@@ -83,7 +83,7 @@ describe('resolveSandboxSessionConfig', () => {
 
   // A built instance's checkout lives on the sandbox's local disk, so commands
   // run there — while `cwd` keeps naming the instance's directory on the
-  // volume, which is what the call belongs to and may see (LOBE-14363).
+  // volume, which is what the call belongs to and may see.
   it('runs a built repository instance on local disk, scoped to its directory', async () => {
     findInstanceById.mockResolvedValue({
       configurationSnapshot: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
@@ -102,7 +102,7 @@ describe('resolveSandboxSessionConfig', () => {
     });
   });
 
-  // Regression (LOBE-14442): the definition never reached a conversation, so
+  // Regression: the definition never reached a conversation, so
   // the declared variables were missing from the agent's shell, the
   // maintenance command never ran once, and the environment's network switch
   // could not cut anything. All three are the execution plane acting on this
@@ -148,6 +148,37 @@ describe('resolveSandboxSessionConfig', () => {
     expect(specification).toEqual({ env: { NODE_ENV: 'production' } });
   });
 
+  // `kind` is the product's own: an instance whose environment gained one must
+  // send exactly what it sent before, or the execution plane would read every
+  // such session as running a different specification from its build.
+  it('sends the same specification whether or not the definition carries a kind', async () => {
+    const definition = {
+      bootstrapCommand: 'pnpm install',
+      env: { NODE_ENV: 'production' },
+      excludePaths: ['node_modules'],
+      internetAccess: false,
+      maintenanceCommand: 'git pull --ff-only',
+      sources: [{ kind: 'git', url: 'https://github.com/a/b' }],
+    };
+
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: definition,
+      id: INSTANCE_ID,
+      workingDirectory: 'projects/atlas',
+    });
+    const { specification: before } = await resolve();
+
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: { ...definition, kind: 'code' },
+      id: INSTANCE_ID,
+      workingDirectory: 'projects/atlas',
+    });
+    const { specification: after } = await resolve();
+
+    expect(after).toEqual(before);
+    expect(after).not.toHaveProperty('kind');
+  });
+
   // An empty pick is not an empty object: the runtime adopts whatever it is
   // handed, so a definition with nothing to say must send nothing and leave
   // the session's own defaults alone.
@@ -155,6 +186,7 @@ describe('resolveSandboxSessionConfig', () => {
     ['no definition at all', undefined],
     ['a definition with nothing this session acts on', { requirements: { cpu: 2 } }],
     ['an empty variable map', { env: {} }],
+    ['a files environment with nothing but its kind', { kind: 'files' }],
   ])('sends no specification for %s', async (_, configurationSnapshot) => {
     findInstanceById.mockResolvedValue({
       configurationSnapshot,

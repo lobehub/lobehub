@@ -52,7 +52,7 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 配置项类型 | 示例                                                                                                                | 解释                                             |
 | ----- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 基本键值对 | `model=gpt-4`                                                                                                     | 设置模型为 `gpt-4`。                                 |
-| 嵌套字段  | `tts.voice.openai=nova`                                                                                           | 设置 OpenAI 文本转语音的默认音色为 `nova`。                    |
+| 嵌套字段  | `tts.voice.openai=nova`                                                                                           | 设置 OpenAI 文本转语音的默认音色为 `nova`。                  |
 | 数组    | `plugins=search-engine,lobe-image-designer`                                                                       | 启用 `search-engine` 和 `lobe-image-designer` 插件。 |
 | 中文逗号  | `plugins=search-engine，lobe-image-designer`                                                                       | 同上，演示支持中文逗号分隔。                                 |
 | 多个配置项 | `model=glm-4;provider=zhipu`                                                                                      | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。                 |
@@ -145,6 +145,20 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 描述：Agent Gateway 验证 Token，用于 Gateway Mode 与自部署 Agent Gateway 的鉴权
 - 默认值：-
 - 示例：`dev-secret`
+
+### `DEVICE_GATEWAY_URL`
+
+- 类型：可选
+- 描述：服务端访问 Device Gateway 使用的地址，例如 Docker Compose 服务名。LobeHub 通过它访问已连接的设备。该地址只在服务端使用，不会下发给客户端。
+- 默认值：-
+- 示例：`http://gateway:8788`
+
+### `DEVICE_GATEWAY_PUBLIC_URL`
+
+- 类型：可选
+- 描述：桌面端和 CLI 客户端访问 Device Gateway 使用的地址。配置后，LobeHub 会在服务端配置中下发该地址（`deviceGatewayUrl`），支持自动发现的客户端可以从当前服务端获取它。不配置时不下发任何地址，客户端继续使用各自配置的地址，例如 `lh connect --gateway <url>`。两种方式都可以使用，也可以一直不配置。请填写不带 `/ws` 等路径的基础地址；包含账号密码、查询参数或片段（`#`）的地址无法通过环境变量校验，末尾的 `/` 会被去掉。`DEVICE_GATEWAY_URL` 不会被用来代替它下发。
+- 默认值：-
+- 示例：`https://device-gateway.example.com` 或 `http://your_server_ip:8788`
 
 ### `PROXY_URL`
 

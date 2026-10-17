@@ -1,4 +1,4 @@
-import { css, cx } from 'antd-style';
+import { css, cx } from '@lobehub/ui';
 
 // Override the default chip style from `@lobehub/editor`'s mention plugin so
 // @-mentions render as plain colored text, matching the look of other inline

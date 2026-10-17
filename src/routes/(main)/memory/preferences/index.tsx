@@ -1,11 +1,10 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
+import { MemoryListBoundary } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -35,10 +34,7 @@ const PreferencesArea = memo(() => {
   const preferencesPage = useUserMemoryStore((s) => s.preferencesPage);
   const preferencesInit = useUserMemoryStore((s) => s.preferencesInit);
   const preferencesTotal = useUserMemoryStore((s) => s.preferencesTotal);
-  const preferencesSearchError = useUserMemoryStore((s) => s.preferencesSearchError);
-  const preferencesSearchLoading = useUserMemoryStore((s) => s.preferencesSearchLoading);
   const useFetchPreferences = useUserMemoryStore((s) => s.useFetchPreferences);
-  const resetPreferencesList = useUserMemoryStore((s) => s.resetPreferencesList);
 
   const sortOptions = [
     { label: t('filter.sort.createdAt'), value: 'capturedAt' },
@@ -48,15 +44,10 @@ const PreferencesArea = memo(() => {
   // Convert sort: capturedAt becomes undefined (backend default)
   const apiSort = sortValue === 'capturedAt' ? undefined : (sortValue as 'scorePriority');
 
-  useResetMemoryList({
-    query: searchValue,
-    resetList: resetPreferencesList,
-    sort: apiSort,
-    viewMode,
-  });
-
-  // Call SWR hook to fetch data
-  const { data, isLoading, mutate } = useFetchPreferences({
+  // Each search / sort is its own replica entry: the hook selects it before
+  // paint, so the previous query's rows never show under this one. `error` is
+  // this query's failure while it has nothing painted.
+  const { data, error, isLoading, mutate } = useFetchPreferences({
     page: preferencesPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -109,10 +100,9 @@ const PreferencesArea = memo(() => {
           />
           <MemoryListBoundary
             data={data}
-            error={preferencesSearchError}
+            error={error}
             isInitialized={preferencesInit}
             isLoading={isLoading}
-            isResetting={preferencesSearchLoading}
             loading={<Loading viewMode={viewMode} />}
             onRetry={() => void mutate()}
           >

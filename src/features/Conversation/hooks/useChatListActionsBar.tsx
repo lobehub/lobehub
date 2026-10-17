@@ -1,11 +1,12 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type ActionIconGroupItemType } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
+import { css, cx } from '@lobehub/ui';
 import {
   ArrowDownFromLine,
   Copy,
   DownloadIcon,
   Edit,
+  GitFork,
   LanguagesIcon,
   ListChevronsDownUp,
   ListChevronsUpDown,
@@ -40,6 +41,7 @@ interface ChatListActionsBar {
   edit: ActionBarItem;
   expand: ActionBarItem;
   export: ActionBarItem;
+  fork: ActionBarItem;
   regenerate: ActionBarItem;
   share: ActionBarItem;
   translate: ActionBarItem;
@@ -116,6 +118,11 @@ export const useChatListActionsBar = ({
         key: 'export',
         label: 'Export as PDF',
         sfSymbol: 'square.and.arrow.up',
+      },
+      fork: {
+        icon: GitFork,
+        key: 'fork',
+        label: t('forkTopic'),
       },
       regenerate: {
         disabled: isRegenerating,

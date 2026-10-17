@@ -17,158 +17,174 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   getHeterogeneousAgentClientConfig: (type: string) =>
-    type === 'claude-code'
+    type === 'deepseek-harness'
       ? {
-          defaultCommand: 'claude',
-          icon: () => <span>Claude Code Icon</span>,
-          title: 'Claude Code',
+          icon: () => <span>DeepSeek Icon</span>,
+          title: 'DeepSeek Harness',
         }
-      : type === 'droid'
+      : type === 'claude-code'
         ? {
-            defaultCommand: 'droid',
-            icon: () => <span>Factory Droid Icon</span>,
-            title: 'Factory Droid',
+            defaultCommand: 'claude',
+            icon: () => <span>Claude Code Icon</span>,
+            title: 'Claude Code',
           }
-        : type === 'kimi-code'
+        : type === 'droid'
           ? {
-              defaultCommand: 'kimi',
-              icon: () => <span>Kimi Code Icon</span>,
-              title: 'Kimi Code',
+              defaultCommand: 'droid',
+              icon: () => <span>Factory Droid Icon</span>,
+              title: 'Factory Droid',
             }
-          : type === 'opencode'
+          : type === 'kimi-code'
             ? {
-                defaultCommand: 'opencode',
-                icon: () => <span>OpenCode Icon</span>,
-                title: 'OpenCode',
+                defaultCommand: 'kimi',
+                icon: () => <span>Kimi Code Icon</span>,
+                title: 'Kimi Code',
               }
-            : type === 'pi'
+            : type === 'opencode'
               ? {
-                  defaultCommand: 'pi',
-                  icon: () => <span>Pi Icon</span>,
-                  title: 'Pi',
+                  defaultCommand: 'opencode',
+                  icon: () => <span>OpenCode Icon</span>,
+                  title: 'OpenCode',
                 }
-              : {
-                  defaultCommand: 'codex',
-                  icon: () => <span>Codex Icon</span>,
-                  title: 'Codex',
-                },
+              : type === 'pi'
+                ? {
+                    defaultCommand: 'pi',
+                    icon: () => <span>Pi Icon</span>,
+                    title: 'Pi',
+                  }
+                : {
+                    defaultCommand: 'codex',
+                    icon: () => <span>Codex Icon</span>,
+                    title: 'Codex',
+                  },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
+  isLocalRuntimeHeterogeneousType: (type: string) => type === 'deepseek-harness',
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  CopyButton: () => <button type="button">Copy</button>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span>Icon</span>,
-  Input: ({
-    onBlur,
-    onChange,
-    onKeyDown,
-    placeholder,
-    ref,
-    value,
-  }: {
-    onBlur?: () => void;
-    onChange?: (event: { target: { value: string } }) => void;
-    onKeyDown?: (event: { key: string; preventDefault: () => void }) => void;
-    placeholder?: string;
-    ref?: React.Ref<HTMLInputElement>;
-    value?: string;
-  }) => (
-    <input
-      placeholder={placeholder}
-      ref={ref}
-      value={value}
-      onBlur={onBlur}
-      onChange={(event) => {
-        onChange?.({ target: { value: event.target.value } });
-      }}
-      onKeyDown={(event) => {
-        onKeyDown?.({ key: event.key, preventDefault: () => event.preventDefault() });
-      }}
-    />
-  ),
-  Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ActionIcon: ({
-    'aria-label': ariaLabel,
-    className,
-    onClick,
-  }: {
-    'aria-label'?: string;
-    'className'?: string;
-    'onClick'?: () => void;
-  }) => (
-    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
-      Refresh
-    </button>
-  ),
-  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Segmented: ({
-    disabled,
-    onChange,
-    options,
-  }: {
-    disabled?: boolean;
-    onChange?: (value: string) => void;
-    options: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
-  }) => (
-    <div>
-      {options.map((option) => (
-        <button
-          disabled={disabled || option.disabled}
-          key={option.value}
-          type="button"
-          onClick={() => onChange?.(option.value)}
-        >
-          {option.label}
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      CopyButton: () => <button type="button">Copy</button>,
+      Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      Icon: () => <span>Icon</span>,
+      Input: ({
+        onBlur,
+        onChange,
+        onKeyDown,
+        placeholder,
+        ref,
+        value,
+      }: {
+        onBlur?: () => void;
+        onChange?: (event: { target: { value: string } }) => void;
+        onKeyDown?: (event: { key: string; preventDefault: () => void }) => void;
+        placeholder?: string;
+        ref?: React.Ref<HTMLInputElement>;
+        value?: string;
+      }) => (
+        <input
+          placeholder={placeholder}
+          ref={ref}
+          value={value}
+          onBlur={onBlur}
+          onChange={(event) => {
+            onChange?.({ target: { value: event.target.value } });
+          }}
+          onKeyDown={(event) => {
+            onKeyDown?.({ key: event.key, preventDefault: () => event.preventDefault() });
+          }}
+        />
+      ),
+      Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      ActionIcon: ({
+        'aria-label': ariaLabel,
+        className,
+        onClick,
+      }: {
+        'aria-label'?: string;
+        'className'?: string;
+        'onClick'?: () => void;
+      }) => (
+        <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
+          Refresh
         </button>
-      ))}
-    </div>
-  ),
-  Select: ({
-    onChange,
-    options,
-    value,
-  }: {
-    onChange?: (value: string) => void;
-    options?: Array<{
-      disabled?: boolean;
-      label?: ReactNode;
-      options?: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
-      value?: string;
-    }>;
-    value?: string;
-  }) => (
-    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {options?.flatMap((option) =>
-        option.options
-          ? option.options.map((child) => (
-              <option disabled={child.disabled} key={child.value} value={child.value}>
-                {child.label}
-              </option>
-            ))
-          : option.value
-            ? [
-                <option disabled={option.disabled} key={option.value} value={option.value}>
-                  {option.label}
-                </option>,
-              ]
-            : [],
-      )}
-    </select>
-  ),
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
+      ),
+      Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
+        <button type="button" onClick={onClick}>
+          {children}
+        </button>
+      ),
+      Segmented: ({
+        disabled,
+        onChange,
+        options,
+      }: {
+        disabled?: boolean;
+        onChange?: (value: string) => void;
+        options: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
+      }) => (
+        <div>
+          {options.map((option) => (
+            <button
+              disabled={disabled || option.disabled}
+              key={option.value}
+              type="button"
+              onClick={() => onChange?.(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ),
+      Select: ({
+        onChange,
+        options,
+        value,
+      }: {
+        onChange?: (value: string) => void;
+        options?: Array<{
+          disabled?: boolean;
+          label?: ReactNode;
+          options?: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
+          value?: string;
+        }>;
+        value?: string;
+      }) => (
+        <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+          {options?.flatMap((option) =>
+            option.options
+              ? option.options.map((child) => (
+                  <option disabled={child.disabled} key={child.value} value={child.value}>
+                    {child.label}
+                  </option>
+                ))
+              : option.value
+                ? [
+                    <option disabled={option.disabled} key={option.value} value={option.value}>
+                      {option.label}
+                    </option>,
+                  ]
+                : [],
+          )}
+        </select>
+      ),
+      Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+      Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -247,7 +263,23 @@ const claudeServerModels = [{ model: 'claude-sonnet-4-6' }, { model: 'claude-hai
 
 const codexServerModels = [{ model: 'gpt-5.4' }];
 
+vi.mock('@/store/aiInfra/slices/aiProvider/selectors', () => ({
+  aiProviderSelectors: { providerKeyVaults: () => () => ({ apiKey: 'configured' }) },
+}));
+
 describe('HeterogeneousAgentStatusCard', () => {
+  it('shows the bundled runtime and provider-key state without probing a CLI', () => {
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={{ type: 'deepseek-harness' }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('DeepSeek Harness')).toBeInTheDocument();
+    expect(screen.getByText('heterogeneousStatus.runtime.keyReady')).toBeInTheDocument();
+    expect(detectHeterogeneousAgentCommand).not.toHaveBeenCalled();
+  });
+
   it('shows the embedded Codex install guide when the CLI is unavailable', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
     getClaudeAuthStatus.mockResolvedValue(null);

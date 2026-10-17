@@ -1,8 +1,11 @@
 import {
   type AgentSignalSourceVariants,
   isAgentUserMessageSource,
+  type SourceAgentUserMessage,
 } from '@lobechat/agent-signal/source';
 
+import type { AgentSignalBudgetDecision } from '../budget';
+import { describeBudgetDenial } from '../budget';
 import {
   AGENT_SIGNAL_POLICY_SIGNAL_TYPES,
   type AgentSignalFeedbackDomainConflictPolicy,
@@ -36,10 +39,31 @@ export interface ClassifierProcessorServices {
    */
   domainClassifier?: DomainClassifierService;
   /**
+   * Optional per-user budget gate taken right before each satisfaction classifier call.
+   * A denied decision skips the classifier for this source.
+   */
+  satisfactionBudget?: () => Promise<AgentSignalBudgetDecision>;
+  /**
    * Optional satisfaction classifier for classifying `agent.user.message` sources.
    */
   satisfactionClassifier?: SatisfactionClassifierService;
 }
+
+/** Stop reason for user messages that cannot be feedback on an earlier reply. */
+export const NO_PRIOR_REPLY_STOP_REASON = 'no prior reply to give feedback on';
+
+/**
+ * Decides whether a user message can be skipped before any model call.
+ *
+ * Only a message the producer marked as the conversation root qualifies: with no earlier
+ * message in its topic or thread there is no reply to be (dis)satisfied with. Messages that
+ * carry explicit client intent hints still go to the classifier.
+ */
+const cannotBeFeedback = (payload: SourceAgentUserMessage['payload']) =>
+  payload.isConversationRoot === true &&
+  !payload.intents?.length &&
+  !payload.memoryPayload &&
+  !payload.documentPayload;
 
 /**
  * Feedback-domain signal variants emitted by classifier processors.
@@ -297,6 +321,17 @@ export const classifySatisfaction = async (
 
   if (!services.satisfactionClassifier) {
     return stop('satisfaction classifier unavailable');
+  }
+
+  // Cheap checks first: neither of these spends the user's provider credentials.
+  if (cannotBeFeedback(source.payload)) {
+    return stop(NO_PRIOR_REPLY_STOP_REASON);
+  }
+
+  if (services.satisfactionBudget) {
+    const decision = await services.satisfactionBudget();
+
+    if (!decision.allowed) return stop(describeBudgetDenial(decision));
   }
 
   const message = source.payload.message.trim();

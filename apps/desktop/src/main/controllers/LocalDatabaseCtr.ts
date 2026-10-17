@@ -1,5 +1,6 @@
 import type {
   DesktopLocalDatabaseBatchOperation,
+  DesktopLocalDatabaseCollectionInfo,
   DesktopLocalDatabaseEntry,
   DesktopLocalDatabaseKey,
   DesktopLocalDatabasePrefix,
@@ -48,6 +49,11 @@ export default class LocalDatabaseController extends ControllerModule {
   @IpcMethod()
   async get({ collection, key }: DesktopLocalDatabaseKey): Promise<string | undefined> {
     return this.service.get(collection, key);
+  }
+
+  @IpcMethod()
+  async listCollections(): Promise<DesktopLocalDatabaseCollectionInfo[]> {
+    return this.service.listCollections();
   }
 
   @IpcMethod()

@@ -1,14 +1,16 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
   AccordionTrigger,
+  createStaticStyles,
+  Flexbox,
+  Icon,
   Tag,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import { ArrowDownToDot, ArrowUpFromDot, CircleFadingArrowUp } from 'lucide-react';
 import type { FC } from 'react';
 import { memo } from 'react';
@@ -342,7 +344,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                             {t(`ModelSwitchPanel.detail.abilities.${ability.key}` as any)}
                           </span>
                         </Flexbox>
-                        <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+                        <span style={{ color: 'var(--lobe-color-text-tertiary)', fontSize: 11 }}>
                           {t(
                             `ModelSelect.featureTag.${ability.key === 'files' ? 'file' : ability.key}` as any,
                           )}

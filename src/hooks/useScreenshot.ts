@@ -1,5 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { type TabsItem } from '@lobehub/ui/base-ui';
+import { type TabsItem } from '@lobehub/ui';
 import { snapdom } from '@zumer/snapdom';
 import dayjs from 'dayjs';
 import { useCallback, useState } from 'react';

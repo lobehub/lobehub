@@ -1,4 +1,4 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 /**
  * One sheet, Linear-style: a sticky header row, one hairline per row, group rows that run the

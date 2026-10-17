@@ -9,10 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 /** Reason a `client.runtime.start` event could not become a feedback source. */
 export type ClientRuntimeStartHydrationSkipReason =
-  | 'empty-content'
-  | 'message-not-found'
-  | 'missing-parent-message-id'
-  | 'non-user-parent';
+  'empty-content' | 'message-not-found' | 'missing-parent-message-id' | 'non-user-parent';
 
 /** Diagnostic emitted while hydrating a client runtime-start source. */
 export interface ClientRuntimeStartHydrationDiagnostic {
@@ -84,6 +81,7 @@ export const resolveClientRuntimeStartFeedbackSource = async (
     source: {
       payload: {
         agentId: parentMessage.agentId ?? sourceEvent.payload.agentId,
+        ...(!parentMessage.parentId && !parentMessage.threadId ? { isConversationRoot: true } : {}),
         message: parentMessage.content,
         messageId: parentMessage.id,
         threadId: parentMessage.threadId ?? sourceEvent.payload.threadId,

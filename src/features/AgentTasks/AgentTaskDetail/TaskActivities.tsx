@@ -4,9 +4,7 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import { Block, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Collapsible, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Avatar, Block, Collapsible, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {

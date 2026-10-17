@@ -3,7 +3,10 @@ import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  collectHeteroAttachedFiles,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
@@ -24,7 +27,7 @@ import {
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
@@ -53,6 +56,7 @@ import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
+import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import {
@@ -106,6 +110,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { findProjectDirectory } from '@/store/projectWorkingDirectory';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
@@ -473,7 +478,7 @@ export class ConversationLifecycleActionImpl {
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop. An existing
     // conversation then stays on the machine it already ran on.
-    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
+    const topicBinding = applyTopicDeviceBinding(
       {
         agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
           canManage,
@@ -488,7 +493,48 @@ export class ConversationLifecycleActionImpl {
       ),
       getElectronStoreState().gatewayDeviceInfo?.deviceId,
     );
+    const { workspaceScoped } = topicBinding;
+    let { agencyConfig } = topicBinding;
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    const boundTopic = context.topicId
+      ? topicSelectors.getTopicById(context.topicId)(this.#get())
+      : undefined;
+    // A blank conversation opened from a project group's "+" runs in the
+    // directory it staged; the gateway transport has the server bind the topic.
+    const pendingDirectory = this.#get().pendingNewTopicDirectory;
+    const stagedDirectoryId =
+      !context.topicId &&
+      !context.isolatedTopic &&
+      !context.groupId &&
+      !directMentionRoute &&
+      pendingDirectory?.agentId === ownerAgentId
+        ? pendingDirectory.projectWorkingDirectoryId
+        : undefined;
+    const projectDirectoryId = boundTopic?.projectWorkingDirectoryId ?? stagedDirectoryId;
+    let stagedDirectory: { id: string; projectId: string } | undefined;
+    if (projectDirectoryId) {
+      // The sidebar's directory replica already holds the row; read it locally
+      // so the optimistic pair is not held behind a network round trip. The
+      // server re-validates the directory (environment link, enabled state,
+      // permission) when it starts the run. Only a cold replica pays for resolve.
+      const directory =
+        findProjectDirectory(projectDirectoryId) ??
+        (await projectWorkingDirectoryService.resolve(projectDirectoryId)).data;
+      if (stagedDirectoryId) stagedDirectory = directory;
+      if (!isGatewayMode)
+        throw new Error('Enable Gateway Mode to run in a project working directory');
+      if (
+        agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+        agencyConfig.boundDeviceId !== directory.deviceId
+      )
+        throw new Error('Agent is fixed to another execution target');
+      agencyConfig = {
+        ...agencyConfig,
+        boundDeviceId: directory.deviceId,
+        executionTarget: 'device',
+      };
+    }
+
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
     // off so desktop can still spawn locally and non-desktop (Android/web) still
@@ -964,6 +1010,12 @@ export class ConversationLifecycleActionImpl {
       } else {
         targetInputEditor?.setDocument('markdown', message);
       }
+
+      // The editor snapshot covers only text. A send rejected after the composer
+      // was cleared (e.g. the server refusing an offline bound device) would
+      // otherwise still swallow the cleared uploads and context selections —
+      // hand them back to the caller that captured them before clearing.
+      onPreflightFailure?.();
     };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;
@@ -1138,6 +1190,11 @@ export class ConversationLifecycleActionImpl {
           value: {
             id: mintedTopicId,
             ...newTopicModelSnapshot,
+            // Shown under its project group from the first frame.
+            ...(stagedDirectory && {
+              projectId: stagedDirectory.projectId,
+              projectWorkingDirectoryId: stagedDirectory.id,
+            }),
             ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
             title: newTopicTitle,
           },
@@ -1700,7 +1757,7 @@ export class ConversationLifecycleActionImpl {
       const { operationId: heteroOpId } = this.#get().startOperation({
         context: heteroExecutionContext,
         label: 'Heterogeneous Agent Execution',
-        metadata: { heterogeneousType: heterogeneousProvider.type },
+        metadata: { heteroAutoRetryAvailable: true, heterogeneousType: heterogeneousProvider.type },
         parentOperationId: operationId,
         type: 'execHeterogeneousAgent',
       });
@@ -1715,6 +1772,7 @@ export class ConversationLifecycleActionImpl {
         // may already be cleared by this point, so we read from DB instead)
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
         const persistedImageList = userMsg?.imageList;
+        const persistedAttachedFiles = userMsg ? collectHeteroAttachedFiles(userMsg) : [];
         const persistedMetadata = userMsg?.metadata as MessageMetadata | undefined;
         const effectiveContextSelections = contextSelections?.length
           ? contextSelections
@@ -1759,6 +1817,7 @@ export class ConversationLifecycleActionImpl {
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroExecutionAssistantId,
+          attachedFiles: persistedAttachedFiles.length ? persistedAttachedFiles : undefined,
           context: heteroExecutionContext,
           contextSelections: effectiveContextSelections,
           heterogeneousProvider: effectiveHeterogeneousProvider,
@@ -1826,13 +1885,13 @@ export class ConversationLifecycleActionImpl {
         // input loading state would drop during the execAgentTask round-trip
         // and the send button would flicker back to "send".
         const result = await this.#get().executeGatewayAgent({
-          // The ids this send's optimistic rows already render under. The
-          // server honours them, so the gateway path converges on the same ids
-          // instead of minting its own — same contract as sendMessageInServer.
+          // Ids and branch tail the optimistic rows render under; the server honours
+          // them like sendMessageInServer, so the turn stays on the visible branch.
           clientIds: {
             assistantMessageId: tempAssistantId,
             topicId: optimisticTopic?.id,
             userMessageId: tempId,
+            userMessageParentId: willCreateNewTopic ? undefined : parentId,
           },
           // Execution context: what the SERVER should act on. While creating,
           // the topic exists only client-side, so the server must see no
@@ -1856,11 +1915,16 @@ export class ConversationLifecycleActionImpl {
           clientOperations,
           replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
+          projectWorkingDirectoryId: stagedDirectory?.id,
           // Forward @-mentioned tool ids so the server runtime enables them for
           // this run — the gateway/server path otherwise never sees the mention
           // selection (only the client runtime did). Omit when empty.
           selectedToolIds:
             selectedTools.length > 0 ? selectedTools.map((tool) => tool.identifier) : undefined,
+          // Forward selected skills so the server injects their bodies, as the
+          // client runtime does by persisting them into the message content.
+          selectedSkillIds:
+            selectedSkills.length > 0 ? selectedSkills.map((skill) => skill.identifier) : undefined,
           // Forward @-mentioned agents so the server supervisor can delegate to
           // them (multi-mention). Mirrors the client runtime's `initialContext`
           // injection: the server enables the callAgent tool and injects the

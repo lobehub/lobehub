@@ -1,6 +1,4 @@
-import { Block } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, Block, createStaticStyles, cx } from '@lobehub/ui';
 import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 

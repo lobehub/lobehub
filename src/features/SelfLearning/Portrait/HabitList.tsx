@@ -1,8 +1,20 @@
 'use client';
 
-import { Block, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, Button, DropdownMenu, Popover, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Popover,
+  SearchBar,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ArchiveIcon,

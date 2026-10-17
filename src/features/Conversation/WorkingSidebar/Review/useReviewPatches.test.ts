@@ -20,6 +20,12 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(() => ({ data: undefined })),
 }));
 
+const revalidateGitStatus = vi.hoisted(() => vi.fn());
+
+vi.mock('@/store/device/gitStatus/store', () => ({
+  useGitStatusStore: { getState: () => ({ revalidateGitStatus }) },
+}));
+
 vi.mock('@/services/git', () => ({
   gitService: {
     getGitBranchDiff: vi.fn(),
@@ -92,9 +98,11 @@ describe('useReviewPatches', () => {
       'branch',
       'origin/canary',
     ]);
-    expect(mutate).toHaveBeenNthCalledWith(2, ['device:gitWorkingTreeStatus', 'device-1', '/repo']);
-    expect(mutate).toHaveBeenNthCalledWith(3, ['device:gitAheadBehind', 'device-1', '/repo']);
-    expect(mutate).toHaveBeenNthCalledWith(4, [
+    expect(revalidateGitStatus).toHaveBeenCalledWith('device-1', '/repo', [
+      'workingTreeStatus',
+      'aheadBehind',
+    ]);
+    expect(mutate).toHaveBeenNthCalledWith(2, [
       'localFile:gitWorkingTreeFiles',
       'device-1',
       '/repo',

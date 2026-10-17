@@ -23,7 +23,7 @@ CommandMenu/
 ├── index.tsx                    # Main component & orchestration
 ├── useCommandMenu.ts            # Core hook with business logic
 ├── types.ts                     # TypeScript type definitions
-├── styles.ts                    # antd-style CSS-in-JS styles
+├── styles.ts                    # createStaticStyles styles
 │
 ├── components/
 │   ├── CommandInput.tsx         # Search input with context/back navigation
@@ -312,7 +312,7 @@ if (isLoading) {
 
 ## Styling
 
-Uses `antd-style` for theme-aware CSS-in-JS:
+Uses `@lobehub/ui` `createStaticStyles` + `cssVar` for theme-aware styles:
 
 **Key Patterns**:
 
@@ -656,7 +656,6 @@ Potential areas for enhancement:
 - `react-router-dom` - Navigation
 - `zustand` - Global state
 - `swr` - Data fetching
-- `antd-style` - Styling
 - `lucide-react` - Icons
 
 **Related Documentation**:

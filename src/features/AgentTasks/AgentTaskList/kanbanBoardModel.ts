@@ -6,6 +6,7 @@ import type {
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
 
+import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
@@ -168,6 +169,49 @@ export const getKanbanTaskPatch = (
     return { status: column.targetStatus as TaskStatus };
   }
 };
+
+/** Pinned on the new task, so it lands in the column it was created from. */
+export interface KanbanColumnCreateDefaults {
+  assigneeAgentId?: string;
+  priority?: number;
+}
+
+/**
+ * Whether a column offers a create entry, and what the new task is pinned to.
+ * `undefined` means no entry: a task created there could not be guaranteed to
+ * land in that column.
+ */
+export const getKanbanColumnCreateDefaults = (
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): KanbanColumnCreateDefaults | undefined => {
+  if (groupBy === 'status' && column.key === 'backlog') return {};
+  if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
+    return { priority: column.groupMeta.priority ?? 0 };
+  }
+  // The unassigned column has no entry: the modal cannot pin "no agent".
+  if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
+    const { assigneeId } = column.groupMeta;
+    return assigneeId ? { assigneeAgentId: assigneeId } : undefined;
+  }
+};
+
+/**
+ * Props for the create task modal opened from a column. The column's pinned
+ * fields are prefilled, so an untouched modal creates the task in this column.
+ */
+export const getKanbanCreateTaskModalProps = (
+  defaults: KanbanColumnCreateDefaults,
+  scope: { agentId?: string; projectId?: string },
+): CreateTaskContentProps => ({
+  agentId: defaults.assigneeAgentId ?? scope.agentId,
+  defaultPriority: defaults.priority,
+  // An agent-scoped board only holds that agent's tasks.
+  lockAssignee: !!scope.agentId,
+  projectId: scope.projectId,
+  // The board has no inline entry to minimize into.
+  showInlineToggle: false,
+});
 
 export const canDropTaskIntoKanbanColumn = (
   task: TaskListItem,

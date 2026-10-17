@@ -58,6 +58,8 @@ interface McpInstallParams {
  * Responsible for handling MCP plugin installation process
  */
 export default class McpInstallController extends ControllerModule {
+  static override readonly groupName = 'mcpInstall';
+
   /**
    * Handle MCP plugin installation request
    * @param parsedData Parsed protocol data

@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Footer hosting the approve / reject actions (portal target). Hidden until
@@ -12,6 +12,29 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     &:empty {
       display: none;
     }
+  `,
+  // Goal cards' footer: the dismiss text button on the left, the form's own
+  // actions (portal target) filling the rest.
+  goalActions: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 8px 12px;
+    padding-inline: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
+  `,
+  reviewSummary: css`
+    padding-block: 4px 8px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  goalActionsSlot: css`
+    flex: 1;
+    min-width: 0;
   `,
   card: css`
     pointer-events: auto;

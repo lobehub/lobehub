@@ -206,10 +206,6 @@ export function registerProjectCommand(program: Command) {
         console.log(`${pc.bold('task')}: ${url}`);
       },
     );
-  task.command('move <projectId> <taskId>').action(async (projectId: string, taskId: string) => {
-    const result = await (await getTrpcClient()).project.moveTask.mutate({ id: projectId, taskId });
-    console.log(`${pc.green('✓')} Moved ${result.data.length} task(s)`);
-  });
 
   project.command('request-review <id>').action(async (id: string) => {
     await (await getTrpcClient()).project.requestCompletion.mutate({ id });

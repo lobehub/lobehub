@@ -3,11 +3,17 @@ import { SelfFeedbackIntentExecutionRuntime } from '@lobechat/builtin-tool-self-
 import { nanoid } from '@lobechat/utils';
 
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import { createSelfFeedbackIntentService } from '@/server/services/agentSignal/services/selfFeedbackIntent';
+import {
+  createRedisDeclarationLimiter,
+  createSelfFeedbackIntentService,
+} from '@/server/services/agentSignal/services/selfFeedbackIntent';
 
 import type { ServerRuntimeRegistration } from './types';
 
 const sharedSelfFeedbackIntentService = createSelfFeedbackIntentService({
+  // Serverless instances do not share memory, so the per-scope declaration
+  // limit lives in Redis to hold across processes.
+  declarationLimiter: createRedisDeclarationLimiter(),
   enqueueSource: (sourceEvent) =>
     enqueueAgentSignalSourceEvent(sourceEvent, {
       agentId: sourceEvent.payload.agentId,
@@ -30,7 +36,7 @@ const runtime = new SelfFeedbackIntentExecutionRuntime({
  *
  * Expects:
  * - The package ExecutionRuntime validates per-call `agentId`, `userId`, and `topicId`
- * - The shared service preserves fast-loop declaration rate limits
+ * - The shared service enforces the per-scope declaration limit through Redis
  *
  * Returns:
  * - A shared runtime instance backed by the server Agent Signal enqueue boundary

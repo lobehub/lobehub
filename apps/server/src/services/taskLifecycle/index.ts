@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import { BRANDING_URL } from '@lobechat/business-const';
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
@@ -18,7 +17,6 @@ import {
   TASK_TOPIC_HANDOFF_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import type {
-  BriefAction,
   BriefArtifacts,
   BriefDecision,
   TaskItem,
@@ -27,13 +25,14 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { ChatErrorType, DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
+import { DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import {
   notifyScheduledTaskCompleted,
   notifyScheduledTaskFailed,
 } from '@/business/server/task/notifyScheduledTaskResult';
+import { notifyTaskRunFailed } from '@/business/server/task/notifyTaskRunFailed';
 import { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
@@ -41,7 +40,6 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
-import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
@@ -80,20 +78,9 @@ const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 // for now; move to task.config later if it needs to be tunable per-task.
 const AUTOMATION_FAILURE_FUSE = 3;
 
-// Terminal error codes whose fix lives in billing, not in a retry — running the
-// same task again just reproduces the same wall. For these the error brief leads
-// with an "Upgrade" remedy instead of a futile Retry (ux Feedback §4.2).
-// Everything else keeps the default retry + feedback actions.
-const BILLING_ERROR_CODES = new Set<string>([
-  ChatErrorType.InsufficientBudgetForModel,
-  ChatErrorType.FreePlanLimit,
-  ChatErrorType.SubscriptionPlanLimit,
-  ChatErrorType.WorkspaceSubscriptionInactive,
-]);
-
 export interface TopicCompleteParams {
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
-   *  completion lifecycle event, used to pick the error brief's remedy action. */
+   *  completion lifecycle event, forwarded to the failure notification. */
   errorCode?: string;
   errorMessage?: string;
   lastAssistantContent?: string;
@@ -228,6 +215,9 @@ export class TaskLifecycleService {
       }
 
       // 5. Default post-tick transition.
+      //    - Automation task whose own tick requested completion (the
+      //      instruction's end condition was verified as met) → 'completed',
+      //      retiring the loop now that the run has finished cleanly.
       //    - Schedule-mode task that just consumed its final allowed run
       //      (count ≥ maxExecutions) → park at 'completed' so the UI reflects
       //      the cap immediately. Without this, a daily cron with
@@ -272,7 +262,10 @@ export class TaskLifecycleService {
             } | null
           )?.completion?.requestedByOperationId === params.operationId;
 
-        if (
+        if (currentTask.automationMode && completionRequestedByCurrentOperation) {
+          log('automation task=%s retired by its own tick — end condition met', taskIdentifier);
+          await this.completeTask(currentTask);
+        } else if (
           currentTask.automationMode === 'schedule' &&
           (await this.scheduleCapReached(currentTask))
         ) {
@@ -287,14 +280,7 @@ export class TaskLifecycleService {
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
         } else if (!verifyBound && completionRequestedByCurrentOperation) {
-          if (currentTask.parentTaskId) {
-            await this.completeSubtask(currentTask);
-          } else {
-            await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
-              completedAt: new Date(),
-              error: null,
-            });
-          }
+          await this.completeTask(currentTask);
         } else if (!verifyBound && params.runTrigger === 'goal' && !currentTask.parentTaskId) {
           await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
             completedAt: new Date(),
@@ -307,7 +293,7 @@ export class TaskLifecycleService {
               error: null,
             });
           } else {
-            await this.completeSubtask(currentTask);
+            await this.completeTask(currentTask);
           }
         } else if (!verifyBound && this.taskModel.shouldPauseOnTopicComplete(currentTask)) {
           await this.taskModel.updateStatus(taskId, 'paused', { error: null });
@@ -347,78 +333,6 @@ export class TaskLifecycleService {
         );
 
       const errorText = errorMessage || 'Unknown error';
-
-      // A budget / plan failure won't clear on a blind Retry — lead the card with
-      // the fix (Upgrade → plans page) instead. Other causes keep retry + feedback.
-      const isBillingError = errorCode ? BILLING_ERROR_CODES.has(errorCode) : false;
-      const errorActions: BriefAction[] =
-        isBillingError && BRANDING_URL.subscription
-          ? [
-              {
-                key: 'upgrade',
-                label: 'Upgrade plan',
-                type: 'link',
-                url: BRANDING_URL.subscription,
-              },
-              { key: 'feedback', label: '💬 Feedback', type: 'comment' },
-            ]
-          : DEFAULT_BRIEF_ACTIONS['error'];
-
-      // Resolve the user-facing copy in the user's language, at the source (not
-      // by string-munging on the client):
-      //  - title: a plain localized "run failed" — the task identity already sits
-      //    in the card's meta row, so the headline needn't repeat it.
-      //  - summary: map the structured error code to the same human, localized
-      //    message the chat error card shows. The copy for a code lives in exactly
-      //    one of two namespaces — `modelRuntime:<code>` (runtime codes) or
-      //    `error:response.<code>` (HTTP status / Cloud ChatErrorType such as
-      //    `InsufficientBudgetForModel`) — so try both and take whichever resolves
-      //    (the server `t` returns the key unchanged when it has no entry). Fall
-      //    back to the raw runtime message for codes with no friendly copy, or copy
-      //    left with an unresolved `{{…}}` placeholder we can't fill here.
-      const locale = await this.systemAgentService.getUserLocale();
-      const [{ t: tHome }, { t: tRuntime }, { t: tError }] = await Promise.all([
-        translation('home', locale),
-        translation('modelRuntime', locale),
-        translation('error', locale),
-      ]);
-      const resolveErrorSummary = () => {
-        if (!errorCode) return errorText;
-        const runtimeMsg = tRuntime(errorCode);
-        if (runtimeMsg !== errorCode && !runtimeMsg.includes('{{')) return runtimeMsg;
-        const responseKey = `response.${errorCode}`;
-        const responseMsg = tError(responseKey);
-        if (responseMsg !== responseKey && !responseMsg.includes('{{')) return responseMsg;
-        return errorText;
-      };
-      const summary = resolveErrorSummary();
-
-      // Always surface an urgent error brief — a failed run is visible to the
-      // user regardless of what happens to the scheduling state below. The topic
-      // id rides the structured `topicId` field (it also powers the card's
-      // "View run" shortcut), never the headline.
-      // A Goal Task's failed run is the coordinator's to recover: it retries,
-      // reroutes or opens a decision gate, and that gate is the brief the
-      // person gets. An urgent error card per failed run asked them to act on
-      // something the goal was already handling — the same reason Goal rounds
-      // never synthesize result briefs above. Only runs the coordinator
-      // dispatched count: a manual rerun of a Task kept under a paused or
-      // finished goal has nobody recovering it, so its failure still surfaces.
-      const coordinatedByGoal = params.runTrigger === 'goal';
-      if (!coordinatedByGoal)
-        await this.briefModel.create({
-          actions: errorActions,
-          agentId: currentTask?.assigneeAgentId || undefined,
-          // Persist the structured cause for observability / future remedy mapping.
-          metadata: errorCode ? { error: { code: errorCode } } : undefined,
-          priority: 'urgent',
-          summary,
-          taskId,
-          title: tHome('inbox.error.title'),
-          topicId,
-          trigger: 'task',
-          type: 'error',
-        });
 
       const runTrigger = params.runTrigger ?? 'manual';
       const isAutomationTick = runTrigger === 'schedule' || runTrigger === 'heartbeat';
@@ -491,28 +405,53 @@ export class TaskLifecycleService {
         await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
       }
 
-      // Tell the user their automation failed: fire-and-forget through the
-      // `@/business` slot (default impl is a no-op; a notification failure
-      // must never affect the task lifecycle). Manual "run now" failures are
-      // ad-hoc debug runs — the error brief above already covers them, and
-      // they are not an automation-health signal, so only automation ticks
-      // notify. Heartbeat ticks can fire every few seconds, so they only
-      // notify at the fuse-stop moment (the automation stopped re-arming);
-      // low-frequency scheduled ticks notify on every failure. Only the
-      // structured `errorCode` crosses the slot boundary; raw error text
-      // stays in the brief.
-      if (
-        currentTask?.automationMode &&
-        isAutomationTick &&
-        (runTrigger === 'schedule' || pausedByFuse)
-      ) {
-        void notifyScheduledTaskFailed({
+      // Tell the user the run failed through the notification center — failures
+      // are not decisions, so they no longer mint a "Needs you" error brief.
+      // Fire-and-forget through the `@/business` slots (default impls are
+      // no-ops; a notification failure must never affect the task lifecycle).
+      // Only the structured `errorCode` crosses the slot boundary; raw error
+      // text stays on the task.
+      //  - A Goal Task's failed run is the coordinator's to recover: it retries,
+      //    reroutes or opens a decision gate, and that gate is what the person
+      //    gets. Only runs the coordinator dispatched count: a manual rerun of a
+      //    Task kept under a paused or finished goal has nobody recovering it.
+      //  - Automation ticks report as automation health: heartbeat ticks can
+      //    fire every few seconds, so they only notify at the fuse-stop moment;
+      //    low-frequency scheduled ticks notify on every failure.
+      //  - Everything else (manual runs, ad-hoc tasks) notifies once per run.
+      const coordinatedByGoal = runTrigger === 'goal';
+      if (coordinatedByGoal || !currentTask) {
+        // The goal coordinator owns recovery and the user-facing decision; a
+        // task deleted mid-run has no page left to link to.
+      } else if (currentTask.automationMode && isAutomationTick) {
+        if (runTrigger === 'schedule' || pausedByFuse) {
+          void notifyScheduledTaskFailed({
+            agentId: currentTask.assigneeAgentId ?? undefined,
+            consecutiveFailures: scheduleConsecutiveFailures,
+            errorCode,
+            operationId: params.operationId,
+            paused: pausedByFuse,
+            runTrigger: runTrigger === 'schedule' ? 'schedule' : 'heartbeat',
+            taskId,
+            taskIdentifier,
+            taskName: currentTask.name ?? undefined,
+            topicId,
+            userId: this.userId,
+            workspaceId: this.workspaceId,
+          }).catch((error) =>
+            log(
+              'scheduled-task failure notification failed for task=%s (non-fatal): %O',
+              taskIdentifier,
+              error,
+            ),
+          );
+        }
+      } else {
+        void notifyTaskRunFailed({
           agentId: currentTask.assigneeAgentId ?? undefined,
-          consecutiveFailures: scheduleConsecutiveFailures,
           errorCode,
           operationId: params.operationId,
-          paused: pausedByFuse,
-          runTrigger: runTrigger === 'schedule' ? 'schedule' : 'heartbeat',
+          reason: 'error',
           taskId,
           taskIdentifier,
           taskName: currentTask.name ?? undefined,
@@ -521,7 +460,7 @@ export class TaskLifecycleService {
           workspaceId: this.workspaceId,
         }).catch((error) =>
           log(
-            'scheduled-task failure notification failed for task=%s (non-fatal): %O',
+            'task-run failure notification failed for task=%s (non-fatal): %O',
             taskIdentifier,
             error,
           ),
@@ -550,14 +489,14 @@ export class TaskLifecycleService {
   }
 
   /**
-   * Settle a successful child task and advance its sibling dependency graph.
+   * Settle a successful task and advance its dependency graph.
    *
    * This mirrors the completion side effects of TaskService.updateStatus
    * without importing TaskService here (TaskRunner already depends on this
    * lifecycle service). The dynamic import keeps that module cycle out of
    * initialization while preserving the runner's single cascade implementation.
    */
-  private async completeSubtask(task: TaskItem): Promise<void> {
+  private async completeTask(task: TaskItem): Promise<void> {
     const completedTask = await this.taskModel.updateStatusIfCurrent(
       task.id,
       'running',
@@ -568,13 +507,15 @@ export class TaskLifecycleService {
       },
     );
     if (!completedTask) {
-      log('subtask=%s no longer running — skipping completion cascade', task.identifier);
+      log('task=%s no longer running — skipping completion cascade', task.identifier);
       return;
     }
 
-    const parentTask = await this.taskModel.findById(completedTask.parentTaskId!);
-    if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
-      await this.taskModel.updateStatus(parentTask.id, 'paused');
+    if (completedTask.parentTaskId) {
+      const parentTask = await this.taskModel.findById(completedTask.parentTaskId);
+      if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
+        await this.taskModel.updateStatus(parentTask.id, 'paused');
+      }
     }
 
     const { TaskRunnerService } = await import('@/server/services/taskRunner');

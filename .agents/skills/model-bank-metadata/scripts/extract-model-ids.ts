@@ -12,7 +12,10 @@ const dir = resolve('packages/model-bank/src/aiModels');
 const out = process.argv[2] || '/tmp/model-ids.json';
 
 const ids = new Set<string>();
-for (const f of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+for (const f of readdirSync(dir, { encoding: 'utf8', recursive: true }).filter(
+  // Providers can be directories (e.g. google/) whose cards span several files.
+  (f) => f.endsWith('.ts') && !f.endsWith('.test.ts'),
+)) {
   const mod = await import(join(dir, f));
   for (const m of mod.default || []) {
     if (!m?.id || m.type !== 'chat') continue;

@@ -1,0 +1,274 @@
+diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
+--- a/dev/lib/syntax.js
++++ b/dev/lib/syntax.js
+@@ -1,5 +1,5 @@
+ /**
+- * @import {Code, ConstructRecord, Event, Extension, Previous, State, TokenizeContext, Tokenizer} from 'micromark-util-types'
++ * @import {Code, ConstructRecord, Event, Extension, Previous, State, Token, TokenizeContext, Tokenizer} from 'micromark-util-types'
+  */
+
+ import {
+@@ -16,6 +16,7 @@
+ const domain = {tokenize: tokenizeDomain, partial: true}
+ const path = {tokenize: tokenizePath, partial: true}
+ const trail = {tokenize: tokenizeTrail, partial: true}
++const strongEnd = {tokenize: tokenizeStrongEnd, partial: true}
+ const emailDomainDotTrail = {
+   tokenize: tokenizeEmailDomainDotTrail,
+   partial: true
+@@ -607,6 +608,9 @@
+  * @type {Tokenizer}
+  */
+ function tokenizePath(effects, ok) {
++  const self = this
++  /** @type {boolean | undefined} */
++  let strong
+   let sizeOpen = 0
+   let sizeClose = 0
+
+@@ -656,7 +660,13 @@
+       code === codes.underscore ||
+       code === codes.tilde
+     ) {
+-      return effects.check(trail, ok, pathAtPunctuation)(code)
++      return effects.check(
++        trail,
++        ok,
++        code === codes.asterisk && self.previous !== codes.asterisk
++          ? effects.check(strongEnd, atStrongEnd, pathAtPunctuation)
++          : pathAtPunctuation
++      )(code)
+     }
+
+     if (
+@@ -671,6 +681,13 @@
+     return pathInside
+   }
+
++  /** @type {State} */
++  function atStrongEnd(code) {
++    // Only resolve the prefix once a qualifying closing boundary is found.
++    if (strong === undefined) strong = unmatchedStrong(self)
++    return strong ? ok(code) : pathAtPunctuation(code)
++  }
++
+   /**
+    * In path, at potential trailing punctuation, that was not trailing.
+    *
+@@ -693,6 +710,94 @@
+ }
+
+ /**
++ * Resolve a detached prefix to distinguish a fresh ** opener from a delimiter
++ * already used as a closer. Use the tokenizer's actual resolver order, including
++ * strikethrough, without mutating the live tokens or their positions.
++ *
++ * @param {TokenizeContext} context
++ * @returns {boolean}
++ */
++function unmatchedStrong(context) {
++  // The two current events enter literalAutolink and its protocol/www token.
++  const before = context.events[context.events.length - 3]
++  if (
++    !before ||
++    before[0] !== 'exit' ||
++    before[1].type !== 'attentionSequence' ||
++    !before[1]._open ||
++    context.sliceSerialize(before[1]) !== '**'
++  )
++    return false
++
++  /** @type {Map<Token, Token>} */
++  const copies = new Map()
++  /** @type {Array<Event>} */
++  const events = context.events.slice(0, -2).map(([kind, token, owner]) => {
++    let copy = copies.get(token)
++    if (!copy) {
++      copy = {...token, start: {...token.start}, end: {...token.end}}
++      copies.set(token, copy)
++    }
++    return [kind, copy, owner]
++  })
++  const opener = copies.get(before[1])
++  // Private contract supplied by the pinned micromark core patch.
++  const resolved =
++    /** @type {TokenizeContext & {_resolveAll: (events: Array<Event>) => Array<Event>}} */ (
++      context
++    )._resolveAll(events)
++  for (const [original, copy] of copies) {
++    // An unresolved strike opener can match after the URL, changing the scope
++    // in which emphasis pairs. Leave these ambiguous cases to upstream.
++    if (
++      original.type === 'strikethroughSequenceTemporary' &&
++      original._open &&
++      copy.type !== 'strikethroughSequence'
++    )
++      return false
++  }
++  return resolved.some(
++    ([kind, token]) =>
++      kind === 'exit' &&
++      token === opener &&
++      token.start.offset === before[1].start.offset &&
++      token.end.offset === before[1].end.offset
++  )
++}
++
++/**
++ * Let an adjacent ** opener close before non-ASCII punctuation without changing
++ * bare URL boundaries. The lookahead leaves both stars for attention parsing.
++ *
++ * @this {TokenizeContext}
++ * @type {Tokenizer}
++ */
++function tokenizeStrongEnd(effects, ok, nok) {
++  const self = this
++  // Use the active attention tokenizer, including CJK flanking rules, rather
++  // than guessing whether this delimiter can close from punctuation alone.
++  return effects.attempt(
++    self.parser.constructs.text[codes.asterisk],
++    after,
++    nok
++  )
++
++  /** @type {State} */
++  function after(code) {
++    const event = self.events[self.events.length - 1]
++    return code !== codes.eof &&
++      code > 127 &&
++      unicodePunctuation(code) &&
++      event[0] === 'exit' &&
++      event[1].type === 'attentionSequence' &&
++      event[1]._close &&
++      self.sliceSerialize(event[1]) === '**'
++      ? ok(code)
++      : nok(code)
++  }
++}
++
++/**
+  * Trail.
+  *
+  * This calls `ok` if this *is* the trail, followed by an end, which means
+diff --git a/lib/syntax.js b/lib/syntax.js
+--- a/lib/syntax.js
++++ b/lib/syntax.js
+@@ -1,5 +1,5 @@
+ /**
+- * @import {Code, ConstructRecord, Event, Extension, Previous, State, TokenizeContext, Tokenizer} from 'micromark-util-types'
++ * @import {Code, ConstructRecord, Event, Extension, Previous, State, Token, TokenizeContext, Tokenizer} from 'micromark-util-types'
+  */
+
+ import { asciiAlpha, asciiAlphanumeric, asciiControl, markdownLineEndingOrSpace, unicodePunctuation, unicodeWhitespace } from 'micromark-util-character';
+@@ -19,6 +19,10 @@
+   tokenize: tokenizeTrail,
+   partial: true
+ };
++const strongEnd = {
++  tokenize: tokenizeStrongEnd,
++  partial: true
++};
+ const emailDomainDotTrail = {
+   tokenize: tokenizeEmailDomainDotTrail,
+   partial: true
+@@ -550,6 +554,9 @@
+  * @type {Tokenizer}
+  */
+ function tokenizePath(effects, ok) {
++  const self = this;
++  /** @type {boolean | undefined} */
++  let strong;
+   let sizeOpen = 0;
+   let sizeClose = 0;
+   return pathInside;
+@@ -582,7 +589,7 @@
+     // followed by more trailing markers, and then followed
+     // by an end.
+     if (code === 33 || code === 34 || code === 38 || code === 39 || code === 41 || code === 42 || code === 44 || code === 46 || code === 58 || code === 59 || code === 60 || code === 63 || code === 93 || code === 95 || code === 126) {
+-      return effects.check(trail, ok, pathAtPunctuation)(code);
++      return effects.check(trail, ok, code === 42 && self.previous !== 42 ? effects.check(strongEnd, atStrongEnd, pathAtPunctuation) : pathAtPunctuation)(code);
+     }
+     if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
+       return ok(code);
+@@ -591,6 +598,13 @@
+     return pathInside;
+   }
+
++  /** @type {State} */
++  function atStrongEnd(code) {
++    // Only resolve the prefix once a qualifying closing boundary is found.
++    if (strong === undefined) strong = unmatchedStrong(self);
++    return strong ? ok(code) : pathAtPunctuation(code);
++  }
++
+   /**
+    * In path, at potential trailing punctuation, that was not trailing.
+    *
+@@ -608,6 +622,60 @@
+     }
+     effects.consume(code);
+     return pathInside;
++  }
++}
++
++/**
++ * Resolve a detached prefix to distinguish a fresh ** opener from a delimiter
++ * already used as a closer. Use the tokenizer's actual resolver order, including
++ * strikethrough, without mutating the live tokens or their positions.
++ *
++ * @param {TokenizeContext} context
++ * @returns {boolean}
++ */
++function unmatchedStrong(context) {
++  // The two current events enter literalAutolink and its protocol/www token.
++  const before = context.events[context.events.length - 3];
++  if (!before || before[0] !== 'exit' || before[1].type !== 'attentionSequence' || !before[1]._open || context.sliceSerialize(before[1]) !== '**') return false;
++  /** @type {Map<Token, Token>} */
++  const copies = new Map();
++  /** @type {Array<Event>} */
++  const events = context.events.slice(0, -2).map(([kind, token, owner]) => {
++    let copy = copies.get(token);
++    if (!copy) {
++      copy = {...token, start: {...token.start}, end: {...token.end}};
++      copies.set(token, copy);
++    }
++    return [kind, copy, owner];
++  });
++  const opener = copies.get(before[1]);
++  // Private contract supplied by the pinned micromark core patch.
++  const resolved = /** @type {TokenizeContext & {_resolveAll: (events: Array<Event>) => Array<Event>}} */ (context)._resolveAll(events);
++  for (const [original, copy] of copies) {
++    // An unresolved strike opener can match after the URL, changing the scope
++    // in which emphasis pairs. Leave these ambiguous cases to upstream.
++    if (original.type === 'strikethroughSequenceTemporary' && original._open && copy.type !== 'strikethroughSequence') return false;
++  }
++  return resolved.some(([kind, token]) => kind === 'exit' && token === opener && token.start.offset === before[1].start.offset && token.end.offset === before[1].end.offset);
++}
++
++/**
++ * Let an adjacent ** opener close before non-ASCII punctuation without changing
++ * bare URL boundaries. The lookahead leaves both stars for attention parsing.
++ *
++ * @this {TokenizeContext}
++ * @type {Tokenizer}
++ */
++function tokenizeStrongEnd(effects, ok, nok) {
++  const self = this;
++  // Use the active attention tokenizer, including CJK flanking rules, rather
++  // than guessing whether this delimiter can close from punctuation alone.
++  return effects.attempt(self.parser.constructs.text[42], after, nok);
++
++  /** @type {State} */
++  function after(code) {
++    const event = self.events[self.events.length - 1];
++    return code !== null && code > 127 && unicodePunctuation(code) && event[0] === 'exit' && event[1].type === 'attentionSequence' && event[1]._close && self.sliceSerialize(event[1]) === '**' ? ok(code) : nok(code);
+   }
+ }
+
+@@ -851,4 +919,4 @@
+     events[events.length - 1][1]._gfmAutolinkLiteralWalkedInto = true;
+   }
+   return result;
+-}
+\ No newline at end of file
++}

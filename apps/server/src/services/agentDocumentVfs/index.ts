@@ -13,7 +13,7 @@ import {
   getAgentDocumentContentType,
   RAW_TEXT_DOCUMENT_FILE_TYPE,
 } from '../agentDocuments/contentFormat';
-import { createMarkdownEditorSnapshot } from '../agentDocuments/headlessEditor';
+import { createAgentMarkdownSnapshot } from '../agentDocuments/headlessEditor';
 import { FileService } from '../file';
 import { AgentDocumentVfsError } from './errors';
 import { createSkillMount } from './mounts/skills/createSkillMount';
@@ -836,7 +836,7 @@ export class AgentDocumentVfsService {
           fileType: RAW_TEXT_DOCUMENT_FILE_TYPE,
         });
       } else {
-        const snapshot = await createMarkdownEditorSnapshot(content);
+        const snapshot = await createAgentMarkdownSnapshot(content);
         await this.agentDocumentModel.update(existing.id, {
           content: snapshot.content,
           editorData: snapshot.editorData,
@@ -897,7 +897,7 @@ export class AgentDocumentVfsService {
       return this.toOrdinaryStats(created, buildOrdinaryPath(parentPath, normalizedFilename));
     }
 
-    const snapshot = await createMarkdownEditorSnapshot(content);
+    const snapshot = await createAgentMarkdownSnapshot(content);
     const created = await this.agentDocumentModel.create(
       ctx.agentId,
       normalizedFilename,

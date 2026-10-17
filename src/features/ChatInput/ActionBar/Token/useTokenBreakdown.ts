@@ -20,6 +20,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
+import { useTopicId } from '../../hooks/useTopicId';
 import { useStoreApi } from '../../store';
 import { getToolContextRefreshKey, getToolExcludeDefaultToolIds } from './utils';
 
@@ -82,8 +83,14 @@ export interface TokenBreakdown {
 
 export const useTokenBreakdown = (): TokenBreakdown => {
   const { input, messages } = useComposerSource();
-  const historySummary = useChatStore(
-    (s) => topicSelectors.currentActiveTopicSummary(s)?.content || '',
+  // The summary of this composer's own conversation (see `useTopicId`), never
+  // the global active topic's: an embedded composer would otherwise count the
+  // outer chat's history against its context window.
+  const topicId = useTopicId();
+  // The topic itself is loaded by id in `useTopicModel` (via `useEffectiveModel`
+  // below), so a sidebar-excluded topic's persisted summary arrives here too.
+  const historySummary = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s)?.historySummary || '' : '',
   );
 
   const agentId = useAgentId();

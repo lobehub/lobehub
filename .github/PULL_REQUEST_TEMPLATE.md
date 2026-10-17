@@ -53,7 +53,12 @@ Contribution source: <!-- Set to AI-assisted, Human-only, or Unknown. Required f
 - [ ] Added/updated tests
 - [ ] No tests needed
 
-<!-- Acceptance round for user-visible changes (AGENTS.md → Acceptance); or state why none is needed -->
+<!--
+Required. Replace `...` below with acceptance evidence: an acceptance round link (AGENTS.md → Acceptance),
+screenshots or recordings, or the steps you used to verify the change.
+When no acceptance is needed, write `Not needed: <reason>`.
+The PR admission check labels PRs missing these fields as `pr:incomplete`; incomplete PRs are closed after 14 days without activity.
+-->
 
 - Acceptance: ...
 

@@ -11,6 +11,7 @@ import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { evidenceTypeForStoredFile } from '@/server/services/verify/evidenceMedium';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -172,7 +173,9 @@ class AcceptanceEvidenceExecutionRuntime {
     // with no file, which renders on the acceptance as a visual check with
     // nothing behind it: strictly worse than an honest text note.
     const unbacked = params.evidence.find(
-      (item) => (item.type === 'screenshot' || item.type === 'video') && !item.fileId,
+      (item) =>
+        (item.type === 'gif' || item.type === 'screenshot' || item.type === 'video') &&
+        !item.fileId,
     );
     if (unbacked) {
       return {
@@ -214,6 +217,7 @@ class AcceptanceEvidenceExecutionRuntime {
     }
 
     const fileIds = [...new Set(params.evidence.flatMap((evidence) => evidence.fileId ?? []))];
+    const filesById = new Map<string, Awaited<ReturnType<FileModel['findById']>>>();
     if (fileIds.length > 0) {
       const files = await Promise.all(
         fileIds.map((fileId) =>
@@ -228,6 +232,7 @@ class AcceptanceEvidenceExecutionRuntime {
           success: false,
         };
       }
+      fileIds.forEach((fileId, index) => filesById.set(fileId, files[index]));
     }
 
     const result = await new VerifyCheckResultModel(
@@ -253,7 +258,10 @@ class AcceptanceEvidenceExecutionRuntime {
         description: evidence.description ?? null,
         documentId: evidence.documentId ?? null,
         fileId: evidence.fileId ?? null,
-        type: evidence.type,
+        type: evidenceTypeForStoredFile(
+          evidence.type,
+          evidence.fileId ? filesById.get(evidence.fileId) : undefined,
+        ),
       })),
     );
 

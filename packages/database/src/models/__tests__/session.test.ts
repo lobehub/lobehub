@@ -366,6 +366,36 @@ describe('SessionModel', () => {
     });
   });
 
+  describe('findSessionsByKeywords BM25 limit', () => {
+    it('clamps the page size to the ParadeDB BM25 ceiling', async () => {
+      // ParadeDB rejects `LIMIT > 8192` for BM25 (`@@@`) ordering with
+      // `error: min > max. min = 9999, max = 8192`, and the error is swallowed
+      // one frame below — so an over-limit "no pagination" page size returned
+      // *no* matches at all instead of the top hits.
+      const findMany = vi.fn().mockResolvedValue([]);
+      const model = new SessionModel(
+        { query: { agents: { findMany } } } as unknown as LobeChatDatabase,
+        userId,
+      );
+
+      await model.findSessionsByKeywords({ keyword: 'hello' });
+
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ limit: 8192 }));
+    });
+
+    it('keeps an explicit page size below the ceiling', async () => {
+      const findMany = vi.fn().mockResolvedValue([]);
+      const model = new SessionModel(
+        { query: { agents: { findMany } } } as unknown as LobeChatDatabase,
+        userId,
+      );
+
+      await model.findSessionsByKeywords({ keyword: 'hello', pageSize: 20 });
+
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ limit: 20 }));
+    });
+  });
+
   describe('queryByKeyword with external candidates', () => {
     it('hydrates only current-scope sessions and surfaces candidate failures', async () => {
       await serverDB.insert(users).values({ id: 'candidate-other-user' });

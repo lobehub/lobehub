@@ -2,7 +2,7 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.7.0"
+  version: "0.7.5"
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -300,12 +300,12 @@ excuse below was made in a real round.
 
 | Excuse                                                                                                 | Reality                                                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Injection is hard; happy-path plus unit tests covers it"                                              | The error state _was_ the goal. Walk the probe ladder ([probe-mock-patterns.md](references/probe-mock-patterns.md) A) before calling it blocked. (M2)                                                                           |
-| "The branch name says what to verify" / "Loading the living logs first…"                               | The task lives in the user's words. Recover it, or confirm a labeled guess with one structured question — silently; never narrate setup. (M3, M21)                                                                              |
-| "The black frame is probably display sleep / a permission"                                             | Measure first: pixel brightness, the permission bit, an A/B with one variable toggled. Publish "confirmed by X" or "suspected", never a guess. (M4)                                                                             |
-| "Let me ask how they want it run" / "I'll click Sign in and you authorize" / "too small to screenshot" | Environment mechanics are yours: full isolated run, auth by direct injection (never an interactive login — it hijacks the user's browser), a screenshot for every user-facing change. Ask only about the product decision. (M8) |
-| "One more config edit and the env will boot" / "I'll mock it" / "I'll drive the rest myself"           | Timebox. Inventory running instances, probe for the real capability before mocking (a mock that records nothing is not in the path), re-delegate a dead subagent's remaining steps, revert experiments and ask. (M17)           |
-| "The fix is in and tests pass — verified"                                                              | Reproduce the failure's precondition first, then verify with it held. A run that cannot fail proves nothing; "reproduces sometimes" means an unnamed precondition. When the mocked seam is the suspect, drop the mock. (M31)    |
+| "Injection is hard; happy-path plus unit tests covers it"                                              | The error state _was_ the goal. Walk the probe ladder ([probe-mock-patterns.md](references/probe-mock-patterns.md) A) before calling it blocked. |
+| "The branch name says what to verify" / "Loading the living logs first…"                               | The task lives in the user's words. Recover it, or confirm a labeled guess with one structured question — silently; never narrate setup. |
+| "The black frame is probably display sleep / a permission"                                             | Measure first: pixel brightness, the permission bit, an A/B with one variable toggled. Publish "confirmed by X" or "suspected", never a guess. |
+| "Let me ask how they want it run" / "I'll click Sign in and you authorize" / "too small to screenshot" | Environment mechanics are yours: full isolated run, auth by direct injection (never an interactive login — it hijacks the user's browser), a screenshot for every user-facing change. Ask only about the product decision. |
+| "One more config edit and the env will boot" / "I'll mock it" / "I'll drive the rest myself"           | Timebox. Inventory running instances, probe for the real capability before mocking (a mock that records nothing is not in the path), re-delegate a dead subagent's remaining steps. Search the project layer (`.agents/acceptance/`, including `references/`) for the exact error before asking; if it has no fix, revert experiments and ask for the missing prerequisite. |
+| "The fix is in and tests pass — verified"                                                              | Reproduce the failure's precondition first, then verify with it held. A run that cannot fail proves nothing; "reproduces sometimes" means an unnamed precondition. When the mocked seam is the suspect, drop the mock. |
 
 ## Pick the surface by the user-visible outcome
 
@@ -334,6 +334,15 @@ passing tests support that evidence; they do not replace it.
   [report.md](references/report.md#structured-visualizations). **A deliverable
   the user hears needs `audio`** —
   [evidence.md](references/evidence.md#audio-deliverables).
+- **A change to UI users already see needs before/after evidence.** When the
+  delivery changes existing copy, labels, toasts, layout, or style, each such
+  case requires a `comparison` pair of the same view on the pre-change and
+  post-change code — [report.md](references/report.md#beforeafter-comparison-pairs).
+  An after-only shot of a toast reading `重命名遇到了问题，请重试` does not show
+  it replaced `Rename failed`. Prove the before half really runs the old code
+  ([probe-mock-patterns.md](references/probe-mock-patterns.md) A6); text that
+  does not render visibly, such as an `aria-label`, also needs the DOM reading.
+  UI with no prior state is exempt.
 - **Auth is a gate scoped to the surface**: authenticate that surface first or
   every capture lands on the sign-in page. Web:
   [auth-web.md](references/auth-web.md).
@@ -434,6 +443,15 @@ or a `storage_block:` error. Do not stop at "upload failed" or "noted in the PR"
   verdicts; read back coverage and do not claim the delivery is complete while
   required evidence is missing.
 
+**Record the deployed preview.** When the delivery is deployed somewhere a
+reviewer can open (a pull-request preview, a staging URL, a dev server on this
+machine), run `lh acceptance preview <acceptanceId> <url>` after the round is
+published. The URL must be https, or http on `localhost`/`127.0.0.1`. The
+acceptance page then offers "Review on preview", where reviewers comment on the
+live page; `lh acceptance feedback` lists those comments with the page URL and
+the `file:line` they were pinned to. Skip this when nothing is deployed — never
+invent a URL.
+
 The final response for a completed handoff MUST include the published acceptance
 URL together with the coverage result — never only a check-result id or a prose
 claim. Obtain the links from the path you actually executed:
@@ -468,8 +486,9 @@ Coverage: 2/2 criteria, all required evidence uploaded
 
 - **Engine-level capture over OS capture.** `agent-browser screenshot` / `dom` /
   `eval` run headless; `screencapture` / osascript are macOS-only. iOS: `xcrun
-simctl io` over host-window capture. Rounds land under `.acceptances/`, which
-  the CLI keeps out of git.
+simctl io` over host-window capture. Rounds land under `.acceptances/`;
+  allocate them with `new_round` ([report.md](references/report.md#no-operation-id-needed)),
+  which seeds the `.acceptances/.gitignore` that keeps them out of git.
 - **Upload as you go.** Evidence keyed to its check mid-run survives a crash near
   the end.
 - **Don't invent evidence.** Capture only the types a check declares.

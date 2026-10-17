@@ -1,7 +1,6 @@
 import i18n from 'i18next';
 
 import { type LocaleMode } from '@/types/locale';
-import { getAntdLocale } from '@/utils/locale';
 
 import { resolveLang } from './switchLang';
 
@@ -37,6 +36,5 @@ export const preloadLang = (locale: LocaleMode) => {
     const lang = resolveLang(locale);
 
     loadNamespaces(lang);
-    getAntdLocale(lang).catch(() => {});
   }, HOVER_INTENT_DELAY);
 };

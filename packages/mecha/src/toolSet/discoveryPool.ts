@@ -72,6 +72,16 @@ export interface DiscoveryPoolRequest {
   enabledManifests: ReadonlyMap<string, LobeToolManifest>;
   exclusivePluginIds?: readonly string[];
   executionTarget: DeviceExecutionTarget;
+  /**
+   * Installed plugins the run may DISCOVER but must never enable by itself —
+   * the three-state plugin config's `auto` mode (installed, not pinned, not
+   * disabled). They are seeded last and only for identifiers nothing else in
+   * the pool already covers, so an enabled manifest, a discoverable builtin
+   * or a connector family keeps this run's manifest and routing. Nothing here
+   * reaches the enable rules: `enabledToolIds` stays pinned-only, and the
+   * activator is the only way one of these becomes callable.
+   */
+  installedManifests?: readonly LobeToolManifest[];
   /** Disabled-filtered LobeHub skill manifests. */
   lobehubSkills?: readonly LobeToolManifest[];
   /**
@@ -94,8 +104,9 @@ export interface DiscoveryPool {
 
 /**
  * The pool the activator may resolve tools from mid-run: the enabled
- * manifests, every discoverable builtin the walls allow, and the connector
- * families. Device and sandbox tools only appear when the run can reach
+ * manifests, every discoverable builtin the walls allow, the connector
+ * families, and the installed plugins the run may activate but not enable on
+ * its own. Device and sandbox tools only appear when the run can reach
  * them — explicit activation bypasses the enable rules, so what is not
  * reachable must not be discoverable at all.
  */
@@ -189,12 +200,27 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
   ingestFamily(request.lobehubSkills ?? [], 'lobehubSkill');
   ingestFamily(request.composio ?? [], 'composio');
 
+  // Installed-but-not-pinned plugins (`auto` in the agent's three-state
+  // plugin config): discoverable exactly like the client runtime lists them
+  // from `installedPlugins`, yet never part of the run's enabled set — the
+  // activator is what turns one into a callable tool. Seeded last and only
+  // where nothing above already answered for the identifier, so a pinned
+  // manifest, a discoverable builtin or a connector family always wins.
+  for (const manifest of request.installedManifests ?? []) {
+    const identifier = manifest?.identifier;
+    if (!identifier) continue;
+    if (manifestMap[identifier]) continue;
+    if (!isManifestIngestAllowed(identifier)) continue;
+    manifestMap[identifier] = manifest;
+    // Every installed plugin executes through the MCP path, matching the
+    // client's own labelling of them.
+    sourceMap[identifier] = 'mcp';
+  }
+
   return { isManifestIngestAllowed, manifestMap, sourceMap };
 };
 
 export interface ClientExecutorsRequest {
-  /** Identifiers the engine enabled for this run. */
-  enabledIds: ReadonlySet<string>;
   /** A device gateway exists; tool calls tunnel to a registered device. */
   hasDeviceProxy: boolean;
   manifestMap: Readonly<Record<string, LobeToolManifest>>;
@@ -207,6 +233,14 @@ export interface ClientExecutorsRequest {
  * marked for direct client dispatch only in the standalone deployment: with a
  * gateway every caller converges on the device-gateway path and the executor
  * stays unset so the remote-device proxy resolves the route.
+ *
+ * A stdio entry is recognised by being *part of this run's pool*, not by being
+ * enabled. The activator can turn a discoverable-but-unpinned plugin into a
+ * callable tool mid-run, and `ToolResolver.applyActivation` adds it without
+ * re-running this pass — an id left out here would be dispatched to the server
+ * and run the user's local MCP command there instead of on their machine.
+ * Marking the whole pool up front costs nothing: an executor entry for a tool
+ * nobody calls is inert, and a share run prunes what it does not grant.
  */
 export const resolveClientExecutors = (
   request: ClientExecutorsRequest,
@@ -218,7 +252,7 @@ export const resolveClientExecutors = (
       executorMap[id] = 'client';
   }
   for (const id of request.stdioIdentifiers ?? []) {
-    if (request.enabledIds.has(id)) executorMap[id] = 'client';
+    if (request.manifestMap[id]) executorMap[id] = 'client';
   }
   return executorMap;
 };

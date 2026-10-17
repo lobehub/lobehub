@@ -23,6 +23,9 @@ const { mockDeviceProxy } = vi.hoisted(() => ({
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
     queryDeviceSystemInfo: vi.fn().mockResolvedValue(undefined),
+    // Present so a send-path regression that probes the device shows up as a
+    // failed assertion rather than a "not a function" crash.
+    statPath: vi.fn().mockResolvedValue({ exists: true, isDirectory: true }),
   },
 }));
 
@@ -97,6 +100,19 @@ const topicMock = {
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
     return topicMock;
+  }),
+}));
+
+const { mockResolveProjectDirectory, mockResolveProjectDirectoryForTopic } = vi.hoisted(() => ({
+  mockResolveProjectDirectory: vi.fn(),
+  mockResolveProjectDirectoryForTopic: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/database/models/projectWorkingDirectory', () => ({
+  ProjectWorkingDirectoryModel: vi.fn().mockImplementation(function () {
+    return {
+      resolve: mockResolveProjectDirectory,
+      resolveForTopic: mockResolveProjectDirectoryForTopic,
+    };
   }),
 }));
 
@@ -695,6 +711,174 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         }),
         undefined,
       );
+    });
+  });
+
+  describe('project directory binding', () => {
+    it('keeps a project topic without a directory on the device it already ran on', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      // Started outside any directory: the first run stamped its device.
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-002', workingDirectory: '/repo' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: null,
+      });
+      // The agent default points elsewhere; the conversation's pin must win.
+      await useAgencyConfig({ boundDeviceId: 'device-001', executionTarget: 'device' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Keep working',
+        appContext: { topicId: 'topic-1' },
+      });
+
+      expect(mockResolveProjectDirectoryForTopic).not.toHaveBeenCalled();
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
+    });
+
+    it('does not consult the project resolver for plain device-bound topics', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001' },
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Keep working',
+        appContext: { topicId: 'topic-1' },
+      });
+
+      expect(mockResolveProjectDirectoryForTopic).not.toHaveBeenCalled();
+      expect(mockCreateOperation).toHaveBeenCalled();
+    });
+
+    // Regression: the send path used to `await deviceGateway.statPath(...)` to
+    // pre-check the directory, putting a full device WebSocket round trip (up to
+    // its 8s timeout) in front of every message and rejecting the send when the
+    // device was merely slow to answer. Liveness is the dispatch's to discover.
+    it('routes a project-directory topic without a device round trip on the send path', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001', workingDirectory: '/repo' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+      mockResolveProjectDirectoryForTopic.mockResolvedValueOnce({
+        deviceId: 'device-001',
+        path: '/repo',
+        permission: 'readWrite',
+        platform: 'darwin',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Keep working',
+        appContext: { topicId: 'topic-1' },
+      });
+
+      expect(mockDeviceProxy.statPath).not.toHaveBeenCalled();
+      expect(mockCreateOperation).toHaveBeenCalled();
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('device-001');
+    });
+
+    // Regression: the directory lives on one device, so an offline device has to
+    // reject the send *before* the user/assistant rows are persisted. A
+    // rejection after persistence leaves a failed turn durable server-side while
+    // the client treats the send as unaccepted, rolls its optimistic pair back
+    // and keeps the draft — and retrying then stacks duplicate failed turns.
+    it('rejects an offline bound device before persisting the turn', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001', workingDirectory: '/repo' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+      mockResolveProjectDirectoryForTopic.mockResolvedValueOnce({
+        deviceId: 'device-001',
+        path: '/repo',
+        permission: 'readWrite',
+        platform: 'darwin',
+      });
+      mockMessageCreate.mockClear();
+      mockCreateOperation.mockClear();
+
+      const error: unknown = await service
+        .execAgent({
+          agentId: 'agent-1',
+          prompt: 'Run a command',
+          appContext: { topicId: 'topic-1' },
+        })
+        .catch((thrown) => thrown);
+
+      // Asserted before the message so a post-persistence rejection fails here,
+      // on the divergence itself rather than on the error text.
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        'Device is offline or working directory is unavailable',
+      );
+    });
+  });
+
+  describe('new topic in a staged project directory', () => {
+    const stagedDirectory = {
+      deviceId: 'device-001',
+      id: 'dir-1',
+      path: '/repo',
+      permission: 'readWrite',
+      platform: 'darwin',
+      projectId: 'project-1',
+    };
+
+    // Regression: a blank conversation opened from a project group's "+" was
+    // created without its directory — the first send dropped the staged
+    // binding, so the topic left the project and ran on the agent default.
+    it('binds the created topic to the directory and runs on its device', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      mockResolveProjectDirectory.mockResolvedValueOnce(stagedDirectory);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { projectWorkingDirectoryId: 'dir-1' },
+        prompt: 'Start here',
+      });
+
+      expect(mockResolveProjectDirectory).toHaveBeenCalledWith('dir-1');
+      const createArgs = topicMock.create.mock.calls.at(-1)![0];
+      expect(createArgs.projectId).toBe('project-1');
+      expect(createArgs.projectWorkingDirectoryId).toBe('dir-1');
+      expect(createArgs.metadata?.boundDeviceId).toBe('device-001');
+      expect(createArgs.metadata?.workingDirectory).toBe('/repo');
+      expect(mockCreateOperation.mock.calls.at(-1)![0].activeDeviceId).toBe('device-001');
+    });
+
+    it('rejects an offline directory device before creating the topic', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
+      mockResolveProjectDirectory.mockResolvedValueOnce(stagedDirectory);
+      topicMock.create.mockClear();
+      mockCreateOperation.mockClear();
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: { projectWorkingDirectoryId: 'dir-1' },
+          prompt: 'Start here',
+        }),
+      ).rejects.toThrow('Device is offline or working directory is unavailable');
+      expect(topicMock.create).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
     });
   });
 

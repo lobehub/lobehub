@@ -1,6 +1,7 @@
 import type { spawn } from 'node:child_process';
-import { stat } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
+import path from 'node:path';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
@@ -39,21 +40,106 @@ export interface RunCommandOptions {
    * registers the process with a tracker). Ignored when {@link backend} is set.
    */
   spawnProcess?: typeof spawn;
+  /**
+   * Root directory for the isolated fallback directory (see below). Defaults
+   * to `os.tmpdir()`. Test/DI hook — the fallback and its reporting are the
+   * behaviors under test, not the specific directory.
+   */
+  tmpdirOverride?: string;
 }
 
 /**
- * Node reports a missing spawn cwd as `spawn <shell> ENOENT` — blaming the
- * shell binary — so the model goes off debugging a healthy shell. Check the
- * directory first and name the real problem, and the machine it happened on
- * (a cwd pinned on another device is the usual cause).
+ * `true` = resolves to a directory; `false` = resolves to a non-directory
+ * (a regular file); `undefined` = cannot be resolved at all (missing, an
+ * unreadable parent, a symlink loop). Keeping the three cases apart lets the
+ * report name what actually happened instead of guessing.
  */
-const checkWorkingDirectory = async (cwd: string): Promise<string | undefined> => {
+const statIsDirectory = async (dir: string): Promise<boolean | undefined> => {
   try {
-    if ((await stat(cwd)).isDirectory()) return;
-    return `Working directory is not a directory on ${os.hostname()}: ${cwd}`;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
-    return `Working directory does not exist on ${os.hostname()}: ${cwd}. The shell is fine — run the command from a directory that exists on this device.`;
+    return (await stat(dir)).isDirectory();
+  } catch {
+    return undefined;
+  }
+};
+
+interface WorkingDirectoryResolution {
+  /** The directory to spawn in, when the request was honored or a fallback was found. */
+  cwd?: string;
+  /** Structured failure: no usable directory anywhere, or a sandboxed run that must not move. */
+  error?: string;
+  /**
+   * Set when the requested cwd was unusable and the run fell back. Prepended to
+   * the command's output so the model sees the caveat next to whatever the
+   * command printed from the fallback directory.
+   */
+  notice?: string;
+  /**
+   * Removes the fallback directory once nothing is running in it. Only set when
+   * the cwd is a fresh fallback; without this, every command against a stale
+   * cwd would leave another directory (and anything the command wrote into it)
+   * under the temp root forever.
+   */
+  remove?: () => Promise<void>;
+}
+
+/**
+ * Resolve a requested cwd to a directory the shell can actually start in.
+ *
+ * A cwd pinned on another machine (a stale repo path, a moved worktree) would
+ * otherwise kill every command in the run: the run cannot change its own pinned
+ * cwd, callers strip a model-supplied cwd before dispatch, and re-running
+ * `cd` inside the command does not help because the check happens before the
+ * shell exists — so the same failure repeats forever. Un-sandboxed runs fall
+ * back to a fresh isolated directory created under the OS temp root, and the
+ * fallback is reported so nothing downstream mistakes it for the requested
+ * directory.
+ *
+ * Sandboxed runs do NOT fall back: the sandbox fence (`createLocalSandboxPolicy`)
+ * is built on the requested cwd, so silently spawning in another directory
+ * would grant writes somewhere the user never approved. Those fail loudly.
+ */
+const resolveWorkingDirectory = async (
+  requestedCwd: string,
+  sandboxRequested: boolean,
+  fallbackRoot: string | undefined,
+): Promise<WorkingDirectoryResolution> => {
+  const usable = await statIsDirectory(requestedCwd);
+  if (usable) return { cwd: requestedCwd };
+
+  const reason =
+    usable === false
+      ? `Working directory is not a directory on ${os.hostname()}: ${requestedCwd}`
+      : `Working directory does not exist on ${os.hostname()}: ${requestedCwd}`;
+
+  if (sandboxRequested) {
+    return {
+      error: `${reason}. A sandboxed run must start in its requested directory — the sandbox fence is built on it — so the command was not run.`,
+    };
+  }
+
+  // The fallback is a fresh, empty directory rather than an existing one: a
+  // populated fallback (the user's home) would run project-relative commands
+  // like `rm -rf ./*` against someone else's files before the notice even
+  // reaches the model. An empty directory cannot be damaged that way, and the
+  // notice plus the visible `pwd` make the move impossible to miss.
+  try {
+    const fallback = await mkdtemp(path.join(fallbackRoot ?? os.tmpdir(), 'lobehub-cwd-fallback-'));
+    return {
+      cwd: fallback,
+      notice: `${reason}. Falling back to ${fallback}.`,
+      // Best-effort cleanup: the fallback is empty and lives under the OS temp
+      // root, so a missed removal is only a small leak — never lose the run
+      // over it.
+      remove: async () => {
+        await rm(fallback, { force: true, recursive: true });
+      },
+    };
+  } catch {
+    // No usable fallback: keep the structured error instead of letting the
+    // spawn surface a misleading `spawn <shell> ENOENT`.
+    return {
+      error: `${reason}. The shell is fine — run the command from a directory that exists on this device.`,
+    };
   }
 };
 
@@ -73,6 +159,7 @@ export async function runCommand(
     onSandboxUnavailable,
     sandboxPolicy,
     spawnProcess,
+    tmpdirOverride,
   }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
@@ -87,9 +174,17 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
+  let effectiveCwd = cwd;
+  let cwdNotice: string | undefined;
+  // Set only when the cwd fell back to a fresh directory; invoked once nothing
+  // is running in it anymore (see the `close` wiring below).
+  let removeCwdFallback: (() => Promise<void>) | undefined;
   if (cwd) {
-    const cwdError = await checkWorkingDirectory(cwd);
-    if (cwdError) return { error: cwdError, success: false };
+    const resolution = await resolveWorkingDirectory(cwd, !!sandboxPolicy, tmpdirOverride);
+    if (resolution.error) return { error: resolution.error, success: false };
+    effectiveCwd = resolution.cwd;
+    cwdNotice = resolution.notice;
+    removeCwdFallback = resolution.remove;
   }
 
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
@@ -105,6 +200,10 @@ export async function runCommand(
       : command;
   const shellConfig = await getShellConfig(effectiveCommand);
   let outputFiles: ShellOutputFiles | undefined;
+  // Whether the spawned process made it into the process manager. Past this
+  // point a thrown error must NOT remove the fallback: the process is still
+  // running in it, and its eventual `close` event owns the cleanup.
+  let registered = false;
   let releaseSandbox: (() => void) | undefined;
   // What actually happened, reported back so nothing downstream has to infer a
   // security property from the request that asked for it.
@@ -126,7 +225,7 @@ export async function runCommand(
       try {
         launchPlan = await createSandboxLaunchPlan({
           command: shellConfig,
-          cwd,
+          cwd: effectiveCwd,
           env: requestedEnv,
           policy: sandboxPolicy,
         });
@@ -144,7 +243,7 @@ export async function runCommand(
     outputFiles = shellOutputFiles;
     const handle = backend.spawn(
       { args: launchCommand.args, cmd: launchCommand.cmd },
-      { cwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
+      { cwd: effectiveCwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
     );
 
     const shellProcess: ShellProcess = {
@@ -170,16 +269,31 @@ export async function runCommand(
       );
       shellProcess.exitCode = 1;
     });
-    handle.once('close', () => releaseSandbox?.());
+    handle.once('close', () => {
+      releaseSandbox?.();
+      // Best-effort removal of the cwd fallback directory once nothing can be
+      // using it. `close` fires after exit *and* after all stdio has flushed,
+      // so nothing reads or writes the fallback anymore. Background runs,
+      // kills (SIGKILL has no exit callback) and `cleanupAll()` all end in a
+      // `close` event, so this is the one choke point that covers every exit
+      // path. Removal races are tolerated by design: a command that wrote into
+      // the fallback loses only its own temp files.
+      if (removeCwdFallback) {
+        removeCwdFallback().catch((error) => {
+          logger?.debug(`${logPrefix} Fallback directory cleanup failed`, { error });
+        });
+      }
+    });
 
     processManager.register(shellId, shellProcess);
+    registered = true;
     // Close our fd copy only after error/close listeners are registered; spawn errors are asynchronous.
     processManager.closeOutputFiles(shellOutputFiles);
     logger?.info?.(`${logPrefix} Started session`, { background: run_in_background, shellId });
 
     if (run_in_background) {
       return {
-        output: '',
+        output: cwdNotice ?? '',
         output_files: processManager.getOutputFilesInfo(shellOutputFiles),
         sandboxed,
         shell_id: shellId,
@@ -192,14 +306,26 @@ export async function runCommand(
       timeout,
     });
 
+    const result: RunCommandResult = { ...observation, sandboxed, shell_id: shellId };
+    if (!cwdNotice) return result;
+    // Put the caveat before whatever the command printed, so the model reads
+    // the fallback next to the output it produced from the fallback directory.
+    const prefix = `${cwdNotice}\n\n`;
     return {
-      ...observation,
-      sandboxed,
-      shell_id: shellId,
+      ...result,
+      output: `${prefix}${result.output ?? ''}`,
+      stdout: `${prefix}${result.stdout ?? ''}`,
     };
   } catch (error) {
     releaseSandbox?.();
     if (outputFiles) processManager.closeOutputFiles(outputFiles);
+    // The spawn never happened (shell config, sandbox plan build, or a spawn
+    // throw before registration): no `close` event will fire, so remove the
+    // fallback here instead of leaking it. After registration the process is
+    // running in the fallback — its `close` event owns the cleanup.
+    if (removeCwdFallback && !registered) {
+      await removeCwdFallback().catch(() => {});
+    }
     return { error: (error as Error).message, success: false };
   }
 }

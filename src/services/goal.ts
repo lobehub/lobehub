@@ -1,4 +1,4 @@
-import type { GoalStatus } from '@lobechat/const/goal';
+import { GOAL_GRAPH_CAPABILITY, type GoalStatus } from '@lobechat/const/goal';
 import type {
   GoalCreateConfig,
   GoalGraphSnapshot,
@@ -68,7 +68,12 @@ class GoalService {
 
   /** The whole Goal Graph in one read: nodes, edges, decisions, events, work-version links. */
   getGraph = async (id: string): Promise<GoalGraphSnapshot> => {
-    const { data } = await lambdaClient.goal.graph.query({ id });
+    // This client draws batches; without the declaration the server sends an
+    // older client's shape (see `graphForClient`).
+    const { data } = await lambdaClient.goal.graph.query({
+      capabilities: [GOAL_GRAPH_CAPABILITY.batch],
+      id,
+    });
     return data;
   };
 
@@ -92,6 +97,9 @@ class GoalService {
   pause = async (id: string) => lambdaClient.goal.pause.mutate({ id });
 
   resume = async (id: string) => lambdaClient.goal.resume.mutate({ id });
+
+  /** Launch a draft goal; nothing was dispatched before this. */
+  start = async (id: string) => lambdaClient.goal.start.mutate({ id });
 
   /** Answer a goal's whole clarification round; the goal re-plans once with every answer. */
   answerClarifications = async (params: {
@@ -130,10 +138,14 @@ class GoalService {
     maxTotalCost?: number | null;
   }) => lambdaClient.goal.setBudget.mutate(params);
 
+  /**
+   * A batch is only ever created by decomposition, never hand-authored, so the
+   * add-node surface accepts every kind except `batch`.
+   */
   addNode = async (params: {
     description?: string;
     id: string;
-    kind: GoalNodeKind;
+    kind: Exclude<GoalNodeKind, 'batch'>;
     priority?: number;
     title: string;
   }) => lambdaClient.goal.addNode.mutate(params);

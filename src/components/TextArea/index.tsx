@@ -1,4 +1,4 @@
-import { TextArea as LobeTextArea, type TextAreaProps as Props } from '@lobehub/ui/base-ui';
+import { TextArea as LobeTextArea, type TextAreaProps as Props } from '@lobehub/ui';
 import { memo, useRef, useState } from 'react';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';

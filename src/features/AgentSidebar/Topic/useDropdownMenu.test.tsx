@@ -25,6 +25,13 @@ const chatStoreMock = vi.hoisted(() => ({
 }));
 
 const messageMock = vi.hoisted(() => ({ info: vi.fn(), success: vi.fn() }));
+const addFolderMock = vi.hoisted(() => ({
+  item: null as { key: string; label: string; onClick: () => void } | null,
+}));
+
+vi.mock('./useAddFolderMenuItem', () => ({
+  useAddFolderMenuItem: () => addFolderMock.item,
+}));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspaceMock.activeWorkspaceId,
@@ -42,7 +49,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: () => userMock.currentUserId,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: confirmModalMock,
   toast: messageMock,
@@ -119,6 +126,31 @@ describe('useTopicActionsDropdownMenu', () => {
     chatStoreMock.updateTopicStatus.mockReset();
     messageMock.info.mockReset();
     messageMock.success.mockReset();
+    addFolderMock.item = null;
+  });
+
+  it('leads the menu with the add-folder action when the agent works in folders', () => {
+    const onClick = vi.fn();
+    addFolderMock.item = { key: 'addFolder', label: 'workingDirectory.addFolder', onClick };
+
+    const { result } = renderHook(() => useTopicActionsDropdownMenu());
+    const items = result.current()!;
+
+    expect(items[0]).toMatchObject({ key: 'addFolder', label: 'workingDirectory.addFolder' });
+    expect(items[1]).toMatchObject({ type: 'divider' });
+    expect(items[2]).toMatchObject({ key: 'displayItems' });
+
+    const addFolderItem = getMenuItem(items, 'addFolder');
+    if (addFolderItem && 'onClick' in addFolderItem) addFolderItem.onClick?.({} as never);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the add-folder action for agents that do not work in folders', () => {
+    const { result } = renderHook(() => useTopicActionsDropdownMenu());
+    const items = result.current()!;
+
+    expect(getMenuItem(items, 'addFolder')).toBeUndefined();
+    expect(items[0]).toMatchObject({ key: 'displayItems' });
   });
 
   it('disables topic write management actions for workspace viewers', () => {

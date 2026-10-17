@@ -1,5 +1,9 @@
 import type { GitWorkingTreePatches } from '@lobechat/electron-client-ipc';
-import type { DeviceGitPullRequestCiStatus, DeviceGitWorktreeListItem } from '@lobechat/types';
+import type {
+  DeviceExecutionTarget,
+  DeviceGitPullRequestCiStatus,
+  DeviceGitWorktreeListItem,
+} from '@lobechat/types';
 
 import { normalizeDisplayPath } from '@/features/ChatInput/ControlBar/worktreeHelpers';
 
@@ -57,3 +61,28 @@ export const isLinkedWorktreeCheckout = (
  */
 export const shouldShowCiLabel = (status?: DeviceGitPullRequestCiStatus): boolean =>
   status === 'failure' || status === 'pending';
+
+/**
+ * The machine whose live status the Overview shows. Unlike the RPC routing id,
+ * which is empty for "This device" so file and git reads stay on Electron IPC,
+ * a local run still names the desktop it is bound to, and that machine has a
+ * device card like any other.
+ */
+export const getStatusDeviceId = (
+  target: DeviceExecutionTarget,
+  boundDeviceId: string | undefined,
+): string | undefined => (target === 'device' || target === 'local' ? boundDeviceId : undefined);
+
+/**
+ * The git section skeleton is a first-ever-load affordance only. Once any git
+ * read has data — live, or hydrated from the replica's persisted rows on
+ * reload — the rows render stale-first and the in-flight reads refresh them in
+ * place.
+ */
+export const shouldShowGitSkeleton = ({
+  hasData,
+  loading,
+}: {
+  hasData: boolean;
+  loading: boolean;
+}): boolean => loading && !hasData;

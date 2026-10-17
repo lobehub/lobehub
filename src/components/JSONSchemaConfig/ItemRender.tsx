@@ -1,4 +1,4 @@
-import { Input, InputNumber, InputPassword, Select, Slider, Switch } from '@lobehub/ui/base-ui';
+import { Input, InputNumber, InputPassword, Select, Slider, Switch } from '@lobehub/ui';
 import { type JSONSchema7Type } from 'json-schema';
 import { memo } from 'react';
 

@@ -4,13 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { imageService } from '@/services/image';
 import { useImageStore } from '@/store/image';
 
-const { handleGenerationPromptModerationErrorMock } = vi.hoisted(() => ({
-  handleGenerationPromptModerationErrorMock: vi.fn(),
+const { isGenerationPromptModerationErrorMock, toastErrorMock } = vi.hoisted(() => ({
+  isGenerationPromptModerationErrorMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  toast: { error: toastErrorMock },
 }));
 
 // Mock external dependencies
-vi.mock('@/business/client/handleGenerationPromptModerationError', () => ({
-  handleGenerationPromptModerationError: handleGenerationPromptModerationErrorMock,
+vi.mock('@/business/client/isGenerationPromptModerationError', () => ({
+  isGenerationPromptModerationError: isGenerationPromptModerationErrorMock,
 }));
 
 vi.mock('@/services/image', () => ({
@@ -48,6 +54,7 @@ describe('CreateImageAction', () => {
     const initialState = useImageStore.getState();
     useImageStore.setState({
       ...initialState,
+      blockedPrompt: undefined,
       isCreating: false,
       isCreatingWithNewTopic: false,
       activeGenerationTopicId: 'active-topic-id',
@@ -210,7 +217,7 @@ describe('CreateImageAction', () => {
 
       // The service should have been called before the error
       expect(mockImageService.createImage).toHaveBeenCalled();
-      expect(handleGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
+      expect(isGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
 
       // Verify prompt is NOT cleared when error occurs
       expect(result.current.parameters?.prompt).toBe('test prompt');
@@ -248,10 +255,63 @@ describe('CreateImageAction', () => {
       // Verify topic was created before the error
       expect(mockCreateGenerationTopic).toHaveBeenCalled();
       expect(mockSwitchGenerationTopic).toHaveBeenCalled();
-      expect(handleGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
+      expect(isGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
 
       // Verify prompt is NOT cleared when error occurs
       expect(result.current.parameters?.prompt).toBe('test prompt');
+    });
+
+    it('should keep a moderation-rejected prompt for the inline notice', async () => {
+      const error = new Error('blocked');
+      mockImageService.createImage.mockRejectedValueOnce(error);
+      isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+
+      const { result } = renderHook(() => useImageStore());
+
+      await expect(
+        act(async () => {
+          await result.current.createImage();
+        }),
+      ).rejects.toThrow('blocked');
+
+      // A rejected act does not re-render the hook, so read the store directly.
+      expect(useImageStore.getState().blockedPrompt).toBe('test prompt');
+      expect(useImageStore.getState().parameters?.prompt).toBe('test prompt');
+      expect(toastErrorMock).not.toHaveBeenCalled();
+
+      act(() => {
+        useImageStore.getState().dismissBlockedPrompt();
+      });
+      expect(useImageStore.getState().blockedPrompt).toBeUndefined();
+    });
+
+    it('should clear a previous moderation rejection when submitting again', async () => {
+      act(() => {
+        useImageStore.setState({
+          blockedPrompt: 'test prompt',
+          refreshGenerationBatches: vi.fn().mockResolvedValue(undefined),
+        });
+      });
+      const { result } = renderHook(() => useImageStore());
+
+      await act(async () => {
+        await result.current.createImage();
+      });
+
+      expect(useImageStore.getState().blockedPrompt).toBeUndefined();
+    });
+
+    it('should not mark the prompt as blocked for other errors', async () => {
+      mockImageService.createImage.mockRejectedValueOnce(new Error('Service error'));
+      const { result } = renderHook(() => useImageStore());
+
+      await expect(
+        act(async () => {
+          await result.current.createImage();
+        }),
+      ).rejects.toThrow('Service error');
+
+      expect(useImageStore.getState().blockedPrompt).toBeUndefined();
     });
 
     it('should clear prompt input after successful image creation', async () => {
@@ -368,7 +428,29 @@ describe('CreateImageAction', () => {
 
       // Verify batch was removed before the error
       expect(mockRemoveGenerationBatch).toHaveBeenCalledWith('batch-id', 'active-topic-id');
-      expect(handleGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
+      expect(isGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
+    });
+
+    it('should toast a moderation rejection instead of marking the input', async () => {
+      mockImageService.createImage.mockRejectedValueOnce(new Error('blocked'));
+      isGenerationPromptModerationErrorMock.mockReturnValueOnce(true);
+      const { result } = renderHook(() => useImageStore());
+
+      act(() => {
+        useImageStore.setState({ removeGenerationBatch: vi.fn().mockResolvedValue(undefined) });
+      });
+
+      let caught: unknown;
+      await act(async () => {
+        try {
+          await result.current.recreateImage('batch-id');
+        } catch (e) {
+          caught = e;
+        }
+      });
+      expect((caught as Error)?.message).toBe('blocked');
+      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect(useImageStore.getState().blockedPrompt).toBeUndefined();
     });
 
     it('should handle batch removal error', async () => {

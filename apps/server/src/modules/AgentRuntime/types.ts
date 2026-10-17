@@ -196,6 +196,9 @@ export interface IStreamEventManager {
   /** Optional: the relayed attempt is over; the gateway stops replaying it. */
   closeLlmCall?: (operationId: string, callId: string) => Promise<void>;
 
+  /** Optional: end a one-shot relay channel's gateway session. */
+  closeLlmRelayChannel?: (channel: string) => Promise<void>;
+
   /**
    * Close connections
    */
@@ -217,6 +220,12 @@ export interface IStreamEventManager {
    * Get stream event history
    */
   getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
+
+  /**
+   * Optional: open a one-shot relay channel on the gateway, owned by `userId`.
+   * Present only with a gateway, like {@link sendLlmExecute}.
+   */
+  openLlmRelayChannel?: (channel: string, userId: string) => Promise<void>;
 
   /**
    * Publish Agent runtime end event.

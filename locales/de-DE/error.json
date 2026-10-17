@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Diese Antwort konnte nicht generiert werden",
   "unknownError.title": "Hoppla, die Anfrage hat ein Nickerchen gemacht",
   "unknownError.traceIdLabel": "Trace-ID:",
+  "unknownError.troubleshoot": "Fehlerbehebung",
   "unlock.addProxyUrl": "OpenAI-Proxy-URL hinzufügen (optional)",
   "unlock.apiKey.description": "Geben Sie Ihren {{name}} API-Schlüssel ein, um die Sitzung zu starten",
   "unlock.apiKey.imageGenerationDescription": "Geben Sie Ihren {{name}} API-Schlüssel ein, um mit der Generierung zu beginnen",

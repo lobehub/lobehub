@@ -1,0 +1,36 @@
+name: PR Admission Check
+
+# Labels PRs whose title or description lacks what the merge standard relies on
+# (see .github/scripts/pr-admission-check.cjs). `pull_request_target` lets the check label
+# and comment on fork PRs; it never checks out or runs PR code — only the base branch's
+# script is loaded, and the title and body are read from the event payload.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, ready_for_review]
+
+concurrency:
+  group: pr-admission-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout base branch scripts
+        uses: actions/checkout@v7
+        with:
+          # Cone mode also checks out files directly under .github/, including maintainers.txt.
+          sparse-checkout: .github/scripts
+
+      - name: Check PR description
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const check = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-admission-check.cjs`);
+            await check.run({ github, context });

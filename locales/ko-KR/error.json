@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "이 답변을 생성할 수 없습니다",
   "unknownError.title": "이런, 요청이 잠시 쉬고 있습니다",
   "unknownError.traceIdLabel": "추적 ID:",
+  "unknownError.troubleshoot": "문제 해결",
   "unlock.addProxyUrl": "OpenAI 프록시 주소 추가(선택 사항)",
   "unlock.apiKey.description": "{{name}} API 키를 입력하면 대화를 시작할 수 있습니다",
   "unlock.apiKey.imageGenerationDescription": "{{name}} API 키를 입력하면 생성을 시작할 수 있습니다",

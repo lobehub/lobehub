@@ -1,10 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { replicaKeys } from '@/libs/replica';
 import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 
+import { initialChatGroupState } from '../initialState';
+import { agentGroupDetailResource } from '../projection';
 import { useAgentGroupStore } from '../store';
 
 // Mock dependencies
@@ -21,16 +24,33 @@ vi.mock('@/libs/swr', async (importOriginal) => {
   return { ...actual, mutate: vi.fn().mockResolvedValue(undefined) };
 });
 
+/**
+ * A member write refreshes the group's detail through the replica: assert the
+ * sync query match predicate instead of the retired `group:detail` SWR tuple.
+ */
+const expectDetailRevalidated = (groupId: string) => {
+  const match = vi.mocked(mutate).mock.calls.at(-1)?.[0] as ((key: unknown) => boolean) | undefined;
+  expect(typeof match).toBe('function');
+
+  const keyOf = (id: string) =>
+    replicaKeys.sync(
+      agentGroupDetailResource.name,
+      agentGroupDetailResource.version,
+      agentGroupDetailResource.scope.get(),
+      id,
+      { groupId: id },
+    );
+
+  expect(match!(keyOf(groupId))).toBe(true);
+  expect(match!(keyOf(`${groupId}-other`))).toBe(false);
+};
+
 describe('ChatGroupMemberSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset store state
     act(() => {
-      useAgentGroupStore.setState({
-        groupMap: {},
-        groups: [],
-        groupsInit: false,
-      });
+      useAgentGroupStore.setState({ ...initialChatGroupState });
     });
   });
 
@@ -63,7 +83,7 @@ describe('ChatGroupMemberSlice', () => {
         await result.current.addAgentsToGroup('group-1', ['agent-1']);
       });
 
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expectDetailRevalidated('group-1');
     });
   });
 
@@ -95,7 +115,7 @@ describe('ChatGroupMemberSlice', () => {
         await result.current.removeAgentFromGroup('group-1', 'agent-1');
       });
 
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expectDetailRevalidated('group-1');
     });
   });
 
@@ -130,7 +150,7 @@ describe('ChatGroupMemberSlice', () => {
         await result.current.reorderGroupMembers('group-1', ['agent-1', 'agent-2']);
       });
 
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expectDetailRevalidated('group-1');
     });
   });
 });

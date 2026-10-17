@@ -1,6 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Avatar, Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { type DiscoverMcpItem } from '@/types/discover';

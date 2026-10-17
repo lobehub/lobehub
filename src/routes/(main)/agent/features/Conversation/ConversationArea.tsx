@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import debug from 'debug';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,8 +39,6 @@ import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
 
-const log = debug('lobe-render:agent:ConversationArea');
-
 const styles = createStaticStyles(({ css }) => ({
   // When the chat column is wide enough for the header to float above the
   // full-bleed list (see Conversation/Header), this in-list spacer keeps the
@@ -72,10 +68,6 @@ const Conversation = memo(() => {
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
   const chatKey = messageMapKey(context);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-
-  log('contextKey %s: %o', chatKey, messages);
 
   // Get operation state from ChatStore for reactive updates
   const operationState = useOperationState(context);
@@ -134,13 +126,8 @@ const Conversation = memo(() => {
     <ConversationProvider
       actionsBar={actionsBarConfig}
       context={context}
-      hasInitMessages={!!messages}
       hooks={hooks}
-      messages={messages}
       operationState={operationState}
-      onMessagesChange={(messages, ctx, meta) => {
-        replaceMessages(messages, { context: ctx, source: meta?.source });
-      }}
     >
       <SplitDropZone>
         <Flexbox

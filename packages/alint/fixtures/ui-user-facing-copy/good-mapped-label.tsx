@@ -1,6 +1,6 @@
 // Fixture: the event kind maps to a translated label; the model id stays raw.
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,6 +1,4 @@
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, CopyButton, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

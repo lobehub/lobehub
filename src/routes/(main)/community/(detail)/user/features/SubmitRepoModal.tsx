@@ -1,13 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Input, Text, toast } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
+import { Flexbox, Input, Text, toast } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
 import { lambdaClient } from '@/libs/trpc/client';
+
+import { isGithubRepoUrl } from './githubRepoUrl';
 
 interface SubmitRepoModalProps {
   beforeSubmit?: () => Promise<{ actAs?: number } | void>;
@@ -15,8 +16,6 @@ interface SubmitRepoModalProps {
   onSuccess?: () => void;
   open: boolean;
 }
-
-const GITHUB_URL_REGEX = /^https?:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/;
 
 export const SubmitRepoModal = memo<SubmitRepoModalProps>(
   ({ open, onClose, onSuccess, beforeSubmit }) => {
@@ -88,7 +87,7 @@ export const SubmitRepoModal = memo<SubmitRepoModalProps>(
             name="gitUrl"
             required={t('user.githubUrlRequired')}
             validate={(value: string) =>
-              value && !GITHUB_URL_REGEX.test(value) ? t('user.githubUrlInvalid') : undefined
+              value && !isGithubRepoUrl(value) ? t('user.githubUrlInvalid') : undefined
             }
           >
             <Input placeholder="https://github.com/username/repo" />

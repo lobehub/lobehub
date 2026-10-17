@@ -95,6 +95,93 @@ describe('VerifyExecutorService', () => {
     mocks.statusRecompute.mockResolvedValue('verifying');
   });
 
+  it('leaves a check carried into a repair round alone and judges the repaired one', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-2',
+      plan: [
+        { id: 'carried', index: 0, required: true, title: 'List', verifierType: 'agent' },
+        { id: 'repaired', index: 1, required: true, title: 'Reader', verifierType: 'agent' },
+      ],
+      planConfirmedAt: new Date(),
+    });
+    mocks.resultListByRun.mockReset().mockResolvedValue([
+      {
+        checkItemId: 'carried',
+        metadata: { carriedFrom: { checkResultId: 'r1', roundIndex: 1, verifyRunId: 'run-1' } },
+        status: 'passed',
+      },
+    ]);
+    mocks.evidenceListByRun.mockResolvedValue([
+      {
+        checkItemId: 'carried',
+        content: 'diff',
+        metadata: { carriedFromEvidenceId: 'e1' },
+        type: 'text',
+      },
+      { checkItemId: 'repaired', content: 'fix', metadata: null, type: 'text' },
+    ]);
+    const runVerifierAgent = vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op' });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'Fixed the reader; no other change this round.',
+      goal: 'ship it',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'repair-op',
+      runVerifierAgent,
+    });
+
+    expect(runVerifierAgent).toHaveBeenCalledTimes(1);
+    expect(runVerifierAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItem: expect.objectContaining({ id: 'repaired' }) }),
+    );
+    expect(mocks.resultUpdateByCheckItem).not.toHaveBeenCalledWith(
+      'run-2',
+      'carried',
+      expect.anything(),
+    );
+  });
+
+  it('judges a carried check again once the builder evidences it in the repair round', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-2',
+      plan: [{ id: 'carried', index: 0, required: true, title: 'List', verifierType: 'agent' }],
+      planConfirmedAt: new Date(),
+    });
+    mocks.resultListByRun.mockReset().mockResolvedValue([
+      {
+        checkItemId: 'carried',
+        metadata: { carriedFrom: { checkResultId: 'r1', roundIndex: 1, verifyRunId: 'run-1' } },
+        status: 'passed',
+      },
+    ]);
+    mocks.evidenceListByRun.mockResolvedValue([
+      { checkItemId: 'carried', metadata: { carriedFromEvidenceId: 'e1' }, type: 'text' },
+      { checkItemId: 'carried', content: 'new run log', metadata: null, type: 'text' },
+    ]);
+    const runVerifierAgent = vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op' });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'done',
+      goal: 'ship it',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'repair-op',
+      runVerifierAgent,
+    });
+
+    expect(mocks.resultUpdateByCheckItem).toHaveBeenCalledWith(
+      'run-2',
+      'carried',
+      expect.objectContaining({
+        metadata: { reopenedFrom: { checkResultId: 'r1', roundIndex: 1, verifyRunId: 'run-1' } },
+        status: 'pending',
+        verdict: null,
+      }),
+    );
+    expect(runVerifierAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItem: expect.objectContaining({ id: 'carried' }) }),
+    );
+  });
+
   it('runs a program criterion through the verifier-agent fallback', async () => {
     mocks.runEnsureForOperation.mockResolvedValue({
       id: 'run-1',
@@ -204,7 +291,7 @@ describe('VerifyExecutorService', () => {
       'shot-check',
       expect.objectContaining({
         suggestion: expect.stringContaining(
-          'lh acceptance run result submit --run run-1 --item shot-check',
+          'lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item shot-check --type screenshot',
         ),
         verdict: 'uncertain',
       }),

@@ -1,18 +1,24 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { parseToolNameMaxLength } from '@lobechat/const/plugin';
 import { ModelProvider } from 'model-bank';
+import urlJoin from 'url-join';
 
+import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { isDesktop } from '@/const/version';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { fileEnv } from '@/envs/file';
+import { gatewayEnv } from '@/envs/gateway';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
+import { sandboxEnv } from '@/envs/sandbox';
 import { toolsEnv } from '@/envs/tools';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
+import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
+import { isLlmRelayDeploymentReady } from '@/server/modules/AgentRuntime/llmRelay/deployment';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
 
@@ -51,9 +57,7 @@ const resolveAgentGatewayProtocol = (): 1 | 2 => {
   return ENABLE_BUSINESS_FEATURES ? 2 : 1;
 };
 
-export const getServerGlobalConfig = async () => {
-  const { DEFAULT_AGENT_CONFIG } = getAppConfig();
-
+const getAiProviderSpecificConfig = () => {
   const aiProviderSpecificConfig: Record<string, ProviderSpecificConfig> = {
     azure: {
       enabledKey: 'ENABLED_AZURE_OPENAI',
@@ -119,11 +123,38 @@ export const getServerGlobalConfig = async () => {
     }
   }
 
+  return aiProviderSpecificConfig;
+};
+
+/** Resolve one provider without rebuilding the global config or reloading its catalog. */
+export const getServerAiProviderConfig = async (provider: ModelProvider) => {
+  const models = await loadModels();
+  const configs = await genServerAiProvidersConfig(
+    getAiProviderSpecificConfig(),
+    [provider],
+    models,
+  );
+  const config = configs[provider];
+
+  return {
+    ...config,
+    serverModelLists:
+      config.serverModelLists ?? models.filter((model) => model.providerId === provider),
+  };
+};
+
+export const getServerGlobalConfig = async () => {
+  const { DEFAULT_AGENT_CONFIG } = getAppConfig();
+
   const config: GlobalServerConfig = {
-    aiProvider: await genServerAiProvidersConfig(aiProviderSpecificConfig),
+    aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
     },
+    // Never fall back to the server-internal DEVICE_GATEWAY_URL.
+    ...(gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL
+      ? { deviceGatewayUrl: gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL }
+      : undefined),
     disableEmailPassword: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
@@ -151,6 +182,9 @@ export const getServerGlobalConfig = async () => {
     // Expose Agent Gateway URL to client (used by hetero agents; also required for queue mode)
     ...(appEnv.AGENT_GATEWAY_URL ? { agentGatewayUrl: appEnv.AGENT_GATEWAY_URL } : undefined),
     agentGatewayProtocol: resolveAgentGatewayProtocol(),
+    // Whether the server can relay an LLM call to a tab (gateway + Redis): only
+    // then does the browser drop its own provider fallback for the one-shot relay.
+    llmRelayAvailable: isLlmRelayDeploymentReady(),
 
     image: cleanObject({
       defaultImageNum: imageEnv.AI_IMAGE_DEFAULT_IMAGE_NUM,
@@ -159,6 +193,8 @@ export const getServerGlobalConfig = async () => {
       userMemory: cleanObject(getPublicMemoryExtractionConfig()),
     },
     oAuthSSOProviders: getBetterAuthSSOProviders(),
+    // Same derivation as the provider's own issuer (`libs/oidc-provider/provider.ts`).
+    ...(appEnv.APP_URL ? { oidcIssuer: urlJoin(appEnv.APP_URL, OIDC_ISSUER_PATH) } : undefined),
     systemAgent: parseSystemAgent(appEnv.SYSTEM_AGENT),
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
@@ -169,6 +205,10 @@ export const getServerGlobalConfig = async () => {
     // resolver's own function so both sides read the raw value identically —
     // unset/invalid stays `undefined`, i.e. the resolver's default 64.
     toolNameMaxLength: parseToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH),
+    // Lets the widget publish review match the sandbox's real egress contract:
+    // unless the Worker enforces per-host allowlists, declared hosts are
+    // advisory and the review must say any host is reachable.
+    widgetSandboxNetworkFormat: sandboxEnv.WIDGET_SANDBOX_NETWORK_FORMAT,
   };
 
   return config;

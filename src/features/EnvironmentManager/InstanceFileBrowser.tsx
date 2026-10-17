@@ -1,8 +1,15 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, createModal, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ChevronLeftIcon,
@@ -127,7 +134,7 @@ interface InstanceFileBrowserProps {
 
 /**
  * The files an instance has kept, in a window of its own — to look at, not to
- * change (LOBE-14364).
+ * change.
  *
  * This directory is the saved copy of the instance's work tree: the sandbox
  * runs the checkout on its own disk and writes it here, and it is the only

@@ -5,20 +5,22 @@ import {
   type ExpertiseEnforcement,
   type ExpertiseRuleDirection,
 } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Spin,
   Text,
   TextArea,
   toast,
   Tooltip,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import {
   ArrowLeftIcon,
   BellIcon,

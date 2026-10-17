@@ -15,7 +15,7 @@ cat > {{ connect_script }} <<'LH_CONNECT'
 set -euo pipefail
 mkdir -p "$HOME/.lobehub" /logs/agent
 printf "%s\n" "$$" > "$HOME/.lobehub/daemon.pid"
-exec {{ cli_command }} connect --daemon-child{% if gateway_url %} --gateway {{ gateway_url }}{% endif %}
+exec {{ cli_command }} connect --daemon-child{% if workspace_id %} --workspace {{ workspace_id }}{% endif %}{% if gateway_url %} --gateway {{ gateway_url }}{% endif %}
 LH_CONNECT
 chmod +x {{ connect_script }}
 

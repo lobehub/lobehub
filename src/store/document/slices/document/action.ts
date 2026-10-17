@@ -4,18 +4,20 @@ import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
 import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
-import type { SWRResponse } from 'swr';
+import { useLayoutEffect } from 'react';
 
-import { useClientDataSWRWithSync } from '@/libs/swr';
+import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 import type { StoreSetter } from '@/store/types';
 import { isSkillMarkdownDocument, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
+import { useDocumentStore } from '../../store';
 import type { DocumentContentFormat, DocumentSourceType } from '../editor/initialState';
+import type { DocumentDetail } from './projection';
+import { documentDetailResource } from './projection';
 
 const n = setNamespace('document/document');
 
@@ -60,6 +62,26 @@ export interface UseFetchDocumentOptions {
   topicId?: string | null;
 }
 
+/**
+ * Result of `useFetchDocument`.
+ *
+ * `data` is the replica view (`undefined` = nothing loaded for this id yet,
+ * `null` = the server answered "not found"). It is read from the store, not
+ * returned by the hook, so it paints from the persisted projection on the first
+ * frame and the network only confirms it.
+ */
+export interface UseFetchDocumentResult {
+  data: DocumentItem | null | undefined;
+  error: unknown;
+  /** SWR's `isLoading` semantics: no value yet and no error. */
+  isLoading: boolean;
+  isValidating: boolean;
+  /** Re-run the network sync for this document. */
+  mutate: () => Promise<unknown>;
+}
+
+const detailLens = recordLens<DocumentStore, DocumentDetail>('documentDetailMap');
+
 type Setter = StoreSetter<DocumentStore>;
 export const createDocumentSlice = (set: Setter, get: () => DocumentStore, _api?: unknown) =>
   new DocumentActionImpl(set, get, _api);
@@ -68,12 +90,82 @@ export class DocumentActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
   readonly #debouncedSaves = new Map<string, ReturnType<typeof debounce>>();
+  /**
+   * Per-document count of server rows adopted outside a read (saves, CONFLICT
+   * reconciles). A read that saw the count change while in flight started
+   * before that row was written, so it must not replace it.
+   */
+  readonly #adoptions = new Map<string, number>();
+  readonly #detail;
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#detail = createReplicaSlice(documentDetailResource, {
+      actionPrefix: n('documentDetail'),
+      fetcher: async (id) => {
+        const adoptedBefore = this.#adoptions.get(id) ?? 0;
+        const document = (await documentService.getDocumentById(id)) ?? null;
+        // A save (or CONFLICT reconcile) adopted a server row while this read was
+        // in flight: that row is newer than anything this read saw, even when an
+        // older server returned no `updatedAt` to compare. Keep it.
+        const current = this.#get().documentDetailMap[id];
+        if ((this.#adoptions.get(id) ?? 0) !== adoptedBefore && current) return current;
+        return this.#keepNewerDetail(id, { document });
+      },
+      get,
+      set,
+      stateKey: 'documentDetailReplica',
+      // A "not found" answer is a page state, not a document: never persist it,
+      // and evict the row persisted for this document earlier (the engine
+      // removes it) so a reload cannot resurrect a deleted / revoked document.
+      toPersisted: (data) => (data.document ? data : null),
+      view: { ...detailLens, clear: this.#clearDetailView },
+    });
   }
+
+  /**
+   * Scope reset (account / workspace switch): drop the projection together with
+   * every editor entry derived from it, in the same commit.
+   *
+   * `useFetchDocument` only watches the document it is mounted for, so editor
+   * entries of documents opened earlier in the session would otherwise survive
+   * the reset: revisiting one under the new identity would treat the previous
+   * identity's body as loaded (and keep showing it if the new fetch fails).
+   * Their queued autosaves belong to the previous identity and are cancelled,
+   * never flushed under the new one.
+   */
+  #clearDetailView = (state: DocumentStore): Partial<DocumentStore> => {
+    const derivedIds = Object.keys(state.documentDetailMap).filter((id) => state.documents[id]);
+    if (derivedIds.length === 0) return detailLens.clear(state);
+
+    const documents = { ...state.documents };
+    for (const id of derivedIds) {
+      this.#cleanupDebouncedSave(id);
+      delete documents[id];
+    }
+    return { ...detailLens.clear(state), documents };
+  };
+
+  /**
+   * Order a fetched detail against the entry it is about to replace.
+   *
+   * A focus / SSE revalidation that started before a save but answers after it
+   * carries the pre-save row. The save already adopted the newer revision into
+   * the replica, so landing the late response would regress the projection and
+   * its IndexedDB row — and a later offline reload would hydrate the pre-save
+   * body. Keep the entry when the response is strictly older; a not-found answer
+   * and any equal-or-newer revision still win.
+   */
+  #keepNewerDetail = (documentId: string, fetched: DocumentDetail): DocumentDetail => {
+    const current = this.#get().documentDetailMap[documentId]?.document;
+    const next = fetched.document;
+    if (!current?.updatedAt || !next?.updatedAt) return fetched;
+    return new Date(next.updatedAt).getTime() < new Date(current.updatedAt).getTime()
+      ? { document: current }
+      : fetched;
+  };
 
   cancelDebouncedSave = (documentId: string): void => {
     this.#debouncedSaves.get(documentId)?.cancel();
@@ -217,75 +309,191 @@ export class DocumentActionImpl {
   };
 
   /**
-   * SWR hook to fetch document and initialize in DocumentStore
+   * Clear the editor state derived from a replica entry that has left the view.
+   *
+   * The only way a loaded entry disappears while this route stays mounted is a
+   * replica scope reset (account / workspace switch), which drops every entry
+   * of the previous identity. The editor state derived from that entry has to
+   * go with it: `DocumentIdMode` treats a present `documents[id]` as "loaded",
+   * so leaving it behind renders the previous identity's body — and, once the
+   * new scope's request fails, keeps rendering it behind an inline error.
+   *
+   * A queued autosave is cancelled rather than flushed: it belongs to the
+   * previous identity and must not be sent under the new one.
+   */
+  #clearDerivedDocument = (documentId: string): void => {
+    if (!this.#get().documents[documentId]) return;
+    this.cancelDebouncedSave(documentId);
+    this.#get().internal_dispatchDocument(
+      { id: documentId, type: 'deleteDocument' },
+      n('clearDerivedDocument'),
+    );
+  };
+
+  /**
+   * Fold one server row into the editor's derived state.
+   *
+   * Called both when the replica view changes (the persisted projection paints
+   * before the network answers) and when a fresh response lands, so the editor
+   * adopts a document in either path. Idempotent: an existing entry is only
+   * reconciled against, never re-initialized.
+   */
+  #adoptDocument = (
+    documentId: string,
+    document: DocumentItem | null,
+    options: {
+      autoSave?: boolean;
+      editor?: IEditor;
+      sourceType: DocumentSourceType;
+      topicId?: string | null;
+    },
+  ): void => {
+    const { autoSave, editor, sourceType, topicId } = options;
+    // `null` = the server answered "not found"; nothing to adopt.
+    if (!document || !editor) return;
+
+    // Check if this response is still for the current active document.
+    // This prevents race conditions when quickly switching between documents.
+    const currentActiveId = this.#get().activeDocumentId;
+    if (currentActiveId && currentActiveId !== documentId) return;
+
+    if (this.#get().documents[documentId]) {
+      this.#get().reconcileRemote(documentId, document);
+      if (sourceType === 'notebook' && topicId) {
+        this.#rememberTopicDocument(topicId, documentId);
+      }
+      if (sourceType === 'page') {
+        pageActions.upsertDocument(document);
+      }
+      return;
+    }
+
+    this.#get().initDocumentWithEditor({
+      autoSave,
+      content: document.content,
+      contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
+      documentId,
+      editor,
+      editorData: document.editorData,
+      sourceType,
+      topicId: topicId ?? undefined,
+      updatedAt: document.updatedAt,
+    });
+
+    // Mirror page metadata (title/emoji) into pageStore so PageExplorer
+    // selectors resolve correctly when the page is opened from a context
+    // that didn't pre-load the documents list (e.g. task workspace modal).
+    if (sourceType === 'page') {
+      pageActions.upsertDocument(document);
+    }
+  };
+
+  /**
+   * Fetch a document through its replica and initialize it in the DocumentStore.
    */
   useFetchDocument = (
     documentId: string | undefined,
     options: UseFetchDocumentOptions = {},
-  ): SWRResponse<DocumentItem | null> => {
+  ): UseFetchDocumentResult => {
     const { autoSave = true, editor, sourceType = 'page', topicId } = options;
-    const swrKey = documentId && editor ? documentSWRKeys.editor(documentId) : null;
+    const enabled = Boolean(documentId && editor);
 
-    return useClientDataSWRWithSync<DocumentItem | null>(
-      swrKey,
-      async () => {
-        // documentId is guaranteed to be defined when swrKey is not null
-        const document = await documentService.getDocumentById(documentId!);
-        if (!document) {
-          console.warn(`[useFetchDocument] Document not found: ${documentId}`);
-          return null;
-        }
-
-        return document;
-      },
-      {
-        focusThrottleInterval: 20_000,
-        onData: (document) => {
-          // Both documentId and editor are guaranteed to be defined when this callback is called
-          if (!document || !documentId || !editor) return;
-
-          // Check if this response is still for the current active document
-          // This prevents race conditions when quickly switching between documents
-          const currentActiveId = this.#get().activeDocumentId;
-
-          if (currentActiveId && currentActiveId !== documentId) {
-            // User has already switched to another document, discard this stale response
-            return;
-          }
-
-          if (this.#get().documents[documentId]) {
-            this.#get().reconcileRemote(documentId, document);
-            if (sourceType === 'notebook' && topicId) {
-              this.#rememberTopicDocument(topicId, documentId);
-            }
-            if (sourceType === 'page') {
-              usePageStore.getState().upsertDocument(document);
-            }
-            return;
-          }
-
-          this.#get().initDocumentWithEditor({
-            autoSave,
-            content: document.content,
-            contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
-            documentId,
-            editor,
-            editorData: document.editorData,
-            sourceType,
-            topicId: topicId ?? undefined,
-            updatedAt: document.updatedAt,
-          });
-
-          // Mirror page metadata (title/emoji) into pageStore so PageExplorer
-          // selectors resolve correctly when the page is opened from a context
-          // that didn't pre-load the documents list (e.g. task workspace modal).
-          if (sourceType === 'page') {
-            usePageStore.getState().upsertDocument(document);
-          }
-        },
-        revalidateOnFocus: true,
-      },
+    // The view is the source of truth: read it from the store so a reload paints
+    // the persisted projection on the first frame, before the network answers.
+    const entry = useDocumentStore((s) =>
+      documentId ? s.documentDetailMap[documentId] : undefined,
     );
+    const document = entry?.document;
+
+    const sync = this.#detail.useSync(enabled ? documentId : undefined, {
+      // Keep a long-open editor in step with other writers. Personal and
+      // notebook documents have no workspace-page SSE stream, so the app-wide
+      // five-minute focus throttle would leave another writer's edit stale for
+      // minutes after returning to the tab — ~20s is the window this was tuned
+      // to before the migration.
+      focusThrottleInterval: 20_000,
+      revalidateOnFocus: true,
+    });
+
+    useLayoutEffect(() => {
+      if (!enabled || !documentId) return;
+
+      // Adopt *synchronously with the store write that produced the entry*, so
+      // the editor state lands in the same commit as the hydrated view. Waiting
+      // for a passive effect — or for `isHydrated`, which only flips in a later
+      // commit — leaves a painted frame where the projection already holds the
+      // document but `documents[id]` is still missing, and that frame is exactly
+      // the skeleton flash a repeat visit is supposed to avoid.
+      const adopt = (state: DocumentStore, previous?: DocumentStore) => {
+        const next = state.documentDetailMap[documentId];
+        if (!next) {
+          // The entry left the view: a scope reset dropped the previous
+          // identity's entries. Its derived editor state must not outlive it —
+          // see `#clearDerivedDocument`.
+          if (previous?.documentDetailMap[documentId]) this.#clearDerivedDocument(documentId);
+          return;
+        }
+        // Only react to *this* entry changing; every other store write (typing
+        // in the editor included) is none of our business.
+        if (previous && previous.documentDetailMap[documentId] === next) return;
+        // Entries are scope-owned by the engine; never adopt one that belongs to
+        // another identity (this hook can stay mounted across an identity switch).
+        const scope = state.documentDetailReplica?.scope;
+        if (scope !== undefined && scope !== documentDetailResource.scope.get()) return;
+        this.#adoptDocument(documentId, next.document, { autoSave, editor, sourceType, topicId });
+      };
+
+      // An entry already in memory (repeat visit in this session) never writes
+      // again, so adopt it now; hydration and every response go through the
+      // subscription.
+      adopt(useDocumentStore.getState());
+      return useDocumentStore.subscribe(adopt);
+    }, [autoSave, documentId, editor, enabled, sourceType, topicId]);
+
+    return {
+      data: document,
+      error: sync.error,
+      isLoading: enabled && document === undefined && sync.error == null,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    };
+  };
+
+  /**
+   * Warm the replica for a document the user is about to open (hover prefetch),
+   * so navigation paints the editor from the projection instead of a skeleton.
+   */
+  prefetchDocument = async (documentId: string): Promise<void> => {
+    // Goes through the replica's own fetcher (which keeps a newer adopted row)
+    // and settle pipeline: a response captured under another identity is
+    // dropped, and one older than a response a sync already applied — e.g. a
+    // not-found the page settled while this was in flight — cannot regress it.
+    try {
+      await this.#detail.fetch(documentId);
+    } catch (error) {
+      console.error('[DocumentStore] Failed to prefetch document:', error);
+    }
+  };
+
+  /**
+   * Adopt a server row the caller already holds (e.g. the save pipeline
+   * reconciling a CONFLICT) so the replica — not a stale fetch — is what the
+   * editor hydrates from next.
+   *
+   * `scope` is the identity the row was fetched under, captured *before* the
+   * request. Pass it whenever the caller awaited something in between: an
+   * account / workspace switch would otherwise make `replace` fall back to the
+   * new scope and write the previous identity's document into its memory and
+   * IndexedDB partition. The engine drops an action whose scope is no longer
+   * active.
+   */
+  internal_adoptDocumentDetail = (
+    documentId: string,
+    document: DocumentItem | null,
+    scope?: string,
+  ): void => {
+    this.#adoptions.set(documentId, (this.#adoptions.get(documentId) ?? 0) + 1);
+    this.#detail.replace(documentId, { document }, scope);
   };
 }
 

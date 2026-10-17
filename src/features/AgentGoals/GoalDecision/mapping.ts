@@ -1,4 +1,5 @@
 import {
+  GOAL_BATCH_BREAK_OPTION,
   GOAL_CLARIFICATION_OPTION,
   GOAL_CLARIFICATION_TITLE,
   GOAL_MACHINE_GATE_TITLE,
@@ -24,7 +25,15 @@ export type GoalGateCategory =
   'agentQuestion' | 'clarify' | 'goalAcceptance' | 'judgment' | 'machine';
 
 /** The ids the coordinator writes on its own gates; anything else is an Agent's answer. */
-const COORDINATOR_OPTION_IDS = new Set(['fail', 'retire', 'retry']);
+const COORDINATOR_OPTION_IDS = new Set([
+  'fail',
+  'retire',
+  'retry',
+  // A batch's own gates: revise or fork the recipe, release the next wave.
+  'new_class',
+  'release',
+  'revise',
+]);
 
 export const goalGateCategory = (gate: {
   nodeTitle?: string | null;
@@ -102,3 +111,16 @@ export const toGateAnswer = (
   const option = optionForWrittenAnswer(decision.options ?? [], decision.recommendedOptionId);
   return option ? { optionId: option.id, resolution: answer.text } : undefined;
 };
+
+/**
+ * An answer the gate cannot take as is. Revising a batch recipe without saying
+ * what to change would re-run the plan that just failed under a new version,
+ * so the correction is required there (the server refuses it too).
+ */
+export const gateAnswerProblem = (answer: {
+  optionId: string;
+  resolution?: string;
+}): 'correctionRequired' | undefined =>
+  answer.optionId === GOAL_BATCH_BREAK_OPTION.revise && !answer.resolution?.trim()
+    ? 'correctionRequired'
+    : undefined;

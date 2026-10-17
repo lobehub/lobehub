@@ -1,5 +1,4 @@
-import { Flexbox, ScrollShadow } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useChatInputStore } from '@/features/ChatInput/store';

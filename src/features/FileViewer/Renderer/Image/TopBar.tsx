@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Button, createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   DownloadIcon,
   MaximizeIcon,

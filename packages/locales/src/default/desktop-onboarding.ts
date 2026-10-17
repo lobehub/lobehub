@@ -43,7 +43,6 @@ export default {
 
   'screen3.actions.grantAccess': 'Grant Access',
   'screen3.actions.granted': 'Access Granted',
-  'screen3.actions.openSettings': 'Open Settings',
   'screen3.badge': 'Permissions',
   'screen3.description':
     'Grant permissions to unlock the full potential of Agents and Groups. You can manage these anytime in settings.',
@@ -53,12 +52,18 @@ export default {
   'screen3.permissions.2.description':
     'Access files and folders to enable document analysis, knowledge base creation, and file processing workflows',
   'screen3.permissions.2.title': 'File Access',
-  'screen3.permissions.3.description':
-    'Capture screen content and audio for voice interactions, screen analysis, and multimodal assistance',
-  'screen3.permissions.3.title': 'Screen & Audio',
   'screen3.permissions.4.description':
     'Enable system-level automation for seamless workflow execution across applications',
   'screen3.permissions.4.title': 'Accessibility',
+  'screen3.actions.continue': 'Continue',
+  'screen3.actions.waiting': 'Waiting for access',
+  'screen3.hint.guide': 'Drag LobeHub into the list in System Settings',
+  'screen3.hint.incomplete': 'Not finished yet. You can try again.',
+  'screen3.hint.prompt': 'Choose Allow in the system dialog',
+  'screen3.permissions.microphone.description': 'Use voice input and voice conversations',
+  'screen3.permissions.microphone.title': 'Microphone',
+  'screen3.permissions.screen.description': 'Analyze your screen and ask about screenshots',
+  'screen3.permissions.screen.title': 'Screen Recording',
   'screen3.title': 'Grant Permissions',
   'screen3.title2': 'Enable access to unlock full features',
   'screen3.title3': 'You can manage these anytime in settings',

@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { use } from 'react';
 import { useTranslation } from 'react-i18next';
 

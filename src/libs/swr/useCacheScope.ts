@@ -1,10 +1,13 @@
 import { isDesktop } from '@lobechat/const';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import {
   getActiveWorkspaceId,
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
+// Leaf import on purpose: `@/libs/replica` imports this module, so going
+// through its index would be a cycle.
+import { broadcastCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { getUserStoreState, type UserStore, useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -25,7 +28,8 @@ const ACTIVE_SCOPE_STORAGE_KEY = 'lobehub:active-scope';
 
 const isBrowser = () => typeof localStorage !== 'undefined';
 
-const readActiveScope = (): string | null => {
+/** The last-known resolved cache scope, or `null` when none is persisted. */
+export const readActiveScope = (): string | null => {
   if (!isBrowser()) return null;
   try {
     return localStorage.getItem(ACTIVE_SCOPE_STORAGE_KEY);
@@ -34,7 +38,7 @@ const readActiveScope = (): string | null => {
   }
 };
 
-const writeActiveScope = (scope: string): void => {
+export const writeActiveScope = (scope: string): void => {
   if (!isBrowser()) return;
   try {
     localStorage.setItem(ACTIVE_SCOPE_STORAGE_KEY, scope);
@@ -131,6 +135,13 @@ export const useCacheScope = (): string => {
   const [persisted] = useState(readActiveScope);
 
   const scope = resolveScope(userId, workspaceId, persisted, identityResolved);
+
+  // Before paint, so an imperative replica can drop the previous identity's
+  // views in the same frame the switch commits — a passive effect would leave
+  // one paintable frame of the old scope on screen.
+  useLayoutEffect(() => {
+    broadcastCacheScope(scope);
+  }, [scope]);
 
   useEffect(() => {
     if (userId && !isAnonymousScope(scope)) writeActiveScope(scope);

@@ -1,8 +1,19 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, responsive, useResponsive } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  responsive,
+  Text,
+  toast,
+  useResponsive,
+} from '@lobehub/ui';
 import { CheckCircle2, CheckIcon, ChevronDown, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +24,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
 import { agentSkillService } from '@/services/skill';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { formatShortenNumber } from '@/utils/format';
@@ -238,7 +250,11 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   // Same query as the Reviews tab — SWR dedupes them into one request, so the
   // stat costs nothing extra and warms the tab
   const useFetchSkillComments = useDiscoverStore((s) => s.useFetchSkillComments);
-  const { data: comments } = useFetchSkillComments({ identifier, ...FIRST_COMMENTS_PAGE_QUERY });
+  const { queryKey: commentsKey } = useFetchSkillComments({
+    identifier,
+    ...FIRST_COMMENTS_PAGE_QUERY,
+  });
+  const comments = useDiscoverStore(skillSelectors.skillComments(commentsKey));
 
   const displayRatingAverage =
     typeof ratingAverage === 'number' ? Number(ratingAverage.toFixed(1)) : undefined;

@@ -11,6 +11,12 @@ interface UseRemoteAgentDeviceGuardOptions {
   /** The conversation's agent — validate this agent's bound device, not the global active one. */
   agentId: string;
   enabled?: boolean;
+  /**
+   * The conversation's topic, whose device binding applies — a side-by-side
+   * pane must not validate the globally active topic's device. `null` means the
+   * conversation has no topic; omitted, it follows the active topic.
+   */
+  topicId?: string | null;
 }
 
 interface UseRemoteAgentDeviceGuardResult {
@@ -26,12 +32,13 @@ interface UseRemoteAgentDeviceGuardResult {
 export const useRemoteAgentDeviceGuard = ({
   agentId,
   enabled = true,
+  topicId,
 }: UseRemoteAgentDeviceGuardOptions): UseRemoteAgentDeviceGuardResult => {
   // Effective config = shared row + this member's per-agent device override
   //. Checking the raw shared `boundDeviceId` would probe whichever
   // machine landed on the shared row (usually the creator's, often offline)
   // instead of the device THIS member picked — a false "device offline".
-  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId, { topicId });
 
   const boundDeviceId = agencyConfig?.boundDeviceId;
   const providerType = agencyConfig?.heterogeneousProvider?.type;

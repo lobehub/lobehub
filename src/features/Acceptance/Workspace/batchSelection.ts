@@ -93,7 +93,9 @@ export const acceptanceBatchTargets = (
     .filter(
       (item) =>
         selectedSet.has(item.id) &&
-        getAcceptanceStatusActions(item.status as AcceptanceStatus).includes(action),
+        getAcceptanceStatusActions(item.status as AcceptanceStatus, item.subjectType).includes(
+          action,
+        ),
     )
     .map((item) => item.id);
 };

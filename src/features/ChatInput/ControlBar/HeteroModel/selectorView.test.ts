@@ -220,6 +220,73 @@ describe('current value surfaced on each dimension', () => {
   });
 });
 
+describe('value source on each dimension', () => {
+  const provider = { effort: 'high', model: 'gpt-5.6-sol', speed: 'fast', type: 'codex' } as const;
+  const sourcesOf = (options: Parameters<typeof buildSelectorView>[0]) => {
+    const view = buildSelectorView(options);
+    return {
+      ...Object.fromEntries(view.dimensions.map((dimension) => [dimension.key, dimension.source])),
+      model: view.modelSource,
+    };
+  };
+
+  it('labels topic pins and inherited values separately inside a topic', () => {
+    expect(
+      sourcesOf({
+        capability: selectorCapabilityOf('codex'),
+        provider,
+        t,
+        topicPin: { model: 'gpt-5.6-sol', provider: 'codex', speed: 'fast' },
+        topicScoped: true,
+      }),
+    ).toEqual({
+      model: 'heteroAgent.modelSelector.source.topic',
+      reasoning: 'heteroAgent.modelSelector.source.inherited',
+      speed: 'heteroAgent.modelSelector.source.topic',
+    });
+  });
+
+  it('does not credit the topic with a model pin the runtime ignored', () => {
+    expect(
+      sourcesOf({
+        capability: selectorCapabilityOf('codex'),
+        provider,
+        t,
+        topicPin: { model: 'opus', provider: 'claude-code' },
+        topicScoped: true,
+      }).model,
+    ).toBe('heteroAgent.modelSelector.source.inherited');
+  });
+
+  it('leaves an unset speed to the CLI config instead of claiming Standard', () => {
+    // The Agent sets no speed and the topic pins none, so no tier flag is sent
+    // and `service_tier` in the Codex CLI config decides (it may well be fast).
+    const speed = buildSelectorView({
+      capability: selectorCapabilityOf('codex'),
+      provider: { model: 'gpt-5.6-sol', type: 'codex' },
+      t,
+      topicPin: { model: 'gpt-5.6-sol', provider: 'codex' },
+      topicScoped: true,
+    }).dimensions.find((dimension) => dimension.key === 'speed');
+
+    expect(speed).toMatchObject({
+      current: 'default',
+      source: 'heteroAgent.modelSelector.source.cli',
+      valueLabel: 'heteroAgent.modelSelector.default',
+    });
+    expect(speed?.options[0]).toMatchObject({
+      label: 'heteroAgent.modelSelector.default',
+      value: 'default',
+    });
+  });
+
+  it('labels every value as the Agent default before a topic exists', () => {
+    expect(
+      new Set(Object.values(sourcesOf({ capability: selectorCapabilityOf('codex'), provider, t }))),
+    ).toEqual(new Set(['heteroAgent.modelSelector.source.agent']));
+  });
+});
+
 describe('resolveModelSwitchSelection', () => {
   it.each(['max', 'ultra'] as const)('handles %s when switching to Astra', (effort) => {
     expect(

@@ -11,6 +11,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -22,6 +23,7 @@ import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
+import { assertNotInOpenGoal } from '@/server/services/task/archiveGuard';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { TaskIntentService } from '@/server/services/task/intent';
 import {
@@ -34,6 +36,7 @@ import {
   scheduleTimezoneSchema,
 } from '@/server/services/task/scheduleValidation';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
+import { failStuckTasks } from '@/server/services/taskLifecycle/failStuckTasks';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
@@ -47,6 +50,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { groupListSchema, listSchema } from './_helpers/taskListSchemas';
 
 const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -85,6 +89,9 @@ const taskVerifyConfigPatchSchema = z.object({
 });
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
+// Unknown fields are stripped, including the removed identifierPrefix. Released
+// CLI clients send 'T' by default; ignore it so project subtasks use their project
+// identifier without breaking ordinary creates from those clients.
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
   assigneeUserId: z.string().optional(),
@@ -96,7 +103,6 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
-  identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
   parentTaskId: z.string().optional(),
@@ -145,63 +151,6 @@ const updateSchema = z.object({
   scheduleTimezone: scheduleTimezoneSchema.nullish(),
   status: z.enum(TASK_STATUSES).optional(),
 });
-
-const listSchema = z.object({
-  // Keyset cursor — rows strictly after this `(orderBy timestamp, seq)` position
-  // in newest-first order. Stable under concurrent inserts/deletes, unlike `offset`.
-  after: z.object({ at: z.coerce.date(), seq: z.number().int() }).optional(),
-  assigneeAgentId: z.string().optional(),
-  // true → only tasks whose schedule or heartbeat can still fire (a terminal or
-  // misconfigured one cannot), false → its exact complement. Omitted leaves the
-  // set unnarrowed.
-  automated: z.boolean().optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-  // Which timestamp orders the page, newest first. Defaults to creation time.
-  orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
-  parentIdentifier: z.string().optional(),
-  parentTaskId: z.string().nullish(),
-  priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
-  projectId: z.string().optional(),
-  // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
-  // caller, 'created' → tasks the caller created. Always resolved against
-  // `ctx.userId` so the endpoint never filters by an arbitrary member.
-  scope: z.enum(['assigned', 'created']).optional(),
-  statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
-  // UI-side narrowing of the result set. Omitted means "All" (the chip's
-  // default 'private' is enforced client-side; the server stays permissive
-  // so router tests / external callers don't have to know the chip).
-  visibility: z.enum(['private', 'public']).optional(),
-});
-
-const groupListSchema = z
-  .object({
-    assigneeAgentId: z.string().optional(),
-    automated: z.boolean().optional(),
-    excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
-    groupBy: z.enum(['agent', 'assignee', 'member', 'priority']).optional(),
-    groups: z
-      .array(
-        z.object({
-          key: z.string(),
-          limit: z.number().min(1).max(100).default(50),
-          offset: z.number().min(0).default(0),
-          statuses: z.array(z.string()).min(1).max(10),
-        }),
-      )
-      .min(1)
-      .max(10)
-      .optional(),
-    parentTaskId: z.string().nullish(),
-    projectId: z.string().optional(),
-    // Same "My tasks" narrowing as `listSchema.scope`, so the board renders the
-    // exact set its list view does. Always resolved against `ctx.userId`.
-    scope: z.enum(['assigned', 'created']).optional(),
-    visibility: z.enum(['private', 'public']).optional(),
-  })
-  .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
-    message: 'Provide either groups or groupBy',
-  });
 
 // Helper: resolve id/identifier and throw if not found
 async function resolveOrThrow(model: TaskModel, id: string) {
@@ -749,6 +698,51 @@ export const taskRouter = router({
     }
   }),
 
+  // User-only close-out: no builtin agent tool exposes it, so an agent never
+  // archives a task on its own. `status` is left untouched.
+  archive: taskProcedureWrite
+    .input(idInput.extend({ archived: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const task = await resolveOrThrow(ctx.taskModel, input.id);
+        // Archiving hides a shared task from every member's lists: same
+        // creator-or-owner scope as delete.
+        assertWorkspaceRowManageable(ctx, task.createdByUserId, 'task');
+        if (input.archived) {
+          await assertNotInOpenGoal(
+            ctx.serverDB,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            task,
+          );
+        }
+        const archiveModel = new TaskArchiveModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        // Archived rows leave every list, so live work would run out of sight.
+        // The guard is part of the UPDATE, so a run starting concurrently can't slip past.
+        const updated = input.archived
+          ? await archiveModel.archive(task.id)
+          : await archiveModel.unarchive(task.id);
+        if (!updated) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Stop the running task or its schedule/heartbeat before archiving it',
+          });
+        }
+        return { data: updated, success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:archive]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to archive task',
+        });
+      }
+    }),
+
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const detail = await ctx.taskService.getTaskDetail(input.id);
@@ -888,34 +882,10 @@ export const taskRouter = router({
 
   watchdog: taskProcedureWrite.mutation(async ({ ctx }) => {
     try {
-      const stuckTasks = await TaskModel.findStuckTasks(ctx.serverDB);
-      const failed: string[] = [];
-
-      for (const task of stuckTasks) {
-        const wsId = task.workspaceId ?? undefined;
-        const model = new TaskModel(ctx.serverDB, task.createdByUserId, wsId);
-        await model.updateStatus(task.id, 'failed', {
-          completedAt: new Date(),
-          error: 'Heartbeat timeout',
-        });
-
-        // Create error brief
-        const briefModel = new BriefModel(ctx.serverDB, task.createdByUserId, wsId);
-        await briefModel.create({
-          agentId: task.assigneeAgentId || undefined,
-          priority: 'urgent',
-          summary: `Task has been running without heartbeat update for more than ${task.heartbeatTimeout} seconds.`,
-          taskId: task.id,
-          title: `${task.identifier} heartbeat timeout`,
-          trigger: 'task',
-          type: 'error',
-        });
-
-        failed.push(task.identifier);
-      }
+      const { checked, failed } = await failStuckTasks(ctx.serverDB);
 
       return {
-        checked: stuckTasks.length,
+        checked,
         failed,
         message:
           failed.length > 0
@@ -1039,6 +1009,7 @@ export const taskRouter = router({
       idInput.merge(
         z.object({
           continueTopicId: z.string().optional(),
+          deviceId: z.string().optional(),
           prompt: z.string().optional(),
         }),
       ),
@@ -1054,6 +1025,7 @@ export const taskRouter = router({
         );
         return await runner.runTask({
           continueTopicId: input.continueTopicId,
+          deviceId: input.deviceId,
           extraPrompt: input.prompt,
           taskId: task.id,
         });
@@ -1643,6 +1615,7 @@ export const taskRouter = router({
         actorAgentId: z.string().optional(),
         error: z.string().optional(),
         id: z.string(),
+        operationId: z.string().optional(),
         status: z.enum(TASK_STATUSES),
       }),
     )
@@ -1653,12 +1626,20 @@ export const taskRouter = router({
         // transitions call the service without an actor and stay silent.
         const actor = await resolveActivityActor(ctx, actorAgentId);
         const result = await ctx.taskService.updateStatus(statusInput, actor);
-        const { task, unlocked, paused, checkpointTriggered, allSubtasksDone, parentTaskId } =
-          result;
+        const {
+          task,
+          unlocked,
+          paused,
+          checkpointTriggered,
+          allSubtasksDone,
+          parentTaskId,
+          completionDeferred,
+        } = result;
         return {
           data: task,
           message: `Task ${input.status}`,
           success: true,
+          ...(completionDeferred && { completionDeferred: true }),
           ...(unlocked.length > 0 && { unlocked }),
           ...(paused.length > 0 && { paused }),
           ...(checkpointTriggered && { checkpointTriggered: true }),
@@ -1699,6 +1680,26 @@ export const taskRouter = router({
         });
       }
     }),
+
+  usage: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
+    try {
+      const task = await resolveOrThrow(ctx.taskModel, input.id);
+      const usage = await ctx.taskTopicModel.sumRunCostByTaskIds([task.id]);
+
+      return {
+        data: { ...usage, taskId: task.id, taskIdentifier: task.identifier },
+        success: true,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:usage]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to get task usage',
+      });
+    }
+  }),
 
   // Cross-workspace task *transfer* is intentionally not supported anymore:
   // moving a task drags its whole subtree plus history (dependencies,

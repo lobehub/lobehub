@@ -242,6 +242,32 @@ describe('createLambdaContext', () => {
     });
   });
 
+  it('should carry the one-shot relay headers of the requesting tab', async () => {
+    const channel = 'llmcall:user-1:0b7c1d2e-aaaa';
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'x-lobe-client-id': 'tab-a', 'x-lobe-llm-relay-channel': channel },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.llmRelay).toEqual({ channel, clientId: 'tab-a' });
+  });
+
+  // Procedures of one batch share the request headers but each opens its own
+  // relay scope: they would share the channel and its call ids. The browser
+  // sends relayed calls unbatched, so a batch never gets relayed.
+  it('should ignore the one-shot relay headers on a batched request', async () => {
+    const channel = 'llmcall:user-1:0b7c1d2e-aaaa';
+    const request = new NextRequest(
+      'https://example.com/trpc/lambda/task.analyzeIntent,verify.generateGoalPlan?batch=1',
+      { headers: { 'x-lobe-client-id': 'tab-a', 'x-lobe-llm-relay-channel': channel } },
+    );
+
+    const context = await createLambdaContext(request);
+
+    expect(context.llmRelay).toBeUndefined();
+  });
+
   it('should resolve clientIp through the overridable request IP module', async () => {
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: { 'x-forwarded-for': '198.51.100.3, 10.0.0.1' },
@@ -387,6 +413,36 @@ describe('createLambdaContext', () => {
     expect(context.userId).toBeNull();
     expect(context.workspaceId).toBeUndefined();
     expect(mockCanUseWorkspaceApiKeys).toHaveBeenCalledWith('ws-1');
+  });
+
+  it('should collapse a blank workspace scope instead of carrying it into every model', async () => {
+    // ROOT CAUSE:
+    //
+    // `''` is not a workspace. When a caller resolves "no workspace" into a
+    // blank string, every model built from this context writes
+    // `workspace_id = ''`, which the foreign key to `workspaces` rejects — the
+    // whole statement fails, so not even a single chat message could be
+    // persisted. This context is the funnel every lambda request passes
+    // through, so the collapse belongs here rather than at each of the ~90
+    // model constructors.
+    //
+    // Before: `ctx.workspaceId` was `''`.
+    // After: it is `undefined`, which is how the context already spells
+    // "personal" (see the API-key assertions above).
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: '' })).workspaceId,
+    ).toBeUndefined();
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: '   ' })).workspaceId,
+    ).toBeUndefined();
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: null })).workspaceId,
+    ).toBeUndefined();
+
+    // A real scope still comes through, trimmed.
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: ' ws-1 ' })).workspaceId,
+    ).toBe('ws-1');
   });
 
   it('should accept a workspace API key with a matching workspace header', async () => {

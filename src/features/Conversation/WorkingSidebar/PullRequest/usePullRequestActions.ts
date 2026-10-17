@@ -1,10 +1,11 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestActionResult } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useRef, useState } from 'react';
 
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
+import { useGitStatusStore } from '@/store/device/gitStatus/store';
 
 export type PullRequestBusy = DeviceGitPullRequestAction['type'] | 'push';
 
@@ -72,8 +73,9 @@ export const usePullRequestActions = ({
               key[2] === workingDirectory &&
               key[3] === number,
           ),
-          mutate(deviceKeys.gitAheadBehind(cacheDeviceId, workingDirectory)),
-          mutate(deviceKeys.gitWorkingTreeStatus(cacheDeviceId, workingDirectory)),
+          useGitStatusStore
+            .getState()
+            .revalidateGitStatus(deviceId, workingDirectory, ['aheadBehind', 'workingTreeStatus']),
         ]);
         return true;
       } catch (err) {

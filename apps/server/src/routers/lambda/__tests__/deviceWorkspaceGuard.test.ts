@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DeviceModel } from '@/database/models/device';
 
-import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
+import {
+  assertWorkspaceDeviceEditable,
+  assertWorkspaceDeviceVisible,
+  assertWorkspaceRootApproved,
+} from '../deviceWorkspaceGuard';
 
 const mockModel = (
   row: {
@@ -109,5 +113,18 @@ describe('assertWorkspaceDeviceVisible', () => {
     await expect(
       assertWorkspaceDeviceVisible(model, 'someone-elses-private'),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('assertWorkspaceDeviceEditable', () => {
+  it.each([
+    ['owner', 'owner'],
+    ['member', 'enroller'],
+  ] as const)('lets the %s edit the registration', (role, userId) => {
+    expect(() => assertWorkspaceDeviceEditable(role, userId, 'enroller')).not.toThrow();
+  });
+
+  it('rejects any other member', () => {
+    expect(() => assertWorkspaceDeviceEditable('member', 'member', 'enroller')).toThrow(TRPCError);
   });
 });

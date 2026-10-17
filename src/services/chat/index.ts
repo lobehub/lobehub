@@ -11,6 +11,7 @@ import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/mo
 import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
+  type ChatMessageError,
   getDisabledPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -25,6 +26,7 @@ import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
+import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
@@ -62,6 +64,11 @@ const providersWithDeploymentName = new Set<string>([
 export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   agentId?: string;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
   groupId?: string;
   messages: UIChatMessage[];
   /**
@@ -117,6 +124,28 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
   trace?: TracePayload;
 }
 
+/**
+ * A relayed call that fails on the device reaches the stream as its executor's
+ * error (`{ provider, errorType, error }`), not the `ChatMessageError`
+ * (`{ type, body, message }`) the legacy browser path produced for the same
+ * failure. Callers read `type` / `body.error` (the Ollama error views, the
+ * provider checker), so give them that shape again.
+ */
+const toRelayedChatError = (error: ChatMessageError): ChatMessageError => {
+  const relayed = error as unknown as {
+    error?: { message?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  if (!relayed || typeof relayed !== 'object' || relayed.type || !relayed.errorType) return error;
+  const message =
+    (typeof relayed.error?.message === 'string' && relayed.error.message) ||
+    (typeof relayed.message === 'string' && relayed.message) ||
+    String(relayed.errorType);
+  return { body: relayed, message, type: relayed.errorType as ChatMessageError['type'] };
+};
+
 class ChatService {
   buildAssistantMessageContext = async (
     {
@@ -124,6 +153,7 @@ class ChatService {
       agentId,
       groupId,
       additionalContexts,
+      attachmentPreviewFileIds,
       topicId,
       resolvedAgentConfig,
       ...params
@@ -211,6 +241,7 @@ class ChatService {
       enableUserMemories,
       groupId,
       additionalContexts,
+      attachmentPreviewFileIds,
       // History messages + the current turn; unset means no truncation.
       historyCount: modelParams.historyCount,
       // Page editor context from agent runtime
@@ -343,13 +374,17 @@ class ChatService {
     const sdkType = resolveRuntimeProvider(provider);
 
     /**
-     * Use browser agent runtime
+     * A provider only this device reaches: within the LLM relay the server
+     * makes the call and relays it back to this tab (one-shot relay), so the
+     * browser never dials the provider on its own. Outside it, the legacy
+     * browser runtime calls the provider directly.
      */
     const enableFetchOnClient = isEnableFetchOnClient(provider);
+    const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
 
     let fetcher: typeof fetch | undefined = undefined;
 
-    if (enableFetchOnClient) {
+    if (enableFetchOnClient && !relayToThisTab) {
       /**
        * Notes:
        * 1. Browser agent runtime will skip auth check if a key and endpoint provided by
@@ -409,24 +444,32 @@ class ChatService {
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
 
-    return fetchSSE(API_ENDPOINTS.chat(provider), {
-      body: JSON.stringify(payload),
-      fetcher,
-      headers,
-      method: 'POST',
-      onAbort: options?.onAbort,
-      onErrorHandle: options?.onErrorHandle,
-      onFinish: options?.onFinish,
-      onMessageHandle: options?.onMessageHandle,
-      requestContext: {
-        apiMode,
-        fetchOnClient: enableFetchOnClient,
-        model,
-        provider,
-      },
-      responseAnimation: mergedResponseAnimation,
-      signal,
-    });
+    return oneShotRelay.run(
+      relayToThisTab ? provider : undefined,
+      (relay) =>
+        fetchSSE(API_ENDPOINTS.chat(provider), {
+          body: JSON.stringify(payload),
+          fetcher,
+          headers: relay ? { ...(headers as Record<string, string>), ...relay.headers } : headers,
+          method: 'POST',
+          onAbort: options?.onAbort,
+          onErrorHandle:
+            relay && options?.onErrorHandle
+              ? (error) => options.onErrorHandle!(toRelayedChatError(error))
+              : options?.onErrorHandle,
+          onFinish: options?.onFinish,
+          onMessageHandle: options?.onMessageHandle,
+          requestContext: {
+            apiMode,
+            fetchOnClient: enableFetchOnClient && !relayToThisTab,
+            model,
+            provider,
+          },
+          responseAnimation: mergedResponseAnimation,
+          signal,
+        }),
+      { signal },
+    );
   };
 
   fetchPresetTaskResult = async ({

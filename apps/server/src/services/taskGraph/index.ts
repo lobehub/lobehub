@@ -34,8 +34,8 @@ export interface SubtaskGraphPlan {
   /** Identifiers participating in at least one dependency cycle. */
   cycles: string[];
   /**
-   * Descendants whose own status excludes them from this batch (running /
-   * scheduled / etc.). Distinct from `blockedExternally`, which describes a
+   * Descendants whose own state excludes them from this batch (running /
+   * scheduled / archived / etc.). Distinct from `blockedExternally`, which describes a
    * runnable task held back by *some other* task.
    */
   ineligible: string[];
@@ -46,6 +46,8 @@ export interface SubtaskGraphPlan {
 }
 
 export interface SubtaskNode {
+  /** Archived by the user: never run, so it sits out like an ineligible status. */
+  archived?: boolean;
   /** Tasks this one depends on (must be `completed` first). */
   dependsOn: string[];
   identifier: string;
@@ -81,7 +83,7 @@ export const planSubtaskLayers = (
     statusByIdentifier.set(node.identifier, node.status);
     if (TERMINAL_STATUSES.has(node.status)) {
       alreadyDone.push(node.identifier);
-    } else if (RUNNABLE_STATUSES.has(node.status)) {
+    } else if (RUNNABLE_STATUSES.has(node.status) && !node.archived) {
       runnableSet.add(node.identifier);
     } else {
       ineligible.push(node.identifier);
@@ -297,6 +299,7 @@ export class TaskGraphService {
     }
 
     const nodes: SubtaskNode[] = descendants.map((d) => ({
+      archived: !!d.archivedAt,
       dependsOn: dependsOnByIdentifier.get(d.identifier) ?? [],
       identifier: d.identifier,
       status: d.status,

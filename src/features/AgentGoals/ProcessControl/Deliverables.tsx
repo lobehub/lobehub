@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ExternalLink, FileDown, FileText, Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +51,10 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: end;
   `,
   row: css`
-    width: 100%;
+    width: calc(100% + 16px);
+
+    /* Same column edge as the section title, like the findings and activity rows. */
+    margin-inline: -8px;
     padding-block: 8px;
     padding-inline: 8px;
     border: none;

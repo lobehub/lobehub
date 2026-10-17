@@ -1,5 +1,5 @@
+import { cssVar } from '@lobehub/ui';
 import { BrainOffIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import { Brain } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

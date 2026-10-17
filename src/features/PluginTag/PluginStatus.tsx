@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Badge, Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Badge, Button, Flexbox, Tag, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { LucideRotateCw, LucideTrash2, RotateCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';

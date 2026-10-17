@@ -2,9 +2,20 @@
 
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
-import { copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, confirmModal, Tag, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  confirmModal,
+  copyToClipboard,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Highlighter,
+  Markdown,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import {
   ArrowLeft,
   ChevronDown,

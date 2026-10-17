@@ -336,6 +336,18 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
     },
 
     /**
+     * Stop whatever sandbox holds `name` and release it, rather than waiting
+     * for the idle sweep. The execution plane snapshots that sandbox first and
+     * refuses retryably (`SNAPSHOT_IN_PROGRESS`) while the snapshot is still
+     * packing. `stopped: false` means nothing held it. Control plane only —
+     * stopping a sandbox never starts one.
+     */
+    stopInstance: async (params: { name: string }): Promise<{ stopped: boolean }> =>
+      request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.name)}/stop`, {
+        method: 'POST',
+      }),
+
+    /**
      * Start building an environment from its specification.
      *
      * Returns as soon as the build has started: a bootstrap running an install

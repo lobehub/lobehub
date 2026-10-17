@@ -4,8 +4,8 @@ import type {
   TrashItem,
   TrashListParams,
   TrashListResult,
-  TrashResourceType,
   TrashRestoreErrorCode,
+  TrashRootFilter,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -203,8 +203,8 @@ export class TrashService {
 
   list = (params?: TrashListParams): Promise<TrashListResult> => this.trashModel.list(params);
 
-  countByType = (options?: { deletedByUserId?: string }): Promise<TrashCountByType> =>
-    this.trashModel.countByType(options);
+  countByType = (filter?: Omit<TrashRootFilter, 'resourceType'>): Promise<TrashCountByType> =>
+    this.trashModel.countByType(filter);
 
   findByIds = async (ids: string[]): Promise<TrashItem[]> =>
     (await this.trashModel.findByIds(ids)).map(this.toItem);
@@ -288,22 +288,24 @@ export class TrashService {
   };
 
   /**
-   * Permanently delete one bounded batch of roots from the caller's bin
-   * (optionally one type only). Each purge is serial and may call storage, so
-   * a bin of thousands must not ride a single HTTP request: the caller repeats
-   * while `hasMore` is true, and every call commits only what it finished.
+   * Permanently delete one bounded batch of the roots a recycle-bin view
+   * covers (type / project / actor). Each purge is serial and may call
+   * storage, so a bin of thousands must not ride a single HTTP request: the
+   * caller repeats with the same filter while `hasMore` is true, and every
+   * call commits only what it finished. A matched root takes its whole
+   * cascade with it, whatever its children were recorded under.
    */
-  emptyTrash = async (options?: {
+  emptyTrash = async (
     /**
-     * Restrict the sweep to roots this user trashed. A workspace non-owner may
-     * only empty their own items — filtered in the query, not on a page of
-     * results, so "empty trash" really does empty everything it is allowed to.
+     * `deletedByUserId` restricts the sweep to roots this user trashed: a
+     * workspace non-owner may only empty their own items — filtered in the
+     * query, not on a page of results, so "empty trash" really does empty
+     * everything it is allowed to.
      */
-    deletedByUserId?: string;
-    resourceType?: TrashResourceType;
-  }): Promise<{ hasMore: boolean; purged: number }> => {
+    filter?: TrashRootFilter,
+  ): Promise<{ hasMore: boolean; purged: number }> => {
     const ids = await this.trashModel.listAllRootIds({
-      ...options,
+      ...filter,
       limit: TRASH_EMPTY_BATCH_SIZE + 1,
     });
     const { purged } = await this.purge(ids.slice(0, TRASH_EMPTY_BATCH_SIZE));

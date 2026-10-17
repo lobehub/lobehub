@@ -1,8 +1,18 @@
 'use client';
 
-import { Flexbox, Icon, Markdown, Tooltip } from '@lobehub/ui';
-import { Button, Skeleton, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Markdown,
+  Skeleton,
+  Spin,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import {
   BookOpen,
   ChevronRight,

@@ -42,7 +42,7 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createModal: (props: ModalProps) => {
     createModalMock(props);

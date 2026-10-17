@@ -32,13 +32,18 @@ export interface SandboxSelection {
  *
  * Before a topic exists the choice is buffered by agent and carried by the
  * first send; see `pendingSandboxSelection`.
+ *
+ * `scopeTopicId` is the conversation the caller belongs to; `null` means it has
+ * no topic yet. Omitted, it follows the global active topic.
  */
-export const useSandboxMode = (agentId: string) => {
-  const topicId = useChatStore((s) => s.activeTopicId);
-  const topicInstanceId = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.sandboxInstanceId,
+export const useSandboxMode = (agentId: string, scopeTopicId?: string | null) => {
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const topicId = scopeTopicId === undefined ? activeTopicId : scopeTopicId;
+  const topicMetadata = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata : undefined,
   );
-  const topicMode = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.sandboxMode);
+  const topicInstanceId = topicMetadata?.sandboxInstanceId;
+  const topicMode = topicMetadata?.sandboxMode;
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
   // The pending value lives outside React, so this subscribes to it the way a
   // store would be subscribed to. Every component using this hook re-renders

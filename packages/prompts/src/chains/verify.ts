@@ -3,7 +3,7 @@ import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
 export const VERIFY_PLAN_PROMPT_VERSION = 'v3';
 /** Bump when the judge prompt meaningfully changes. */
-export const VERIFY_JUDGE_PROMPT_VERSION = 'v2';
+export const VERIFY_JUDGE_PROMPT_VERSION = 'v3';
 /** Bump when the report prompt meaningfully changes. */
 export const VERIFY_REPORT_PROMPT_VERSION = 'v1';
 /**
@@ -309,6 +309,7 @@ export const chainVerifyJudge = ({ goal, deliverable, items, mode }: JudgePrompt
     '- suggestion: a concrete fix when the verdict is failed/uncertain.',
     'Artifacts listed under "Evidence captured during the run" are primary Data only when their contents are attached or quoted. Never treat mere existence, a filename, or a caption as proof of what an artifact depicts.',
     'Be skeptical: default to "uncertain" rather than "passed" when evidence is missing.',
+    "The deliverable may be a follow-up round's reply that only describes what that round changed. A statement that a round made no code change is not evidence that the work is missing: judge each criterion on its captured evidence, and treat the deliverable as the builder's account rather than a complete inventory.",
     mode === 'batch'
       ? 'Return one verdict object per criterion, each tagged with its exact checkItemId.'
       : 'Return a single verdict object for the one criterion below.',

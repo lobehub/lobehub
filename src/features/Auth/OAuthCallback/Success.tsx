@@ -1,7 +1,6 @@
 'use client';
 
-import { FluentEmoji } from '@lobehub/ui';
-import { Result, Text } from '@lobehub/ui/base-ui';
+import { FluentEmoji, Result, Text } from '@lobehub/ui';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -50,7 +49,7 @@ const SuccessPage = memo(() => {
       icon={<FluentEmoji emoji={'✅'} size={96} type={'anim'} />}
       status="success"
       subTitle={
-        <Text fontSize={16} type="secondary">
+        <Text align="left" as="span" fontSize={16} style={{ display: 'block' }} type="secondary">
           {provider
             ? t('success.subTitleWithCountdown', {
                 countdown,

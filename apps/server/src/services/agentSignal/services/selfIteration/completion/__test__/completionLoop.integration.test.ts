@@ -207,4 +207,128 @@ describe('S2 completion loop (policy → handler → projection → persist)', (
 
     expect(appended).toHaveLength(0);
   });
+
+  describe('nightly ideas Daily Brief', () => {
+    const ideasOnly = (overrides: Partial<SelfIterationCompletionPayload> = {}) => ({
+      agentId: BUILTIN_AGENT_SLUGS.nightlyReview,
+      operationId: 'op_ideas',
+      selfIteration: {
+        artifacts: [
+          {
+            apiName: 'recordSelfReviewIdea',
+            data: {
+              apiName: 'recordSelfReviewIdea',
+              idempotencyKey: 'idea:tone',
+              kind: 'artifact',
+              rationale: 'User keeps asking for shorter answers',
+              risk: 'low',
+              title: 'Shorter answers',
+            },
+            kind: 'artifact',
+            toolCallId: 'call_idea',
+          },
+        ],
+        marker: {
+          agentId: 'agent_user_1',
+          kind: 'nightly-review',
+          localDate: '2026-05-30',
+          reviewWindowEnd: '2026-05-30T15:59:59.000Z',
+          reviewWindowStart: '2026-05-29T16:00:00.000Z',
+          sourceId: 'nightly-review:user_1:agent_user_1:2026-05-30',
+        },
+        mutations: [],
+        userId: 'user_1',
+        ...overrides,
+      } satisfies SelfIterationCompletionPayload,
+    });
+
+    const setup = () => {
+      const { appended, store } = makeInMemoryReceiptStore();
+      const writeDailyBrief = vi.fn().mockResolvedValue({ id: 'brief_1' });
+      const [handler] = installAndCapture(
+        createCompletionPolicy({
+          onSelfIterationCompleted: createSelfIterationCompletionHandler({
+            ideasBrief: { writer: { writeDailyBrief } },
+            receiptStore: store,
+          }),
+        }),
+      );
+      return { appended, handler, writeDailyBrief };
+    };
+
+    it('writes one ideas brief for the reviewed agent when the run only recorded ideas', async () => {
+      const { appended, handler, writeDailyBrief } = setup();
+
+      await handler.handle({ payload: ideasOnly() });
+
+      expect(appended[0].detail).toBe('Captured 1 idea(s).');
+      expect(writeDailyBrief).toHaveBeenCalledTimes(1);
+      const brief = writeDailyBrief.mock.calls[0][0];
+      expect(brief).toMatchObject({
+        agentId: 'agent_user_1',
+        summary: 'User keeps asking for shorter answers',
+        title: 'Dream note: Shorter answers',
+        trigger: 'agent-signal:nightly-review',
+        type: 'insight',
+      });
+      expect(brief.metadata.agentSignal.nightlySelfReview).toMatchObject({
+        ideas: [
+          {
+            idempotencyKey: 'idea:tone',
+            rationale: 'User keeps asking for shorter answers',
+            risk: 'low',
+            title: 'Shorter answers',
+          },
+        ],
+        localDate: '2026-05-30',
+        outcome: 'ideas',
+        receiptIds: ['nightly-review:user_1:agent_user_1:2026-05-30:self-iteration-summary'],
+        sourceId: 'nightly-review:user_1:agent_user_1:2026-05-30',
+      });
+    });
+
+    it('does not write an ideas brief when the run already wrote a proposal brief', async () => {
+      const { handler, writeDailyBrief } = setup();
+
+      await handler.handle({
+        payload: ideasOnly({
+          mutations: [
+            {
+              apiName: 'createSelfReviewProposal',
+              data: { proposalId: 'brf_1', summary: 'Refine skill X' },
+              kind: 'mutation',
+              toolCallId: 'call_prop',
+            },
+          ],
+        }),
+      });
+
+      expect(writeDailyBrief).not.toHaveBeenCalled();
+    });
+
+    it('does not write an ideas brief for non-nightly runs or runs without ideas', async () => {
+      const { handler, writeDailyBrief } = setup();
+      const base = ideasOnly().selfIteration;
+
+      await handler.handle({
+        payload: ideasOnly({ marker: { ...base.marker, kind: 'self-reflection' } }),
+      });
+      await handler.handle({ payload: ideasOnly({ artifacts: [] }) });
+
+      expect(writeDailyBrief).not.toHaveBeenCalled();
+    });
+
+    it('keeps receipts persisted when the brief write fails', async () => {
+      const { appended, store } = makeInMemoryReceiptStore();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const onSelfIterationCompleted = createSelfIterationCompletionHandler({
+        ideasBrief: { writer: { writeDailyBrief: vi.fn().mockRejectedValue(new Error('db')) } },
+        receiptStore: store,
+      });
+
+      await expect(onSelfIterationCompleted(ideasOnly() as never)).resolves.toBeUndefined();
+      expect(appended).toHaveLength(1);
+      consoleError.mockRestore();
+    });
+  });
 });

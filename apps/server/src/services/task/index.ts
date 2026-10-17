@@ -43,7 +43,10 @@ import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { createTaskSchedulerModule } from '../taskScheduler';
 import { resolveTaskAcceptance } from '../verify/taskAcceptance';
+import { assertArchivedTaskStaysIdle, writeKeepingArchivedIdle } from './archiveGuard';
 import { collapseActivityLog } from './collapseActivityLog';
+import { projectTaskDetailState } from './detailProjection';
+import { resolveMissingTaskModelConfig } from './modelSnapshot';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -83,7 +86,6 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
-  identifierPrefix?: string;
   instruction: string;
   name?: string;
   parentTaskId?: string;
@@ -101,6 +103,8 @@ export interface CreateTaskInput {
 export interface UpdateStatusResult {
   allSubtasksDone?: boolean;
   checkpointTriggered?: boolean;
+  /** Completion was requested by the task's own run and lands when it ends. */
+  completionDeferred?: boolean;
   parentTaskId?: string | null;
   paused: string[];
   task: TaskItem;
@@ -174,7 +178,6 @@ export class TaskService {
     if (createData.projectId) {
       const project = await this.projectModel.findManageableById(createData.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
-      createData.identifierPrefix ??= project.identifier;
     }
 
     // Pull the model/provider snapshot and the agent's visibility in a single
@@ -184,7 +187,16 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = { ...agentInfo.snapshot, ...createData.config };
+        if (agentInfo.snapshot) {
+          createData.config = {
+            ...createData.config,
+            ...resolveMissingTaskModelConfig(
+              createData.config,
+              agentInfo.snapshot,
+              agentInfo.modelOverrideProvider,
+            ),
+          };
+        }
         agentVisibility = agentInfo.visibility;
       }
     }
@@ -400,19 +412,50 @@ export class TaskService {
     // seen here and wins; a run that records later finds the task gone and
     // stops its own execution. Compare-and-delete on the status as well, so a
     // run that moved the task on in the meantime is never deleted under.
+    //
+    // The tool contract ("dependencies/topics/comments cascade-delete") is
+    // honored here for topics themselves: `task_topics` rows go via FK
+    // cascade, but the underlying `topics` rows have no FK back to `tasks`
+    // and would otherwise survive as orphans that keep showing up in the
+    // sidebar. Collect their ids before the task row goes (the cascade wipes
+    // the links with it), then delete the topic rows in the same transaction.
+    // The kept operation's own topic is excluded — it must survive with its
+    // run (see the snapshot below).
     const handled = new Set(runningTopics.map((topic) => topic.operationId));
     const outcome = await this.db.transaction(async (tx) => {
       const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
       if (!(await taskModel.lockForUpdate(task.id))) return 'gone' as const;
-      const nowRunning = await new TaskTopicModel(
-        tx,
-        this.userId,
-        this.workspaceId,
-      ).findRunningByTaskIds([task.id]);
+      const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+      const nowRunning = await taskTopicModel.findRunningByTaskIds([task.id]);
       if (nowRunning.some((topic) => !handled.has(topic.operationId))) return 'conflict' as const;
-      return (await taskModel.deleteIfStatus(task.id, task.status))
-        ? ('deleted' as const)
-        : ('conflict' as const);
+
+      // The row lock guarantees no run can record a topic between here and
+      // the status CAS below, so this snapshot is the complete topic set.
+      // `keepOperationId` spares the caller's own run: its topic must survive
+      // with the operation, or the messages ON DELETE CASCADE would pull the
+      // conversation out from under the still-running tool call.
+      const allTopics = await taskTopicModel.findByTaskId(task.id);
+      const topicIds = allTopics
+        .filter(
+          (topic) =>
+            !topic.topicId ||
+            !options.keepOperationId ||
+            topic.operationId !== options.keepOperationId,
+        )
+        .map((topic) => topic.topicId)
+        .filter((topicId): topicId is string => !!topicId);
+
+      if (!(await taskModel.deleteIfStatus(task.id, task.status))) return 'conflict' as const;
+
+      if (topicIds.length > 0) {
+        // trashScope variant: a linked topic already sitting in the recycle
+        // bin must go too, or restoring it later resurrects the sidebar
+        // orphan this cascade exists to eliminate.
+        await new TopicModel(tx, this.userId, this.workspaceId).batchDeleteIncludingTrashed(
+          topicIds,
+        );
+      }
+      return 'deleted' as const;
     });
     if (outcome === 'conflict') {
       throw new TRPCError({
@@ -491,6 +534,13 @@ export class TaskService {
     input: {
       error?: string;
       id: string;
+      /**
+       * The caller's own run, when an agent changes the task it is executing.
+       * Completing that task is a delivery request: it is recorded and
+       * finalized by onTopicComplete once the run ends, instead of
+       * interrupting the run mid-tool-call.
+       */
+      operationId?: string;
       status: TaskStatus;
     },
     /**
@@ -500,7 +550,7 @@ export class TaskService {
      */
     actor?: { agentId?: string | null; userId?: string | null },
   ): Promise<UpdateStatusResult> {
-    const { id, status, error: errorMsg } = input;
+    const { id, operationId, status, error: errorMsg } = input;
 
     if (errorMsg && status !== 'failed') {
       throw new TRPCError({
@@ -510,9 +560,22 @@ export class TaskService {
     }
 
     const resolved = await this.resolveOrThrow(id);
+    assertArchivedTaskStaysIdle(resolved, { status });
 
     if (resolved.status === 'running' && status !== 'running') {
       const topics = await this.taskTopicModel.findByTaskId(resolved.id);
+
+      if (
+        status === 'completed' &&
+        operationId &&
+        topics.some((t) => t.status === 'running' && t.operationId === operationId)
+      ) {
+        await this.taskModel.updateContext(resolved.id, {
+          completion: { requestedByOperationId: operationId },
+        });
+        return { completionDeferred: true, paused: [], task: resolved, unlocked: [] };
+      }
+
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
@@ -545,9 +608,12 @@ export class TaskService {
       extra.completedAt = new Date();
     if (errorMsg) extra.error = errorMsg;
 
-    const task = actor
-      ? await this.taskModel.updateWithLog(resolved.id, { status, ...extra }, actor)
-      : await this.taskModel.updateStatus(resolved.id, status, extra);
+    const task = await writeKeepingArchivedIdle(this.db, (tx) => {
+      const model = new TaskModel(tx, this.userId, this.workspaceId);
+      return actor
+        ? model.updateWithLog(resolved.id, { status, ...extra }, actor)
+        : model.updateStatus(resolved.id, status, extra);
+    });
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
 
     // Stamp the schedule run-count window each time the user (re)starts a
@@ -940,7 +1006,14 @@ export class TaskService {
     options: Parameters<TaskModel['updateWithLog']>[3] = {},
   ): Promise<TaskItem | null> {
     return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
-      new TaskModel(db, this.userId, this.workspaceId).updateWithLog(taskId, data, actor, options),
+      writeKeepingArchivedIdle(db, (tx) =>
+        new TaskModel(tx, this.userId, this.workspaceId).updateWithLog(
+          taskId,
+          data,
+          actor,
+          options,
+        ),
+      ),
     );
   }
 
@@ -1109,6 +1182,7 @@ export class TaskService {
                 },
               }
             : {}),
+          ...(s.archivedAt ? { archivedAt: new Date(s.archivedAt).toISOString() } : {}),
           assigneeUserId: s.assigneeUserId,
           automationMode: s.automationMode,
           blockedBy: depMap.get(s.id),
@@ -1363,10 +1437,9 @@ export class TaskService {
     });
 
     const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
-    const taskContext = task.context ? (task.context as TaskContext) : undefined;
-    const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
 
     return {
+      ...projectTaskDetailState(task, taskConfig),
       agentId: task.assigneeAgentId,
       automationMode: task.automationMode ?? null,
       checkpoint: this.taskModel.getCheckpointConfig(task),
@@ -1386,29 +1459,12 @@ export class TaskService {
       error: task.error,
       goal: goal ?? null,
       files: taskFiles.length > 0 ? taskFiles : undefined,
-      heartbeat:
-        task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
-          ? {
-              interval: task.heartbeatInterval,
-              lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
-              scheduledAt: taskContext?.scheduler?.scheduledAt,
-              timeout: task.heartbeatTimeout,
-            }
-          : undefined,
       id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
       name: task.name,
       parent,
       priority: task.priority,
-      schedule:
-        task.schedulePattern || task.scheduleTimezone || scheduleConfig.maxExecutions != null
-          ? {
-              maxExecutions: scheduleConfig.maxExecutions ?? null,
-              pattern: task.schedulePattern,
-              timezone: task.scheduleTimezone,
-            }
-          : undefined,
       startedAt: task.startedAt ? new Date(task.startedAt).toISOString() : undefined,
       status: task.status,
       userId: task.assigneeUserId,

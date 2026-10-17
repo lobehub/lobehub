@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { pickDefaultInstance } from '@lobechat/utils/environmentInstance';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -258,5 +259,36 @@ describe('environment visibility', () => {
 
     const rows = await owner.query();
     expect(rows.map((row) => row.id)).toEqual([inWorkspace.id]);
+  });
+});
+
+describe('instance order', () => {
+  it("lists an environment's instances oldest first, ties broken by id, with the default first", async () => {
+    const environment = await owner.create({ name: 'Ordered' });
+    const created = new Date('2026-01-01T00:00:00.000Z');
+    const later = new Date('2026-01-02T00:00:00.000Z');
+
+    // Two rows created in the same instant — the case where only the id can
+    // decide — and one created later but inserted first, so insertion order
+    // and the expected order disagree.
+    const newest = await addInstance(environment.id, 'ordered-newest');
+    const tiedA = await addInstance(environment.id, 'ordered-tied-a');
+    const tiedB = await addInstance(environment.id, 'ordered-tied-b');
+    await serverDB
+      .update(environmentInstances)
+      .set({ createdAt: later })
+      .where(eq(environmentInstances.id, newest.id));
+    await serverDB
+      .update(environmentInstances)
+      .set({ createdAt: created })
+      .where(inArray(environmentInstances.id, [tiedA.id, tiedB.id]));
+
+    const [first, second] = [tiedA.id, tiedB.id].sort();
+    const rows = await ownerInstances.query({ environmentId: environment.id });
+
+    expect(rows.map((row) => row.id)).toEqual([first, second, newest.id]);
+    // The shared rule and the database agree on which instance is the default.
+    expect(pickDefaultInstance(rows)?.id).toBe(rows[0].id);
+    expect(pickDefaultInstance([...rows].reverse())?.id).toBe(first);
   });
 });

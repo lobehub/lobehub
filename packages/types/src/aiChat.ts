@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { type ClientAllocatableEntity, entityIdPattern } from './entityId';
 import type { UIChatMessage } from './message';
 import type { MessageMetadata } from './message/common';
-import { ChatToolPayloadSchema, MessageMetadataSchema } from './message/common';
+import {
+  ChatToolPayloadSchema,
+  ClientMessageMetadataSchema,
+  omitServerOwnedMessageMetadata,
+} from './message/common';
 import type { ContextSelection, CreateMessageParams, PageSelection } from './message/ui/params';
 import { ContextSelectionSchema, PageSelectionSchema } from './message/ui/params';
 import type { OpenAIChatMessage } from './openai/chat';
@@ -137,7 +141,7 @@ export const CreateThreadWithMessageSchema = z.object({
 
 const SendPreloadMessageSchema = z.object({
   content: z.string(),
-  metadata: MessageMetadataSchema.optional(),
+  metadata: ClientMessageMetadataSchema.optional(),
   plugin: z
     .object({
       apiName: z.string(),
@@ -172,7 +176,10 @@ export const AiSendMessageServerSchema = z.object({
   newAssistantMessage: z.object({
     agentId: z.string().optional(),
     id: clientEntityId('messages'),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .transform(omitServerOwnedMessageMetadata),
     model: z.string().optional(),
     provider: z.string().optional(),
   }),
@@ -195,7 +202,7 @@ export const AiSendMessageServerSchema = z.object({
     editorData: z.record(z.string(), z.unknown()).optional(),
     files: z.array(z.string()).optional(),
     id: clientEntityId('messages'),
-    metadata: MessageMetadataSchema.optional(),
+    metadata: ClientMessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),
   }),

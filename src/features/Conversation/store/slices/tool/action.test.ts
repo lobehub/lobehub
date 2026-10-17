@@ -13,6 +13,7 @@ const mockSubmitHeteroIntervention = vi.fn();
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      dbMessagesMap: {},
       messagesMap: {},
       operations: {},
       approveToolCalling: mockApproveToolCalling,

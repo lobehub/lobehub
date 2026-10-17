@@ -30,6 +30,23 @@ describe('resolveStaleSnapshot', () => {
     expect(view.pullRequest?.number).toBe(18_454);
   });
 
+  it('labels the chip with the recorded branch', () => {
+    const view = resolveStaleSnapshot({ git: deadWorktree, path: '/tmp/lobehub-wt-subtask' });
+
+    expect(view.label).toBe('feat/task-list-subtask-nesting');
+  });
+
+  it('falls back to the worktree name when no branch was recorded', () => {
+    const view = resolveStaleSnapshot({
+      git: { activeWorktree: '/tmp/agent-gateway-wt-asa', isWorktree: true },
+      path: '/tmp/agent-gateway-wt-asa',
+      sourcePath: '/Users/me/code/lobehub',
+    });
+
+    expect(view.label).toBe('agent-gateway-wt-asa');
+    expect(view.reset?.targetPath).toBe('/Users/me/code/lobehub');
+  });
+
   it('names the missing worktree in the explanation', () => {
     const view = resolveStaleSnapshot({ git: deadWorktree, path: '/tmp/lobehub-wt-subtask' });
 

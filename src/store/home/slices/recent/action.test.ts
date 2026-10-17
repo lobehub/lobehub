@@ -15,11 +15,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
+import { fileService } from '@/services/file';
 import { recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
 import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
-import { recentListResource } from '@/store/home/slices/recent/projection';
+import {
+  recentFileListResource,
+  recentListResource,
+  recentPageListResource,
+} from '@/store/home/slices/recent/projection';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
 const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem => ({
@@ -92,6 +97,8 @@ const load = async (sidebar: RecentItem[], drawer?: RecentItem[]) => {
 beforeEach(() => {
   useScope(`recent-user-${randomUUID()}:personal`);
   act(() => useHomeStore.setState({ ...initialRecentState }));
+  vi.spyOn(fileService, 'getRecentFiles').mockImplementation(() => new Promise(() => {}));
+  vi.spyOn(fileService, 'getRecentPages').mockImplementation(() => new Promise(() => {}));
 });
 
 afterEach(() => {
@@ -214,5 +221,151 @@ describe('recents replica', () => {
 
     secondRequest.resolve(taskUpdateResult);
     await secondRename;
+  });
+});
+
+type RecentFileRow = Awaited<ReturnType<typeof fileService.getRecentFiles>>[number];
+type RecentPageRow = Awaited<ReturnType<typeof fileService.getRecentPages>>[number];
+
+const fileRow = (id: string, url: string): RecentFileRow =>
+  ({
+    chunkCount: 3,
+    createdAt: new Date(0),
+    fileType: 'image/png',
+    id,
+    name: `${id}.png`,
+    url,
+  }) as unknown as RecentFileRow;
+
+const pageRow = (id: string): RecentPageRow =>
+  ({
+    content: 'the whole page body',
+    editorData: { root: {} },
+    id,
+    metadata: { emoji: '📄' },
+    name: id,
+    updatedAt: new Date(0),
+  }) as unknown as RecentPageRow;
+
+const storedRow = <T>(
+  resource: { storage?: { get: (key: { queryKey: string; scope: string }) => Promise<T> } },
+  queryKey: string,
+) => resource.storage!.get({ queryKey, scope });
+
+describe('resource home recents replica', () => {
+  it('paints the persisted file and page cards before the network answers', async () => {
+    await recentFileListResource.storage!.set(
+      { queryKey: 'private', scope },
+      {
+        data: [{ createdAt: new Date(0), fileType: 'image/png', id: 'f1', name: 'Cached file' }],
+        updatedAt: 1,
+      },
+    );
+    await recentPageListResource.storage!.set(
+      { queryKey: 'private', scope },
+      { data: [{ id: 'p1', name: 'Cached page', updatedAt: new Date(0) }], updatedAt: 1 },
+    );
+
+    const { result } = renderHook(
+      () => ({
+        files: useHomeStore((s) => s.useFetchResourceRecentFiles)({ visibility: 'private' }),
+        pages: useHomeStore((s) => s.useFetchResourceRecentPages)({ visibility: 'private' }),
+      }),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      const state = useHomeStore.getState();
+      expect(homeRecentSelectors.resourceFiles({ visibility: 'private' })(state)?.[0].name).toBe(
+        'Cached file',
+      );
+      expect(homeRecentSelectors.resourcePages({ visibility: 'private' })(state)?.[0].name).toBe(
+        'Cached page',
+      );
+    });
+    expect(result.current.files.isValidating).toBe(true);
+    expect(result.current.pages.isValidating).toBe(true);
+  });
+
+  it('keeps each visibility in its own entry', async () => {
+    vi.mocked(fileService.getRecentPages).mockImplementation(async (_limit, visibility) => [
+      pageRow(`page-${visibility}`),
+    ]);
+
+    renderHook(
+      () => {
+        useHomeStore((s) => s.useFetchResourceRecentPages)({ visibility: 'private' });
+        useHomeStore((s) => s.useFetchResourceRecentPages)({ visibility: 'public' });
+      },
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      const state = useHomeStore.getState();
+      expect(homeRecentSelectors.resourcePages({ visibility: 'private' })(state)?.[0].id).toBe(
+        'page-private',
+      );
+      expect(homeRecentSelectors.resourcePages({ visibility: 'public' })(state)?.[0].id).toBe(
+        'page-public',
+      );
+    });
+  });
+
+  it('persists slim page cards, never the page body', async () => {
+    vi.mocked(fileService.getRecentPages).mockResolvedValue([pageRow('p1')]);
+
+    renderHook(() => useHomeStore((s) => s.useFetchResourceRecentPages)({}), { wrapper });
+
+    await waitFor(async () =>
+      expect((await storedRow(recentPageListResource, 'all'))?.data).toEqual([
+        { emoji: '📄', id: 'p1', name: 'p1', updatedAt: new Date(0) },
+      ]),
+    );
+  });
+
+  it('drops credential-bearing file URLs from the persisted copy only', async () => {
+    vi.mocked(fileService.getRecentFiles).mockResolvedValue([
+      fileRow('signed', 'https://s3.example.com/a.png?X-Amz-Signature=secret'),
+      fileRow('proxy', 'https://app.example.com/f/proxy'),
+    ]);
+
+    renderHook(() => useHomeStore((s) => s.useFetchResourceRecentFiles)({}), { wrapper });
+
+    await waitFor(async () =>
+      expect((await storedRow(recentFileListResource, 'all'))?.data).toBeDefined(),
+    );
+    const persisted = (await storedRow(recentFileListResource, 'all'))!.data;
+    expect(persisted.map((card) => card.url)).toEqual([
+      undefined,
+      'https://app.example.com/f/proxy',
+    ]);
+    expect(persisted[0]).not.toHaveProperty('chunkCount');
+    expect(JSON.stringify(localStorage)).not.toContain('X-Amz-Signature');
+    // The session still shows the thumbnail it was handed.
+    expect(
+      homeRecentSelectors
+        .resourceFiles({})(useHomeStore.getState())
+        ?.map((card) => card.url),
+    ).toEqual([
+      'https://s3.example.com/a.png?X-Amz-Signature=secret',
+      'https://app.example.com/f/proxy',
+    ]);
+  });
+
+  it("never paints another workspace's cards", async () => {
+    await recentFileListResource.storage!.set(
+      { queryKey: 'all', scope: `${scope}-other-workspace` },
+      {
+        data: [{ createdAt: new Date(0), fileType: 'image/png', id: 'x', name: 'Theirs' }],
+        updatedAt: 1,
+      },
+    );
+
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchResourceRecentFiles)({}), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(homeRecentSelectors.resourceFiles({})(useHomeStore.getState())).toBeUndefined();
   });
 });

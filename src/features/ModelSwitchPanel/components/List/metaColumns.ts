@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import { type AiModelForSelect, type ModelRating, type Pricing } from 'model-bank';
 import { createContext, useContext } from 'react';
 

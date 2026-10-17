@@ -1,9 +1,16 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,9 +20,16 @@ import ListSkeleton from '@/components/ListSkeleton';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import { openCreateInstanceModal } from './CreateInstanceModal';
+import { openCreatedEnvironment } from './environmentCreated';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
-import { useEnvironments, useInstances, useWorkspaceUsage } from './useEnvironmentData';
+import {
+  type CreatedEnvironment,
+  useEnvironmentActions,
+  useEnvironments,
+  useInstances,
+  useWorkspaceUsage,
+} from './useEnvironmentData';
 import WorkspaceUsageMeter from './WorkspaceUsageMeter';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -56,7 +70,7 @@ const styles = createStaticStyles(({ css }) => ({
 const LIST_MIN_HEIGHT = 4 * 72;
 
 /**
- * Environments and the instances built from them.
+ * Environments and the copies built from them.
  *
  * An environment is a SPECIFICATION — the sources to check out, what makes them
  * usable, what they run with. What a sandbox builds from it is a cache, which is
@@ -87,6 +101,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const { data, error, isValidating, mutate } = useEnvironments(visibility);
   const { data: instanceData, mutate: refreshInstances } = useInstances();
   const { refresh: refreshUsage } = useWorkspaceUsage();
+  const { buildInstance } = useEnvironmentActions();
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
@@ -117,13 +132,17 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     setSelectedId((current) => (current === id ? undefined : id));
   };
 
-  // The row's shortcut: open the environment so the new instance is seen
-  // landing in its list, and ask for the instance in the same dialog the
-  // panel's own button opens.
+  // The row's "new copy" shortcut: open the environment so the copy is seen
+  // landing in its list, and ask for it in the same dialog the panel's own
+  // button opens.
   const createInstance = (id: string) => {
     setSelectedId(id);
     openCreateInstanceModal({ environmentId: id });
   };
+
+  // No instance dialog after creating one: see `openCreatedEnvironment`.
+  const onEnvironmentCreated = (created: CreatedEnvironment) =>
+    openCreatedEnvironment(created, { buildInstance, select: setSelectedId });
 
   /**
    * Both lists, because the two halves of what this page shows are fetched
@@ -172,7 +191,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       <Button
         icon={<Icon icon={PlusIcon} />}
         type={'primary'}
-        onClick={() => openCreateEnvironmentModal(visibility)}
+        onClick={() => openCreateEnvironmentModal(visibility, onEnvironmentCreated)}
       >
         {t('environments.create')}
       </Button>
@@ -203,7 +222,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
               action={
                 <Button
                   icon={<Icon icon={PlusIcon} />}
-                  onClick={() => openCreateEnvironmentModal(visibility)}
+                  onClick={() => openCreateEnvironmentModal(visibility, onEnvironmentCreated)}
                 >
                   {t('environments.create')}
                 </Button>

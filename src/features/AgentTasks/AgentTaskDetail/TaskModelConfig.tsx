@@ -1,3 +1,4 @@
+import isEqual from 'fast-deep-equal';
 import { memo, useCallback } from 'react';
 
 import ModelSelect from '@/features/ModelSelect';
@@ -6,6 +7,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+
+import { HeterogeneousTaskConfig } from './HeterogeneousTaskConfig';
 
 const TaskModelConfig = memo(() => {
   const { allowed: canEditTask } = usePermission('create_content');
@@ -29,8 +32,14 @@ const TaskModelConfig = memo(() => {
       ? agentByIdSelectors.getAgentModelProviderById(assigneeAgentId)(s)
       : agentSelectors.currentAgentModelProvider(s),
   );
-  const isHeterogeneous = useAgentStore(
-    agentByIdSelectors.isAgentHeterogeneousById(assigneeAgentId ?? ''),
+  const heterogeneousProvider = useAgentStore(
+    (s) => agentByIdSelectors.getAgencyConfigById(assigneeAgentId ?? '')(s)?.heterogeneousProvider,
+    isEqual,
+  );
+
+  const runtimeConfig = useTaskStore(
+    taskDetailSelectors.activeTaskRuntimeConfig(heterogeneousProvider),
+    isEqual,
   );
 
   const model = taskModel || agentModel || '';
@@ -45,9 +54,11 @@ const TaskModelConfig = memo(() => {
     [canEditTask, taskId, updateTaskModelConfig],
   );
 
-  // Heterogeneous agents (e.g. Claude Code) run on their own external runtime,
-  // so the model is not user-selectable — hide the picker entirely.
-  if (isHeterogeneous) return null;
+  // External runtimes previously hid this picker because ordinary provider models
+  // do not describe their execution. Expose their runtime-aware configuration instead.
+  if (runtimeConfig) {
+    return <HeterogeneousTaskConfig fields={runtimeConfig} source={'task'} />;
+  }
 
   return (
     <ModelSelect

@@ -9,9 +9,12 @@ import { agentManagementRuntime } from '../agentManagement';
 const {
   mockCountAgents,
   mockGetAssistantList,
+  mockGetAssistantDetail,
   mockQueryAgents,
+  mockExistsById,
   mockGetAgentConfigById,
   mockServiceUpdateConfig,
+  mockUpdateAgent,
   mockUpdateConfig,
   mockFindById,
   mockCreatePlugin,
@@ -27,10 +30,13 @@ const {
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
   mockUpdatePlugin: vi.fn(),
+  mockExistsById: vi.fn(),
   mockGetAgentConfigById: vi.fn(),
   mockGetAssistantList: vi.fn(),
+  mockGetAssistantDetail: vi.fn(),
   mockQueryAgents: vi.fn(),
   mockServiceUpdateConfig: vi.fn(),
+  mockUpdateAgent: vi.fn(),
   mockUpdateConfig: vi.fn(),
 }));
 
@@ -44,8 +50,10 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
     return {
       countAgents: mockCountAgents,
+      existsById: mockExistsById,
       getAgentConfigById: mockGetAgentConfigById,
       queryAgents: mockQueryAgents,
+      update: mockUpdateAgent,
       updateConfig: mockUpdateConfig,
     };
   }),
@@ -71,6 +79,7 @@ vi.mock('@/database/models/connector', () => ({
 vi.mock('@/server/services/discover', () => ({
   DiscoverService: vi.fn(function () {
     return {
+      getAssistantDetail: mockGetAssistantDetail,
       getAssistantList: mockGetAssistantList,
       getMcpManifest: mockGetMcpManifest,
     };
@@ -104,6 +113,7 @@ const makeAgents = (count: number, startIndex = 0) =>
 describe('agentManagementRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExistsById.mockResolvedValue(true);
     mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockResolveConnectors.mockResolvedValue([]);
     mockQueryPlugins.mockResolvedValue([]);
@@ -137,6 +147,62 @@ describe('agentManagementRuntime', () => {
 
     expect(AgentModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
     expect(PluginModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
+  });
+
+  describe('existence guard (0-row silent no-op)', () => {
+    it('updateAgent fails loudly for an agent that does not exist', async () => {
+      mockExistsById.mockResolvedValue(false);
+
+      const result = await createRuntime().updateAgent({
+        agentId: 'agent-missing',
+        config: { model: 'gpt-4o' },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not found');
+      expect(mockServiceUpdateConfig).not.toHaveBeenCalled();
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+    });
+
+    it('updateAgent still writes meta once the guard passes', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1' });
+
+      const result = await createRuntime().updateAgent({
+        agentId: 'agent-1',
+        meta: { title: 'Renamed' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', { title: 'Renamed' });
+    });
+
+    it('updatePrompt fails loudly for an agent that does not exist', async () => {
+      mockExistsById.mockResolvedValue(false);
+
+      const result = await createRuntime().updatePrompt({
+        agentId: 'agent-missing',
+        prompt: 'new prompt',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not found');
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+    });
+
+    it('updatePrompt writes through once the guard passes', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1' });
+
+      const result = await createRuntime().updatePrompt({
+        agentId: 'agent-1',
+        prompt: 'new prompt',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', {
+        editorData: null,
+        systemRole: 'new prompt',
+      });
+    });
   });
 
   describe('callAgent', () => {
@@ -271,7 +337,12 @@ describe('agentManagementRuntime', () => {
       const runtime = createRuntime();
       const result = await runtime.searchAgent({ limit: 20, source: 'user' });
 
-      expect(mockQueryAgents).toHaveBeenCalledWith({ keyword: undefined, limit: 20, offset: 0 });
+      expect(mockQueryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
+        keyword: undefined,
+        limit: 20,
+        offset: 0,
+      });
       expect(result.success).toBe(true);
       expect(result.content).toContain('Found 137 agents in your workspace, showing 1-20');
       expect(result.content).toContain('call searchAgent with offset=20');
@@ -285,7 +356,12 @@ describe('agentManagementRuntime', () => {
       const runtime = createRuntime();
       const result = await runtime.searchAgent({ limit: 20, offset: 20, source: 'user' });
 
-      expect(mockQueryAgents).toHaveBeenCalledWith({ keyword: undefined, limit: 20, offset: 20 });
+      expect(mockQueryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
+        keyword: undefined,
+        limit: 20,
+        offset: 20,
+      });
       expect(result.content).toContain('Found 50 agents in your workspace, showing 21-40');
       expect(result.content).toContain('call searchAgent with offset=40');
       expect(result.state).toMatchObject({ hasMore: true, offset: 20, totalCount: 50 });
@@ -298,11 +374,35 @@ describe('agentManagementRuntime', () => {
       const runtime = createRuntime();
       const result = await runtime.searchAgent({ limit: 50, source: 'user' });
 
-      expect(mockQueryAgents).toHaveBeenCalledWith({ keyword: undefined, limit: 20, offset: 0 });
+      expect(mockQueryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
+        keyword: undefined,
+        limit: 20,
+        offset: 0,
+      });
       expect(result.content).toContain(
         'Requested limit 50 exceeds the maximum of 20; results were capped at 20 per call.',
       );
       expect(result.state).toMatchObject({ hasMore: false });
+    });
+
+    it('excludes the inbox from the management search and its total', async () => {
+      // This is the CRUD surface: ids it returns can be sent to deleteAgent.
+      // The inbox is product-owned and cannot be deleted, so it must not be
+      // offered here — and the count has to match the list, or pagination lies.
+      mockQueryAgents.mockResolvedValue(makeAgents(1));
+      mockCountAgents.mockResolvedValue(1);
+
+      const runtime = createRuntime();
+      await runtime.searchAgent({ keyword: 'lobe', source: 'user' });
+
+      expect(mockQueryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
+        keyword: 'lobe',
+        limit: 10,
+        offset: 0,
+      });
+      expect(mockCountAgents).toHaveBeenCalledWith({ includeInbox: false, keyword: 'lobe' });
     });
 
     it('returns no agents found when nothing matches', async () => {
@@ -540,6 +640,109 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression guard: searchAgent surfaces marketplace ids (short codes) that
+  // have no local agents row, but getAgentDetail used to report a false
+  // "not found" for them on the gateway/Cloud execution path.
+  describe('getAgentDetail market fallback', () => {
+    it('falls back to marketplace detail for a market-only agent', async () => {
+      mockGetAgentConfigById.mockResolvedValue(null);
+      mockGetAssistantDetail.mockResolvedValue({
+        avatar: '🌐',
+        backgroundColor: 'pink',
+        config: {
+          model: 'gpt-4o',
+          openingMessage: 'Hi!',
+          openingQuestions: ['Q1'],
+          plugins: ['web-browsing', 'search'],
+          provider: 'openai',
+          systemRole: 'Market prompt',
+        },
+        description: 'A market agent',
+        identifier: 'mkt12345',
+        related: [],
+        tags: ['ai'],
+        title: 'Market Agent',
+      });
+
+      const runtime = createRuntime();
+      const result = await runtime.getAgentDetail({ agentId: 'mkt12345' });
+
+      expect(mockGetAssistantDetail).toHaveBeenCalledWith({
+        identifier: 'mkt12345',
+        source: 'new',
+      });
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Market Agent');
+      expect(result.content).toContain('Market prompt');
+      expect(result.content).toContain('marketplace agent (read-only)');
+      expect(result.state).toMatchObject({
+        agentId: 'mkt12345',
+        isMarket: true,
+        config: expect.objectContaining({ model: 'gpt-4o', systemRole: 'Market prompt' }),
+        meta: expect.objectContaining({ title: 'Market Agent' }),
+      });
+    });
+
+    it('normalizes the object-shaped marketplace model before rendering', async () => {
+      mockGetAgentConfigById.mockResolvedValue(null);
+      mockGetAssistantDetail.mockResolvedValue({
+        avatar: '🌐',
+        config: {
+          model: { model: 'gpt-4o', parameters: { temperature: 0.6 }, provider: 'openai' },
+          plugins: ['web-browsing'],
+          systemRole: 'Market prompt',
+        },
+        description: 'A market agent',
+        identifier: 'mktobj1',
+        related: [],
+        tags: ['ai'],
+        title: 'Object Model Agent',
+      });
+
+      const runtime = createRuntime();
+      const result = await runtime.getAgentDetail({ agentId: 'mktobj1' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('Model: openai/gpt-4o');
+      expect(result.content).not.toContain('[object Object]');
+      expect(result.state).toMatchObject({
+        config: expect.objectContaining({ model: 'gpt-4o', provider: 'openai' }),
+      });
+    });
+
+    it('still reports not found when the market fallback misses', async () => {
+      mockGetAgentConfigById.mockResolvedValue(null);
+      mockGetAssistantDetail.mockResolvedValue(undefined);
+
+      const runtime = createRuntime();
+      const result = await runtime.getAgentDetail({ agentId: 'ghost-id' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe('Agent "ghost-id" not found.');
+    });
+
+    it('treats a market lookup failure as best-effort and reports not found', async () => {
+      mockGetAgentConfigById.mockResolvedValue(null);
+      mockGetAssistantDetail.mockRejectedValue(new Error('network down'));
+
+      const runtime = createRuntime();
+      const result = await runtime.getAgentDetail({ agentId: 'offline-id' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe('Agent "offline-id" not found.');
+    });
+
+    it('does not hit the market for a local agent', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', provider: 'lobehub' });
+
+      const runtime = createRuntime();
+      const result = await runtime.getAgentDetail({ agentId: 'agent-1' });
+
+      expect(result.success).toBe(true);
+      expect(mockGetAssistantDetail).not.toHaveBeenCalled();
     });
   });
 

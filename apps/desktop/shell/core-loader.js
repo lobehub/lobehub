@@ -78,7 +78,14 @@ const verifyCandidate = (dir, { abi, builtinHashes, publicKey, storeDir }) => {
   return manifest;
 };
 
-function resolveCore({ userData, builtinDir, abi, publicKey, platform = process.platform }) {
+function resolveCore({
+  userData,
+  builtinDir,
+  abi,
+  publicKey,
+  deferBoot = false,
+  platform = process.platform,
+}) {
   const otaRoot = path.join(userData, 'core-ota');
   const bootFile = path.join(otaRoot, 'boot.json');
   const pointerFile = path.join(otaRoot, 'pointer.json');
@@ -210,8 +217,9 @@ function resolveCore({ userData, builtinDir, abi, publicKey, platform = process.
         break;
       }
       const healthy = boot.version === version && boot.healthy === true;
-      writeJson(bootFile, { failures: failures + 1, healthy, version });
-      return { dir, log, manifest, ...bootMarkers(version), source: 'external' };
+      const startBoot = () => writeJson(bootFile, { failures: failures + 1, healthy, version });
+      if (!deferBoot) startBoot();
+      return { dir, log, manifest, ...bootMarkers(version), source: 'external', startBoot };
     } catch (error) {
       log.push(`core ${version} rejected: ${error.message}`);
     }
@@ -224,22 +232,26 @@ function resolveCore({ userData, builtinDir, abi, publicKey, platform = process.
     log.push(`${builtinKey} failed ${builtinFailures} boots`);
     return { dir: builtinDir, log, manifest: builtinManifest, source: 'rescue' };
   }
-  try {
-    fs.mkdirSync(otaRoot, { recursive: true });
-    writeJson(bootFile, {
-      failures: builtinFailures + 1,
-      healthy: boot.version === builtinKey && boot.healthy === true,
-      version: builtinKey,
-    });
-  } catch (error) {
-    log.push(`builtin boot count failed: ${error.message}`);
-  }
+  const startBoot = () => {
+    try {
+      fs.mkdirSync(otaRoot, { recursive: true });
+      writeJson(bootFile, {
+        failures: builtinFailures + 1,
+        healthy: boot.version === builtinKey && boot.healthy === true,
+        version: builtinKey,
+      });
+    } catch (error) {
+      log.push(`builtin boot count failed: ${error.message}`);
+    }
+  };
+  if (!deferBoot) startBoot();
   return {
     dir: builtinDir,
     log,
     manifest: builtinManifest,
     ...bootMarkers(builtinKey),
     source: 'builtin',
+    startBoot,
   };
 }
 

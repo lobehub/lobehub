@@ -18,12 +18,15 @@ Component → Store useFetchXxx hook → Service → lambdaClient
 - Store read hooks use `useClientDataSWR` and return its SWR response, including `error`
   and `mutate`. Sync successful results into the store through the wrapper's supported
   callback (`onSuccess`, or `onData` for the sync wrapper).
+- Server lists and details that paint from a local copy go through `@/libs/replica`
+  instead: the store's `useFetchXxx` returns `slice.useSync(params)` (flags only) and
+  the engine writes the store. See the Replica section of [zustand](../zustand/SKILL.md).
 - Components call these hooks and read store data through selectors. Do not fetch in
   `useEffect` or duplicate server data in component `useState`.
 - Use `useFetchXxx` for read hooks and `refreshXxx` for cache invalidation.
 - For list/detail types, maps, reducers, and shared type sources, use
-  [Zustand data structures](../zustand/references/data-structures.md). For action classes,
-  internal actions, and `flattenActions`, use [zustand](../zustand/SKILL.md).
+  [Zustand data structures](../zustand/references/data-structures.md). For store layout
+  and action classes, use [zustand](../zustand/SKILL.md).
 
 ## Home First Paint and Persistent Caches
 
@@ -75,11 +78,12 @@ For lists cached separately under multiple parents, see
 - Keep pending flags in store state and clear them in `finally`. Use per-id state for
   row updates/deletes so unrelated rows remain usable; create can use a separate flag
   because no persistent id exists yet.
-- For optimistic create/update, use the store's reducer/dispatch convention and
-  restore or revalidate affected state if the service fails. Do not leave a temporary
-  row or a successful-looking edit after rejection.
-- Delete after server success, following the `zustand` convention. Do not remove the
-  row optimistically or apply create/update's optimistic recipe to deletion.
+- For optimistic writes on replica data, use `slice.optimistic` / `entity.optimistic`;
+  a rejected call rolls back on its own, deletes included.
+- For optimistic create/update on legacy stores, use the store's reducer/dispatch
+  convention and restore or revalidate affected state if the service fails. Do not
+  leave a temporary row or a successful-looking edit after rejection. Delete only after
+  server success there: a hand-written reducer has no rollback base.
 - Let failures reach the caller's error UI; a `finally` block clears pending state
   but does not by itself recover an optimistic write.
 
@@ -92,6 +96,10 @@ loading or empty results.
 Use `AsyncBoundary` for standard loading/error/empty/data surfaces; use `AsyncError`
 for custom layouts and inline failures. Pass the original SWR `data` to the boundary:
 `undefined` means no successful result, whereas `[]` is a settled empty result.
+
+Replica `useSync` returns no `data`. Feed `AsyncBoundary` its `error` and a settled
+signal from the store entry (`data={isListInit || undefined}`, where the selector is
+`entry !== undefined`); see `src/features/Pages/PageLayout/Body/index.tsx`.
 
 ```tsx
 const BenchmarkList = () => {

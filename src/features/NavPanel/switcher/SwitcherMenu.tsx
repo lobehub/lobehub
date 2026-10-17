@@ -1,6 +1,12 @@
-import { Flexbox, Icon, usePopoverContext } from '@lobehub/ui';
-import { Input, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Input,
+  Text,
+  usePopoverContext,
+} from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -11,7 +11,15 @@ export {
   type PricingComputationResult,
 } from './utils/computeChatCost';
 export { computeImageCost } from './utils/computeImageCost';
-export { computeVideoCost } from './utils/computeVideoCost';
+export {
+  computeVideoCost,
+  computeVideoRequestCost,
+  getVideoPricingParamNames,
+  getVideoReferenceImages,
+  needsVideoReferenceImageTokens,
+  type VideoGenerationParams,
+  type VideoRequestPricingInputs,
+} from './utils/computeVideoCost';
 export {
   type ChatCostEstimate,
   type ChatInputTokenEstimate,
@@ -25,3 +33,14 @@ export {
 } from './utils/estimateChatCost';
 export { resolveImageSinglePrice } from './utils/resolveImageSinglePrice';
 export { resolveVideoSinglePrice } from './utils/resolveVideoSinglePrice';
+export {
+  countVideoOutputTokens,
+  getVideoOutputTokenParamNames,
+  meterVideoOutputTokens,
+  type VideoOutputFrames,
+  type VideoOutputTokenEstimate,
+} from './utils/videoOutputTokens';
+export {
+  countVideoReferenceImageTokens,
+  type ImageDimensions,
+} from './utils/videoReferenceImageTokens';

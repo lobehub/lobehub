@@ -1,7 +1,5 @@
 import { type ChatPluginPayload } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { cx, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { CircuitBoard } from 'lucide-react';
 import { memo } from 'react';

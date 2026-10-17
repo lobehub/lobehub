@@ -59,6 +59,23 @@ lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-effect-fetching" = "error"
 "lobehub/no-mode-flags" = "warn"
+"lobehub/no-unguarded-response-field" = "error"
+
+# Fixed product images and App-owned resource requests have different namespaces.
+[[config.group]]
+files = [ "src/**/*.{ts,tsx,css}", "packages/const/src/**/*.ts", "apps/*/app/**/*.{ts,tsx,css}", "apps/{share,workbench}/src/**/*.{ts,tsx,css}", "apps/desktop/vite.*.config.{ts,mts}", "scripts/**/*.{ts,mts}" ]
+ignores = [ "**/*.{test,spec}.{ts,tsx}", "**/__tests__/**", "**/fixtures/**", "**/generated/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/static-app-image-namespace" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/static-app-image-namespace/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/static-app-image-namespace" = "warn"
 
 
 # Browser code, everywhere: no third-party package that needs Node may be
@@ -186,7 +203,48 @@ lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/ui-content-width" = "warn"
 
+# Test value: semantic checks of retained behavior, not assertion syntax.
+[[config.group]]
+files = [ "src/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs}", "apps/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs}", "packages/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs}" ]
+ignores = [ "**/fixtures/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-removal-only-tests" = "warn"
+"lobehub/no-constant-stub-tests" = "warn"
+
+# Ordinary API instructions: avoid removal announcements and locally redundant
+# descriptions while preserving migration guidance and useful input semantics.
+[[config.group]]
+files = [ "docs/usage/**/*.mdx", "docs/usage/**/*.md", "packages/builtin-skills/**/*.md", "packages/builtin-skills/src/**/content.ts", "packages/builtin-skills/src/**/references/**/*.ts", "apps/cli/src/commands/**/*.ts", "packages/openapi/src/types/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-redundant-api-copy" = "warn"
+
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
+[[config.group]]
+files = [ "packages/alint/fixtures/no-redundant-api-copy/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-redundant-api-copy" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-constant-stub-tests/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-constant-stub-tests" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-removal-only-tests/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-removal-only-tests" = "warn"
+
 [[config.group]]
 files = [ "packages/alint/fixtures/pmap-over-promise-all/**" ]
 [config.group.plugins]
@@ -207,6 +265,13 @@ files = [ "packages/alint/fixtures/no-effect-fetching/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-effect-fetching" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unguarded-response-field/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unguarded-response-field" = "warn"
 
 [[config.group]]
 files = [ "packages/alint/fixtures/no-mode-flags/**" ]
@@ -497,3 +562,24 @@ files = [ "packages/alint/fixtures/no-privileged-untrusted-electron/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-privileged-untrusted-electron" = "warn"
+
+# Tests: a unit test asserts on behaviour, never on how long a wall-clock
+# measurement happened to take. Scope is every business test in the repo;
+# `packages/database` is left out on purpose — its query-time guards are
+# deliberate and run in the DB package's single-process suite.
+[[config.group]]
+files = [ "**/*.test.ts", "**/*.test.tsx" ]
+ignores = [ "packages/database/**", "packages/alint/fixtures/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-benchmark-in-tests" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-benchmark-in-tests/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-benchmark-in-tests" = "warn"

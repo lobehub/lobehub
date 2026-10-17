@@ -118,6 +118,33 @@ describe('TopicReferenceService scope resolution', () => {
     });
   });
 
+  describe('findTopic', () => {
+    it('falls back to the caller’s personal topic from a workspace', async () => {
+      expect(await workspaceService.findTopic('reference-personal-messages')).toMatchObject({
+        id: 'reference-personal-messages',
+        workspaceId: null,
+      });
+    });
+
+    it('prefers the current workspace', async () => {
+      expect(await workspaceService.findTopic('reference-current')).toMatchObject({
+        id: 'reference-current',
+        workspaceId,
+      });
+    });
+
+    it.each(['reference-other-user', 'reference-other-workspace', 'reference-visitor', 'missing'])(
+      'does not resolve inaccessible topic %s',
+      async (topicId) => {
+        expect(await workspaceService.findTopic(topicId)).toBeUndefined();
+      },
+    );
+
+    it('does not reach a workspace from personal mode', async () => {
+      expect(await personalService.findTopic('reference-current')).toBeUndefined();
+    });
+  });
+
   it('does not expand personal-mode reads into workspaces', async () => {
     expect(await personalService.getTopicContext({ topicId: 'reference-current' })).toEqual({
       content: 'Topic not found: reference-current',

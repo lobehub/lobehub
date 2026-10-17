@@ -131,6 +131,10 @@ const mockGetDesktopBootstrapIdentity = vi.fn(() => ({
   userId: 'user_1',
 }));
 
+const mockPermissionGuide = {
+  open: vi.fn(async (_permission: string) => false),
+};
+
 const mockApp = {
   appStoragePath: '/mock/storage',
   browserManager: mockBrowserManager,
@@ -138,6 +142,7 @@ const mockApp = {
     getDesktopBootstrapIdentity: mockGetDesktopBootstrapIdentity,
   })),
   i18n: mockI18n,
+  permissionGuide: mockPermissionGuide,
   storeManager: mockStoreManager,
 } as unknown as App;
 
@@ -153,6 +158,7 @@ describe('SystemController', () => {
     __resetMacPermissionsModuleCache();
     __setMacPermissionsModule(permissionsMock as any);
     fontListGetFonts2Mock.mockResolvedValue([]);
+    mockPermissionGuide.open.mockResolvedValue(false);
     controller = new SystemController(mockApp);
   });
 
@@ -255,6 +261,47 @@ describe('SystemController', () => {
       expect(secondResult).toEqual(firstResult);
       expect(fontListGetFonts2Mock).toHaveBeenCalledOnce();
       expect(fontListGetFonts2Mock).toHaveBeenCalledWith();
+    });
+  });
+
+  describe('permission drag guide', () => {
+    it('should guide accessibility through the drag panel without pre-registering the app', async () => {
+      mockPermissionGuide.open.mockResolvedValue(true);
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+
+      const result = await invokeIpc('system.requestAccessibilityAccess');
+
+      expect(mockPermissionGuide.open).toHaveBeenCalledWith('accessibility');
+      expect(permissionsMock.askForAccessibilityAccess).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+    });
+
+    it('should guide screen recording without the system prompt', async () => {
+      mockPermissionGuide.open.mockResolvedValue(true);
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+
+      await invokeIpc('system.requestScreenAccess');
+
+      expect(mockPermissionGuide.open).toHaveBeenCalledWith('screen');
+      expect(permissionsMock.askForScreenCaptureAccess).not.toHaveBeenCalled();
+
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+    });
+
+    it('should skip the Full Disk Access dialog when the guide opens', async () => {
+      const { dialog } = await import('electron');
+      mockPermissionGuide.open.mockResolvedValue(true);
+      permissionsMock.getAuthStatus.mockReturnValue('denied');
+
+      const result = await invokeIpc('system.promptFullDiskAccessIfNotGranted');
+
+      expect(result).toBe('opened_settings');
+      expect(mockPermissionGuide.open).toHaveBeenCalledWith('fullDisk');
+      expect(dialog.showMessageBox).not.toHaveBeenCalled();
+
+      permissionsMock.getAuthStatus.mockReturnValue('authorized');
     });
   });
 

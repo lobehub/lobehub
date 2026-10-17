@@ -41,6 +41,8 @@ const SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
 const withLhPreprocessing = (
   service: ISandboxService,
   resolve: {
+    /** This run's operation, so an `lh agent run` from here is attributed to its agent. */
+    operationId: string | undefined;
     userId: string;
     /** Raw context workspace id, log-only — cheap to read, unlike {@link resolveContentWorkspaceId}. */
     workspaceIdHint: string | undefined;
@@ -86,6 +88,7 @@ const withLhPreprocessing = (
       resolve.userId,
       workspaceId,
       resolve.isShareVisitor,
+      resolve.operationId,
     );
 
     if (result.error) {
@@ -173,6 +176,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
     return new CloudSandboxExecutionRuntime(
       withLhPreprocessing(sandboxService, {
         isShareVisitor: Boolean(context.agentShareVisitor),
+        operationId: context.operationId,
         userId: context.userId,
         workspaceId: async () => workspaceId,
         workspaceIdHint: workspaceId,

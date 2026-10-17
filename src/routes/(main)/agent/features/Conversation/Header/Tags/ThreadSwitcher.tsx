@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Popover } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -70,7 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       box-shadow: none;
     }
 
-    /* Keep a visible landmark for keyboard focus (mirrors DeviceItem). */
+    /* Keep a visible landmark for keyboard focus (mirrors DeviceCard). */
     &:focus-visible {
       outline: 2px solid ${cssVar.colorPrimary};
       outline-offset: -1px;

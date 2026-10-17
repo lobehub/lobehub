@@ -2,8 +2,8 @@
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ListChecksIcon } from 'lucide-react';
 import { memo } from 'react';
 

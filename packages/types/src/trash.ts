@@ -65,16 +65,33 @@ export interface TrashItem {
   workspaceId: string | null;
 }
 
-export interface TrashListParams {
-  cursor?: string | null;
+/**
+ * Project filter over the project recorded when a root was first trashed
+ * (`trash_items.project_id`):
+ *
+ * - `undefined` — every root, whatever its project (including projects that
+ *   have since been deleted).
+ * - `null` — only roots recorded without a project: agents, project-less
+ *   topics / messages, and rows trashed before project context was captured.
+ * - a project id — only roots recorded under that project.
+ */
+export type TrashProjectFilter = string | null | undefined;
+
+/** Filters shared by the recycle-bin list, its counts and "empty trash". */
+export interface TrashRootFilter {
   /**
    * Only roots this user trashed. Set server-side for workspace non-owners, so
    * a member never sees titles of teammates' resources (a message root's title
    * is a content excerpt).
    */
   deletedByUserId?: string;
-  limit?: number;
+  projectId?: TrashProjectFilter;
   resourceType?: TrashResourceType;
+}
+
+export interface TrashListParams extends TrashRootFilter {
+  cursor?: string | null;
+  limit?: number;
 }
 
 export interface TrashListResult {

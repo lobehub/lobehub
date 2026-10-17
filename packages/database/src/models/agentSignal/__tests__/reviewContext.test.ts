@@ -50,6 +50,27 @@ describe('AgentSignalReviewContextModel', () => {
     });
 
     /**
+     * Labs → Self-evolving is the only control; legacy per-agent values are ignored.
+     */
+    it('ignores legacy per-agent opt-out values on inbox Lobe AI', async () => {
+      await serverDB.insert(users).values({ id: userId });
+      await serverDB.insert(agents).values({
+        chatConfig: { selfIteration: { enabled: false, optedOut: true } } as never,
+        id: 'agent-signal-review-context-inbox-off',
+        slug: INBOX_SESSION_ID,
+        title: 'Lobe AI',
+        userId,
+        virtual: true,
+      });
+
+      const model = new AgentSignalReviewContextModel(serverDB, userId);
+
+      await expect(
+        model.canAgentRunSelfIteration('agent-signal-review-context-inbox-off'),
+      ).resolves.toBe(true);
+    });
+
+    /**
      * @example
      * await expect(model.canAgentRunSelfIteration('agent-signal-review-context-task')).resolves.toBe(false).
      */
@@ -70,11 +91,7 @@ describe('AgentSignalReviewContextModel', () => {
       ).resolves.toBe(false);
     });
 
-    /**
-     * @example
-     * await expect(model.canAgentRunSelfIteration('agent-signal-review-context-enabled')).resolves.toBe(true).
-     */
-    it('keeps non-Lobe AI agents behind chatConfig.selfIteration.enabled', async () => {
+    it('allows every owned non-virtual agent, ignoring legacy selfIteration.enabled', async () => {
       await serverDB.insert(users).values({ id: userId });
       await serverDB.insert(agents).values([
         {
@@ -91,16 +108,23 @@ describe('AgentSignalReviewContextModel', () => {
           title: 'Custom disabled',
           userId,
         },
+        {
+          id: 'agent-signal-review-context-implicit',
+          slug: 'custom-implicit',
+          title: 'Custom implicit',
+          userId,
+        },
       ]);
 
       const model = new AgentSignalReviewContextModel(serverDB, userId);
 
-      await expect(
-        model.canAgentRunSelfIteration('agent-signal-review-context-enabled'),
-      ).resolves.toBe(true);
-      await expect(
-        model.canAgentRunSelfIteration('agent-signal-review-context-disabled'),
-      ).resolves.toBe(false);
+      for (const id of [
+        'agent-signal-review-context-enabled',
+        'agent-signal-review-context-disabled',
+        'agent-signal-review-context-implicit',
+      ]) {
+        await expect(model.canAgentRunSelfIteration(id)).resolves.toBe(true);
+      }
     });
   });
 

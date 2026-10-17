@@ -7,6 +7,7 @@ import { LobeFalAI, resolveFalImageSize } from './index';
 
 // Mock the fal client
 vi.mock('@fal-ai/client', () => ({
+  createFalClient: vi.fn(() => ({})),
   fal: {
     config: vi.fn(),
     subscribe: vi.fn(),

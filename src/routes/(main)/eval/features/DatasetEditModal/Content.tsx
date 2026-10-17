@@ -1,9 +1,19 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Input, Select, Text, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Input,
+  Select,
+  Text,
+  TextArea,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { CheckIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -91,10 +101,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface DatasetEditContentProps {
   dataset: {
-    description?: string;
+    description?: string | null;
     evalMode?: string | null;
     id: string;
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | null;
     name: string;
   };
   formId: string;
@@ -204,17 +214,17 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
 
       {(evalModeValue === 'llm-rubric' || evalModeValue === 'answer-relevance') && (
         <>
-          <Form.Field label={'Provider'} name="evalConfig.provider">
-            <TextArea placeholder={'LLM provider (e.g. openai, azure)'} rows={1} />
+          <Form.Field label={t('evalMode.provider.label')} name="evalConfig.provider">
+            <TextArea placeholder={t('evalMode.provider.placeholder')} rows={1} />
           </Form.Field>
-          <Form.Field label={'Model'} name="evalConfig.model">
-            <TextArea placeholder={'LLM model to use for evaluation (e.g. gpt-4)'} rows={1} />
+          <Form.Field label={t('evalMode.model.label')} name="evalConfig.model">
+            <TextArea placeholder={t('evalMode.model.placeholder')} rows={1} />
           </Form.Field>
-          <Form.Field label={'System Prompt'} name="evalConfig.systemRole">
-            <TextArea placeholder={'Optional system prompt for the LLM judge'} rows={3} />
+          <Form.Field label={t('evalMode.systemRole.label')} name="evalConfig.systemRole">
+            <TextArea placeholder={t('evalMode.systemRole.placeholder')} rows={3} />
           </Form.Field>
-          <Form.Field label={'Eval Prompt'} name="evalConfig.criteria">
-            <TextArea placeholder={'Prompt template for the LLM judge'} rows={3} />
+          <Form.Field label={t('evalMode.criteria.label')} name="evalConfig.criteria">
+            <TextArea placeholder={t('evalMode.criteria.placeholder')} rows={3} />
           </Form.Field>
           <Form.Field label={t('evalMode.prompt.label')} name="evalConfig.judgePrompt">
             <TextArea placeholder={t('evalMode.prompt.placeholder')} rows={3} />

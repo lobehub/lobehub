@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { InputNumber, Switch, TextArea } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Flexbox, InputNumber, Switch, TextArea, Tooltip } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

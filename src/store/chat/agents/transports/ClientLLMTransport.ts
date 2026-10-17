@@ -183,9 +183,32 @@ class ClientLLMRetryPolicy implements LLMRetryPolicy {
     return resolveLLMRetryBudget(provider, CLIENT_LLM_RETRY_POLICY);
   }
 
-  async waitForRetry(delayMs: number): Promise<void> {
-    await sleep(delayMs);
-  }
+  /**
+   * Wakes early when the operation is aborted. `callLlm` re-checks for an
+   * interrupt right after this resolves, so Stop during a backoff (up to 30s
+   * between attempts) ends the run at once instead of keeping the spinner
+   * until the delay elapses.
+   *
+   * An arrow field because `callLlm` invokes it unbound.
+   */
+  waitForRetry = async (delayMs: number): Promise<void> => {
+    const signal = this.get().operations[this.operationId]?.abortController?.signal;
+    if (!signal) {
+      await sleep(delayMs);
+      return;
+    }
+    if (signal.aborted) return;
+
+    await new Promise<void>((resolve) => {
+      const wake = () => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', wake);
+        resolve();
+      };
+      const timer = setTimeout(wake, delayMs);
+      signal.addEventListener('abort', wake, { once: true });
+    });
+  };
 }
 
 interface ClientLLMTransportOptions {

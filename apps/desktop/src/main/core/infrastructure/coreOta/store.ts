@@ -30,6 +30,8 @@ type LocalCore = { dir: string; manifest: CoreManifest };
 type StageInput = {
   builtin: LocalCore;
   current: LocalCore | null;
+  onApplying?: () => void;
+  onDownloadProgress?: (progress: { received: number; total?: number }) => void;
   objectsBaseUrl?: string;
   packsBaseUrl: string;
   remote: CoreManifest;
@@ -162,7 +164,23 @@ export class CoreStore {
     }
   }
 
-  private async stageCore({ builtin, current, objectsBaseUrl, packsBaseUrl, remote }: StageInput) {
+  private async stageCore({
+    builtin,
+    current,
+    objectsBaseUrl,
+    packsBaseUrl,
+    remote,
+    onApplying,
+    onDownloadProgress,
+  }: StageInput) {
+    let received = 0;
+    let total: number | undefined;
+    const onChunk = onDownloadProgress
+      ? (bytes: number) => {
+          received += bytes;
+          onDownloadProgress({ received, total });
+        }
+      : undefined;
     if (!isSafeVersion(remote.version)) throw new Error(`Unsafe version: ${remote.version}`);
     await mkdir(this.storeDir, { mode: DIR_MODE, recursive: true });
     await mkdir(this.coresDir, { mode: DIR_MODE, recursive: true });
@@ -202,7 +220,9 @@ export class CoreStore {
         byHash,
         packsBaseUrl,
         (hash, bytes) => this.putObject(hash, bytes),
+        onChunk,
       );
+      onApplying?.();
       return { ...result, dir: await this.assemble(remote, byHash, builtin) } satisfies StageResult;
     }
     const missing = [...new Set(remote.tree.map((file) => file.sha256))].filter(
@@ -223,7 +243,7 @@ export class CoreStore {
           patch &&
           (await attempt(`patch ${patch.fromSha256}->${patch.toSha256}`, async () => {
             const url = `${objectsBaseUrl}/patches/${patch.fromSha256}-${patch.toSha256}.zst`;
-            const raw = await this.fetchBytes(url);
+            const raw = await this.fetchBytes(url, onChunk);
             const base = await readFile(byHash.get(patch.fromSha256)!);
             await this.putObject(sha256, await applyZstdPatch(base, raw));
             downloaded.patches += 1;
@@ -231,7 +251,7 @@ export class CoreStore {
           }));
         if (patched) return;
         const fetched = await attempt(`object ${sha256}`, async () => {
-          const raw = await this.fetchBytes(`${objectsBaseUrl}/objects/${sha256}.zst`);
+          const raw = await this.fetchBytes(`${objectsBaseUrl}/objects/${sha256}.zst`, onChunk);
           await this.putObject(sha256, Buffer.from(await zstdDecompressAsync(raw)));
           downloaded.objects += 1;
           downloaded.bytes += raw.byteLength;
@@ -242,7 +262,8 @@ export class CoreStore {
 
     const fallbackFull = failed.length > 0 || missing.length > FULL_FALLBACK_THRESHOLD;
     if (fallbackFull) {
-      const pack = await this.fetchBytes(`${packsBaseUrl}/${remote.full.path}`);
+      total = received + remote.full.size;
+      const pack = await this.fetchBytes(`${packsBaseUrl}/${remote.full.path}`, onChunk);
       if (sha256File(pack) !== remote.full.sha256) {
         throw new Error(`Core pack integrity mismatch: ${remote.full.path}`);
       }
@@ -256,6 +277,7 @@ export class CoreStore {
       }
     }
 
+    onApplying?.();
     const dir = await this.assemble(remote, byHash, builtin);
     return { dir, downloaded, fallbackFull } satisfies StageResult;
   }
@@ -283,10 +305,23 @@ export class CoreStore {
     return path.join(this.storeDir, sha256);
   }
 
-  private async fetchBytes(url: string): Promise<Buffer> {
+  private async fetchBytes(url: string, onChunk?: (bytes: number) => void): Promise<Buffer> {
     const response = await this.fetchImpl(url);
     if (!response.ok) throw new Error(`Core OTA fetch failed (${response.status}): ${url}`);
-    return Buffer.from(await response.arrayBuffer());
+    if (!onChunk || !response.body) return Buffer.from(await response.arrayBuffer());
+    const chunks: Buffer[] = [];
+    const reader = response.body.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(Buffer.from(value));
+        onChunk(value.byteLength);
+      }
+      return Buffer.concat(chunks);
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   private async putObject(sha256: string, content: Buffer) {

@@ -219,6 +219,8 @@ export interface SelfReviewProposalMetadata {
   proposalKey: string;
   /** Current proposal lifecycle state. */
   status: SelfReviewProposalStatus;
+  /** Reviewer-written one-line summary of what the proposal changes and why. */
+  summary?: string;
   /** Proposal key or brief id that superseded this proposal. */
   supersededBy?: string;
   /** ISO timestamp for the last proposal lifecycle update. */
@@ -238,10 +240,14 @@ export interface SelfReviewProposalBriefMetadata {
   };
 }
 
+/**
+ * Stored labels mirror the en-US `home` copy for each key (`brief.action.*`):
+ * the card renders the localized key and only falls back to these strings.
+ */
 export const AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS = [
-  { key: 'approve', label: 'Apply', type: 'resolve' },
+  { key: 'approve', label: 'Approve', type: 'resolve' },
   { key: 'dismiss', label: 'Dismiss', type: 'resolve' },
-  { key: 'feedback', label: 'Request changes', type: 'comment' },
+  { key: 'feedback', label: 'Feedback', type: 'comment' },
 ] satisfies BriefAction[];
 
 /** Daily Brief actions for nightly self-review proposal cards. */
@@ -308,6 +314,7 @@ const SelfReviewProposalMetadataSchema = z
     expiresAt: z.string(),
     proposalKey: z.string(),
     status: z.enum(SELF_REVIEW_PROPOSAL_STATUSES),
+    summary: z.string().optional(),
     supersededBy: z.string().optional(),
     updatedAt: z.string(),
     version: z.literal(SELF_REVIEW_PROPOSAL_VERSION),
@@ -483,6 +490,8 @@ export interface BuildSelfReviewProposalFromPlanInput {
   plan: SelfReviewProposalPlan;
   /** Execution results that identify which actions stayed proposed. */
   results: ActionResult[];
+  /** Reviewer-written proposal summary shown as the brief lead line. */
+  summary?: string;
 }
 
 /**
@@ -506,6 +515,7 @@ export const buildSelfReviewProposalFromPlan = ({
   now,
   plan,
   results,
+  summary,
 }: BuildSelfReviewProposalFromPlanInput): SelfReviewProposalMetadata | undefined => {
   const proposedResultKeys = new Set(
     results
@@ -560,6 +570,7 @@ export const buildSelfReviewProposalFromPlan = ({
     expiresAt: getNextProposalExpiry({ createdAt: now, now }),
     proposalKey,
     status: 'pending',
+    ...(summary?.trim() ? { summary: summary.trim() } : {}),
     updatedAt: now,
     version: SELF_REVIEW_PROPOSAL_VERSION,
   };
@@ -721,6 +732,7 @@ export const refreshSelfReviewProposal = ({
   evidenceWindowStart: incoming.evidenceWindowStart,
   expiresAt: getNextProposalExpiry({ createdAt: existing.createdAt, now }),
   status: 'pending',
+  summary: incoming.summary ?? existing.summary,
   updatedAt: now,
 });
 

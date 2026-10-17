@@ -3,6 +3,11 @@ export interface LocalDatabaseEntry<T = unknown> {
   value: T;
 }
 
+export interface LocalDatabaseCollectionInfo {
+  entryCount: number;
+  name: string;
+}
+
 export type LocalDatabaseBatchOperation =
   | {
       collection: string;
@@ -29,5 +34,6 @@ export interface LocalDatabaseAdapter {
   entriesByPrefix: <T>(collection: string, prefix: string) => Promise<LocalDatabaseEntry<T>[]>;
   get: <T>(collection: string, key: string) => Promise<T | undefined>;
   initialize: () => Promise<void>;
+  listCollections: () => Promise<LocalDatabaseCollectionInfo[]>;
   set: (collection: string, key: string, value: unknown) => Promise<void>;
 }

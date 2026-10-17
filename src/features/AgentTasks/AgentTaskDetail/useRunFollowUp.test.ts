@@ -34,7 +34,7 @@ vi.mock('@/features/Conversation/hooks/useConversationResourceAccess', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: mocks.toastError } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: mocks.toastError } }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

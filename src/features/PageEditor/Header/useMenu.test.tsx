@@ -38,7 +38,8 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: false,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   confirmModal: vi.fn(),
 }));
 
@@ -103,11 +104,11 @@ vi.mock('@/store/page', () => ({
   pageSelectors: {
     getDocumentById: (_id: string) => (_s: unknown) => undefined,
   },
-  usePageStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      publishPageToWorkspace: vi.fn(),
-      setPageVisibility: vi.fn(),
-    }),
+  pageActions: {
+    publishPageToWorkspace: vi.fn(),
+    setPageVisibility: vi.fn(),
+  },
+  usePageStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/user', () => ({

@@ -72,6 +72,19 @@ describe('ShellProcessManager', () => {
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
+  it('counts running background commands until exit or spawn failure', () => {
+    const child = createMockProcess();
+    const shell = createShellProcess(manager, 'background', child);
+    manager.register('background', shell);
+    expect(manager.activeCount).toBe(1);
+    Object.defineProperty(child, 'exitCode', { value: 0 });
+    expect(manager.activeCount).toBe(0);
+    const failed = createShellProcess(manager, 'failed', createMockProcess());
+    failed.spawnError = new Error('spawn failed');
+    manager.register('failed', failed);
+    expect(manager.activeCount).toBe(0);
+  });
+
   describe('getOutput', () => {
     it('should return error for non-existent shell_id', async () => {
       const result = await manager.getOutput({ shell_id: 'non-existent' });

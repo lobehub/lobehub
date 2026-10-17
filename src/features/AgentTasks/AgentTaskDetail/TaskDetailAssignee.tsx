@@ -1,7 +1,5 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar, useThemeMode } from 'antd-style';
+import { Block, cssVar, Text, Tooltip, useThemeMode } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

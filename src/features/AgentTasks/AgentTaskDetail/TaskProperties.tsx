@@ -1,7 +1,6 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Icon, Text } from '@lobehub/ui';
+import { ArchiveIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,6 +51,7 @@ const TaskProperties = memo(() => {
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
   const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
@@ -83,6 +83,23 @@ const TaskProperties = memo(() => {
           <Text weight={500}>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
         </Block>
       </TaskStatusTag>
+
+      {/* Archived is the user's close-out on top of the status, not a status
+          itself — shown read-only; the header menu restores it. */}
+      {isArchived && (
+        <Block
+          horizontal
+          align="center"
+          className={styles.propertyItem}
+          gap={8}
+          variant={'borderless'}
+        >
+          <Icon color={cssVar.colorTextDescription} icon={ArchiveIcon} size={16} />
+          <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+            {t('taskList.archived')}
+          </Text>
+        </Block>
+      )}
 
       {/* The human layer: whether the delivery is accepted. Read-only here —
           the decision itself is made on the acceptance page this links to.

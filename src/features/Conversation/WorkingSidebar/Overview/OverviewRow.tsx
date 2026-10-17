@@ -1,5 +1,5 @@
 import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { ChevronRightIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 

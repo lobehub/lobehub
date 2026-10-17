@@ -2,21 +2,24 @@ import type { AiModelReasoningConfig } from 'model-bank';
 import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
-import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
+import type { HeterogeneousRuntimeConfigField } from '../agent/heterogeneousRuntimeConfig';
+import type {
+  HeterogeneousReasoningEffort,
+  HeterogeneousSpeedMode,
+} from '../agent/heteroSelectorCapabilities';
 import type { SerializedAgentHook } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
+import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
 import type { OnboardingUnderstandingSession } from '../understanding';
 import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
 
-// Type definitions
 export type ShareVisibility = 'private' | 'link';
-
 export type TimeGroupId =
   'today' | 'yesterday' | 'week' | 'month' | `${number}-${string}` | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus' | 'byAgent' | 'byDevice';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 /**
@@ -122,8 +125,17 @@ export interface ChatTopicMetadata {
   };
 
   bot?: ChatTopicBotContext;
+  botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
   cronJobId?: string;
+  /**
+   * Set on a topic created by editing and resending a user message of a
+   * runtime whose native history cannot be rewound (Codex). The topic holds a
+   * copy of the source ancestry but no native session, so a fresh local run
+   * replays the copied history as `<previous_conversation>`. Ordinary topics
+   * never carry it, so their fresh sessions keep starting without replay.
+   */
+  editedFrom?: { messageId: string; topicId: string };
   /**
    * The agent whose Profile page this Agent Builder conversation was started
    * from (mirrors `ExecAgentAppContext.editingAgentId`).
@@ -165,6 +177,13 @@ export interface ChatTopicMetadata {
    * agent's effort" by `applyTopicModelToHeterogeneousProvider`.
    */
   heteroEffort?: HeterogeneousReasoningEffort;
+  /** Latest Task run's dispatched settings; no args, credentials or system context. */
+  heteroRuntimeConfig?: {
+    /** Per-field configuration and provenance captured before dispatch. */
+    fields: HeterogeneousRuntimeConfigField[];
+    /** Durable operation whose metadata retains this same receipt. */
+    operationId: string;
+  };
   /**
    * Secret-free identity of the provider/auth binding that created
    * `heteroSessionId`. Resume is allowed only when this identity still matches.
@@ -205,8 +224,24 @@ export interface ChatTopicMetadata {
    * (message counts are not comparable across transcript records and DB rows).
    */
   heteroSourceEndAt?: string;
+  /**
+   * Topic-pinned speed for a heterogeneous agent, snapshotted and overwritten
+   * like `heteroEffort`. `default` is an explicit Standard pin that removes an
+   * inherited Fast flag; legacy topics without it inherit the agent's speed.
+   */
+  heteroSpeed?: HeterogeneousSpeedMode;
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
+  /**
+   * The newest agent message each viewer has seen in a messaging client (toby),
+   * written by `POST /api/v1/im/topics/{topicId}/read`, keyed by viewer id.
+   * Agent messages after the viewer's `readAt` count as unread. A viewer's entry
+   * only ever moves forward, and tracking viewers separately keeps one member of
+   * a shared workspace conversation from clearing everyone else's unread.
+   * `createdAtUs` is the stored ordering value: it keeps the cursor comparable
+   * after that message is deleted, and at the microseconds a Date drops.
+   */
+  imReadCursors?: Record<string, { createdAtUs: string; messageId: string; readAt: string }>;
   /**
    * Root operation that most recently consumed `runningOperation`.
    * Used to scope a post-terminal `unread` → `active` correction when the
@@ -555,6 +590,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  heteroSpeed: z.enum(['default', 'fast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({
@@ -628,6 +664,7 @@ export type UpdateTopicMetadataInput = z.input<typeof chatTopicMetadataUpdateSch
  */
 export const chatTopicCreateMetadataSchema = chatTopicMetadataUpdateSchema.pick({
   heteroEffort: true,
+  heteroSpeed: true,
   reasoningConfig: true,
 });
 
@@ -755,6 +792,14 @@ export interface CreateTopicParams {
   metadata?: ChatTopicMetadata;
   /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
   model?: string;
+  /**
+   * Bind the new topic to a project working directory. The server resolves the
+   * directory and pins its project, device and paths onto the topic — the same
+   * binding `projectWorkingDirectory.startTopic` writes. Carried by the first
+   * message of a conversation started from a project group's "+", so deferring
+   * the topic creation does not drop the project membership.
+   */
+  projectWorkingDirectoryId?: string;
   provider?: string;
   sessionId?: string | null;
   title: string;

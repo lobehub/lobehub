@@ -9,13 +9,14 @@ CLI_ENV_FILE="$REPO_ROOT/.records/env/eval-harbor-cli.env"
 TARGET="${1:-}"
 CLI_MODE="${2:-}"
 EVAL_REPO="${3:-}"
+RUN_MODE="${4:-${LH_RUN_MODE:-agent}}"
 SMOKE_DIR="$SCRIPT_DIR/smoke"
 JOBS_DIR="$REPO_ROOT/.records/harbor/jobs"
 JOB_NAME="smoke-$(date +%Y%m%d-%H%M%S)-$$"
 JOB_DIR="$JOBS_DIR/$JOB_NAME"
 
 usage() {
-  printf 'Usage: %s <local|cloud> <checkout|npm> [absolute-eval-repository]\n' "$0"
+  printf 'Usage: %s <local|cloud> <checkout|npm> [absolute-eval-repository] [agent|task]\n' "$0"
 }
 
 if [[ "$TARGET" == '-h' || "$TARGET" == '--help' ]]; then
@@ -24,6 +25,7 @@ if [[ "$TARGET" == '-h' || "$TARGET" == '--help' ]]; then
 fi
 [[ "$TARGET" == 'local' || "$TARGET" == 'cloud' ]] || { usage >&2; exit 2; }
 [[ "$CLI_MODE" == 'checkout' || "$CLI_MODE" == 'npm' ]] || { usage >&2; exit 2; }
+[[ "$RUN_MODE" == 'agent' || "$RUN_MODE" == 'task' ]] || { usage >&2; exit 2; }
 if [[ -n "$EVAL_REPO" ]]; then
   [[ -d "$EVAL_REPO" ]] || { printf 'Eval repository does not exist: %s\n' "$EVAL_REPO" >&2; exit 2; }
   EVAL_REPO="$(cd -- "$EVAL_REPO" && pwd)"
@@ -55,7 +57,17 @@ else
 fi
 set +a
 
-[[ -n "${LH_AGENT_ID:-}" ]] || { printf 'LH_AGENT_ID is required for smoke.\n' >&2; exit 1; }
+if [[ "$TARGET" == 'local' ]]; then
+  if [[ -z "${LH_AGENT_ID:-}" ]]; then
+    export LH_AGENT_SLUG="${LH_AGENT_SLUG:-inbox}"
+  fi
+else
+  [[ -n "${LH_AGENT_ID:-}" ]] || {
+    printf 'LH_AGENT_ID is required for cloud smoke.\n' >&2
+    exit 1
+  }
+  unset LH_AGENT_SLUG
+fi
 [[ -n "${LOBEHUB_CLI_API_KEY:-}" ]] || { printf 'LOBEHUB_CLI_API_KEY is required for smoke.\n' >&2; exit 1; }
 
 if [[ "$CLI_MODE" == 'checkout' ]]; then
@@ -87,11 +99,12 @@ harbor_args=(
   --disable-verification
   --yes
   --agent lh.agent:LhInstalledAgent
-  --agent-env 'LH_AGENT_ID=${LH_AGENT_ID}'
   --agent-env 'LOBEHUB_CLI_API_KEY=${LOBEHUB_CLI_API_KEY}'
   --agent-env 'LH_CLI_SOURCE=${LH_CLI_SOURCE}'
+  --agent-env 'LH_RUN_MODE=${LH_RUN_MODE}'
 )
-for key in LH_SERVER_URL LH_GATEWAY_URL AGENT_GATEWAY_URL LOBEHUB_SERVER; do
+export LH_RUN_MODE="$RUN_MODE"
+for key in LH_AGENT_ID LH_AGENT_SLUG LH_SERVER_URL LH_GATEWAY_URL AGENT_GATEWAY_URL LOBEHUB_SERVER LOBEHUB_WORKSPACE_ID; do
   [[ -n "${!key:-}" ]] && harbor_args+=(--agent-env "$key=\${$key}")
 done
 uv run --with 'harbor==0.23.0' harbor "${harbor_args[@]}"

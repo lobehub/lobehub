@@ -1,4 +1,4 @@
-import { useResponsive } from 'antd-style';
+import { useResponsive } from '@lobehub/ui';
 import { useMemo } from 'react';
 
 export const useIsMobile = (): boolean => {

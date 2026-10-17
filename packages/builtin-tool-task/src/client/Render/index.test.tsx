@@ -26,7 +26,7 @@ vi.mock('react-i18next', () => ({
 
 // base-ui Button requires the app-level motion provider (this package has no
 // shared vitest setup, unlike src tests which stub it globally).
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Button: ({ children, ...props }: { children?: ReactNode }) => (
     <button type="button" {...props}>

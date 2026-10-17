@@ -1,7 +1,14 @@
 import type { GoalSpend } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { InputNumber, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +32,13 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import Lifecycle from './Lifecycle';
-import { taskRowSpan, type TaskRowState, taskRowState, taskRowStateLabelKey } from './taskRowState';
+import {
+  metricRowTaskId,
+  taskRowSpan,
+  type TaskRowState,
+  taskRowState,
+  taskRowStateLabelKey,
+} from './taskRowState';
 
 /**
  * Drill-down behind each header metric of the goal detail page. Every view is
@@ -73,8 +86,10 @@ const NodeRow = memo<{
   leading?: ReactNode;
 }>(({ afterTitle, extra, goalId, graph, leading, nodeId }) => {
   const openGoalNode = useChatStore((s) => s.openGoalNode);
+  const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const view = graph.byId[nodeId];
   if (!view) return null;
+  const taskId = metricRowTaskId(view);
 
   return (
     <Flexbox
@@ -82,7 +97,7 @@ const NodeRow = memo<{
       align={'center'}
       className={styles.row}
       gap={8}
-      onClick={() => openGoalNode(goalId, nodeId)}
+      onClick={() => (taskId ? openTaskDetail(taskId) : openGoalNode(goalId, nodeId))}
     >
       {view.seq !== undefined && (
         <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
@@ -363,86 +378,84 @@ const formatTokens = (value: number): string =>
  * Rows are ordered by spend, and a Task whose runs have not settled shows $0
  * rather than being dropped: it is still consuming rounds.
  */
-const CostBreakdown = memo<{ goalId: string; graph: GoalGraphView; spend?: GoalSpend }>(
-  ({ goalId, graph, spend }) => {
-    const { t } = useTranslation('chat');
-    const openGoalNode = useChatStore((s) => s.openGoalNode);
+const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph, spend }) => {
+  const { t } = useTranslation('chat');
+  const openTaskDetail = useChatStore((s) => s.openTaskDetail);
 
-    const rows = useMemo(() => {
-      const nodeByTaskId = new Map(
-        graph.nodes
-          .filter((view) => view.node.taskId)
-          .map((view) => [view.node.taskId!, view] as const),
-      );
-      return (spend?.byTask ?? [])
-        .map((row) => ({ ...row, view: nodeByTaskId.get(row.taskId) }))
-        .sort((a, b) => b.totalCost - a.totalCost || b.totalTokens - a.totalTokens);
-    }, [graph, spend]);
+  const rows = useMemo(() => {
+    const nodeByTaskId = new Map(
+      graph.nodes
+        .filter((view) => view.node.taskId)
+        .map((view) => [view.node.taskId!, view] as const),
+    );
+    return (spend?.byTask ?? [])
+      .map((row) => ({ ...row, view: nodeByTaskId.get(row.taskId) }))
+      .sort((a, b) => b.totalCost - a.totalCost || b.totalTokens - a.totalTokens);
+  }, [graph, spend]);
 
-    if (rows.length === 0)
-      return (
-        <Text fontSize={13} type={'secondary'}>
-          {t('goalProcess.metricDetail.budget.perTaskEmpty')}
-        </Text>
-      );
-
+  if (rows.length === 0)
     return (
-      <Flexbox gap={4}>
-        <span className={styles.label}>{t('goalProcess.metricDetail.budget.perTaskTitle')}</span>
-        <Flexbox gap={0}>
-          {rows.map((row) => {
-            const body = (
-              <Flexbox horizontal align={'center'} gap={8} key={row.taskId}>
-                {row.view?.seq !== undefined && (
-                  <Text
-                    className={styles.mono}
-                    fontSize={12}
-                    style={{ flex: 'none' }}
-                    type={'secondary'}
-                  >
-                    #{row.view.seq}
-                  </Text>
-                )}
-                <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-                  {row.view?.node.title ?? row.taskId}
-                </Text>
+      <Text fontSize={13} type={'secondary'}>
+        {t('goalProcess.metricDetail.budget.perTaskEmpty')}
+      </Text>
+    );
+
+  return (
+    <Flexbox gap={4}>
+      <span className={styles.label}>{t('goalProcess.metricDetail.budget.perTaskTitle')}</span>
+      <Flexbox gap={0}>
+        {rows.map((row) => {
+          const body = (
+            <Flexbox horizontal align={'center'} gap={8} key={row.taskId}>
+              {row.view?.seq !== undefined && (
                 <Text
                   className={styles.mono}
                   fontSize={12}
                   style={{ flex: 'none' }}
                   type={'secondary'}
                 >
-                  {t('goalProcess.metricDetail.budget.tokensValue', {
-                    value: formatTokens(row.totalTokens),
-                  })}
+                  #{row.view.seq}
                 </Text>
-                <Text className={styles.mono} style={{ flex: 'none' }} weight={500}>
-                  {formatUsd(row.totalCost)}
-                </Text>
-              </Flexbox>
-            );
-
-            // A row without a graph node is a Task the snapshot no longer
-            // carries — still billed, but nothing to open.
-            return row.view ? (
-              <Flexbox
-                className={styles.row}
-                key={row.taskId}
-                onClick={() => openGoalNode(goalId, row.view!.node.id)}
+              )}
+              <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                {row.view?.node.title ?? row.taskId}
+              </Text>
+              <Text
+                className={styles.mono}
+                fontSize={12}
+                style={{ flex: 'none' }}
+                type={'secondary'}
               >
-                {body}
-              </Flexbox>
-            ) : (
-              <Flexbox className={styles.staticRow} key={row.taskId}>
-                {body}
-              </Flexbox>
-            );
-          })}
-        </Flexbox>
+                {t('goalProcess.metricDetail.budget.tokensValue', {
+                  value: formatTokens(row.totalTokens),
+                })}
+              </Text>
+              <Text className={styles.mono} style={{ flex: 'none' }} weight={500}>
+                {formatUsd(row.totalCost)}
+              </Text>
+            </Flexbox>
+          );
+
+          // A row without a graph node is a Task the snapshot no longer
+          // carries — still billed, but nothing to open.
+          return row.view ? (
+            <Flexbox
+              className={styles.row}
+              key={row.taskId}
+              onClick={() => openTaskDetail(row.taskId)}
+            >
+              {body}
+            </Flexbox>
+          ) : (
+            <Flexbox className={styles.staticRow} key={row.taskId}>
+              {body}
+            </Flexbox>
+          );
+        })}
       </Flexbox>
-    );
-  },
-);
+    </Flexbox>
+  );
+});
 
 CostBreakdown.displayName = 'GoalMetricCostBreakdown';
 
@@ -476,7 +489,7 @@ const Budget = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }
           {t('goalProcess.metricDetail.budget.raiseNote')}
         </Text>
       </Flexbox>
-      <CostBreakdown goalId={goalId} graph={graph} spend={spend} />
+      <CostBreakdown graph={graph} spend={spend} />
     </Flexbox>
   );
 });

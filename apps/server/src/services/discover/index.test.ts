@@ -591,30 +591,6 @@ describe('DiscoverService', () => {
         expect(result.items[1].identifier).toBe('plugin-1');
       });
     });
-
-    describe('getPluginDetail', () => {
-      it('should return plugin detail with related items', async () => {
-        const result = await service.getPluginDetail({
-          identifier: 'plugin-1',
-        });
-
-        expect(result).toEqual(
-          expect.objectContaining({
-            identifier: 'plugin-1',
-            title: 'Test Plugin 1',
-            related: expect.any(Array),
-          }),
-        );
-      });
-
-      it('should return undefined for non-existent plugin', async () => {
-        const result = await service.getPluginDetail({
-          identifier: 'non-existent',
-        });
-
-        expect(result).toBeUndefined();
-      });
-    });
   });
 
   describe('MCP Market', () => {

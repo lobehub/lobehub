@@ -4,15 +4,14 @@ import {
   readTaskExecutionConfig,
   toTaskExecutionConfigPatch,
 } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
-import { createReplicaSlice, recordLens } from '@/libs/replica';
-import { mutate } from '@/libs/swr';
-import { goalKeys } from '@/libs/swr/keys';
+import { createReplicaSlice, recordLens, revalidateReplica } from '@/libs/replica';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
+import { goalGraphResource } from '@/store/goal/projection';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -278,6 +277,32 @@ export class TaskDetailSliceActionImpl {
       );
     }
 
+    // Reconcile at the server-read boundary, even when the live chat panel has
+    // unmounted. A missing running marker alone is not proof of completion.
+    const terminalActivities = detail.activities?.filter(
+      (activity) =>
+        activity.type === 'topic' &&
+        activity.id &&
+        activity.operationId &&
+        ['completed', 'failed', 'canceled', 'timeout'].includes(activity.status ?? '') &&
+        activity.runningOperation?.operationId !== activity.operationId,
+    );
+    if (terminalActivities?.length) {
+      const { getChatStoreState } = await import('@/store/chat');
+      for (const activity of terminalActivities) {
+        getChatStoreState().reconcileServerOperation({
+          operationId: activity.operationId!,
+          status:
+            activity.status === 'completed'
+              ? 'completed'
+              : activity.status === 'canceled'
+                ? 'cancelled'
+                : 'failed',
+          topicId: activity.id!,
+        });
+      }
+    }
+
     return detail;
   };
 
@@ -365,6 +390,7 @@ export class TaskDetailSliceActionImpl {
       {
         activeTaskId: taskId,
         activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerFocusRequest: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
@@ -376,13 +402,23 @@ export class TaskDetailSliceActionImpl {
   /**
    * `topic` carries the agent and title for a run opened outside a task detail
    * (the home inbox lists plain topics too) — the drawer falls back to it when
-   * no task detail is loaded to read them from.
+   * no task detail is loaded to read them from. `autoFocus` marks openings made
+   * with conversational intent (the brief's "Continue chat"); each one bumps
+   * the focus request so the body expands and focuses its reply composer, even
+   * when the drawer already shows this topic.
    */
-  openTopicDrawer = (topicId: string, topic?: { agentId?: string; title?: string }): void => {
-    if (this.#get().activeTopicDrawerTopicId === topicId) return;
+  openTopicDrawer = (
+    topicId: string,
+    topic?: { agentId?: string; autoFocus?: boolean; title?: string },
+  ): void => {
+    const current = this.#get();
+    if (current.activeTopicDrawerTopicId === topicId && !topic?.autoFocus) return;
     this.#set(
       {
         activeTopicDrawerAgentId: topic?.agentId,
+        activeTopicDrawerFocusRequest: topic?.autoFocus
+          ? (current.activeTopicDrawerFocusRequest ?? 0) + 1
+          : undefined,
         activeTopicDrawerTitle: topic?.title,
         activeTopicDrawerTopicId: topicId,
       },
@@ -396,6 +432,7 @@ export class TaskDetailSliceActionImpl {
     this.#set(
       {
         activeTopicDrawerAgentId: undefined,
+        activeTopicDrawerFocusRequest: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
@@ -585,9 +622,7 @@ export class TaskDetailSliceActionImpl {
         // and only polls while the goal is advancing — a paused or finished
         // goal would keep showing the old assignee. The task does not know its
         // goal, so revalidate every goal graph; only mounted ones refetch.
-        assigneeAgentId !== undefined
-          ? mutate((key) => Array.isArray(key) && key[0] === goalKeys.graph.root)
-          : undefined,
+        assigneeAgentId !== undefined ? revalidateReplica(goalGraphResource) : undefined,
       ]).catch(() => {});
     }
   };

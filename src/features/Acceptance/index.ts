@@ -12,7 +12,6 @@ export {
 export {
   useAcceptanceBundle,
   useAcceptanceBySubject,
-  useVerifyReportSummariesInfinite,
   useVerifyResults,
   useVerifyState,
 } from './hooks';

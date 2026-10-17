@@ -1,0 +1,109 @@
+'use client';
+
+import { Block, createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
+import { BotIcon } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AsyncBoundary from '@/components/AsyncBoundary';
+import CateTag from '@/routes/(main)/memory/features/CateTag';
+import DetailLoading from '@/routes/(main)/memory/features/DetailLoading';
+import DetailNotFound from '@/routes/(main)/memory/features/DetailNotFound';
+import HashTags from '@/routes/(main)/memory/features/HashTags';
+import HighlightedContent from '@/routes/(main)/memory/features/HighlightedContent';
+import ProgressIcon from '@/routes/(main)/memory/features/ProgressIcon';
+import SourceLink from '@/routes/(main)/memory/features/SourceLink';
+import Time from '@/routes/(main)/memory/features/Time';
+import { useUserMemoryStore } from '@/store/userMemory';
+import { LayersEnum } from '@/types/userMemory';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  suggestionsTitle: css`
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
+}));
+
+interface PreferenceDetailProps {
+  /** Layer-specific row id (`preferenceId`). */
+  id: string;
+}
+
+/**
+ * The preference memory detail body, shared by the memory page's right panel and the chat Portal.
+ */
+const PreferenceDetail = memo<PreferenceDetailProps>(({ id: preferenceId }) => {
+  const { t } = useTranslation('memory');
+  const useFetchMemoryDetail = useUserMemoryStore((s) => s.useFetchMemoryDetail);
+
+  const {
+    data: preference,
+    isLoading,
+    error,
+    mutate,
+  } = useFetchMemoryDetail(preferenceId, LayersEnum.Preference);
+
+  const content = preference && (
+    <>
+      <CateTag cate={preference.type} />
+      <Text
+        as={'h1'}
+        fontSize={20}
+        weight={'bold'}
+        style={{
+          lineHeight: 1.4,
+          marginBottom: 0,
+        }}
+      >
+        {preference.title || preference.type || t('preference.defaultType')}
+      </Text>
+      <Flexbox horizontal align="center" gap={16} justify="space-between">
+        <ProgressIcon
+          showInfo
+          format={(percent) => `${t('filter.sort.scorePriority')}: ${percent}%`}
+          percent={(preference.scorePriority ?? 0) * 100}
+        />
+      </Flexbox>
+      <Flexbox horizontal align="center" gap={16} justify="space-between">
+        <SourceLink source={preference.source} />
+        <Time capturedAt={preference.capturedAt || preference.updatedAt || preference.createdAt} />
+      </Flexbox>
+
+      {preference.conclusionDirectives && (
+        <HighlightedContent>{preference.conclusionDirectives}</HighlightedContent>
+      )}
+
+      {preference.suggestions && (
+        <Block gap={8} padding={16} variant={'filled'}>
+          <Flexbox horizontal align={'center'} className={styles.suggestionsTitle} gap={6}>
+            <Icon icon={BotIcon} size={16} />
+            <span>{t('preference.suggestions')}</span>
+          </Flexbox>
+          <HighlightedContent>{preference.suggestions}</HighlightedContent>
+        </Block>
+      )}
+
+      <HashTags hashTags={preference.tags} />
+    </>
+  );
+
+  return (
+    <AsyncBoundary
+      data={preference}
+      empty={<DetailNotFound />}
+      error={error}
+      errorVariant={'page'}
+      isEmpty={!preference}
+      isLoading={isLoading}
+      loading={<DetailLoading />}
+      onRetry={() => mutate()}
+    >
+      {content}
+    </AsyncBoundary>
+  );
+});
+
+PreferenceDetail.displayName = 'PreferenceDetail';
+
+export default PreferenceDetail;

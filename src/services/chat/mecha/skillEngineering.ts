@@ -7,6 +7,7 @@ import debug from 'debug';
 
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { agentSkillsSelectors } from '@/store/tool/slices/agentSkills/selectors';
 import { loadBuiltinSkills } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 const log = debug('context-engine:resolveClientSkills');
@@ -29,7 +30,7 @@ const buildDbSkillContent = (detail: SkillItem): string | undefined => {
  *
  * Sources:
  * 1. Builtin skills (e.g., Artifacts) - from toolStore.builtinSkills
- * 2. DB skills (user/market) - from toolStore.agentSkills
+ * 2. DB skills (user/market) - from the `agentSkillList` replica
  *
  * Pinned skills (ids in `pluginIds`) carry their full `content` so the
  * SkillContextProvider can inject it directly into the system prompt instead of
@@ -45,7 +46,18 @@ export const resolveClientSkills = async (
   pluginIds?: string[],
   disabledIds?: string[],
   skillActivateMode?: 'auto' | 'manual',
+  /** Selectable for this turn even in manual mode, without being pinned. */
+  turnSkillIds?: string[],
 ): Promise<OperationSkillSet> => {
+  // The list is only fetched by mounted views (tool popover, side panel), so a
+  // send right after a page load would otherwise see no DB skills. A failed
+  // load must not block the send; fall back to whatever the store holds.
+  try {
+    await getToolStoreState().ensureAgentSkillsLoaded();
+  } catch (error) {
+    log('Failed to load agent skills before building the skill pool: %O', error);
+  }
+
   const toolState = getToolStoreState();
   const pinnedIds = new Set(pluginIds ?? []);
   const disabledIdSet = new Set(disabledIds ?? []);
@@ -66,7 +78,8 @@ export const resolveClientSkills = async (
     }));
 
   const dbMetas = await Promise.all(
-    (toolState.agentSkills || [])
+    agentSkillsSelectors
+      .getAgentSkills(toolState)
       .filter((s) => !disabledIdSet.has(s.identifier))
       .map(async (s) => {
         const meta = {
@@ -89,7 +102,8 @@ export const resolveClientSkills = async (
 
         try {
           const detail =
-            toolState.agentSkillDetailMap?.[s.id] ?? (await agentSkillService.getById(s.id));
+            agentSkillsSelectors.getAgentSkillDetail(s.id)(toolState) ??
+            (await agentSkillService.getById(s.id));
           const content = detail && buildDbSkillContent(detail);
           // Mark activated only when content is available, otherwise the skill would
           // be excluded from both the activated and the <available_skills> lists.
@@ -113,6 +127,7 @@ export const resolveClientSkills = async (
       canExecuteOnDevice: isDesktop,
       enabledPluginIds: pluginIds,
       skillActivateMode,
+      turnSkillIds,
     },
   );
 };

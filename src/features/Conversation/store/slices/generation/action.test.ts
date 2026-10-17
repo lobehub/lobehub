@@ -12,9 +12,12 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
+import type { CodexMessageEdit } from './action';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
 
-vi.mock('@/services/topic', () => ({ topicService: { cancelRateLimitContinuation: vi.fn() } }));
+vi.mock('@/services/topic', () => ({
+  topicService: { branchTopicAtMessage: vi.fn(), cancelRateLimitContinuation: vi.fn() },
+}));
 
 // Mock useChatStore
 const mockCancelOperations = vi.fn();
@@ -34,6 +37,7 @@ const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
 const mockUpdateTopicMetadata = vi.fn();
 const mockUpdateTopicStatus = vi.fn();
+const mockOpenThreadCreator = vi.fn();
 const mockSourceTopic = {
   status: 'scheduled',
   metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
@@ -42,6 +46,7 @@ const mockSourceTopic = {
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      dbMessagesMap: {},
       messagesMap: {
         'session-1-': [
           { id: 'msg-1', role: 'user', content: 'Hello' },
@@ -69,6 +74,7 @@ vi.mock('@/store/chat', () => ({
       isGatewayModeEnabled: mockIsGatewayModeEnabled,
       executeGatewayAgent: mockExecuteGatewayAgent,
       internal_dispatchTopic: vi.fn(),
+      openThreadCreator: mockOpenThreadCreator,
       updateTopicMetadata: mockUpdateTopicMetadata,
       updateTopicStatus: mockUpdateTopicStatus,
     })),
@@ -84,6 +90,32 @@ describe('Generation Actions', () => {
 
   afterEach(() => {
     vi.clearAllTimers();
+  });
+
+  describe('openThreadCreator', () => {
+    it('anchors a steered row on its tail instead of the row/host id', () => {
+      const store = createStore({
+        context: { agentId: 'session-1', threadId: null, topicId: 'topic-1' },
+      });
+
+      // Steered row: host `g1` + steer message `s1` + continuation `g2`. The row
+      // renders as one block whose id is `g1` (the chain head), so passing the raw
+      // id anchored the fork at the top of the row instead of where the user is.
+      store.setState({
+        displayMessages: [
+          { content: '', createdAt: 0, id: 'u1', role: 'user' },
+          { content: '', createdAt: 0, id: 'g1', role: 'assistantGroup' },
+          { content: '', createdAt: 0, id: 's1', metadata: { steer: true }, role: 'user' },
+          { content: '', createdAt: 0, id: 'g2', role: 'assistantGroup' },
+        ] as any,
+      });
+
+      act(() => {
+        store.getState().openThreadCreator('g1');
+      });
+
+      expect(mockOpenThreadCreator).toHaveBeenCalledWith('g2');
+    });
   });
 
   describe('cancelHeteroContinuation', () => {
@@ -254,289 +286,6 @@ describe('Generation Actions', () => {
     });
   });
 
-  describe('continueGeneration', () => {
-    it('should continue generation from assistantGroup message with last child as blockId', async () => {
-      // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: 'topic-1',
-        threadId: null,
-        groupId: 'group-1',
-      };
-
-      const store = createStore({ context });
-
-      // Set displayMessages with assistantGroup message containing children
-      act(() => {
-        store.setState({
-          displayMessages: [
-            {
-              id: 'group-msg-1',
-              role: 'assistantGroup',
-              content: '',
-              children: [
-                { id: 'child-1', content: 'First response' },
-                { id: 'child-2', content: 'Second response' },
-              ],
-            },
-          ],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().continueGeneration('group-msg-1');
-      });
-
-      // Should create operation with groupMessageId
-      expect(mockStartOperation).toHaveBeenCalledWith({
-        context: { ...context, messageId: 'group-msg-1' },
-        type: 'continue',
-      });
-
-      // Should call executeClientAgent with last child id as parentMessageId
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context,
-          parentMessageId: 'child-2', // last child's id
-          parentMessageType: 'assistantGroup',
-          parentOperationId: 'test-op-id',
-        }),
-      );
-    });
-
-    it('should not continue if message is not assistantGroup', async () => {
-      // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
-
-      const store = createStore({ context });
-
-      // Set displayMessages with regular assistant message (not assistantGroup)
-      act(() => {
-        store.setState({
-          displayMessages: [{ id: 'msg-1', role: 'assistant', content: 'Hello' }],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().continueGeneration('msg-1');
-      });
-
-      // Should not create operation if message is not assistantGroup
-      expect(mockStartOperation).not.toHaveBeenCalled();
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
-    });
-
-    it('should not continue if assistantGroup has no children', async () => {
-      // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
-
-      const store = createStore({ context });
-
-      // Set displayMessages with assistantGroup but no children
-      act(() => {
-        store.setState({
-          displayMessages: [
-            { id: 'group-msg-1', role: 'assistantGroup', content: '', children: [] },
-          ],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().continueGeneration('group-msg-1');
-      });
-
-      // Should not create operation if no children
-      expect(mockStartOperation).not.toHaveBeenCalled();
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
-    });
-
-    it('should call onBeforeContinue hook and respect false return', async () => {
-      // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const onBeforeContinue = vi.fn().mockResolvedValue(false);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
-      const hooks: ConversationHooks = { onBeforeContinue };
-
-      const store = createStore({ context, hooks });
-
-      // Set displayMessages with assistantGroup
-      act(() => {
-        store.setState({
-          displayMessages: [
-            {
-              id: 'group-msg-1',
-              role: 'assistantGroup',
-              content: '',
-              children: [{ id: 'child-1', content: 'Response' }],
-            },
-          ],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().continueGeneration('group-msg-1');
-      });
-
-      expect(onBeforeContinue).toHaveBeenCalledWith('group-msg-1');
-      // Should not call executeClientAgent if hook returns false
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
-    });
-
-    it('should call onContinueComplete hook after continuation', async () => {
-      // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent.mockResolvedValue(undefined),
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const onContinueComplete = vi.fn();
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
-      const hooks: ConversationHooks = { onContinueComplete };
-
-      const store = createStore({ context, hooks });
-
-      // Set displayMessages with assistantGroup
-      act(() => {
-        store.setState({
-          displayMessages: [
-            {
-              id: 'group-msg-1',
-              role: 'assistantGroup',
-              content: '',
-              children: [{ id: 'child-1', content: 'Response' }],
-            },
-          ],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().continueGeneration('group-msg-1');
-      });
-
-      expect(onContinueComplete).toHaveBeenCalledWith('group-msg-1');
-    });
-
-    it('should not continue if message is not found', async () => {
-      // Reset mock to ensure all required functions are available
-      vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
-
-      const store = createStore({ context });
-
-      // Set empty displayMessages
-      act(() => {
-        store.setState({
-          displayMessages: [],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().continueGeneration('msg-not-exist');
-      });
-
-      // Should not create operation if message not found
-      expect(mockStartOperation).not.toHaveBeenCalled();
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
-    });
-  });
-
-  // Retrying the failed step of a turn used to be "delete the block, then call
-  // continueGeneration and hope it still finds a group". Verified live: it did
-  // not. Both shapes below deleted the failed step and then created NO operation
-  // at all — the answer was gone and nothing was running, with no toast.
   describe('retryFailedAssistantStep', () => {
     const context: ConversationContext = {
       agentId: 'session-1',
@@ -547,6 +296,7 @@ describe('Generation Actions', () => {
     const mockChatStore = async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         dbMessagesMap: {},
         operations: {},
@@ -732,6 +482,7 @@ describe('Generation Actions', () => {
       // Re-setup mock to ensure all required functions are available
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -799,6 +550,7 @@ describe('Generation Actions', () => {
       // Re-setup mock to track call order
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -871,6 +623,7 @@ describe('Generation Actions', () => {
     it('should not proceed if assistant message has no parentId', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -917,6 +670,7 @@ describe('Generation Actions', () => {
       // this sub-second window and applies to the fresh run instead).
       let operationCount = 0;
       const chatState: any = {
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1006,6 +760,7 @@ describe('Generation Actions', () => {
         resolveDelete = resolve;
       });
       const chatState: any = {
+        dbMessagesMap: {},
         dbMessagesMap: { [oldContextKey]: [oldUserMessage, oldAssistantMessage] },
         messagesMap: { [oldContextKey]: [oldUserMessage, oldAssistantMessage] },
         operations: {},
@@ -1069,6 +824,7 @@ describe('Generation Actions', () => {
       let operationCount = 0;
       const executeClientAgent = vi.fn().mockRejectedValue(new Error('boom'));
       const chatState: any = {
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1125,6 +881,7 @@ describe('Generation Actions', () => {
       // Re-setup mock to ensure startOperation is available
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1180,6 +937,7 @@ describe('Generation Actions', () => {
       // Re-setup mock with all required properties
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1240,6 +998,7 @@ describe('Generation Actions', () => {
       // Re-setup mock with all required properties
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1291,6 +1050,7 @@ describe('Generation Actions', () => {
     it('should bail out if the interim op was cancelled during preflight (Stop pressed)', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         // Simulate the user hitting Stop during the preflight awaits: stopGenerating
         // has already flipped the interim regenerate op to 'cancelled'.
@@ -1344,6 +1104,7 @@ describe('Generation Actions', () => {
       // The op passes the preflight guard as 'running', then a Stop lands while
       // switchMessageBranch is awaiting — flip it to cancelled inside the mock.
       const chatState: any = {
+        dbMessagesMap: {},
         messagesMap: {},
         operations: { 'test-op-id': { id: 'test-op-id', status: 'running' } },
         operationsByMessage: {},
@@ -1393,6 +1154,7 @@ describe('Generation Actions', () => {
     it('should restore mention-based initialContext when regenerating a user message', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1468,6 +1230,7 @@ describe('Generation Actions', () => {
     it('should use executeGatewayAgent when gateway mode is enabled', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1540,6 +1303,7 @@ describe('Generation Actions', () => {
     it('should call onRegenerateComplete hook after gateway regeneration', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1585,6 +1349,7 @@ describe('Generation Actions', () => {
     it('should fall back to client mode when gateway is disabled', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1628,6 +1393,7 @@ describe('Generation Actions', () => {
     it('should not regenerate if the message already has a running regenerate op', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {
           'op-1': {
@@ -1672,6 +1438,7 @@ describe('Generation Actions', () => {
     it('regenerates despite an unrelated running op left on the message', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         dbMessagesMap: {},
         operations: {
@@ -1744,6 +1511,7 @@ describe('Generation Actions', () => {
 
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},
@@ -1875,10 +1643,167 @@ describe('Generation Actions', () => {
       expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
         expect.any(Function),
         expect.objectContaining({
-          heterogeneousProvider: expect.objectContaining({ model: pinnedModel, type: providerType }),
+          heterogeneousProvider: expect.objectContaining({
+            model: pinnedModel,
+            type: providerType,
+          }),
         }),
       );
     });
+
+    it.runIf(providerType === 'codex')(
+      'resends an edit through the branched topic, leaving the source session alone',
+      async () => {
+        const branchContext = { agentId: 'session-1', threadId: null, topicId: 'branch-topic' };
+        const branchRows = [{ content: 'fixed prompt', id: 'branch-user', role: 'user' }];
+        const mockSwitchTopic = vi.fn();
+        await setupHeteroChatStore({
+          dbMessagesMap: { [messageMapKey(branchContext)]: branchRows },
+          messagesMap: { [messageMapKey(branchContext)]: branchRows },
+          prefetchMessages: vi.fn(),
+          refreshTopic: vi.fn(),
+          switchTopic: mockSwitchTopic,
+          topicDataMap: {
+            test: { items: [{ id: 'topic-1', metadata: { heteroSessionId: 'source-thread' } }] },
+          },
+        });
+        vi.mocked(topicService.branchTopicAtMessage).mockResolvedValue({
+          messageId: 'branch-user',
+          topicId: 'branch-topic',
+        });
+        const store = createStore({
+          context: { agentId: 'session-1', threadId: null, topicId: 'topic-1' },
+        });
+        store.setState({
+          displayMessages: [{ content: 'typo prompt', id: 'msg-1', role: 'user' }],
+        } as any);
+        const onAccepted = vi.fn();
+
+        await store
+          .getState()
+          .regenerateUserMessage('msg-1', { content: 'fixed prompt', onAccepted });
+        await vi.waitFor(() => expect(executeHeterogeneousAgentSpy).toHaveBeenCalled());
+
+        expect(topicService.branchTopicAtMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: 'fixed prompt',
+            messageId: 'msg-1',
+            topicId: 'topic-1',
+          }),
+        );
+        expect(onAccepted).toHaveBeenCalled();
+        expect(mockSwitchTopic).toHaveBeenCalledWith(
+          'branch-topic',
+          expect.objectContaining({ onlyIfActiveTopicIn: ['topic-1'] }),
+        );
+        expect(createMessageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ parentId: 'branch-user', topicId: 'branch-topic' }),
+        );
+        expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({
+            context: expect.objectContaining({ topicId: 'branch-topic' }),
+            message: 'fixed prompt',
+            resumeSessionId: undefined,
+          }),
+        );
+      },
+    );
+
+    /** @example A failed destination fetch keeps an isolated editor open and retryable. */
+    it.runIf(providerType === 'codex')(
+      'keeps the edit until the copied message is available for resend',
+      async () => {
+        const target = { agentId: 'session-1', threadId: null, topicId: 'branch-topic' };
+        const onTopicCreated = vi.fn();
+        const onAccepted = vi.fn();
+        const edit: CodexMessageEdit = { content: 'fixed prompt', onAccepted };
+        const switchTopic = vi.fn();
+        await setupHeteroChatStore({
+          dbMessagesMap: {},
+          messagesMap: {},
+          prefetchMessages: vi.fn().mockResolvedValue(undefined),
+          refreshTopic: vi.fn(),
+          switchTopic,
+        });
+        vi.mocked(topicService.branchTopicAtMessage).mockResolvedValue({
+          messageId: 'branch-user',
+          topicId: 'branch-topic',
+        });
+        const store = createStore({
+          context: {
+            agentId: 'session-1',
+            isolatedTopic: true,
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          hooks: { onTopicCreated },
+        });
+        // ROOT CAUSE:
+        // Background prefetch swallows network errors; an empty destination made resend silently
+        // return after onAccepted closed the editor. Acceptance must wait for the copied message.
+        await expect(store.getState().regenerateUserMessage('msg-1', edit)).rejects.toThrow(
+          'Could not load the new topic. Your edit is kept; try sending again.',
+        );
+        /** @example Neither host navigation nor draft acceptance happens on incomplete context. */
+        expect(onAccepted).not.toHaveBeenCalled();
+        expect(onTopicCreated).not.toHaveBeenCalled();
+        expect(switchTopic).not.toHaveBeenCalled();
+        expect(executeHeterogeneousAgentSpy).not.toHaveBeenCalled();
+
+        const { useChatStore } = await import('@/store/chat');
+        // The same editor may amend its draft before retrying the failed preparation.
+        vi.spyOn(messageService, 'updateMessage').mockResolvedValue({ success: true });
+        edit.content = 'amended prompt';
+        const rows = [{ content: 'amended prompt', id: 'branch-user', role: 'user' as const }];
+        const state = useChatStore.getState();
+        vi.mocked(state.prefetchMessages).mockImplementation(async () => {
+          state.messagesMap[messageMapKey(target)] = rows;
+          state.dbMessagesMap[messageMapKey(target)] = rows;
+        });
+        await store.getState().regenerateUserMessage('msg-1', edit);
+        /** @example A retry dispatches the edited prompt once the destination fetch succeeds. */
+        await vi.waitFor(() => expect(executeHeterogeneousAgentSpy).toHaveBeenCalledTimes(1));
+        /** @example Retrying preparation reuses the already-created destination. */
+        expect(topicService.branchTopicAtMessage).toHaveBeenCalledTimes(1);
+        /** @example Only the already-created destination receives the amended draft. */
+        expect(messageService.updateMessage).toHaveBeenCalledWith('branch-user', {
+          content: 'amended prompt',
+          editorData: undefined,
+        });
+        expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.objectContaining({ message: 'amended prompt' }),
+        );
+        expect(onAccepted).toHaveBeenCalledTimes(1);
+        expect(onTopicCreated).toHaveBeenCalledWith('branch-topic');
+      },
+    );
+
+    it.runIf(providerType === 'codex')(
+      'reports a friendly error and keeps the draft when the branch cannot be created',
+      async () => {
+        await setupHeteroChatStore();
+        vi.mocked(topicService.branchTopicAtMessage).mockRejectedValue(new Error('offline'));
+        const store = createStore({
+          context: { agentId: 'session-1', threadId: null, topicId: 'topic-1' },
+        });
+        const onAccepted = vi.fn();
+
+        const result = store
+          .getState()
+          .regenerateUserMessage('msg-1', { content: 'fixed prompt', onAccepted });
+
+        // The editor toasts this message, so it must not be the raw transport error.
+        await expect(result).rejects.toThrow(
+          'Could not create the new topic. Your edit is kept; try sending again.',
+        );
+        await expect(result).rejects.toMatchObject({ cause: new Error('offline') });
+
+        expect(onAccepted).not.toHaveBeenCalled();
+        expect(executeHeterogeneousAgentSpy).not.toHaveBeenCalled();
+      },
+    );
 
     it('preserves a legacy subscription resume', async () => {
       await setupHeteroChatStore({
@@ -2017,6 +1942,7 @@ describe('Generation Actions', () => {
     it('returns early without starting an operation or dispatching any runtime', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
         messagesMap: {},
         operations: {},
         operationsByMessage: {},

@@ -253,8 +253,24 @@ export const LobeChatPluginApiSchema = z.object({
   work: PluginApiWorkConfigSchema.optional(),
 });
 
+/**
+ * A program that holds a device-gateway connection for a device: the LobeHub
+ * desktop app, or the `lh connect` CLI. One device can hold both at once.
+ */
+export type DeviceClient = 'cli' | 'desktop';
+
 export interface BuiltinToolManifest {
   api: LobeChatPluginApi[];
+
+  /**
+   * Device clients that can run this tool when it executes on a device. The
+   * gateway is told to skip connections of any other client — e.g. Computer
+   * Use and the browser panel live only in the desktop app, so a call must not
+   * land on `lh connect` running on the same machine.
+   *
+   * When omitted, any device client can run it.
+   */
+  deviceClients?: DeviceClient[];
 
   /**
    * Supported execution environments for this tool.
@@ -295,6 +311,7 @@ export interface BuiltinToolManifest {
 
 export const BuiltinToolManifestSchema = z.object({
   api: z.array(LobeChatPluginApiSchema),
+  deviceClients: z.array(z.enum(['cli', 'desktop'])).optional(),
   executors: z.array(z.enum(['client', 'server'])).optional(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   identifier: z.string(),
@@ -562,6 +579,14 @@ export interface BuiltinInterventionProps<Arguments = any> {
   identifier?: string;
   interactionMode?: 'approval' | 'custom';
   messageId: string;
+  /**
+   * Hold the host's approve action while the intervention cannot show what is
+   * being approved — e.g. its review data is still loading or failed to load.
+   * Pass `true` to block approval and `false` to release it; reject / stop stay
+   * available. Hosts without approval controls ignore it. Only approval-mode
+   * interventions receive it.
+   */
+  onApprovalBlockedChange?: (blocked: boolean) => void;
   /**
    * Callback to update the arguments before approval
    * This is called when the user modifies the intervention content

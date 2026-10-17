@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"agent_message_chunk","messageId":"610e6531-b1d0-41b7-8021-3ac83501e804","content":{"type":"text","text":"ACP profile OK"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"{{sessionId}}","update":{"sessionUpdate":"usage_update","used":7049,"size":1000000}}}

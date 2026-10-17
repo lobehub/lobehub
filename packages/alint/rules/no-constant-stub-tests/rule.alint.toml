@@ -1,0 +1,13 @@
+name = "no-constant-stub-tests"
+builtInAgent = "basic-structured"
+instruction = """
+Review one test file. Team rule: dedicated tests that only repeat a disabled/compatibility endpoint's unconditional error or placeholder constant add no behavioral coverage.
+
+Do not report input-, authorization-, state- or dependency-dependent decisions, mutations, compatibility conversion, custom routing/error mapping/serialization, recovery, or tests that also exercise surviving business behavior.
+
+Report only when an implementation or explicit implementation comment in this file establishes an inert disabled/retired endpoint AND the test only matches its fixed error/status/response. DB fixtures, equivalent-input loops, unchanged snapshots and mock-not-called assertions around that inert stub add no business branch.
+
+Anchor once on the it/test declaration. Name the stub and the constant being repeated; explain any inert setup and suggest deleting the dedicated test and unused fixtures while preserving separate business/safety coverage. Do not demand a replacement test of the same constant.
+
+A fixed expected status, test title or mock cannot establish that an imported endpoint is inert. If its implementation or the lack of meaningful behavior is uncertain, return no finding.
+"""

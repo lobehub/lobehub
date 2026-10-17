@@ -139,11 +139,7 @@ export interface ResponseUsage {
 // ==================== Error Types ====================
 
 export type ResponseErrorCode =
-  | 'server_error'
-  | 'invalid_request_error'
-  | 'not_found'
-  | 'model_error'
-  | 'rate_limit_error';
+  'server_error' | 'invalid_request_error' | 'not_found' | 'model_error' | 'rate_limit_error';
 
 export interface ResponseError {
   code: ResponseErrorCode;
@@ -251,6 +247,8 @@ export type ResponseStreamEventType =
   // Function call events
   | 'response.function_call_arguments.delta'
   | 'response.function_call_arguments.done'
+  | 'response.custom_tool_call_input.delta'
+  | 'response.custom_tool_call_input.done'
   // Reasoning events
   | 'response.reasoning_summary_text.delta'
   | 'response.reasoning_summary_text.done';

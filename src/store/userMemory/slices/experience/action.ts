@@ -1,184 +1,128 @@
-import { type ExperienceListResult } from '@lobechat/types';
-import { uniqBy } from 'es-toolkit/compat';
-import { produce } from 'immer';
-import { useEffect } from 'react';
+import { type ExperienceListItem } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore } from '../../store';
-import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
-import { shouldSurfaceMemoryListError } from '../utils/shouldSurfaceMemoryListError';
+import { type UserMemoryStore, useUserMemoryStore } from '../../store';
+import { type MemoryListPageResult, MemoryQueryList } from '../utils/memoryQueryList';
+import {
+  EXPERIENCE_LIST_PAGE_SIZE,
+  type ExperienceListData,
+  type ExperienceListParams,
+  experienceListResource,
+} from './projection';
 
 const n = setNamespace('userMemory/experience');
 
-export interface ExperienceQueryParams {
+export interface ExperienceQueryParams extends Partial<ExperienceListParams> {
   page?: number;
-  pageSize?: number;
-  q?: string;
-  sort?: 'capturedAt' | 'scoreConfidence';
 }
 
-type ExperienceListRequest = ExperienceQueryParams & { page: number };
+/** Flat mirrors of one page set (`undefined` = the active query has no view yet). */
+const mirrorsOf = (data: ExperienceListData | undefined): Partial<UserMemoryStore> =>
+  data
+    ? {
+        experienceListData: data,
+        experiences: data.items,
+        experiencesHasMore: data.hasMore,
+        experiencesInit: true,
+        experiencesPage: data.currentPage + 1,
+        experiencesTotal: data.total ?? data.items.length,
+      }
+    : {
+        experienceListData: undefined,
+        experiences: [],
+        experiencesHasMore: true,
+        experiencesInit: false,
+        experiencesPage: 1,
+        experiencesTotal: 0,
+      };
 
 type Setter = StoreSetter<UserMemoryStore>;
 export const createExperienceSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
   new ExperienceActionImpl(set, get, _api);
 
+/**
+ * The user-memory experience list: one `MemoryQueryList` (shared with the other
+ * offset-paged memory lists) behind the slice's long-standing action names.
+ */
 export class ExperienceActionImpl {
-  readonly #get: () => UserMemoryStore;
-  readonly #set: Setter;
+  readonly #list: MemoryQueryList<ExperienceListParams, ExperienceListItem, ExperienceListData>;
 
   constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
-  }
-
-  deleteExperience = async (id: string): Promise<void> => {
-    await memoryCRUDService.deleteExperience(id);
-    // Reset list to refresh
-    this.#get().resetExperiencesList({
-      q: this.#get().experiencesQuery,
-      sort: this.#get().experiencesSort,
-    });
-  };
-
-  loadMoreExperiences = (): void => {
-    const { experiencesPage, experiencesTotal, experiences } = this.#get();
-    if (experiences.length < (experiencesTotal || 0)) {
-      this.#set(
-        produce((draft) => {
-          draft.experiencesPage = experiencesPage + 1;
-        }),
-        false,
-        n('loadMoreExperiences'),
-      );
-    }
-  };
-
-  internal_acceptExperiencesList = (
-    data: ExperienceListResult,
-    request: ExperienceListRequest,
-  ): void => {
-    const state = this.#get();
-    if (
-      !isMemoryListRequestCurrent(
-        {
-          page: state.experiencesPage,
-          q: state.experiencesQuery,
-          sort: state.experiencesSort,
-        },
-        { page: request.page, q: request.q, sort: request.sort },
-      )
-    )
-      return;
-
-    this.#set(
-      produce((draft) => {
-        draft.experiencesSearchError = undefined;
-        draft.experiencesSearchLoading = false;
-        draft.experiencesTotal = data.total;
-
-        if (!draft.experiencesInit) {
-          draft.experiencesInit = true;
-        }
-
-        if (request.page === 1) {
-          draft.experiences = uniqBy(data.items, 'id');
-        } else {
-          draft.experiences = uniqBy([...draft.experiences, ...data.items], 'id');
-        }
-
-        draft.experiencesHasMore = data.items.length >= (request.pageSize || 20);
-      }),
-      false,
-      n('internal_acceptExperiencesList'),
-    );
-  };
-
-  internal_failExperiencesList = (error: unknown, request: ExperienceListRequest): void => {
-    const state = this.#get();
-    if (
-      !isMemoryListRequestCurrent(
-        {
-          page: state.experiencesPage,
-          q: state.experiencesQuery,
-          sort: state.experiencesSort,
-        },
-        { page: request.page, q: request.q, sort: request.sort },
-      )
-    )
-      return;
-
-    const shouldSurfaceError = shouldSurfaceMemoryListError({
-      initialized: state.experiencesInit,
-      page: request.page,
-      resetting: state.experiencesSearchLoading,
-    });
-
-    this.#set(
-      produce((draft) => {
-        if (shouldSurfaceError) draft.experiencesSearchError = error;
-        draft.experiencesSearchLoading = false;
-      }),
-      false,
-      n('internal_failExperiencesList'),
-    );
-  };
-
-  resetExperiencesList = (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>): void => {
-    this.#set(
-      produce((draft) => {
-        draft.experiences = [];
-        draft.experiencesPage = 1;
-        draft.experiencesQuery = params?.q;
-        draft.experiencesSearchError = undefined;
-        draft.experiencesSearchLoading = true;
-        draft.experiencesSort = params?.sort;
-      }),
-      false,
-      n('resetExperiencesList'),
-    );
-  };
-
-  /**
-   * Hydrate the store from SWR's rendered state because deduped cache hits do not invoke SWR's
-   * request lifecycle callbacks.
-   */
-  useFetchExperiences = (params: ExperienceQueryParams): SWRResponse<ExperienceListResult> => {
-    const page = params.page ?? 1;
-    const response = useSWR(
-      userMemoryKeys.experiences(params),
-      async () => {
-        // Use the new dedicated queryExperiences API
-        return userMemoryService.queryExperiences({
-          page: params.page,
+    this.#list = new MemoryQueryList({
+      actionPrefix: n('experienceList'),
+      activeKeyField: 'experienceListKey',
+      entriesField: 'experienceListEntries',
+      fetchPage: async (params, page) => {
+        const response = await userMemoryService.queryExperiences({
+          page,
           pageSize: params.pageSize,
           q: params.q,
           sort: params.sort,
         });
+        return { items: response.items, total: response.total };
       },
-      {
-        revalidateOnFocus: false,
-      },
-    );
+      get,
+      mirror: mirrorsOf,
+      queryFields: ({ q, sort }) => ({ experiencesQuery: q || undefined, experiencesSort: sort }),
+      replicaField: 'experienceListReplica',
+      resource: experienceListResource,
+      rootKey: userMemoryKeys.experiences.root,
+      set,
+      useStore: (selector) => useUserMemoryStore(selector),
+    });
+  }
 
-    useEffect(() => {
-      if (response.data !== undefined)
-        this.internal_acceptExperiencesList(response.data, { ...params, page });
-    }, [page, params.pageSize, params.q, params.sort, response.data]);
+  /** Delete one experience: optimistic, then the offset repair (see `OffsetListPager`). */
+  deleteExperience = (id: string): Promise<void> =>
+    this.#list.delete(id, () => memoryCRUDService.deleteExperience(id));
 
-    useEffect(() => {
-      if (response.error !== undefined)
-        this.internal_failExperiencesList(response.error, { ...params, page });
-    }, [page, params.pageSize, params.q, params.sort, response.error]);
+  /** Purge for "delete all memories" (every query, memory + IndexedDB). */
+  internal_clearExperienceList = (user?: string): Promise<boolean> => this.#list.clear(user);
 
-    return response;
+  /** Confirmed edit of one experience in every loaded and persisted query. */
+  internal_updateExperienceEntity = (
+    id: string,
+    fn: (item: ExperienceListItem) => ExperienceListItem,
+  ): void => {
+    this.#list.updateEntity(id, fn);
+  };
+
+  /** Append the next page of the query on screen. */
+  loadMoreExperiences = (): void => {
+    void this.#list.loadMore();
+  };
+
+  /** Seed the persisted head page of a query before its route paints. */
+  preHydrateExperiences = (
+    query?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>,
+  ): Promise<boolean> =>
+    this.#list.preHydrate({
+      ...query,
+      pageSize: EXPERIENCE_LIST_PAGE_SIZE,
+      q: query?.q || undefined,
+    });
+
+  /** Point the list at another search / sort (no page set is dropped). */
+  resetExperiencesList = (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>): void => {
+    this.#list.select({ ...params, q: params?.q || undefined });
+  };
+
+  /** Fetch orchestration for the experience list page (see `MemoryQueryList.useFetch`). */
+  useFetchExperiences = (
+    params: ExperienceQueryParams,
+  ): SWRResponse<MemoryListPageResult<ExperienceListItem>> => {
+    const { page: _page, ...query } = params;
+    return this.#list.useFetch({
+      ...query,
+      pageSize: params.pageSize ?? EXPERIENCE_LIST_PAGE_SIZE,
+      q: params.q || undefined,
+    });
   };
 }
 

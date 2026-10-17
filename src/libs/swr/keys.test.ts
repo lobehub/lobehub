@@ -8,7 +8,6 @@ import {
   isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
   recentKeys,
-  resourceKeys,
   taskKeys,
   verifyKeys,
   workKeys,
@@ -65,7 +64,7 @@ describe('isAcceptanceListKey', () => {
     expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
       true,
     );
-    expect(isAcceptanceListKey(['verify:acceptanceBundle', 'acceptance-1'])).toBe(false);
+    expect(isAcceptanceListKey(['verify:acceptancePurgePreview', 'acceptance-1'])).toBe(false);
   });
 
   it('keeps project-scoped acceptance feeds in separate cache entries', () => {
@@ -107,34 +106,6 @@ describe('workKeys', () => {
       null,
       null,
     ]);
-  });
-});
-
-describe('resourceKeys', () => {
-  it('keeps Private and Workspace recent sections in separate cache entries', () => {
-    expect(resourceKeys.recentPages('workspace-1', 'private')).not.toEqual(
-      resourceKeys.recentPages('workspace-1', 'public'),
-    );
-    expect(resourceKeys.recentFiles('workspace-1', 'private')).not.toEqual(
-      resourceKeys.recentFiles('workspace-1', 'public'),
-    );
-  });
-
-  // Regression: without the workspace in the key, switching workspaces served
-  // the previous workspace's rows out of cache before revalidation landed.
-  it('keeps every Resources cache entry scoped to its workspace', () => {
-    expect(resourceKeys.recentFiles('workspace-1', 'public')).not.toEqual(
-      resourceKeys.recentFiles('workspace-2', 'public'),
-    );
-    expect(resourceKeys.recentPages('workspace-1', 'public')).not.toEqual(
-      resourceKeys.recentPages('workspace-2', 'public'),
-    );
-    expect(resourceKeys.recentFiles(null, undefined)).not.toEqual(
-      resourceKeys.recentFiles('workspace-1', undefined),
-    );
-    expect(resourceKeys.search({ q: 'report' }, 'workspace-1')).not.toEqual(
-      resourceKeys.search({ q: 'report' }, 'workspace-2'),
-    );
   });
 });
 

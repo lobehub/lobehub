@@ -8,6 +8,7 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 
 const {
   mockCreateVideo,
+  mockFillVideoPricingDefaults,
   mockFindPreviousGeneration,
   mockFindUserById,
   mockGenerationTopicFindById,
@@ -33,6 +34,7 @@ const {
   const mockAfter = vi.fn(function (cb: () => void) {
     return cb();
   });
+  const mockFillVideoPricingDefaults = vi.fn(async ({ params }: { params: unknown }) => params);
   const mockAppEnv = {
     APP_URL: 'https://app.example.com',
     VIDEO_GENERATION_PREFER_WEBHOOK: false,
@@ -47,6 +49,7 @@ const {
   const mockResolveBusinessModelMapping = vi.fn();
   return {
     mockCreateVideo,
+    mockFillVideoPricingDefaults,
     mockFindPreviousGeneration,
     mockFindUserById,
     mockGenerationTopicFindById,
@@ -111,6 +114,9 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
       { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
     ]
   ) => mockIsLobeHubModelAvailable(...args),
+}));
+vi.mock('@/server/services/generation/videoPricingDefaults', () => ({
+  fillVideoPricingDefaults: mockFillVideoPricingDefaults,
 }));
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
@@ -656,6 +662,36 @@ describe('videoRouter', () => {
       await caller.createVideo(defaultInput);
 
       expect(chargeBeforeGenerate).toHaveBeenCalledWith(expect.objectContaining({ spendOrigin }));
+    });
+
+    it('prices and generates with the model defaults the request omitted', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      mockFillVideoPricingDefaults.mockImplementationOnce(async ({ params }) => ({
+        ...(params as object),
+        duration: 5,
+        resolution: '768P',
+      }));
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockFillVideoPricingDefaults).toHaveBeenCalledWith(
+        expect.objectContaining({ params: defaultInput.params }),
+      );
+      expect(chargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ duration: 5, resolution: '768P' }),
+          providerParams: expect.objectContaining({ duration: 5, resolution: '768P' }),
+        }),
+      );
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ duration: 5, resolution: '768P' }),
+        }),
+        expect.anything(),
+      );
     });
 
     it('should return error batch when pre-charge fails', async () => {

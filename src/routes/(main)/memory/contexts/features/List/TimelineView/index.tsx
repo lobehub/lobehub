@@ -18,13 +18,17 @@ interface ContextTimelineViewProps {
 const ContextTimelineView = memo<ContextTimelineViewProps>(({ contexts, isLoading, onClick }) => {
   const loadMoreContexts = useUserMemoryStore((s) => s.loadMoreContexts);
   const contextsHasMore = useUserMemoryStore((s) => s.contextsHasMore);
+  // Load-more progress / failure of the query on screen (footer + retry).
+  const isLoadingMore = useUserMemoryStore((s) => Boolean(s.contextListData?.isLoadingMore));
+  const loadMoreError = useUserMemoryStore((s) => s.contextListData?.loadMoreError);
 
   return (
     <GenericTimelineView
       data={contexts}
       groupBy="day"
       hasMore={contextsHasMore}
-      isLoading={isLoading}
+      isLoading={isLoading || isLoadingMore}
+      loadMoreError={loadMoreError}
       renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
       renderItem={(context) => (
         <TimelineItemWrapper>

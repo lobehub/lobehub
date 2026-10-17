@@ -11,8 +11,13 @@ const mutate = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/git', () => ({ gitService: { pushGitBranch, runPullRequestAction } }));
+const revalidateGitStatus = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
 vi.mock('@/libs/swr', () => ({ mutate }));
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: toastError } }));
+vi.mock('@/store/device/gitStatus/store', () => ({
+  useGitStatusStore: { getState: () => ({ revalidateGitStatus }) },
+}));
+vi.mock('@lobehub/ui', () => ({ toast: { error: toastError } }));
 
 const params = { deviceId: 'dev-1', number: 7, workingDirectory: '/repo' };
 
@@ -74,8 +79,10 @@ describe('usePullRequestActions', () => {
 
     expect(mutateDetail).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(deviceKeys.gitPullRequestActivity('dev-1', '/repo', 7));
-    expect(mutate).toHaveBeenCalledWith(deviceKeys.gitAheadBehind('dev-1', '/repo'));
-    expect(mutate).toHaveBeenCalledWith(deviceKeys.gitWorkingTreeStatus('dev-1', '/repo'));
+    expect(revalidateGitStatus).toHaveBeenCalledWith('dev-1', '/repo', [
+      'aheadBehind',
+      'workingTreeStatus',
+    ]);
     const matcher = mutate.mock.calls.find(([key]) => typeof key === 'function')?.[0];
     expect(matcher(deviceKeys.gitLinkedPR('dev-1', '/repo', 'feat/x', 7))).toBe(true);
     expect(matcher(deviceKeys.gitLinkedPR('dev-1', '/other', 'feat/x'))).toBe(false);

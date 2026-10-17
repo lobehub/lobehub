@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Kan dit antwoord niet genereren",
   "unknownError.title": "Oeps, het verzoek heeft een dutje gedaan",
   "unknownError.traceIdLabel": "Traceer-ID:",
+  "unknownError.troubleshoot": "Probleem oplossen",
   "unlock.addProxyUrl": "Voeg OpenAI-proxy-URL toe (optioneel)",
   "unlock.apiKey.description": "Voer je {{name}} API-sleutel in om de sessie te starten",
   "unlock.apiKey.imageGenerationDescription": "Voer je {{name}} API-sleutel in om afbeeldingen te genereren",

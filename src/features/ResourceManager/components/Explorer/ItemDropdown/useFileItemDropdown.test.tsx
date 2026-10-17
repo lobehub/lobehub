@@ -18,19 +18,35 @@ const mocks = vi.hoisted(() => ({
   publishFileToWorkspace: vi.fn(async (_id: string) => undefined),
   setFileVisibility: vi.fn(async (_id: string, _visibility: string) => undefined),
   refreshFileList: vi.fn(async () => undefined),
+  removeSearchHits: vi.fn(),
   revalidateTree: vi.fn(async () => undefined),
   useSendToMessengerMenuItem: vi.fn((_params: SendToMessengerParams) => undefined),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: mocks.confirmModal,
-  toast: {
-    error: vi.fn(),
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    () => ({
+      confirmModal: mocks.confirmModal,
+      toast: {
+        error: vi.fn(),
+        loading: vi.fn(() => ({ close: vi.fn() })),
+        success: vi.fn(),
+        warning: vi.fn(),
+      },
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      copyToClipboard: mocks.copyToClipboard,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem', () => ({
   useSendToMessengerMenuItem: mocks.useSendToMessengerMenuItem,
@@ -39,6 +55,9 @@ vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.exampl
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/features/ResourceManager/components/KnowledgeBaseListProvider', () => ({
   useKnowledgeBaseListContext: () => [],
+}));
+vi.mock('@/features/ResourceManager/store', () => ({
+  useResourceManagerStore: { getState: () => ({ removeSearchHits: mocks.removeSearchHits }) },
 }));
 vi.mock('@/store/user', () => ({ useUserStore: () => 'user-1' }));
 vi.mock('@/store/user/selectors', () => ({ userProfileSelectors: { userId: vi.fn() } }));
@@ -60,10 +79,6 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => mocks.activeWorkspaceSlug,
-}));
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  copyToClipboard: mocks.copyToClipboard,
 }));
 
 vi.mock('@/store/tree', () => ({
@@ -328,6 +343,32 @@ describe('useFileItemDropdown — workspace resource permissions', () => {
     await waitFor(() =>
       expect(mocks.dropTreeNodes).toHaveBeenCalledWith(['resource-id'], 'tree-parent-id'),
     );
+  });
+
+  it('drops the deleted row from the cached search results', async () => {
+    // Regression: deleting a hit from the search overlay updated the file store
+    // and the sidebar tree only, so the persisted search replica kept the hit
+    // and repainted it on the next revisit or reload.
+    const { result } = renderHook(() => useFileItemDropdown(baseParams as any));
+    const deleteItem = result.current.menuItems().find((item) => item?.key === 'delete') as any;
+    await deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    mocks.confirmModal.mock.calls.at(-1)![0].onOk();
+
+    await waitFor(() => expect(mocks.removeSearchHits).toHaveBeenCalledWith(['resource-id']));
+  });
+
+  it('keeps the cached search results when the delete fails', async () => {
+    mocks.deleteResource.mockRejectedValueOnce(new Error('boom'));
+    const { result } = renderHook(() => useFileItemDropdown(baseParams as any));
+    const deleteItem = result.current.menuItems().find((item) => item?.key === 'delete') as any;
+    await deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    mocks.confirmModal.mock.calls.at(-1)![0].onOk();
+
+    await waitFor(() => expect(mocks.deleteResource).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mocks.removeSearchHits).not.toHaveBeenCalled();
   });
 
   it("falls back to the explorer's folder for a row the tree does not own", async () => {

@@ -46,6 +46,12 @@ export interface AssembleSkillPoolOptions {
    * always-on `lobe-skills` tool and resolves against this pool.
    */
   skillActivateMode?: 'auto' | 'manual';
+  /**
+   * Skills this turn needs to stay selectable even in `manual` mode (e.g. the
+   * lobehub skill for a `<refer_topic>` turn). They are not pinned, so their
+   * content is only loaded through `activateSkill`.
+   */
+  turnSkillIds?: readonly string[];
 }
 
 /**
@@ -61,13 +67,16 @@ export const assembleSkillPool = (
   options: AssembleSkillPoolOptions = {},
 ): OperationSkillSet => {
   const enabledPluginIds = new Set(options.enabledPluginIds ?? []);
+  const turnSkillIds = new Set(options.turnSkillIds ?? []);
   // Manual mode exposes only what the user picked. Project / device skills are
   // discovered from the run's working directory and can never be picked in the
   // UI, so the mode does not speak about them and they stay.
   const selectable =
     options.skillActivateMode === 'manual'
       ? (skills: readonly SkillMeta[] = []) =>
-          skills.filter((skill) => enabledPluginIds.has(skill.identifier))
+          skills.filter(
+            (skill) => enabledPluginIds.has(skill.identifier) || turnSkillIds.has(skill.identifier),
+          )
       : (skills: readonly SkillMeta[] = []) => skills;
 
   const ordered = [

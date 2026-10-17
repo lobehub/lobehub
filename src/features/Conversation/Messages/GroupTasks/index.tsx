@@ -1,9 +1,7 @@
 'use client';
 
 import { type UIChatMessage } from '@lobechat/types';
-import { Block, Flexbox, GroupAvatar, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Flexbox, GroupAvatar, Icon, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ListTodo } from 'lucide-react';
 import { memo, useMemo } from 'react';

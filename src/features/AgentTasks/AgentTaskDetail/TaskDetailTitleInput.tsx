@@ -1,4 +1,4 @@
-import { TextArea } from '@lobehub/ui/base-ui';
+import { TextArea } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

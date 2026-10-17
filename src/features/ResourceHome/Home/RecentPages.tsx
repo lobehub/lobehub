@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { FileTextIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -16,9 +15,8 @@ import {
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
-import { resourceKeys } from '@/libs/swr/keys';
-import { fileService } from '@/services/file';
+import { useHomeStore } from '@/store/home';
+import { homeRecentSelectors } from '@/store/home/selectors';
 
 import SectionTitle from './SectionTitle';
 
@@ -82,24 +80,31 @@ const RecentPages = memo(() => {
     ? getResourceQueryVisibility(undefined, listVisibility)
     : undefined;
 
-  const { data, error, isLoading, mutate } = useClientDataSWR(
-    resourceKeys.recentPages(workspaceId ?? null, visibility),
-    () => fileService.getRecentPages(6, visibility),
-  );
+  // A replica partitioned by user + workspace: a reload paints the last cards
+  // from the local copy while the server confirms them.
+  const { error, isValidating, revalidate } = useHomeStore((s) => s.useFetchResourceRecentPages)({
+    visibility,
+  });
+  const data = useHomeStore(homeRecentSelectors.resourcePages({ visibility }));
+  const isLoading = data === undefined && !error;
 
   if (!isLoading && !error && !data?.length) return null;
 
   return (
     <Flexbox gap={12}>
-      <SectionTitle title={t('home.recentPages')} viewAllUrl={'/resource/page'} />
+      <SectionTitle
+        loading={isValidating && !!data?.length}
+        title={t('home.recentPages')}
+        viewAllUrl={'/resource/page'}
+      />
       {error && !data?.length ? (
-        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+        <AsyncError error={error} variant={'inline'} onRetry={() => void revalidate()} />
       ) : isLoading ? (
         <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.pages} />
       ) : (
         <div className={styles.grid}>
           {data?.map((item) => {
-            const emoji = (item.metadata as { emoji?: string } | null)?.emoji;
+            const { emoji } = item;
             return (
               <button
                 className={styles.card}

@@ -1,4 +1,4 @@
-import { NEWS_BRIEF_TYPES } from '@lobechat/types';
+import { HOME_FEED_EXCLUDED_BRIEF_TYPES, NEWS_BRIEF_TYPES } from '@lobechat/types';
 import { and, desc, eq, gte, inArray, isNull, lt, notInArray, type SQL, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
@@ -105,7 +105,13 @@ export class BriefModel {
       .from(briefs)
       .leftJoin(agents, eq(briefs.agentId, agents.id))
       .leftJoin(tasks, eq(briefs.taskId, tasks.id))
-      .where(and(this.ownership(), isNull(briefs.resolvedAt)))
+      .where(
+        and(
+          this.ownership(),
+          isNull(briefs.resolvedAt),
+          notInArray(briefs.type, HOME_FEED_EXCLUDED_BRIEF_TYPES),
+        ),
+      )
       .orderBy(
         sql`CASE
           WHEN ${briefs.priority} = 'urgent' THEN 0

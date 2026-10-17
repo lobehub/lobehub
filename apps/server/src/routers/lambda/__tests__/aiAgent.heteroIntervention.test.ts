@@ -11,7 +11,7 @@ import {
   deriveAgentInterventionQueueDeduplicationId,
 } from '@/business/server/agent-run/agentInterventionIdentity';
 
-import { aiAgentRouter } from '../aiAgent';
+import { aiAgentRouter, dispatchClaimedAgentIntervention } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
 
 const business = vi.hoisted(() => ({
@@ -1056,6 +1056,77 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
 
       const [params] = aiAgentService.execAgent.mock.calls[0];
       expect(params.userInterventionConfig).toEqual({ allowList: [], approvalMode: 'manual' });
+    });
+
+    it("continues a share visitor's run under its share gate and the visitor's own mode", async () => {
+      const sourceOperationId = 'operation-share-source';
+      stateFor(sourceOperationId, {
+        operationId: sourceOperationId,
+        principal: { policy: { userIntervention: { approvalMode: 'manual' } } },
+        status: 'waiting_for_human',
+      });
+      // The creator's own allow list must not leak into the visitor's run.
+      await serverDB
+        .insert(userSettings)
+        .values({
+          id: userId,
+          tool: {
+            humanIntervention: {
+              allowList: ['lobe-local-system____runCommand'],
+              approvalMode: 'allow-list',
+            },
+          },
+        })
+        .onConflictDoNothing();
+      await insertPendingTool({
+        batchId: 'batch-share-source',
+        messageId: 'assistant-share',
+        operationId: sourceOperationId,
+        toolCallId: 'tool-share',
+      });
+      aiAgentService.execAgent.mockResolvedValueOnce(execution);
+      const shareGate = {
+        agentId: 'agent-runtime',
+        shareConfig: {},
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      };
+
+      await dispatchClaimedAgentIntervention(
+        {
+          claimId: 'claim-share',
+          contractVersion: 2,
+          handled: true,
+          ownerUserId: userId,
+          resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000045',
+          runtimeAction: {
+            agentId: 'agent-runtime',
+            appContext: { topicId: 'topic-runtime' },
+            content: '{"answer":"A"}',
+            operationId: sourceOperationId,
+            outcome: 'submitted',
+            parentMessageId: 'assistant-share',
+            toolCallId: 'tool-share',
+            type: 'resume_tool_result',
+          },
+          state: 'claimed',
+        } as any,
+        {
+          aiAgentService: aiAgentService as any,
+          serverDB,
+          shareGate: shareGate as any,
+          userId: 'visitor-1',
+          workspaceId: null,
+        },
+      );
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shareGate,
+          trigger: 'agent_share',
+          userInterventionConfig: { approvalMode: 'manual' },
+        }),
+      );
     });
 
     it('keeps a continuation headless when the answered run was headless', async () => {

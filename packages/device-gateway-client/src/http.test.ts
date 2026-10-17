@@ -827,6 +827,17 @@ describe('GatewayHttpClient', () => {
       expect(result).toEqual({ success: false });
     });
 
+    it('keeps the gateway reason on a non-ok response', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ error: 'TIMEOUT', success: false }),
+        ok: false,
+      });
+
+      const result = await client.getDeviceSystemInfo('user-1', 'device-1');
+
+      expect(result).toEqual({ error: 'TIMEOUT', success: false });
+    });
+
     it('bounds the read with a timeout', async () => {
       mockFetch({ json: vi.fn().mockResolvedValue({ success: true, systemInfo: {} }), ok: true });
 

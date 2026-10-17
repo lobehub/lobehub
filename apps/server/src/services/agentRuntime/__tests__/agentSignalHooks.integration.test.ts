@@ -78,9 +78,7 @@ vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/server/featureFlags', () => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: vi
-    .fn()
-    .mockResolvedValue({ enableAgentSelfIteration: true }),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('../../agentSignal/featureGate', () => ({
   isAgentSignalEnabledForUser: vi.fn().mockResolvedValue(true),

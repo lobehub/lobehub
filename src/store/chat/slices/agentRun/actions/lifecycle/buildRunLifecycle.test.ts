@@ -53,8 +53,10 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {},
+    operationsByContext: { [messageMapKey(CONTEXT)]: [OP] },
     operations: {
       [OP]: {
+        id: OP,
         context: CONTEXT,
         metadata: afterCompletionCallbacks ? { runtimeHooks: { afterCompletionCallbacks } } : {},
         status: 'running',

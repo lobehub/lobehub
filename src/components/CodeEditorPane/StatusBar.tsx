@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Tooltip } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { IndentStyle } from './indent';

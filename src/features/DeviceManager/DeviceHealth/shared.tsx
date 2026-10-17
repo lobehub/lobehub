@@ -1,7 +1,5 @@
-import type { DeviceMetricSeries } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import type { DeviceMetricSeries, DeviceScope } from '@lobechat/types';
+import { cssVar, Flexbox, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
@@ -17,14 +15,19 @@ const REFRESH_INTERVAL_MS = 5 * 60_000;
 
 /**
  * The device's health series. The list-row preview and the detail panel read
- * the same key, so opening a device reuses the preview's data. `enabled: false`
- * (an off-screen row) stops fetching; cached data comes back when it is on
- * screen again.
+ * the same key, so opening a device reuses the preview's data. `scope` is the
+ * list item's, so a deviceId enrolled both personally and in the workspace
+ * reads the row it was listed as. `enabled: false` (an off-screen row) stops
+ * fetching; cached data comes back when it is on screen again.
  */
-export const useDeviceMetricSeries = (deviceId: string, enabled = true) =>
+export const useDeviceMetricSeries = (
+  deviceId: string,
+  scope: DeviceScope | undefined,
+  enabled = true,
+) =>
   useClientDataSWR<DeviceMetricSeries>(
-    enabled ? [DEVICE_METRICS_SWR_KEY, deviceId] : null,
-    () => deviceService.getMetricSeries(deviceId),
+    enabled ? [DEVICE_METRICS_SWR_KEY, deviceId, scope] : null,
+    () => deviceService.getMetricSeries(deviceId, scope),
     { refreshInterval: REFRESH_INTERVAL_MS },
   );
 

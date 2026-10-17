@@ -72,23 +72,32 @@ export class MarketSandboxProvider implements SandboxProvider {
     );
 
     try {
-      const response = await marketService.getSDK().plugins.runBuildInTool(
-        toolName as CodeInterpreterToolName,
-        params as never,
-        {
-          // Cast: the published SDK's context type predates both fields. Market
-          // validates the request body with a non-strict schema, so a field it
-          // does not know yet is dropped rather than rejected — which is what
-          // `sandboxCwd` relies on until the execution plane consumes it.
-          ...(sandboxMode && { sandboxMode }),
-          ...(sandboxCwd && { sandboxCwd }),
-          ...(sandboxWorkingDir && { sandboxWorkingDir }),
-          ...(sandboxInstanceId && { sandboxInstanceId }),
-          ...(sandboxSpecification && { sandboxSpecification }),
+      const response = await marketService
+        .getSDK()
+        .plugins.runBuildInTool(toolName as CodeInterpreterToolName, params as never, {
+          // Named one by one, and deliberately NOT cast. Market validates this
+          // body with a non-strict schema, so an SDK that predates these fields
+          // drops them silently and the call runs in a throwaway sandbox while
+          // reporting success — which is exactly what shipped: the package was
+          // bumped in the cloud superproject only, this workspace resolved the
+          // older SDK, and every persistent run landed in /tmp without one
+          // error. Excess-property checking is what turns that into a build
+          // failure, and it does NOT see properties contributed by a
+          // conditional spread — `...(sandboxMode && { sandboxMode })` compiles
+          // happily against a context type that has no such field. Each one is
+          // written out so that it does. The SDK omits an undefined field from
+          // the request body itself, so naming them costs nothing on the wire.
+          sandboxCwd,
+          sandboxInstanceId,
+          sandboxMode,
+          // The SDK types this one loosely (`Record<string, unknown>`) while
+          // ours is a named shape, so only this field is widened — the rest
+          // stay checked, which is the point of dropping the blanket cast.
+          sandboxSpecification: sandboxSpecification as Record<string, unknown> | undefined,
+          sandboxWorkingDir,
           topicId,
           userId,
-        } as never,
-      );
+        });
 
       log('Sandbox tool %s response: %O', toolName, response);
 

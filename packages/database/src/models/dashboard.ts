@@ -1,5 +1,5 @@
 import type { DashboardItemLayout, DashboardVisibility, WidgetLevelFilter } from '@lobechat/types';
-import { and, asc, eq, inArray, max } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, max } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
 import { dashboardItems, dashboards } from '../schemas/dashboard';
@@ -44,6 +44,20 @@ export interface UpdateDashboardInput {
 export interface AddDashboardItemInput {
   layout?: DashboardItemLayout | null;
   sortOrder?: number;
+}
+
+/**
+ * Most widgets one board holds. The layout editor saves every item of a board
+ * in one patch list, so the router's layout cap and this cap must match.
+ */
+export const DASHBOARD_MAX_ITEMS = 200;
+
+/** Raised when placing a new widget on a board that is already full. */
+export class DashboardItemLimitError extends Error {
+  constructor() {
+    super(`A dashboard holds at most ${DASHBOARD_MAX_ITEMS} widgets`);
+    this.name = 'DashboardItemLimitError';
+  }
 }
 
 export interface DashboardItemLayoutPatch {
@@ -180,7 +194,12 @@ export class DashboardModel {
       await this.trashRegistry(tx).register(
         {
           deletedAt: now,
-          root: { resourceId: dashboard.id, resourceType: 'dashboard', title: dashboard.title },
+          root: {
+            projectId: dashboard.projectId,
+            resourceId: dashboard.id,
+            resourceType: 'dashboard',
+            title: dashboard.title,
+          },
         },
         tx,
       );
@@ -278,6 +297,8 @@ export class DashboardModel {
       );
     }
 
+    if (await this.isFull(dashboardId, widgetId)) throw new DashboardItemLimitError();
+
     const sortOrder = input.sortOrder ?? (await this.nextSortOrder(dashboardId));
     const [item] = await this.db
       .insert(dashboardItems)
@@ -319,12 +340,30 @@ export class DashboardModel {
       .orderBy(asc(dashboardItems.sortOrder), asc(dashboardItems.createdAt));
   }
 
+  /**
+   * {@link listItems} for many boards in one query: items of the readable
+   * boards among `dashboardIds` (unreadable, trashed or unknown ids yield
+   * nothing), each with its readable widget, in display order per board.
+   */
+  async listItemsForDashboards(dashboardIds: string[]) {
+    const ids = [...new Set(dashboardIds.filter(isUuid))];
+    if (ids.length === 0) return [];
+
+    return this.db
+      .select({ item: dashboardItems, widget: widgets })
+      .from(dashboardItems)
+      .innerJoin(dashboards, eq(dashboardItems.dashboardId, dashboards.id))
+      .innerJoin(widgets, eq(dashboardItems.widgetId, widgets.id))
+      .where(and(inArray(dashboardItems.dashboardId, ids), this.readable(), this.readableWidget()))
+      .orderBy(asc(dashboardItems.sortOrder), asc(dashboardItems.createdAt));
+  }
+
   /** Readable boards a widget is placed on, in board order. */
   async listByWidget(widgetId: string) {
     if (!isUuid(widgetId)) return [];
 
     return this.db
-      .select({ id: dashboards.id, title: dashboards.title })
+      .select({ id: dashboards.id, projectId: dashboards.projectId, title: dashboards.title })
       .from(dashboardItems)
       .innerJoin(dashboards, eq(dashboardItems.dashboardId, dashboards.id))
       .where(and(eq(dashboardItems.widgetId, widgetId), this.readable()))
@@ -376,6 +415,24 @@ export class DashboardModel {
       .where(and(eq(dashboards.id, dashboardId), this.manageable()))
       .limit(1);
     return !!dashboard;
+  }
+
+  /** Whether placing `widgetId` would add a new item to a board already at the cap. */
+  private async isFull(dashboardId: string, widgetId: string) {
+    const [placed] = await this.db
+      .select({ id: dashboardItems.id })
+      .from(dashboardItems)
+      .where(
+        and(eq(dashboardItems.dashboardId, dashboardId), eq(dashboardItems.widgetId, widgetId)),
+      )
+      .limit(1);
+    if (placed) return false;
+
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(dashboardItems)
+      .where(eq(dashboardItems.dashboardId, dashboardId));
+    return (row?.total ?? 0) >= DASHBOARD_MAX_ITEMS;
   }
 
   private async nextSortOrder(dashboardId: string) {

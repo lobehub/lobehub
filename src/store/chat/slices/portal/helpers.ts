@@ -36,3 +36,11 @@ export const createLocalFileTabId = ({
 
 export const getLocalFileTabId = (entry: OpenLocalFileParams & { id?: string }): string =>
   entry.id ?? createLocalFileTabId(entry);
+
+/**
+ * Whether a tab's path lives on another machine (a remote device or the cloud
+ * sandbox) rather than this one's filesystem, so local OS actions such as
+ * "show in system" would open an unrelated folder or fail.
+ */
+export const isRemoteLocalFile = (entry?: OpenLocalFileParams): boolean =>
+  !!entry?.deviceId || !!entry?.sandboxTopicId;

@@ -37,6 +37,23 @@ export class TaskLifecycleSliceActionImpl {
     this.#get = get;
   }
 
+  /** User-only: archived tasks drop out of every list until shown or restored. */
+  archiveTask = async (id: string, archived: boolean): Promise<void> => {
+    await taskService.archive(id, archived);
+    const { activeTaskId, internal_refreshTaskDetail, refreshTaskList } = this.#get();
+    // The write already committed, so a refresh failure must not read as an
+    // archive failure. The open detail may be the task or a parent listing it.
+    const refreshes = await Promise.allSettled([
+      activeTaskId ? internal_refreshTaskDetail(activeTaskId) : undefined,
+      refreshTaskList(),
+    ]);
+    for (const refresh of refreshes) {
+      if (refresh.status === 'rejected') {
+        log('Failed to refresh after archiving task %s: %O', id, refresh.reason);
+      }
+    }
+  };
+
   cancelTopic = async (topicId: string): Promise<void> => {
     await taskService.cancelTopic(topicId);
     const { activeTaskId, internal_refreshTaskDetail } = this.#get();

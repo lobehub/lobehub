@@ -11,7 +11,8 @@ interface AddGenerationTopicAction {
 interface UpdateGenerationTopicAction {
   id: string;
   type: 'updateTopic';
-  value: UpdateTopicValue;
+  /** `coverUrl` is local-only: the optimistic cover shown until `updateTopicCover` returns */
+  value: UpdateTopicValue & { coverUrl?: string | null };
 }
 
 interface DeleteGenerationTopicAction {
@@ -20,9 +21,7 @@ interface DeleteGenerationTopicAction {
 }
 
 export type GenerationTopicDispatch =
-  | AddGenerationTopicAction
-  | UpdateGenerationTopicAction
-  | DeleteGenerationTopicAction;
+  AddGenerationTopicAction | UpdateGenerationTopicAction | DeleteGenerationTopicAction;
 
 export const generationTopicReducer = (
   state: ImageGenerationTopic[] = [],

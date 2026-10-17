@@ -5,7 +5,7 @@ import type {
   DocumentTemplateSet,
 } from '@lobechat/agent-templates';
 import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat/agent-templates';
-import { buildAgentSkillIdentifier } from '@lobechat/const';
+import { buildAgentSkillIdentifier, WEB_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 import type { DocumentAccessScope } from '@lobechat/types';
@@ -45,6 +45,35 @@ import {
 } from './headlessEditor';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
+/** Guards the ancestor walk against a corrupt parent cycle. */
+const MAX_TREE_DEPTH = 64;
+
+/**
+ * Whether a document may hold children. Folders group; an ordinary document can
+ * also be a parent — e.g. a workflow/SOP with its execution records nested under
+ * it. Skills keep their own bundle layout and web clips are not tree-managed.
+ */
+const canHoldChildren = (doc: AgentDocument) =>
+  !isManagedSkillDocument(doc) &&
+  !doc.fileType.startsWith('skills/') &&
+  doc.sourceType !== WEB_DOCUMENT_SOURCE_TYPE;
+
+export type MoveAgentDocumentStatus = 'failed' | 'moved' | 'unchanged';
+
+export interface MoveAgentDocumentResult {
+  documentId?: string;
+  error?: string;
+  /** The agent-document row id when resolved, otherwise the reference the caller passed. */
+  id: string;
+  status: MoveAgentDocumentStatus;
+  title?: string;
+}
+
+export interface CreateAgentFolderResult {
+  /** False when a folder with the same name already existed under the same parent. */
+  created: boolean;
+  folder: AgentDocument;
+}
 const appendFilenameSuffix = (filename: string, suffix: number): string => {
   const dotIndex = filename.lastIndexOf('.');
 
@@ -638,21 +667,18 @@ export class AgentDocumentsService {
     content: string,
     options: CreateAgentDocumentOptions = {},
   ) {
-    if (options.parentId) {
-      const parent = await this.agentDocumentModel.findByDocumentId(agentId, options.parentId);
-      if (!parent) throw new Error(`Parent folder not found: ${options.parentId}`);
-      if (parent.fileType !== DOCUMENT_FOLDER_TYPE) {
-        throw new Error(`Parent document is not a folder: ${options.parentId}`);
-      }
-    }
+    const parentId = options.parentId
+      ? (await this.resolveParent(agentId, options.parentId)).documentId
+      : undefined;
 
     // The caller's explicit title wins; a leading H1 only names untitled documents.
-    // The H1 is stripped from the body only when it duplicates the chosen title.
-    const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
+    // The leading H1 is always dropped from the body: the document title renders
+    // as the page header on share/editor surfaces, so that first heading would
+    // read as a second page title. Deeper body headings are left alone.
+    const { title: extractedTitle, content: finalContent } = extractMarkdownH1Title(content);
     // Tool callers do not always send `title` even though the schema asks for it.
     const requestedTitle = typeof title === 'string' ? title.trim() : '';
     const finalTitle = requestedTitle || extractedTitle || '';
-    const finalContent = extractedTitle === finalTitle ? strippedContent : content;
     const metadata = options.hintIsSkill
       ? {
           agentSignal: {
@@ -664,8 +690,150 @@ export class AgentDocumentsService {
 
     return this.createWithUniqueFilename(agentId, finalTitle, finalContent, {
       ...(metadata ? { metadata } : {}),
-      ...(options.parentId ? { parentId: options.parentId } : {}),
+      ...(parentId ? { parentId } : {}),
     });
+  }
+
+  /**
+   * Resolve a parent — a folder or an ordinary document — from either of its ids:
+   * the backing `documentId` (`docs_…`, which listDocuments and the context index
+   * show) or the agent-document row id (uuid). Models routinely pass the other id
+   * of the pair, and a miss used to read back as an empty folder, so an unknown
+   * reference, a skill, or a web clip throws.
+   */
+  async resolveParent(agentId: string, parentRef: string): Promise<AgentDocument> {
+    const parent = await this.findReadableDocumentById(parentRef, agentId);
+    if (!parent) throw new AgentDocumentVfsError(`Parent not found: ${parentRef}`, 'NOT_FOUND');
+    if (!canHoldChildren(parent)) {
+      throw new AgentDocumentVfsError(
+        `"${parent.title}" cannot contain other documents (skills and web clips cannot be parents).`,
+        'BAD_REQUEST',
+      );
+    }
+
+    return parent;
+  }
+
+  /**
+   * Live children per parent `documentId`; parents without children are absent.
+   * Omit `parentIds` to count every parent of the agent.
+   */
+  async countChildren(agentId: string, parentIds?: string[]): Promise<Map<string, number>> {
+    return this.agentDocumentModel.countChildrenByParentIds(agentId, parentIds);
+  }
+
+  /**
+   * Create a folder by name under the root or under an existing folder. Idempotent
+   * like `mkdir -p`: an existing folder with the same name is returned as-is so a
+   * scheduled task can call this on every run.
+   */
+  async createFolder(
+    agentId: string,
+    title: string,
+    parentRef?: string | null,
+  ): Promise<CreateAgentFolderResult> {
+    const name = typeof title === 'string' ? title.trim() : '';
+    if (!name || /[\\/]/.test(name)) {
+      throw new AgentDocumentVfsError(
+        'Folder name must be non-empty and cannot contain "/" or "\\".',
+        'BAD_REQUEST',
+      );
+    }
+
+    const parentId = parentRef ? (await this.resolveParent(agentId, parentRef)).documentId : null;
+    const existing = await this.agentDocumentModel.findByParentAndFilename(agentId, parentId, name);
+    if (existing) {
+      if (existing.fileType === DOCUMENT_FOLDER_TYPE) return { created: false, folder: existing };
+
+      throw new AgentDocumentVfsError(
+        `A document named "${name}" already exists in that location.`,
+        'CONFLICT',
+      );
+    }
+
+    const folder = await this.agentDocumentModel.create(agentId, name, '', {
+      fileType: DOCUMENT_FOLDER_TYPE,
+      parentId,
+      title: name,
+    });
+
+    return { created: true, folder };
+  }
+
+  /**
+   * Move documents or folders under a parent folder or document (or to the root
+   * with `null`). Each
+   * entry is applied and reported on its own so one bad id does not abort a bulk
+   * reorganisation. Titles, ids, history and load rules are kept.
+   */
+  async moveDocuments(
+    agentId: string,
+    refs: string[],
+    parentRef: string | null,
+  ): Promise<MoveAgentDocumentResult[]> {
+    const target = parentRef ? await this.resolveParent(agentId, parentRef) : undefined;
+    const targetParentId = target?.documentId ?? null;
+    const blockedIds = target ? await this.collectLineage(agentId, target) : new Set<string>();
+    const results: MoveAgentDocumentResult[] = [];
+
+    for (const ref of new Set(refs)) {
+      const doc = await this.findReadableDocumentById(ref, agentId);
+      if (!doc) {
+        results.push({ error: `Document not found: ${ref}`, id: ref, status: 'failed' });
+        continue;
+      }
+
+      const base = { documentId: doc.documentId, id: doc.id, title: doc.title };
+      const fail = (error: string) => results.push({ ...base, error, status: 'failed' });
+
+      if (isManagedSkillDocument(doc) || doc.fileType.startsWith('skills/')) {
+        fail('Skill documents cannot be moved.');
+        continue;
+      }
+      if ((doc.parentId ?? null) === targetParentId) {
+        results.push({ ...base, status: 'unchanged' });
+        continue;
+      }
+      if (blockedIds.has(doc.documentId)) {
+        fail('Cannot move a document or folder under itself or one of its descendants.');
+        continue;
+      }
+
+      const clash = await this.agentDocumentModel.findByParentAndFilename(
+        agentId,
+        targetParentId,
+        doc.filename,
+      );
+      if (clash && clash.id !== doc.id) {
+        fail(`"${doc.filename}" already exists in the destination folder.`);
+        continue;
+      }
+
+      const moved = await this.agentDocumentModel.movePath(doc.id, {
+        filename: doc.filename,
+        parentId: targetParentId,
+        title: doc.title,
+      });
+      if (moved) results.push({ ...base, status: 'moved' });
+      else fail('Move failed.');
+    }
+
+    return results;
+  }
+
+  /** The target parent plus every ancestor; moving any of them into the target would loop. */
+  private async collectLineage(agentId: string, parent: AgentDocument) {
+    const lineage = new Set<string>([parent.documentId]);
+    let parentId = parent.parentId;
+
+    for (let depth = 0; parentId && depth < MAX_TREE_DEPTH; depth += 1) {
+      if (lineage.has(parentId)) break;
+      lineage.add(parentId);
+      parentId =
+        (await this.agentDocumentModel.findByDocumentId(agentId, parentId))?.parentId ?? null;
+    }
+
+    return lineage;
   }
 
   async createForTopic(
@@ -689,9 +857,30 @@ export class AgentDocumentsService {
     return this.agentDocumentModel.delete(documentId);
   }
 
-  async removeDocumentById(documentId: string, expectedAgentId?: string): Promise<boolean> {
+  async removeDocumentById(
+    documentId: string,
+    expectedAgentId?: string,
+    options: { withChildren?: boolean } = {},
+  ): Promise<boolean> {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return false;
+
+    // A parent document carries its nested records (e.g. a workflow and its runs).
+    // Removing only the parent would strand them under a deleted row, so the
+    // caller has to choose: take the subtree, or move the children out first.
+    const childCount =
+      (await this.countChildren(doc.agentId, [doc.documentId])).get(doc.documentId) ?? 0;
+    if (childCount > 0) {
+      if (!options.withChildren) {
+        throw new AgentDocumentVfsError(
+          `"${doc.title}" has ${childCount} nested document(s). Remove it with withChildren: true to delete them too, or move them out first.`,
+          'CONFLICT',
+        );
+      }
+
+      await this.agentDocumentModel.deleteSubtreeByDocumentId(doc.agentId, doc.documentId);
+      return true;
+    }
 
     await this.deleteDocument(documentId);
     return true;
@@ -808,9 +997,12 @@ export class AgentDocumentsService {
     sourceType?: AgentDocumentListSourceType,
     options?: { excludeWeb?: boolean; includeArchivedToolResults?: boolean; parentId?: string },
   ) {
+    const parentId = options?.parentId
+      ? (await this.resolveParent(agentId, options.parentId)).documentId
+      : undefined;
     const docs = await this.agentDocumentModel.listByAgent(agentId, {
       excludeWeb: options?.excludeWeb,
-      parentId: options?.parentId,
+      parentId,
       sourceType,
     });
 
@@ -882,7 +1074,11 @@ export class AgentDocumentsService {
   async replaceDocumentContentById(documentId: string, content: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
-    const snapshot = await createAgentMarkdownSnapshot(content);
+
+    // Mirror createDocument: the document title renders as the page header, so
+    // a leading H1 would show it a second time; deeper headings are kept.
+    const { content: finalContent } = extractMarkdownH1Title(content);
+    const snapshot = await createAgentMarkdownSnapshot(finalContent);
 
     if (doc.content !== snapshot.content) {
       await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');

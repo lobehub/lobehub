@@ -1,18 +1,20 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  Center,
   confirmModal,
+  createStaticStyles,
   DropdownMenu,
+  Empty,
+  Flexbox,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
-import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { BookOpen, Eye, MoreHorizontal, Trash } from 'lucide-react';

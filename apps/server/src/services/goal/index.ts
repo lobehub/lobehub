@@ -1,11 +1,21 @@
+import { randomUUID } from 'node:crypto';
+
 import type { GoalAdvanceEffect, GoalMetricCriteriaState } from '@lobechat/agent-tracing';
 import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
 import {
   DEVICE_OFFLINE_RUN_STATUS,
+  GOAL_BATCH_ASSAY_TITLE,
+  GOAL_BATCH_BREAK_OPTION,
+  GOAL_BATCH_BREAK_QUESTION_TAIL,
+  GOAL_BATCH_RELEASE_OPTION,
+  GOAL_BATCH_TEMPLATE_TITLE,
   GOAL_CLARIFICATION_OPTION,
   GOAL_CLARIFICATION_TITLE,
   GOAL_COORDINATOR_ACTOR_ID,
   GOAL_MACHINE_GATE_TITLE,
+  PATTERN_BREAK_PAUSE_REASON,
+  ROLLOUT_CANARY_SIZE_DEFAULT,
+  ROLLOUT_MAX_CANARY_SIZE,
 } from '@lobechat/const/goal';
 import type {
   ChatTopicMetadata,
@@ -13,6 +23,8 @@ import type {
   GoalCreateConfig,
   GoalDecisionOption,
   GoalEdgeKind,
+  GoalEventEntityType,
+  GoalEventType,
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
@@ -22,6 +34,7 @@ import type {
   GoalNodeKind,
   GoalNodeStatus,
   GoalPauseReason,
+  GoalRolloutPolicy,
   GoalStatus,
   GoalTickResult,
   MetricKind,
@@ -31,11 +44,14 @@ import type {
 } from '@lobechat/types';
 import { isAgentOperationInFlight } from '@lobechat/types';
 import { experimentOwner, provenanceParentId } from '@lobechat/utils/goalGraph';
+import { goalSeedDependencyProblem, type GoalSeedTask } from '@lobechat/utils/goalSeeds';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { type ExpertiseCarrier, ExpertiseModel } from '@/database/models/expertise';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { MetricModel } from '@/database/models/metric';
@@ -54,6 +70,7 @@ import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
+import { BatchPlanSkillService, learnedRulesClause, planSkillIdentifier } from './batchPlanSkill';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
   compareMetric,
@@ -87,10 +104,21 @@ import {
   resolveTaskMaxSteps,
   VERIFY_SETTLE_GRACE_MS,
 } from './recoveryPolicy';
+import { GoalReleaseReview } from './releaseReview';
 import { isGoalReportNode, withoutGoalReport } from './report';
 import { GoalReportService } from './reportService';
 import { GoalReportStore } from './reportStore';
+import {
+  carriedUnitBrief,
+  createRecipeUnitTask,
+  materializeRolloutBatch,
+  MAX_ROLLOUT_ROSTER,
+  normalizeRolloutRoster,
+} from './rolloutBatch';
+import { evaluateRolloutGate, type RolloutGateResult, withGateVerdict } from './rolloutGate';
 import { scheduleGoalAdvance } from './scheduler';
+import { seedGoalTasks } from './seedTasks';
+import { evaluateHomogeneity } from './spec';
 import { GoalSupervisorService } from './supervisor';
 import { statusAuthoredByActor } from './supervisor/policy';
 import { claimGoalTask } from './taskClaim';
@@ -128,15 +156,58 @@ const TASK_DESCRIPTION_MAX_LENGTH = 255;
 const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
+/** Why a decomposition did or did not become a batch: DEBUG=lobe-server:goal-rollout. */
+const log = debug('lobe-server:goal-rollout');
 
+/**
+ * Why the system planner's one pass should go to the main Agent, or undefined
+ * when its plan can run: the pass failed, the planner said it was not enough,
+ * or it claimed a batch it could not lay out. A goal that is simply not a batch
+ * is not a reason — the ordinary plan is right for it.
+ */
+const planningHandoffReason = (
+  plan: GoalDecompositionDraft | undefined,
+  plannerFailure: string | undefined,
+  rollout: GoalRolloutPolicy | undefined,
+  maxUnits: number,
+): string | undefined => {
+  if (!plan) return `Planner failed (${plannerFailure ?? 'no answer'})`;
+  const asked = plan.escalate?.trim();
+  if (asked) return `Planner asked for the main Agent: ${asked}`;
+  if (!plan.rollout || rollout?.trigger === 'off') return undefined;
+  const verdict = evaluateHomogeneity(
+    plan.rollout,
+    plan.tasks.map((draft) => ({ instruction: draft.instruction, title: draft.title })),
+    { maxUnits, minUnits: rollout?.minHomogeneousUnits },
+  );
+  return verdict.malformed
+    ? `Batch claim could not be laid out (${verdict.reasons.join('; ')})`
+    : undefined;
+};
+
+/**
+ * One line for why the planner failed, for the audit trail. Model runtime
+ * errors arrive as plain objects (`{ errorType, error }`), not `Error`s.
+ */
+const describePlannerFailure = (error: unknown): string => {
+  const runtime = error as { error?: { message?: string }; errorType?: string } | undefined;
+  const text =
+    error instanceof Error
+      ? error.message
+      : [runtime?.errorType, runtime?.error?.message].filter(Boolean).join(': ') || String(error);
+  return text.length > 300 ? `${text.slice(0, 299)}…` : text;
+};
+
+const draftNotStarted = (goalId: string) =>
+  new TRPCError({
+    code: 'CONFLICT',
+    message: `Goal is a draft; start it with lh goal start ${goalId}`,
+  });
 /** Who does the goal's Tasks: its dedicated executor, else the goal agent itself. */
 export const goalTaskAgentId = (goal: Pick<GoalItem, 'agentId' | 'config'>) =>
   goal.config?.taskAgentId ?? goal.agentId ?? undefined;
 
-export interface CreateGoalTaskInput {
-  description?: string;
-  title: string;
-}
+export type CreateGoalTaskInput = GoalSeedTask;
 
 export interface CreateGoalGraphInput {
   /**
@@ -160,6 +231,11 @@ export interface CreateGoalGraphInput {
    * prose — that text remains what every Task's execution context reads.
    */
   criteria?: Array<{ description?: string; instruction?: string; title: string }>;
+  /**
+   * Create the goal as a `draft`: the graph can be arranged, and nothing is
+   * dispatched until `GoalStartService.start` launches it.
+   */
+  draft?: boolean;
   maxRounds?: number;
   maxTotalCost?: number;
   /**
@@ -171,7 +247,7 @@ export interface CreateGoalGraphInput {
   projectId?: string;
   requirement?: string;
   /**
-   * Seed task nodes, in dependency-free order. A plain string is title-only.
+   * Seed task nodes; `dependsOn` names other seeds by title. A plain string is title-only.
    * When omitted, the coordinator plans the decomposition on first advance.
    */
   tasks?: Array<CreateGoalTaskInput | string>;
@@ -249,6 +325,7 @@ export class GoalService {
   private readonly agentModel: AgentModel;
   /** What the goal tells the person through the inbox: gates, sign-off, findings. */
   private readonly briefs: GoalBriefService;
+  private readonly releaseReview: GoalReleaseReview;
   private readonly goalModel: GoalModel;
   /**
    * Graph writes attributed to the person who asked for them: seeding a goal,
@@ -276,6 +353,14 @@ export class GoalService {
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.briefs = new GoalBriefService(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
+    this.releaseReview = new GoalReleaseReview(db, userId, workspaceId, {
+      briefs: this.briefs,
+      decide: (...args) => this.decide(...args),
+      graph: (goalId) => this.graph(goalId),
+      requireGraph: (goalId) => this.requireGraph(goalId),
+      setPauseReason: (goalId, reason) => this.setPauseReason(goalId, reason),
+      transitionStatus: (goal, to, reason) => this.transitionStatus(goal, to, reason),
+    });
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
       id: GOAL_COORDINATOR_ACTOR_ID,
@@ -322,6 +407,10 @@ export class GoalService {
       'Only a run in a topic with an agent can create a goal it supervises',
     );
 
+    // A conversation goal opens as a draft when the caller asks for one: its
+    // agent arranges the graph in this run, and the goal runs only once someone
+    // starts it. Opt-in, because a CLI released before `lh goal start` existed
+    // could never start the draft it created.
     const created = await this.create({
       ...input,
       agentId,
@@ -509,6 +598,8 @@ export class GoalService {
     // unsupervised Goal. A legacy `enabled: false` is rejected rather than
     // silently rewritten: the caller asked for the opposite of what it would
     // get, and hiding that would make the surprise surface later, mid-run.
+    const seedProblem = goalSeedDependencyProblem(input.tasks ?? []);
+    if (seedProblem) throw new TRPCError({ code: 'BAD_REQUEST', message: seedProblem });
     const requestedSupervision = config?.supervision;
     if (requestedSupervision?.enabled === false)
       throw new TRPCError({
@@ -579,6 +670,7 @@ export class GoalService {
       maxTotalCost: input.maxTotalCost,
       projectId: input.projectId,
       requirement,
+      ...(input.draft ? { status: 'draft' as const } : {}),
       ...(input.topicId
         ? { subjectId: input.topicId, subjectType: 'topic' as const }
         : { subjectType: 'standalone' as const }),
@@ -622,17 +714,13 @@ export class GoalService {
         });
         if (!taskNode) throw new Error('Failed to seed goal task');
       }
-      for (const seed of input.tasks ?? []) {
-        const { description, title } = typeof seed === 'string' ? { title: seed } : seed;
-        const taskNode = await authorGraph.createNode(goal.id, {
-          createdByAgentId: input.createdByAgentId,
-          description,
-          kind: 'task',
-          title,
-        });
-        if (!taskNode) throw new Error('Failed to seed goal task');
-        await authorGraph.createEdge(goal.id, problem.id, taskNode.id, 'decomposes');
-      }
+      await seedGoalTasks(
+        authorGraph,
+        goal.id,
+        problem.id,
+        input.tasks ?? [],
+        input.createdByAgentId,
+      );
     } catch (error) {
       await this.goalModel.delete(goal.id).catch(() => {});
       throw error;
@@ -882,6 +970,26 @@ export class GoalService {
       new GoalReportStore(this.db, this.userId, this.workspaceId).state(graph),
     ]);
     return { ...graph, acceptances, assignees, deliveredAt, report, runHeartbeats, spend };
+  };
+
+  /**
+   * The goal's audit trail, newest first, paged past the capped copy `graph()`
+   * carries. `graph()` stays the shape the page reads; this is for a reader
+   * chasing one transition — the pause that explains why a plan was refused
+   * hours into a run, say. Returns the cursor that continues the page.
+   */
+  listEvents = async (
+    goalId: string,
+    options: {
+      cursor?: { createdAt: Date; id: string };
+      entityType?: GoalEventEntityType;
+      eventType?: GoalEventType;
+      limit: number;
+    },
+  ) => {
+    const page = await this.graphModel.listEvents(goalId, options);
+    if (!page) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return page;
   };
 
   /**
@@ -1202,6 +1310,8 @@ export class GoalService {
 
   pause = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
+    // A draft never ran; pausing it would let a later resume skip `start`.
+    if (graph.goal.status === 'draft') throw draftNotStarted(goalId);
     // From here the pause is the person's, so no later measurement lifts it.
     // Written even when the goal is already paused — that transition is a
     // no-op, so this marker is the only record that the person took it over.
@@ -1555,6 +1665,52 @@ export class GoalService {
         };
 
   /**
+   * Stop the Tasks bound to nodes already fenced as `retired`, so a retired
+   * node cannot keep spending or deliver into the Goal afterwards. Bound Tasks
+   * are read after the fence so a Task bound just before it is included.
+   * Returns the graph as read after the fence.
+   */
+  private stopFencedTasks = async (goalId: string, targetIds: ReadonlySet<string>) => {
+    const fenced = await this.requireGraph(goalId);
+    const taskIds = fenced.nodes.flatMap((node) =>
+      targetIds.has(node.id) && node.taskId ? [node.taskId] : [],
+    );
+    if (taskIds.length > 0) {
+      // The caller may be a workspace owner retiring a colleague's goal (the
+      // router authorizes that). The nodes' Tasks were created by the goal's
+      // coordinator, which runs as the goal's owner — and may be `private`,
+      // inherited from that owner's private agent — so reads under the caller's
+      // visibility would miss them and leave them running. Stop them under the
+      // goal owner's principal instead, limited to the Tasks bound to the nodes
+      // being retired.
+      const { taskModel, taskService, taskTopicModel } = this.goalOwnerTaskScope(fenced.goal);
+      const cancelTasks = async () => {
+        for (const id of taskIds) {
+          // CAS against the status just read; a runner flipping the Task to
+          // `running` in between makes it miss, so re-read and try again.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const [task] = await taskModel.findByIds([id]);
+            if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) break;
+            if (await taskModel.updateStatusIfCurrent(id, task.status, 'canceled')) break;
+          }
+        }
+      };
+      // Cancel the Tasks FIRST: that is the fence a run still being dispatched
+      // checks under the Task's row lock before recording its operation, so a
+      // run started from here on stops itself (TaskRunnerService.runTask).
+      // Runs recorded before the fence are then found and stopped below.
+      await cancelTasks();
+      for (const topic of await taskTopicModel.findRunningByTaskIds(taskIds)) {
+        if (topic.topicId) await taskService.cancelTopic(topic.topicId);
+      }
+      // `cancelTopic` parks its Task as `paused`; settle them back to canceled.
+      await cancelTasks();
+    }
+
+    return fenced;
+  };
+
+  /**
    * Retire Task nodes a person no longer wants run — a duplicated plan branch,
    * work that landed elsewhere. Without this a stray node that never got a Task
    * stays unfinished forever and the coordinator can never reach acceptance.
@@ -1629,43 +1785,8 @@ export class GoalService {
     }
 
     // Stop what the nodes are still running, so a retired node cannot keep
-    // spending or deliver into the Goal afterwards. Bound Tasks are read after
-    // the fence so a Task bound just before it is included.
-    const fenced = await this.requireGraph(goalId);
-    const taskIds = fenced.nodes.flatMap((node) =>
-      targetIds.has(node.id) && node.taskId ? [node.taskId] : [],
-    );
-    if (taskIds.length > 0) {
-      // The caller may be a workspace owner retiring a colleague's goal (the
-      // router authorizes that). The nodes' Tasks were created by the goal's
-      // coordinator, which runs as the goal's owner — and may be `private`,
-      // inherited from that owner's private agent — so reads under the caller's
-      // visibility would miss them and leave them running. Stop them under the
-      // goal owner's principal instead, limited to the Tasks bound to the nodes
-      // being retired.
-      const { taskModel, taskService, taskTopicModel } = this.goalOwnerTaskScope(fenced.goal);
-      const cancelTasks = async () => {
-        for (const id of taskIds) {
-          // CAS against the status just read; a runner flipping the Task to
-          // `running` in between makes it miss, so re-read and try again.
-          for (let attempt = 0; attempt < 3; attempt++) {
-            const [task] = await taskModel.findByIds([id]);
-            if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) break;
-            if (await taskModel.updateStatusIfCurrent(id, task.status, 'canceled')) break;
-          }
-        }
-      };
-      // Cancel the Tasks FIRST: that is the fence a run still being dispatched
-      // checks under the Task's row lock before recording its operation, so a
-      // run started from here on stops itself (TaskRunnerService.runTask).
-      // Runs recorded before the fence are then found and stopped below.
-      await cancelTasks();
-      for (const topic of await taskTopicModel.findRunningByTaskIds(taskIds)) {
-        if (topic.topicId) await taskService.cancelTopic(topic.topicId);
-      }
-      // `cancelTopic` parks its Task as `paused`; settle them back to canceled.
-      await cancelTasks();
-    }
+    // spending or deliver into the Goal afterwards.
+    const fenced = await this.stopFencedTasks(goalId, targetIds);
 
     // A pending recovery gate on a retired node asks a question nobody needs
     // answered any more; left pending it keeps the Goal parked in review.
@@ -1826,6 +1947,9 @@ export class GoalService {
       const model = new GoalModel(tx, this.userId, this.workspaceId);
       const current = await model.lockById(goalId);
       if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      // Only `start` launches a draft: it settles the creating run's planning
+      // turn and checks who may launch it, which a plain status flip skips.
+      if (current.status === 'draft') throw draftNotStarted(goalId);
       if (current.status !== graph.goal.status) {
         throw new TRPCError({
           code: 'CONFLICT',
@@ -1981,7 +2105,13 @@ export class GoalService {
     return goal;
   };
 
-  decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
+  decide = async (
+    goalId: string,
+    decisionId: string,
+    optionId: string,
+    resolution?: string,
+    options?: { fromReleaseGate?: boolean },
+  ) => {
     const graph = await this.requireGraph(goalId);
     // A goal a person ended stays ended: a gate another tab still shows must
     // not reopen it. Checked again under the lock before the status moves.
@@ -1995,18 +2125,63 @@ export class GoalService {
     if (decision.options?.length && !decision.options.some((option) => option.id === optionId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
     }
+    // A held release with a review page is decided there, with its evidence —
+    // not by a one-click answer from a surface that never showed it.
+    const heldRelease = graph.goal.config?.rolloutState;
+    if (
+      !options?.fromReleaseGate &&
+      heldRelease?.releaseGateAcceptanceId &&
+      heldRelease.releaseReviewNodeId === decision.nodeId
+    ) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'This release is decided on its review page',
+      });
+    }
     // The note *is* the answer for this option; an empty one would re-plan the
     // goal on nothing and the question could never be asked again.
     if (optionId === GOAL_CLARIFICATION_OPTION.answer && !resolution?.trim()) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
     }
+    // Revising a batch recipe without a correction would re-run the plan that
+    // just failed under a new version number. The correction is the revision.
+    if (optionId === GOAL_BATCH_BREAK_OPTION.revise && !resolution?.trim()) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Revising the recipe needs a correction',
+      });
+    }
     const chosen = decision.options?.find((option) => option.id === optionId);
-    const resolved = await this.graphModel.resolveDecision(
-      goalId,
-      decisionId,
-      optionId,
-      resolution,
-    );
+    // R5: a person answering a batch gate IS the intervention, and an
+    // intervention rolls the class back to canary. Open the next recipe round
+    // automatically — revise the same mould, or fork it as a new class — rather
+    // than leaving the goal parked for someone to rerun by hand. The gate hangs
+    // on the Assay (materialized on demand for a `full` rollout), so match that,
+    // falling back to the batch node for any gate opened elsewhere. The restart
+    // consumes the answer itself, atomically with the round it opens.
+    const rolloutState = graph.goal.config?.rolloutState;
+    const batchGateNodeId =
+      rolloutState?.phase === 'release_review'
+        ? rolloutState.releaseReviewNodeId
+        : rolloutState?.phase === 'pattern_break'
+          ? (rolloutState.assayNodeId ?? rolloutState.batchNodeId)
+          : undefined;
+    const answersBatchGate = batchGateNodeId !== undefined && decision.nodeId === batchGateNodeId;
+    // A held release keeps its round either way: approving sends the wave out on
+    // the proven plan, sending it back has the main Agent rewrite that plan.
+    const resolved = !answersBatchGate
+      ? await this.graphModel.resolveDecision(goalId, decisionId, optionId, resolution)
+      : rolloutState?.phase !== 'release_review'
+        ? await this.restartRolloutLoop(goalId, decisionId, optionId, resolution)
+        : optionId === GOAL_BATCH_RELEASE_OPTION.release
+          ? await this.releaseReview.approveRolloutRelease(goalId, decisionId, optionId, resolution)
+          : // A release sent back goes to the main Agent, whoever answered it.
+            await this.releaseReview.sendRevisionToAgent(
+              goalId,
+              decision.nodeId,
+              decisionId,
+              resolution,
+            );
     if (!resolved)
       throw new TRPCError({ code: 'CONFLICT', message: 'Decision was already resolved' });
 
@@ -2244,6 +2419,13 @@ export class GoalService {
     // The coordinator never sees the wrap-up report node: it runs after the
     // Goal-level acceptance and does not take part in the Goal's status.
     const graph = withoutGoalReport(await this.requireGraph(goalId));
+    // A draft is still being arranged; only `start` hands it to the coordinator.
+    if (graph.goal.status === 'draft')
+      return {
+        goalId,
+        message: `Goal is a draft; start it with lh goal start ${goalId}`,
+        outcome: 'no_progress',
+      };
     if (graph.goal.config?.manager) {
       // The system's own planner leads whenever the Goal has one: a main Agent is
       // the fallback for problems that planner cannot express, not a replacement
@@ -2257,6 +2439,11 @@ export class GoalService {
       );
       if (result) return result;
     }
+    // A plan the owner sent back waits on the main Agent's rewrite, not on the
+    // frontier: every probe has settled and nothing else is ready to run.
+    if (graph.goal.config?.rolloutState?.phase === 'plan_revision')
+      return this.releaseReview.routeRolloutRevision(graph);
+
     const frontier = selectFrontier(graph);
 
     // Every candidate's task, not just the head's: the scheduler has to know
@@ -2285,12 +2472,16 @@ export class GoalService {
       : undefined;
 
     const concurrency = resolveMaxConcurrentTasks(graph.goal);
+    // A repeated batch judges its own gate once the wave it released has fully
+    // settled; while a wave is still running the ordinary frontier owns the tick.
+    const rolloutGate = this.collectRolloutGate(graph);
     const move = decideNextMove({
       budget,
       concurrency,
       frontier,
       graph,
       metricCriteria,
+      rolloutGate,
       tasksById,
     });
     // The scheduler may pick past the head of the frontier, so every arm below
@@ -2392,6 +2583,16 @@ export class GoalService {
         return observe(await this.planDecomposition(graph, effects));
       }
 
+      case 'rollout_gate': {
+        return observe(await this.releaseReview.routeRolloutRelease(graph, effects, rolloutGate));
+      }
+
+      case 'pattern_break': {
+        return observe(
+          await this.openPatternBreakGate(graph, move.message, effects, { gate: rolloutGate }),
+        );
+      }
+
       case 'no_frontier': {
         // Say so on the row instead of leaving a goal that reads as `running`
         // while it cannot run — and, just as importantly, take it out of the
@@ -2442,6 +2643,20 @@ export class GoalService {
           }
 
           case 'failure_decision': {
+            // R6: a batch member that did not pass its own check IS the same
+            // intervention as a blocked gate. Route it through the batch gate so
+            // the class rolls back to canary, instead of parking on a standalone
+            // task decision that never touches the recipe.
+            if (this.isBatchMember(graph, acting!.id)) {
+              return observe(
+                await this.openPatternBreakGate(
+                  graph,
+                  `${acting!.title}: ${move.message}`,
+                  effects,
+                  { unitId: acting!.id },
+                ),
+              );
+            }
             const waiting =
               (await this.waitForDevice(graph, acting!.id, task, effects)) ??
               (await this.waitForQuotaReset(graph, acting!.id, task, effects));
@@ -2464,6 +2679,18 @@ export class GoalService {
           }
 
           case 'task_paused': {
+            // R6: a paused batch member (e.g. its delivery did not pass
+            // verification) is an intervention on the class, not on one task.
+            if (this.isBatchMember(graph, acting!.id)) {
+              return observe(
+                await this.openPatternBreakGate(
+                  graph,
+                  `${acting!.title}: ${move.message}`,
+                  effects,
+                  { unitId: acting!.id },
+                ),
+              );
+            }
             return observe({
               goalId,
               message: move.message,
@@ -2576,13 +2803,19 @@ export class GoalService {
       // Acceptance closes the whole Goal, so it builds on the work that ends each
       // line of the graph. Linking the delivered leaf Tasks lays it out below them
       // instead of beside the first round. They are all resolved, so nothing blocks.
-      const delivered = graph.nodes.filter(
-        (node) =>
-          node.kind === 'task' &&
-          node.status === 'resolved' &&
-          node.id !== created.node.id &&
-          !experimentOwner(graph, node.id),
-      );
+      // An experiment's Tasks are a candidate answer and stay inside it; a
+      // batch's units ARE the delivered work, so they count as leaves too —
+      // otherwise the report, which walks back from acceptance, never sees them.
+      const ownerKind = (nodeId: string) => {
+        const owner = experimentOwner(graph, nodeId);
+        return owner ? graph.nodes.find((node) => node.id === owner)?.kind : undefined;
+      };
+      const delivered = graph.nodes.filter((node) => {
+        if (node.kind !== 'task' || node.status !== 'resolved' || node.id === created.node.id)
+          return false;
+        const kind = ownerKind(node.id);
+        return !kind || kind === 'batch';
+      });
       const deliveredIds = new Set(delivered.map((node) => node.id));
       const builtUpon = new Set(
         graph.edges
@@ -2657,9 +2890,18 @@ export class GoalService {
       ]
         .filter(Boolean)
         .join('\n\n');
+      // A batch unit loads the batch's plan skill on every run, and is judged
+      // by every rule the batch's breaks have taught.
+      const rollout = graph.goal.config?.rolloutState;
+      const batchUnit = frontier.kind === 'task' && this.isBatchMember(graph, frontier.id);
+      const planSkill = batchUnit ? rollout?.planSkill : undefined;
+      const learnedRules = batchUnit ? (rollout?.learnings ?? []) : [];
       task = await this.taskService.createTask({
         assigneeAgentId: await this.resolveTaskAssignee(graph.goal),
-        config: { checkpoint: { topic: { after: false } } },
+        config: {
+          checkpoint: { topic: { after: false } },
+          ...(planSkill ? { skills: [planSkillIdentifier(planSkill)] } : {}),
+        },
         description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
         instruction: this.buildTaskInstruction(graph, frontier.title, description),
         name: frontier.title,
@@ -2678,11 +2920,16 @@ export class GoalService {
           enabled: true,
           ...(goalCriteriaIds?.length ? { verifyCriteriaIds: goalCriteriaIds } : {}),
         },
-        requirement: this.buildTaskAcceptanceRequirement(
-          graph,
-          frontier.title,
-          frontier.description,
-        ),
+        // A batch unit is judged on its own delivery and, on top of it, on every
+        // rule the batch's breaks taught. Configured criteria would replace the
+        // prose contract (the verify plan materializes only them), so the
+        // rules join the requirement instead of standing in for it.
+        requirement: [
+          this.buildTaskAcceptanceRequirement(graph, frontier.title, frontier.description),
+          learnedRulesClause(learnedRules),
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       });
       acceptanceId = acceptance.id;
       const bound = await this.coordinatorGraph.bindTask(goalId, frontier.id, task.id);
@@ -2824,6 +3071,22 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted'
           : 'Automatic recovery could not start the next attempt';
+    // R6: a batch member that ran out of attempts to pass its own check breaks
+    // the class, like one that failed outright — revise the recipe and re-probe,
+    // not a standalone retry/retire gate (retiring a last-wave member would let
+    // the goal head for acceptance with the unit undone). A spent goal budget
+    // and a run that never started are not the recipe's fault: those keep the
+    // ordinary gate.
+    if (
+      recovery.outcome !== 'exhausted-cost' &&
+      recovery.outcome !== 'spawn-failed' &&
+      this.isBatchMember(graph, nodeId)
+    ) {
+      const title = graph.nodes.find((node) => node.id === nodeId)?.title ?? task.identifier;
+      return this.openPatternBreakGate(graph, `${title}: ${exhaustedReason}`, effects, {
+        unitId: nodeId,
+      });
+    }
     return this.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects, {
       machine: recovery.outcome === 'spawn-failed',
     });
@@ -3495,9 +3758,19 @@ export class GoalService {
 
       const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
       const clarifications = collectClarificationAnswers(graph);
+      // A failed plan still starts the goal from the raw requirement, but says
+      // so: the server log and the first task's audit event carry the cause.
+      let plannerFailure: string | undefined;
       const plan = await generator
         .decompose({ clarifications, requirement })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          plannerFailure = describePlannerFailure(error);
+          console.error(
+            `[GoalService] goal ${goalId} decomposition failed; starting from the raw requirement:`,
+            error,
+          );
+          return undefined;
+        });
       // A graph without a problem node has nowhere to hang a question, so its
       // questions are planned around as assumptions like a re-plan's would be.
       const understanding = plan
@@ -3507,6 +3780,27 @@ export class GoalService {
             clarifications.map((item) => item.question),
           )
         : undefined;
+
+      // The system planner does one simple pass. When that pass failed, said it
+      // was not enough, or claimed a batch it could not lay out, the main Agent
+      // — which can inspect the workspace — plans the goal instead. Without one
+      // (no goal agent, or no turn could start) the pass below still runs.
+      const handoff = planningHandoffReason(
+        plan,
+        plannerFailure,
+        graph.goal.config?.rollout,
+        MAX_ROLLOUT_ROSTER,
+      );
+      if (handoff && graph.goal.agentId) {
+        const handed = await this.handPlanningToMainAgent(graph, handoff);
+        if (handed) {
+          effects.push({
+            detail: `planning handed to the main Agent: ${handoff}`,
+            type: 'goal_status',
+          });
+          return handed;
+        }
+      }
 
       const draftTasks: GoalDecompositionDraft['tasks'] = plan?.tasks ?? [
         {
@@ -3609,8 +3903,128 @@ export class GoalService {
           return committedEffects;
         }
 
+        // Batch roll-out: when the planner judges this goal to be one repeated
+        // mould — and `spec.ts` agrees — decompose it as a class rather than as
+        // N flat siblings. The graph gets one `batch` container, one Template,
+        // one Assay and only the K fully-briefed probe tasks; the roster waits in
+        // `rolloutState` and the coordinator releases it one wave at a time.
+        const rolloutClaim = plan?.rollout ?? null;
+        const existingRollout = current.config?.rollout;
+        const rolloutTrigger = existingRollout?.trigger ?? 'canary';
+        const rolloutEnabled = rolloutTrigger !== 'off';
+        const verdict =
+          rolloutClaim && rolloutEnabled
+            ? evaluateHomogeneity(
+                rolloutClaim,
+                draftTasks.map((draft) => ({ instruction: draft.instruction, title: draft.title })),
+                {
+                  maxUnits: MAX_ROLLOUT_ROSTER,
+                  minUnits: existingRollout?.minHomogeneousUnits,
+                },
+              )
+            : { batch: false, malformed: false, reasons: [] as string[] };
+
+        log(
+          'decomposition rollout: trigger=%s claim=%o tasks=%d verdict=%o',
+          rolloutTrigger,
+          rolloutClaim,
+          draftTasks.length,
+          verdict,
+        );
+
+        if (rolloutClaim && rolloutEnabled && verdict.batch && currentProblem) {
+          const roster = normalizeRolloutRoster(
+            rolloutClaim.units,
+            draftTasks,
+            draftTasks.length,
+            undefined,
+            { matchUnitInProbeTitle: true },
+          );
+          const canarySize =
+            rolloutTrigger === 'full'
+              ? roster.length
+              : Math.max(
+                  2,
+                  Math.min(
+                    existingRollout?.canarySize ?? ROLLOUT_CANARY_SIZE_DEFAULT,
+                    ROLLOUT_MAX_CANARY_SIZE,
+                    draftTasks.length,
+                  ),
+                );
+          const { probeDrafts, probeIds } = await materializeRolloutBatch({
+            canarySize,
+            goalId,
+            goalModel,
+            planSkillOwner: {
+              db: tx,
+              goalTitle: graph.goal.title,
+              userId: this.userId,
+              workspaceId: this.workspaceId,
+            },
+            policy: existingRollout,
+            problemId: currentProblem.id,
+            probes: draftTasks,
+            recipeOutline: rolloutClaim.recipeOutline,
+            repeatable: rolloutClaim.repeatable,
+            roster,
+            trigger: rolloutTrigger === 'full' ? 'full' : 'canary',
+            variants: rolloutClaim.variants,
+            writer,
+          });
+          for (const [index, draft] of probeDrafts.entries()) {
+            committedEffects.push({
+              nodeId: probeIds[index],
+              type: 'created_node',
+              detail: draft.title,
+            });
+          }
+          return committedEffects;
+        }
+
+        // A rollout claim we did NOT turn into a batch — the caller forced
+        // `--rollout off`, or the homogeneity check refused it — still carries
+        // only the 3–5 representative probes in `tasks`, with the complete
+        // roster in `units`. A plain decomposition of `draftTasks` alone would
+        // silently drop every other unit, so materialize the whole roster as
+        // ordinary tasks instead: the probes keep their first-hand briefs, the
+        // rest run from the recipe. The batch config's roster cap does NOT apply
+        // here — trimming the fallback would leave the tail of the requested
+        // goal undelivered. A goal with no claim at all is unchanged.
+        const plannedUnits = rolloutClaim
+          ? normalizeRolloutRoster(
+              rolloutClaim.units,
+              draftTasks,
+              draftTasks.length,
+              Number.POSITIVE_INFINITY,
+              { matchUnitInProbeTitle: true },
+            ).map((title, index) => {
+              const draft = draftTasks[index];
+              return {
+                dependsOn: draft?.dependsOn ?? [],
+                hypothesis: draft?.hypothesis,
+                instruction:
+                  draft?.instruction ??
+                  [rolloutClaim.recipeOutline, `Unit: ${title}`].filter(Boolean).join('\n\n'),
+                title: draft?.title ?? title,
+              };
+            })
+          : draftTasks;
+
+        // Why this goal was planned unit by unit, on the first task's `created`
+        // event: a planner failure, or a batch claim the checks refused.
+        // A hand-over that did not happen (no main Agent could take the goal)
+        // says so too.
+        const unhanded = handoff ? '; no main Agent could take the goal' : '';
+        let fallbackReason = !plan
+          ? `Planner failed (${plannerFailure ?? 'no answer'})${unhanded}; started from the raw requirement`
+          : plan.escalate?.trim()
+            ? `Planner asked for the main Agent (${plan.escalate.trim()})${unhanded}; ran its own plan`
+            : rolloutClaim && rolloutEnabled && !verdict.batch
+              ? `Batch claim refused (${verdict.reasons.join('; ')}); planned unit by unit`
+              : undefined;
+
         const createdIds: string[] = [];
-        for (const draft of draftTasks) {
+        for (const draft of plannedUnits) {
           // An experiment is a container for a candidate answer, not the
           // default shell around every planned step. Only a direction the
           // planner marked with a hypothesis gets one; a certain delivery step
@@ -3632,6 +4046,7 @@ export class GoalService {
             scopeId: experiment?.id,
             description: draft.instruction,
             kind: 'task',
+            reason: fallbackReason,
             title: draft.title,
           });
           if (!node) throw new Error('Failed to create a planned task');
@@ -3639,13 +4054,14 @@ export class GoalService {
             await writer.createEdge(goalId, currentProblem.id, node.id, 'decomposes');
           createdIds.push(node.id);
           committedEffects.push({ nodeId: node.id, type: 'created_node', detail: draft.title });
+          fallbackReason = undefined;
         }
 
         // The planner's `dependsOn` indices become `depends_on` edges, drawn
         // dependent → prerequisite the way `decideNextMove` reads a blocker. Only
         // earlier indices are honoured, so a hallucinated forward or self reference
         // can never form a cycle that deadlocks the frontier.
-        for (const [index, draft] of draftTasks.entries()) {
+        for (const [index, draft] of plannedUnits.entries()) {
           const nodeId = createdIds[index];
           if (!nodeId) continue;
           for (const dep of new Set(draft.dependsOn ?? [])) {
@@ -3689,6 +4105,530 @@ export class GoalService {
     } finally {
       await this.goalModel.releasePlanning(goalId, claim.token);
     }
+  };
+
+  /**
+   * Give the goal's planning to its main Agent, opening one for a goal that had
+   * none. Returns undefined when no turn could start (no eligible agent, turn or
+   * budget limits); a policy opened here is then removed again — only that one,
+   * by its token — so the goal keeps the system planner and does not gain an
+   * uninvited planner later, while a policy a person set meanwhile stays.
+   */
+  private handPlanningToMainAgent = async (graph: GoalGraphSnapshot, reason: string) => {
+    const goalId = graph.goal.id;
+    const token = randomUUID();
+    await this.goalModel.openManagerPolicy(goalId, { openedForHandoff: token });
+    const result = await new GoalManagerService(this.db, this.userId, this.workspaceId)
+      .planInstead(await this.requireGraph(goalId), reason)
+      .catch((error: unknown) => {
+        console.error(`[GoalService] goal ${goalId} could not hand planning over:`, error);
+        return null;
+      });
+    if (result) return result;
+    await this.goalModel.closeHandoffManagerPolicy(goalId, token);
+    return undefined;
+  };
+
+  /**
+   * Judge a repeated batch's gate, but only once the wave it released has fully
+   * settled. Returns undefined when there is nothing to judge: no batch, a batch
+   * already through its gate or parked on a pattern break, or a wave still
+   * running (the ordinary frontier owns that tick). The final wave is judged
+   * like every other — a unit retired or broken in it must stop the batch the
+   * same way — and a pass with the roster exhausted closes the batch.
+   */
+  private collectRolloutGate = (graph: GoalGraphSnapshot): RolloutGateResult | undefined => {
+    const policy = graph.goal.config?.rollout;
+    const state = graph.goal.config?.rolloutState;
+    if (
+      !policy ||
+      !state ||
+      state.phase === 'done' ||
+      state.phase === 'pattern_break' ||
+      state.phase === 'release_review' ||
+      state.phase === 'plan_revision'
+    )
+      return undefined;
+    const materializedIds = new Set([...state.probeNodeIds, ...(state.massNodeIds ?? [])]);
+    const materialized = graph.nodes.filter((node) => materializedIds.has(node.id));
+    if (materialized.some((node) => !TERMINAL_NODE_STATUSES.has(node.status))) return undefined;
+    return evaluateRolloutGate({ graph, policy, state });
+  };
+
+  /** Whether a node is one of the current batch's released members (R6 routing). */
+  private isBatchMember = (graph: GoalGraphSnapshot, nodeId: string): boolean => {
+    const state = graph.goal.config?.rolloutState;
+    if (!state) return false;
+    return state.probeNodeIds.includes(nodeId) || (state.massNodeIds ?? []).includes(nodeId);
+  };
+
+  /** Answer a held release from its review report; see {@link GoalReleaseReview.answerReleaseGate}. */
+  answerReleaseGate: GoalReleaseReview['answerReleaseGate'] = (...args) =>
+    this.releaseReview.answerReleaseGate(...args);
+
+  /**
+   * Hand a blocked batch gate to a person.
+   *
+   * The batch cannot advance on its own, so this opens a decision on the Assay
+   * and pauses the goal with the pattern-break reason. The choice is the v3
+   * fork: revise the same recipe (repeat the v1 → v2 loop) or fork a fresh
+   * recipe for the units that broke, inside this batch — never a silent park.
+   */
+  private openPatternBreakGate = async (
+    graph: GoalGraphSnapshot,
+    message: string,
+    effects: GoalAdvanceEffect[],
+    /** What held the batch: the gate's own verdict, or one unit's failed check (R6). */
+    cause: { gate?: RolloutGateResult; unitId?: string } = {},
+  ): Promise<GoalTickResult> => {
+    const goalId = graph.goal.id;
+    const state = graph.goal.config?.rolloutState;
+    if (!state) return { goalId, message, outcome: 'waiting_human' };
+
+    const reason = `${PATTERN_BREAK_PAUSE_REASON}: ${message}`;
+    // Overlapping advances can both see the batch break. Claim it under the
+    // goal row's lock: the first opens the gate — materializing the Assay a
+    // `full` rollout never created — and records it in the same transaction;
+    // the rest find the break already open and reuse its gate instead of
+    // opening a second assay and decision that would re-park the goal later.
+    const claim = await this.db.transaction(async (tx) => {
+      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const locked = await goalModel.lockById(goalId);
+      const current = locked?.config?.rolloutState;
+      if (!locked || !current) return undefined;
+      if (current.phase === 'pattern_break')
+        return { gateNodeId: current.assayNodeId, opened: false as const };
+      const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      });
+
+      // The gate hangs on the Assay. A `full` rollout never created one — it
+      // skips the probe gate — but a break still needs a `decision` node for the
+      // human question and, later, for the restart (a `batch` node cannot carry
+      // a decision), so the gate target is stable whichever trigger opened it.
+      let gateNodeId = current.assayNodeId;
+      if (!gateNodeId) {
+        const assay = await writer.createNode(goalId, {
+          description:
+            'Whether this repeated batch can be delivered without further human decisions.',
+          kind: 'decision',
+          scopeId: current.batchNodeId,
+          status: 'proposed',
+          title: GOAL_BATCH_ASSAY_TITLE,
+        });
+        if (!assay) return undefined;
+        gateNodeId = assay.id;
+      }
+      // The ids are the stable vocabulary; the human-facing labels and their
+      // consequences live in the locale files and are resolved by option id on
+      // the client (like the retry/retire/fail gates), so no English copy is
+      // persisted into a gate a non-English reader has to answer.
+      const decision = await writer.createDecision(goalId, gateNodeId, {
+        authority: 'user',
+        options: [
+          {
+            id: GOAL_BATCH_BREAK_OPTION.revise,
+            label: 'Revise the recipe and re-probe',
+          },
+          {
+            // One batch carries one roster and one gate, so this is not a second
+            // batch running in parallel: it forks the recipe (no `revises`
+            // chain) for the units that broke, inside this same batch.
+            id: GOAL_BATCH_BREAK_OPTION.newClass,
+            label: 'Fork a fresh recipe',
+          },
+        ],
+        question: `${message}\n\n${GOAL_BATCH_BREAK_QUESTION_TAIL}`,
+        requestedUserId: this.userId,
+      });
+      await writer.updateNodeStatus(goalId, gateNodeId, 'waiting', reason);
+      await goalModel.updateRolloutState(
+        goalId,
+        withGateVerdict(
+          { ...current, assayNodeId: gateNodeId, phase: 'pattern_break' },
+          {
+            checks: cause.gate?.checks ?? [],
+            message,
+            nodeId: cause.unitId,
+            outcome: 'blocked',
+            revision: current.templateRevision,
+            trigger: cause.unitId ? 'unit' : 'gate',
+            waveIndex: current.waveIndex,
+          },
+        ),
+      );
+      // Park the goal in the same commit, from the locked row: once the gate is
+      // visible an answer may land at any moment, and a pause written after it
+      // from an older snapshot would re-park a goal the answer just resumed.
+      await goalModel.updatePauseReason(goalId, 'pattern_break');
+      if (locked.status !== 'paused' && !GOAL_ENDED_STATUSES.has(locked.status)) {
+        await goalModel.updateStatus(goalId, 'paused');
+        await writer
+          .recordGoalStatus(goalId, locked.status, 'paused', reason)
+          .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      }
+      return { decisionId: decision?.id, gateNodeId, opened: true as const };
+    });
+    if (!claim) return { goalId, message, outcome: 'waiting_human' };
+    // Another advance opened this break; it parks the goal.
+    if (!claim.opened)
+      return { goalId, message, nodeId: claim.gateNodeId, outcome: 'waiting_human' };
+    const gateNodeId = claim.gateNodeId;
+    effects.push({
+      detail: message,
+      nodeId: gateNodeId,
+      targetId: claim.decisionId ?? gateNodeId,
+      type: 'opened_decision',
+    });
+    // Home lists what waits on the person from its briefs, so the gate stays
+    // findable after it is dismissed from the approval island. It offers no
+    // one-click answers: revising needs a correction, written on the goal page.
+    if (claim.decisionId)
+      await this.briefs.openDecision(graph.goal, {
+        decisionId: claim.decisionId,
+        options: [],
+        question: `${message}\n\n${GOAL_BATCH_BREAK_QUESTION_TAIL}`,
+      });
+    effects.push({ type: 'goal_status', detail: 'paused: pattern_break' });
+    return { goalId, message, nodeId: gateNodeId, outcome: 'waiting_human' };
+  };
+
+  /**
+   * R5: restart the canary loop after a person intervened on a batch gate.
+   *
+   * The person's answer is the single human judgment; the coordinator opens the
+   * next recipe round from it. `revise` chains a new Template onto the old one
+   * (`revises`); `new_class` forks a fresh Template with no chain edge, still
+   * inside this batch. Either way the members that broke are retired and
+   * re-opened as the new canary, and the rollout returns to the probe phase, so
+   * the class is proved again instead of rerun by hand.
+   *
+   * The correction is the *new recipe*: it is folded into the policy and written
+   * on the Template, so the re-opened probes and every later wave are briefed
+   * from the revised transformation — not from the outline that just failed.
+   */
+  private restartRolloutLoop = async (
+    goalId: string,
+    decisionId: string,
+    optionId: string,
+    resolution: string | undefined,
+  ) => {
+    const graph = await this.requireGraph(goalId);
+    const policy = graph.goal.config?.rollout;
+    const state = graph.goal.config?.rolloutState;
+    if (!policy || !state)
+      return this.graphModel.resolveDecision(goalId, decisionId, optionId, resolution);
+
+    const batchId = state.batchNodeId;
+    const roster = state.unitTitles ?? [];
+    const released = state.releasedCount ?? state.probeNodeIds.length;
+    // The correction the person wrote. A revision carries the plan forward and
+    // appends it as its own section, so each version reads whole and diffs
+    // against the last one; a fork starts again from the original outline. The
+    // result is the new recipe: later waves only ever read
+    // `policy.spec.recipeOutline`, so a note kept solely on the Template would
+    // never reach the tasks meant to test it.
+    const baseOutline = policy.spec?.recipeOutline?.trim() ?? '';
+    const correction = (resolution ?? '').trim();
+    const revision = state.templateRevision + 1;
+    const previousPlan = state.templateNodeId
+      ? graph.nodes.find((node) => node.id === state.templateNodeId)?.description?.trim()
+      : undefined;
+    // A fork starts from the batch's original outline — kept on the batch node,
+    // since every revision rewrites the policy's — not from the revised plan.
+    const originalOutline =
+      graph.nodes.find((node) => node.id === batchId)?.description?.trim() || baseOutline;
+    const basePlan = optionId === 'new_class' ? originalOutline : previousPlan || baseOutline;
+    const revisedOutline = [basePlan, correction && `### v${revision}\n${correction}`]
+      .filter(Boolean)
+      .join('\n\n');
+
+    // The answer and the round it opens land together. Every write below —
+    // resolving the question included — commits in one transaction under the
+    // goal row's lock, so a failure part-way leaves the question open to answer
+    // again rather than consumed beside half a round; and a second answer
+    // racing this one finds the break already restarted.
+    // What a break teaches is mounted on the agent that runs the batch's units
+    // (a run's expertise snapshot reads the executing agent's domains, not the
+    // project's) — resolved like the task assignee, so a deleted executor falls
+    // back to the goal agent rather than a binding that cannot be written. Read
+    // before the transaction, which holds the goal row.
+    const carrierAgentId = await this.resolveTaskAssignee(graph.goal);
+    const carrier: ExpertiseCarrier = carrierAgentId
+      ? { id: carrierAgentId, type: 'agent' }
+      : { type: 'user' };
+
+    const committed = await this.db.transaction(async (tx) => {
+      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
+      if (current?.phase !== 'pattern_break') return undefined;
+      const resolved = await new GoalGraphModel(tx, this.userId, this.workspaceId).resolveDecision(
+        goalId,
+        decisionId,
+        optionId,
+        resolution,
+      );
+      if (!resolved) return undefined;
+      const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      });
+
+      // 1. A new recipe revision, or a forked new class (no `revises` chain).
+      const template = await writer.createNode(goalId, {
+        description: revisedOutline || baseOutline,
+        kind: 'finding',
+        scopeId: batchId,
+        title: GOAL_BATCH_TEMPLATE_TITLE,
+      });
+      if (template && optionId !== 'new_class' && state.templateNodeId) {
+        await writer.createEdge(goalId, template.id, state.templateNodeId, 'revises');
+      }
+
+      // The plan skill takes the revision as its next version, and the break
+      // teaches the batch: a rule the executor reads, compiled into a criterion
+      // the verifier judges every later unit by. A fork starts a new class of
+      // units — its correction describes them, it is not a rule for the old
+      // ones. Each runs in its own savepoint: a failure there costs the skill
+      // version or the lesson, never the round the answer opens.
+      const inSavepoint = <T>(label: string, run: (db: typeof tx) => Promise<T>) =>
+        tx.transaction(run).catch((error) => {
+          log('restartRolloutLoop: %s failed: %O', label, error);
+          return undefined;
+        });
+      let planSkill = state.planSkill;
+      let planVersion: number | undefined;
+      if (planSkill && revisedOutline) {
+        const skill = planSkill;
+        const version = await inSavepoint('plan skill revision', (db) =>
+          new BatchPlanSkillService(db, this.userId, this.workspaceId).revise(skill, {
+            goalId,
+            guidance: correction || undefined,
+            plan: revisedOutline,
+            revision,
+          }),
+        );
+        // The revision did not land (the skill was deleted, or the write
+        // failed): units must not load a skill that lacks it. They fall back to
+        // copying the revised plan, and the batch drops the stale reference.
+        if (version === undefined) planSkill = undefined;
+        else planVersion = version;
+      } else if (!planSkill && revisedOutline) {
+        // A batch from before plans were skills moves into one now, carrying
+        // every earlier version of its plan.
+        const inBatch = new Set(
+          graph.edges
+            .filter((edge) => edge.kind === 'contains' && edge.sourceNodeId === batchId)
+            .map((edge) => edge.targetNodeId),
+        );
+        const earlier = graph.nodes
+          .filter(
+            (node) =>
+              node.kind === 'finding' &&
+              node.title === GOAL_BATCH_TEMPLATE_TITLE &&
+              inBatch.has(node.id),
+          )
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          .map((node) => node.description?.trim() ?? '');
+        planSkill = await inSavepoint('plan skill adoption', (db) =>
+          new BatchPlanSkillService(db, this.userId, this.workspaceId).adopt({
+            batchNodeId: batchId,
+            goalId,
+            goalTitle: graph.goal.title,
+            versions: [...earlier, revisedOutline],
+          }),
+        );
+      }
+      // A fork starts a new class: the old class's rules must stop reaching
+      // runs too, not only its acceptance — retire them in the shared domain,
+      // where the executor's expertise would otherwise keep injecting them.
+      // Not in a forgiving savepoint: the fork clears the batch's record of
+      // them below, so a failure here fails the fork (the question stays open
+      // to answer again) rather than leaving them active and forgotten.
+      if (optionId === 'new_class' && state.learnings?.length) {
+        const expertise = new ExpertiseModel(tx, this.userId, this.workspaceId);
+        for (const learning of state.learnings) await expertise.retireLesson(learning.lessonId);
+      }
+      const learned =
+        correction && optionId !== 'new_class'
+          ? await inSavepoint('break learning', (db) =>
+              new BatchPlanSkillService(db, this.userId, this.workspaceId).learn({
+                carrier,
+                domainId: state.learningDomainId,
+                // What the gate found: this round's latest hold, in its own words.
+                found:
+                  state.gateLog?.findLast(
+                    (entry) =>
+                      entry.outcome === 'blocked' && entry.revision === state.templateRevision,
+                  )?.message ?? 'the release gate held',
+                goalTitle: graph.goal.title,
+                guidance: correction,
+                planSkill,
+                revision: state.templateRevision,
+              }),
+            )
+          : undefined;
+
+      // 2. Retire the members that broke or were superseded, never delete them —
+      // the new round is `derived_from` them (decision #4). A member an earlier
+      // round already re-opened is history, not a unit to re-open again.
+      const memberIds = new Set([...state.probeNodeIds, ...(state.massNodeIds ?? [])]);
+      const reopenedIds = new Set(
+        graph.edges.filter((edge) => edge.kind === 'derived_from').map((edge) => edge.targetNodeId),
+      );
+      const broken: { brief?: string; id: string; title: string }[] = [];
+      for (const node of graph.nodes) {
+        if (!memberIds.has(node.id) || node.status === 'resolved' || reopenedIds.has(node.id))
+          continue;
+        broken.push({ brief: carriedUnitBrief(node), id: node.id, title: node.title });
+        if (!TERMINAL_NODE_STATUSES.has(node.status)) {
+          await writer.updateNodeStatus(
+            goalId,
+            node.id,
+            'retired',
+            'superseded by a new recipe revision',
+          );
+        }
+      }
+
+      // 3. A fresh gate for the fresh round.
+      const assay = await writer.createNode(goalId, {
+        description:
+          'Whether this repeated batch can be delivered without further human decisions.',
+        kind: 'decision',
+        scopeId: batchId,
+        status: 'proposed',
+        title: GOAL_BATCH_ASSAY_TITLE,
+      });
+      if (!assay) throw new Error('Failed to create the next batch gate');
+
+      // The revised recipe becomes the batch's policy, so the probes below and
+      // every later wave (which read it off the graph) carry the correction.
+      await goalModel.updateRolloutPolicy(goalId, {
+        ...policy,
+        spec: {
+          ...policy.spec,
+          recipeOutline: revisedOutline || baseOutline,
+          repeatable: policy.spec?.repeatable ?? true,
+        },
+      });
+
+      // 4. The new canary re-opens the units that broke, as new tasks that
+      // supersede the retired ones (decision #4: new task + retire, never move).
+      // Cap it at the canary size: a break in a large wave — or a `full` rollout
+      // that released the whole class — must not redispatch every member at once.
+      // The broken units beyond the canary stay owed, and the waves after the gate
+      // re-deliver them under the revised recipe. Only a gate that blocked with
+      // every member resolved has nothing to re-open; it re-probes the next slice.
+      const canarySize = Math.max(
+        2,
+        Math.min(policy.canarySize ?? ROLLOUT_CANARY_SIZE_DEFAULT, ROLLOUT_MAX_CANARY_SIZE),
+      );
+      const reOpen = broken.slice(0, canarySize);
+      const deferred = broken.slice(canarySize).map((unit) => unit.title);
+      const fresh = broken.length ? [] : roster.slice(released, released + canarySize);
+      // Nothing broke and nothing is left to release — the gate held on something
+      // else, such as an untested axis. Re-probe units this round delivered,
+      // under the revision, so the new canary is never empty (an empty one would
+      // re-open the same break at once).
+      const reProbe =
+        broken.length || fresh.length
+          ? []
+          : [...memberIds]
+              .map((id) => graph.nodes.find((node) => node.id === id))
+              .filter(
+                (node): node is NonNullable<typeof node> =>
+                  !!node && node.status === 'resolved' && !reopenedIds.has(node.id),
+              )
+              .slice(0, canarySize)
+              .map((node) => ({ brief: carriedUnitBrief(node), id: node.id, title: node.title }));
+      const units = [
+        ...[...reOpen, ...reProbe].map((unit) => ({
+          brief: unit.brief,
+          from: unit.id,
+          title: unit.title,
+        })),
+        ...fresh.map((title) => ({
+          brief: policy.unitBriefs?.[title],
+          from: undefined as string | undefined,
+          title,
+        })),
+      ];
+      const probeIds: string[] = [];
+      const opened: { from: string | undefined; title: string }[] = [];
+      for (const unit of units) {
+        const nodeId = await createRecipeUnitTask(
+          writer,
+          goalId,
+          batchId,
+          unit.title,
+          { outline: revisedOutline || baseOutline, skill: planSkill },
+          unit.brief,
+        );
+        if (!nodeId) continue;
+        probeIds.push(nodeId);
+        opened.push(unit);
+        if (unit.from) {
+          await writer.createEdge(goalId, nodeId, unit.from, 'derived_from').catch(() => {});
+        }
+      }
+      for (const probeId of probeIds) {
+        await writer.createEdge(goalId, assay.id, probeId, 'depends_on');
+      }
+
+      // 5. Back to canary, on the new revision. The roster is re-cut to what is
+      // still owed — the new probes first, then the broken units not re-probed,
+      // then whatever was never released — so the waves deliver only the
+      // remainder and units already delivered under the old recipe drop out.
+      const remaining = Array.from(
+        new Set([
+          ...opened.map((unit) => unit.title),
+          ...deferred,
+          ...roster.slice(released + fresh.length),
+        ]),
+      );
+      await goalModel.updateRolloutState(goalId, {
+        ...state,
+        assayNodeId: assay.id,
+        // A round's plan can be rewritten in place, so its skill version is kept, not derived.
+        planVersions: planVersion
+          ? { ...state.planVersions, [String(revision)]: planVersion }
+          : state.planVersions,
+        // The new canary is a fresh round: the old waves' members — the broken
+        // ones now retired — must not count against its gate.
+        massNodeIds: undefined,
+        phase: 'probe',
+        probeNodeIds: probeIds,
+        releasedCount: opened.length,
+        // A fork starts a new class of units: the old class's rules do not
+        // bind it, so its learnings start empty.
+        learningDomainId:
+          optionId === 'new_class' ? undefined : (learned?.domainId ?? state.learningDomainId),
+        learnings:
+          optionId === 'new_class'
+            ? undefined
+            : learned
+              ? [...(state.learnings ?? []), learned.learning]
+              : state.learnings,
+        planSkill,
+        templateNodeId: template?.id ?? state.templateNodeId,
+        templateRevision: state.templateRevision + 1,
+        unitTitles: remaining,
+        waveIndex: 0,
+      });
+      return { brokenIds: broken.map((unit) => unit.id), resolved };
+    });
+    if (!committed) return undefined;
+
+    // A sibling still running when the gate was answered would keep spending —
+    // and could deliver — beside the probe that replaces it. Its node is fenced
+    // as retired above; stop the Task behind it. Not part of the transaction:
+    // stopping a run cannot be rolled back, and retrying it is harmless.
+    if (committed.brokenIds.length)
+      await this.stopFencedTasks(goalId, new Set(committed.brokenIds));
+    await this.setPauseReason(goalId, undefined);
+    return committed.resolved;
   };
 
   private buildTaskAcceptanceRequirement = (

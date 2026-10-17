@@ -10,7 +10,7 @@ import {
   toast,
   Upload,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -77,7 +77,7 @@ const UploadSkillContent = memo(() => {
           <Icon
             icon={ArrowLeftRight}
             size={16}
-            style={{ color: 'var(--ant-color-text-tertiary)' }}
+            style={{ color: 'var(--lobe-color-text-tertiary)' }}
           />
           <Icon icon={Sparkles} size={28} />
         </Flexbox>
@@ -109,7 +109,7 @@ const UploadSkillContent = memo(() => {
               <Icon
                 icon={InboxIcon}
                 size={48}
-                style={{ color: 'var(--ant-color-text-quaternary)' }}
+                style={{ color: 'var(--lobe-color-text-quaternary)' }}
               />
               <Text type={'secondary'}>{t('agentSkillModal.upload.dragText')}</Text>
             </>

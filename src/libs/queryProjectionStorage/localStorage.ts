@@ -42,23 +42,33 @@ export class LocalStorageQueryProjectionStorage<T> implements QueryProjectionSto
     }
   };
 
+  /** Like `get`, but rejects when the row could not be read or parsed (see `ReplicaStorage.getStrict`). */
+  getStrict = async (key: QueryProjectionKey): Promise<QueryProjection<T> | undefined> => {
+    if (typeof window === 'undefined') return undefined;
+
+    const value = localStorage.getItem(this.#key(key));
+    return value ? this.#codec.parse(value) : undefined;
+  };
+
+  /**
+   * Rejects when the delete did not land (e.g. storage access denied), unlike
+   * reads and writes: a caller removing a row the user deleted must be able to
+   * retry it.
+   */
   remove = async (key: QueryProjectionKey): Promise<void> => {
     if (typeof window === 'undefined') return;
 
-    try {
-      localStorage.removeItem(this.#key(key));
-    } catch {
-      // Projection persistence is best-effort; the server remains the durable SoT.
-    }
+    localStorage.removeItem(this.#key(key));
   };
 
+  /**
+   * Rejects when the write did not land (a quota error, see `ReplicaStorage.set`):
+   * the replica engine only treats a row as holding a value after a confirmed
+   * write. Callers that persist best-effort catch it.
+   */
   set = async (key: QueryProjectionKey, projection: QueryProjection<T>): Promise<void> => {
     if (typeof window === 'undefined') return;
 
-    try {
-      localStorage.setItem(this.#key(key), this.#codec.stringify(projection));
-    } catch {
-      // Projection persistence is best-effort; the server remains the durable SoT.
-    }
+    localStorage.setItem(this.#key(key), this.#codec.stringify(projection));
   };
 }

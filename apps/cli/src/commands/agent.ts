@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import { AgentGraphSchema } from '@lobechat/types/agent/graph';
@@ -6,20 +5,11 @@ import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { getAgentStreamAuthInfo } from '../api/http';
-import { resolveAgentGatewayUrl } from '../settings';
-import type { AgentRunOutcome } from '../utils/agentRunOutcome';
-import { AGENT_RUN_EXIT_CODES, colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
-import {
-  replayAgentEvents,
-  streamAgentEvents,
-  streamAgentEventsViaWebSocket,
-} from '../utils/agentStream';
-import { resolveLocalDeviceId } from '../utils/device';
+import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log, setVerbose } from '../utils/logger';
+import { log } from '../utils/logger';
 import { resolveAgentId } from './agent/resolveAgentId';
-import { pollAgentRunStatus, probeRunOutcome, RUN_POLL_INTERVAL_MS } from './agent/runStatus';
+import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
 import { resolveAppUrlBuilder } from './task/url';
 
@@ -69,7 +59,16 @@ export function registerAgentCommand(program: Command) {
     .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
       const client = await getTrpcClient();
 
-      const input: { keyword?: string; limit?: number; offset?: number } = {};
+      // The inbox (Lobe AI) is a real assistant the user can open, and this is
+      // exactly where they look for it — so opt in. `queryAgents` omits the
+      // product-owned inbox for callers that do not explicitly ask for it, so
+      // that older clients and CRUD/group surfaces keep their old behavior.
+      const input: {
+        includeInbox: boolean;
+        keyword?: string;
+        limit?: number;
+        offset?: number;
+      } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
@@ -87,14 +86,19 @@ export function registerAgentCommand(program: Command) {
         return;
       }
 
+      // `name` (user-facing display name) and `title` (role/identity) are separate
+      // fields and both are returned — collapsing them into one column hides the
+      // only handle the user knows an agent by, e.g. the inbox shows up as
+      // `Sienna` / `Lobe`. `model` is not part of the queryAgents payload, so the
+      // column that used to sit here was always empty.
       const rows = items.map((a: any) => [
         a.id || a.agentId || '',
-        truncate(a.title || a.name || a.meta?.title || 'Untitled', 40),
+        truncate(a.name || a.meta?.name || '', 24),
+        truncate(a.title || a.meta?.title || '', 36),
         truncate(a.description || a.meta?.description || '', 50),
-        a.model || '',
       ]);
 
-      printTable(rows, ['ID', 'TITLE', 'DESCRIPTION', 'MODEL']);
+      printTable(rows, ['ID', 'NAME', 'TITLE', 'DESCRIPTION']);
     });
 
   // ── view ──────────────────────────────────────────────
@@ -126,8 +130,15 @@ export function registerAgentCommand(program: Command) {
         }
 
         const r = result as any;
-        console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
+        // Same rule as the web UI (`agentDisplayName`): the personal `name` is the
+        // primary label and a real (non-blank) title is the supporting line — so
+        // the inbox reads `Sienna · Lobe`, while a named agent without a title
+        // reads `Alice`, not `Alice · Untitled`.
+        const name = (r.name || r.meta?.name)?.trim();
+        const title = (r.title || r.meta?.title)?.trim();
+        console.log(pc.bold(name || title || 'Untitled'));
         const meta: string[] = [];
+        if (name && title && title !== name) meta.push(title);
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
@@ -346,218 +357,7 @@ export function registerAgentCommand(program: Command) {
 
   // ── run ──────────────────────────────────────────────
 
-  agent
-    .command('run')
-    .description('Run an agent with a prompt')
-    .option('-a, --agent-id <id>', 'Agent ID')
-    .option('-s, --slug <slug>', 'Agent slug')
-    .option('-p, --prompt <text>', 'User prompt')
-    .option('-t, --topic-id <id>', 'Reuse an existing topic')
-    .option('--no-auto-start', 'Do not auto-start the agent')
-    .option(
-      '--device <target>',
-      'Target device ID, or use "local" for the current connected device',
-    )
-    .option(
-      '--no-headless',
-      "Disable headless mode: tool calls that need approval park the run for a human (default: headless — tools auto-run, matching the CLI's non-interactive nature). The CLI does not wait for that approval; it returns with exit code 2 and the run continues once it is answered in LobeHub",
-    )
-    .option('--json', 'Output full JSON event stream')
-    .option('-v, --verbose', 'Show detailed tool call info')
-    .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
-    .option('--sse', 'Force SSE stream instead of WebSocket gateway')
-    .option(
-      '--timeout <seconds>',
-      'Stop waiting after this many seconds (exit code 3; the run keeps going server-side). Default: wait as long as the server reports the run active',
-      parsePositiveSeconds,
-    )
-    .addHelpText(
-      'after',
-      `
-Exit codes:
-  0  the run finished (done)
-  1  the run failed or was interrupted
-  2  the run is paused waiting for human approval / input
-  3  the outcome could not be confirmed (no or unreadable status, status checks kept failing, or --timeout reached)`,
-    )
-    .action(
-      async (options: {
-        agentId?: string;
-        autoStart?: boolean;
-        device?: string;
-        headless?: boolean;
-        json?: boolean;
-        prompt?: string;
-        replay?: string;
-        slug?: string;
-        sse?: boolean;
-        timeout?: number;
-        topicId?: string;
-        verbose?: boolean;
-      }) => {
-        if (options.verbose) setVerbose(true);
-
-        // Replay mode: render from saved JSON file, no network needed
-        if (options.replay) {
-          const data = readFileSync(options.replay, 'utf8');
-          const events = JSON.parse(data);
-          const replayed = replayAgentEvents(events, {
-            json: options.json,
-            verbose: options.verbose,
-          });
-          // A recording without a terminal event cannot tell how the run ended.
-          const replayExitCode = AGENT_RUN_EXIT_CODES[(replayed ?? { kind: 'unknown' }).kind];
-          if (replayExitCode !== 0) process.exitCode = replayExitCode;
-          return;
-        }
-
-        if (!options.agentId && !options.slug) {
-          log.error('Either --agent-id or --slug is required.');
-          process.exit(1);
-          return;
-        }
-        if (!options.prompt) {
-          log.error('--prompt is required.');
-          process.exit(1);
-          return;
-        }
-
-        const client = await getTrpcClient();
-
-        let deviceId: string | undefined;
-        if (options.device !== undefined) {
-          if (options.device === 'local') {
-            deviceId = resolveLocalDeviceId();
-            if (!deviceId) {
-              log.error(
-                "No local device found. Run 'lh connect' first, then retry with --device local.",
-              );
-              process.exit(1);
-              return;
-            }
-          } else {
-            deviceId = options.device;
-          }
-
-          const devices = await client.device.listDevices.query();
-          const matchedDevice = devices.find(
-            (device: { deviceId?: string; online?: boolean }) => device.deviceId === deviceId,
-          );
-          if (!matchedDevice) {
-            log.error(`Device "${deviceId}" was not found. Check 'lh device list' and try again.`);
-            process.exit(1);
-            return;
-          }
-          if (!matchedDevice.online) {
-            log.error(
-              options.device === 'local'
-                ? `Local device "${deviceId}" is not online. Reconnect with 'lh connect' and try again.`
-                : `Device "${deviceId}" is not online. Bring it online and try again.`,
-            );
-            process.exit(1);
-            return;
-          }
-        }
-
-        // 1. Exec agent to get operationId
-        const input: Record<string, any> = { prompt: options.prompt, trigger: 'cli' };
-        if (options.agentId) input.agentId = options.agentId;
-        if (deviceId) input.deviceId = deviceId;
-        if (options.slug) input.slug = options.slug;
-        if (options.topicId) input.appContext = { topicId: options.topicId };
-        if (options.autoStart === false) input.autoStart = false;
-        // commander's --no-headless sets `headless` to false. Anything else
-        // (undefined, true) → headless mode is on and tool calls auto-execute.
-        if (options.headless !== false) {
-          input.userInterventionConfig = { approvalMode: 'headless' };
-        }
-
-        const result = await client.aiAgent.execAgent.mutate(input as any);
-        const r = result as any;
-
-        if (!r.success) {
-          log.error(`Failed to start agent: ${r.error || r.message || 'Unknown error'}`);
-          process.exit(1);
-        }
-
-        const operationId = r.operationId;
-        if (!options.json) {
-          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
-        }
-
-        // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
-        const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
-        const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
-
-        const waitForRun = async (): Promise<AgentRunOutcome> => {
-          let streamed: AgentRunOutcome | undefined;
-          try {
-            if (agentGatewayUrl) {
-              streamed = await streamAgentEventsViaWebSocket({
-                gatewayUrl: agentGatewayUrl,
-                json: options.json,
-                // A quiet stream is checked against the run status rather than
-                // treated as finished or failed — a long tool call can be silent.
-                onStall: () => probeRunOutcome(client, operationId, { json: options.json }),
-                operationId,
-                serverUrl,
-                token,
-                tokenType,
-                verbose: options.verbose,
-              });
-            } else {
-              const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
-              streamed = await streamAgentEvents(streamUrl, headers, {
-                json: options.json,
-                // SSE heartbeats keep the response open even when the terminal
-                // event was published before this subscription (in-memory event
-                // manager), so a quiet stream is checked against the run status.
-                onStall: () => probeRunOutcome(client, operationId, { json: options.json }),
-                verbose: options.verbose,
-              });
-            }
-          } catch (error) {
-            // The live stream (gateway WS / SSE) dropped before the run finished —
-            // the run may still be executing server-side, in --json mode too.
-            // Fall back to polling the run status until it reaches a terminal state.
-            log.warn(
-              `Live stream unavailable (${(error as Error).message}). Polling run status every ${RUN_POLL_INTERVAL_MS / 1000}s…`,
-            );
-            return pollAgentRunStatus(client, operationId, { json: options.json });
-          }
-
-          // The stream closed without a terminal event: that is not a success
-          // signal, so ask the server how the run actually ended.
-          return streamed ?? pollAgentRunStatus(client, operationId, { json: options.json });
-        };
-
-        let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-        let didTimeOut = false;
-        const timedOut =
-          options.timeout === undefined
-            ? undefined
-            : new Promise<AgentRunOutcome>((resolve) => {
-                timeoutTimer = setTimeout(() => {
-                  didTimeOut = true;
-                  log.error(
-                    `Stopped waiting after ${options.timeout}s (--timeout). The run may still be executing — check it with 'lh agent status ${operationId}'.`,
-                  );
-                  resolve({ kind: 'unknown' });
-                }, options.timeout! * 1000);
-              });
-
-        const outcome = await (timedOut ? Promise.race([waitForRun(), timedOut]) : waitForRun());
-        clearTimeout(timeoutTimer);
-
-        const exitCode = AGENT_RUN_EXIT_CODES[outcome.kind];
-        if (exitCode !== 0) {
-          // A timeout leaves the stream / poll pending, so exit hard; otherwise
-          // set the code and let stdout (possibly a large --json array) drain.
-          if (didTimeOut) process.exit(exitCode);
-          process.exitCode = exitCode;
-        }
-      },
-    );
+  registerAgentRunCommand(agent);
 
   // ── pin / unpin ─────────────────────────────────────
 
@@ -853,12 +653,4 @@ Exit codes:
         }
       },
     );
-}
-
-function parsePositiveSeconds(value: string): number {
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    throw new InvalidArgumentError('Expected a positive number of seconds.');
-  }
-  return seconds;
 }

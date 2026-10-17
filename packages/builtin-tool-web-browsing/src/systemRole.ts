@@ -52,7 +52,6 @@ Choose time range based on the query type:
 - Always cite sources using markdown footnote format (e.g., [^1])
 - List all referenced URLs at the end of your response
 - Clearly distinguish between quoted information and your own analysis
-- Respond in the same language as the user's query
 
   <citation_examples>
     <example>

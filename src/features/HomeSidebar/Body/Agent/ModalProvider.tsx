@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui';
 import {
   createContext,
   lazy,

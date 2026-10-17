@@ -1,8 +1,8 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import { DEFAULT_LLM_CONFIG } from '@lobechat/business-config';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import debug from 'debug';
 import { ModelProvider } from 'model-bank';
+import { isProviderFetchOnClient } from 'model-bank/modelProviders';
 
 import { AiProviderModel } from '@/database/models/aiProvider';
 import type { LobeChatDatabase } from '@/database/type';
@@ -18,7 +18,13 @@ const log = debug('lobe-server:agent-runtime:llm-relay:site');
 
 export type LlmExecutionSite =
   | { site: 'server' }
-  | { preferredClientId: string; runtimeProvider: string; site: 'client' }
+  | {
+      /** Channel to dispatch on when the executor listens on another run's; see `AgentRunLlmExecutor`. */
+      channelOperationId?: string;
+      preferredClientId: string;
+      runtimeProvider: string;
+      site: 'client';
+    }
   | { reason: ClientLlmUnavailableReason; site: 'unavailable' };
 
 export interface ResolveLlmExecutionSiteParams {
@@ -31,17 +37,45 @@ export interface ResolveLlmExecutionSiteParams {
 
 const SERVER: LlmExecutionSite = { site: 'server' };
 
+export interface ResolveProviderRelayParams {
+  db: LobeChatDatabase;
+  provider: string;
+  userId: string;
+  workspaceId?: string;
+}
+
 /**
- * `fetchOnClient` as the client store reads it: the user's choice when they
- * made one, else this deployment's override from the server global config
- * (desktop, `OLLAMA_PROXY_URL`), else the provider default (Ollama / LM Studio
- * / Unsloth ship with `fetchOnClient: true`).
+ * Whether calls to `provider` must run on the user's device, i.e. be relayed:
+ * the relay is on for the user, the provider is not platform-owned, and the
+ * shared `fetchOnClient` rule — the one the client store applies, on the
+ * user's config with this deployment's override (desktop, `OLLAMA_PROXY_URL`)
+ * as the default — sends it to the device. `undefined` keeps it on the server.
  */
-const resolveFetchOnClient = (provider: string, stored: boolean | undefined) =>
-  stored ??
-  getServerFetchOnClientOverride(provider) ??
-  (DEFAULT_LLM_CONFIG as Record<string, { fetchOnClient?: boolean } | undefined>)[provider]
-    ?.fetchOnClient;
+export const resolveProviderRelay = async ({
+  db,
+  provider,
+  userId,
+  workspaceId,
+}: ResolveProviderRelayParams): Promise<{ runtimeProvider: string } | undefined> => {
+  if (provider === BRANDING_PROVIDER || provider === ModelProvider.LobeHub) return;
+
+  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
+  if (!featureFlags.enableLlmRelay) return;
+
+  const config = await new AiProviderModel(db, userId, workspaceId).getAiProviderById(
+    provider,
+    KeyVaultsGateKeeper.getUserKeyVaults,
+  );
+  const fetchOnClient = isProviderFetchOnClient(provider, {
+    fetchOnClient: config?.fetchOnClient ?? getServerFetchOnClientOverride(provider),
+    keyVaults: config?.keyVaults as { apiKey?: string; baseURL?: string } | undefined,
+  });
+
+  log('provider=%s fetchOnClient=%s', provider, fetchOnClient);
+  if (!fetchOnClient) return;
+
+  return { runtimeProvider: resolveRuntimeProvider(provider, config?.settings?.sdkType) };
+};
 
 /**
  * Where one LLM call of a run executes (T-540 §2.1). The server is the
@@ -64,20 +98,10 @@ export const resolveLlmExecutionSite = async ({
   userId,
   workspaceId,
 }: ResolveLlmExecutionSiteParams): Promise<LlmExecutionSite> => {
-  if (provider === BRANDING_PROVIDER || provider === ModelProvider.LobeHub) return SERVER;
   if (state?.principal?.actor?.shareVisitor) return SERVER;
 
-  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-  if (!featureFlags.enableLlmRelay) return SERVER;
-
-  const config = await new AiProviderModel(db, userId, workspaceId).getAiProviderById(
-    provider,
-    KeyVaultsGateKeeper.getUserKeyVaults,
-  );
-  const fetchOnClient = resolveFetchOnClient(provider, config?.fetchOnClient) === true;
-
-  log('provider=%s fetchOnClient=%s', provider, fetchOnClient);
-  if (!fetchOnClient) return SERVER;
+  const relay = await resolveProviderRelay({ db, provider, userId, workspaceId });
+  if (!relay) return SERVER;
 
   const executor = state?.host?.llmExecutor;
   const canExecute =
@@ -87,8 +111,9 @@ export const resolveLlmExecutionSite = async ({
   if (!canExecute) return { reason: 'no_executor', site: 'unavailable' };
 
   return {
+    ...(executor.channelOperationId && { channelOperationId: executor.channelOperationId }),
     preferredClientId: executor.clientId,
-    runtimeProvider: resolveRuntimeProvider(provider, config?.settings?.sdkType),
+    runtimeProvider: relay.runtimeProvider,
     site: 'client',
   };
 };

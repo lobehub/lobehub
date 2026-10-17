@@ -4,7 +4,10 @@ import {
   type AgentSignalOperationMarker,
   parseAgentSignalMarker,
 } from '@/server/services/agentSignal/operationMarker';
-import { resolveMemoryActionResultFromState } from '@/server/services/agentSignal/policies/analyzeIntent/actions/memoryActionResult';
+import {
+  resolveMemoryActionResultFromState,
+  resolveMemoryActionTargetsFromState,
+} from '@/server/services/agentSignal/policies/analyzeIntent/actions/memoryActionResult';
 
 import {
   extractArtifacts,
@@ -43,6 +46,21 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const extractMemoryMutations = (finalState: AgentState): ToolResultWithKind[] => {
   const result = resolveMemoryActionResultFromState(finalState);
   if (result.status !== 'applied') return [];
+
+  const targets = resolveMemoryActionTargetsFromState(finalState);
+  if (targets.length > 1) {
+    return targets.map((target) => ({
+      apiName: 'writeMemory',
+      data: {
+        kind: 'mutation',
+        resourceId: target.id ?? target.memoryId,
+        status: 'applied',
+        summary: target.summary,
+        target,
+      },
+      kind: 'mutation',
+    }));
+  }
 
   return [
     {

@@ -20,28 +20,35 @@ export class IndexedDBQueryProjectionStorage<T> implements QueryProjectionStorag
 
   get = async (key: QueryProjectionKey): Promise<QueryProjection<T> | undefined> => {
     try {
-      await localDatabase.initialize();
-      return await localDatabase.get<QueryProjection<T>>(COLLECTION, this.#key(key));
+      return await this.getStrict(key);
     } catch {
       return undefined;
     }
   };
 
-  remove = async (key: QueryProjectionKey): Promise<void> => {
-    try {
-      await localDatabase.initialize();
-      await localDatabase.delete(COLLECTION, this.#key(key));
-    } catch {
-      // Projection persistence is best-effort; the server remains the durable SoT.
-    }
+  /** Like `get`, but rejects when the row could not be read (see `ReplicaStorage.getStrict`). */
+  getStrict = async (key: QueryProjectionKey): Promise<QueryProjection<T> | undefined> => {
+    await localDatabase.initialize();
+    return localDatabase.get<QueryProjection<T>>(COLLECTION, this.#key(key));
   };
 
+  /**
+   * Rejects when the delete did not land, unlike reads: a caller that removes a
+   * row the user deleted must be able to retry it.
+   */
+  remove = async (key: QueryProjectionKey): Promise<void> => {
+    await localDatabase.initialize();
+    await localDatabase.delete(COLLECTION, this.#key(key));
+  };
+
+  /**
+   * Rejects when the write did not land (see `ReplicaStorage.set`): the replica
+   * engine only treats a row as holding a value after a confirmed write, so a
+   * dropped write is retried by the next persist instead of being skipped as
+   * redundant. Callers that persist best-effort catch it.
+   */
   set = async (key: QueryProjectionKey, projection: QueryProjection<T>): Promise<void> => {
-    try {
-      await localDatabase.initialize();
-      await localDatabase.set(COLLECTION, this.#key(key), projection);
-    } catch {
-      // Projection persistence is best-effort; the server remains the durable SoT.
-    }
+    await localDatabase.initialize();
+    await localDatabase.set(COLLECTION, this.#key(key), projection);
   };
 }

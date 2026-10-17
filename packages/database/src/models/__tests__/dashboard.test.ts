@@ -10,11 +10,12 @@ import {
   projects,
   trashItems,
   users,
+  widgets as widgetsTable,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ScopeLevelError } from '../../utils/scopeLevel';
-import { DashboardModel } from '../dashboard';
+import { DASHBOARD_MAX_ITEMS, DashboardItemLimitError, DashboardModel } from '../dashboard';
 import { WidgetModel } from '../widget';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -347,6 +348,32 @@ describe('DashboardModel', () => {
       expect((await model.listItems(dashboard.id)).map((r) => r.widget.id)).toEqual([w1.id]);
     });
 
+    it('refuses a new widget on a full board but still updates placed ones', async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const dashboard = await model.create({ title: 'Full' });
+      const seeded = await serverDB
+        .insert(widgetsTable)
+        .values(
+          Array.from({ length: DASHBOARD_MAX_ITEMS + 1 }, (_, i) => ({ title: `w${i}`, userId })),
+        )
+        .returning({ id: widgetsTable.id });
+      const [extra, ...placed] = seeded;
+      await serverDB.insert(dashboardItems).values(
+        placed.map(({ id }, sortOrder) => ({
+          dashboardId: dashboard.id,
+          sortOrder,
+          userId,
+          widgetId: id,
+        })),
+      );
+
+      await expect(model.addItem(dashboard.id, extra.id)).rejects.toBeInstanceOf(
+        DashboardItemLimitError,
+      );
+      const moved = await model.addItem(dashboard.id, placed[0].id, { sortOrder: 999 });
+      expect(moved?.sortOrder).toBe(999);
+    });
+
     it('refuses items on boards or widgets the caller cannot manage or see', async () => {
       const model = new DashboardModel(serverDB, userId);
       const other = new DashboardModel(serverDB, otherUserId);
@@ -371,6 +398,47 @@ describe('DashboardModel', () => {
       ).toHaveLength(1);
     });
 
+    it('lists items of many readable boards at once, with the same rules as listItems', async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const widgetModel = new WidgetModel(serverDB, userId);
+      const first = await model.create({ title: 'First' });
+      const second = await model.create({ title: 'Second' });
+      const trashedBoard = await model.create({ title: 'Trashed' });
+      const theirs = await new DashboardModel(serverDB, otherUserId).create({ title: 'Theirs' });
+      const a = await widgetModel.create({ title: 'a' });
+      const b = await widgetModel.create({ title: 'b' });
+      const gone = await widgetModel.create({ title: 'gone' });
+      await model.addItem(first.id, b.id);
+      await model.addItem(first.id, a.id);
+      await model.addItem(first.id, gone.id);
+      await model.addItem(second.id, a.id);
+      await model.addItem(trashedBoard.id, a.id);
+      await widgetModel.trash(gone.id);
+      await model.trash(trashedBoard.id);
+
+      const rows = await model.listItemsForDashboards([
+        first.id,
+        second.id,
+        trashedBoard.id,
+        theirs.id,
+        'not-a-uuid',
+      ]);
+      const byBoard = (id: string) =>
+        rows.filter((r) => r.item.dashboardId === id).map((r) => r.widget.title);
+      for (const board of [first, second]) {
+        expect(byBoard(board.id)).toEqual(
+          (await model.listItems(board.id)).map((r) => r.widget.title),
+        );
+      }
+      expect(byBoard(first.id)).toEqual(['b', 'a']);
+      expect(byBoard(second.id)).toEqual(['a']);
+      expect(rows).toHaveLength(3);
+      expect(await model.listItemsForDashboards([])).toEqual([]);
+      expect(
+        await new DashboardModel(serverDB, otherUserId).listItemsForDashboards([first.id]),
+      ).toEqual([]);
+    });
+
     it('lists the readable, live boards a widget is placed on', async () => {
       const model = new DashboardModel(serverDB, userId);
       const widget = await new WidgetModel(serverDB, userId).create({ title: 'w' });
@@ -382,8 +450,8 @@ describe('DashboardModel', () => {
       await model.trash(trashed.id);
 
       expect(await model.listByWidget(widget.id)).toEqual([
-        { id: first.id, title: 'First' },
-        { id: second.id, title: 'Second' },
+        { id: first.id, projectId: null, title: 'First' },
+        { id: second.id, projectId: null, title: 'Second' },
       ]);
       // another user sees none of this user's boards
       expect(await new DashboardModel(serverDB, otherUserId).listByWidget(widget.id)).toEqual([]);

@@ -1117,6 +1117,34 @@ describe('GatewayStreamNotifier', () => {
       expect(callsTo('/api/operations/llm-close')).toHaveLength(0);
     });
 
+    it('opens a one-shot relay channel for its user and ends it when the request is done', async () => {
+      const channel = 'llmcall:user-1:0b7c1d2e-aaaa';
+
+      await notifier.openLlmRelayChannel(channel, 'user-1');
+      await notifier.closeLlmRelayChannel(channel);
+
+      expect(JSON.parse(callsTo('/api/operations/init')[0][1].body)).toEqual({
+        meta: { scope: 'llm_call' },
+        operationId: channel,
+        userId: 'user-1',
+      });
+      expect(JSON.parse(callsTo('/api/operations/update-status')[0][1].body)).toEqual({
+        operationId: channel,
+        status: 'completed',
+      });
+    });
+
+    it('rejects opening a one-shot channel the gateway refuses, but never a failed close', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('boom') });
+
+      await expect(
+        notifier.openLlmRelayChannel('llmcall:user-1:abcdefgh', 'user-1'),
+      ).rejects.toThrow('500');
+      await expect(
+        notifier.closeLlmRelayChannel('llmcall:user-1:abcdefgh'),
+      ).resolves.toBeUndefined();
+    });
+
     it('stops probing the relay routes once a close returns 404', async () => {
       mockFetch.mockImplementation((url: string) =>
         Promise.resolve(

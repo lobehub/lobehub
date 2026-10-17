@@ -1,6 +1,6 @@
 'use client';
 
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

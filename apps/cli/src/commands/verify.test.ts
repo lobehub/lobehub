@@ -30,6 +30,11 @@ import { evidenceDescriptionForFile } from './verifyHelpers';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    user: {
+      getUserState: {
+        query: vi.fn(async () => ({ settings: { general: { responseLanguage: 'en-US' } } })),
+      },
+    },
     verify: {
       createRubric: { mutate: vi.fn() },
       deleteRun: { mutate: vi.fn() },

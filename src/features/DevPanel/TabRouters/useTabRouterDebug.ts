@@ -5,10 +5,8 @@ import { useEffect, useState } from 'react';
 // Imported from the concrete modules, not the `TabHost` barrel: that barrel
 // re-exports `TabHost.tsx`, which would drag the whole desktop route tree into
 // this dev-only chunk.
-import {
-  MAX_LIVE_TAB_ROUTERS,
-  resolveLiveTabIds,
-} from '@/features/Electron/TabHost/resolveLiveTabIds';
+import { useLiveTabRouterCap } from '@/features/Electron/TabHost/liveTabRouterCap';
+import { resolveLiveTabIds } from '@/features/Electron/TabHost/resolveLiveTabIds';
 import {
   getTabHistorySnapshot,
   getTabRouter,
@@ -56,10 +54,11 @@ export const useTabRouterDebug = (): TabRouterDebug => {
   const tabs = useElectronStore((s) => s.tabs);
   const activeTabId = useElectronStore((s) => s.activeTabId);
   const activeTabScope = useElectronStore((s) => s.activeTabScope);
+  const cap = useLiveTabRouterCap((s) => s.cap);
 
   useTick(1000);
 
-  const shouldBeLive = new Set(resolveLiveTabIds(tabs, activeTabId, MAX_LIVE_TAB_ROUTERS));
+  const shouldBeLive = new Set(resolveLiveTabIds(tabs, activeTabId, cap));
   const routerIds = getTabRouterIds();
   const liveIds = new Set(routerIds);
 
@@ -90,7 +89,7 @@ export const useTabRouterDebug = (): TabRouterDebug => {
   });
 
   return {
-    cap: MAX_LIVE_TAB_ROUTERS,
+    cap,
     liveCount: routerIds.length,
     orphanIds: routerIds.filter((id) => !tabs.some((tab) => tab.id === id)),
     rows,

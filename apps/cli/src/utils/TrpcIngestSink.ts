@@ -1,4 +1,7 @@
-import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type {
+  LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
 
 import type { TrpcClient } from '../api/client';
@@ -14,7 +17,7 @@ import type { IngestAck, IngestSink } from './BatchIngester';
 export class TrpcIngestSink implements IngestSink {
   constructor(
     private readonly client: TrpcClient,
-    private readonly agentType: LocalHeterogeneousAgentType,
+    private readonly agentType: LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType,
     private readonly operationId: string,
     private readonly topicId: string,
     private readonly assistantMessageId?: string,

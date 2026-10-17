@@ -20,23 +20,33 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
-    <button {...rest} aria-label={title} type="button" onClick={onClick} />
-  ),
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  // Keep content mounted after dismissal to model the popover's exit animation.
-  Popover: ({ children, content, onOpenChange }: any) => (
-    <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
-      {children}
-      {content}
-    </div>
-  ),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+        <button {...rest} aria-label={title} type="button" onClick={onClick} />
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      // Keep content mounted after dismissal to model the popover's exit animation.
+      Popover: ({ children, content, onOpenChange }: any) => (
+        <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
+          {children}
+          {content}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 // `enableMessageLinkIcon` is read via useUserStore(selector). We drive the
 // selector's return value through this module-level flag so each case can flip
@@ -72,16 +82,18 @@ vi.mock('@/libs/swr', () => ({
     if (key === null) return { data: undefined, mutate: vi.fn() };
     if (Array.isArray(key) && key[0] === 'internal-entity-preview')
       return { data: mockEntityPreview, mutate: vi.fn() };
-    return {
-      data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
-      mutate: vi.fn(),
-    };
+    return { data: undefined, mutate: vi.fn() };
   },
 }));
 
-vi.mock('@/services/agentDocument', () => ({
-  agentDocumentService: { listDocuments: vi.fn() },
-  agentDocumentSWRKeys: { documentsList: (agentId: string) => ['agent-documents', agentId] },
+// The active agent's document-list replica, already loaded.
+vi.mock('@/store/agentDocument', () => ({
+  agentDocumentActions: { fetchDocumentList: vi.fn(), useFetchDocumentList: vi.fn() },
+  agentDocumentSelectors: {
+    getDocumentList: (agentId?: string) => () =>
+      agentId ? [{ documentId: 'docs_doc1', id: 'agent-document-1' }] : undefined,
+  },
+  useAgentDocumentStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/agent', () => ({

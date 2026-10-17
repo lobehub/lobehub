@@ -1,3 +1,4 @@
+import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import { isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import type {
   ExecAgentResult,
@@ -66,6 +67,12 @@ export interface ExecAgentThreadRunOptions {
    */
   deviceId?: string;
   isSubAgent: boolean;
+  /**
+   * Relay executor for the spawned run, when the dispatching tab stands by on a
+   * channel of its own (see `openSubAgentLlmRelay`). Unset, the run inherits
+   * its parent's, if any.
+   */
+  llmExecutor?: AgentRunLlmExecutor;
   localDeviceId?: string;
   logScope: 'execSubAgent' | 'execVirtualSubAgent';
   /**
@@ -258,23 +265,24 @@ export const execAgentThreadRun = async (
     });
   }
 
-  // 3. Create hooks for updating Thread metadata and source message
+  const hasCompletionBridge = Boolean(options.resumeParentOnComplete && parentOperationId);
+  // 3. Thread hooks always own metadata. A completion bridge exclusively owns
+  // the tool result so no summary can publish before its afterToolCall control.
   const threadHooks = createThreadHooks(
     deps.agentRuntimeService,
     deps.threadModel,
     deps.messageModel,
     thread.id,
     startedAt,
-    parentMessageId,
+    hasCompletionBridge ? undefined : parentMessageId,
     options.logScope,
     usageBaseline,
   );
   // For the virtual sub-agent path, also register the completion bridge that
   // backfills the parent's placeholder tool message and resumes the parked
-  // parent op once the child run is done. Registered last so its tool-message
-  // backfill (content + pluginState) is the final write.
+  // parent op once the child run is done.
   const hooks =
-    options.resumeParentOnComplete && parentOperationId
+    hasCompletionBridge && parentOperationId
       ? [
           ...threadHooks,
           options.bridgeHookFactory
@@ -336,6 +344,7 @@ export const execAgentThreadRun = async (
       chatConfigOverride: options.chatConfig,
       deviceId: options.deviceId,
       hooks,
+      ...(options.llmExecutor && { llmExecutor: options.llmExecutor }),
       localDeviceId: options.localDeviceId,
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,

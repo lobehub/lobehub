@@ -27,6 +27,21 @@ elsewhere are refused. Like `create --topic`, the topic comes from
 the run's operation; an operation-token run (device or gateway) needs the
 `goal:manage` capability that `/goal` grants.
 
+A topic goal (`create --topic`, `/goal`) opens as a `draft` when the CLI asks
+for one (`draft: true`, sent by every CLI that has `lh goal start`; an older CLI
+gets a goal that runs at once). The coordinator leaves a draft alone: its agent
+arranges the graph — seed tasks, `add-node`, `add-edge`, even a submitted plan —
+and `lh goal start` (or the goal page's Start) moves it to `running`
+(`start.ts`). `pause` and `resume` refuse a draft, so `start` stays the only way
+in. Starting a draft that already holds work settles the adopted planning turn
+on the spot, so dispatch does not wait for the creating run to exit; a plan
+submitted on that turn afterwards is refused (`started_from_draft`). An empty
+draft keeps the turn open for a plan. `start --rollout` folds the seed tasks
+into a batch: the probes are re-created inside it and the other seeds leave the
+graph as roster units, their descriptions kept as unit notes
+(`rollout.unitBriefs`). A folded seed may depend only on a probe, and folded
+seeds need distinct titles; anything else is refused rather than dropped.
+
 The main Agent must have a working shell and an authenticated `lh` CLI in its
 execution environment (for example a configured device Kimi/Codex Agent). Its
 normal Agent configuration selects the runtime; dispatch uses the same
@@ -55,6 +70,15 @@ commands. It submits a JSON file through `lh goal plan <goal-id> --token <turn> 
   is written. All existing work must first be settled. The coordinator creates
   and runs ordinary Tasks. The terminal acceptance Task depends on the delivered
   leaf Tasks, so it renders after the work it closes.
+  A `tasks` plan may add `rollout` — `recipe`, `units` (titles or
+  `{title, description}`) and optional `variants` — to declare one repeated
+  mould. Its `tasks` (2-5) become the probes of a `batch`, the units wait in
+  `rolloutState`, and the coordinator's gate releases them wave by wave
+  (`rolloutBatch.ts`, the same builder the system planner uses after `spec.ts`).
+  The judgement is the main Agent's: only a malformed declaration, a Goal with
+  rollout `off`, a takeover turn or a batch already in flight is refused. While
+  a batch is in flight no uninvited turn starts, so the gate — not a planning
+  turn — answers the moment its members settle.
 - `verify`: reason; requests the ordinary independent final acceptance Task.
   This does not mark the Goal achieved.
 - `retry`: reason (checkpoint-aware recovery instruction), taskId and exact

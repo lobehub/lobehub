@@ -1,14 +1,15 @@
 'use client';
 
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
 
 import { useIsDark } from '@/hooks/useIsDark';
-import Loading from '@/routes/(main)/memory/features/Loading';
 
+import LoadMoreFooter from '../LoadMoreFooter';
+import { autoLoadMoreProps, resolveLoadMoreFooter } from '../loadMoreFooterState';
 import { useScrollParent } from './useScrollParent';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -56,6 +57,10 @@ interface TimelineViewProps<
    */
   isLoading?: boolean;
   /**
+   * Failure of the last "load more" request; rendered with a retry below the rows
+   */
+  loadMoreError?: unknown;
+  /**
    * Callback when end is reached
    */
   onLoadMore?: () => void;
@@ -80,12 +85,14 @@ function TimelineViewInner<
   getDateForGrouping,
   hasMore,
   isLoading,
+  loadMoreError,
   onLoadMore,
   renderHeader,
   renderItem,
 }: TimelineViewProps<T>) {
   const isDarkMode = useIsDark();
   const scrollParent = useScrollParent();
+  const footer = resolveLoadMoreFooter({ isLoading, loadMoreError });
 
   const { groupCounts, sortedPeriods, groupedItems } = useMemo(() => {
     const format = groupBy === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
@@ -143,13 +150,22 @@ function TimelineViewInner<
       <div className={cx(styles.timelineLine, isDarkMode && styles.timelineLine_dark)} />
       <GroupedVirtuoso
         customScrollParent={scrollParent}
-        endReached={hasMore && onLoadMore ? onLoadMore : undefined}
+        {...autoLoadMoreProps({ hasMore, items: groupedItems, loadMoreError, onLoadMore })}
         groupCounts={groupCounts}
         increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
         overscan={24}
         style={{ minHeight: '100%' }}
         components={{
-          Footer: isLoading ? () => <Loading viewMode={'timeline'} /> : undefined,
+          Footer: footer
+            ? () => (
+                <LoadMoreFooter
+                  loadMoreError={loadMoreError}
+                  state={footer}
+                  viewMode={'timeline'}
+                  onRetry={onLoadMore}
+                />
+              )
+            : undefined,
         }}
         groupContent={(index) => {
           const periodKey = sortedPeriods[index];

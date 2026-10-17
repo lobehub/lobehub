@@ -3,8 +3,8 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinStreamingProps } from '@lobechat/types';
 import { Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { Avatar } from '@lobehub/ui';
+import { createStaticStyles, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { useAgentGroupStore } from '@/store/agentGroup';

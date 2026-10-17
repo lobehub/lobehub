@@ -80,10 +80,9 @@ describe('HTTP hook network boundary', () => {
     });
     expect(requests).toEqual([`/${decision}`]);
   });
-  it('rejects 204 for control but accepts it for notification', async () => {
+  it('accepts 204 as a notification in either response mode', async () => {
     expect(await executeToolCallWebhook(config(`${base}/hook`), {})).toEqual({
-      status: 'error',
-      code: 'invalid_response',
+      status: 'ignored',
     });
     await expect(deliverWebhook({ url: `${base}/hook` }, {})).resolves.toBeUndefined();
     expect(requests).toEqual(['/hook', '/hook']);

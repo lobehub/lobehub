@@ -220,7 +220,17 @@ export const PROGRAMMATIC_TEST_CHECK_HINT =
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export const acceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone'] as const;
+/**
+ * `goal_gate`: a Goal's decision gate — a human decision a batch is held on
+ * (the release review), reviewed with its evidence like any delivery.
+ */
+export const acceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
 
 /**

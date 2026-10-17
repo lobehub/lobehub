@@ -24,36 +24,54 @@ vi.mock('@/services/git', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Icon: ({ icon }: any) => <span data-icon={icon?.displayName ?? icon?.name} data-testid="icon" />,
-  Tooltip: ({ children }: { children: ReactNode }) => (
-    <span data-testid="worktree-tooltip">{children}</span>
-  ),
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  confirmModal: confirmModalMock,
-  DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
-  ),
-  DropdownMenuPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuPortal: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuPositioner: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuRoot: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div className={className} data-testid="worktree-dropdown-trigger">
-      {children}
-    </div>
-  ),
-  toast: {
-    error: messageErrorMock,
-    info: vi.fn(),
-    loading: toastLoadingMock,
-    success: messageSuccessMock,
-  },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Icon: ({ icon }: any) => (
+        <span data-icon={icon?.displayName ?? icon?.name} data-testid="icon" />
+      ),
+      Tooltip: ({ children }: { children: ReactNode }) => (
+        <span data-testid="worktree-tooltip">{children}</span>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      confirmModal: confirmModalMock,
+      DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
+        <button onClick={onClick}>{children}</button>
+      ),
+      DropdownMenuPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      DropdownMenuPortal: ({ children }: { children: ReactNode }) => <>{children}</>,
+      DropdownMenuPositioner: ({ children }: { children: ReactNode }) => <>{children}</>,
+      DropdownMenuRoot: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      DropdownMenuTrigger: ({
+        children,
+        className,
+      }: {
+        children: ReactNode;
+        className?: string;
+      }) => (
+        <div className={className} data-testid="worktree-dropdown-trigger">
+          {children}
+        </div>
+      ),
+      toast: {
+        error: messageErrorMock,
+        info: vi.fn(),
+        loading: toastLoadingMock,
+        success: messageSuccessMock,
+      },
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -110,6 +128,32 @@ describe('WorktreeSwitcher', () => {
     const trigger = screen.getByTestId('worktree-dropdown-trigger');
     expect(trigger.firstElementChild?.tagName).toBe('DIV');
     expect(within(trigger).getByTestId('worktree-tooltip')).toBeTruthy();
+  });
+
+  it('keeps the trigger mounted but inert while the branch is unconfirmed', () => {
+    render(
+      <WorktreeSwitcher
+        disabled
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            branch: 'feat/current',
+            current: true,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByTestId('worktree-dropdown-trigger');
+    // Same DOM and icon as the enabled trigger — only the action is gated.
+    expect(within(trigger).getByTestId('icon')).toBeTruthy();
+    expect(trigger.firstElementChild).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('shows a branch icon on the main worktree and a fork icon on a linked one', () => {
@@ -418,7 +462,8 @@ describe('WorktreeSwitcher', () => {
     expect(screen.getAllByLabelText('workingDirectory.removeWorktreeAction')).toHaveLength(1);
   });
 
-  it('commits the selected worktree path as the working directory', () => {
+  // The branch is the only label left once the worktree directory is deleted.
+  it('commits the selected worktree path and its branch as the working directory', () => {
     render(
       <WorktreeSwitcher
         isGithub
@@ -446,7 +491,7 @@ describe('WorktreeSwitcher', () => {
     fireEvent.click(screen.getByText('/repo-canary'));
 
     expect(commitMock).toHaveBeenCalledWith({
-      git: { activeWorktree: '/repo-canary' },
+      git: { activeWorktree: '/repo-canary', branch: 'canary' },
       path: '/repo',
       repoType: 'github',
     });

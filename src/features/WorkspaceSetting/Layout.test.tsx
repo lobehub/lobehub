@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { WorkspaceSettingsContentLayout } from './Layout';
+import WorkspaceSettingsLayout, { WorkspaceSettingsContentLayout } from './Layout';
 
 vi.mock('@/features/NavHeader', () => ({
   default: ({ children }: { children?: React.ReactNode }) =>
@@ -11,8 +11,8 @@ vi.mock('@/features/NavHeader', () => ({
 }));
 
 vi.mock('./Container', () => ({
-  default: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement('main', undefined, children),
+  default: ({ children, maxWidth }: { children?: React.ReactNode; maxWidth?: number | string }) =>
+    React.createElement('main', { 'data-max-width': maxWidth }, children),
 }));
 
 vi.mock('./SideBar', () => ({ default: () => null }));
@@ -87,13 +87,38 @@ describe('WorkspaceSettingsContentLayout', () => {
     expect(html).toMatch(
       new RegExp(`<header>(?:(?!</header>).)*>${title}<(?:(?!<header>).)*</header>`),
     );
-    expect(html).toContain('<main><div>Page content</div></main>');
+    expect(html).toContain('<div>Page content</div></main>');
+  });
+
+  it('spans the full pane on the devices tab and keeps the 1024 column elsewhere', () => {
+    expect(renderLayout('devices')).toContain('<main data-max-width="100%">');
+    expect(renderLayout('members')).toContain('<main data-max-width="1024">');
   });
 
   it.each(['audit-log', 'advanced'])('keeps the %s tab on the content-only layout', (tab) => {
     const html = renderLayout(tab);
 
     expect(html).not.toContain('<header>');
-    expect(html).toContain('<main><div>Page content</div></main>');
+    expect(html).toContain('<div>Page content</div></main>');
+  });
+});
+
+describe('WorkspaceSettingsLayout', () => {
+  // Electron tab panes are plain block boxes, so full-bleed pages (Provider)
+  // need the layout itself to give the outlet a bounded flex column to scroll.
+  it('renders the outlet inside a full-height flex container', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/acme/settings/provider']}>
+        <Routes>
+          <Route element={<WorkspaceSettingsLayout />} path="/:workspaceSlug/settings">
+            <Route element={<div>Provider page</div>} path=":tab" />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toMatch(
+      /<div class="lobe-flex" style="[^"]*--lobe-flex:1;[^"]*--lobe-flex-height:100%[^"]*overflow:hidden;position:relative"><div>Provider page<\/div><\/div>/,
+    );
   });
 });

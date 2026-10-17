@@ -161,14 +161,16 @@ export const agentRouter = router({
     }),
 
   /**
-   * Count non-virtual agents with optional keyword filter, matching the
-   * conditions of queryAgents. Lets paginated callers report real totals.
+   * Count the agents matching the conditions of queryAgents — other virtual
+   * rows excluded, and the inbox (Lobe AI) counted only when the caller passes
+   * `includeInbox: true`. Lets paginated callers report real totals.
    */
   countAgents: agentProcedure
     .input(
       z
         .object({
           endDate: z.string().optional(),
+          includeInbox: z.boolean().optional(),
           keyword: z.string().optional(),
           range: z.tuple([z.string(), z.string()]).optional(),
           startDate: z.string().optional(),
@@ -747,14 +749,18 @@ export const agentRouter = router({
     }),
 
   /**
-   * Query non-virtual agents with optional keyword filter.
-   * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
+   * Query the user's agents with optional keyword filter — other virtual rows
+   * excluded, and the inbox (Lobe AI) included and flagged with `isInbox` only
+   * when the caller passes `includeInbox: true`.
+   * Returns agents with minimal info (id, name, title, description, avatar,
+   * backgroundColor).
    * Used by AddGroupMemberModal and group-management tool to search/select agents.
    */
   queryAgents: agentProcedure
     .input(
       z
         .object({
+          includeInbox: z.boolean().optional(),
           keyword: z.string().optional(),
           limit: z.number().max(100).optional(),
           offset: z.number().optional(),
@@ -1412,6 +1418,8 @@ export const agentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        // Transport-only opt-in; old clients send cached complete device maps.
+        replaceWorkingDirDeviceIds: z.array(z.string()).optional(),
         value: z.object({}).passthrough().partial(),
       }),
     )
@@ -1462,7 +1470,11 @@ export const agentRouter = router({
       }
 
       // Use AgentService to update and return the updated agent data
-      return ctx.agentService.updateAgentConfig(input.agentId, safeValue);
+      return ctx.agentService.updateAgentConfig(
+        input.agentId,
+        safeValue,
+        input.replaceWorkingDirDeviceIds,
+      );
     }),
 
   /**

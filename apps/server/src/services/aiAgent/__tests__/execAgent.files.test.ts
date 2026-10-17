@@ -489,6 +489,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         {
           alt: 'photo.png',
           id: 'file-img-1',
+          mimeType: 'image/png',
           url: 'https://s3.example.com/files/test-user-id/xxx/photo.png',
         },
       ]);

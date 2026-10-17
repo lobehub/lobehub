@@ -116,6 +116,35 @@ describe('describeGatewayResponseFailure', () => {
   });
 });
 
+describe('describeGatewayResponseFailure NO_CAPABLE_CONNECTION', () => {
+  it('says which client is needed instead of advising retries', () => {
+    const body = JSON.stringify({
+      channels: ['cli'],
+      clientKinds: ['desktop'],
+      error: 'NO_CAPABLE_CONNECTION',
+      success: false,
+    });
+
+    const failure = describeGatewayResponseFailure(503, body, 'tool call');
+
+    expect(failure.code).toBe(DeviceTransportErrorCode.NoCapableClient);
+    expect(failure.content).toContain('the LobeHub desktop app');
+    expect(failure.content).toContain('only cli is connected');
+    expect(failure.content).toContain('Nothing ran');
+    expect(failure.content).not.toContain('retry up to');
+    expect(failure.error).toBe(body);
+  });
+
+  it('keeps other 503 answers on the reconnect path', () => {
+    const failure = describeGatewayResponseFailure(
+      503,
+      JSON.stringify({ error: 'DEVICE_OFFLINE', success: false }),
+      'tool call',
+    );
+    expect(failure.code).toBe(DeviceTransportErrorCode.DeviceChannelUnavailable);
+  });
+});
+
 describe('describeGatewayRequestFailure', () => {
   it('treats a client-side abort like a 504 — the call may have landed', () => {
     const failure = describeGatewayRequestFailure(

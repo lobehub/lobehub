@@ -1,7 +1,7 @@
 'use client';
 
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

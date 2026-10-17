@@ -37,8 +37,19 @@ describe('tab context menu ownership', () => {
     expect(toNativeTemplate(items).template).toMatchSnapshot();
   });
 
-  it('stays native-eligible in the fully disabled single-tab state', () => {
+  it('stays native-eligible in the single-tab state', () => {
     expect(canGoNative(build(0, 1))).toBe(true);
+  });
+});
+
+describe('close entries', () => {
+  it('lets a lone tab close itself while the bulk closes have nothing to reach', () => {
+    const items = build(0, 1);
+
+    expect(isDisabled(items, 'closeCurrentTab')).toBe(false);
+    expect(isDisabled(items, 'closeOtherTabs')).toBe(true);
+    expect(isDisabled(items, 'closeLeftTabs')).toBe(true);
+    expect(isDisabled(items, 'closeRightTabs')).toBe(true);
   });
 });
 
@@ -55,7 +66,7 @@ describe('pin entry', () => {
     expect(labelOf(true)).toBe('tab.unpin');
   });
 
-  it('stays available when closing is not — a lone tab can still be pinned', () => {
+  it('stays available for a lone tab', () => {
     const items = build(0, 1);
     const pin = items.find((item) => !!item && 'key' in item && item.key === 'togglePin');
 

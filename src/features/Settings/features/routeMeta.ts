@@ -1,4 +1,5 @@
 import { Settings } from 'lucide-react';
+import { type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
@@ -9,24 +10,43 @@ import { SettingsTabs } from '@/store/global/initialState';
 
 import { useCategory } from '../hooks/useCategory';
 
-const SettingsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
-  const { t: tAuth } = useTranslation('auth');
-  const groups = useCategory();
-  const activeTab = (params.tab as SettingsTabs) || SettingsTabs.Profile;
+/**
+ * Publishes the active settings tab's label as the page title. `fixedTab`
+ * names the tab for explicit routes (e.g. `devices/:sub`) that carry no
+ * `:tab` param.
+ */
+const createSettingsDynamicMeta = (fixedTab?: SettingsTabs) => {
+  const SettingsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+    const { t: tAuth } = useTranslation('auth');
+    const groups = useCategory();
+    const activeTab = (params.tab as SettingsTabs) || fixedTab || SettingsTabs.Profile;
 
-  const label =
-    activeTab === SettingsTabs.Profile
-      ? tAuth('tab.profile')
-      : groups.flatMap((group) => group.items).find((item) => item.key === activeTab)?.label;
+    const label =
+      activeTab === SettingsTabs.Profile
+        ? tAuth('tab.profile')
+        : groups.flatMap((group) => group.items).find((item) => item.key === activeTab)?.label;
 
-  usePublishDynamicRouteMeta({ title: label || undefined }, onResolve);
+    usePublishDynamicRouteMeta({ title: label || undefined }, onResolve);
 
-  return null;
+    return null;
+  };
+
+  return SettingsDynamicMeta;
 };
 
-export const settingsRouteMeta = routeMeta({
-  DynamicMeta: SettingsDynamicMeta,
-  icon: Settings,
-  Skeleton: SettingsPageSkeleton,
-  titleKey: 'navigation.settings',
-});
+interface SettingsRouteMetaOptions {
+  Skeleton?: ComponentType;
+  /** The tab an explicit (non-`:tab`) route renders. */
+  tab?: SettingsTabs;
+}
+
+/** Settings route meta; explicit tab routes pass their tab and page-shaped skeleton. */
+export const createSettingsRouteMeta = ({ Skeleton, tab }: SettingsRouteMetaOptions = {}) =>
+  routeMeta({
+    DynamicMeta: createSettingsDynamicMeta(tab),
+    icon: Settings,
+    Skeleton: Skeleton ?? SettingsPageSkeleton,
+    titleKey: 'navigation.settings',
+  });
+
+export const settingsRouteMeta = createSettingsRouteMeta();

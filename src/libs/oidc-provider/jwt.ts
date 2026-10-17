@@ -1,7 +1,10 @@
+import { acceptanceIdFromReviewResource } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { authEnv } from '@/envs/auth';
+
+import { isAcceptanceReviewClient, isAcceptanceReviewIssued } from './acceptanceReview';
 
 const log = debug('oidc-jwt');
 
@@ -129,6 +132,14 @@ export const validateOIDCJWT = async (token: string) => {
       });
     }
 
+    // Review tokens live on third-party preview pages; they only open the review API.
+    if (isAcceptanceReviewIssued(payload)) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Acceptance review tokens are not accepted here',
+      });
+    }
+
     return {
       clientId,
       payload,
@@ -159,4 +170,14 @@ export const validateOIDCJWT = async (token: string) => {
       message: `JWT token validation failed: ${(error as Error).message}`,
     });
   }
+};
+
+export const verifyAcceptanceReviewJWT = async (token: string) => {
+  const publicKey = await getVerificationKey();
+  const { jwtVerify } = await import('jose');
+  const { payload } = await jwtVerify(token, publicKey, { algorithms: ['RS256'] });
+  const acceptanceId = acceptanceIdFromReviewResource(payload.aud);
+  if (!isAcceptanceReviewClient(payload.client_id as string) || !acceptanceId || !payload.sub)
+    throw new Error('Not an acceptance review token');
+  return { acceptanceId, expiresAt: payload.exp, userId: payload.sub };
 };

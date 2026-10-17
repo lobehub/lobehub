@@ -39,6 +39,7 @@ describe('acceptance publication with missing evidence', () => {
       uploadEvidence: { mutate: vi.fn() },
       upsertReport: { mutate: vi.fn() },
     },
+    user: { getUserState: { query: vi.fn() } },
     workspace: { getById: { query: vi.fn() } },
   };
   let dir: string;
@@ -65,6 +66,9 @@ describe('acceptance publication with missing evidence', () => {
       id: `result-${input.checkItemId}`,
     }));
     client.verify.uploadEvidence.mutate.mockResolvedValue({ id: 'evidence-1' });
+    client.user.getUserState.query.mockResolvedValue({
+      settings: { general: { responseLanguage: 'en-US' } },
+    });
     dir = await mkdtemp(path.join(tmpdir(), 'lh-evidence-'));
     await writeFile(path.join(dir, "screen's shot.png"), 'image fixture');
     await writeFile(path.join(dir, 'scroll.mp4'), 'video fixture');
@@ -543,6 +547,42 @@ describe('acceptance publication with missing evidence', () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it('warns when supersedes names no check of the acceptance', async () => {
+    client.acceptance.attachRun.mutate.mockResolvedValue({
+      id: 'run-1',
+      roundIndex: 2,
+      unresolvedSupersedes: ['typo-id'],
+    });
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ evidence: ['output.txt'], id: 'response', name: '收到回复', status: 'passed' }],
+        plan: [{ id: 'response', supersedes: ['typo-id'], title: '收到回复' }],
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({ unresolvedSupersedes: ['typo-id'] });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('typo-id'));
+  });
+
+  it('reports no unresolved supersedes when an older server omits the field', async () => {
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ evidence: ['output.txt'], id: 'response', name: '收到回复', status: 'passed' }],
+        plan: [{ id: 'response', title: '收到回复' }],
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(result()).toMatchObject({ unresolvedSupersedes: [] });
+  });
+
   it('accounts for draft-only checks and incoming checks using the folded plan', async () => {
     client.acceptance.attachRun.mutate.mockResolvedValue({
       id: 'draft-run',
@@ -806,6 +846,155 @@ describe('acceptance publication with missing evidence', () => {
       totalChecks: 3,
       uncertainChecks: 1,
       verdict: 'failed',
+    });
+  });
+
+  describe('report language', () => {
+    const englishReport = async () => {
+      await writeFile(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          cases: [{ id: 'screen', name: '用户能看到处理结果', observation: 'The page shows it.' }],
+          plan: [{ expected: '页面显示结果', id: 'screen', title: '用户能看到处理结果' }],
+          summary: { conclusion: '通过', verdict: 'passed' },
+          title: '处理结果展示',
+        }),
+      );
+      await writeFile(path.join(dir, 'report.md'), 'All checks passed.');
+    };
+
+    it('rejects a report in the wrong language before any remote write', async () => {
+      client.user.getUserState.query.mockResolvedValue({
+        settings: { general: { responseLanguage: 'zh-CN' } },
+      });
+      await englishReport();
+
+      const error = await run('ingest', dir).catch((e: unknown) => e);
+
+      expect(String(error)).toContain('responseLanguage) is "zh-CN"');
+      expect(String(error)).toContain('cases[screen].observation');
+      expect(String(error)).toContain('report.md');
+      expect(String(error)).not.toContain('plan[screen].title');
+      expect(client.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      expect(client.verify.createRun.mutate).not.toHaveBeenCalled();
+    });
+
+    it('validates a plan-only report with --dry-run without publishing', async () => {
+      client.user.getUserState.query.mockResolvedValue({
+        settings: { general: { responseLanguage: 'zh-CN' } },
+      });
+      await writeFile(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          plan: [{ id: 'screen', method: 'Open the page', title: '用户能看到处理结果' }],
+          title: '处理结果展示',
+        }),
+      );
+
+      await expect(run('ingest', dir, '--dry-run')).rejects.toThrow('plan[screen].method');
+
+      await writeFile(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          plan: [{ id: 'screen', method: '打开页面', title: '用户能看到处理结果' }],
+          title: '处理结果展示',
+        }),
+      );
+      await run('ingest', dir, '--dry-run', '--json');
+
+      expect(result()).toMatchObject({
+        dryRun: true,
+        language: { enforced: true, locale: 'zh-CN', status: 'enforced' },
+        planItems: 1,
+      });
+      expect(client.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      expect(client.verify.createRun.mutate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an English category, which renders as the checklist group heading', async () => {
+      client.user.getUserState.query.mockResolvedValue({
+        settings: { general: { responseLanguage: 'zh-CN' } },
+      });
+      await writeFile(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          plan: [{ category: 'Task hierarchy', id: 'screen', title: '用户能看到处理结果' }],
+          title: '处理结果展示',
+        }),
+      );
+
+      await expect(run('ingest', dir, '--dry-run')).rejects.toThrow('plan[screen].category');
+    });
+
+    it('rejects an English required-evidence hint, shown as the evidence tooltip', async () => {
+      client.user.getUserState.query.mockResolvedValue({
+        settings: { general: { responseLanguage: 'zh-CN' } },
+      });
+      await writeFile(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          plan: [
+            {
+              id: 'screen',
+              requiredEvidence: [{ hint: 'Capture checkout result', type: 'screenshot' }],
+              title: '用户能看到处理结果',
+            },
+          ],
+          title: '处理结果展示',
+        }),
+      );
+
+      await expect(run('ingest', dir, '--dry-run')).rejects.toThrow(
+        'plan[screen].requiredEvidence[0].hint',
+      );
+    });
+
+    it('rejects English captions in `evidence upload --metadata` before uploading', async () => {
+      client.user.getUserState.query.mockResolvedValue({
+        settings: { general: { responseLanguage: 'zh-CN' } },
+      });
+
+      await expect(
+        run(
+          'evidence',
+          'upload',
+          '--check',
+          'result-screen',
+          '--content',
+          '日志',
+          '--type',
+          'text',
+          '--desc',
+          '执行记录',
+          '--metadata',
+          JSON.stringify({
+            chapters: [{ kind: 'step', label: 'Open checkout', t: 0 }],
+            comparison: { id: 'pair', label: '重试前', role: 'before' },
+          }),
+        ),
+      ).rejects.toThrow('--metadata.chapters[0].label');
+      expect(client.verify.uploadEvidence.mutate).not.toHaveBeenCalled();
+    });
+
+    it('rejects `run create` with a title in the wrong language', async () => {
+      client.user.getUserState.query.mockResolvedValue({
+        settings: { general: { responseLanguage: 'zh-CN' } },
+      });
+
+      await expect(
+        run('create', '--title', 'Checkout recovery', '--goal', '验证重试'),
+      ).rejects.toThrow('--title');
+      expect(client.verify.createRun.mutate).not.toHaveBeenCalled();
+    });
+
+    it('warns and still publishes when the account has no response language', async () => {
+      client.user.getUserState.query.mockResolvedValue({ settings: { general: {} } });
+      await englishReport();
+
+      await run('ingest', dir, '--json');
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('no response language set'));
+      expect(client.verify.createRun.mutate).toHaveBeenCalledOnce();
     });
   });
 });

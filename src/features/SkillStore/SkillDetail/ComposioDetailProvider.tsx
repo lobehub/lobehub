@@ -40,7 +40,14 @@ export const ComposioDetailProvider = ({
   );
 
   const useFetchAppTools = useToolStore((s) => s.useFetchAppTools);
-  const { data: tools = [], isLoading: toolsLoading } = useFetchAppTools(serverName);
+  const appTools = useToolStore((s) => s.composioAppToolsMap[serverName]);
+  const { isHydrated, isValidating } = useFetchAppTools(serverName);
+
+  // The tool catalog is read from the store (the replica view); the hook only
+  // orchestrates the fetch. `isLoading` means "nothing to show yet" — a
+  // revalidation with the list already on screen must not blank it.
+  const tools = appTools ?? [];
+  const toolsLoading = !appTools && (isValidating || !isHydrated);
 
   if (!config) return null;
 

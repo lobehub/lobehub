@@ -1,10 +1,11 @@
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Spin } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import IntegrationsSettings from '@/features/Integrations';
+import IntegrationsLayout from '@/features/Integrations/Layout';
+import IntegrationsOverviewSkeleton from '@/features/Integrations/OverviewSkeleton';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
@@ -32,8 +33,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
   const showHeader = showSettingHeader && !params.sub;
 
   // Labs alpha: a deep link with the flag off is a missing page, not a leak.
-  if (!isPreferenceInit) return <Skeleton.Text rows={5} />;
-  if (!enableIntegrations) return <NotFound />;
+  if (!enableIntegrations && isPreferenceInit) return <NotFound />;
 
   return (
     <>
@@ -42,7 +42,21 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
           <SettingHeader description={t('overview.description')} title={t('overview.title')} />
         </div>
       )}
-      <IntegrationsSettings />
+      {isPreferenceInit ? (
+        <IntegrationsSettings />
+      ) : (
+        // Keep the header and reading-width column while the flag resolves. The
+        // directory has a known card layout; an integration page's hero does not.
+        <IntegrationsLayout>
+          {params.sub ? (
+            <Center paddingBlock={48}>
+              <Spin size={'large'} />
+            </Center>
+          ) : (
+            <IntegrationsOverviewSkeleton />
+          )}
+        </IntegrationsLayout>
+      )}
     </>
   );
 };

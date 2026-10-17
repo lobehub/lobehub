@@ -1,7 +1,7 @@
 import { SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
 import { type ChatContextContent } from '@lobechat/types';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
@@ -119,8 +119,27 @@ export class FileActionImpl {
     this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
-  clearChatUploadFileList = (): void => {
-    this.#set({ chatUploadFileList: [] }, false, n('clearChatUploadFileList'));
+  clearChatUploadFileList = (submittedIds?: string[]): void => {
+    const chatUploadFileList = submittedIds
+      ? this.#get().chatUploadFileList.filter((file) => !submittedIds.includes(file.id))
+      : [];
+    this.#set({ chatUploadFileList }, false, n('clearChatUploadFileList'));
+  };
+
+  /**
+   * Put captured upload items back into the composer list after a send was
+   * rejected before any message owned them (e.g. the server refused the turn
+   * up front). Items already in the list are skipped by id so a concurrent
+   * draft does not end up with duplicates.
+   */
+  restoreChatUploadFileList = (files: UploadFileItem[]): void => {
+    if (files.length === 0) return;
+
+    const currentIds = new Set(this.#get().chatUploadFileList.map((file) => file.id));
+    const restored = files.filter((file) => !currentIds.has(file.id));
+    if (restored.length === 0) return;
+
+    this.#get().dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
   };
 
   dispatchChatUploadFileList = (payload: UploadFileListDispatch): void => {

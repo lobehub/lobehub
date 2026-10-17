@@ -1,6 +1,5 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { Flexbox } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui/base-ui';
+import { Flexbox, Spin } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

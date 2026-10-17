@@ -87,6 +87,7 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     generationBatchModelMock = { findById: vi.fn() };
     generationModelMock = { createAssetAndFile: vi.fn() };
     generationServiceMock = {
+      ensureTopicCover: vi.fn(),
       transformImageForGeneration: vi.fn(),
       uploadImageForGeneration: vi.fn(),
     };
@@ -186,6 +187,54 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
         isError: true,
         prechargeResult: undefined,
       }),
+    );
+  });
+
+  it('fills the topic cover from the thumbnail before marking the task Success', async () => {
+    // Topics created by agent tools have no image page polling them, so the
+    // server success path is the only place the cover can be set reliably.
+    asyncTaskModelMock.findById.mockResolvedValue({ metadata: undefined });
+    vi.mocked(resolveBusinessModelMapping).mockResolvedValue({
+      requestedModelId: 'some-model',
+      resolvedModelId: 'some-model',
+    } as any);
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+      createImage: vi.fn().mockResolvedValue({
+        height: 512,
+        imageUrl: 'https://example.com/image.png',
+        width: 512,
+      }),
+    } as any);
+    generationServiceMock.transformImageForGeneration.mockResolvedValue({
+      image: {
+        extension: 'png',
+        hash: 'hash',
+        height: 512,
+        mime: 'image/png',
+        size: 1,
+        width: 512,
+      },
+      thumbnailImage: {},
+    });
+    generationServiceMock.uploadImageForGeneration.mockResolvedValue({
+      imageUrl: 'generations/image.png',
+      thumbnailImageUrl: 'generations/image_512.webp',
+    });
+
+    const caller = imageRouter.createCaller(mockCtx);
+    const result = await caller.createImage(createInput());
+
+    expect(result).toMatchObject({ success: true });
+    expect(generationServiceMock.ensureTopicCover).toHaveBeenCalledWith(
+      'topic-1',
+      'generations/image_512.webp',
+    );
+    const successCall = asyncTaskModelMock.update.mock.calls.findIndex(
+      ([, value]: [string, { status: AsyncTaskStatus }]) =>
+        value.status === AsyncTaskStatus.Success,
+    );
+    expect(generationServiceMock.ensureTopicCover.mock.invocationCallOrder[0]).toBeLessThan(
+      asyncTaskModelMock.update.mock.invocationCallOrder[successCall],
     );
   });
 });

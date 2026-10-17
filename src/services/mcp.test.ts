@@ -13,8 +13,11 @@ const mockElectronIpc = {
   },
 };
 
-// Mock dependencies
-vi.mock('@lobechat/const', () => ({
+// Mock dependencies. Spread the real module: the connector slice this service
+// pulls in lazily now reaches the user store chain, which reads `DEFAULT_AGENT`
+// from `@lobechat/const` — a partial factory would break on that missing export.
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
   CURRENT_VERSION: '1.0.0',
   isDesktop: false,
 }));

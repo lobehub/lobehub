@@ -1,4 +1,4 @@
-import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui';
 import { Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

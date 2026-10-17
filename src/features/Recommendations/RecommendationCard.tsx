@@ -1,6 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Button, Divider, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar, cx } from 'antd-style';
+import { Block, Button, cssVar, cx, Divider, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

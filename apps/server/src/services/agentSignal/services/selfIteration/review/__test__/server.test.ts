@@ -158,4 +158,85 @@ describe('createReviewRuntimePrimitives', () => {
       },
     });
   });
+
+  /**
+   * @example
+   * Production nightly reviews send the action kind as `type`; the proposal must
+   * still project to a Daily Brief instead of failing with "no brief".
+   */
+  it('creates a proposal brief when the model names the action kind `type`', async () => {
+    const writeDailyBrief = vi.fn().mockResolvedValue({ id: 'brief-1' });
+    const service = createReviewRuntimePrimitives({
+      agentId: 'agent-1',
+      briefModel: {} as never,
+      db: {} as unknown as LobeChatDatabase,
+      localDate: '2026-10-10',
+      proposalBriefWriter: { writeDailyBrief } as never,
+      reviewWindowEnd: '2026-10-10T14:00:00.000Z',
+      reviewWindowStart: '2026-10-09T14:00:00.000Z',
+      skillDocumentService: {
+        listSkills: vi.fn().mockResolvedValue([]),
+      } as unknown as SkillManagementDocumentService,
+      sourceId: 'nightly-review:user-1:agent-1:2026-10-10',
+      userId: 'user-1',
+    });
+
+    const result = await service.createSelfReviewProposal?.(
+      {
+        actions: [
+          {
+            operation: {
+              domain: 'skill',
+              input: {
+                bodyMarkdown: '# Release notes\n\nSteps...',
+                description: 'Draft release notes from merged PRs.',
+                name: 'release-notes',
+                title: 'Release notes',
+              },
+              operation: 'create',
+            },
+            rationale: 'Repeated release-note workflow across topics.',
+            target: { skillName: 'release-notes' },
+            type: 'create_skill',
+          },
+        ],
+        idempotencyKey: 'proposal-1',
+        proposalKey: 'skill:release-notes',
+        summary: 'Create a release-notes skill.',
+        userId: 'user-1',
+      },
+      {},
+    );
+
+    expect(result).toMatchObject({ proposalId: 'brief-1' });
+    expect(writeDailyBrief).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects proposal actions without a recognizable actionType with a recoverable error', async () => {
+    const service = createReviewRuntimePrimitives({
+      agentId: 'agent-1',
+      briefModel: {} as never,
+      db: {} as unknown as LobeChatDatabase,
+      localDate: '2026-10-10',
+      proposalBriefWriter: { writeDailyBrief: vi.fn() } as never,
+      reviewWindowEnd: '2026-10-10T14:00:00.000Z',
+      reviewWindowStart: '2026-10-09T14:00:00.000Z',
+      skillDocumentService: { listSkills: vi.fn().mockResolvedValue([]) } as never,
+      sourceId: 'nightly-review:user-1:agent-1:2026-10-10',
+      userId: 'user-1',
+    });
+
+    await expect(
+      service.createSelfReviewProposal?.(
+        {
+          actions: [{ target: { skillName: 'x' } }],
+          idempotencyKey: 'proposal-2',
+          proposalKey: 'skill:x',
+          summary: 'Missing kind.',
+          userId: 'user-1',
+        },
+        {},
+      ),
+    ).rejects.toThrow('actions[0] has no actionType');
+  });
 });

@@ -1,8 +1,8 @@
 'use client';
 
 import { Block, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ActionIcon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import type { ReactNode } from 'react';

@@ -5,6 +5,7 @@ import {
   getProjectAgentPath,
   getProjectConversationPath,
   getProjectConversationStartPath,
+  getProjectDashboardPath,
   getProjectGoalsPath,
   getProjectLibraryPath,
   getProjectTasksPath,
@@ -17,6 +18,11 @@ describe('project workspace navigation', () => {
     expect(getProjectTasksPath('prj_1')).toBe('/project/prj_1/tasks');
     expect(getProjectGoalsPath('prj_1')).toBe('/project/prj_1/goals');
     expect(getProjectAcceptancePath('prj_1')).toBe('/project/prj_1/acceptance');
+  });
+
+  it('builds the project dashboard list and board routes', () => {
+    expect(getProjectDashboardPath('prj_1')).toBe('/project/prj_1/dashboard');
+    expect(getProjectDashboardPath('prj_1', 'd-1')).toBe('/project/prj_1/dashboard/d-1');
   });
 
   it('builds new and existing conversation routes inside the project', () => {

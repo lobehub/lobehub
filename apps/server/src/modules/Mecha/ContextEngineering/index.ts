@@ -19,6 +19,7 @@ export const toContextSnapshot = ({
   agentGroup,
   agentIdentity,
   agentManagementContext,
+  attachmentPreviewFileIds,
   botPlatformContext,
   capabilities,
   connectorOwnershipNote,
@@ -66,7 +67,7 @@ export const toContextSnapshot = ({
     systemRole,
   },
   // Server-side file access URLs resolve to stable file-proxy URLs in production.
-  fileContext: { enabled: true, includeFileUrl: true },
+  fileContext: { enabled: true, includeFileUrl: true, previewFileIds: attachmentPreviewFileIds },
   model: {
     capabilities: {
       isCanUseAudio: capabilities?.isCanUseAudio,

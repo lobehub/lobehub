@@ -7,6 +7,7 @@ export interface OidcClientMetadata {
 }
 
 export interface OidcInteractionDetailsResponse {
+  acceptanceReview?: { allowed: boolean; title?: string };
   clientId: string;
   clientMetadata: OidcClientMetadata;
   prompt: 'consent' | 'login';

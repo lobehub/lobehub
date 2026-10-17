@@ -551,6 +551,20 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/teams'),
+                  'Mobile > Workspace > Settings > Teams',
+                ),
+                path: 'teams',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/teams'),
+                  'Mobile > Workspace > Settings > Teams > Detail',
+                ),
+                path: 'teams/:teamId',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
                   'Mobile > Workspace > Settings > Notification',
                 ),

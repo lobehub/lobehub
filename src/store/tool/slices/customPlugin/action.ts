@@ -67,8 +67,7 @@ export class CustomPluginActionImpl {
   };
 
   uninstallCustomPlugin = async (id: string): Promise<void> => {
-    await pluginService.uninstallPlugin(id);
-    await this.#get().refreshPlugins();
+    await this.#get().uninstallPlugin(id);
   };
 
   updateCustomPlugin = async (id: string, value: LobeToolCustomPlugin): Promise<void> => {

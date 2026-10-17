@@ -2,9 +2,10 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 
 import type { ProgressInfo, UpdateChannel, UpdateInfo } from '@lobechat/electron-client-ipc';
-import { app } from 'electron';
+import { app, net } from 'electron';
 import type { SparkleBridge, SparkleBridgeEvent } from 'electron-sparkle-updater';
 import { loadSparkleBridge } from 'electron-sparkle-updater';
+import semver from 'semver';
 
 import { createLogger } from '@/utils/logger';
 
@@ -82,8 +83,16 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
 
   checkForUpdates = async () => {
     if (this.downloaded && this.available) {
-      this.emit('update-downloaded', this.available);
-      return;
+      if (!(await this.hasNewerRelease(this.available.version))) {
+        this.emit('update-downloaded', this.available);
+        return;
+      }
+      // Sparkle resumes a staged update without reading the appcast, so a download that sat
+      // unattended would otherwise be installed even after a newer release shipped.
+      logger.info(`Discarding downloaded ${this.available.version} for a newer release`);
+      this.bridge.discardDownloadedUpdate();
+      this.available = null;
+      this.downloaded = false;
     }
     // The bridge starts an asynchronous native cycle. Keep it in flight through download
     // so a channel switch cannot reuse the old cycle's events for the new channel.
@@ -159,6 +168,21 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
       }
     }
   };
+
+  private async hasNewerRelease(downloadedVersion: string) {
+    if (!this.feedUrl) return false;
+    try {
+      const response = await net.fetch(this.feedUrl, { cache: 'no-store' });
+      if (!response.ok) return false;
+      const appcast = await response.text();
+      return [...appcast.matchAll(/<sparkle:shortVersionString>([^<]+)</g)].some(
+        ([, version]) => semver.valid(version) && semver.gt(version, downloadedVersion),
+      );
+    } catch (error) {
+      logger.warn('Failed to read the appcast for a newer release:', error);
+      return false;
+    }
+  }
 
   private handleProgress(event: SparkleBridgeEvent) {
     if (event.phase !== 'download') return;

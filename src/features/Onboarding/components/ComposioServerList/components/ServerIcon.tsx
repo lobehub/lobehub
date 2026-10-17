@@ -1,6 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Avatar, cssVar, Icon } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 

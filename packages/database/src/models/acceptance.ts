@@ -141,7 +141,11 @@ export class AcceptanceModel {
         return and(eq(acceptances.subjectType, 'task'), not(goalStep));
       }
       case 'goal': {
-        return and(eq(acceptances.subjectType, 'task'), goalStep);
+        // A Goal's step deliveries, and the release reviews its batches are held on.
+        return or(
+          and(eq(acceptances.subjectType, 'task'), goalStep),
+          eq(acceptances.subjectType, 'goal_gate'),
+        );
       }
       case 'standalone': {
         return inArray(acceptances.subjectType, ['standalone', 'document']);

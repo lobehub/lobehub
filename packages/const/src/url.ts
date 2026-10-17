@@ -88,7 +88,8 @@ export const GROUP_CHAT_TOPIC_URL = (groupId: string, topicId: string) =>
 
 export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);
 
-export const imageUrl = (filename: string) => `/app-images/${filename}`;
+// Fixed product imagery is mirrored to the static origin; /app-images belongs to the App.
+export const imageUrl = (filename: string) => `/static/app-images/${filename}`;
 
 export const LOBE_URL_IMPORT_NAME = 'settings';
 

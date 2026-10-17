@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox, FluentEmoji } from '@lobehub/ui';
-import { Accordion, Button } from '@lobehub/ui/base-ui';
+import { Accordion, Block, Button, Flexbox, FluentEmoji } from '@lobehub/ui';
 import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

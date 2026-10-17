@@ -1,5 +1,5 @@
 import { DEFAULT_BLOCK_ANCHOR_PADDING } from '@lobehub/editor/react';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 import { GUTTER_INSET_END, GUTTER_INSET_START } from './Gutter/constants';
 

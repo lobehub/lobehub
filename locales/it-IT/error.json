@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Impossibile generare questa risposta",
   "unknownError.title": "Ops, la richiesta si è presa una pausa",
   "unknownError.traceIdLabel": "ID Traccia:",
+  "unknownError.troubleshoot": "Risolvi il problema",
   "unlock.addProxyUrl": "Aggiungi URL proxy OpenAI (opzionale)",
   "unlock.apiKey.description": "Inserisci la tua API Key {{name}} per iniziare la sessione",
   "unlock.apiKey.imageGenerationDescription": "Inserisci la tua API Key {{name}} per iniziare a generare",

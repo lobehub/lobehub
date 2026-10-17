@@ -3,15 +3,22 @@
 import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import {
   ChevronDownIcon,
   ExternalLinkIcon,
   InfoIcon,
   MonitorDownIcon,
-  RefreshCwIcon,
   SettingsIcon,
   ShieldCheckIcon,
 } from 'lucide-react';
@@ -26,30 +33,28 @@ import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectEx
 import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import {
   devicePoolForAgent,
-  ExecutionTargetDeviceStatus,
   ExecutionTargetIcon,
   groupExecutionTargetDevices,
 } from '@/features/ExecutionTargetPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
-  getTopicBoundDeviceId,
   isHeterogeneousSandboxExecutionAvailable,
   isLocalSandboxEnabled,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
+import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
-import { moveTopicToTarget } from './moveTopicToTarget';
+import DeviceOptionRow from './DeviceOptionRow';
 import OptionRow from './OptionRow';
-import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
+import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
+import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -172,12 +177,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
   `,
-  reconnectButton: css`
-    min-height: 18px;
-    padding-block: 0;
-    padding-inline: 2px;
-    font-size: 11px;
-  `,
   optionTitle: css`
     overflow: hidden;
 
@@ -266,6 +265,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const { canUseResource } = useChatInputResourceAccess();
 
+  // This composer's conversation (see `useTopicId`): a side-by-side pane must
+  // resolve, and re-pin, its own topic rather than the main column's.
+  const topicId = useTopicId();
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
 
@@ -278,7 +280,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     canSelectExecutionTarget,
     isPreferenceLoading: isWorkspacePreferenceLoading,
     workspaceScoped,
-  } = useEffectiveAgencyConfig(agentId);
+  } = useEffectiveAgencyConfig(agentId, { topicId });
   const canShowExecutionTarget = canUseResource && canDisplayExecutionTarget;
   const canShowExecutionTargetSelector = canShowExecutionTarget && canSelectExecutionTarget;
 
@@ -295,6 +297,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // dimension, so the picker kept showing the previous workspace's pool after
   // a switch.
   const { data: devices, isLoading, mutate: refreshDevices } = useDeviceList();
+  // Until `useDeviceList` answers, name the bound device from the device store,
+  // whose replica paints the persisted device list first — otherwise the chip
+  // reads "Unknown device" on every reload.
+  const storedBoundDevice = useDeviceStore(deviceSelectors.getDeviceById(boundDeviceId));
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
   // matching device row with a "This device" tag and show the local-process
@@ -388,115 +394,21 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     void revalidateSandboxCapability();
   }, [open, revalidateSandboxCapability]);
 
-  // `homeFallback: false` on purpose — this must reflect whether the user has
-  // actually chosen a directory, not the runtime's convenience fallback.
-  const configuredWorkingDirectory = useEffectiveWorkingDirectory(agentId, { homeFallback: false });
-  const { commit: commitWorkingDirectory } = useCommitWorkingDirectory(agentId);
-
-  /**
-   * Give a sandboxed agent somewhere to work when the user has not picked a
-   * directory yet.
-   *
-   * The fence is scoped to the working directory, so without one the run is
-   * refused — a first use that fails on a requirement the picker never
-   * mentioned. Rather than fence a directory nobody chose *silently*, the
-   * default is written into the same setting the chip reads, so the answer to
-   * "where is this running?" stays visible and changeable.
-   */
-  // `force`: the caller just cleared the directory, which this closure cannot
-  // see yet.
-  const ensureSandboxWorkingDirectory = useCallback(
-    async (force = false) => {
-      if (configuredWorkingDirectory && !force) return;
-
-      const { path } = await localFileService.ensureSandboxWorkspace({ agentId });
-      // Leave it unset if the directory could not be created: pointing the fence
-      // at a path that does not exist would fail later and less clearly.
-      //
-      // `localTarget` because the sandbox pick is about to make `local` the
-      // target: the config still describes the previous one here, so without it a
-      // workspace member's first pick would file the path against the shared
-      // target (or nowhere) and the very next command would refuse again.
-      if (path) await commitWorkingDirectory({ path }, { localTarget: true });
-    },
-    [agentId, commitWorkingDirectory, configuredWorkingDirectory],
-  );
-
   const selectExecutionTarget = useSelectExecutionTarget(agentId);
-
-  // The machine the open topic already ran on. Its cwd and CLI session live
-  // there, so the picker shows it (tagged) instead of the agent default, and
-  // moving the topic elsewhere is an explicit, confirmed re-pin.
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const topicDeviceId = useChatStore((s) =>
-    getTopicBoundDeviceId(topicSelectors.currentActiveTopic(s), agentId),
-  );
-  const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
+  const { selectTarget, topicDeviceId } = useTopicAwareTargetSelect({
+    agentId,
+    currentDeviceId,
+    devices,
+    selectExecutionTarget,
+    topicId,
+  });
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string, localSandbox?: boolean) => {
       setOpen(false);
-      const apply = async () => {
-        if (localSandbox) await ensureSandboxWorkingDirectory();
-        await selectExecutionTarget(target, deviceId, { localSandbox });
-      };
-
-      const nextMachineId =
-        target === 'device' ? deviceId : target === 'local' ? currentDeviceId : undefined;
-      // `local` before this desktop's id resolved cannot say which machine it
-      // is — leave the topic pin alone rather than unbinding it.
-      const machineKnown = target !== 'local' || !!currentDeviceId;
-      if (!activeTopicId || !topicDeviceId || !machineKnown || nextMachineId === topicDeviceId) {
-        await apply();
-        return;
-      }
-
-      const topicDevice = devices?.find((d) => d.deviceId === topicDeviceId);
-      confirmModal({
-        cancelText: t('cancel', { ns: 'common' }),
-        content: t('heteroAgent.executionTarget.switchTopic.content', {
-          name:
-            topicDeviceId === currentDeviceId
-              ? t('heteroAgent.executionTarget.local')
-              : (topicDevice?.friendlyName ??
-                topicDevice?.hostname ??
-                t('heteroAgent.executionTarget.unknownDevice')),
-        }),
-        okText: t('heteroAgent.executionTarget.switchTopic.ok'),
-        onOk: async () => {
-          const result = await moveTopicToTarget({
-            afterRepin: localSandbox ? () => ensureSandboxWorkingDirectory(true) : undefined,
-            // The cwd and session are bare values that only hold on the old
-            // machine — drop them with the pin so the next turn resolves fresh
-            // ones where it now runs.
-            repinTopic: () =>
-              updateTopicMetadata(activeTopicId, {
-                boundDeviceId: nextMachineId,
-                heteroSessionBindingKey: undefined,
-                heteroSessionBindingKeyByWorkingDirectory: undefined,
-                heteroSessionId: undefined,
-                heteroSessionIdByWorkingDirectory: undefined,
-                workingDirectory: undefined,
-                workingDirectoryConfig: undefined,
-              }),
-            saveTarget: () => selectExecutionTarget(target, deviceId, { localSandbox }),
-          });
-          // A refused/failed target save already toasted inside the hook.
-          if (result === 'topic-not-saved') toast.error(t('saveAgentConfigFail', { ns: 'common' }));
-        },
-        title: t('heteroAgent.executionTarget.switchTopic.title'),
-      });
+      await selectTarget(target, deviceId, localSandbox);
     },
-    [
-      activeTopicId,
-      currentDeviceId,
-      devices,
-      ensureSandboxWorkingDirectory,
-      selectExecutionTarget,
-      t,
-      topicDeviceId,
-      updateTopicMetadata,
-    ],
+    [selectTarget],
   );
 
   // Setting up the backend raises an elevation prompt and creates a dedicated
@@ -520,15 +432,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Toggling the network does NOT change which environment is selected — same
   // dormant semantics the sandbox flag itself has when another environment is
   // active, so the popover stays open and nothing is switched behind the user.
-  const handleToggleSandboxNetwork = useCallback(
-    async (enabled: boolean) => {
-      await selectExecutionTarget(executionTarget, boundDeviceId, {
-        localSandbox: localSandboxEnabled,
-        localSandboxNetwork: enabled,
-      });
-    },
-    [selectExecutionTarget, executionTarget, boundDeviceId, localSandboxEnabled],
-  );
+  // Saved on the unpinned default, never the open topic's machine.
+  const handleToggleSandboxNetwork = useSandboxNetworkToggle({
+    agentId,
+    deviceRoutingAvailable,
+    isHetero,
+    selectExecutionTarget,
+  });
 
   // Auto-default to THIS desktop's local execution on first open, for both
   // personal and workspace agents (workspace behaviour used to be a hostname
@@ -566,7 +476,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     canShowExecutionTargetSelector && executionTarget === 'device'
-      ? devices?.find((d) => d.deviceId === boundDeviceId)
+      ? (devices?.find((d) => d.deviceId === boundDeviceId) ??
+        (devices ? undefined : storedBoundDevice))
       : undefined;
 
   // The picker splits by whether the caller is inside a workspace agent:
@@ -667,52 +578,21 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     return executionTarget === target;
   };
 
-  const renderDeviceStatus = (d: NonNullable<typeof devices>[number]) => (
-    <ExecutionTargetDeviceStatus
-      offlineLabel={t('heteroAgent.executionTarget.offline')}
-      online={d.online}
-      onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
-        count: d.channels.length,
-      })}
-    />
-  );
-
   const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => {
     const isCurrentMachine = d.deviceId === currentDeviceId;
     return (
-      <OptionRow
+      <DeviceOptionRow
         active={isActive('device', d.deviceId)}
-        disabled={!d.online}
-        icon={<ExecutionTargetIcon devicePlatform={d.platform} target={'device'} />}
+        device={d}
+        isCurrentMachine={isCurrentMachine}
         key={d.deviceId}
-        label={d.friendlyName || d.hostname || d.deviceId}
-        desc={
-          <>
-            {isCurrentMachine
-              ? t('heteroAgent.executionTarget.gatewayDesc')
-              : renderDeviceStatus(d)}
-            {d.online ? null : (
-              <Button
-                className={styles.reconnectButton}
-                icon={<Icon icon={RefreshCwIcon} size={10} />}
-                loading={reconnectingDeviceId === d.deviceId}
-                size={'small'}
-                type={'text'}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void handleReconnectDevice(d.deviceId);
-                }}
-              >
-                {t('heteroAgent.executionTarget.reconnect')}
-              </Button>
-            )}
-          </>
-        }
+        reconnecting={reconnectingDeviceId === d.deviceId}
         tags={tagsFor(
           isActive('device', d.deviceId),
           isCurrentMachine ? [t('heteroAgent.executionTarget.gateway')] : [],
         )}
-        onClick={() => void handleSelect('device', d.deviceId)}
+        onReconnect={() => void handleReconnectDevice(d.deviceId)}
+        onSelect={() => void handleSelect('device', d.deviceId)}
       />
     );
   };

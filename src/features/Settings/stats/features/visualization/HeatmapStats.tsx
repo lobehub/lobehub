@@ -1,7 +1,5 @@
 import { formatDuration as formatDurationMs } from '@lobechat/utils';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Divider, Skeleton } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

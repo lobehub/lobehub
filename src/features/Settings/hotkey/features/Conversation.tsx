@@ -2,13 +2,13 @@
 
 import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
 import { HotkeyInput } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -29,7 +29,21 @@ const HotkeySetting = memo(() => {
     onValuesChange: (values) => save(() => setSettings({ hotkey: values })),
   });
 
-  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
+  if (!isUserStateInit)
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          {
+            // Hotkey recorder inputs settle at 335x36.
+            control: { height: 36, width: 335 },
+            rows: HOTKEYS_REGISTRATION.filter((item) => item.group === HotkeyGroupEnum.Conversation)
+              .length,
+            titleWidth: 96,
+            withDesc: false,
+          },
+        ]}
+      />
+    );
 
   const clearHotkeyBinding = (id: HotkeyItem['id']) => {
     if (!hotkey[id]) return;

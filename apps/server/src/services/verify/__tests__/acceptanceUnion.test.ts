@@ -400,6 +400,56 @@ describe('buildAcceptanceCheckUnion', () => {
     expect(rows[0].fixed).toBe(true);
   });
 
+  it('folds a generation named by its authored plan id when rows are keyed by criterion', () => {
+    // An authored ingest keeps the harness's plan id (`edit-modal`) but the
+    // server mints a criterion per item, and the union keys rows by that
+    // criterion. A `supersedes` written with the authored id must still fold.
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('edit-modal', 'passed')],
+        run: run('r10', 10, [
+          planItem('edit-modal', { sourceCriterionId: 'crit-20', title: '弹窗编辑' }),
+        ]),
+      },
+      {
+        results: [result('inline-edit', 'passed')],
+        run: run('r11', 11, [
+          planItem('inline-edit', {
+            sourceCriterionId: 'crit-22',
+            supersedes: ['edit-modal'],
+            title: '原地编辑',
+          }),
+        ]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('crit-22');
+    expect(rows[0].supersededIds).toEqual(['crit-20']);
+    expect(rows[0].timeline.map((entry) => entry.title)).toEqual(['弹窗编辑', '原地编辑']);
+  });
+
+  it('folds a whole chain written with authored plan ids', () => {
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('a', 'failed')],
+        run: run('r1', 1, [planItem('a', { sourceCriterionId: 'crit-a' })]),
+      },
+      {
+        results: [result('b', 'failed')],
+        run: run('r2', 2, [planItem('b', { sourceCriterionId: 'crit-b', supersedes: ['a'] })]),
+      },
+      {
+        results: [result('c', 'passed')],
+        run: run('r3', 3, [planItem('c', { sourceCriterionId: 'crit-c', supersedes: ['b'] })]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('crit-c');
+    expect(rows[0].supersededIds.sort()).toEqual(['crit-a', 'crit-b']);
+  });
+
   it('reads the grouping category from the latest plan snapshot', () => {
     const rows = buildAcceptanceCheckUnion([
       { results: [], run: run('r1', 1, [planItem('x', { category: '未读区' })]) },

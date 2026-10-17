@@ -1,186 +1,130 @@
-import { type ActivityListResult } from '@lobechat/types';
-import { uniqBy } from 'es-toolkit/compat';
-import { produce } from 'immer';
-import { useEffect } from 'react';
+import { type ActivityListItem } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore } from '../../store';
-import { isMemoryListRequestCurrent } from '../utils/isMemoryListRequestCurrent';
-import { shouldSurfaceMemoryListError } from '../utils/shouldSurfaceMemoryListError';
+import { type UserMemoryStore, useUserMemoryStore } from '../../store';
+import { type MemoryListPageResult, MemoryQueryList } from '../utils/memoryQueryList';
+import {
+  ACTIVITY_LIST_PAGE_SIZE,
+  type ActivityListData,
+  type ActivityListParams,
+  activityListResource,
+} from './projection';
 
 const n = setNamespace('userMemory/activity');
 
-export interface ActivityQueryParams {
+export interface ActivityQueryParams extends Partial<ActivityListParams> {
   page?: number;
-  pageSize?: number;
-  q?: string;
-  sort?: 'capturedAt' | 'startsAt';
-  status?: string[];
-  types?: string[];
 }
 
-type ActivityListRequest = ActivityQueryParams & { page: number };
+/** Flat mirrors of one page set (`undefined` = the active query has no view yet). */
+const mirrorsOf = (data: ActivityListData | undefined): Partial<UserMemoryStore> =>
+  data
+    ? {
+        activityListData: data,
+        activities: data.items,
+        activitiesHasMore: data.hasMore,
+        activitiesInit: true,
+        activitiesPage: data.currentPage + 1,
+        activitiesTotal: data.total ?? data.items.length,
+      }
+    : {
+        activityListData: undefined,
+        activities: [],
+        activitiesHasMore: true,
+        activitiesInit: false,
+        activitiesPage: 1,
+        activitiesTotal: 0,
+      };
 
 type Setter = StoreSetter<UserMemoryStore>;
 export const createActivitySlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
   new ActivityActionImpl(set, get, _api);
 
+/**
+ * The user-memory activity list: one `MemoryQueryList` (shared with the other
+ * offset-paged memory lists) behind the slice's long-standing action names.
+ */
 export class ActivityActionImpl {
-  readonly #get: () => UserMemoryStore;
-  readonly #set: Setter;
+  readonly #list: MemoryQueryList<ActivityListParams, ActivityListItem, ActivityListData>;
 
   constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
-  }
-
-  deleteActivity = async (id: string): Promise<void> => {
-    await memoryCRUDService.deleteActivity(id);
-    this.#get().resetActivitiesList({
-      q: this.#get().activitiesQuery,
-      sort: this.#get().activitiesSort,
-    });
-  };
-
-  loadMoreActivities = (): void => {
-    const { activitiesPage, activitiesTotal, activities } = this.#get();
-    if (activities.length < (activitiesTotal || 0)) {
-      this.#set(
-        produce((draft) => {
-          draft.activitiesPage = activitiesPage + 1;
-        }),
-        false,
-        n('loadMoreActivities'),
-      );
-    }
-  };
-
-  internal_acceptActivitiesList = (
-    data: ActivityListResult,
-    request: ActivityListRequest,
-  ): void => {
-    const state = this.#get();
-    if (
-      !isMemoryListRequestCurrent(
-        {
-          page: state.activitiesPage,
-          q: state.activitiesQuery,
-          sort: state.activitiesSort,
-        },
-        { page: request.page, q: request.q, sort: request.sort },
-      )
-    )
-      return;
-
-    this.#set(
-      produce((draft) => {
-        draft.activitiesSearchError = undefined;
-        draft.activitiesSearchLoading = false;
-        draft.activitiesTotal = data.total;
-
-        if (!draft.activitiesInit) {
-          draft.activitiesInit = true;
-        }
-
-        if (request.page === 1) {
-          draft.activities = uniqBy(data.items, 'id');
-        } else {
-          draft.activities = uniqBy([...draft.activities, ...data.items], 'id');
-        }
-
-        draft.activitiesHasMore = data.items.length >= (request.pageSize || 20);
-      }),
-      false,
-      n('internal_acceptActivitiesList'),
-    );
-  };
-
-  internal_failActivitiesList = (error: unknown, request: ActivityListRequest): void => {
-    const state = this.#get();
-    if (
-      !isMemoryListRequestCurrent(
-        {
-          page: state.activitiesPage,
-          q: state.activitiesQuery,
-          sort: state.activitiesSort,
-        },
-        { page: request.page, q: request.q, sort: request.sort },
-      )
-    )
-      return;
-
-    const shouldSurfaceError = shouldSurfaceMemoryListError({
-      initialized: state.activitiesInit,
-      page: request.page,
-      resetting: state.activitiesSearchLoading,
-    });
-
-    this.#set(
-      produce((draft) => {
-        if (shouldSurfaceError) draft.activitiesSearchError = error;
-        draft.activitiesSearchLoading = false;
-      }),
-      false,
-      n('internal_failActivitiesList'),
-    );
-  };
-
-  resetActivitiesList = (params?: Omit<ActivityQueryParams, 'page' | 'pageSize'>): void => {
-    this.#set(
-      produce((draft) => {
-        draft.activities = [];
-        draft.activitiesPage = 1;
-        draft.activitiesQuery = params?.q;
-        draft.activitiesSearchError = undefined;
-        draft.activitiesSearchLoading = true;
-        draft.activitiesSort = params?.sort;
-      }),
-      false,
-      n('resetActivitiesList'),
-    );
-  };
-
-  /**
-   * Hydrate the store from SWR's rendered state because deduped cache hits do not invoke SWR's
-   * request lifecycle callbacks.
-   */
-  useFetchActivities = (params: ActivityQueryParams): SWRResponse<ActivityListResult> => {
-    const page = params.page ?? 1;
-    const response = useSWR(
-      userMemoryKeys.activities(params),
-      async () => {
-        return userMemoryService.queryActivities({
-          page: params.page,
+    this.#list = new MemoryQueryList({
+      actionPrefix: n('activityList'),
+      activeKeyField: 'activityListKey',
+      entriesField: 'activityListEntries',
+      fetchPage: async (params, page) => {
+        const response = await userMemoryService.queryActivities({
+          page,
           pageSize: params.pageSize,
           q: params.q,
           sort: params.sort,
           status: params.status,
           types: params.types,
         });
+        return { items: response.items, total: response.total };
       },
-      {
-        revalidateOnFocus: false,
-      },
-    );
+      get,
+      mirror: mirrorsOf,
+      queryFields: ({ q, sort }) => ({ activitiesQuery: q || undefined, activitiesSort: sort }),
+      replicaField: 'activityListReplica',
+      resource: activityListResource,
+      rootKey: userMemoryKeys.activities.root,
+      set,
+      useStore: (selector) => useUserMemoryStore(selector),
+    });
+  }
 
-    useEffect(() => {
-      if (response.data !== undefined)
-        this.internal_acceptActivitiesList(response.data, { ...params, page });
-    }, [page, params.pageSize, params.q, params.sort, response.data]);
+  /** Delete one activity: optimistic, then the offset repair (see `OffsetListPager`). */
+  deleteActivity = (id: string): Promise<void> =>
+    this.#list.delete(id, () => memoryCRUDService.deleteActivity(id));
 
-    useEffect(() => {
-      if (response.error !== undefined)
-        this.internal_failActivitiesList(response.error, { ...params, page });
-    }, [page, params.pageSize, params.q, params.sort, response.error]);
+  /** Purge for "delete all memories" (every query, memory + IndexedDB). */
+  internal_clearActivityList = (user?: string): Promise<boolean> => this.#list.clear(user);
 
-    return response;
+  /** Confirmed edit of one activity in every loaded and persisted query. */
+  internal_updateActivityEntity = (
+    id: string,
+    fn: (item: ActivityListItem) => ActivityListItem,
+  ): void => {
+    this.#list.updateEntity(id, fn);
+  };
+
+  /** Append the next page of the query on screen. */
+  loadMoreActivities = (): void => {
+    void this.#list.loadMore();
+  };
+
+  /** Seed the persisted head page of a query before its route paints. */
+  preHydrateActivities = (
+    query?: Omit<ActivityQueryParams, 'page' | 'pageSize'>,
+  ): Promise<boolean> =>
+    this.#list.preHydrate({
+      ...query,
+      pageSize: ACTIVITY_LIST_PAGE_SIZE,
+      q: query?.q || undefined,
+    });
+
+  /** Point the list at another search / sort (no page set is dropped). */
+  resetActivitiesList = (params?: Omit<ActivityQueryParams, 'page' | 'pageSize'>): void => {
+    this.#list.select({ ...params, q: params?.q || undefined });
+  };
+
+  /** Fetch orchestration for the activity list page (see `MemoryQueryList.useFetch`). */
+  useFetchActivities = (
+    params: ActivityQueryParams,
+  ): SWRResponse<MemoryListPageResult<ActivityListItem>> => {
+    const { page: _page, ...query } = params;
+    return this.#list.useFetch({
+      ...query,
+      pageSize: params.pageSize ?? ACTIVITY_LIST_PAGE_SIZE,
+      q: params.q || undefined,
+    });
   };
 }
 

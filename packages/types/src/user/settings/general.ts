@@ -1,4 +1,4 @@
-import type { HighlighterProps, MermaidProps, NeutralColors, PrimaryColors } from '@lobehub/ui';
+import type { HighlighterProps, LobePrimaryColor, MermaidProps, NeutralColors } from '@lobehub/ui';
 
 import type { ResponseAnimationStyle } from '../../aiProvider';
 
@@ -38,7 +38,7 @@ export interface UserGeneralConfig {
   isLiteMode: boolean;
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
-  primaryColor?: PrimaryColors;
+  primaryColor?: LobePrimaryColor;
   responseLanguage?: string;
   telemetry: boolean;
   timezone?: string;

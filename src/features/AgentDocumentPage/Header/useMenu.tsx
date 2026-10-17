@@ -1,10 +1,8 @@
 import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { isDesktop } from '@lobechat/const';
 import { useEditor } from '@lobehub/editor/react';
-import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { cssVar, useResponsive } from 'antd-style';
+import type { DropdownItem } from '@lobehub/ui';
+import { confirmModal, cssVar, Icon, toast, useResponsive } from '@lobehub/ui';
 import { Download, Link2, Maximize2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -97,7 +95,13 @@ export const useMenu = ({
         okText: t('delete', { ns: 'common' }),
         onOk: async () => {
           try {
-            await agentDocumentService.removeDocument({ agentId, documentId, id: agentDocumentId });
+            await agentDocumentService.removeDocument({
+              agentId,
+              documentId,
+              id: agentDocumentId,
+              // Documents nested under it go with it, as a folder's contents do.
+              withChildren: true,
+            });
             toast.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
             onDeleted();
           } catch (error) {

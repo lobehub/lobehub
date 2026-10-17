@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { after, flushScheduledWork, runWithScheduledWorkScope } from './scheduleAfterResponse';
+import {
+  after,
+  afterUnscoped,
+  flushScheduledWork,
+  runWithScheduledWorkScope,
+} from './scheduleAfterResponse';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -135,5 +140,25 @@ describe('scheduled work scope', () => {
 
   it('is a no-op outside a scope', async () => {
     await expect(flushScheduledWork()).resolves.toBe(true);
+  });
+
+  it('does not capture unscoped work, so a long refresh never holds a step-boundary flush', async () => {
+    let finished = false;
+
+    await runWithScheduledWorkScope(async () => {
+      afterUnscoped(async () => {
+        await sleep(80);
+        finished = true;
+      });
+
+      const startedAt = Date.now();
+      // Settled: the scope has nothing pending, the unscoped work is the host's.
+      await expect(flushScheduledWork({ timeoutMs: 10 })).resolves.toBe(true);
+      expect(Date.now() - startedAt).toBeLessThan(60);
+      expect(finished).toBe(false);
+    });
+
+    await sleep(100);
+    expect(finished).toBe(true);
   });
 });

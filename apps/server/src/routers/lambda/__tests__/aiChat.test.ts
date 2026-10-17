@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { StructuredOutputError } from '@lobechat/model-runtime';
 import type { CreateMessageParams } from '@lobechat/types';
 import { AgentRuntimeErrorType, ChatErrorType, ThreadType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -1201,7 +1202,7 @@ describe('aiChatRouter', () => {
 
       const result = await caller.outputJSON(input);
 
-      expect(initModelRuntimeFromDB).toHaveBeenCalledWith({}, 'u1', 'openai');
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith({}, 'u1', 'openai', undefined);
       expect(mockGenerateObject).toHaveBeenCalledWith(
         {
           messages: input.messages,
@@ -1570,6 +1571,37 @@ describe('aiChatRouter', () => {
       );
     });
 
+    it.each([undefined, 'Mozilla/5.0', 'LobeHub-Mobile/ios-v1.0.5'])(
+      'preserves extensible metadata and uses request UA %s',
+      async (userAgent) => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        const generateObject = vi.fn().mockResolvedValue({ completion: 'ok' });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ generateObject } as any);
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {}, userAgent } as any);
+
+        await caller.outputJSON({
+          messages: [],
+          metadata: {
+            correlationId: 'cid-1',
+            privateOption: true,
+            topicId: 'topic-1',
+            trigger: 'custom_feature',
+            userAgent: 'LobeHub-Mobile/android-v1.0.5',
+          },
+          model: 'test-model',
+          provider: 'test-provider',
+        });
+
+        expect(generateObject.mock.calls[0][1].metadata).toEqual({
+          correlationId: 'cid-1',
+          privateOption: true,
+          topicId: 'topic-1',
+          trigger: 'custom_feature',
+          userAgent,
+        });
+      },
+    );
+
     it('merges caller metadata over the default trigger and forwards tracing', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
       const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'hi there' });
@@ -1609,6 +1641,77 @@ describe('aiChatRouter', () => {
         },
       });
       expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    describe('unparsable structured output', () => {
+      const inputCompletionInput = {
+        messages: [{ content: 'complete: hello', role: 'user' }],
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        schema: {
+          name: 'input_completion',
+          schema: {
+            properties: { completion: { type: 'string' } },
+            type: 'object' as const,
+          },
+        },
+        tracing: { scenario: 'input_completion' },
+      };
+
+      it('returns an empty result instead of an internal error in schema mode', async () => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          generateObject: vi
+            .fn()
+            .mockRejectedValue(new StructuredOutputError('invalid JSON response text')),
+        } as any);
+
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+        const result = await caller.outputJSON(inputCompletionInput);
+
+        expect(result.data).toBeUndefined();
+        expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
+      });
+
+      it('still throws in tool mode, where a missing tool call was already an error', async () => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        const structuredError = new StructuredOutputError('no tool calls returned');
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          generateObject: vi.fn().mockRejectedValue(structuredError),
+        } as any);
+
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+        await expect(
+          caller.outputJSON({
+            ...inputCompletionInput,
+            schema: undefined,
+            tools: [
+              {
+                function: { name: 'pick', parameters: { properties: {}, type: 'object' } },
+                type: 'function',
+              },
+            ],
+          }),
+        ).rejects.toMatchObject({ cause: structuredError, code: 'INTERNAL_SERVER_ERROR' });
+      });
+
+      it('keeps mapping provider errors in schema mode', async () => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          generateObject: vi.fn().mockRejectedValue({
+            error: undefined,
+            errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          }),
+        } as any);
+
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+        await expect(caller.outputJSON(inputCompletionInput)).rejects.toMatchObject({
+          code: 'UNAUTHORIZED',
+          message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+        });
+      });
     });
 
     it('rejects a caller-supplied tracing.tracingId that is not a UUID', async () => {

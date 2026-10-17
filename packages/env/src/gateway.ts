@@ -1,9 +1,25 @@
 import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
 
+// Compose forwards an unset `${VAR:-}` as `''`; blank means not configured.
+const blankToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
+// Public base URL clients append `/ws` to: nothing secret, no trailing slash.
+const publicBaseUrl = z
+  // `abort` skips the refine on unparseable input.
+  .url({ abort: true, protocol: /^https?$/ })
+  .refine((value) => {
+    const { password, username } = new URL(value);
+
+    return !username && !password && !/[?#]/.test(value);
+  }, 'Expected an http(s) base URL without credentials, query or fragment')
+  .transform((value) => value.replace(/\/+$/, ''));
+
 export const getGatewayConfig = () => {
   return createEnv({
     runtimeEnv: {
+      DEVICE_GATEWAY_PUBLIC_URL: process.env.DEVICE_GATEWAY_PUBLIC_URL,
       DEVICE_GATEWAY_SERVICE_TOKEN: process.env.DEVICE_GATEWAY_SERVICE_TOKEN,
       DEVICE_GATEWAY_URL: process.env.DEVICE_GATEWAY_URL,
       MESSAGE_GATEWAY_ENABLED: process.env.MESSAGE_GATEWAY_ENABLED,
@@ -15,6 +31,8 @@ export const getGatewayConfig = () => {
     },
 
     server: {
+      /** Optional client-facing address, published as `deviceGatewayUrl` in the global config. */
+      DEVICE_GATEWAY_PUBLIC_URL: z.preprocess(blankToUndefined, publicBaseUrl.optional()),
       DEVICE_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       DEVICE_GATEWAY_URL: z.string().url().optional(),
       MESSAGE_GATEWAY_ENABLED: z.string().optional(),

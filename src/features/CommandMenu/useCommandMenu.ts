@@ -4,6 +4,8 @@ import { useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
+import { createTaskModal } from '@/features/AgentTasks/CreateTaskModal';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -203,6 +205,19 @@ export const useCommandMenu = () => {
     onClose();
   }, [canCreate, createPage, onClose]);
 
+  const handleCreateTask = useCallback(() => {
+    if (!canCreate) return;
+
+    onClose();
+    createTaskModal({
+      onCreated: (task) => {
+        navigate(taskDetailPath(task.identifier, undefined, task.name));
+      },
+      // The inline composer only mounts in task views; from the command menu it would drop the draft.
+      showInlineToggle: false,
+    });
+  }, [canCreate, onClose, navigate]);
+
   const handleCreateAgentTeam = useCallback(() => {
     if (!canCreate) return;
 
@@ -226,6 +241,7 @@ export const useCommandMenu = () => {
     handleCreateLibrary,
     handleCreatePage,
     handleCreateSession,
+    handleCreateTask,
     handleCreateTopic,
     handleExternalLink,
     handleNavigate,

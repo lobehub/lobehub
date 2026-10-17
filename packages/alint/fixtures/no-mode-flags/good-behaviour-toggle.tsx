@@ -1,5 +1,5 @@
 // Fixture: behaviour toggles and callbacks tune one capability, not a host.
-import { Button, Input } from '@lobehub/ui/base-ui';
+import { Button, Input } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
 import { AgentPicker } from '@/features/AgentPicker';

@@ -156,7 +156,8 @@ describe('HeteroTraceRecorder', () => {
     });
 
     expect(totals).toMatchObject({
-      llmCalls: 1,
+      // both steps are model turns; step 0 just went on to call a tool
+      llmCalls: 2,
       // resolved from stream_start, so heteroFinish can backfill the op row
       model: 'sonnet',
       provider: 'anthropic',

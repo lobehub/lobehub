@@ -125,6 +125,7 @@ export class TaskListSliceActionImpl {
     const params = {
       ...(query.agentId ? { assigneeAgentId: query.agentId } : {}),
       automated: query.automated,
+      includeArchived: query.includeArchived,
       orderBy: query.orderBy,
       projectId: query.projectId,
       statuses: query.statuses,
@@ -141,6 +142,7 @@ export class TaskListSliceActionImpl {
       ...(query.groupBy === 'status'
         ? { groups: DEFAULT_KANBAN_GROUPS }
         : { groupBy: query.groupBy }),
+      includeArchived: query.includeArchived,
       projectId: query.projectId,
       scope: query.scope,
       visibility: filterToServerVisibility(query.visibility),
@@ -278,6 +280,7 @@ export class TaskListSliceActionImpl {
       enabled?: boolean;
       excludeStatuses?: readonly TaskStatus[];
       groupBy?: TaskKanbanGroupBy;
+      includeArchived?: boolean;
       projectId?: string;
       /**
        * "My tasks" board: the caller's own slice of the workspace, narrowed
@@ -293,6 +296,7 @@ export class TaskListSliceActionImpl {
       enabled = true,
       excludeStatuses,
       groupBy = 'status',
+      includeArchived,
       projectId,
       scope,
     } = options;
@@ -305,6 +309,7 @@ export class TaskListSliceActionImpl {
           automated,
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses].sort() : undefined,
           groupBy,
+          includeArchived: includeArchived || undefined,
           projectId,
           scope,
           // "My tasks" is not offered the visibility chip and its list view
@@ -367,6 +372,7 @@ export class TaskListSliceActionImpl {
    */
   useFetchMyTaskList = (options: {
     enabled?: boolean;
+    includeArchived?: boolean;
     limit?: number;
     offset?: number;
     scope: 'assigned' | 'created';
@@ -378,10 +384,24 @@ export class TaskListSliceActionImpl {
      */
     statuses?: TaskStatus[];
   }) => {
-    const { enabled = true, limit, offset, scope, statuses } = options;
+    const { enabled = true, includeArchived, limit, offset, scope, statuses } = options;
     return useClientDataSWR(
-      enabled ? taskKeys.myList(scope, statuses, limit, offset) : null,
-      async () => this.fetchTaskList({ limit, offset, orderBy: 'updatedAt', scope, statuses }),
+      enabled
+        ? [
+            ...taskKeys.myList(scope, statuses, limit, offset),
+            // Archived rows are a different server page, like the status filter.
+            ...(includeArchived ? ['archived'] : []),
+          ]
+        : null,
+      async () =>
+        this.fetchTaskList({
+          includeArchived,
+          limit,
+          offset,
+          orderBy: 'updatedAt',
+          scope,
+          statuses,
+        }),
       { revalidateOnFocus: false },
     );
   };
@@ -407,6 +427,8 @@ export class TaskListSliceActionImpl {
        */
       complete?: boolean;
       enabled?: boolean;
+      /** Include archived tasks (the "Show archived" option); part of the key. */
+      includeArchived?: boolean;
       /**
        * Newest-first by creation unless a caller asks otherwise. A block that
        * calls itself "recent" and prints `updatedAt` has to order by it too, or
@@ -432,6 +454,7 @@ export class TaskListSliceActionImpl {
       automated,
       complete = false,
       enabled = true,
+      includeArchived,
       orderBy,
       projectId,
       statuses,
@@ -445,6 +468,7 @@ export class TaskListSliceActionImpl {
           agentId: allAgents || projectId ? undefined : agentId,
           automated,
           complete: complete || undefined,
+          includeArchived: includeArchived || undefined,
           orderBy,
           projectId,
           statuses: statuses?.length ? [...statuses].sort() : undefined,

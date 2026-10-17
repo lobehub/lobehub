@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import type { ChatGroupItem } from '@/database/schemas/chatGroup';
+import { replicaKeys } from '@/libs/replica';
 import type * as SwrModule from '@/libs/swr';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 
+import { initialChatGroupState } from '../initialState';
+import { agentGroupDetailResource } from '../projection';
 import { useAgentGroupStore } from '../store';
 
 // Mock dependencies
@@ -23,14 +26,8 @@ vi.mock('@/libs/swr', async (importOriginal) => {
   return {
     ...actual,
     mutate: vi.fn().mockResolvedValue(undefined),
-    useClientDataSWRWithSync: vi.fn(() => ({ data: undefined, isValidating: false })),
   };
 });
-
-vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: vi.fn(() => null),
-  useActiveWorkspaceId: vi.fn(() => null),
-}));
 
 // Helper to create mock AgentGroupDetail
 const createMockGroup = (overrides: Partial<AgentGroupDetail>): AgentGroupDetail => ({
@@ -68,12 +65,35 @@ const createMockChatGroup = (overrides: Partial<ChatGroupItem> = {}): ChatGroupI
   ...overrides,
 });
 
+/**
+ * `refreshGroupDetail` revalidates the replica sync query of one group. The
+ * query key is derived from the resource (name + version + scope) and the entry
+ * params, so assert the match predicate itself rather than a literal key tuple.
+ */
+const expectDetailRevalidated = (groupId: string) => {
+  const match = vi.mocked(mutate).mock.calls.at(-1)?.[0] as ((key: unknown) => boolean) | undefined;
+  expect(typeof match).toBe('function');
+
+  const keyOf = (id: string) =>
+    replicaKeys.sync(
+      agentGroupDetailResource.name,
+      agentGroupDetailResource.version,
+      agentGroupDetailResource.scope.get(),
+      id,
+      { groupId: id },
+    );
+
+  expect(match!(keyOf(groupId))).toBe(true);
+  expect(match!(keyOf(`${groupId}-other`))).toBe(false);
+};
+
 describe('ChatGroupCurdSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset store state
     act(() => {
       useAgentGroupStore.setState({
+        ...initialChatGroupState,
         activeGroupId: 'group-1',
         groupMap: {
           'group-1': createMockGroup({ id: 'group-1', title: 'Test Group' }),
@@ -101,6 +121,8 @@ describe('ChatGroupCurdSlice', () => {
       expect(chatGroupService.updateGroup).toHaveBeenCalledWith('group-1', {
         title: 'Updated Title',
       });
+      expect(result.current.groupMap['group-1'].title).toBe('Updated Title');
+      expect(result.current.groups[0].title).toBe('Updated Title');
     });
 
     it('should refresh group detail after update', async () => {
@@ -112,48 +134,7 @@ describe('ChatGroupCurdSlice', () => {
         await result.current.updateGroup('group-1', { description: 'New description' });
       });
 
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
-    });
-  });
-
-  describe('refreshGroups', () => {
-    it('should invalidate the group list', async () => {
-      const { result } = renderHook(() => useAgentGroupStore());
-
-      await act(async () => {
-        await result.current.refreshGroups();
-      });
-
-      expect(mutate).toHaveBeenCalledWith(['group:list', true]);
-    });
-  });
-
-  describe('useFetchGroupDetail', () => {
-    it('should remove stale local group data and mark not-found when detail revalidation reports not found', async () => {
-      vi.mocked(chatGroupService.getGroupDetail).mockResolvedValue(null as any);
-
-      const { result } = renderHook(() => useAgentGroupStore());
-
-      act(() => {
-        result.current.useFetchGroupDetail(true, 'group-1');
-      });
-
-      const swrCall = vi.mocked(useClientDataSWRWithSync).mock.calls.at(-1);
-      const fetcher = swrCall?.[1] as (() => Promise<unknown>) | undefined;
-      const swrOptions = swrCall?.[2];
-      const onData = swrOptions?.onData as ((data: unknown) => void) | undefined;
-
-      // "Gone / no access" resolves to null (settled 404 state) instead of throwing.
-      await act(async () => {
-        await expect(fetcher?.()).resolves.toBeNull();
-      });
-      act(() => {
-        onData?.(null);
-      });
-
-      expect(result.current.groupMap['group-1']).toBeUndefined();
-      expect(result.current.groups.some((group) => group.id === 'group-1')).toBe(false);
-      expect(result.current.groupNotFoundMap['group-1']).toBe(true);
+      expectDetailRevalidated('group-1');
     });
   });
 
@@ -173,6 +154,9 @@ describe('ChatGroupCurdSlice', () => {
           allowDM: false,
         }),
       });
+      expect(result.current.groupMap['group-1'].config).toEqual(
+        expect.objectContaining({ allowDM: false }),
+      );
     });
 
     it('should not update if no current group', async () => {
@@ -201,7 +185,7 @@ describe('ChatGroupCurdSlice', () => {
         await result.current.updateGroupConfig({ revealDM: true });
       });
 
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expectDetailRevalidated('group-1');
     });
   });
 
@@ -247,7 +231,7 @@ describe('ChatGroupCurdSlice', () => {
         await result.current.updateGroupMeta({ title: 'Updated' });
       });
 
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expectDetailRevalidated('group-1');
     });
 
     it('keeps an explicit metadata update bound to its original group', async () => {
@@ -285,7 +269,7 @@ describe('ChatGroupCurdSlice', () => {
       expect(chatGroupService.updateGroup).toHaveBeenCalledExactlyOnceWith('group-1', {
         title: 'Group One Draft',
       });
-      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
+      expectDetailRevalidated('group-1');
       expect(result.current.groupMap['group-1']?.title).toBe('Group One Draft');
       expect(result.current.groupMap['group-2']?.title).toBe('Group Two');
     });

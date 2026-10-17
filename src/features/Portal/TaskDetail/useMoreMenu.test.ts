@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   updateTask: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ confirmModal: mocks.confirmModal }));
+vi.mock('@lobehub/ui', () => ({ confirmModal: mocks.confirmModal }));
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.allowed }) }));
 vi.mock('@/features/AgentTasks/AgentTaskDetail/useTaskCopyActions', () => ({

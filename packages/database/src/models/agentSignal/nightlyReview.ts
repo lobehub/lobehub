@@ -36,6 +36,25 @@ const cursorUsers = alias(users, 'nightly_review_cursor_users');
 const parseAggregateTimestamp = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
 
+/**
+ * Builds the SQL predicate that keeps users whose local hour at `at` is inside the window.
+ *
+ * `AT TIME ZONE` raises on an unknown zone name, which would fail the whole page, so the zone is
+ * checked against `pg_timezone_names` first and unknown zones pass through to the caller's exact
+ * check. Missing or empty timezones evaluate as UTC, matching the service-side fallback.
+ */
+const buildLocalHourCondition = (window: ListAgentSignalNightlyReviewUsersLocalHourWindow) => {
+  const timezone = sql`COALESCE(NULLIF(${userSettings.general}->>'timezone', ''), 'UTC')`;
+  const at = window.at.toISOString();
+
+  return sql`CASE
+    WHEN lower(${timezone}) IN (SELECT lower(name) FROM pg_timezone_names)
+      THEN EXTRACT(HOUR FROM (${at}::timestamptz AT TIME ZONE ${timezone})) >= ${window.startHour}
+        AND EXTRACT(HOUR FROM (${at}::timestamptz AT TIME ZONE ${timezone})) < ${window.endHourExclusive}
+    ELSE true
+  END`;
+};
+
 /** Cursor for stable user pagination in AgentSignal nightly review scheduling. */
 export interface ListAgentSignalNightlyReviewUsersCursor {
   /** User creation time retained in the serialized checkpoint for observability. */
@@ -59,8 +78,28 @@ export interface ListAgentSignalNightlyReviewUsersOptions {
   cursor?: ListAgentSignalNightlyReviewUsersCursor;
   /** Maximum users to return. */
   limit?: number;
+  /**
+   * Coarse local-hour prefilter evaluated in each user's stored timezone.
+   *
+   * Callers must pass a window that is a superset of the exact window they enforce afterwards:
+   * PostgreSQL's tzdata build can disagree with `Intl` by an offset change, so this is only a
+   * cheap way to drop the users who are clearly not in their night, never the final authority.
+   * A timezone PostgreSQL does not recognise is kept rather than evaluated, so a bad stored value
+   * can neither fail the page nor be decided here.
+   */
+  localHourWindow?: ListAgentSignalNightlyReviewUsersLocalHourWindow;
   /** Optional user allowlist for backfills, tests, and targeted runs. */
   whitelist?: string[];
+}
+
+/** Local-hour range used to prefilter nightly review candidates inside SQL. */
+export interface ListAgentSignalNightlyReviewUsersLocalHourWindow {
+  /** UTC instant whose local hour is evaluated for each user. */
+  at: Date;
+  /** Exclusive local hour upper bound, `startHour < endHourExclusive <= 24`. */
+  endHourExclusive: number;
+  /** Inclusive local hour lower bound, `0 <= startHour`. */
+  startHour: number;
 }
 
 /** One user candidate for AgentSignal nightly review scheduling. */
@@ -113,8 +152,8 @@ export interface AgentSignalNightlyReviewTarget {
  * - Nightly review needs active agent targets for a local-day window
  *
  * Expects:
- * - Global feature gates are checked by the service layer
- * - Agent-level opt-in is stored on `agents.chatConfig.selfIteration.enabled`
+ * - The user-level Labs → Self-evolving switch is applied by `listEligibleUsers`
+ * - There is no agent-level opt-in; every active non-virtual agent (and Lobe AI) is a target
  *
  * Returns:
  * - Candidate users and active agent targets without emitting source events
@@ -134,10 +173,13 @@ export class AgentSignalNightlyReviewModel {
    * - Backfills need to restrict scheduling to a user allowlist
    *
    * Expects:
-   * - Global feature gates are checked by the service layer
+   * - Only users with Labs → Self-evolving on (`preference.lab.enableSelfLearning = true`) are
+   *   listed, whitelist runs included; the enqueue path re-checks the same switch
    * - Missing user timezone falls back to UTC
    * - `activeSince` is supplied by the scheduler; it is a superset of the per-user review
    *   window re-applied downstream, and it is skipped for whitelist runs
+   * - `localHourWindow`, when supplied, is a superset of the exact local window the scheduler
+   *   re-checks; it applies to whitelist runs too, because those users would be skipped anyway
    *
    * Returns:
    * - Users sorted by `createdAt, id` for deterministic pagination
@@ -183,6 +225,10 @@ export class AgentSignalNightlyReviewModel {
             .as('nightly_review_active_users')
         : undefined;
 
+    const localHourCondition = options.localHourWindow
+      ? buildLocalHourCondition(options.localHourWindow)
+      : undefined;
+
     let query = this.db
       .select({
         createdAt: users.createdAt,
@@ -198,7 +244,16 @@ export class AgentSignalNightlyReviewModel {
 
     query = query
       .leftJoin(userSettings, eq(users.id, userSettings.id))
-      .where(and(cursorCondition, whitelistCondition))
+      .where(
+        and(
+          // Labs → Self-evolving is the user-level gate for all background self-iteration.
+          // Filtering here keeps users who never turned it on out of the fan-out entirely.
+          sql`${users.preference}->'lab'->>'enableSelfLearning' = 'true'`,
+          cursorCondition,
+          whitelistCondition,
+          localHourCondition,
+        ),
+      )
       .orderBy(asc(users.createdAt), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;
@@ -283,10 +338,6 @@ export class AgentSignalNightlyReviewModel {
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
           or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
-          or(
-            eq(agents.slug, INBOX_SESSION_ID),
-            sql`COALESCE((${agents.chatConfig}->'selfIteration'->>'enabled')::boolean, false) = true`,
-          ),
         ),
       )
       .groupBy(agents.id, agents.title, agents.name, agents.slug, userSettings.general)

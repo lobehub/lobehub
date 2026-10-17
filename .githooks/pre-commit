@@ -11,3 +11,6 @@ if [ "$BRANCH" = "dev" ] || [ "$BRANCH" = "main" ]; then
 fi
 
 lint-staged
+
+# Runs after lint-staged autofix so it measures the final staged content.
+bun run .agents/scripts/check/size-gate.ts --staged

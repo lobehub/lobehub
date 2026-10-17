@@ -40,6 +40,31 @@ const requiresVisualAnalysis = (mediaType: unknown): boolean =>
   typeof mediaType === 'string' && mediaType.split(';', 1)[0].trim().toLowerCase() === 'image/avif';
 
 /**
+ * Image formats no vision API accepts. Agent-mode uploads skip the chat
+ * file-type whitelist, so an SVG still lands in `imageList`; sending it as an
+ * `image_url` part makes every request in that topic fail with a 400.
+ * Provider-specific formats (e.g. HEIC on Gemini) stay with each provider's
+ * context builder, and images without a known type keep the previous behavior.
+ */
+const NON_VISION_IMAGE_TYPES = new Set(['image/svg+xml']);
+
+const getUnsupportedVisionImageType = (image: {
+  mimeType?: string;
+  url?: string;
+}): string | undefined => {
+  const mimeType =
+    image.mimeType ||
+    (typeof image.url === 'string' ? parseDataUri(image.url).mimeType : undefined);
+  if (!mimeType) return;
+
+  const normalized = mimeType.split(';', 1)[0].trim().toLowerCase();
+  return NON_VISION_IMAGE_TYPES.has(normalized) ? normalized : undefined;
+};
+
+const createUnsupportedImageFormatPlaceholder = (mimeType: string) =>
+  `[image omitted: ${mimeType} is not a supported vision input format. Do not infer or describe the image. If the request depends on it, read the attached file with an available tool.]`;
+
+/**
  * Heterogeneous-agent image uploads mirror each persisted image URL into tool
  * text as `![mediaType](url)`. Non-vision models must receive only the opaque
  * media ref, otherwise they can copy the signed URL into a later tool call.
@@ -80,6 +105,11 @@ export interface FileContextConfig {
   enabled?: boolean;
   /** Whether to include file URLs in file context prompts */
   includeFileUrl?: boolean;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (see `planAttachmentPreviews`).
+   */
+  previewFileIds?: string[];
 }
 
 export interface MessageContentConfig {
@@ -127,11 +157,15 @@ export interface UserMessageContentPart {
 export class MessageContentProcessor extends BaseProcessor {
   readonly name = 'MessageContentProcessor';
 
+  private readonly previewFileIds?: ReadonlySet<string>;
+
   constructor(
     private config: MessageContentConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
+    const previewFileIds = config.fileContext?.previewFileIds;
+    if (previewFileIds?.length) this.previewFileIds = new Set(previewFileIds);
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
@@ -252,11 +286,21 @@ export class MessageContentProcessor extends BaseProcessor {
       (!canUseVision && hasImages ? message.imageList.length : 0) +
       (!canUseVision ? arrayImageUrlCount : 0);
 
-    if (imageDowngradeCount > 0) {
-      const placeholders = Array.from(
-        { length: imageDowngradeCount },
-        () => VISION_DOWNGRADE_PLACEHOLDER,
-      ).join('\n');
+    const unsupportedImageTypes: string[] = [];
+    const visionImageList = canUseVision
+      ? (message.imageList || []).filter((image: { mimeType?: string; url?: string }) => {
+          const unsupportedType = getUnsupportedVisionImageType(image);
+          if (unsupportedType) unsupportedImageTypes.push(unsupportedType);
+          return !unsupportedType;
+        })
+      : [];
+
+    const placeholders = [
+      ...Array.from({ length: imageDowngradeCount }, () => VISION_DOWNGRADE_PLACEHOLDER),
+      ...unsupportedImageTypes.map(createUnsupportedImageFormatPlaceholder),
+    ].join('\n');
+
+    if (placeholders) {
       textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
     }
 
@@ -271,6 +315,7 @@ export class MessageContentProcessor extends BaseProcessor {
         fileList: message.fileList,
         imageList: message.imageList || [],
         messageId: message.id,
+        previewFileIds: this.previewFileIds,
         videoList: message.videoList || [],
       });
 
@@ -288,8 +333,8 @@ export class MessageContentProcessor extends BaseProcessor {
     }
 
     // Process image content (legacy imageList path)
-    if (hasImages && canUseVision) {
-      const imageContentParts = await this.processImageList(message.imageList || []);
+    if (visionImageList.length > 0) {
+      const imageContentParts = await this.processImageList(visionImageList);
       contentParts.push(...imageContentParts);
     }
 
@@ -315,7 +360,7 @@ export class MessageContentProcessor extends BaseProcessor {
     // Explicitly return fields, keeping only necessary message fields
     const hasFileContext =
       (hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled;
-    const hasVisionContent = (hasImages || arrayImageUrlCount > 0) && canUseVision;
+    const hasVisionContent = (visionImageList.length > 0 || arrayImageUrlCount > 0) && canUseVision;
     const hasVideoContent = hasVideos && canUseVideo;
     const hasAudioContent = hasAudios && canUseAudio;
 

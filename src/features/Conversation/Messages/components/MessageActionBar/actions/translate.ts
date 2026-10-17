@@ -1,4 +1,4 @@
-import { css, cx } from 'antd-style';
+import { css, cx } from '@lobehub/ui';
 import { LanguagesIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,9 +1,20 @@
 'use client';
 
 import type { TaskTemplateConnectorReference } from '@lobechat/const';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Alert, Avatar, Button, Divider, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Alert,
+  Avatar,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Divider,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';

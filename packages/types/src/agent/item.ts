@@ -24,6 +24,17 @@ export interface AgentRankItem {
   title: string | null;
 }
 
+/** An agent whose execution is routed to a specific device — see the device detail page. */
+export interface DeviceBoundAgentItem {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
+  title: string | null;
+  visibility: 'private' | 'public';
+}
+
 export interface LobeAgentConfig {
   /**
    * Agency configuration: device binding, heterogeneous agent provider, etc.

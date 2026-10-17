@@ -1,5 +1,4 @@
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { css, cx } from 'antd-style';
+import { css, cx, Skeleton } from '@lobehub/ui';
 
 const switchLoading = cx(css`
   width: 44px !important;

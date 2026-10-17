@@ -24,6 +24,7 @@ import {
   inputSelectors,
   messageStateSelectors,
   useConversationStore,
+  useConversationStoreApi,
   virtuaListSelectors,
 } from '../../store';
 import {
@@ -33,6 +34,7 @@ import {
 import { useEarlierHistoryTrigger } from '../hooks/useEarlierHistoryTrigger';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
+import { resolveAutoScrollDetached } from '../utils/autoScrollFollow';
 import type { ResolvedMessageDeepLink } from '../utils/messageDeepLink';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
@@ -54,6 +56,7 @@ const CONVERSATION_HEADER_ID = '__conversation_header__';
 // that talk to virtua directly) work in MESSAGE index space; this offset
 // translates at the virtua boundary.
 const LEADING_ROWS = 1;
+const VLIST_CLASS_NAME = 'conversation-vlist';
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -76,15 +79,26 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastUserScrollIntentAtRef = useRef(0);
+    // Plain clicks also mark `lastUserScrollIntentAtRef` (scrollbar track
+    // clicks), but a click that collapses a block makes the browser correct the
+    // offset upward — so detaching auto-scroll only trusts actual scroll input.
+    const lastActiveScrollInputAtRef = useRef(0);
+    const lastScrollOffsetRef = useRef<number | null>(null);
 
     // Per-topic scroll restoration. Provider does not remount on topic switch,
     // so we key the scroll snapshot by the message-map key derived from
     // ConversationStore's `context`.
     const contextKey = useConversationStore((s) => messageMapKey(s.context));
+    const getScroller = useCallback(
+      () =>
+        containerRef.current?.querySelector<HTMLElement>(`:scope > .${VLIST_CLASS_NAME}`) ?? null,
+      [],
+    );
     const { recordScroll } = useTopicScrollPersist({
       contextKey,
       containerRef,
       dataSourceLength: dataSource.length,
+      getScroller,
       headerOffset: LEADING_ROWS,
       messageDeepLink,
       virtuaRef,
@@ -120,9 +134,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
 
     // Store actions
+    const storeApi = useConversationStoreApi();
     const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
     const setScrollState = useConversationStore((s) => s.setScrollState);
+    const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
     const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
     const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
     const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
@@ -133,51 +149,82 @@ const VirtualizedList = memo<VirtualizedListProps>(
       lastUserScrollIntentAtRef.current = Date.now();
     }, []);
 
-    const handlePointerMove = useCallback(
+    // `isScrolling` pauses streaming auto-scroll, so it tracks the user's own
+    // scrolling only. Auto-scroll's jumps also fire scroll events; counting
+    // them would hold the flag and throttle following to one jump per
+    // scroll-end debounce, leaving the newest lines below the fold.
+    const markUserScrolling = useCallback(() => {
+      setScrollState({ isScrolling: true });
+      if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+      scrollEndTimerRef.current = setTimeout(() => {
+        setScrollState({ isScrolling: false });
+      }, 150);
+    }, [setScrollState]);
+
+    const markActiveScrollInput = useCallback(() => {
+      const now = Date.now();
+      lastUserScrollIntentAtRef.current = now;
+      lastActiveScrollInputAtRef.current = now;
+      // Mark before the resulting scroll event so a streaming chunk landing in
+      // between cannot jump over the user's input.
+      markUserScrolling();
+    }, [markUserScrolling]);
+
+    const handlePointerDown = useCallback(
       (event: PointerEvent<HTMLDivElement>) => {
-        if (event.buttons > 0) {
+        // A press on the scroller's own scrollbar (track click or drag start)
+        // is scroll input; presses on message content are just clicks.
+        const target = event.target as HTMLElement;
+        const isScroller = target.clientWidth > 0 && target.scrollHeight > target.clientHeight;
+        if (isScroller && event.nativeEvent.offsetX > target.clientWidth) {
+          markActiveScrollInput();
+        } else {
           markUserScrollIntent();
         }
       },
-      [markUserScrollIntent],
+      [markActiveScrollInput, markUserScrollIntent],
+    );
+
+    const handlePointerMove = useCallback(
+      (event: PointerEvent<HTMLDivElement>) => {
+        if (event.buttons > 0) {
+          markActiveScrollInput();
+        }
+      },
+      [markActiveScrollInput],
     );
 
     const handleKeyDown = useCallback(
       (event: KeyboardEvent<HTMLDivElement>) => {
         if (SCROLL_KEYS.has(event.key)) {
-          markUserScrollIntent();
+          markActiveScrollInput();
         }
         earlierHistory.onKeyDown(event);
       },
-      [earlierHistory, markUserScrollIntent],
+      [earlierHistory, markActiveScrollInput],
     );
 
     const handleWheel = useCallback(
       (event: WheelEvent<HTMLDivElement>) => {
-        markUserScrollIntent();
+        markActiveScrollInput();
         earlierHistory.onWheel(event);
       },
-      [earlierHistory, markUserScrollIntent],
+      [earlierHistory, markActiveScrollInput],
     );
 
     const handleTouchMove = useCallback(
       (event: TouchEvent<HTMLDivElement>) => {
-        markUserScrollIntent();
+        markActiveScrollInput();
         earlierHistory.onTouchMove(event);
       },
-      [earlierHistory, markUserScrollIntent],
+      [earlierHistory, markActiveScrollInput],
     );
 
-    // Check if at bottom based on scroll position
-    const checkAtBottom = useCallback(() => {
+    const getDistanceToBottom = useCallback(() => {
       const ref = virtuaRef.current;
-      if (!ref) return false;
+      if (!ref) return Infinity;
 
-      const scrollOffset = ref.scrollOffset;
-      const scrollSize = ref.scrollSize;
-      const viewportSize = ref.viewportSize;
-
-      return scrollSize - scrollOffset - viewportSize <= AT_BOTTOM_THRESHOLD;
+      return ref.scrollSize - ref.scrollOffset - ref.viewportSize;
     }, []);
 
     // Handle scroll events
@@ -196,45 +243,71 @@ const VirtualizedList = memo<VirtualizedListProps>(
 
       if (activeFromFind !== activeIndex) setActiveIndex(activeFromFind);
 
-      setScrollState({ isScrolling: true });
+      const hasUserScrollIntent =
+        Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
+      if (hasUserScrollIntent) markUserScrolling();
+
+      const distanceToBottom = getDistanceToBottom();
+      const isAtBottom = distanceToBottom <= AT_BOTTOM_THRESHOLD;
 
       // Shrink spacer on scroll up when not streaming
       const ref = virtuaRef.current;
       if (ref) {
-        const hasUserScrollIntent =
-          Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
         onScrollOffset(ref.scrollOffset, hasUserScrollIntent);
 
         // Programmatic mount/restore scrolls carry no intent and never fetch.
         if (hasUserScrollIntent) earlierHistory.onUserScroll();
-      }
 
-      // Check if at bottom
-      const isAtBottom = checkAtBottom();
-      setScrollState({ atBottom: isAtBottom });
+        const autoScrollDetached = resolveAutoScrollDetached({
+          detached: storeApi.getState().autoScrollDetached,
+          distanceToBottom,
+          hasActiveScrollInput:
+            Date.now() - lastActiveScrollInputAtRef.current <= USER_SCROLL_INTENT_TTL_MS,
+          offset: ref.scrollOffset,
+          prevOffset: lastScrollOffsetRef.current,
+        });
+        lastScrollOffsetRef.current = ref.scrollOffset;
+        setScrollState({ atBottom: isAtBottom, autoScrollDetached });
+      } else {
+        setScrollState({ atBottom: isAtBottom });
+      }
 
       if (ref) {
         recordScroll(ref.scrollOffset, isAtBottom);
       }
-
-      // Clear existing timer
-      if (scrollEndTimerRef.current) {
-        clearTimeout(scrollEndTimerRef.current);
-      }
-
-      // Set new timer for scroll end
-      scrollEndTimerRef.current = setTimeout(() => {
-        setScrollState({ isScrolling: false });
-      }, 150);
     }, [
       activeIndex,
-      checkAtBottom,
       earlierHistory,
+      getDistanceToBottom,
+      markUserScrolling,
       onScrollOffset,
       recordScroll,
       setActiveIndex,
       setScrollState,
+      storeApi,
     ]);
+
+    // Sending a message is an explicit request to follow the new reply, so it
+    // re-attaches auto-scroll even if the user had scrolled away earlier.
+    // Keyed on the last id: loading earlier history prepends rows and leaves it
+    // unchanged, so it must not count as a send.
+    const lastMessageId = dataSource.at(-1);
+    const prevLastMessageIdRef = useRef(lastMessageId);
+    useEffect(() => {
+      const lastChanged = lastMessageId !== prevLastMessageIdRef.current;
+      prevLastMessageIdRef.current = lastMessageId;
+      if (lastChanged && isSecondLastMessageFromUser) {
+        setScrollState({ autoScrollDetached: false });
+      }
+    }, [isSecondLastMessageFromUser, lastMessageId, setScrollState]);
+
+    // BackBottom is an explicit request to follow again. While streaming, a
+    // smooth scroll aims at the bottom measured at click time and lands short
+    // once the reply has grown, so jump instead and let auto-scroll take over.
+    const handleBackBottom = useCallback(() => {
+      setScrollState({ autoScrollDetached: false });
+      scrollToBottom(!messageStateSelectors.isAIGenerating(storeApi.getState()));
+    }, [scrollToBottom, setScrollState, storeApi]);
 
     const handleScrollEnd = useCallback(() => {
       setScrollState({ isScrolling: false });
@@ -249,11 +322,16 @@ const VirtualizedList = memo<VirtualizedListProps>(
         registerVirtuaScrollMethods({
           getItemOffset: (index) => ref.getItemOffset(index + LEADING_ROWS),
           getItemSize: (index) => ref.getItemSize(index + LEADING_ROWS),
+          getScrollElement: getScroller,
           getScrollOffset: () => ref.scrollOffset,
           getScrollSize: () => ref.scrollSize,
           getTotalCount: () => totalCountRef.current,
           getViewportSize: () => ref.viewportSize,
           scrollTo: (offset) => ref.scrollTo(offset),
+          scrollToEnd: () => {
+            const scroller = getScroller();
+            if (scroller) scroller.scrollTop = scroller.scrollHeight;
+          },
           scrollToIndex: (index, options) => ref.scrollToIndex(index + LEADING_ROWS, options),
         });
 
@@ -269,7 +347,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
       return () => {
         registerVirtuaScrollMethods(null);
       };
-    }, [registerVirtuaScrollMethods, setActiveIndex]);
+    }, [getScroller, registerVirtuaScrollMethods, setActiveIndex]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -314,7 +392,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
     }, [dataSource, streamingIndices, selectionMessageIds]);
 
     const atBottom = useConversationStore(virtuaListSelectors.atBottom);
-    const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
 
     // The ChatInput's floating overlay (TodoProgress + QueueTray) covers the
     // bottom of this scroll viewport like a layer. Extend VList's internal
@@ -367,7 +444,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
         ref={containerRef}
         style={{ height: '100%', position: 'relative' }}
         onKeyDownCapture={handleKeyDown}
-        onPointerDownCapture={markUserScrollIntent}
+        onPointerDownCapture={handlePointerDown}
         onPointerMoveCapture={handlePointerMove}
         onTouchMoveCapture={handleTouchMove}
         onTouchStartCapture={earlierHistory.onTouchStart}
@@ -383,6 +460,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
         )}
         <VList
           bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+          className={VLIST_CLASS_NAME}
           data={dataWithSlots}
           keepMounted={keepMountedIndicesWithSlots}
           ref={virtuaRef}
@@ -467,7 +545,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
             atBottom={atBottom}
             bottomOffset={overlayHeight}
             visible={!atBottom}
-            onScrollToBottom={() => scrollToBottom(true)}
+            onScrollToBottom={handleBackBottom}
           />
         </WideScreenContainer>
       </div>

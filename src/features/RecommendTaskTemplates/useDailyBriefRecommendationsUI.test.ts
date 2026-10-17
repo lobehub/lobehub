@@ -54,17 +54,13 @@ vi.mock('swr', () => ({
   default: mockUseSWR,
 }));
 
-// The brief feed is read through the active cache scope — a list fetched for
-// another user/workspace is treated as not-loaded (see `briefListSelectors`).
-vi.mock('@/libs/swr/useCacheScope', () => ({
-  useCacheScope: () => 'user-1:personal',
-}));
-
+// The brief feed is a replica now: the hook only needs the feed to hold a
+// value for the scope (`briefListMap` has an entry) to leave its skeleton —
+// see `briefListSelectors.isBriefsInit`.
 vi.mock('@/store/brief', () => ({
   useBriefStore: (selector: (state: any) => unknown) =>
     selector({
-      briefsScope: 'user-1:personal',
-      isBriefsInit: true,
+      briefListMap: { unresolved: [] },
       useFetchBriefs: mockUseFetchBriefs,
     }),
 }));

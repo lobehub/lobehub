@@ -1,9 +1,17 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Input, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  CopyButton,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Input,
+  Select,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { CheckCircle2 } from 'lucide-react';

@@ -6,7 +6,7 @@ import { INBOX_SESSION_ID } from '@/const/session';
 import type { GlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
 import { MODEL_DETAIL_PANEL_EXPANDABLE_KEYS } from '@/store/global/initialState';
-import { readOverridableField } from '@/store/global/selectors/systemStatus';
+import { readOverridableField, systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
@@ -141,8 +141,7 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   toggleWorkingOverview = (newValue?: boolean): void => {
-    const currentValue =
-      this.#get().status.showWorkingOverview ?? !this.#get().status.showRightPanel;
+    const currentValue = systemStatusSelectors.showWorkingOverview(this.#get());
     const showWorkingOverview = typeof newValue === 'boolean' ? newValue : !currentValue;
 
     this.#get().updateSystemStatus({ showWorkingOverview }, n('toggleWorkingOverview', newValue));

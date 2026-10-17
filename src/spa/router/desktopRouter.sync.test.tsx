@@ -2,12 +2,14 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { isValidElement, type ReactElement, Suspense } from 'react';
+import { renderToString } from 'react-dom/server';
 import type { RouteObject } from 'react-router';
-import { matchRoutes } from 'react-router';
+import { matchRoutes, MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 import AppsSkeleton from '@/components/Skeleton/Apps';
+import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import DelayedFallback from '@/components/Skeleton/Delayed';
@@ -18,9 +20,14 @@ import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleto
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
+import ProviderSettingsSkeleton, {
+  ProviderDetailSkeleton,
+} from '@/components/Skeleton/Settings/Provider';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
 import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetailSkeleton';
+import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
 import { createTabRouter } from '@/spa/router/tabRouter';
@@ -188,7 +195,7 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
-    '%s exposes project task, goal, and acceptance workspaces',
+    '%s exposes project task, goal, dashboard, and acceptance workspaces',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');
       const projectIndexRoute = projectRoute?.children?.find((route) => route.index);
@@ -196,12 +203,36 @@ describe('desktop router shared definition', () => {
         ?.map((route) => route.path)
         .filter((routePath): routePath is string => Boolean(routePath));
 
-      expect(projectPaths).toEqual(['tasks', 'goals', 'acceptance']);
+      expect(projectPaths).toEqual([
+        'conversation/:topicId?',
+        'tasks',
+        'settings/:section?',
+        'goals',
+        'dashboard',
+        'acceptance',
+      ]);
+      for (const section of ['general', 'environments', 'directories']) {
+        const matches = matchRoutes(
+          createMainAreaRoutes(factory),
+          `/project/project-1/settings/${section}`,
+        );
+        expect(matches?.at(-1)?.params.section).toBe(section);
+      }
       expect(
         (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
-      ).toBe('tasks');
+      ).toBe('conversation');
     },
   );
+
+  it.each(mainAreaVariants)('%s matches project dashboard list and board pages', (_, factory) => {
+    const list = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1/dashboard');
+    const board = matchRoutes(createMainAreaRoutes(factory), '/acme/project/prj_1/dashboard/d-1');
+
+    expect(list?.at(-1)?.route.index).toBe(true);
+    expect(list?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
+    expect(board?.at(-1)?.route.path).toBe(':dashboardId');
+    expect(board?.at(-1)?.params).toMatchObject({ dashboardId: 'd-1', projectId: 'prj_1' });
+  });
 
   it.each(mainAreaVariants)('%s exposes the projects view-all route', (_, factory) => {
     const personalMatches = matchRoutes(createMainAreaRoutes(factory), '/projects');
@@ -223,6 +254,27 @@ describe('desktop router shared definition', () => {
       expect(paths).not.toContain(':workspaceSlug');
       expect(paths?.at(-1)).toBe('memory');
       expect(matches?.at(-1)?.route.handle).toMatchObject({ settingsTab: 'memory' });
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s personal devices list and detail use their own skeletons, not the settings form',
+    (_, factory) => {
+      for (const [url, leaf] of [
+        ['/settings/devices', 'devices'],
+        ['/settings/devices/device-1', 'devices/:sub'],
+      ] as const) {
+        const matches = matchRoutes(createMainAreaRoutes(factory), url);
+        const handle = matches?.at(-1)?.route.handle as {
+          meta?: { Skeleton?: unknown };
+          settingsTab?: string;
+        };
+
+        expect(matches?.at(-1)?.route.path).toBe(leaf);
+        expect(handle.settingsTab).toBe('devices');
+        expect(handle.meta?.Skeleton).toBeDefined();
+        expect(handle.meta?.Skeleton).not.toBe(SettingsPageSkeleton);
+      }
     },
   );
 
@@ -351,7 +403,13 @@ describe('desktop router shared definition', () => {
       expect(fallbacks.length).toBeGreaterThan(0);
       expect(fallbacks).not.toContain(BrandTextLoading);
       expect(new Set(fallbacks)).toEqual(
-        new Set([ConversationLayoutSkeleton, ConversationSegmentSkeleton, RouteSegmentSkeleton]),
+        new Set([
+          AgentConversationLayoutSkeleton,
+          ConversationLayoutSkeleton,
+          ConversationSegmentSkeleton,
+          ProviderDetailSkeleton,
+          RouteSegmentSkeleton,
+        ]),
       );
     },
   );
@@ -365,7 +423,7 @@ describe('desktop router shared definition', () => {
       for (const [pathname, expectedFallbacks] of [
         [
           '/agent/agent-1/topic-1',
-          [RouteSegmentSkeleton, ConversationLayoutSkeleton, ConversationSegmentSkeleton],
+          [RouteSegmentSkeleton, AgentConversationLayoutSkeleton, ConversationSegmentSkeleton],
         ],
         ['/group/group-1/topic-1', [RouteSegmentSkeleton, ConversationLayoutSkeleton]],
       ] as const) {
@@ -419,10 +477,12 @@ describe('desktop router shared definition', () => {
       ['/agent/agent-1/goals', GoalSkeleton],
       ['/agent/agent-1/goal/goal-1', GoalDetailSkeleton],
       ['/agent/agent-1/profile', ProfileSkeleton],
-      ['/agent/agent-1/topic-1', ConversationLayoutSkeleton],
+      ['/agent/agent-1/topic-1', AgentConversationLayoutSkeleton],
       ['/group/group-1/profile', GroupProfileRouteSkeleton],
       ['/group/group-1/topic-1', ConversationLayoutSkeleton],
       ['/settings/profile', SettingsPageSkeleton],
+      ['/settings/provider/all', ProviderSettingsSkeleton],
+      ['/settings/provider/openai', ProviderSettingsSkeleton],
       ['/apps', AppsSkeleton],
       ['/memory', MemorySkeleton],
       ['/resource', ResourceHomeSkeleton],
@@ -436,6 +496,79 @@ describe('desktop router shared definition', () => {
         pathname,
       ).toBe(expectedSkeleton);
     }
+  });
+
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])(
+    '%s gives section-stacked workspace settings tabs a sections skeleton without a second frame',
+    (_, getRoutes) => {
+      // Regression: these tabs used the generic avatar/detail surface, which
+      // looked nothing like the stacked groups the page renders.
+      const genericSurfaces = new Set([
+        createSurfaceSkeleton('detail'),
+        createSurfaceSkeleton('grid'),
+      ]);
+
+      for (const tab of ['plans', 'billing', 'budget', 'credits', 'usage']) {
+        const pathname = `/team/settings/${tab}`;
+        const matches = matchRoutes(getRoutes(pathname), pathname);
+        const Skeleton = resolveRouteSkeleton(
+          matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
+        );
+
+        expect(Skeleton, pathname).toBeDefined();
+        expect(genericSurfaces.has(Skeleton!), pathname).toBe(false);
+
+        // Inside the content layout (`chrome='body'`) only the sections render:
+        // the layout already owns the navigation header and padded container.
+        const html = renderToString(
+          <MemoryRouter initialEntries={[pathname]}>
+            {Skeleton && <Skeleton chrome={'body'} />}
+          </MemoryRouter>,
+        );
+
+        expect(html, pathname).toContain('data-testid="settings-sections-skeleton"');
+        expect(html, pathname).not.toContain('max-width:1024px');
+      }
+    },
+  );
+
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])(
+    '%s paints the resource skeleton on its first render, without a chunk wait',
+    (_, getRoutes) => {
+      const matches = matchRoutes(getRoutes('/resource/files'), '/resource/files');
+      const Skeleton = resolveRouteSkeleton(
+        matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
+      );
+
+      const html = renderToString(
+        <MemoryRouter initialEntries={['/resource/files']}>
+          {Skeleton && <Skeleton />}
+        </MemoryRouter>,
+      );
+
+      expect(html).toContain('aria-busy');
+    },
+  );
+
+  it.each([
+    ['Web', (_pathname: string) => webDesktopRoutes],
+    ['Electron', (pathname: string) => createTabRouter(pathname).routes],
+  ])('%s keeps the provider detail chunk inside the provider layout skeleton', (_, getRoutes) => {
+    const matches = matchRoutes(
+      getRoutes('/settings/provider/openai'),
+      '/settings/provider/openai',
+    );
+    const detail = matches?.at(-1)?.route.element as
+      ReactElement<{ fallback?: ReactElement<{ children?: ReactElement }> }> | undefined;
+
+    expect(detail?.props.fallback?.type).toBe(DelayedFallback);
+    expect(detail?.props.fallback?.props.children?.type).toBe(ProviderDetailSkeleton);
   });
 
   it.each([
@@ -517,6 +650,19 @@ describe('desktop router shared definition', () => {
         providerId: 'lobehub',
         workspaceSlug: 'acme',
       });
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s gives the workspace devices list the page skeleton DeviceManager hands over to',
+    (_, factory) => {
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/acme/settings/devices');
+      const handle = matches?.at(-1)?.route.handle as { meta?: { Skeleton?: unknown } };
+
+      // A generic surface skeleton here swapped to DeviceManager's own card
+      // skeleton once the chunk loaded — two different skeletons on reload.
+      expect(matches?.at(-1)?.route.path).toBe('devices');
+      expect(handle.meta?.Skeleton).toBe(DevicesPageSkeleton);
     },
   );
 

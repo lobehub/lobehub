@@ -246,6 +246,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       // call_llm does a parent existence preflight; return a truthy row by
       // default so existing tests don't have to stub it.
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
+      findMessagePlugin: vi.fn().mockResolvedValue(undefined),
       // The abort settle asks whether a row already holds the call. Null by
       // default: these tests exercise calls that never got one.
       findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
@@ -2224,7 +2225,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           ...overrides,
         });
 
-      const callWithMessages = async (
+      const callAndGetMessages = async (
         messages: any[],
         state: AgentState,
         contextOverrides?: Partial<RuntimeExecutorContext>,
@@ -2241,12 +2242,90 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           state,
         );
 
-        // The shared context rules may prepend an agent-management block as its
-        // own user turn; the TODO state rides on the actual user message.
-        return mockChat.mock.calls[0][0].messages.findLast(
-          (message: { role?: string }) => message.role === 'user',
-        )?.content as string;
+        return mockChat.mock.calls[0][0].messages as Array<{
+          content?: unknown;
+          role?: string;
+        }>;
       };
+
+      const callWithMessages = async (
+        messages: any[],
+        state: AgentState,
+        contextOverrides?: Partial<RuntimeExecutorContext>,
+      ) =>
+        (await callAndGetMessages(messages, state, contextOverrides))
+          .filter((message) => message.role === 'user')
+          .map((message) => String(message.content))
+          .join('\n\n');
+
+      it.each([
+        { apiNames: ['listDocuments'], expected: false, stepCount: 1, stepIndex: 1 },
+        { apiNames: ['updateTodos'], expected: true, stepCount: 1, stepIndex: 1 },
+        {
+          apiNames: ['updateTodos', 'listDocuments'],
+          expected: true,
+          stepCount: 1,
+          stepIndex: 1,
+        },
+        { apiNames: ['listDocuments'], expected: true, stepCount: 11, stepIndex: 10 },
+      ])(
+        'injects TODOs=$expected after $apiNames at runtime step $stepIndex',
+        async ({ apiNames, expected, stepCount, stepIndex }) => {
+          const todos = {
+            items: [{ status: 'processing', text: 'Review the cache report' }],
+            updatedAt: 'now',
+          };
+          const content = await callWithMessages(
+            [
+              { content: 'Keep going', role: 'user' },
+              {
+                content: '',
+                role: 'assistant',
+                tool_calls: [
+                  {
+                    function: { arguments: '{}', name: 'lobe-agent____createTodos' },
+                    id: 'create-call',
+                    type: 'function',
+                  },
+                ],
+              },
+              {
+                content: 'created',
+                plugin: { apiName: 'createTodos', identifier: 'lobe-agent' },
+                pluginState: { todos },
+                role: 'tool',
+                tool_call_id: 'create-call',
+              },
+              {
+                content: '',
+                role: 'assistant',
+                tool_calls: apiNames.map((apiName, index) => ({
+                  function: {
+                    arguments: '{}',
+                    name: `${apiName === 'listDocuments' ? 'docs' : 'lobe-agent'}____${apiName}`,
+                  },
+                  id: `current-call-${index}`,
+                  type: 'function',
+                })),
+              },
+              ...apiNames.map((apiName, index) => ({
+                content: 'result',
+                plugin: {
+                  apiName,
+                  identifier: apiName === 'listDocuments' ? 'docs' : 'lobe-agent',
+                },
+                ...(apiName === 'updateTodos' && { pluginState: { todos } }),
+                role: 'tool',
+                tool_call_id: `current-call-${index}`,
+              })),
+            ],
+            stateWithLobeAgent({ stepCount }),
+            { stepIndex },
+          );
+
+          expect(content.includes('<todo_context>')).toBe(expected);
+        },
+      );
 
       it('injects the newest valid message TODO state and skips Notebook', async () => {
         mockFindPlanDocuments.mockResolvedValue([
@@ -2281,6 +2360,43 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         // The plan document is still read for the plan block, but history wins
         // for the TODO state.
         expect(content).not.toContain('Stale metadata task');
+      });
+
+      it('keeps tool-loop history unchanged and injects pluginState todos at the tail', async () => {
+        const messages = await callAndGetMessages(
+          [
+            { content: 'Refactor the parser', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              tool_calls: [
+                {
+                  function: { arguments: '{}', name: 'createTodos' },
+                  id: 'call-1',
+                  type: 'function',
+                },
+              ],
+            },
+            {
+              content: 'created',
+              pluginState: {
+                todos: {
+                  items: [{ status: 'processing', text: 'Write parser tests' }],
+                  updatedAt: 'new',
+                },
+              },
+              role: 'tool',
+              tool_call_id: 'call-1',
+            },
+          ],
+          stateWithLobeAgent(),
+        );
+        const userMessages = messages.filter((message) => message.role === 'user');
+
+        expect(userMessages.map((message) => message.content)).toContain('Refactor the parser');
+        expect(userMessages.at(-1)?.content).toContain('<todo_context>');
+        expect(userMessages.at(-1)?.content).toContain('Write parser tests');
+        expect(messages.at(-1)?.role).toBe('user');
       });
 
       it.each([{ items: [], updatedAt: 'canonical-clear' }, []])(
@@ -6063,10 +6179,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
                 }),
               );
             }
+            // Under `toolCall`, afterToolCall gates a completed result: a call the
+            // before control denied never runs, so it has no result to gate.
             expect(
               fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).hookType),
-            ).toEqual(['beforeToolCall', 'afterToolCall']);
-            expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+            ).toEqual(
+              permissionDecision === 'allow'
+                ? ['beforeToolCall', 'afterToolCall']
+                : ['beforeToolCall'],
+            );
+            if (permissionDecision === 'allow')
+              expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
           } finally {
             fetchSpy.mockRestore();
             vi.unstubAllEnvs();
@@ -6090,6 +6213,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         async (throws) => {
           const mockDispatcher = {
             dispatch: vi.fn().mockResolvedValue(undefined),
+            hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+            evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
             evaluateToolCall: vi.fn().mockResolvedValue({
               status: 'allow',
             }),
@@ -6141,6 +6266,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should preserve native identity and structured results across tool notifications', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6227,6 +6354,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should report structured blocked results as unsuccessful notifications, not exceptions', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6266,6 +6395,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should correlate repeated tool names in a batch by native call ids', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6307,6 +6438,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should retain client routing and structured client results in notifications', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6352,6 +6485,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should dispatch beforeToolCall and afterToolCall hooks', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6395,6 +6530,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         const controller = new AbortController();
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6427,6 +6564,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         // webhook consumer would see `afterToolCall` after `onComplete`.
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6461,6 +6600,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6501,6 +6642,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should preserve failed mock results without executing the real tool', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6541,6 +6684,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6570,6 +6715,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should derive callIndex from state.usage.tools.byTool', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6622,6 +6769,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should dispatch beforeCompact and afterCompact hooks', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),
@@ -6660,9 +6809,51 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('request_human_approve hooks', () => {
+      it('creates an empty result slot before a human answer can be claimed', async () => {
+        const state = createToolState({
+          messages: [{ content: '', id: 'asst-1', role: 'assistant' }],
+        });
+        const dispatcher = new HookDispatcher();
+        dispatcher.register('op-123', [
+          {
+            id: 'result-control',
+            type: 'afterToolCall',
+            webhook: { url: 'https://hooks.example/policy', responseHandling: 'toolCall' },
+          },
+        ]);
+        const executors = createRuntimeExecutors({
+          ...ctx,
+          hookDispatcher: dispatcher,
+          loadAgentState: async () => state,
+        });
+        await executors.request_human_approve!(
+          {
+            type: 'request_human_approve',
+            pendingToolsCalling: [
+              {
+                apiName: 'ask',
+                arguments: '{}',
+                id: 'call-ask',
+                identifier: 'questions',
+                type: 'builtin',
+              },
+            ],
+          },
+          state,
+        );
+        expect(mockMessageModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: '',
+            tool_call_id: 'call-ask',
+          }),
+        );
+      });
+
       it('should dispatch beforeHumanIntervention hook', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
           evaluateToolCall: vi.fn().mockResolvedValue({
             status: 'allow',
           }),

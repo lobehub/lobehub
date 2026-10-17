@@ -123,3 +123,24 @@ Signal and VFS tests additionally require their documented Agent ID variables.
 Search fixtures wait up to 60 seconds for asynchronous indexing; a timeout fails
 the suite rather than accepting empty results. The command above supplies a live
 network budget explicitly; this does not change unit-test timeouts or enable retries.
+
+### Native Codex app-server on a connected device
+
+A current CLI advertises `codex-app-server-v1` only after its resolved Codex binary
+completes a native app-server handshake. The probe runs once per gateway connection
+(and again after 10 minutes), not once per system-info request. `lh connect capabilities`
+reports that same capability as JSON without logging in, connecting a device, or creating
+a conversation. Desktop gateway connections invoke this command through their bundled
+CLI, so an unrelated global CLI cannot determine support. Missing, incompatible, or
+timed-out binaries do not advertise native support.
+
+Codex topics run through `codex exec` unless the user enables the
+**Codex App Server Runtime** Lab. With the Lab on and a capable connection, the server
+runs them through app-server and persists each message's native session and turn IDs.
+These topics keep the `codex exec` recovery: a missing native session is retried fresh
+with the topic transcript.
+
+The internal `lh hetero exec --codex-app-server` transport uses a per-operation process
+that owns cancellation and shell identity. This transport rejects unsupported approval
+or sandbox arguments instead of weakening permissions. The richer permission bridge is
+maintained separately.

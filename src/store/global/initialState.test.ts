@@ -30,6 +30,16 @@ describe('createInitialSystemStatus', () => {
     expect(status.hiddenHomeWidgets).toEqual(['news', 'suggestions']);
   });
 
+  it('restores the agent working panel layout that the chat skeleton reserves', () => {
+    seed({ showRightPanel: true, showWorkingOverview: false, workingSidebarWidth: 480 });
+
+    const status = createInitialSystemStatus();
+
+    expect(status.showRightPanel).toBe(true);
+    expect(status.showWorkingOverview).toBe(false);
+    expect(status.workingSidebarWidth).toBe(480);
+  });
+
   it('falls back to defaults when nothing is persisted', () => {
     const status = createInitialSystemStatus();
 

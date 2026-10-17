@@ -117,6 +117,7 @@ export const groupTopicsByUpdatedTime = (topics: ChatTopic[]) =>
 // Project-based grouping
 const NO_PROJECT_GROUP_ID = 'no-project';
 const PROJECT_GROUP_PREFIX = 'project:';
+const PROJECT_ID_GROUP_PREFIX = 'project-id:';
 
 /**
  * Normalizes project display names to their shortest distinguishing path suffix.
@@ -179,17 +180,24 @@ export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string 
   getTopicMetadataWorkingDirectoryEffectivePath(topic.metadata);
 
 /**
- * Groups topics by source directory with distinguishable project titles.
+ * Groups topics by their owning project, falling back to source directory and
+ * raw path identities for topics that carry no project binding.
  *
  * Use when:
  * - Rendering project groups in a topic sidebar or management view.
  *
  * Expects:
- * - Topics with optional source or worktree directory metadata.
+ * - Topics with optional `projectId` / `projectWorkingDirectoryId` bindings
+ *   and optional source or worktree directory metadata.
  * - A timestamp field for descending activity order.
  *
  * Returns:
- * - Stable path-based group IDs and sorted topics, with no-project topics last.
+ * - `project-id:{projectId}` groups that merge every directory of one project
+ *   into a single group, `project-directory:{id}` / path-based IDs for topics
+ *   without a project, and `no-project` last.
+ * - Groups ordered with explicit-project groups first (the binding is
+ *   deliberate, not inferred from a directory), then directory-derived groups,
+ *   then `no-project`; each tier keeps most-recent-activity order.
  * - Basenames for unique projects and distinguishing path suffixes for collisions.
  */
 export const groupTopicsByProject = (
@@ -198,20 +206,26 @@ export const groupTopicsByProject = (
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const groupsMap = new Map<string, { children: ChatTopic[]; path: string; segments: string[] }>();
+  const groupsMap = new Map<string, { children: ChatTopic[]; paths: Set<string> }>();
 
   for (const topic of topics) {
     const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
-    const id = normalized ? `${PROJECT_GROUP_PREFIX}${normalized}` : NO_PROJECT_GROUP_ID;
+    const deviceId = topic.metadata?.boundDeviceId;
+    const id = topic.projectId
+      ? `${PROJECT_ID_GROUP_PREFIX}${topic.projectId}`
+      : topic.projectWorkingDirectoryId
+        ? `project-directory:${topic.projectWorkingDirectoryId}`
+        : normalized
+          ? `${PROJECT_GROUP_PREFIX}${deviceId ? `${deviceId}:` : ''}${normalized}`
+          : NO_PROJECT_GROUP_ID;
     const existing = groupsMap.get(id);
     if (existing) {
       existing.children.push(topic);
+      if (normalized) existing.paths.add(normalized);
     } else {
-      // Parse each source path once; display labels never change its grouping identity.
       groupsMap.set(id, {
         children: [topic],
-        path: normalized,
-        segments: normalized.split(/[/\\]+/).filter(Boolean),
+        paths: normalized ? new Set([normalized]) : new Set(),
       });
     }
   }
@@ -221,30 +235,192 @@ export const groupTopicsByProject = (
     group.children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
-  // Count suffixes once so an expanding project list does not compare every pair of paths.
+  // Count suffixes once so an expanding project list does not compare every pair
+  // of paths. A merged project group contributes each of its directories once.
   const suffixCounts = new Map<string, number>();
-  for (const { segments } of groupsMap.values()) {
-    for (let depth = 1; depth <= segments.length; depth++) {
-      const suffix = segments.slice(-depth).join('/');
-      suffixCounts.set(suffix, (suffixCounts.get(suffix) ?? 0) + 1);
+  for (const { paths } of groupsMap.values()) {
+    for (const path of paths) {
+      const segments = path.split(/[/\\]+/).filter(Boolean);
+      for (let depth = 1; depth <= segments.length; depth++) {
+        const suffix = segments.slice(-depth).join('/');
+        suffixCounts.set(suffix, (suffixCounts.get(suffix) ?? 0) + 1);
+      }
     }
   }
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
-    ([id, { children, path, segments }]) => ({
-      children,
-      id,
-      title: id === NO_PROJECT_GROUP_ID ? undefined : getProjectName(path, segments, suffixCounts),
-    }),
+    ([id, { children, paths }]) => {
+      // A merged project group spans directories; its most recently active
+      // directory names the group. Groups without any path stay title-less and
+      // let the renderer resolve the project name from its directory registry.
+      const primaryPath =
+        id === NO_PROJECT_GROUP_ID
+          ? undefined
+          : (children
+              .map((topic) => getTopicWorkingDirectorySourcePath(topic))
+              .find((path): path is string => !!path) ?? [...paths][0]);
+      return {
+        children,
+        id,
+        title:
+          id === NO_PROJECT_GROUP_ID || !primaryPath
+            ? undefined
+            : getProjectName(
+                primaryPath,
+                primaryPath.split(/[/\\]+/).filter(Boolean),
+                suffixCounts,
+              ),
+      };
+    },
   );
 
-  // Most-recently-active project first; "no project" always last
+  // Explicit-project groups first (the `projectId` binding is deliberate, not
+  // inferred), then directory-derived groups, then "no project" last. Within a
+  // tier the most recently active group leads.
+  const groupRank = (id: string): number => {
+    if (id === NO_PROJECT_GROUP_ID) return 2;
+    return id.startsWith(PROJECT_ID_GROUP_PREFIX) ? 0 : 1;
+  };
+
   return groups.sort((a, b) => {
-    if (a.id === NO_PROJECT_GROUP_ID) return 1;
-    if (b.id === NO_PROJECT_GROUP_ID) return -1;
+    const rankDiff = groupRank(a.id) - groupRank(b.id);
+    if (rankDiff !== 0) return rankDiff;
     const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
     const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
     return bTime - aTime;
   });
+};
+
+// Agent-based grouping
+const NO_AGENT_GROUP_ID = 'no-agent';
+const AGENT_GROUP_PREFIX = 'agent:';
+
+/**
+ * Topics only carry agent attribution on feeds that join it in (the project
+ * topic list selects `agentId` / `agentTitle` / `agentName` / `agentAvatar`
+ * per row); per-agent sidebar buckets omit it and every row resolves to the
+ * single `no-agent` bucket, where the renderer shows the active agent.
+ */
+interface AgentAttributedTopic extends ChatTopic {
+  agentId?: string | null;
+  agentName?: string | null;
+  agentTitle?: string | null;
+}
+
+/**
+ * Groups topics by their creating agent with agent-attributed titles.
+ *
+ * Use when:
+ * - Rendering the "group by agent" mode in a topic sidebar whose topics span
+ *   multiple agents (e.g. the project topic list).
+ *
+ * Returns:
+ * - `agent:{agentId}` groups sorted by most recent activity, titled from the
+ *   first row's agent metadata, and a title-less `no-agent` bucket for rows
+ *   without attribution (the renderer names those from its agent context).
+ */
+export const groupTopicsByAgent = (
+  topics: AgentAttributedTopic[],
+  field: 'createdAt' | 'updatedAt',
+): GroupedTopic[] => {
+  if (!topics.length) return [];
+
+  const groupsMap = new Map<string, AgentAttributedTopic[]>();
+  for (const topic of topics) {
+    const id = topic.agentId ? `${AGENT_GROUP_PREFIX}${topic.agentId}` : NO_AGENT_GROUP_ID;
+    const existing = groupsMap.get(id);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(id, [topic]);
+    }
+  }
+
+  for (const children of groupsMap.values()) {
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
+  }
+
+  return Array.from(groupsMap.entries())
+    .map(([id, children]) => ({
+      children,
+      id,
+      title: children[0]?.agentTitle ?? children[0]?.agentName ?? undefined,
+    }))
+    .sort((a, b) => {
+      const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+      const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
+      return bTime - aTime;
+    });
+};
+
+// Device-based grouping
+const NO_DEVICE_GROUP_ID = 'no-device';
+const DEVICE_GROUP_PREFIX = 'device:';
+
+/**
+ * The directory shape `groupTopicsByDevice` needs to resolve a topic's device
+ * from its `projectWorkingDirectoryId` — structurally satisfied by the
+ * store's `ProjectDirectory`.
+ */
+export interface TopicDeviceDirectory {
+  deviceId?: string | null;
+  id: string;
+}
+
+/**
+ * Groups topics by the device they run on.
+ *
+ * Use when:
+ * - Rendering the "group by device" mode in a project-scoped topic sidebar
+ *   whose topics span multiple machines.
+ *
+ * Expects:
+ * - Topics with optional `metadata.boundDeviceId` (an explicit device binding
+ *   wins) and optional `projectWorkingDirectoryId`, resolved to a device via
+ *   `directories`.
+ *
+ * Returns:
+ * - `device:{deviceId}` groups sorted by most recent activity, and a
+ *   title-less `no-device` bucket for rows without any device attribution.
+ *   Groups carry no title — the renderer names them from its directory and
+ *   device registries.
+ */
+export const groupTopicsByDevice = (
+  topics: ChatTopic[],
+  field: 'createdAt' | 'updatedAt',
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+): GroupedTopic[] => {
+  if (!topics.length) return [];
+
+  const deviceIdByDirectoryId = new Map(
+    (directories ?? []).map((directory) => [directory.id, directory.deviceId]),
+  );
+  const groupsMap = new Map<string, ChatTopic[]>();
+  for (const topic of topics) {
+    const deviceId =
+      topic.metadata?.boundDeviceId ??
+      (topic.projectWorkingDirectoryId
+        ? deviceIdByDirectoryId.get(topic.projectWorkingDirectoryId)
+        : undefined);
+    const id = deviceId ? `${DEVICE_GROUP_PREFIX}${deviceId}` : NO_DEVICE_GROUP_ID;
+    const existing = groupsMap.get(id);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(id, [topic]);
+    }
+  }
+
+  for (const children of groupsMap.values()) {
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
+  }
+
+  return Array.from(groupsMap.entries())
+    .map(([id, children]) => ({ children, id }))
+    .sort((a, b) => {
+      const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+      const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
+      return bTime - aTime;
+    });
 };
 
 // The display buckets for status grouping. These are NOT raw `ChatTopicStatus`

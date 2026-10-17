@@ -33,6 +33,8 @@ export const webBrowsingRouter = router({
     .input(
       z.object({
         content: z.string(),
+        /** Crawler content type; `json` bodies get wrapped in a fenced code block before persisting. */
+        contentType: z.literal('json').optional(),
         description: z.string().optional(),
         title: z.string(),
         topicId: z.string().optional(),

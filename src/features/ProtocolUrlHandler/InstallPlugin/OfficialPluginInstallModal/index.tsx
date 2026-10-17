@@ -1,7 +1,6 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { Text, toast } from '@lobehub/ui/base-ui';
+import { Block, Text, toast } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +9,7 @@ import DetailLoading from '@/features/MCP/MCPDetail/Loading';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
@@ -39,7 +39,8 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     ]);
     const togglePlugin = useAgentStore((s) => s.togglePlugin);
 
-    const { data, isLoading } = useMcpDetail({ identifier });
+    const { isLoading, queryKey } = useMcpDetail({ identifier });
+    const data = useDiscoverStore(mcpSelectors.mcpDetail(queryKey));
 
     const handleConfirm = useCallback(async () => {
       if (!canCreate || !canEdit || !installRequest || !data) return;

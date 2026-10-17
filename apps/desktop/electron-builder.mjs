@@ -14,6 +14,13 @@ import {
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
+import {
+  COMPUTER_USE_HELPER_BUNDLE_PATH,
+  COMPUTER_USE_HELPER_SIGN_IGNORE,
+  embedComputerUseHelper,
+  resolveComputerUseHelperVersion,
+  verifyComputerUseHelper,
+} from './scripts/computerUseHelper.mjs';
 import { packBuiltinCore } from './scripts/packBuiltinCore.mjs';
 import { toSparkleBuildVersion } from './scripts/sparkleBuildVersion.mjs';
 import { resolveSparklePackaging } from './scripts/sparklePackaging.mjs';
@@ -24,6 +31,8 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const packageJSON = JSON.parse(await fs.readFile(path.join(__dirname, 'package.json'), 'utf8'));
+
+const computerUseHelperVersion = resolveComputerUseHelperVersion(packageJSON);
 
 const channel = process.env.UPDATE_CHANNEL;
 const arch = os.arch();
@@ -194,6 +203,23 @@ const config = {
     console.info('📦 Building CLI for embedding...');
     execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
 
+    // The shell window has no React/i18next runtime. Bundle only its translated strings.
+    const updateStrings = {};
+    for (const locale of ['en-US', 'zh-CN']) {
+      const messages = JSON.parse(
+        await fs.readFile(path.join(__dirname, '../../locales', locale, 'electron.json'), 'utf8'),
+      );
+      updateStrings[locale] = Object.fromEntries(
+        Object.entries(messages)
+          .filter(([key]) => key.startsWith('startupUpdate.'))
+          .map(([key, value]) => [key.slice('startupUpdate.'.length), value]),
+      );
+    }
+    await fs.writeFile(
+      path.join(__dirname, 'shell/update/strings.json'),
+      JSON.stringify(updateStrings, null, 2) + '\n',
+    );
+
     execSync('node scripts/shellAbi.mjs --write', { stdio: 'inherit', cwd: __dirname });
     const { shellAbi } = JSON.parse(
       await fs.readFile(path.join(__dirname, 'shell/abi.json'), 'utf8'),
@@ -220,12 +246,19 @@ const config = {
       return;
     }
 
-    const resourcesPath = path.join(
-      context.appOutDir,
-      `${context.packager.appInfo.productFilename}.app`,
-      'Contents',
-      'Resources',
-    );
+    const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+    const resourcesPath = path.join(appPath, 'Contents', 'Resources');
+
+    // The Mac App Store sandbox cannot register the helper's LaunchAgent.
+    if (context.electronPlatformName === 'darwin') {
+      await embedComputerUseHelper({
+        appPath,
+        arch: arch === 'arm64' ? 'arm64' : 'x64',
+        cacheDir: path.join(__dirname, 'node_modules', '.cache', 'lobehub-computer-use'),
+        version: computerUseHelperVersion,
+      });
+    }
+
     const iconFileName = getIconFileName();
     const assetsCarSource = path.join(__dirname, 'build', `${iconFileName}.Assets.car`);
     const assetsCarDest = path.join(resourcesPath, 'Assets.car');
@@ -240,7 +273,21 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  afterSign: verifyFontListSignature,
+  afterSign: async (context) => {
+    await verifyFontListSignature(context);
+
+    if (context.electronPlatformName === 'darwin') {
+      verifyComputerUseHelper(
+        path.join(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          COMPUTER_USE_HELPER_BUNDLE_PATH,
+        ),
+        { version: computerUseHelperVersion },
+      );
+      console.info('✅ Computer Use helper kept its notarized signature');
+    }
+  },
   appId: macAppId,
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
@@ -340,6 +387,8 @@ const config = {
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder.",
+      NSLocalNetworkUsageDescription:
+        'LobeHub connects to self-hosted servers, model providers, and other services on your local network.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSScreenCaptureUsageDescription:
         'Application requests access to record and analyze screen content for AI assistance.',
@@ -347,6 +396,8 @@ const config = {
     },
     gatekeeperAssess: false,
     hardenedRuntime: hasAppleCertificate,
+    // Ship the notarized helper as built; re-signing drops its stapled ticket.
+    signIgnore: [COMPUTER_USE_HELPER_SIGN_IGNORE],
     notarize: hasAppleCertificate,
     ...(hasAppleCertificate ? {} : { identity: null }),
     target: [

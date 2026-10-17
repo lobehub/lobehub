@@ -323,6 +323,22 @@ describe('DeviceModel', () => {
       expect(ids).toEqual(['w1', 'w2']);
     });
 
+    it('findPersonalByDeviceId never resolves to a workspace enrollment', async () => {
+      await serverDB.insert(devices).values([
+        { deviceId: 'both', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'both', identitySource: 'machine-id', userId },
+        { deviceId: 'ws-only', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'theirs', identitySource: 'machine-id', userId: otherUserId },
+      ]);
+
+      expect(await deviceModel.findPersonalByDeviceId('both')).toMatchObject({
+        deviceId: 'both',
+        workspaceId: null,
+      });
+      expect(await deviceModel.findPersonalByDeviceId('ws-only')).toBeUndefined();
+      expect(await deviceModel.findPersonalByDeviceId('theirs')).toBeUndefined();
+    });
+
     it('queryWorkspaceDevices returns [] without workspace context', async () => {
       await serverDB
         .insert(devices)
@@ -679,6 +695,71 @@ describe('DeviceModel', () => {
 
       const row = await deviceModel.findByDeviceId('dev-1');
       expect(row).toBeUndefined();
+    });
+  });
+
+  describe('mutateWorkspaceDeviceWorkingDirs', () => {
+    const dirsWsId = 'device-model-ws-working-dirs';
+
+    const enroll = async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: dirsWsId, name: 'WS', primaryOwnerId: userId, slug: dirsWsId });
+      const enroller = new DeviceModel(serverDB, otherUserId, dirsWsId);
+      await enroller.registerWorkspaceDevice({
+        deviceId: 'ws-dirs-dev',
+        identitySource: 'machine-id',
+        workspaceId: dirsWsId,
+      });
+      await enroller.updateWorkspaceDevice('ws-dirs-dev', { workingDirs: [{ path: '/a' }] });
+    };
+
+    const storedDirs = async () =>
+      (
+        await serverDB.query.devices.findFirst({
+          where: and(eq(devices.workspaceId, dirsWsId), eq(devices.deviceId, 'ws-dirs-dev')),
+        })
+      )?.workingDirs;
+
+    afterEach(async () => {
+      await serverDB.delete(devices).where(eq(devices.workspaceId, dirsWsId));
+      await serverDB.delete(workspaces).where(eq(workspaces.id, dirsWsId));
+    });
+
+    it("edits another member's workspace device row in place", async () => {
+      await enroll();
+      const member = new DeviceModel(serverDB, userId, dirsWsId);
+
+      const next = await member.mutateWorkspaceDeviceWorkingDirs('ws-dirs-dev', (dirs) => [
+        { path: '/b' },
+        ...dirs,
+      ]);
+
+      expect(next).toEqual([{ path: '/b' }, { path: '/a' }]);
+      expect(await storedDirs()).toEqual([{ path: '/b' }, { path: '/a' }]);
+    });
+
+    it('keeps both entries when two members add concurrently', async () => {
+      await enroll();
+      const add = (path: string) =>
+        new DeviceModel(serverDB, userId, dirsWsId).mutateWorkspaceDeviceWorkingDirs(
+          'ws-dirs-dev',
+          (dirs) => [{ path }, ...dirs],
+        );
+
+      await Promise.all([add('/x'), add('/y')]);
+
+      expect((await storedDirs())?.map((d) => d.path).sort()).toEqual(['/a', '/x', '/y']);
+    });
+
+    it('returns undefined for a device outside the current workspace', async () => {
+      await enroll();
+      const outsider = new DeviceModel(serverDB, userId, 'device-model-other-ws');
+
+      expect(
+        await outsider.mutateWorkspaceDeviceWorkingDirs('ws-dirs-dev', () => []),
+      ).toBeUndefined();
+      expect(await storedDirs()).toEqual([{ path: '/a' }]);
     });
   });
 });

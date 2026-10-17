@@ -15,6 +15,7 @@ import {
   FileText,
   Folder,
   Library,
+  ListTodo,
   MessageCircle,
   MessageSquare,
   Plug,
@@ -27,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
@@ -77,6 +79,7 @@ const SearchResults = memo<SearchResultsProps>(
     typeFilter,
   }) => {
     const { t } = useTranslation('common');
+    const { t: tChat } = useTranslation('chat');
     const { t: tImage } = useTranslation('image');
     const { t: tVideo } = useTranslation('video');
     const navigate = useWorkspaceAwareNavigate();
@@ -170,6 +173,10 @@ const SearchResults = memo<SearchResultsProps>(
           navigate(`/resource/library/${result.id}`);
           break;
         }
+        case 'task': {
+          navigate(taskDetailPath(result.identifier, undefined, result.title));
+          break;
+        }
       }
       onClose();
     };
@@ -212,6 +219,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'knowledgeBase': {
           return <Library size={16} />;
         }
+        case 'task': {
+          return <ListTodo size={16} />;
+        }
       }
     };
 
@@ -253,11 +263,20 @@ const SearchResults = memo<SearchResultsProps>(
         case 'knowledgeBase': {
           return t('cmdk.search.knowledgeBase');
         }
+        case 'task': {
+          return t('cmdk.search.task');
+        }
       }
     };
 
     const getItemValue = (result: FtsSearchResult) => {
-      const meta = [result.title, result.description].filter(Boolean).join(' ');
+      const meta = [
+        result.type === 'task' ? result.identifier : undefined,
+        result.title,
+        result.description,
+      ]
+        .filter(Boolean)
+        .join(' ');
       // Prefix with "search-result" to ensure these items rank after built-in commands
       // Include ID to ensure uniqueness when multiple items have the same title
       return `search-result ${result.type} ${result.id} ${meta}`.trim();
@@ -305,6 +324,14 @@ const SearchResults = memo<SearchResultsProps>(
             )}
           </Flexbox>
         );
+      }
+
+      // Task results: identifier first so the ID the user typed stays visible.
+      if (result.type === 'task') {
+        const status = tChat(`taskDetail.status.${result.status}` as any, {
+          defaultValue: result.status,
+        });
+        return [result.identifier, status, description].filter(Boolean).join(' · ');
       }
 
       // For message results, append creation date
@@ -382,10 +409,12 @@ const SearchResults = memo<SearchResultsProps>(
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
+    const taskResults = results.filter((r) => r.type === 'task');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
     const localResultCount = localImageTopicResults.length + localVideoTopicResults.length;
     const visibleResultPositions = createVisibleResultPositionMap<FtsSearchResult>(
       [
+        taskResults,
         messageResults,
         agentResults,
         chatGroupResults,
@@ -572,6 +601,13 @@ const SearchResults = memo<SearchResultsProps>(
         )}
 
         {/* Render search results grouped by type without headers */}
+        {taskResults.length > 0 && (
+          <Command.Group forceMount>
+            {taskResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('task', taskResults.length)}
+          </Command.Group>
+        )}
+
         {messageResults.length > 0 && (
           <Command.Group forceMount>
             {messageResults.map((result) => renderResultItem(result))}

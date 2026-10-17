@@ -10,7 +10,8 @@ vi.mock('@/store/global', () => ({
     selector({ revealInFilesTab: mockRevealInFilesTab }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ActionIcon: ({ onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props} onClick={onClick} />
   ),

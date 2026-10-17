@@ -35,4 +35,11 @@ describe('systemPrompt', () => {
     // including 'backlog', so merely leaving the task unstarted is not enough.
     expect(systemPrompt).toContain('call updateTaskStatus(identifier, "paused") instead');
   });
+
+  it('lets an automation tick complete its task only when the instruction end condition is met', () => {
+    expect(systemPrompt).toContain('NEVER set it to canceled or failed');
+    expect(systemPrompt).toContain('an end condition the instruction itself defines');
+    expect(systemPrompt).toContain('Do not ask the user to stop the loop instead');
+    expect(systemPrompt).not.toContain('NEVER call updateTaskStatus with "completed"');
+  });
 });

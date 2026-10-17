@@ -309,7 +309,7 @@ export class SkillImporter {
    */
   async importFromUrl(
     input: ImportUrlInput,
-    options?: { identifier?: string; source?: 'market' | 'user' },
+    options?: { identifier?: string; overwrite?: boolean; source?: 'market' | 'user' },
   ): Promise<SkillImportResult> {
     log('importFromUrl: starting with url=%s', input.url);
 
@@ -424,6 +424,17 @@ export class SkillImporter {
     // 5. Check for existing skill
     let existing = await this.skillModel.findByIdentifier(identifier);
 
+    // Dependency installation never updates an installed row, including user
+    // imports that happen to carry the same source URL. Recheck here after the
+    // download as another request may have installed the skill in the meantime.
+    if (existing && options?.overwrite === false) {
+      if (existing.source === 'market') return { skill: existing, status: 'unchanged' };
+      throw new SkillImportError(
+        `A skill with identifier "${identifier}" is already installed from another source`,
+        'CONFLICT',
+      );
+    }
+
     // A user may have authored a skill under this very identifier. Only treat
     // the row as this import when it came from the market or from this same
     // URL; otherwise updating it would overwrite the user's own skill.
@@ -439,7 +450,7 @@ export class SkillImporter {
     // since then is still updated in place rather than installed twice. Only
     // take it when it was fetched from this same URL: a user skill may carry
     // that identifier explicitly and must not be overwritten.
-    if (!existing && identifier !== urlIdentifier) {
+    if (!existing && identifier !== urlIdentifier && options?.overwrite !== false) {
       const legacy = await this.skillModel.findByIdentifier(urlIdentifier);
       if (legacy?.manifest?.sourceUrl === input.url) existing = legacy;
     }
@@ -451,7 +462,7 @@ export class SkillImporter {
     if (!existing) {
       const sameName = await this.skillModel.findByName(manifest.name);
       if (sameName) {
-        if (sameName.manifest?.sourceUrl !== input.url) {
+        if (options?.overwrite === false || sameName.manifest?.sourceUrl !== input.url) {
           throw new SkillImportError(
             `A skill named "${manifest.name}" is already installed (identifier: ${sameName.identifier}). Use the installed skill, or delete it before importing this one.`,
             'CONFLICT',

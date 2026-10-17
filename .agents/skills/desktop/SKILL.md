@@ -70,7 +70,7 @@ Location: `src/store/`
 
 ### 5. Add Tests
 
-Location: `apps/desktop/src/main/controllers/__tests__/`
+Location: beside the controller, `apps/desktop/src/main/controllers/<Name>Ctr.test.ts` (`source-layout` §2)
 
 ## Detailed Guides
 

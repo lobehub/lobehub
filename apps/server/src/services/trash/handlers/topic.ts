@@ -14,6 +14,7 @@ import {
 
 export const topicEntry = (topic: TopicItem, removeFiles?: boolean): TrashRegisterEntry => ({
   meta: removeFiles ? { removeFiles: true } : undefined,
+  projectId: topic.projectId,
   resourceId: topic.id,
   resourceType: 'topic',
   title: topic.title,

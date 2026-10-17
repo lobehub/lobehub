@@ -1,9 +1,19 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
-import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
+  DEFAULT_INBOX_TITLE,
+  INBOX_SESSION_ID,
+  isHeterogeneousAgentModelId,
+} from '@lobechat/const';
+import type {
+  AgentRankItem,
+  AgentTopicShareSubject,
+  DeviceBoundAgentItem,
+  LobeAgentAgencyConfig,
+} from '@lobechat/types';
+import {
+  applyWorkingDirByDevicePatch,
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
-  pruneWorkingDirByDeviceDeletes,
+  getHeterogeneousTaskModelProvider,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
@@ -202,6 +212,17 @@ const RESERVED_AGENT_SLUGS: ReadonlySet<string> = new Set<string>(
 );
 
 /** One chat group an agent belongs to, as surfaced by the transfer guards. */
+/**
+ * A row of {@link AgentModel.queryBoundToDevice}: display fields plus the
+ * stored routing config and ownership needed to resolve the caller's
+ * effective target.
+ */
+export interface DeviceBindingCandidate extends DeviceBoundAgentItem {
+  agencyConfig: LobeAgentAgencyConfig | null;
+  userId: string;
+  workspaceId: string | null;
+}
+
 export interface AgentGroupMembershipRef {
   agentId: string;
   /** `null` when the group is not visible to the caller (see the read below). */
@@ -316,6 +337,54 @@ export class AgentModel {
       .having(({ count }) => gt(count, 0))
       .orderBy(desc(sql`count`))
       .limit(limit);
+
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
+  };
+
+  /**
+   * Candidate agents for a device's "bound agents" list: agents whose stored
+   * agency config routes execution there (`device`, or a desktop `local` pick,
+   * which also records its own `boundDeviceId`), plus `extraAgentIds` — agents
+   * a caller's per-agent device override may route there. Candidates pass the
+   * same visibility gate, so an id the caller cannot see is dropped rather
+   * than leaked.
+   *
+   * The routing fields ride along because the stored config is only a
+   * baseline: the caller merges their own override over it (see
+   * `resolveAgentAgencyConfig`) and keeps the agents whose EFFECTIVE target
+   * is still this device.
+   */
+  queryBoundToDevice = async (
+    deviceId: string,
+    extraAgentIds: string[] = [],
+  ): Promise<DeviceBindingCandidate[]> => {
+    const boundHere = and(
+      sql`${agents.agencyConfig} ->> 'boundDeviceId' = ${deviceId}`,
+      sql`${agents.agencyConfig} ->> 'executionTarget' IN ('device', 'local')`,
+    );
+
+    const rows = await this.db
+      .select({
+        agencyConfig: agents.agencyConfig,
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        name: agents.name,
+        slug: agents.slug,
+        title: agents.title,
+        userId: agents.userId,
+        visibility: agents.visibility,
+        workspaceId: agents.workspaceId,
+      })
+      .from(agents)
+      .where(
+        and(
+          this.ownership(),
+          or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true)),
+          extraAgentIds.length > 0 ? or(boundHere, inArray(agents.id, extraAgentIds)) : boundHere,
+        ),
+      )
+      .orderBy(desc(agents.updatedAt));
 
     return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
   };
@@ -495,6 +564,28 @@ export class AgentModel {
   };
 
   /**
+   * The three fields a sender-identity snapshot needs, projected and scoped by
+   * the model's ownership filter, or `null` when the agent is missing or not
+   * visible to the current caller.
+   *
+   * Deliberately not {@link getAgentConfigById}: that one enriches the agent
+   * with its assigned knowledge and loads every enabled file's row and content,
+   * which is a lot of I/O to render a label. Callers that only display who an
+   * agent is — attribution, receipts — should use this.
+   */
+  getAgentDisplayFields = async (
+    id: string,
+  ): Promise<{ avatar: null | string; name: null | string; title: null | string } | null> => {
+    const rows = await this.db
+      .select({ avatar: agents.avatar, name: agents.name, title: agents.title })
+      .from(agents)
+      .where(and(eq(agents.id, id), this.ownership()))
+      .limit(1);
+
+    return rows[0] ?? null;
+  };
+
+  /**
    * Returns the agent's visibility, scoped by the model's ownership filter, or
    * `null` when the agent is missing or not visible to the current caller.
    * Used by the task service to inherit a private agent's visibility onto
@@ -585,15 +676,28 @@ export class AgentModel {
    * Returns `null` when the agent is not visible to the current caller. When
    * found, `snapshot` is non-null only if both `model` and `provider` are set
    * — same contract as `getAgentModelConfig`.
+   *
+   * Use when:
+   * - Creating a Task with inherited defaults or a native model-only override.
+   *
+   * Expects:
+   * - An Agent ID or slug within the caller's visibility scope.
+   *
+   * Returns:
+   * - The unchanged runtime snapshot and visibility, plus the model override provider
+   *   for native or personal API Tasks. Null preserves missing/server-default API bindings.
    */
   getAgentSnapshotForTaskCreate = async (
     idOrSlug: string,
   ): Promise<{
+    /** Provider for model-only Tasks; null rejects inferred API bindings, absent for regular Agents. */
+    modelOverrideProvider?: string | null;
     snapshot: { model: string; provider: string } | null;
     visibility: 'private' | 'public';
   } | null> => {
     const rows = await this.db
       .select({
+        agencyConfig: agents.agencyConfig,
         model: agents.model,
         provider: agents.provider,
         visibility: agents.visibility,
@@ -606,41 +710,91 @@ export class AgentModel {
     if (!row) return null;
     const snapshot =
       row.model && row.provider ? { model: row.model, provider: row.provider } : null;
-    return { snapshot, visibility: row.visibility as 'private' | 'public' };
+    const modelOverrideProvider = getHeterogeneousTaskModelProvider(
+      row.agencyConfig?.heterogeneousProvider,
+    );
+    return {
+      ...(modelOverrideProvider !== undefined ? { modelOverrideProvider } : {}),
+      snapshot,
+      visibility: row.visibility as 'private' | 'public',
+    };
   };
 
   /**
-   * Build the where condition shared by queryAgents / countAgents:
-   * non-virtual agents of the current user, with optional keyword filter.
+   * Build the where condition shared by queryAgents / countAgents: the current
+   * user's agents, with optional keyword filter.
+   *
+   * Virtual rows are infrastructure (group-built members, supervisors) and stay
+   * excluded. That includes the inbox (Lobe AI): it is the product-owned
+   * assistant, so including it is a deliberate choice every caller makes with
+   * `includeInbox: true` — never something a generic agent lookup inherits. The
+   * default is therefore the long-standing behavior (real, user-created agents
+   * only), so callers that never asked for the inbox — older clients, the
+   * CRUD/management tool runtimes, group pickers — keep it out instead of
+   * discovering a row they cannot delete or add.
+   *
+   * When a caller does opt in, the inbox joins the page inside the where clause
+   * rather than being filtered afterwards, so `limit` is never spent on an inbox
+   * the caller would drop.
    */
-  private buildQueryAgentsWhere = (keyword?: string) => {
-    // Include agents where virtual is false OR null (legacy data without virtual field)
+  private buildQueryAgentsWhere = (keyword?: string, includeInbox = false) => {
+    // Include agents where virtual is false OR null (legacy data without virtual
+    // field), plus the inbox when the caller opts into it.
     const baseConditions = and(
       this.ownership(),
-      or(eq(agents.virtual, false), isNull(agents.virtual)),
+      includeInbox
+        ? or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID))
+        : or(eq(agents.virtual, false), isNull(agents.virtual)),
     );
 
-    // Add keyword search condition if provided
-    return keyword
-      ? and(
-          baseConditions,
-          or(ilike(agents.title, `%${keyword}%`), ilike(agents.description, `%${keyword}%`)),
-        )
-      : baseConditions;
+    // `name` is the user-facing display name (see `agents.name`); resolving the
+    // label the UI shows is the primary way users and tools find an agent, so
+    // the keyword must match it alongside `title`/`description`.
+    if (!keyword) return baseConditions;
+
+    // An inbox with a blank title is shown as `DEFAULT_INBOX_TITLE` only after
+    // the query (see `normalizeInboxAgentMeta`), so the raw `title` column can't
+    // match it — match that default label here instead.
+    const matchesDefaultInboxTitle =
+      includeInbox && DEFAULT_INBOX_TITLE.toLowerCase().includes(keyword.toLowerCase());
+
+    return and(
+      baseConditions,
+      or(
+        ilike(agents.title, `%${keyword}%`),
+        ilike(agents.name, `%${keyword}%`),
+        ilike(agents.description, `%${keyword}%`),
+        matchesDefaultInboxTitle
+          ? and(
+              eq(agents.slug, INBOX_SESSION_ID),
+              or(isNull(agents.title), sql`trim(${agents.title}) = ''`),
+            )
+          : undefined,
+      ),
+    );
   };
 
   /**
-   * Query non-virtual agents with optional keyword filter.
-   * Returns minimal agent info (id, title, description, avatar, backgroundColor),
-   * plus `userId`/`visibility` so callers can gate per-agent actions (e.g.
-   * transfer is creator/primary-owner only), and a compact `heteroType` derived
-   * from `agencyConfig` so callers can tell which results are heterogeneous
-   * (external CLI/device) agents.
-   * Excludes virtual agents (like inbox, supervisors, etc).
+   * Query the user's agents with an optional keyword filter.
+   * Returns minimal agent info (id, title, name, description, avatar,
+   * backgroundColor), plus `userId`/`visibility` so callers can gate per-agent
+   * actions (e.g. transfer is creator/primary-owner only), a compact
+   * `heteroType` derived from `agencyConfig` so callers can tell which results
+   * are heterogeneous (external CLI/device) agents, and `isInbox` so callers can
+   * recognize the product-owned inbox (Lobe AI) without re-deriving it from a
+   * slug the row shape no longer carries.
+   * Excludes virtual agents (supervisors, group-built members) and, unless the
+   * caller opts in with `includeInbox: true`, the product-owned inbox (Lobe AI).
+   * See `buildQueryAgentsWhere`.
    */
-  queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
-    const { keyword, limit = 9999, offset = 0 } = params ?? {};
-    const searchCondition = this.buildQueryAgentsWhere(keyword);
+  queryAgents = async (params?: {
+    includeInbox?: boolean;
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const { includeInbox = false, keyword, limit = 9999, offset = 0 } = params ?? {};
+    const searchCondition = this.buildQueryAgentsWhere(keyword, includeInbox);
 
     const rows = await this.db
       .select({
@@ -662,16 +816,23 @@ export class AgentModel {
       .offset(offset);
 
     // Surface only the hetero runtime type, not the full agencyConfig payload.
-    return rows.map(({ slug, agencyConfig, ...row }) =>
-      normalizeInboxAgentMeta(
+    return rows.map(({ slug, agencyConfig, ...row }) => ({
+      ...normalizeInboxAgentMeta(
         { ...row, heteroType: agencyConfig?.heterogeneousProvider?.type },
         { slug },
       ),
-    );
+      // When the caller opted in, the inbox is the only virtual row this query
+      // keeps, and `slug` is consumed above rather than returned — so the flag
+      // is what lets callers pin or annotate Lobe AI without re-deriving it.
+      isInbox: slug === INBOX_SESSION_ID,
+    }));
   };
 
   /**
-   * Count non-virtual agents matching the same conditions as queryAgents.
+   * Count the agents matching the same conditions as queryAgents — the inbox is
+   * counted only when the caller opts in with `includeInbox: true`, other
+   * virtual rows always excluded — so the count stays a faithful total for
+   * paginated callers and for the assistants stats.
    * Used to report real totals (and pagination) when queryAgents is limited.
    * Accepts the same date filters as SessionModel.count so callers can compare
    * current vs. prior-period totals without falling back to the legacy
@@ -679,6 +840,7 @@ export class AgentModel {
    */
   countAgents = async (params?: {
     endDate?: string;
+    includeInbox?: boolean;
     keyword?: string;
     range?: [string, string];
     startDate?: string;
@@ -688,7 +850,7 @@ export class AgentModel {
       .from(agents)
       .where(
         genWhere([
-          this.buildQueryAgentsWhere(params?.keyword),
+          this.buildQueryAgentsWhere(params?.keyword, params?.includeInbox ?? false),
           params?.range
             ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
             : undefined,
@@ -1027,11 +1189,25 @@ export class AgentModel {
       // lock-then-guard order as transferAgents. A concurrent copy enqueue
       // locks the same source rows, so the guard here cannot run in the window
       // where the enqueue's job row exists but is not yet committed.
-      await trx
-        .select({ id: agents.id })
+      const [locked] = await trx
+        .select({ id: agents.id, slug: agents.slug })
         .from(agents)
         .where(and(eq(agents.id, agentId), this.ownership()))
         .for('update');
+
+      // Builtins (the inbox, the agent builders) are provisioned per user and
+      // carry `virtual` exactly like a group's own members. Deleting one takes
+      // its linked session and every conversation with it, and nothing can
+      // recreate them — refuse here, the same way `addAgentsToGroup` refuses to
+      // seat one. This only guards callers of `AgentModel.delete`; paths that
+      // delete `agents` rows directly (e.g. the OpenAPI `migrateSessionTo`
+      // delete) bypass it.
+      if (locked?.slug && RESERVED_AGENT_SLUGS.has(locked.slug)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'A builtin agent cannot be deleted',
+        });
+      }
 
       // The junction records every agent an unfinished job still maps, a
       // copy's TARGET included — and a group copy's drain writes those ids into
@@ -1587,7 +1763,11 @@ export class AgentModel {
     return result?.id ?? null;
   };
 
-  updateConfig = async (agentId: string, input: PartialDeep<AgentItem> | undefined | null) => {
+  updateConfig = async (
+    agentId: string,
+    input: PartialDeep<AgentItem> | undefined | null,
+    replaceWorkingDirDeviceIds?: string[],
+  ) => {
     if (!input || Object.keys(input).length === 0) return;
 
     const data = this.stripImmutableFields(input);
@@ -1728,9 +1908,13 @@ export class AgentModel {
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
 
-    // agencyConfig.workingDirByDevice: a per-device entry is cleared by sending
-    // `undefined`, which merge() skips — prune those keys so the delete persists.
-    pruneWorkingDirByDeviceDeletes(mergedValue.agencyConfig, data.agencyConfig);
+    // Opt-in replacement prevents old clients' complete cached maps from
+    // deleting Git metadata on devices they did not actually edit.
+    applyWorkingDirByDevicePatch(
+      mergedValue.agencyConfig,
+      data.agencyConfig,
+      replaceWorkingDirDeviceIds,
+    );
 
     await this.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
 

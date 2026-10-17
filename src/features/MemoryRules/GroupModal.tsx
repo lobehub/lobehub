@@ -1,18 +1,20 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   Spin,
   Text,
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { ArrowLeftIcon, PencilLineIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

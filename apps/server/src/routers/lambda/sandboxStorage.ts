@@ -1,6 +1,13 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ConnectorDataError } from '@lobechat/connector-data';
 import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
+import { type LobeChatDatabase } from '@lobechat/database';
+import { toExecutionConfiguration } from '@lobechat/types';
+import {
+  derivedInstanceDirectory,
+  isDefaultInstance,
+  MAX_DERIVED_DIRECTORY_ATTEMPTS,
+} from '@lobechat/utils/environmentInstance';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
@@ -271,6 +278,9 @@ const configurationSchema = z.object({
   env: environmentEnvSchema.optional(),
   excludePaths: z.array(relativePathSchema).max(64).optional(),
   internetAccess: z.boolean().optional(),
+  // Which form the product shows. Accepted here so it is stored rather than
+  // stripped by the parse; it never travels on to the execution plane.
+  kind: z.enum(['files', 'code']).optional(),
   maintenanceCommand: z.string().max(8000).optional(),
   // One repository per environment. The wire format stays a list because the
   // execution plane checks out an array of sources, but an environment that
@@ -337,40 +347,6 @@ const rethrowDuplicateInstanceDirectory = (error: unknown): never => {
   }
 
   throw error;
-};
-
-/**
- * How many derived directories to try before giving up.
- *
- * A bound rather than a loop until success: the only way to exhaust it is a
- * member who already holds fifty directories under one name, and at that point
- * the honest answer is to say so rather than keep probing the index.
- */
-const MAX_DERIVED_DIRECTORY_ATTEMPTS = 50;
-
-/**
- * A directory name derived from an environment's name.
- *
- * Letters and digits of any script survive — a Chinese environment name should
- * not become a row of dashes — while everything else collapses to `-`, because
- * this name is handed to a shell as a path. Interior spaces are legal in a
- * workspace path and still not worth minting: every command the agent writes
- * would need to quote them.
- *
- * Leading dots are stripped rather than escaped, which also puts `.sandbox`
- * (the reserved platform directory) out of reach without naming it here.
- */
-export const environmentDirectorySlug = (name: string): string => {
-  const slug = name
-    .normalize('NFKC')
-    .toLowerCase()
-    .replaceAll(/[^\p{L}\p{N}._-]+/gu, '-')
-    .slice(0, 48)
-    .replaceAll(/^[.-]+|[.-]+$/g, '');
-
-  // Every character was punctuation, or the name was dots. Nothing is derivable
-  // from it, so fall back to a word rather than to an empty path.
-  return slug || 'environment';
 };
 
 /**
@@ -441,6 +417,100 @@ const instanceProcedure = environmentProcedure.use(async (opts) => {
   });
 });
 
+type SandboxStorageClient = ReturnType<MarketService['getSandboxStorageClient']>;
+
+/**
+ * Run `fn` with the environment and instance models bound to one transaction,
+ * for the calls that must change both tables or neither.
+ */
+const inEnvironmentTransaction = <T>(
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
+  fn: (models: {
+    environmentModel: EnvironmentModel;
+    instanceModel: EnvironmentInstanceModel;
+  }) => Promise<T>,
+): Promise<T> =>
+  ctx.serverDB.transaction(async (tx) => {
+    const db = tx as unknown as LobeChatDatabase;
+    const workspaceId = ctx.workspaceId ?? undefined;
+
+    return fn({
+      environmentModel: new EnvironmentModel(db, ctx.userId, workspaceId),
+      instanceModel: new EnvironmentInstanceModel(db, ctx.userId, workspaceId),
+    });
+  });
+
+/**
+ * A new sandbox instance of an environment the caller owns, with its directory
+ * derived from the environment's name rather than asked for.
+ *
+ * The directory is searched rather than computed in one shot: the unique
+ * index spans the whole workspace, not one environment, so a name that is
+ * free inside this environment can still be taken outside it. The index stays
+ * the authority — the pre-check only keeps the common case out of the error
+ * path, and a lost race falls through to the next suffix.
+ */
+const createDerivedInstance = async (
+  instanceModel: EnvironmentInstanceModel,
+  workspaceKey: string,
+  environment: { id: string; name: string },
+) => {
+  for (let attempt = 1; attempt <= MAX_DERIVED_DIRECTORY_ATTEMPTS; attempt += 1) {
+    const workingDirectory = derivedInstanceDirectory(environment.name, attempt);
+
+    if (await instanceModel.findByWorkingDirectory(workingDirectory)) continue;
+
+    const created = await instanceModel
+      .create({
+        ...sandboxBinding(workspaceKey),
+        environmentId: environment.id,
+        // The directory is the only thing that distinguishes this instance
+        // from its siblings right now, so it is also the only honest label
+        // until the person renames it.
+        name: workingDirectory,
+        workingDirectory,
+      })
+      .catch((error: unknown) => {
+        // Someone else took this directory between the check and the
+        // insert, or it nests with another instance's. Not a conflict the
+        // caller can act on — try the next one.
+        if (isDuplicateInstanceDirectory(error)) return undefined;
+        if (error instanceof InstanceDirectoryOverlapError) return undefined;
+        throw error;
+      });
+
+    if (!created) continue;
+
+    // Nothing to clone and nothing to install means nothing will ever build
+    // this instance, so it is ready as it is written. Left to the client's
+    // follow-up build call, a tab closed in between would strand it in
+    // `pending` — and a files environment offers no rebuild to get out of it.
+    if (isBuildable(created.configurationSnapshot)) return created;
+
+    await instanceModel.update(created.id, { status: 'ready' });
+
+    return { ...created, status: 'ready' as const };
+  }
+
+  throw new TRPCError({ code: 'CONFLICT', message: 'DUPLICATE_INSTANCE_DIRECTORY' });
+};
+
+/**
+ * Drop an instance's built state on the execution plane, ahead of its row.
+ *
+ * No snapshot there is the state this call exists to reach, so a 404 is this
+ * step succeeding, not failing. An instance nothing has ever run in has
+ * nothing on the execution plane — and treating that as an error strands the
+ * row permanently, because the environment holding it cannot be deleted
+ * either while an instance references it.
+ */
+const deleteInstanceSnapshot = (client: SandboxStorageClient, id: string, topicId?: string) =>
+  client.deleteInstance({ name: id, topicId }).catch((error: unknown) => {
+    if (error instanceof SandboxStorageFilesError && error.status === 404) return;
+
+    return mapStorageError(error);
+  });
+
 /**
  * The directory a file route may touch, as a path relative to the workspace
  * root; `''` is the whole root.
@@ -456,7 +526,7 @@ const instanceProcedure = environmentProcedure.use(async (opts) => {
  * A personal account's root belongs to its owner alone, which is the one case
  * where no instance is needed.
  *
- * An instance's directory is never written through here (LOBE-14364): it is
+ * An instance's directory is never written through here: it is
  * the saved copy of the sandbox's work tree, written by the sandbox alone. A
  * write from outside would be overwritten by the next save, or leave the
  * directory disagreeing with the record the next restore reads it by.
@@ -580,6 +650,20 @@ export const sandboxStorageRouter = router({
       const source = await ctx.instanceModel.findOwnedById(input.id);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
+      // A held instance is mid-write, so a copy would capture a tree halfway
+      // through a change. The execution plane refuses it too; asking first
+      // keeps the refusal ahead of the row insert and gives it the same code
+      // the rest of the client already turns into a sentence. A lease store
+      // that did not answer is not read as "free" — here that means refusing,
+      // because unlike a rebuild there is no runtime lease standing behind a
+      // copy to catch the second writer.
+      const occupancy = await ctx.client
+        .readOccupancy({ names: [source.id] })
+        .catch(() => ({ held: [], unavailable: true }));
+      if (occupancy.unavailable || occupancy.held.some((entry) => entry.id === source.id)) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
+      }
+
       // Row first: a copy whose snapshot succeeded but whose row is missing
       // would be captured state nobody can name, and therefore nobody can
       // delete. The reverse — a row whose snapshot never arrived — is the same
@@ -631,12 +715,6 @@ export const sandboxStorageRouter = router({
    * snapshot, so this directory holds the outputs worth keeping — which is
    * rarely something anyone has an opinion about before the work exists. Asking
    * would make them invent an answer to start a conversation.
-   *
-   * The directory is searched rather than computed in one shot: the unique
-   * index spans the whole workspace, not one environment, so a name that is
-   * free inside this environment can still be taken outside it. The index stays
-   * the authority — the pre-check only keeps the common case out of the error
-   * path, and a lost race falls through to the next suffix.
    */
   createInstanceForEnvironment: instanceProcedure
     .input(z.object({ environmentId: idSchema }))
@@ -647,39 +725,7 @@ export const sandboxStorageRouter = router({
       if (!environment)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      const base = environmentDirectorySlug(environment.name);
-
-      for (let attempt = 1; attempt <= MAX_DERIVED_DIRECTORY_ATTEMPTS; attempt += 1) {
-        const workingDirectory = attempt === 1 ? base : `${base}-${attempt}`;
-
-        if (await ctx.instanceModel.findByWorkingDirectory(workingDirectory)) continue;
-
-        const created = await ctx.instanceModel
-          .create({
-            ...sandboxBinding(ctx.claim.key),
-            environmentId: environment.id,
-            // The directory is the only thing that distinguishes this instance
-            // from its siblings right now, so it is also the only honest label
-            // until the person renames it.
-            name: workingDirectory,
-            workingDirectory,
-          })
-          .catch((error: unknown) => {
-            // Someone else took this directory between the check and the
-            // insert, or it nests with another instance's. Not a conflict the
-            // caller can act on — try the next one.
-            if (isDuplicateInstanceDirectory(error)) return undefined;
-            if (error instanceof InstanceDirectoryOverlapError) return undefined;
-            throw error;
-          });
-
-        if (created) return created;
-      }
-
-      throw new TRPCError({
-        code: 'CONFLICT',
-        message: 'DUPLICATE_INSTANCE_DIRECTORY',
-      });
+      return createDerivedInstance(ctx.instanceModel, ctx.claim.key, environment);
     }),
 
   /**
@@ -782,7 +828,10 @@ export const sandboxStorageRouter = router({
           // which is what its file browser opens.
           instanceDir: instance.workingDirectory,
           name: input.id,
-          specification,
+          // Without the product's own fields: the execution plane digests
+          // what it is sent, and an instance created before `kind` existed
+          // must keep matching the build it already has.
+          specification: toExecutionConfiguration(specification),
           topicId: input.topicId,
         });
         await ctx.instanceModel.update(input.id, { buildId });
@@ -859,17 +908,52 @@ export const sandboxStorageRouter = router({
       return { chunk: status.chunk, logOffset: status.logOffset, state: status.state };
     }),
 
-  createEnvironment: environmentProcedure
+  /**
+   * An environment, together with its default instance.
+   *
+   * The person creating an environment has not started any work yet, so there
+   * is nothing to ask them about where it should happen: the instance is
+   * created here, with the same derived directory a new copy gets, and every
+   * creation path ends with one. It is returned unbuilt — building it
+   * cold-starts a sandbox, so the client fires `startInstanceBuild` next, the
+   * same split as for any other new instance.
+   *
+   * Both rows are written in one transaction, so a failure to create the
+   * instance leaves no environment behind either: the caller sees the failure
+   * and retries, instead of holding an environment that silently skipped the
+   * step.
+   *
+   * Asked for, not assumed. A client from before this follows the call with
+   * its own create-instance dialog, and an instance made here as well would
+   * leave it with two — the unasked one being the default, which cannot be
+   * removed on its own. Such a client gets the environment alone, as it always
+   * did, and its first instance becomes the default.
+   */
+  createEnvironment: instanceProcedure
     .input(
       z.object({
         configuration: configurationSchema.optional(),
         description: z.string().max(2000).optional(),
         name: nameSchema,
         visibility: visibilitySchema.optional(),
+        withDefaultInstance: z.boolean().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      ctx.environmentModel.create(input).catch(rethrowDuplicateEnvironmentName),
+    .mutation(async ({ ctx, input: { withDefaultInstance, ...input } }) =>
+      inEnvironmentTransaction(ctx, async ({ environmentModel, instanceModel }) => {
+        const environment = await environmentModel
+          .create(input)
+          .catch(rethrowDuplicateEnvironmentName);
+        if (!withDefaultInstance) return { ...environment, defaultInstance: undefined };
+
+        const defaultInstance = await createDerivedInstance(
+          instanceModel,
+          ctx.claim.key,
+          environment,
+        );
+
+        return { ...environment, defaultInstance };
+      }),
     ),
 
   /**
@@ -1079,17 +1163,32 @@ export const sandboxStorageRouter = router({
               .findByIds(topicIds)
               .catch(() => [])
           : [];
-      const titles = new Map(
+      // Where the conversation lives, as well as what it is called: a topic is
+      // addressed as `group/<groupId>/<topicId>` when it belongs to a group and
+      // `agent/<agentId>/<topicId>` otherwise, so a link built from the topic
+      // alone cannot resolve and the panel's one way back into the run is a 404.
+      // A group topic carries BOTH ids, which is why the group one is returned
+      // rather than inferred from the absence of an agent.
+      const topicInfo = new Map(
         topics
           .filter((topic) => topic.userId === ctx.userId)
-          .map((topic) => [topic.id, topic.title]),
+          .map((topic) => [
+            topic.id,
+            { agentId: topic.agentId, groupId: topic.groupId, title: topic.title },
+          ]),
       );
 
       return {
-        sessions: merged.map((session) => ({
-          ...session,
-          topicTitle: (session.topicId && titles.get(session.topicId)) || null,
-        })),
+        sessions: merged.map((session) => {
+          const info = session.topicId ? topicInfo.get(session.topicId) : undefined;
+
+          return {
+            ...session,
+            topicAgentId: info?.agentId ?? null,
+            topicGroupId: info?.groupId ?? null,
+            topicTitle: info?.title || null,
+          };
+        }),
         unavailable: pages.includes(null),
       };
     }),
@@ -1149,40 +1248,101 @@ export const sandboxStorageRouter = router({
       return ctx.client.writeFile(input).catch(mapStorageError);
     }),
 
-  /** Refused while instances still reference it — those go first. */
-  removeEnvironment: environmentProcedure
+  /**
+   * Refused while copies other than the default still reference it — those go
+   * first.
+   *
+   * The default instance goes with the environment: it cannot be removed on
+   * its own, so for an environment with only that one left, deleting the
+   * environment is how it is deleted.
+   *
+   * Both rows go in one transaction, and the snapshot is dropped last, inside
+   * it. Anything that refuses — a project still bound to the environment, an
+   * instance created meanwhile, a run still holding the snapshot — rolls the
+   * rows back with the snapshot untouched, so a refused delete costs nothing.
+   * The one gap left is a commit that fails after the snapshot is gone, which
+   * leaves rows with nothing built behind them. What was lost is what this
+   * call was asked to delete, and the call reports its failure, so deleting
+   * again finishes the job. The other order is the one with no way back: rows
+   * gone and a snapshot nobody can see, name, or reclaim.
+   */
+  removeEnvironment: instanceProcedure
     .input(z.object({ id: idSchema }))
     .mutation(async ({ ctx, input }) => {
-      const removed = await ctx.environmentModel.delete(input.id).catch(rethrowEnvironmentInUse);
-      if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      // Ownership before anything reaches the execution plane: a member who
+      // can see a published environment must not get its snapshot deleted on
+      // the way to being refused the row.
+      const environment = await ctx.environmentModel.findOwnedById(input.id);
+      if (!environment)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      return removed;
+      const instances = await ctx.instanceModel.query({ environmentId: environment.id });
+      if (instances.length > 1) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'ENVIRONMENT_HAS_INSTANCES' });
+      }
+
+      const [onlyInstance] = instances;
+      // Only a sandbox instance has a snapshot this router can drop; any other
+      // kind keeps referencing the environment and the delete below says so.
+      const defaultInstance = onlyInstance?.kind === 'sandbox' ? onlyInstance : undefined;
+
+      return inEnvironmentTransaction(ctx, async ({ environmentModel, instanceModel }) => {
+        if (defaultInstance) {
+          await instanceModel.delete(defaultInstance.id).catch(rethrowEnvironmentInUse);
+        }
+
+        const removed = await environmentModel.delete(input.id).catch(rethrowEnvironmentInUse);
+        if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+
+        if (defaultInstance) await deleteInstanceSnapshot(ctx.client, defaultInstance.id);
+
+        return removed;
+      });
     }),
 
+  /**
+   * Remove one copy of an environment. The default instance is refused: it is
+   * what the environment is, so it goes when the environment does, and a
+   * broken one is rebuilt rather than deleted.
+   */
   removeInstance: instanceProcedure
     .input(z.object({ id: idSchema, topicId: topicIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const instance = await ctx.instanceModel.findOwnedById(input.id);
       if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
+      const siblings = await ctx.instanceModel.query({ environmentId: instance.environmentId });
+      if (isDefaultInstance(instance, siblings)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'DEFAULT_INSTANCE' });
+      }
+
       // Snapshot first, and only drop the row once it is gone: a row removed
       // while the snapshot survives leaves storage nobody can see, name, or
       // reclaim. The execution plane refuses while a session is using it, and
       // that refusal is the one the user needs to see.
-      await ctx.client
-        .deleteInstance({ name: instance.id, topicId: input.topicId })
-        .catch((error: unknown) => {
-          // No snapshot there is the state this call exists to reach, so a 404
-          // is this step succeeding, not failing. An instance nothing has ever
-          // run in has nothing on the execution plane — and treating that as an
-          // error strands the row permanently, because the environment holding
-          // it cannot be deleted either while an instance references it.
-          if (error instanceof SandboxStorageFilesError && error.status === 404) return;
-
-          return mapStorageError(error);
-        });
+      await deleteInstanceSnapshot(ctx.client, instance.id, input.topicId);
 
       return ctx.instanceModel.delete(input.id);
+    }),
+
+  /**
+   * End the run holding an instance, so it can be picked, rebuilt or deleted
+   * now instead of after the idle sweep.
+   *
+   * The owner's, like a rebuild or a delete: in a published environment the
+   * run holding the instance is usually a colleague's conversation, and
+   * cutting it off is not something reading access should allow. The
+   * execution plane does the stop properly — snapshot first, lease released
+   * only once the stop is confirmed — and its refusals (still saving, still
+   * starting, being built) travel as codes the client turns into sentences.
+   */
+  stopInstance: instanceProcedure
+    .input(z.object({ id: idSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const instance = await ctx.instanceModel.findOwnedById(input.id);
+      if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+      return ctx.client.stopInstance({ name: instance.id }).catch(mapStorageError);
     }),
 
   /**

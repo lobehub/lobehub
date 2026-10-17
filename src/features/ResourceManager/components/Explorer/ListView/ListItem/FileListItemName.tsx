@@ -1,5 +1,4 @@
-import { Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Input } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, Input, stopPropagation, Tooltip } from '@lobehub/ui';
 import { FileText, FolderIcon, LockIcon } from 'lucide-react';
 
 import FileIcon from '@/components/FileIcon';

@@ -198,7 +198,9 @@ apply_env() {
   export DATABASE_DRIVER="${DATABASE_DRIVER:-node}"
   export DATABASE_URL
   export DEVICE_GATEWAY_SERVICE_TOKEN="${DEVICE_GATEWAY_SERVICE_TOKEN:-agent-testing-local-device-gateway-token}"
-  export FEATURE_FLAGS="${FEATURE_FLAGS:--agent_self_iteration}"
+  # Background self-iteration follows each user's Labs → Self-evolving switch (off for new
+  # users), so no flag is needed to keep a simple chat from fanning out.
+  export FEATURE_FLAGS="${FEATURE_FLAGS:-}"
   export KEY_VAULTS_SECRET="${KEY_VAULTS_SECRET:-r2gbBPKyJ8ZRKCLKt+I3DImfcL+wGxaQyRC56xtm9Uk=}"
   export NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION="${NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION:-0}"
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}"

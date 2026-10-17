@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
+import { clearReferenceImageCache } from '../../utils/referenceImageCache';
 import { createBflImage } from './createImage';
 import { BflStatusResponse } from './types';
 
@@ -31,6 +32,7 @@ const mockOptions = {
 };
 
 beforeEach(() => {
+  clearReferenceImageCache();
   vi.clearAllMocks();
 });
 

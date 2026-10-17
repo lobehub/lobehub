@@ -116,22 +116,24 @@ Start an agent execution. Streams over the agent gateway WebSocket by default, o
 `--sse`.
 
 ```bash
-lh agent run [-a <id>] [-s <slug>] [-p <text>] [-t <id>] [--no-auto-start] [--device <target>] [--no-headless] [--json] [-v] [--replay <file>] [--sse]
+lh agent run [-a <id>] [-s <slug>] [-p <text>] [-t <id>] [--no-auto-start] [--device <target>] [--no-headless] [--tool <id>]... [--skill <id>]... [--json] [-v] [--replay <file>] [--sse]
 ```
 
-| Option                | Description                                                                            |
-| --------------------- | -------------------------------------------------------------------------------------- |
-| `-a, --agent-id <id>` | Agent ID to run                                                                        |
-| `-s, --slug <slug>`   | Agent slug (alternative to ID)                                                         |
-| `-p, --prompt <text>` | User prompt                                                                            |
-| `-t, --topic-id <id>` | Reuse existing topic                                                                   |
-| `--no-auto-start`     | Don't auto-start the agent                                                             |
-| `--device <target>`   | Target device ID, or `local` for the current connected device                          |
-| `--no-headless`       | Wait for human approval on tool calls instead of auto-running them (default: headless) |
-| `--json`              | Output full JSON event stream                                                          |
-| `-v, --verbose`       | Show detailed tool call info                                                           |
-| `--replay <file>`     | Replay events from saved JSON file (offline)                                           |
-| `--sse`               | Force SSE stream instead of the WebSocket gateway                                      |
+| Option                | Description                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `-a, --agent-id <id>` | Agent ID to run                                                                           |
+| `-s, --slug <slug>`   | Agent slug (alternative to ID)                                                            |
+| `-p, --prompt <text>` | User prompt                                                                               |
+| `-t, --topic-id <id>` | Reuse existing topic                                                                      |
+| `--no-auto-start`     | Don't auto-start the agent                                                                |
+| `--device <target>`   | Target device ID, or `local` for the current connected device                             |
+| `--no-headless`       | Wait for human approval on tool calls instead of auto-running them (default: headless)    |
+| `--tool <id>`         | Enable a tool for this run on top of the agent's own, like an @-mention (repeatable)      |
+| `--skill <id>`        | Load a skill for this run and the rest of its topic, like picking it in chat (repeatable) |
+| `--json`              | Output full JSON event stream                                                             |
+| `-v, --verbose`       | Show detailed tool call info                                                              |
+| `--replay <file>`     | Replay events from saved JSON file (offline)                                              |
+| `--sse`               | Force SSE stream instead of the WebSocket gateway                                         |
 
 ### Streaming Behavior
 

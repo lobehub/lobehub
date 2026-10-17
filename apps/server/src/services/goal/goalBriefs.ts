@@ -1,6 +1,6 @@
 import { GOAL_BRIEF_TRIGGER, GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
 import type { BriefAction, BriefGoalMetadata, GoalDecisionOption, GoalItem } from '@lobechat/types';
-import { coordinatorGateReason, coordinatorReasonCopy } from '@lobechat/utils/goalCopy';
+import { coordinatorGateReason, coordinatorReasonCopies } from '@lobechat/utils/goalCopy';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
@@ -27,6 +27,9 @@ const DECIDED_ACCEPTANCE_STATUSES = new Set<string>(['accepted', 'closed', 'reje
 const signOffFor = (acceptanceId: string) =>
   sql`${briefs.metadata} -> 'goal' ->> 'signOffAcceptanceId' = ${acceptanceId}`;
 
+const decisionFor = (decisionId: string) =>
+  sql`${briefs.metadata} -> 'goal' ->> 'decisionId' = ${decisionId}`;
+
 const clip = (text: string, limit = SUMMARY_LIMIT) =>
   text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
 
@@ -48,6 +51,8 @@ interface DecisionInput {
   options?: GoalDecisionOption[] | null;
   question: string;
   recommendedOptionId?: string | null;
+  /** A held batch release: answered in this review report, not by a one-click action. */
+  reviewAcceptanceId?: string;
 }
 
 /**
@@ -79,8 +84,12 @@ export class GoalBriefService {
       const { t } = await this.chatCopy();
       const { t: tHome } = await this.homeCopy();
       const reason = coordinatorGateReason(input.question) ?? input.question;
-      const reasonCopy = coordinatorReasonCopy(reason);
-      const localizedReason = reasonCopy ? t(reasonCopy.key, reasonCopy.params) : reason;
+      // A batch gate lists every blocker it hit at once, joined by `; `; localize
+      // each so the brief carries no English into a non-English inbox.
+      const reasonCopies = coordinatorReasonCopies(reason);
+      const localizedReason = reasonCopies
+        ? reasonCopies.map((copy) => t(copy.key, copy.params)).join('; ')
+        : reason;
       // The machine gate's retry means "I fixed the setup", not "try again".
       const machine = MACHINE_GATE_TAIL.test(input.question);
       const label = (option: GoalDecisionOption) => {
@@ -117,6 +126,7 @@ export class GoalBriefService {
         metadata: {
           decisionId: input.decisionId,
           kind: 'decision',
+          ...(input.reviewAcceptanceId ? { reviewAcceptanceId: input.reviewAcceptanceId } : {}),
           ...(recommended ? { recommendedAction: recommended.id } : {}),
         },
         priority: 'urgent',
@@ -225,6 +235,17 @@ export class GoalBriefService {
         .set({ resolvedAction: action, resolvedAt: new Date(), resolvedComment: comment ?? null })
         .where(
           and(this.briefModel.ownership(), isNull(briefs.resolvedAt), signOffFor(acceptanceId)),
+        );
+    });
+
+  /** A gate was answered somewhere else — its review report, the goal page. */
+  settleDecision = async (decisionId: string, action: string, comment?: string) =>
+    this.safely('settleDecision', async () => {
+      await this.db
+        .update(briefs)
+        .set({ resolvedAction: action, resolvedAt: new Date(), resolvedComment: comment ?? null })
+        .where(
+          and(this.briefModel.ownership(), isNull(briefs.resolvedAt), decisionFor(decisionId)),
         );
     });
 

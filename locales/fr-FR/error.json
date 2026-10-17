@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Impossible de générer cette réponse",
   "unknownError.title": "Oups, la requête s'est assoupie",
   "unknownError.traceIdLabel": "ID de trace :",
+  "unknownError.troubleshoot": "Dépanner",
   "unlock.addProxyUrl": "Ajouter une URL proxy OpenAI (optionnel)",
   "unlock.apiKey.description": "Entrez votre clé API {{name}} pour démarrer la session",
   "unlock.apiKey.imageGenerationDescription": "Entrez votre clé API {{name}} pour commencer la génération",

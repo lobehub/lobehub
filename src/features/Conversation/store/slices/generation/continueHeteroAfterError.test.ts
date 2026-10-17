@@ -93,6 +93,7 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
+  operationSelectors: { isAgentRuntimeRunningByContext: () => () => false },
   topicSelectors: {
     getTopicById: () => () => mockTopic,
     getTopicHeteroPinById: () => () =>
@@ -120,6 +121,7 @@ const noop = vi.fn();
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      dbMessagesMap: {},
       operations: {},
       operationsByMessage: {},
 
@@ -148,7 +150,8 @@ const USER_MESSAGE = { content: 'clean up worktrees', id: 'user-1', role: 'user'
  * and immediately died on the usage limit. `step-1` is also the group id.
  */
 const buildGroupStore = (children: any[], dbMessages?: any[]) => {
-  const store = createStore({ context: CONTEXT });
+  // A static transcript: the chat store is mocked, so rows are held locally.
+  const store = createStore({ context: CONTEXT, messages: [] });
   act(() => {
     store.setState({
       dbMessages: dbMessages ?? [

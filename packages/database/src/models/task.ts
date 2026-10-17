@@ -25,7 +25,6 @@ import {
   desc,
   eq,
   getTableColumns,
-  gt,
   gte,
   inArray,
   isNotNull,
@@ -63,6 +62,14 @@ import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { ProjectModel } from './project';
+import {
+  buildTaskListFilters,
+  type TaskListFilterOptions,
+  type TaskListOptions,
+} from './taskListFilters';
+
+const DEFAULT_TASK_IDENTIFIER_PREFIX = 'T';
 
 /** Columns whose change is worth a line in the task activity feed. */
 const TRACKED_TASK_COLUMNS = [
@@ -253,59 +260,6 @@ export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
  * workspace_id IS NULL` for all four helpers — visibility is inert because
  * everything personal is implicitly owner-only.
  */
-/**
- * A task the automation runtime would still act on.
- *
- * `automation_mode` alone does not mean "this fires". The tick services refuse
- * to run on exactly these grounds — `scheduleTick` skips a schedule with no
- * cron pattern, `heartbeatTick` skips a heartbeat with no positive interval,
- * and both skip a task that has reached a terminal status. A row that keeps its
- * mode after being completed, canceled or stripped of its pattern is a
- * leftover, not a schedule, and listing it as one lets dead entries crowd real
- * ones out of a bounded roll-up.
- *
- * Kept as one expression so the `automated` filter's two sides stay exact
- * complements and no row falls into neither bucket.
- */
-const RUNNABLE_AUTOMATION = and(
-  notInArray(tasks.status, ['canceled', 'completed', 'failed']),
-  or(
-    and(
-      eq(tasks.automationMode, 'schedule'),
-      isNotNull(tasks.schedulePattern),
-      ne(tasks.schedulePattern, ''),
-    ),
-    and(eq(tasks.automationMode, 'heartbeat'), gt(tasks.heartbeatInterval, 0)),
-  ),
-)!;
-
-interface TaskListFilterOptions {
-  assigneeAgentId?: string;
-  /** Only tasks assigned to this workspace member. */
-  assigneeUserId?: string;
-  automated?: boolean;
-  /** Only tasks created by this user. */
-  createdByUserId?: string;
-  parentTaskId?: string | null;
-  projectId?: string;
-  visibility?: 'private' | 'public';
-}
-
-interface TaskListOptions extends TaskListFilterOptions {
-  /**
-   * Keyset cursor: only rows that sort strictly after this `(orderBy, seq)`
-   * position in the list's newest-first order. Unlike `offset`, a cursor is
-   * unaffected by rows inserted or deleted ahead of it, so a client walking
-   * the whole list page by page never repeats or skips a row.
-   */
-  after?: { at: Date; seq: number };
-  limit?: number;
-  offset?: number;
-  orderBy?: 'createdAt' | 'updatedAt';
-  priorities?: number[];
-  statuses?: string[];
-}
-
 interface TaskRunStats extends Record<string, unknown> {
   root_id: string;
   total_run_cost: number;
@@ -387,35 +341,10 @@ export class TaskModel {
       : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL AND ${prefix}is_deleted IS NOT TRUE`;
   };
 
-  private buildListConditions = ({
-    assigneeAgentId,
-    assigneeUserId,
-    automated,
-    createdByUserId,
-    parentTaskId,
-    projectId,
-    visibility,
-  }: TaskListFilterOptions): SQL[] => {
-    const conditions = [this.ownership()];
-
-    if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (assigneeUserId) conditions.push(eq(tasks.assigneeUserId, assigneeUserId));
-    if (createdByUserId) conditions.push(eq(tasks.createdByUserId, createdByUserId));
-    if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
-    // `IS NOT TRUE`, not `NOT (…)`: nullable automation fields make the
-    // runnable expression NULL for manual tasks, and WHERE would drop them.
-    if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
-    if (projectId) conditions.push(eq(tasks.projectId, projectId));
-    if (visibility) conditions.push(eq(tasks.visibility, visibility));
-
-    if (parentTaskId === null) {
-      conditions.push(isNull(tasks.parentTaskId));
-    } else if (parentTaskId) {
-      conditions.push(eq(tasks.parentTaskId, parentTaskId));
-    }
-
-    return conditions;
-  };
+  private buildListConditions = (options: TaskListFilterOptions): SQL[] => [
+    this.ownership(),
+    ...buildTaskListFilters(options),
+  ];
 
   /**
    * Look up a task's visibility so child-row inserts (deps, docs, topics) can
@@ -436,12 +365,34 @@ export class TaskModel {
   // ========== CRUD ==========
 
   async create(
-    data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'> & {
-      identifierPrefix?: string;
-    },
+    data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>,
     options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
-    const { identifierPrefix = 'T', ...rest } = normalizeTaskRefs(data);
+    const createData = normalizeTaskRefs(data);
+
+    // Keep the invariant at the write boundary, including direct model callers.
+    // Parent references here are canonical database ids; the service resolves
+    // display identifiers before calling the model.
+    if (createData.parentTaskId) {
+      const parent = await this.findById(createData.parentTaskId);
+      if (!parent) throw new Error('Task not found');
+      if (createData.projectId && createData.projectId !== parent.projectId) {
+        throw new Error('Subtask must belong to the same project as its parent');
+      }
+      createData.projectId ??= parent.projectId;
+    }
+
+    // A prefix is derived from placement, never accepted as a creation field.
+    let identifierPrefix = DEFAULT_TASK_IDENTIFIER_PREFIX;
+    if (createData.projectId) {
+      const project = await new ProjectModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findManageableById(createData.projectId);
+      if (!project) throw new Error('Project not found');
+      identifierPrefix = project.identifier;
+    }
 
     // Retry loop to handle concurrent creates (parallel tool calls)
     const maxRetries = options.maxRetries ?? 5;
@@ -468,7 +419,7 @@ export class TaskModel {
         const [task] = await this.db
           .insert(tasks)
           .values({
-            ...rest,
+            ...createData,
             createdByUserId: this.userId,
             identifier,
             seq: nextSeq,
@@ -1450,7 +1401,7 @@ export class TaskModel {
     id: string,
     currentStatus: string,
     status: string,
-    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+    extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
     const [task] = await this.db
       .update(tasks)
@@ -1737,7 +1688,7 @@ export class TaskModel {
    * lost, the Task keeps a `running` run forever. Everything downstream then
    * believes a dead run is live — the Goal view reads its frozen heartbeat as
    * activity, and the coordinator parks on `waiting_external` instead of
-   * recovering it (LOBE-12391). This finder is what lets a sweep settle those
+   * recovering it. This finder is what lets a sweep settle those
    * rows without depending on the lost delivery.
    *
    * The grace window is what keeps the sweep from racing the normal path: the
@@ -2596,7 +2547,7 @@ export class TaskModel {
         const newParentId =
           currentId === taskId ? null : (idMap.get(original.parentTaskId!) ?? null);
 
-        const identifier = `T-${seq}`;
+        const identifier = `${DEFAULT_TASK_IDENTIFIER_PREFIX}-${seq}`;
         const inserted = (await (trx as LobeChatDatabase)
           .insert(tasks)
           .values({

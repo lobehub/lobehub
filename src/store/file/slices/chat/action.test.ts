@@ -1,5 +1,5 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,7 +24,7 @@ const mockAgentMode = ({
   vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockReturnValue(() => heterogeneous);
 };
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
@@ -203,6 +203,40 @@ describe('useFileStore:chat', () => {
     });
 
     expect(result.current.chatUploadFileList).toEqual([]);
+  });
+
+  it('clears only submitted uploads while retaining newer files and their status', () => {
+    const { result } = renderHook(() => useStore());
+    const newerFile = { id: 'new', status: 'uploading' };
+    act(() => {
+      useStore.setState({ chatUploadFileList: [{ id: 'submitted' }, newerFile] as any });
+      result.current.clearChatUploadFileList(['submitted']);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+    act(() => {
+      result.current.clearChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+  });
+
+  it('restoreChatUploadFileList puts cleared uploads back without duplicating newer drafts', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedFile = { id: 'submitted', status: 'success' };
+    const newerFile = { id: 'new', status: 'uploading' };
+
+    // The composer cleared everything on send; a fresh draft arrived while the
+    // rejected send was still unwinding.
+    act(() => {
+      useStore.setState({ chatUploadFileList: [newerFile] as any });
+      result.current.restoreChatUploadFileList([submittedFile, newerFile] as any);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+
+    act(() => {
+      result.current.restoreChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
   });
 
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {

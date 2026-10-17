@@ -47,8 +47,11 @@ export class ChatTranslateActionImpl {
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message) return;
 
-    // Get current agent for translation
-    const translationSetting = systemAgentSelectors.translation(useUserStore.getState());
+    // Only the model of the translation system agent: its other settings
+    // (`enabled`, `customPrompt`) are not model parameters and must not reach
+    // the provider request.
+    const { model, provider } = systemAgentSelectors.translation(useUserStore.getState());
+    const translationSetting = { model, provider };
 
     // create translate extra
     await updateMessageTranslate(id, { content: '', from: '', to: targetLang });

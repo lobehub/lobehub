@@ -11,7 +11,8 @@ export type FtsSearchResultType =
   | 'mcp'
   | 'plugin'
   | 'communityAgent'
-  | 'knowledgeBase';
+  | 'knowledgeBase'
+  | 'task';
 
 export interface FtsSearchBaseResult {
   createdAt: Date;
@@ -118,6 +119,15 @@ export interface FtsSearchKnowledgeBaseResult extends FtsSearchBaseResult {
   type: 'knowledgeBase';
 }
 
+/** Task lookup result. Tasks are not indexed; `TaskSearchRepo` queries them directly. */
+export interface FtsSearchTaskResult extends FtsSearchBaseResult {
+  /** Assignee agent, when the task is agent-assigned. */
+  agentId: string | null;
+  identifier: string;
+  status: string;
+  type: 'task';
+}
+
 /**
  * Hydrated BM25 hit for KB-scoped documents. `fileId` identifies a parsed-file
  * source; inline pages use `documentId` directly.
@@ -154,7 +164,11 @@ export type FtsSearchDatabaseResult =
   | FtsSearchKnowledgeBaseResult;
 
 export type FtsSearchResult =
-  FtsSearchDatabaseResult | FtsSearchMCPResult | FtsSearchPluginResult | FtsSearchAssistantResult;
+  | FtsSearchDatabaseResult
+  | FtsSearchMCPResult
+  | FtsSearchPluginResult
+  | FtsSearchAssistantResult
+  | FtsSearchTaskResult;
 
 export interface FtsSearchOptions {
   agentId?: string;

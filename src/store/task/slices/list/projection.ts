@@ -28,6 +28,8 @@ export interface TaskListQuery {
   automated?: boolean;
   /** Every page walked (the Tasks list view), or the first server page. */
   complete?: boolean;
+  /** Archived tasks are hidden unless the "Show archived" option is on. */
+  includeArchived?: boolean;
   orderBy?: 'createdAt' | 'updatedAt';
   projectId?: string;
   /** Sorted, so the same status set is one entry. */
@@ -48,6 +50,7 @@ export interface TaskGroupListQuery {
   /** Sorted. */
   excludeStatuses?: TaskStatus[];
   groupBy: TaskKanbanGroupBy;
+  includeArchived?: boolean;
   projectId?: string;
   /** "My tasks" board. */
   scope?: 'assigned' | 'created';

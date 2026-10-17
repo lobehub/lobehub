@@ -26,7 +26,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', () => ({
   confirmModal: (...args: unknown[]) => mocks.confirmModal(...args),
   toast: {
     error: (...args: unknown[]) => mocks.toastError(...args),

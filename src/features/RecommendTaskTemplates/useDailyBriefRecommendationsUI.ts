@@ -5,14 +5,13 @@ import type {
 } from '@lobechat/const';
 import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useSessionStorageState } from 'ahooks';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { taskTemplateKeys } from '@/libs/swr/keys';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
@@ -164,11 +163,10 @@ export function useDailyBriefRecommendationsUI(
   const locale = i18n.resolvedLanguage || i18n.language;
 
   const isLogin = useUserStore(authSelectors.isLogin);
-  const cacheScope = useCacheScope();
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  useFetchBriefs(isLogin, cacheScope);
+  useFetchBriefs(isLogin);
 
-  const isInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
+  const isInit = useBriefStore(briefListSelectors.isBriefsInit);
 
   const interestKeys = useResolvedInterestKeys();
   const [refreshSeed, setRefreshSeed] = useSessionStorageState<string>(REFRESH_SEED_STORAGE_KEY, {

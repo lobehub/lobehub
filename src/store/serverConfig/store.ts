@@ -33,6 +33,12 @@ interface ServerConfigState {
   segmentVariants?: string;
   serverConfig: GlobalServerConfig;
   serverConfigInit: boolean;
+  /**
+   * The global config request succeeded. `serverConfigInit` also turns true on
+   * the error fallback, where `serverConfig` keeps its defaults and every
+   * server-gated feature reads as disabled.
+   */
+  serverConfigLoaded: boolean;
 }
 
 const initialState: ServerConfigState = {
@@ -44,6 +50,7 @@ const initialState: ServerConfigState = {
   segmentVariants: '',
   serverConfig: { aiProvider: {}, telemetry: {} },
   serverConfigInit: false,
+  serverConfigLoaded: false,
 };
 
 //  ===============  Aggregate createStoreFn ============ //

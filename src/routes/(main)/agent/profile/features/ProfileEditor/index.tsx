@@ -7,10 +7,8 @@ import {
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import type { TabsItem } from '@lobehub/ui/base-ui';
-import { Alert, Button, Tabs } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import type { TabsItem } from '@lobehub/ui';
+import { Alert, Button, createStaticStyles, cssVar, Flexbox, Tabs } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
@@ -140,7 +138,6 @@ const ProfileEditor = memo(() => {
   const localDesktopAvailable =
     isDesktop &&
     !!heterogeneousProvider &&
-    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
     resolveExecutionTarget(effectiveAgencyConfig, {
       clientExecutionAvailable: true,
       isHetero: true,
@@ -152,7 +149,10 @@ const ProfileEditor = memo(() => {
   // `selectRuntimeType`'s personal-scope guard). The deployment-default API
   // source is not a user-provider binding, so it stays available whenever
   // local Desktop execution is available.
-  const apiModeAvailable = localDesktopAvailable && !isWorkspaceAgent;
+  const apiModeAvailable =
+    localDesktopAvailable &&
+    !isWorkspaceAgent &&
+    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type);
   const useFetchServerDefaultCapability = useAgentStore(
     (s) => s.useFetchServerDefaultHeterogeneousCapability,
   );

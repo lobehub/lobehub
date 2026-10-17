@@ -7,15 +7,26 @@ import {
   OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
-import { Block, Flexbox, Icon, Image } from '@lobehub/ui';
-import { Avatar, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Image,
+  Skeleton,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDiscoverStore } from '@/store/discover';
+import { pluginSelectors } from '@/store/discover/selectors';
 
 /**
  * Icon component for built-in tools (Composio & LobehubSkill)
@@ -77,8 +88,10 @@ interface PluginItemProps {
 
 const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const { t } = useTranslation('discover');
-  const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
-  const { data: apiData, isLoading } = usePluginDetail({ identifier, withManifest: false });
+  const usePluginDetail = useDiscoverStore((s) => s.useFetchPluginDetail);
+  const { isLoading, queryKey } = usePluginDetail({ identifier, withManifest: false });
+  // The replica view of this identifier; the sync hook only reports the fetch flags.
+  const apiData = useDiscoverStore(pluginSelectors.pluginDetail(queryKey));
 
   // Try to get Composio tool info if API returns no data
   const composioTool = useMemo(() => {

@@ -76,11 +76,12 @@ import {
   createLocalFile,
   editLocalFile,
   expandTilde,
+  getLocalImageMimeType,
   listLocalFiles,
   moveLocalFiles,
   readLocalFile,
+  readLocalImageFile,
   renameLocalFile,
-  resolveAgainstCwd,
   writeLocalFile,
 } from '@lobechat/local-file-shell/file';
 import type { FileResult, SearchOptions } from '@lobechat/local-file-shell/types';
@@ -120,29 +121,6 @@ const formatUploadFailure = ({ kind, reason }: UploadFailure): string => {
 };
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
-
-/**
- * Image extensions `readFile` uploads to file storage instead of refusing as
- * binary. The runtime can then route the image to downstream media analysis
- * rather than hitting "Unsupported binary file".
- *
- * AVIF is included for Analyze Media, whose request-boundary normalization
- * converts unsupported image formats for its fallback vision model. This does
- * not imply native AVIF support across providers. SVG is intentionally absent:
- * it's text, and reading the source is more useful to the model than a
- * rasterization we can't produce here.
- */
-const LOCAL_IMAGE_EXT_TO_MIME: Record<string, string> = {
-  avif: 'image/avif',
-  gif: 'image/gif',
-  jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-};
-
-/** Refuse to load image bytes beyond this size — providers reject them anyway. */
-const MAX_IMAGE_READ_BYTES = 10 * 1024 * 1024;
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
@@ -518,79 +496,24 @@ export default class LocalFileCtr extends ControllerModule {
     // able to actually *see* the image (vision) rather than hit "Unsupported
     // binary file type". Delegate the upload to the embedded CLI
     // (`lh file upload`) and return a durable { fileId, url } — bytes never
-    // cross IPC and never reach the DB; the MessageContent processor turns
-    // the uploaded URL into an `image_url` part for the LLM.
-    const ext = path.extname(params.path).toLowerCase().replace('.', '');
-    const imageMimeType = LOCAL_IMAGE_EXT_TO_MIME[ext];
+    // cross IPC and never reach the DB.
+    const imageMimeType = getLocalImageMimeType(params.path);
     if (imageMimeType) {
-      const filePath = resolveAgainstCwd(params.path, params.cwd) ?? params.path;
-      const filename = path.basename(filePath);
-
-      const buildImageResult = (
-        content: string,
-        extra: Partial<LocalReadFileResult> = {},
-      ): LocalReadFileResult => ({
-        charCount: 0,
-        content,
-        createdTime: new Date(),
-        fileType: imageMimeType,
-        filename,
-        isImage: true,
-        lineCount: 0,
-        loc: [0, 0],
-        modifiedTime: new Date(),
-        totalCharCount: 0,
-        totalLineCount: 0,
-        ...extra,
-      });
-
-      let fileStat;
-      try {
-        fileStat = await stat(filePath);
-      } catch (error) {
-        return buildImageResult(`Error accessing or processing file: ${(error as Error).message}`);
-      }
-
-      if (!fileStat.isFile()) {
-        return buildImageResult(`Error: Not a regular file: ${filePath}`);
-      }
-
-      if (fileStat.size > MAX_IMAGE_READ_BYTES) {
-        return buildImageResult(
-          `Error: Image file is too large to preview (${fileStat.size} bytes, limit ${MAX_IMAGE_READ_BYTES}).`,
-        );
-      }
-
-      try {
-        const record = await this.app.getService(RemoteFileUploadService).uploadLocalFile(filePath);
-
-        if (record?.url) {
-          return buildImageResult(`[Image: ${filename}]`, {
-            createdTime: fileStat.birthtime,
-            imageFileId: record.id,
-            imageUrl: record.url,
-            modifiedTime: fileStat.mtime,
-          });
-        }
-
-        logger.warn('Image upload returned no record:', { filePath });
-      } catch (error) {
-        logger.warn('Image upload failed:', { error, filePath });
-
+      return readLocalImageFile(params, imageMimeType, {
         // Degrade with the real cause so the model can tell a full storage
         // quota (retrying is pointless) apart from a transient network error.
-        return buildImageResult(
-          `[Image: ${filename}] (upload unavailable — ${formatUploadFailure(describeUploadFailure(error))})`,
-          { createdTime: fileStat.birthtime, modifiedTime: fileStat.mtime },
-        );
-      }
-
-      // Degrade: the placeholder tells the model an image exists that it
-      // cannot inspect, instead of failing the read outright.
-      return buildImageResult(
-        `[Image: ${filename}] (upload unavailable — the model cannot view this image)`,
-        { createdTime: fileStat.birthtime, modifiedTime: fileStat.mtime },
-      );
+        describeUploadError: (error) => {
+          logger.warn('Image upload failed:', { error, filePath: params.path });
+          return formatUploadFailure(describeUploadFailure(error));
+        },
+        upload: async (filePath) => {
+          const record = await this.app
+            .getService(RemoteFileUploadService)
+            .uploadLocalFile(filePath);
+          if (!record?.url) logger.warn('Image upload returned no record:', { filePath });
+          return record;
+        },
+      });
     }
 
     return readLocalFile(params);

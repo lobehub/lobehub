@@ -16,6 +16,8 @@ export interface TaskListViewOptions {
   orderBy: TaskOrderBy;
   orderCompletedByRecency: boolean;
   orderDirection: TaskOrderDirection;
+  /** Bring back the tasks the user archived; they stay out of every list by default. */
+  showArchived: boolean;
   /** List sub-tasks whose parent is already on the list as rows of their own. */
   showSubTasks: boolean;
   subGroupBy: TaskGroupBy;
@@ -62,6 +64,7 @@ export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
   orderBy: 'updatedAt',
   orderCompletedByRecency: true,
   orderDirection: 'asc',
+  showArchived: false,
   showSubTasks: false,
   subGroupBy: 'none',
 };
@@ -115,6 +118,10 @@ export const normalizeTaskListViewOptions = (
     orderDirection: TASK_ORDER_DIRECTION_SET.has(next.orderDirection as TaskOrderDirection)
       ? (next.orderDirection as TaskOrderDirection)
       : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderDirection,
+    showArchived:
+      typeof next.showArchived === 'boolean'
+        ? next.showArchived
+        : DEFAULT_TASK_LIST_VIEW_OPTIONS.showArchived,
     showSubTasks:
       typeof next.showSubTasks === 'boolean'
         ? next.showSubTasks

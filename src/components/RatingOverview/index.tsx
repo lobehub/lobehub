@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Progress, Text } from '@lobehub/ui/base-ui';
-import { cssVar, useResponsive } from 'antd-style';
+import { cssVar, Flexbox, Progress, Text, useResponsive } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

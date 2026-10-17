@@ -1,4 +1,5 @@
 import type { VerifyCheckDefinition } from './acceptanceFlow';
+import type { GoalReleaseGateDossier } from './goal';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
  * shape, Toulmin narrative, and rubric run-policy config. Kept here (not in the
@@ -50,7 +51,7 @@ export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export type AcceptanceSubjectType = 'task' | 'topic' | 'document' | 'standalone';
+export type AcceptanceSubjectType = 'task' | 'topic' | 'document' | 'standalone' | 'goal_gate';
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -676,6 +677,9 @@ export interface VerifyRunMetadata {
    * run that *authored* the report — and is many-to-one.
    */
   origin?: VerifyRunOrigin;
+  previewUrl?: string;
+  /** A Goal decision gate's frozen dossier: what the owner decides a batch release on. */
+  releaseGate?: GoalReleaseGateDossier;
   /**
    * The round this one replays (`flow plan --from-run`). A replay is pinned to
    * the source round's frozen definition, so it never follows later graph edits

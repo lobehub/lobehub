@@ -93,6 +93,37 @@ describe('piDriver', () => {
     expect(content).not.toContain('stale-token');
   });
 
+  it('describes a server-default model to Pi from the deployment card', async () => {
+    const plan = await piDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'kimi-k3',
+      modelDescriptor: {
+        abilities: { reasoning: true, vision: true },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        maxOutput: 32_768,
+        model: 'kimi-k3',
+        nativeResponses: false,
+      },
+      profileDir: '/managed/pi',
+    });
+    const config = JSON.parse(plan.profileFiles?.[0]?.content ?? '{}');
+
+    expect(config.providers['lobehub-server-default'].models).toEqual([
+      {
+        contextWindow: 262_144,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+        id: 'lobehub/kimi-k3',
+        input: ['text', 'image'],
+        maxTokens: 32_768,
+        name: 'Kimi K3',
+        reasoning: true,
+      },
+    ]);
+  });
+
   it('is registered but rejects the legacy CLI spawn plan — pi is RPC-only', async () => {
     expect(getHeterogeneousAgentDriver('pi')).toBe(piDriver);
 

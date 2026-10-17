@@ -77,7 +77,7 @@ vi.mock('@lobehub/editor/react', async () => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { error: vi.fn(), success: toastSuccessMock },
 }));

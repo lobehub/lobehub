@@ -24,6 +24,9 @@ const rubricConfigEdit = (rubricId?: string) => (s: Store) =>
 const rubricTitleEdit = (rubricId?: string) => (s: Store) =>
   rubricId ? s.rubricTitleEdits[rubricId] : undefined;
 
+const verifyRun = (operationId?: string | null) => (s: Store) =>
+  operationId ? s.verifyRunMap[operationId] : undefined;
+
 export const verifySelectors = {
   acceptanceBundle,
   acceptanceBySubject,
@@ -31,4 +34,5 @@ export const verifySelectors = {
   instructionEdit,
   rubricConfigEdit,
   rubricTitleEdit,
+  verifyRun,
 };

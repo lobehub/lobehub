@@ -74,4 +74,36 @@ describe('resolveAgentTopicGroupMode', () => {
       }),
     ).toBe('byTime');
   });
+
+  /** @example byAgent picked in a project sidebar must not leak into a single agent's own sidebar. */
+  it.each([{ agentTopicGroupMode: undefined }, { agentTopicGroupMode: 'byAgent' as const }])(
+    'normalizes byAgent to byTime for unscoped agent sidebars (config %o)',
+    ({ agentTopicGroupMode }) => {
+      // ROOT CAUSE: the project sidebar persists byAgent into the global
+      // preference and (before this fix) the per-agent config could hold it
+      // too; a single agent's topics then rendered as one self-named bucket.
+      // Project-scoped lists read the global mode directly and keep byAgent.
+      expect(
+        resolveAgentTopicGroupMode({
+          agentTopicGroupMode,
+          globalMode: 'byAgent',
+        }),
+      ).toBe('byTime');
+    },
+  );
+
+  /** @example byDevice picked in a project sidebar must not leak into a single agent's own sidebar. */
+  it.each([{ agentTopicGroupMode: undefined }, { agentTopicGroupMode: 'byDevice' as const }])(
+    'normalizes byDevice to byTime for unscoped agent sidebars (config %o)',
+    ({ agentTopicGroupMode }) => {
+      // Same leak as byAgent: device attribution only exists on project feeds,
+      // so an unscoped sidebar would bucket every topic under `no-device`.
+      expect(
+        resolveAgentTopicGroupMode({
+          agentTopicGroupMode,
+          globalMode: 'byDevice',
+        }),
+      ).toBe('byTime');
+    },
+  );
 });

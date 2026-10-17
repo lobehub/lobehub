@@ -1,4 +1,4 @@
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { lazy, Suspense } from 'react';
 
 import type { CreateProjectOptions } from './CreateProjectContent';

@@ -28,7 +28,7 @@ describe('buildGoalManagerPrompt', () => {
     'keeps supervision language tied to the goal rather than the English control prompt: %s',
     (requirement) => {
       const prompt = buildGoalManagerPrompt({ ...base, requirement });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v8');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v11');
       expect(cdataOf(prompt, 'requirement')).toBe(requirement);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
@@ -42,6 +42,38 @@ describe('buildGoalManagerPrompt', () => {
       );
     },
   );
+
+  it('asks a release turn to review the wave and answer release or escalate', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      problem: 'Batch gate passed for v1 after wave 1. Decide whether wave 2 (5 units) goes out.',
+      problemKind: 'rollout_release',
+    });
+    expect(prompt).toContain('trigger="takeover"');
+    expect(prompt).toContain('Batch release:');
+    expect(prompt).toContain('{"action":"release"');
+    // The failure takeover's corrective-task guidance does not apply to a release.
+    expect(prompt).not.toContain('Takeover: without you this Goal stops on a person');
+  });
+
+  /**
+   * Regression: a main Agent planning one recipe over many units only knew the
+   * flat tasks schema, so it seeded every unit at once and the batch rollout
+   * (probes, gate, waves) never ran for an agent-planned Goal.
+   */
+  it('teaches when to declare a batch and the rollout schema to declare it with', () => {
+    const prompt = buildGoalManagerPrompt(base);
+    expect(prompt).toContain('Batch (one repeated mould)');
+    expect(prompt).toContain('"tasks" become 2-5 probes');
+    const tasksSchemas = prompt
+      .split('\n')
+      .filter((line) => line.startsWith('{"action":"tasks"'))
+      .map((line) => JSON.parse(line));
+    expect(tasksSchemas.find((schema) => schema.rollout)?.rollout).toMatchObject({
+      recipe: expect.any(String),
+      units: expect.any(Array),
+    });
+  });
 
   /**
    * Regression: a takeover turn has to know what it is taking over. Without the
@@ -120,7 +152,7 @@ describe('buildGoalManagerPrompt', () => {
     });
 
     expect(prompt.split('\n')[0]).toBe(
-      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v8">',
+      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v11">',
     );
     expect(prompt.endsWith('</goalTurn>')).toBe(true);
     // CommonMark ends an HTML block at a blank line; the client needs one block.

@@ -8,6 +8,7 @@ import type { ToolRenderFixture } from '../lifecycleMode';
 import { buildSchemaSample, humanize, single, type ToolsetFixtureModule } from './_helpers';
 import claudeCode from './claude-code';
 import codex from './codex';
+import devin from './devin';
 import github from './github';
 import kimiCode from './kimi-code';
 import linear from './linear';
@@ -85,6 +86,7 @@ export const DEVTOOLS_GROUP_DETAIL = {
 const toolsetModules: ToolsetFixtureModule[] = [
   claudeCode,
   codex,
+  devin,
   github,
   kimiCode,
   linear,

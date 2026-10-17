@@ -131,6 +131,33 @@ const steps = {
     publish('v3', { previous: 'v2', seq: 2, version: `${APP_VERSION}-core.2` });
   },
 
+  staged() {
+    const [slot, mode] = process.argv.slice(3);
+    if (!['b', 'c'].includes(slot) || !['reload', 'relaunch'].includes(mode))
+      throw new Error('usage: staged <b|c> <reload|relaunch>');
+    // Both candidates are based on the running builtin core, so C can revert
+    // B's main change and exercise relaunch -> reload without ever applying B.
+    const tag = `staged-${slot}`;
+    const marker = `STAGED ${slot.toUpperCase()} ${mode}`;
+    rmSync(coreDir(tag), { force: true, recursive: true });
+    cpSync(coreDir('v1'), coreDir(tag), { recursive: true });
+    const html = path.join(coreDir(tag), 'dist/renderer/apps/desktop/index.html');
+    writeFileSync(
+      html,
+      readFileSync(html, 'utf8').replace(
+        /<body[^>]*>/,
+        `$&<div id="core-ota-e2e" style="position:fixed;top:8px;right:8px;z-index:99999;background:#173;color:#fff;padding:6px 10px;font:bold 14px sans-serif">${marker}</div>`,
+      ),
+    );
+    if (mode === 'relaunch')
+      appendFileSync(
+        path.join(coreDir(tag), 'dist/main/index.js'),
+        `\nconsole.log(${JSON.stringify(marker)});\n`,
+      );
+    const seq = slot === 'b' ? 10 : 11;
+    publish(tag, { previous: 'v1', seq, version: `${APP_VERSION}-core.${seq}` });
+  },
+
   v4() {
     rmSync(coreDir('v4'), { force: true, recursive: true });
     cpSync(coreDir('v3'), coreDir('v4'), { recursive: true });
@@ -160,9 +187,12 @@ const steps = {
   },
 
   launch() {
+    const env = { ...process.env, RENDERER_OTA_CHECK_DELAY: '3000' };
+    // Electron-based terminals may export this; the packaged fixture must run as an app.
+    delete env.ELECTRON_RUN_AS_NODE;
     const child = spawn(APP, [`--remote-debugging-port=${CDP_PORT}`], {
       detached: true,
-      env: { ...process.env, RENDERER_OTA_CHECK_DELAY: '3000' },
+      env,
       stdio: 'ignore',
     });
     child.unref();

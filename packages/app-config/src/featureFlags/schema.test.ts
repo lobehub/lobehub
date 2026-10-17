@@ -8,6 +8,17 @@ import {
 } from './schema';
 
 describe('FeatureFlagsSchema', () => {
+  /**
+   * A published runtime-config snapshot may still hold a flag that was since removed;
+   * it must neither fail validation nor reach the mapped client state.
+   */
+  it('drops unknown flags instead of failing validation', () => {
+    const result = FeatureFlagsSchema.safeParse({ dashboard: true, some_removed_flag: ['user-1'] });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ dashboard: true });
+  });
+
   it('should validate correct feature flags with boolean values', () => {
     const result = FeatureFlagsSchema.safeParse({
       provider_settings: false,
@@ -182,6 +193,38 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should gate the mobile gateway mux independently from the Web flag', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(
+      false,
+    );
+
+    const everyone = mapFeatureFlagsEnvToState({ agent_gateway_mux_mobile: true }, 'user-1');
+    expect(everyone.enableGatewayMuxMobile).toBe(true);
+    expect(everyone.enableGatewayMux).toBeFalsy();
+
+    const config = { agent_gateway_mux_mobile: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableGatewayMuxMobile).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableGatewayMuxMobile).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableGatewayMuxMobile).toBe(false);
+
+    const webOnly = mapFeatureFlagsEnvToState({ agent_gateway_mux: true }, 'user-1');
+    expect(webOnly.enableGatewayMux).toBe(true);
+    expect(webOnly.enableGatewayMuxMobile).toBeFalsy();
+  });
+
+  it('should keep dashboards off by default and enable them per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.dashboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableDashboard).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ dashboard: true }).enableDashboard).toBe(true);
+
+    const config = { dashboard: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableDashboard).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableDashboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,
@@ -193,7 +236,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       welcome_suggest: true,
       knowledge_base: false,
       rag_eval: true,
-      agent_self_iteration: true,
       agent_onboarding: true,
       auth_captcha: true,
       market: true,
@@ -221,7 +263,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       showWelcomeSuggest: true,
       enableKnowledgeBase: false,
       enableRAGEval: true,
-      enableAgentSelfIteration: true,
       enableAgentOnboarding: true,
       enableAuthCaptcha: true,
       enableStorageOverage: false,
@@ -238,7 +279,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     const userId = 'user-123';
     const config = {
       edit_agent: ['user-123', 'user-456'],
-      agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
       auth_captcha: ['user-123'],
       storage_overage: ['user-123'],
@@ -250,8 +290,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     const mappedState = mapFeatureFlagsEnvToState(config, userId);
 
     expect(mappedState.isAgentEditable).toBe(true); // user-123 is in allowlist
-
-    expect(mappedState.enableAgentSelfIteration).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAuthCaptcha).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableStorageOverage).toBe(true); // user-123 is in allowlist
@@ -273,15 +311,12 @@ describe('mapFeatureFlagsEnvToState', () => {
 
   it('should return false for array flags when no user ID provided', () => {
     const config = {
-      agent_self_iteration: ['user-1'],
       agent_onboarding: ['user-1'],
       edit_agent: ['user-123', 'user-456'],
       create_session: true,
     };
 
     const mappedState = mapFeatureFlagsEnvToState(config);
-
-    expect(mappedState.enableAgentSelfIteration).toBe(false);
     expect(mappedState.enableAgentOnboarding).toBe(false);
     expect(mappedState.isAgentEditable).toBe(false);
   });
@@ -290,7 +325,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     const userId = 'user-123';
     const config = {
       edit_agent: ['user-123'],
-      agent_self_iteration: ['user-123'],
       agent_onboarding: ['user-123'],
       create_session: true,
       dalle: false,
@@ -302,8 +336,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     const mappedState = mapFeatureFlagsEnvToState(config, userId);
 
     expect(mappedState.isAgentEditable).toBe(true);
-
-    expect(mappedState.enableAgentSelfIteration).toBe(true);
     expect(mappedState.enableAgentOnboarding).toBe(true);
     expect(mappedState.showAiImage).toBe(false);
     expect(mappedState.enableKnowledgeBase).toBe(true);

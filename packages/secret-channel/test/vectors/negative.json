@@ -1,0 +1,1128 @@
+{
+  "description": "Negative cases (spec §6.4–§6.8, §8). Unless stated otherwise every case uses baseRequest/baseEnvelope; the recipient is DeriveKeyPair(ikmR) and is freshly created for each case. expectedOpenError is the error code a conforming Executor returns; expectedVerifyError is what a conforming Client returns before sealing (null = accepted).",
+  "generator": "spec/test-vectors/generate.ts (packages/asc-core reference implementation)",
+  "ikmR": {
+    "derivation": "SHA-256(UTF-8(\"ASC test vector: ikmR #1\"))",
+    "hex": "b72ee6e87e3db2399fb0552d66a1b8a76f254504afec39fa0dafaa3dea6a2e72"
+  },
+  "ikmE": {
+    "derivation": "SHA-256(UTF-8(\"ASC test vector: ikmE #1\"))",
+    "hex": "9a764e92e329a72505c51f35b115938843477c92842f3f0116a98a611913c753"
+  },
+  "baseRequest": {
+    "createdAt": 1790000000000,
+    "executor": {
+      "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+      "executorId": "exec-TEST-0001",
+      "executorName": "Test Laptop",
+      "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+      "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+      "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+    },
+    "expiresAt": 1790000300000,
+    "id": "AAECAwQFBgcICQoLDA0ODw",
+    "kind": "password",
+    "label": "sudo-password",
+    "persistence": "once",
+    "purpose": {
+      "agentClaim": "Install the example package (agent claim, unverified)",
+      "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+    },
+    "requester": {
+      "runId": "run-TEST-0001",
+      "source": "askpass"
+    },
+    "target": {
+      "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+      "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+      "exePath": "/usr/bin/sudo",
+      "kind": "sudo",
+      "promptText": "Password:",
+      "verification": "verified"
+    },
+    "v": 1
+  },
+  "baseAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+  "baseEnvelope": {
+    "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+    "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+    "requestId": "AAECAwQFBgcICQoLDA0ODw",
+    "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+    "v": 1
+  },
+  "openAt": 1790000001000,
+  "positiveControl": {
+    "expectedOpenError": null,
+    "expectedVerifyError": null
+  },
+  "aadTampering": [
+    {
+      "name": "tamper-id",
+      "aadField": "requestId",
+      "path": "id",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "Dw4NDAsKCQgHBgUEAwIBAA",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d000000164477344e4441734b43516748426755454177494241410000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "REQUEST_MISMATCH"
+    },
+    {
+      "name": "tamper-requester.runId",
+      "aadField": "runId",
+      "path": "requester.runId",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0002",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030320000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-executor.executorId",
+      "aadField": "executorId",
+      "path": "executor.executorId",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0002",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303032000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-executor.identityKeyFp",
+      "aadField": "identityKeyFp",
+      "path": "executor.identityKeyFp",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:7ck_dFykt_qbHuMVdW9Aop46djIZuJEZZ4zCcvQf7t8",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a37636b5f6446796b745f716248754d56645739416f703436646a495a754a455a5a347a43637651663774380000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "FINGERPRINT_MISMATCH",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-executor.ephPub",
+      "aadField": "ephPub",
+      "path": "executor.ephPub",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "wUbZyHX_H0xMInf_rkQBhIo5q4kSd_7_s-gB-dpfMZ8",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b7755625a7948585f4830784d496e665f726b514268496f3571346b53645f375f732d67422d6470664d5a38000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "REQUEST_MISMATCH"
+    },
+    {
+      "name": "tamper-target.kind",
+      "aadField": "targetKind",
+      "path": "target.kind",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "git",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000036769740000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-target.exePath",
+      "aadField": "exePath",
+      "path": "target.exePath",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/tmp/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f000000092f746d702f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-target.argvHash",
+      "aadField": "argvHash",
+      "path": "target.argvHash",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "MioxswbAoz3KHALtqnlue1OdZEOd4mvskjox62olxkY",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b4d696f78737762416f7a334b48414c74716e6c7565314f645a454f64346d76736b6a6f7836326f6c786b590000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-kind",
+      "aadField": "kind",
+      "path": "kind",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "token",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f6678565100000005746f6b656e0000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-target.argvDisplay",
+      "aadField": "displayHash",
+      "path": "target.argvDisplay",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "true",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b582d4263304e55765a4e68796f6b35337042514279364939716d4a336b7235366d6b764678592d62665a730000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-target.promptText",
+      "aadField": "displayHash",
+      "path": "target.promptText",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Passphrase:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b2d4e59624975614a75653938434378393871424a2d5f795262396361446a31443278494d50426d4f4434410000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-target.verification",
+      "aadField": "displayHash",
+      "path": "target.verification",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "unverified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b7a7a5739787a50437764395a346a793834716b62516c39766142665f7a4a412d49314349425f44626e6d590000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-purpose.systemObserved",
+      "aadField": "displayHash",
+      "path": "purpose.systemObserved",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: true"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b6a6b4f647358584934594e4e4f4e74484d445846724b3164556a57676b6f4a584a6c7055456c38346972670000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-executor.executorName",
+      "aadField": "displayHash",
+      "path": "executor.executorName",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Other Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b67786d757630505538746d667472514754524575486b647934777059626f6e326f6f6a536a6977636559410000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-label",
+      "aadField": "displayHash",
+      "path": "label",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "ssh-passphrase",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b76465a6845737a6a6e4f4c70522d7a4861565665674e78624455537331537233595730493662437a544a4d0000000d31373930303030333030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "tamper-expiresAt",
+      "aadField": "expiresAt",
+      "path": "expiresAt",
+      "tamperedRequest": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000900000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "tamperedAadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030393030303030",
+      "expectedVerifyError": "BAD_SIGNATURE",
+      "rawAeadOpenMustFail": true,
+      "expectedOpenError": "DECRYPT_FAILED"
+    }
+  ],
+  "unboundField": {
+    "name": "agentClaim-is-unbound",
+    "path": "purpose.agentClaim",
+    "tamperedRequest": {
+      "createdAt": 1790000000000,
+      "executor": {
+        "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+        "executorId": "exec-TEST-0001",
+        "executorName": "Test Laptop",
+        "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+        "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+        "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+      },
+      "expiresAt": 1790000300000,
+      "id": "AAECAwQFBgcICQoLDA0ODw",
+      "kind": "password",
+      "label": "sudo-password",
+      "persistence": "once",
+      "purpose": {
+        "agentClaim": "Totally different explanation",
+        "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+      },
+      "requester": {
+        "runId": "run-TEST-0001",
+        "source": "askpass"
+      },
+      "target": {
+        "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+        "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+        "exePath": "/usr/bin/sudo",
+        "kind": "sudo",
+        "promptText": "Password:",
+        "verification": "verified"
+      },
+      "v": 1
+    },
+    "expectedVerifyError": null,
+    "expectedOpenError": null
+  },
+  "envelopeTampering": [
+    {
+      "name": "ct-bit-flip-first",
+      "note": "first ciphertext byte flipped",
+      "envelope": {
+        "ct": "ovNH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "ct-bit-flip-tag",
+      "note": "last byte of the AEAD tag flipped",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK8",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "ct-truncated",
+      "note": "ciphertext truncated by 16 bytes",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kgw",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "enc-substituted",
+      "note": "enc replaced by another valid X25519 public key",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+        "enc": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "DECRYPT_FAILED"
+    },
+    {
+      "name": "suite-downgrade",
+      "note": "suite label changed",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-128-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "UNSUPPORTED_VERSION"
+    },
+    {
+      "name": "version-changed",
+      "note": "v = 2",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 2
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "UNSUPPORTED_VERSION"
+    },
+    {
+      "name": "request-id-mismatch",
+      "note": "envelope names a different request; key is NOT consumed",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAAAAAAAAAAAAAAAAAAAAA",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "REQUEST_MISMATCH"
+    },
+    {
+      "name": "oversized-ct",
+      "note": "ct longer than 8192 base64url chars",
+      "envelope": {
+        "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000001000,
+      "expectedOpenError": "INVALID_ENVELOPE"
+    },
+    {
+      "name": "expired",
+      "note": "opened 1 ms after expiresAt",
+      "envelope": {
+        "ct": "o_NH0xMtumKTJ18Aha6bCrE9HwJoakSFiO1Ta7T7RZEkTG5TV9hYSZeVZgJBox9CdSdQRV28Q3Q2qzN6vwjt0y2TKW57YLM86g6IDWegA0KyykEir7UaGmK6DNsudQ7S2mQzeskx8enyCnu1INtsucWaFOmHPduPvq83eTsIlu5g4t59AnuRxvMHclpF8USpSbaUDPLBVhBYm2G799xUZ0xbpQkHwWnI-E5ElGcGipyOoLLliVqwCANFFpMvT9WKi8n4d687zwtAToY2gw1Oq36bKcKDVjr-JK9c3eFcTsQ1sBMaUqWqKu7ZeleQiLyX5A7m9_PGwcq2xSBkSj3Kg1wYRrv2-F7S6GV6fUNCoK4",
+        "enc": "zxjULdIStMDIvCLtcB-1i7S-DKm98961WJG0AR-4S24",
+        "requestId": "AAECAwQFBgcICQoLDA0ODw",
+        "suite": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM",
+        "v": 1
+      },
+      "openAt": 1790000300001,
+      "expectedOpenError": "EXPIRED"
+    }
+  ],
+  "wrongRecipient": {
+    "name": "wrong-recipient-key",
+    "note": "the reference envelope opened with a different X25519 private key (DeriveKeyPair(wrongIkmR))",
+    "wrongIkmR": {
+      "derivation": "SHA-256(UTF-8(\"ASC test vector: wrong recipient ikmR\"))",
+      "hex": "bbe2192a10a0ad01550b8e39ff6820118673a79a0d686daa52910419a1cc74b8"
+    },
+    "wrongPkRHex": "9e10204b61f87e86ef5868658292e33e2ccc02b49dd1669c236191cbc1d0ff4c",
+    "rawAeadOpenMustFail": true,
+    "expectedOpenError": "REQUEST_MISMATCH"
+  },
+  "singleUse": [
+    {
+      "name": "replay-same-envelope",
+      "note": "open succeeds once, second open of the same envelope",
+      "expectedOpenError": "REPLAYED"
+    },
+    {
+      "name": "garbage-then-valid",
+      "note": "a tampered envelope reaches decryption first, then the genuine envelope",
+      "expectedFirstError": "DECRYPT_FAILED",
+      "expectedOpenError": "REPLAYED"
+    },
+    {
+      "name": "mismatch-does-not-consume",
+      "note": "an envelope for another request is refused without consuming the key; the genuine envelope still opens",
+      "expectedFirstError": "REQUEST_MISMATCH",
+      "expectedOpenError": null
+    },
+    {
+      "name": "destroyed-before-use",
+      "note": "request denied/cancelled; key destroyed",
+      "expectedOpenError": "REPLAYED"
+    }
+  ],
+  "identity": [
+    {
+      "name": "relay-substitutes-identity-and-resigns",
+      "note": "relay swaps in its own identity key and re-signs; Client has the genuine fingerprint pinned",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:7ck_dFykt_qbHuMVdW9Aop46djIZuJEZZ4zCcvQf7t8",
+          "identityPublicKey": "gNQqRJ_tNciSpy39YsFOhUP28wdARJy3M3836yX1YTU",
+          "sig": "kfy10xXr_xtQE3GzAHRz8qKOquSQ-5-Kzxm121SC34E2Erg4hiZyv3r-pmdUcuatgXZQ90q_AlSG3TMzp5X_Cg"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "pinnedFingerprint": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+      "expectedVerifyError": "FINGERPRINT_MISMATCH"
+    },
+    {
+      "name": "relay-substitutes-identity-first-contact",
+      "note": "same as above but no pin yet (TOFU first contact): verification passes, which is the documented TOFU limitation; the Host MUST show the fingerprint for comparison",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:7ck_dFykt_qbHuMVdW9Aop46djIZuJEZZ4zCcvQf7t8",
+          "identityPublicKey": "gNQqRJ_tNciSpy39YsFOhUP28wdARJy3M3836yX1YTU",
+          "sig": "kfy10xXr_xtQE3GzAHRz8qKOquSQ-5-Kzxm121SC34E2Erg4hiZyv3r-pmdUcuatgXZQ90q_AlSG3TMzp5X_Cg"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "expectedVerifyError": null
+    },
+    {
+      "name": "fingerprint-inconsistent-with-key",
+      "note": "identityKeyFp does not hash identityPublicKey",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:7ck_dFykt_qbHuMVdW9Aop46djIZuJEZZ4zCcvQf7t8",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "expectedVerifyError": "FINGERPRINT_MISMATCH"
+    },
+    {
+      "name": "signature-corrupted",
+      "note": "one bit of sig flipped",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "oteUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "pinnedFingerprint": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+      "expectedVerifyError": "BAD_SIGNATURE"
+    },
+    {
+      "name": "genuine-request-pinned",
+      "note": "positive control",
+      "request": {
+        "createdAt": 1790000000000,
+        "executor": {
+          "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+          "executorId": "exec-TEST-0001",
+          "executorName": "Test Laptop",
+          "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+          "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+          "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+        },
+        "expiresAt": 1790000300000,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "kind": "password",
+        "label": "sudo-password",
+        "persistence": "once",
+        "purpose": {
+          "agentClaim": "Install the example package (agent claim, unverified)",
+          "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+        },
+        "requester": {
+          "runId": "run-TEST-0001",
+          "source": "askpass"
+        },
+        "target": {
+          "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+          "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+          "exePath": "/usr/bin/sudo",
+          "kind": "sudo",
+          "promptText": "Password:",
+          "verification": "verified"
+        },
+        "v": 1
+      },
+      "pinnedFingerprint": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+      "expectedVerifyError": null
+    }
+  ],
+  "clientSide": [
+    {
+      "name": "seal-at-expiry",
+      "note": "Client refuses to seal when now >= expiresAt",
+      "now": 1790000300000,
+      "expectedSealError": "EXPIRED"
+    }
+  ]
+}

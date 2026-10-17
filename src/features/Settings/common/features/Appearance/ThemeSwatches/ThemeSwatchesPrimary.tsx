@@ -1,24 +1,37 @@
-import { type PrimaryColors } from '@lobehub/ui';
-import { ColorSwatches, findCustomThemeName, primaryColors } from '@lobehub/ui';
+import { type LobePrimaryColor, type PrimaryColors } from '@lobehub/ui';
+import {
+  ColorSwatches,
+  findCustomThemeName,
+  isCustomPrimaryColor,
+  primaryColors,
+} from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface IProps {
-  onChange?: (v: PrimaryColors) => void;
-  value?: PrimaryColors;
+  onChange?: (v: LobePrimaryColor | '') => void;
+  value?: LobePrimaryColor;
 }
+
+const toSwatchColor = (value?: LobePrimaryColor) => {
+  if (!value) return undefined;
+  return isCustomPrimaryColor(value) ? value : primaryColors[value];
+};
 
 const ThemeSwatchesPrimary = memo<IProps>(({ onChange, value }) => {
   const { t } = useTranslation('color');
 
-  const handleSelect = (v: any) => {
-    const name = findCustomThemeName('primary', v) as PrimaryColors;
-    onChange?.(name || '');
+  const handleSelect = (color?: string) => {
+    const name = color && (findCustomThemeName('primary', color) as PrimaryColors | undefined);
+    if (name) return onChange?.(name);
+    onChange?.(isCustomPrimaryColor(color) ? color : '');
   };
 
   return (
     <ColorSwatches
-      value={value ? primaryColors[value] : undefined}
+      enableColorPicker
+      texts={{ custom: t('custom') }}
+      value={toSwatchColor(value)}
       colors={[
         {
           color: 'rgba(0, 0, 0, 0)',

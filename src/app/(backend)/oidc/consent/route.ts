@@ -1,11 +1,23 @@
+import { acceptanceIdFromReviewResource } from '@lobechat/const';
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { getServerDB } from '@/database/core/db-adaptor';
+import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
+import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
+
+const canReview = async (userId: string | null | undefined, resource: unknown) => {
+  const acceptanceId = acceptanceIdFromReviewResource(
+    Array.isArray(resource) ? resource[0] : resource,
+  );
+  if (!userId || !acceptanceId) return false;
+  return Boolean(await resolveReviewAccess(await getServerDB(), userId, acceptanceId));
+};
 
 export async function POST(request: NextRequest) {
   log('Received POST request for /oidc/consent, URL: %s', request.url);
@@ -60,6 +72,21 @@ export async function POST(request: NextRequest) {
 
         // 1. Get necessary IDs
         const clientId = details.params.client_id as string;
+
+        if (
+          isAcceptanceReviewClient(clientId) &&
+          !(await canReview(userId, details.params.resource))
+        ) {
+          const denied = await oidcService.getInteractionResult(uid, {
+            error: 'access_denied',
+            error_description: 'No access to this acceptance',
+          });
+          const { pathname, search, hash } = new URL(denied);
+          return new NextResponse(null, {
+            headers: { location: `${pathname}${search}${hash}` },
+            status: 303,
+          });
+        }
 
         // 2. Find or create Grant object
         const grant = await oidcService.findOrCreateGrants(userId!, clientId, details.grantId);

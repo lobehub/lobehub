@@ -1,4 +1,3 @@
-import { parse } from '@lobechat/conversation-flow';
 import { type ConversationContext, type TraceEventPayloads } from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
@@ -11,6 +10,7 @@ import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { type MessageDispatch } from '../reducer';
 import { messagesReducer } from '../reducer';
+import { getMessageTranscript } from '../transcript';
 import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
 const log = debug('lobe-store:message-internals');
@@ -64,19 +64,12 @@ export class MessageInternalsActionImpl {
     // reconcileAssistantToolLinks).
     const reconciled = reconcileAssistantToolLinks(updatedRawMessages);
 
-    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };
+    if (isEqual(reconciled, rawMessages)) return;
 
-    if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
-
-    // parse to get display messages
-    // The key's thread decides which threaded rows render (see conversation-flow `ThreadScope`).
-    const { flatList } = parse(reconciled, undefined, { threadId: ctx.threadId });
-    const nextDisplayMap = { ...this.#get().messagesMap, [messagesKey]: flatList };
-
-    this.#set({ dbMessagesMap: nextDbMap, messagesMap: nextDisplayMap }, false, {
-      payload,
-      type: `dispatchMessage/${payload.type}`,
-    });
+    log('[internal_dispatchMessage] %s | key=%s', payload.type, messagesKey);
+    const transcript = getMessageTranscript(this.#set, this.#get);
+    transcript.commit(ctx, reconciled, true);
+    transcript.settle(ctx);
   };
 
   internal_traceMessage = async (id: string, payload: TraceEventPayloads): Promise<void> => {

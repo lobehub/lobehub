@@ -1,0 +1,161 @@
+import debug from 'debug';
+import IORedis, { type Redis } from 'ioredis';
+
+import {
+  type BaseRedisProvider,
+  type RedisConfig,
+  type RedisKey,
+  type RedisMSetArgument,
+  type RedisPipeline,
+  type RedisScanArgs,
+  type RedisScanResult,
+  type RedisSetResult,
+  type RedisValue,
+  type SetOptions,
+} from './types';
+import { buildIORedisSetArgs, normalizeMsetValues } from './utils';
+
+const log = debug('lobe:redis');
+
+const REDIS_CONNECT_TIMEOUT_MS = 10_000;
+const REDIS_COMMAND_TIMEOUT_MS = 10_000;
+
+export class IoRedisRedisProvider implements BaseRedisProvider {
+  private client: Redis | null = null;
+
+  constructor(private config: RedisConfig) {}
+
+  async initialize() {
+    this.client = new IORedis(this.config.url, {
+      commandTimeout: this.config.commandTimeoutMs ?? REDIS_COMMAND_TIMEOUT_MS,
+      connectTimeout: this.config.connectTimeoutMs ?? REDIS_CONNECT_TIMEOUT_MS,
+      db: this.config.database,
+      keyPrefix: this.config.prefix ? `${this.config.prefix}:` : undefined,
+      lazyConnect: true,
+      maxRetriesPerRequest: 2,
+      password: this.config.password,
+      tls: this.config.tls ? {} : undefined,
+      username: this.config.username,
+    });
+
+    await this.client.connect();
+    await this.client.ping();
+
+    log('Connected to Redis provider with prefix "%s"', this.config.prefix);
+  }
+
+  async disconnect() {
+    await this.client?.quit();
+  }
+
+  private ensureClient(): Redis {
+    if (!this.client) {
+      throw new Error('Redis client is not initialized');
+    }
+
+    return this.client;
+  }
+
+  async get(key: RedisKey): Promise<string | null> {
+    return this.ensureClient().get(key);
+  }
+
+  async set(key: RedisKey, value: RedisValue, options?: SetOptions): Promise<RedisSetResult> {
+    const args = buildIORedisSetArgs(options);
+
+    // ioredis has many overloads for SET; use a cast to keep async-only usage ergonomic
+    return (this.ensureClient().set as any)(key, value, ...args);
+  }
+
+  async setex(key: RedisKey, seconds: number, value: RedisValue): Promise<'OK'> {
+    return this.ensureClient().setex(key, seconds, value);
+  }
+
+  async del(...keys: RedisKey[]): Promise<number> {
+    return this.ensureClient().del(...keys);
+  }
+
+  async exists(...keys: RedisKey[]): Promise<number> {
+    return this.ensureClient().exists(...keys);
+  }
+
+  async expire(key: RedisKey, seconds: number): Promise<number> {
+    return this.ensureClient().expire(key, seconds);
+  }
+
+  async ttl(key: RedisKey): Promise<number> {
+    return this.ensureClient().ttl(key);
+  }
+
+  async scan(cursor: string, ...args: RedisScanArgs): Promise<RedisScanResult> {
+    const client = this.ensureClient();
+
+    if (args.length === 0) return client.scan(cursor);
+    if (args[0] === 'MATCH' && args.length === 2) return client.scan(cursor, 'MATCH', args[1]);
+    if (args[0] === 'COUNT' && args.length === 2) return client.scan(cursor, 'COUNT', args[1]);
+    if (args[0] === 'MATCH') {
+      return client.scan(cursor, 'MATCH', args[1], 'COUNT', args[3]);
+    }
+
+    return client.scan(cursor, 'MATCH', args[3], 'COUNT', args[1]);
+  }
+
+  async incr(key: RedisKey): Promise<number> {
+    return this.ensureClient().incr(key);
+  }
+
+  async decr(key: RedisKey): Promise<number> {
+    return this.ensureClient().decr(key);
+  }
+
+  async mget(...keys: RedisKey[]): Promise<(string | null)[]> {
+    return this.ensureClient().mget(...keys);
+  }
+
+  async mset(values: RedisMSetArgument): Promise<'OK'> {
+    return this.ensureClient().mset(normalizeMsetValues(values));
+  }
+
+  async hget(key: RedisKey, field: RedisKey): Promise<string | null> {
+    return this.ensureClient().hget(key, field);
+  }
+
+  async hset(key: RedisKey, field: RedisKey, value: RedisValue): Promise<number> {
+    return this.ensureClient().hset(key, field, value);
+  }
+
+  async hdel(key: RedisKey, ...fields: RedisKey[]): Promise<number> {
+    return this.ensureClient().hdel(key, ...fields);
+  }
+
+  async hgetall(key: RedisKey): Promise<Record<string, string>> {
+    return this.ensureClient().hgetall(key);
+  }
+
+  async eval<T = unknown>(script: string, numkeys: number, ...args: RedisValue[]): Promise<T> {
+    return this.ensureClient().eval(script, numkeys, ...args) as Promise<T>;
+  }
+
+  pipeline(): RedisPipeline {
+    const raw = this.ensureClient().pipeline();
+    const pipe: RedisPipeline = {
+      decr: (key) => (raw.decr(key), pipe),
+      del: (...keys) => (raw.del(...keys), pipe),
+      exec: () => raw.exec() as Promise<[Error | null, unknown][] | null>,
+      expire: (key, seconds) => (raw.expire(key, seconds), pipe),
+      get: (key) => (raw.get(key), pipe),
+      hdel: (key, ...fields) => (raw.hdel(key, ...fields), pipe),
+      hget: (key, field) => (raw.hget(key, field), pipe),
+      hgetall: (key) => (raw.hgetall(key), pipe),
+      hset: (key, field, value) => (raw.hset(key, field, value), pipe),
+      incr: (key) => (raw.incr(key), pipe),
+      set: (key, value, options?) => {
+        const args = buildIORedisSetArgs(options);
+        (raw.set as any)(key, value, ...args);
+        return pipe;
+      },
+      setex: (key, seconds, value) => (raw.setex(key, seconds, value), pipe),
+    };
+    return pipe;
+  }
+}

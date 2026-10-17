@@ -1,7 +1,5 @@
 import type { WorkListItem } from '@lobechat/types';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Spin } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Center, createStaticStyles, Empty, Flexbox, Spin } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';

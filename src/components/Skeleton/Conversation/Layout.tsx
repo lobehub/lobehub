@@ -1,11 +1,18 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import type { ReactNode } from 'react';
+
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from '../Bar';
 import ConversationSegmentSkeleton from './Segment';
 
-const ConversationLayoutSkeleton = () => (
+interface ConversationLayoutSkeletonProps extends RouteSkeletonProps {
+  aside?: ReactNode;
+}
+
+const ConversationLayoutSkeleton = ({ aside }: ConversationLayoutSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
     <Flexbox
       horizontal
@@ -18,7 +25,16 @@ const ConversationLayoutSkeleton = () => (
       <SkeletonBar height={24} width={144} />
       <SkeletonBar height={28} width={72} />
     </Flexbox>
-    <ConversationSegmentSkeleton />
+    {aside ? (
+      <Flexbox horizontal flex={1} style={{ minHeight: 0, minWidth: 0 }}>
+        <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
+          <ConversationSegmentSkeleton />
+        </Flexbox>
+        {aside}
+      </Flexbox>
+    ) : (
+      <ConversationSegmentSkeleton />
+    )}
   </Flexbox>
 );
 

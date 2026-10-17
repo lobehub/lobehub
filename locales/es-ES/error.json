@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "No se puede generar esta respuesta",
   "unknownError.title": "Vaya, la solicitud se tomó un descanso",
   "unknownError.traceIdLabel": "ID de rastreo:",
+  "unknownError.troubleshoot": "Solucionar problemas",
   "unlock.addProxyUrl": "Agregar URL de proxy de OpenAI (opcional)",
   "unlock.apiKey.description": "Ingresa tu API Key de {{name}} para comenzar la sesión",
   "unlock.apiKey.imageGenerationDescription": "Ingresa tu API Key de {{name}} para comenzar a generar",

@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, createModal, Input, Spin } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
+import { Button, createModal, createStaticStyles, cx, Flexbox, Input, Spin } from '@lobehub/ui';
+import { ChevronLeft, ChevronRight, Expand } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,15 +24,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     height: 100%;
     padding: 20px;
-  `,
-  emptyState: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    height: 100%;
-
-    color: #666;
   `,
   expandButton: css`
     position: absolute;
@@ -100,6 +89,7 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: center;
 
     height: 100%;
+    min-height: 320px;
   `,
   loadingText: css`
     margin-block-start: 8px;
@@ -214,12 +204,10 @@ const openPdfFullscreenModal = (pdfDataUri: string, initialPage: number) =>
   });
 
 interface PdfPreviewProps {
-  loading: boolean;
-  onGeneratePdf?: () => void;
   pdfData: string | null;
 }
 
-const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) => {
+const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
   const localStyles = styles;
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();
@@ -250,30 +238,12 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
     }
   };
 
-  if (loading) {
+  if (!pdfData) {
     return (
-      <div
-        className={cx(containerStyles.preview, containerStyles.previewWide)}
-        style={{ padding: 12 }}
-      >
+      <div className={cx(containerStyles.preview, containerStyles.previewText)}>
         <div className={localStyles.loadingState}>
           <Spin size={24} />
           <div className={localStyles.loadingText}>{t('shareModal.generatingPdf')}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!pdfData) {
-    return (
-      <div
-        className={cx(containerStyles.preview, containerStyles.previewWide)}
-        style={{ padding: 12 }}
-      >
-        <div className={localStyles.emptyState}>
-          <Button icon={<FileText size={20} />} size="large" type="primary" onClick={onGeneratePdf}>
-            {t('shareModal.generatePdf')}
-          </Button>
         </div>
       </div>
     );
@@ -287,20 +257,18 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
 
   return (
     <div className={localStyles.containerWrapper}>
-      {pdfData && (
-        <Button
-          className={localStyles.expandButton}
-          icon={<Expand size={16} />}
-          size="small"
-          type="text"
-          onClick={handleFullscreen}
-        />
-      )}
+      <Button
+        className={localStyles.expandButton}
+        icon={<Expand size={16} />}
+        size="small"
+        type="text"
+        onClick={handleFullscreen}
+      />
 
       <div
         className={cx(
           containerStyles.preview,
-          containerStyles.previewWide,
+          containerStyles.previewText,
           localStyles.previewContainer,
         )}
       >
@@ -323,7 +291,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         </Document>
       </div>
 
-      {pdfData && numPages > 1 && (
+      {numPages > 1 && (
         <div className={localStyles.footerNavigation}>
           <Flexbox horizontal align="center" gap={8} justify="center">
             <Button

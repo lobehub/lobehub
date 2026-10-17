@@ -1,7 +1,10 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type ISnapshotStore, parseOperationId } from '@lobechat/agent-tracing';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { type LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import {
+  type LocalHeterogeneousAgentType,
+  type LocalRuntimeHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import {
   classifyHeteroProcessFailure,
@@ -33,7 +36,9 @@ import { HeteroTraceRecorder } from './HeteroTraceRecorder';
 
 const log = debug('lobe-server:hetero-agent-service');
 
-export type HeterogeneousAgentType = LocalHeterogeneousAgentType;
+/** Producers that stream through `heteroIngest`: local CLIs and bundled runtimes. */
+export type HeterogeneousAgentType =
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType;
 
 export type HeterogeneousFinishResult = 'success' | 'error' | 'cancelled';
 

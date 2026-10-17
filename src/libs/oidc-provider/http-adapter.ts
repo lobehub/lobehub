@@ -7,6 +7,7 @@ import { type NextRequest } from 'next/server';
 import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
+import { OIDC_DISCOVERY_PATH } from '@/libs/oidc-provider/routes';
 
 const log = debug('lobe-oidc:http-adapter');
 
@@ -27,7 +28,6 @@ export const convertHeadersToNodeHeaders = (nextHeaders: Headers): Record<string
  * Create a Node.js HTTP request object for OIDC Provider
  * @param req Next.js request object
  */
-const DISCOVERY_PUBLIC_PATH = '/oidc/.well-known/openid-configuration';
 const DISCOVERY_PROVIDER_PATH = '/.well-known/openid-configuration';
 
 export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessage> => {
@@ -46,7 +46,7 @@ export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessa
   // under the `/oidc` prefix the way every other route is. The document lives
   // where clients look for it (`/oidc/.well-known/openid-configuration`, the
   // issuer plus the well-known suffix) and is translated back here.
-  if (providerPath === DISCOVERY_PUBLIC_PATH) {
+  if (providerPath === OIDC_DISCOVERY_PATH) {
     providerPath = DISCOVERY_PROVIDER_PATH;
   }
 

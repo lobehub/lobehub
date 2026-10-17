@@ -1,14 +1,37 @@
+import { useLayoutEffect } from 'react';
 import type { StateCreator } from 'zustand/vanilla';
 
 import type { ResourceManagerMode } from '@/features/ResourceManager';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  readReplicaStoredKeys,
+  recordLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+  revalidateReplica,
+} from '@/libs/replica';
 import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import type { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
+import type { ResourceItem } from '@/types/resource';
+import { setNamespace } from '@/utils/storeDebug';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
 import { DEFAULT_WORKSPACE_LIST_VISIBILITY, initialState } from './initialState';
 import { readPersistedResourceMode, writePersistedResourceMode } from './modePersistence';
+import {
+  DEFAULT_SEARCH_PAGE_SIZE,
+  type ExplorerSearchParams,
+  explorerSearchResource,
+  type ExplorerSearchValue,
+  type HierarchySearchParams,
+  hierarchySearchResource,
+  type HierarchySearchValue,
+} from './projection';
+
+const n = setNamespace('resourceManager');
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
@@ -28,15 +51,307 @@ export type Store = Action & State;
 
 type Setter = StoreSetter<Store>;
 
+/**
+ * One page of a search list. `cursor` is the page index (0 = head), so the
+ * replica owns the offset and a query change repaints from its own head page.
+ */
+/**
+ * A search page as the replica needs it.
+ *
+ * The endpoint also reports `hasMore`, which the replica cannot read: it infers
+ * "another page" from a full page when `total` is unknown. So an exact multiple
+ * of the page size — the endpoint then answers `hasMore: false` with no `total` —
+ * would keep a dead "load more" and fire one request for an empty page. Recording
+ * the terminal count the flag implies is how that signal survives.
+ */
+const toSearchPageResult = (
+  response: { hasMore: boolean; items: ResourceItem[]; total?: number },
+  cursor: number | undefined,
+  pageSize: number,
+): ReplicaPageResult<ResourceItem, number> => ({
+  items: response.items,
+  total:
+    response.total ??
+    (response.hasMore ? undefined : (cursor ?? 0) * pageSize + response.items.length),
+});
+
+const fetchExplorerSearchPage = async (
+  params: ExplorerSearchParams,
+  cursor?: number,
+): Promise<ReplicaPageResult<ResourceItem, number>> => {
+  const { resourceService } = await import('@/services/resource');
+  const pageSize = params.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
+
+  const response = await resourceService.queryResources({
+    category: params.category,
+    includeContentPreview: params.includeContentPreview,
+    libraryId: params.libraryId,
+    limit: pageSize,
+    offset: (cursor ?? 0) * pageSize,
+    q: params.q,
+    showFilesInKnowledgeBase: false,
+    sourceFilter: params.sourceFilter,
+    visibility: params.visibility,
+  });
+
+  return toSearchPageResult(response, cursor, pageSize);
+};
+
+const fetchHierarchySearchPage = async (
+  params: HierarchySearchParams,
+  cursor?: number,
+): Promise<ReplicaPageResult<ResourceItem, number>> => {
+  const { resourceService } = await import('@/services/resource');
+  const pageSize = params.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
+
+  const response = await resourceService.queryResources({
+    libraryId: params.libraryId,
+    limit: pageSize,
+    offset: (cursor ?? 0) * pageSize,
+    q: params.q,
+    showFilesInKnowledgeBase: false,
+  });
+
+  return toSearchPageResult(response, cursor, pageSize);
+};
+
+/**
+ * How many distinct queries per search surface keep a replica entry. The one
+ * the user is on is always the most recent, so bounding the list bounds memory
+ * and IndexedDB together: searching all day cannot grow either without limit,
+ * and the queries just used still paint from their own rows when revisited.
+ */
+export const MAX_RECENT_SEARCHES = 8;
+
+/** Where the explorer search views live in the store — one entry per query. */
+const explorerSearchLens = recordLens<Store, ExplorerSearchValue>('explorerSearchEntries');
+
+/** Where the library sidebar search views live — one entry per (library, keyword). */
+const hierarchySearchLens = recordLens<Store, HierarchySearchValue>('hierarchySearchEntries');
+
+/**
+ * Either search surface. Both key their persisted rows by the entry key alone
+ * (neither sets a replica `query`), so the stored index holds entry keys.
+ */
+type SearchReplicaResource = typeof explorerSearchResource | typeof hierarchySearchResource;
+
+/** The invalidation surface both search slices expose. */
+type SearchReplicaSlice = {
+  collapse: (key: string) => unknown;
+  remove: (key: string) => unknown;
+};
+
 export class ResourceManagerStoreActionImpl {
   readonly #get: () => Store;
   readonly #set: Setter;
+  readonly #explorerSearch;
+  readonly #hierarchySearch;
+  /**
+   * A resource as a search hit: both search surfaces hold copies of the same
+   * `ResourceItem`, in every query variant they have loaded or persisted.
+   */
+  readonly #searchHits;
+  /** Query entry keys each surface has used, oldest first (see `#trackRecentSearch`). */
+  readonly #recentExplorerSearches: string[] = [];
+  readonly #recentHierarchySearches: string[] = [];
+  /** Identity each recency list currently belongs to (see `#seedRecentSearches`). */
+  readonly #recentSearchScope = new WeakMap<string[], string>();
+  /** Recency lists whose persisted keys are already folded in. */
+  readonly #seededRecentSearches = new WeakSet<string[]>();
+  /**
+   * The search entry on screen per surface, if any. The sync driver revalidates
+   * only mounted queries, so these are the entries whose head a refresh can
+   * repair (see `#invalidateSearchSurface`).
+   */
+  #activeExplorerSearchKey?: string;
+  #activeHierarchySearchKey?: string;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+
+    this.#explorerSearch = createReplicaSlice(explorerSearchResource, {
+      actionPrefix: n('explorerSearch'),
+      fetcher: fetchExplorerSearchPage,
+      get,
+      set,
+      stateKey: 'explorerSearchReplica',
+      view: explorerSearchLens,
+      // The keyword is part of the entry identity, so the mounted surface can
+      // tell whether the painted rows still answer the request on screen.
+      viewFields: (params) => ({ searchParams: params }),
+    });
+
+    this.#hierarchySearch = createReplicaSlice(hierarchySearchResource, {
+      actionPrefix: n('hierarchySearch'),
+      fetcher: fetchHierarchySearchPage,
+      get,
+      set,
+      stateKey: 'hierarchySearchReplica',
+      view: hierarchySearchLens,
+      viewFields: (params) => ({ searchParams: params }),
+    });
+
+    this.#searchHits = linkReplicaEntity<ResourceItem>([
+      this.#explorerSearch,
+      this.#hierarchySearch,
+    ]);
   }
+
+  /**
+   * Fold the keys an earlier session persisted into a surface's recency list,
+   * once per list per scope.
+   *
+   * {@link MAX_RECENT_SEARCHES} only bounds what the list knows about, and a
+   * list that starts empty on every page load bounds nothing across reloads:
+   * each session would persist up to the cap again while the rows of every
+   * session before it stayed in IndexedDB. Seeding the list from the persisted
+   * index makes the window — and with it what eviction drops — span sessions.
+   */
+  #seedRecentSearches = (
+    recents: string[],
+    resource: SearchReplicaResource,
+    drop: (key: string) => void,
+  ): void => {
+    const scope = resource.scope.get();
+    if (this.#recentSearchScope.get(recents) !== scope) {
+      // Another identity owns the partition: the keys this list learned stood
+      // for the previous scope's rows, so start the window over for this one.
+      recents.length = 0;
+      this.#recentSearchScope.set(recents, scope);
+      this.#seededRecentSearches.delete(recents);
+    }
+    if (this.#seededRecentSearches.has(recents)) return;
+    this.#seededRecentSearches.add(recents);
+
+    void readReplicaStoredKeys(resource).then((persisted) => {
+      // A scope switch while the index was read voids this seed.
+      if (this.#recentSearchScope.get(recents) !== scope) return;
+      // The index is append-ordered (oldest first); prepending keeps that order,
+      // so eviction — which takes from the front — drops the least recently used
+      // persisted query first.
+      for (const persistedKey of [...persisted].reverse()) {
+        if (!recents.includes(persistedKey)) recents.unshift(persistedKey);
+      }
+      this.#evictOldestSearches(recents, drop);
+    });
+  };
+
+  #evictOldestSearches = (recents: string[], drop: (key: string) => void): void => {
+    while (recents.length > MAX_RECENT_SEARCHES) {
+      const oldest = recents.shift();
+      if (oldest) drop(oldest);
+    }
+  };
+
+  /**
+   * Remember a query the user is looking at, and drop the oldest ones past
+   * {@link MAX_RECENT_SEARCHES}. Dropping removes the replica entry (memory)
+   * *and* its persisted projection, so both stay bounded no matter how many
+   * keywords are tried. Called from a layout effect, never during render.
+   */
+  #trackRecentSearch = (
+    recents: string[],
+    key: string,
+    drop: (key: string) => void,
+    resource: SearchReplicaResource,
+  ): void => {
+    this.#seedRecentSearches(recents, resource, drop);
+    const existing = recents.indexOf(key);
+    if (existing !== -1) recents.splice(existing, 1);
+    recents.push(key);
+    this.#evictOldestSearches(recents, drop);
+  };
+
+  /**
+   * Invalidate one search surface.
+   *
+   * A rename / move / delete can touch a row a search had loaded beyond its head
+   * page. Revalidating only re-runs the head request and the replica keeps the
+   * rows the user already scrolled to, so a stale hit would linger in that tail;
+   * dropping the loaded pages first means the head that comes back is the only
+   * thing left to show.
+   *
+   * Only the entry on screen gets that treatment. The driver revalidates just
+   * mounted queries, so every other entry — a search left behind in memory, or
+   * one only an earlier session had persisted — would keep its stale head
+   * forever (and offline, indefinitely). Those are dropped outright: a revisit
+   * then has nothing stale to hydrate.
+   */
+  #invalidateSearchSurface = async (
+    resource: SearchReplicaResource,
+    entries: Record<string, unknown>,
+    activeKey: string | undefined,
+    slice: SearchReplicaSlice,
+  ): Promise<void> => {
+    const loaded = new Set(Object.keys(entries));
+    for (const key of loaded) {
+      if (key === activeKey) slice.collapse(key);
+      else slice.remove(key);
+    }
+
+    const scope = resource.scope.get();
+    const persisted = await readReplicaStoredKeys(resource);
+    // The identity can change while the index is read; those rows are not ours
+    // to touch, and `remove` resolves against the *current* scope.
+    if (resource.scope.get() !== scope) return;
+    for (const key of persisted) {
+      if (!loaded.has(key)) slice.remove(key);
+    }
+  };
+
+  /** Invalidate the sidebar's cached searches (see `#invalidateSearchSurface`). */
+  collapseHierarchySearch = async (): Promise<void> =>
+    this.#invalidateSearchSurface(
+      hierarchySearchResource,
+      this.#get().hierarchySearchEntries,
+      this.#activeHierarchySearchKey,
+      this.#hierarchySearch,
+    );
+
+  /**
+   * Invalidate the explorer's search overlay after a mutation it cannot patch
+   * by id, then refresh the query on screen.
+   */
+  #invalidateExplorerSearch = async (): Promise<void> => {
+    await this.#invalidateSearchSurface(
+      explorerSearchResource,
+      this.#get().explorerSearchEntries,
+      this.#activeExplorerSearchKey,
+      this.#explorerSearch,
+    );
+    await revalidateReplica(explorerSearchResource);
+  };
+
+  /**
+   * Drop deleted resources from every cached search, after the delete landed.
+   *
+   * The search replicas persist each query's head page, so a deleted hit has to
+   * leave every variant — the one on screen, the ones left in memory and the
+   * ones only IndexedDB still holds — or a revisit / reload paints it again. An
+   * entity removal also guards hydrates already in flight, so a row read before
+   * the delete cannot bring the hit back. The mounted searches then refetch, so
+   * their totals and paging follow the server.
+   */
+  removeSearchHits = (ids: string[]): void => {
+    if (ids.length === 0) return;
+    for (const id of ids) this.#searchHits.remove(id);
+    void this.#searchHits.revalidate();
+  };
+
+  /**
+   * Apply a confirmed resource change (e.g. a rename) to every cached search.
+   *
+   * Every loaded and persisted variant gets the new fields, so no revisit or
+   * reload paints the old name. A rename can also move the hit into or out of a
+   * query, which only the server can decide: the mounted searches refetch so
+   * their membership is recomputed (unmounted ones refetch when shown again).
+   */
+  patchSearchHit = (id: string, patch: Partial<ResourceItem>): void => {
+    this.#searchHits.update(id, (item) => ({ ...item, ...patch }));
+    void this.#searchHits.revalidate();
+  };
 
   clearSelectAllState = (): void => {
     this.#set({ selectAllState: 'none', selectedFileIds: [], selectionTotal: undefined });
@@ -70,12 +385,16 @@ export class ResourceManagerStoreActionImpl {
             fileStore.queryParams as any,
             selectedFileIds,
           );
-          fileStore.clearCurrentQueryResources();
-          // The server applies the caller's workspace role: members delete
-          // only their own rows, while owners may delete the full query scope.
-          // Revalidate so any surviving rows immediately reappear.
-          const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
-          await revalidateResources(fileStore.queryParams);
+          // The deleted set is only known to the server, so the cached searches
+          // cannot drop those rows by id: invalidate the surfaces instead and
+          // let the refetch paint whatever survived.
+          void this.#invalidateExplorerSearch();
+          // Same for the explorer list: evict every cached variant (memory and
+          // persisted rows), so a failed refetch cannot leave deleted rows for a
+          // reload or an offline visit to repaint. The server applies the
+          // caller's workspace role — members delete only their own rows, owners
+          // the full query scope — so the revalidation repaints the survivors.
+          await fileStore.evictResourceLists();
           // The deleted set is only known to the server here, and every row in
           // it was a child of the listed folder, so refetch that one folder.
           void useTreeStore.getState().revalidate(currentFolderKey);
@@ -89,6 +408,9 @@ export class ResourceManagerStoreActionImpl {
 
         await fileStore.deleteResources(resourceIds);
         void useTreeStore.getState().dropNodes(resourceIds, currentFolderKey);
+        // The explorer's own list drops the rows optimistically; the search
+        // surfaces mirror cached replica pages, so drop them there too.
+        this.removeSearchHits(resourceIds);
 
         this.clearSelectAllState();
         return;
@@ -309,6 +631,72 @@ export class ResourceManagerStoreActionImpl {
   setViewMode = (viewMode: ViewMode): void => {
     this.#set({ viewMode });
   };
+
+  /**
+   * Fetch orchestration for the explorer's search overlay. It only schedules the
+   * sync; read the rows from `explorerSearchEntries[explorerSearchResource.key(params)]`.
+   */
+  useFetchExplorerSearch = (params: ExplorerSearchParams | null): ReplicaSyncResult => {
+    const key = params ? explorerSearchResource.key(params) : undefined;
+    useLayoutEffect(() => {
+      if (key) {
+        this.#trackRecentSearch(
+          this.#recentExplorerSearches,
+          key,
+          (stale) => this.#explorerSearch.remove(stale),
+          explorerSearchResource,
+        );
+      }
+    }, [key]);
+    // The driver revalidates only mounted queries, so remember which entry the
+    // overlay is showing: the invalidation below collapses that one's head (the
+    // refetch repairs it) and drops the heads of the rest.
+    useLayoutEffect(() => {
+      if (!key) return;
+      this.#activeExplorerSearchKey = key;
+      return () => {
+        if (this.#activeExplorerSearchKey === key) this.#activeExplorerSearchKey = undefined;
+      };
+    }, [key]);
+    return this.#explorerSearch.useSync(params);
+  };
+
+  /**
+   * Fetch orchestration for the library sidebar's flat search list. It only
+   * schedules the sync; read the rows from
+   * `hierarchySearchEntries[hierarchySearchResource.key(params)]`.
+   */
+  useFetchHierarchySearch = (params: HierarchySearchParams | null): ReplicaSyncResult => {
+    const key = params ? hierarchySearchResource.key(params) : undefined;
+    useLayoutEffect(() => {
+      if (key) {
+        this.#trackRecentSearch(
+          this.#recentHierarchySearches,
+          key,
+          (stale) => this.#hierarchySearch.remove(stale),
+          hierarchySearchResource,
+        );
+      }
+    }, [key]);
+    // The driver revalidates only mounted queries, so remember which entry the
+    // sidebar is showing: `collapseHierarchySearch` collapses that one's head
+    // (the refetch repairs it) and drops the heads of the rest.
+    useLayoutEffect(() => {
+      if (!key) return;
+      this.#activeHierarchySearchKey = key;
+      return () => {
+        if (this.#activeHierarchySearchKey === key) this.#activeHierarchySearchKey = undefined;
+      };
+    }, [key]);
+    return this.#hierarchySearch.useSync(params);
+  };
+
+  /** Append the next page of the explorer search (the entry's own query). */
+  loadMoreExplorerSearch = async (key: string): Promise<void> => this.#explorerSearch.loadMore(key);
+
+  /** Append the next page of the sidebar search (the entry's own query). */
+  loadMoreHierarchySearch = async (key: string): Promise<void> =>
+    this.#hierarchySearch.loadMore(key);
 }
 
 export type Action = Pick<ResourceManagerStoreActionImpl, keyof ResourceManagerStoreActionImpl>;

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
 import { initialState, type PageState } from '../../initialState';
-import { initialListState } from './initialState';
+import { PAGE_LIST_KEY } from '../../projection';
 import { listSelectors } from './selectors';
 
 vi.mock('@/store/global', () => ({
@@ -37,11 +37,19 @@ const doc = (
   ...overrides,
 });
 
-const createState = (documents: LobeDocument[]): PageState => ({
+const createState = (documents: LobeDocument[], overrides: Partial<PageState> = {}): PageState => ({
   ...initialState,
-  ...initialListState,
-  documents,
+  pageListMap: {
+    [PAGE_LIST_KEY]: {
+      currentPage: 0,
+      hasMore: false,
+      items: documents,
+      pageSize: 20,
+      total: documents.length,
+    },
+  },
   searchKeywords: '',
+  ...overrides,
 });
 
 describe('listSelectors — private/workspace buckets', () => {
@@ -97,5 +105,61 @@ describe('listSelectors — private/workspace buckets', () => {
     const state = createState(many);
     expect(listSelectors.getPrivateFilteredDocumentsLimited(state)).toHaveLength(20);
     expect(listSelectors.hasMorePrivateFilteredDocuments(state)).toBe(true);
+  });
+});
+
+describe('listSelectors — replica-backed reads', () => {
+  it('reports the list as uninitialized until the entry has a value', () => {
+    const empty = { ...initialState, searchKeywords: '' } as PageState;
+
+    expect(listSelectors.isPageListInit(empty)).toBe(false);
+    expect(listSelectors.isDocumentsLoading(empty)).toBe(true);
+    expect(listSelectors.getFilteredDocuments(empty)).toEqual([]);
+    expect(listSelectors.documentsTotal(empty)).toBe(0);
+
+    const loaded = createState([doc('page-a', 'public')]);
+
+    expect(listSelectors.isPageListInit(loaded)).toBe(true);
+    expect(listSelectors.isDocumentsLoading(loaded)).toBe(false);
+    expect(listSelectors.documentsTotal(loaded)).toBe(1);
+  });
+
+  it('reads pagination flags from the paged view', () => {
+    const state = createState([doc('page-a', 'public')], {
+      pageListMap: {
+        [PAGE_LIST_KEY]: {
+          currentPage: 1,
+          hasMore: true,
+          isLoadingMore: true,
+          items: [doc('page-a', 'public')],
+          pageSize: 20,
+          total: 42,
+        },
+      },
+    });
+
+    expect(listSelectors.hasMoreDocuments(state)).toBe(true);
+    expect(listSelectors.isLoadingMoreDocuments(state)).toBe(true);
+    expect(listSelectors.documentsTotal(state)).toBe(42);
+  });
+
+  it('resolves a page from the list, falling back to the by-id projection', () => {
+    const state = createState([doc('in-list', 'private')], {
+      pageDetailMap: { 'deep-link': doc('deep-link', 'public', { title: 'Deep linked' }) },
+    });
+
+    expect(listSelectors.getDocumentById('in-list')(state)?.id).toBe('in-list');
+    expect(listSelectors.getDocumentById('deep-link')(state)?.title).toBe('Deep linked');
+    // A page that is in neither location resolves to nothing.
+    expect(listSelectors.getDocumentById('missing')(state)).toBeUndefined();
+    expect(listSelectors.getDocumentById(undefined)(state)).toBeUndefined();
+  });
+
+  it('prefers the list copy over the by-id projection for the same page', () => {
+    const state = createState([doc('same-page', 'private', { title: 'From list' })], {
+      pageDetailMap: { 'same-page': doc('same-page', 'private', { title: 'From detail' }) },
+    });
+
+    expect(listSelectors.getDocumentById('same-page')(state)?.title).toBe('From list');
   });
 });

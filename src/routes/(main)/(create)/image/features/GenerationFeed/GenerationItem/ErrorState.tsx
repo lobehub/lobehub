@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Center, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, Center, cssVar, Icon, Text } from '@lobehub/ui';
 import { ImageOffIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

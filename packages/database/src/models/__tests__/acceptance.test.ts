@@ -308,15 +308,16 @@ describe('AcceptanceModel', () => {
     await model.create({ subjectId: topicId, subjectType: 'topic' });
     await model.create({ subjectId: 'cli-run', subjectType: 'standalone' });
     await model.create({ subjectId: 'doc-1', subjectType: 'document' });
+    await model.create({ subjectId: 'release-node', subjectType: 'goal_gate' });
 
     const subjectsFor = async (source: 'goal' | 'standalone' | 'task' | 'topic') =>
       (await model.queryPage({ source })).items.map((row) => row.subjectId).sort();
 
-    expect(await subjectsFor('goal')).toEqual(['goal-step-task']);
+    expect(await subjectsFor('goal')).toEqual(['goal-step-task', 'release-node']);
     expect(await subjectsFor('task')).toEqual(['plain-task']);
     expect(await subjectsFor('topic')).toEqual([topicId]);
     expect(await subjectsFor('standalone')).toEqual(['cli-run', 'doc-1']);
-    expect(await model.query({ source: 'all' })).toHaveLength(5);
+    expect(await model.query({ source: 'all' })).toHaveLength(6);
   });
 
   describe('scope', () => {

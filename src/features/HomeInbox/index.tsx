@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, createStaticStyles, cx, Flexbox, Segmented } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
@@ -41,7 +39,7 @@ import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
 import { filterTopicsForInboxScope, resolveInboxScopeToggleSection } from './scopeTogglePlacement';
-import { splitBriefs } from './splitBriefs';
+import { arrangeDayNews, splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
@@ -70,6 +68,8 @@ interface InboxSection {
   key: string;
   /** Omitted when the section labels itself (the running card names its own count). */
   label?: string;
+  /** A refresh is in flight over rows already on screen (see GroupBlock `loading`). */
+  loading?: boolean;
   node: ReactNode;
   onCollapsedChange?: (collapsed: boolean) => void;
   /** Section carries its own card shell — the rail renders it verbatim. */
@@ -84,9 +84,8 @@ interface InboxSection {
  * - **Goals** — the standing exception to "while you were away": goals run for
  *   days, so the ones still open (waiting on you, or working) are listed here
  *   rather than left to the agent page nobody visits mid-flight.
- * - **Needs you** — briefs blocking an agent (decide / fix). Errors sink to the
- *   bottom: a stuck decision blocks work right now, a failed run has already
- *   stopped.
+ * - **Needs you** — decision briefs blocking an agent. Run failures are not
+ *   decisions; they go to the notification center instead.
  * - **Unread** — runs that finished while you were away, each showing the agent's
  *   last reply so the answer is right there.
  * - **Running** — collapsed to one line, showing who is working; a healthy run
@@ -138,14 +137,16 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
-  // Briefs are per-user AND per-workspace rows, so the feed is read through the
-  // active cache scope — a list left over from the previous workspace holds ids
-  // this one cannot resolve, and every action on it would fail silently.
+  // Briefs are per-user AND per-workspace rows: a list left over from the
+  // previous workspace holds ids this one cannot resolve, and every action on it
+  // would fail silently. The `briefList` replica partitions by identity scope
+  // and clears its view on a scope switch, so the selectors only ever surface
+  // the active scope's feed.
   const cacheScope = useCacheScope();
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
-  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
+  const briefsSWR = useFetchBriefs(isLogin);
+  const briefs = useBriefStore(briefListSelectors.briefs);
+  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit);
 
   // The news digest is day-scoped: it fetches only briefs *created* on the
   // viewed local day (today by default), resolved or not, with ‹ › paging into
@@ -175,10 +176,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
-  // Branch off the SWR response: a persisted-cache hit never fires a network
-  // callback, so the store-backed selector lags a frame and the rail would
-  // render nothing until the revalidate lands.
-  const goals = goalsSWR.data?.goals; // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
+  // Read the replica view, not the hook: the persisted roll-up paints the rail
+  // on the first frame and the sync only confirms it, so a cache hit no longer
+  // renders one empty frame before the revalidate lands.
+  const goals = useGoalStore((s) => s.homeGoalsByScope[cacheScope]?.goals);
+  // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
   // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
     () => (showGoals ? buildHomeGoalEntries(goals) : []),
@@ -211,6 +213,9 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const teamView = isTeam && scope === 'team';
 
   const { needsYou } = useMemo(() => splitBriefs(briefs), [briefs]);
+  // Urgent briefs already waiting in "Needs you" leave the digest; the rest
+  // lead with urgent, then normal, then info.
+  const news = useMemo(() => arrangeDayNews(dayNews ?? [], briefs), [dayNews, briefs]);
 
   // Topics are already workspace-wide from the server; "mine" is the viewer's
   // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
@@ -225,6 +230,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   );
 
   if (!isLogin) return null;
+
+  // The cached feed is on screen while the server confirms it: say so on the
+  // section heading instead of hiding the rows behind a skeleton.
+  const briefsRefreshing = isBriefsInit && briefsSWR.isValidating;
 
   const blockState = resolveInboxBlockState({
     hasError: Boolean(briefsSWR.error),
@@ -334,6 +343,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             count: needsYou.length,
             key: 'needsYou',
             label: t('inbox.needsYou.title'),
+            loading: briefsRefreshing,
             node: (
               <Flexbox gap={12}>
                 {needsYou.map((brief) => (
@@ -359,6 +369,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       count: unreadTopics.length,
       key: 'unread',
       label: t('inbox.unread.title'),
+      loading: topics.isRefreshing,
       node: (
         <UnreadTopicList
           bare={isRail}
@@ -390,6 +401,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         count: needsYou.length,
         key: 'needsYou',
         label: t('inbox.needsYou.title'),
+        loading: briefsRefreshing,
         node: (
           <Flexbox gap={12}>
             {needsYou.map((brief) => (
@@ -432,7 +444,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // Everything below renders from `shownNewsOffset` / the payload's own day —
   // see the comment at `shownNewsOffset` for why `newsDayOffset` must not be
   // used for display.
-  const news = dayNews ?? [];
   const unresolvedNews = news.filter((brief) => !brief.resolvedAt);
   const showNewsSection =
     showRailSections && !!dayNews && (news.length > 0 || shownNewsOffset > 0 || hasEarlierNews);
@@ -546,6 +557,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           count,
           key,
           label,
+          loading,
           node,
           onCollapsedChange,
           selfShelled,
@@ -560,6 +572,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                 collapsed={collapsed}
                 count={count}
                 key={key}
+                loading={loading}
                 title={
                   label && (
                     <>
@@ -583,6 +596,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
               collapsed={collapsed}
               count={count}
               key={key}
+              loading={loading}
               title={
                 <>
                   {label}

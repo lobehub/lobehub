@@ -47,6 +47,8 @@ export interface UpdateToolMessageInput {
   metadata?: Record<string, any>;
   pluginError?: unknown;
   pluginState?: Record<string, any>;
+  /** A result gate must not retain keys from a previous complete result. */
+  replacePluginState?: boolean;
 }
 
 /**

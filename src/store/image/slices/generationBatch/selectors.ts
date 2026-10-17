@@ -23,6 +23,8 @@ const getGenerationBatchByBatchId = (batchId: string) => (s: ImageStoreState) =>
 const isCurrentGenerationTopicLoaded = (s: ImageStoreState): boolean => {
   const activeTopicId = generationTopicSelectors.activeGenerationTopicId(s);
   if (!activeTopicId) return false;
+  // The batches replica removes the key when a topic leaves the view, so a
+  // present array (even empty) is exactly "hydrated or server-confirmed".
   return Array.isArray(s.generationBatchesMap[activeTopicId]);
 };
 

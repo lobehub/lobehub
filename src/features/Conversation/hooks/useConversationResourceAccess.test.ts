@@ -1,7 +1,10 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useActiveConversationResourceAccess } from './useConversationResourceAccess';
+import {
+  useActiveConversationResourceAccess,
+  useConversationResourceAccessForTarget,
+} from './useConversationResourceAccess';
 
 const mocks = vi.hoisted(() => ({
   agentState: {
@@ -20,7 +23,13 @@ const mocks = vi.hoisted(() => ({
   groupState: {
     groupMap: {} as Record<string, { id: string; visibility: 'private' | 'public' }>,
   },
-  useResourceAccess: vi.fn(() => ({ canUseResource: true, isLoading: false })),
+  useResourceAccess: vi.fn(
+    (): { canUseResource: boolean; isAccessResolved?: boolean; isLoading: boolean } => ({
+      canUseResource: true,
+      isAccessResolved: true,
+      isLoading: false,
+    }),
+  ),
 }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
@@ -86,5 +95,69 @@ describe('useActiveConversationResourceAccess', () => {
     expect(result.current.isGroupContext).toBe(true);
     expect(mocks.conversationStore).not.toHaveBeenCalled();
     expect(mocks.useResourceAccess).toHaveBeenCalledWith('agentGroup', 'group-1');
+  });
+});
+
+describe('useConversationResourceAccessForTarget', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('confirms use only once access has resolved to a usable level', () => {
+    mocks.useResourceAccess.mockReturnValue({
+      canUseResource: true,
+      isAccessResolved: true,
+      isLoading: false,
+    });
+
+    const { result } = renderHook(() =>
+      useConversationResourceAccessForTarget({ agentId: 'agent-1' }),
+    );
+
+    expect(result.current.canUseResource).toBe(true);
+    expect(result.current.canUseResourceConfirmed).toBe(true);
+  });
+
+  it('stays permissive but unconfirmed while access is loading', () => {
+    mocks.useResourceAccess.mockReturnValue({
+      canUseResource: true,
+      isAccessResolved: false,
+      isLoading: true,
+    });
+
+    const { result } = renderHook(() =>
+      useConversationResourceAccessForTarget({ agentId: 'agent-1' }),
+    );
+
+    expect(result.current.canUseResource).toBe(true);
+    expect(result.current.canUseResourceConfirmed).toBe(false);
+  });
+
+  it('fails closed when the access lookup errored and never resolved', () => {
+    mocks.useResourceAccess.mockReturnValue({
+      canUseResource: true,
+      isAccessResolved: false,
+      isLoading: false,
+    });
+
+    const { result } = renderHook(() =>
+      useConversationResourceAccessForTarget({ agentId: 'agent-1' }),
+    );
+
+    expect(result.current.canUseResourceConfirmed).toBe(false);
+  });
+
+  it('does not confirm a resolved view-only grant', () => {
+    mocks.useResourceAccess.mockReturnValue({
+      canUseResource: false,
+      isAccessResolved: true,
+      isLoading: false,
+    });
+
+    const { result } = renderHook(() =>
+      useConversationResourceAccessForTarget({ agentId: 'agent-1' }),
+    );
+
+    expect(result.current.canUseResourceConfirmed).toBe(false);
   });
 });

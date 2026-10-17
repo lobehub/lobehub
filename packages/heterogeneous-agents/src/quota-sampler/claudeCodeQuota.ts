@@ -106,6 +106,21 @@ const unavailableSnapshot = (
   status: 'unavailable',
 });
 
+/**
+ * Anthropic answers a request from a blocked network or region with a 403
+ * `forbidden` error ("Request not allowed") before it ever looks at the token,
+ * so it says nothing about the login. A 403 for a bad token carries an auth /
+ * permission error type instead.
+ */
+const isRequestBlocked = async (response: Response) => {
+  try {
+    const body = (await response.json()) as { error?: { type?: unknown } };
+    return body?.error?.type === 'forbidden';
+  } catch {
+    return false;
+  }
+};
+
 const parseCredentialsJson = (raw: string): ClaudeOAuthCredentials | null => {
   try {
     const parsed = JSON.parse(raw) as {
@@ -265,6 +280,13 @@ export const fetchClaudeCodeQuota = async (
       },
       signal: controller.signal,
     });
+
+    if (response.status === 403 && (await isRequestBlocked(response))) {
+      return unavailableSnapshot(
+        'request-blocked',
+        'Anthropic usage API blocked the request from this network (403)',
+      );
+    }
 
     if (response.status === 401 || response.status === 403) {
       return unavailableSnapshot(

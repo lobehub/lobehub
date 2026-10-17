@@ -1026,6 +1026,13 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   private readonly profile: ClaudeCompatibleAdapterProfile;
   sessionId?: string;
   private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
+  /**
+   * What the resumed session had already spent before this run (from its
+   * transcript's last `cost-state`). CC restores that tally on `--resume`, so
+   * its `result.total_cost_usd` is session-cumulative; subtracting this makes
+   * the emitted `costUsd` this run's own spend.
+   */
+  private sessionCostBaseline?: number;
 
   /** Pending tool_use ids awaiting their tool_result */
   private pendingToolCalls = new Set<string>();
@@ -1289,6 +1296,12 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       }
       case 'result': {
         return this.handleResult(raw);
+      }
+      case 'session_configured': {
+        if (typeof raw.initialSessionCostUsd === 'number') {
+          this.sessionCostBaseline = raw.initialSessionCostUsd;
+        }
+        return [];
       }
       default: {
         return [];
@@ -2091,6 +2104,19 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     return synthesizeTaskPluginState(this.claudeCodeTasks);
   }
 
+  /**
+   * This run's spend out of CC's session-cumulative `total_cost_usd`. A total
+   * below the baseline means CC did not restore the tally (the transcript's
+   * cost-state was not the one it resumed from), so the total stands alone.
+   */
+  private toRunCost(sessionTotal: unknown): number | undefined {
+    if (typeof sessionTotal !== 'number') return undefined;
+    const baseline = this.sessionCostBaseline;
+    return baseline !== undefined && baseline <= sessionTotal
+      ? sessionTotal - baseline
+      : sessionTotal;
+  }
+
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
     // Resuming a session whose previous run left background tasks behind makes
     // CC first report them as orphaned (`task_notification` ×N), then close that
@@ -2108,7 +2134,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
-          costUsd: raw.total_cost_usd,
+          costUsd: this.toRunCost(raw.total_cost_usd),
           phase: 'result_usage',
           usage,
         }),

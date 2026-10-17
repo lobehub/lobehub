@@ -1,18 +1,20 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { isDesktop } from '@lobechat/const';
 import {
   ActionIcon,
   Button,
   type ContextMenuItem,
   ContextMenuTrigger,
+  createStaticStyles,
+  Flexbox,
+  Select,
   TabsIndicator,
   TabsList,
   TabsRoot,
   TabsTab,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+} from '@lobehub/ui';
 import {
   CopyXIcon,
   PlusIcon,
@@ -20,19 +22,21 @@ import {
   SquareTerminalIcon,
   XIcon,
 } from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { canHostTerminal, deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
 import SplitView from './SplitView';
 import type { TerminalTab } from './store';
 import { useChatTerminalStore } from './store';
+import { buildTargetOptions, LOCAL_TARGET } from './targetOptions';
 
 const EMPTY_TABS: TerminalTab[] = [];
 
@@ -118,19 +122,37 @@ const Content = memo(() => {
   const closePane = useChatTerminalStore((s) => s.closePane);
   const setActivePane = useChatTerminalStore((s) => s.setActivePane);
   const setPaneFlex = useChatTerminalStore((s) => s.setPaneFlex);
+  const targetDeviceId = useChatTerminalStore((s) => s.deviceByTopic[topicKey]);
+  const setTerminalDevice = useChatTerminalStore((s) => s.setTerminalDevice);
+
+  const devices = useDeviceStore(deviceSelectors.deviceList);
+  // Only devices that can actually open a shell. An offline row, or one whose
+  // live connections are all desktop ones, answers a terminal RPC with a
+  // refusal — offering it would fail the session the moment it is claimed.
+  const targets = useMemo(() => devices.filter(canHostTerminal), [devices]);
+  // Desktop can always run a shell here; the web build needs a device.
+  const canSpawn = isDesktop || !!targetDeviceId;
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs.at(-1);
 
   const prevTabCountRef = useRef(0);
 
-  // Open a first shell automatically when this topic has none yet. Runs on
-  // open / topic switch only — NOT on tab-count changes, so closing the last
-  // tab doesn't immediately respawn a shell.
+  // The web build has no local shell, so a topic must name a device before the
+  // first terminal can open. Claim the first usable one until the user picks
+  // another.
+  useEffect(() => {
+    if (isDesktop || targetDeviceId || targets.length === 0) return;
+    setTerminalDevice(topicKey, targets[0].deviceId);
+  }, [targets, setTerminalDevice, targetDeviceId, topicKey]);
+
+  // Open a first shell automatically when this topic has none yet and we know
+  // where it would run. Runs on open / topic switch / target arrival only — NOT
+  // on tab-count changes, so closing the last tab doesn't respawn a shell.
   useEffect(() => {
     prevTabCountRef.current = tabs.length;
-    if (tabs.length === 0) void createTab(topicKey, cwd);
+    if (tabs.length === 0 && canSpawn) void createTab(topicKey, cwd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicKey]);
+  }, [topicKey, canSpawn]);
 
   // Closing the last tab (X button or the shell exiting) collapses the panel.
   useEffect(() => {
@@ -154,6 +176,20 @@ const Content = memo(() => {
       onClick: () => closeOtherTabs(topicKey, tabId),
     },
   ];
+
+  /**
+   * Point the topic at another machine. Existing shells keep running where they
+   * started, so open one — otherwise picking a device looks like it did nothing.
+   */
+  const selectTarget = (next: string) => {
+    setTerminalDevice(topicKey, next === LOCAL_TARGET ? undefined : next);
+    void createTab(topicKey, cwd);
+  };
+
+  const targetOptions = buildTargetOptions(
+    targets,
+    isDesktop ? t('terminalPanel.targetLocal') : undefined,
+  );
 
   return (
     <Flexbox className={styles.container}>
@@ -195,6 +231,14 @@ const Content = memo(() => {
           onClick={() => createTab(topicKey, cwd)}
         />
         <Flexbox flex={1} />
+        <Select
+          options={targetOptions}
+          size={'small'}
+          // The trigger defaults to `width: 100%`, which fills the whole tab bar.
+          style={{ flex: 'none', maxWidth: 240, minWidth: 120, width: 'auto' }}
+          value={targetDeviceId ?? LOCAL_TARGET}
+          onChange={(value) => selectTarget(String(value))}
+        />
         <ActionIcon
           disabled={!activeTab || creating}
           icon={SquareSplitHorizontalIcon}

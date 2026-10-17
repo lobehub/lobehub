@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
+  Flexbox,
   Input,
   InputPassword,
   Select,
@@ -10,8 +10,8 @@ import {
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

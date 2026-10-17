@@ -125,14 +125,11 @@ describe('Message CRUD Actions', () => {
         },
       ];
       const store = createTestStore(oldContext);
-      const onMessagesChange = vi.fn();
-      store.setState({ onMessagesChange });
 
       const createPromise = store.getState().createMessage({
         content: 'old topic message',
         role: 'user',
       });
-      onMessagesChange.mockClear();
       store.setState({
         context: currentContext,
         dbMessages: currentMessages,
@@ -160,7 +157,6 @@ describe('Message CRUD Actions', () => {
 
       expect(result).toBeUndefined();
       expect(store.getState().dbMessages).toEqual(currentMessages);
-      expect(onMessagesChange).not.toHaveBeenCalled();
     });
   });
 

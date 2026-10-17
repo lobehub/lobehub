@@ -581,6 +581,33 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     }
   }
 
+  /**
+   * Open a one-shot relay channel (`llmcall:<userId>:…`): the gateway session a
+   * single LLM call outside any run dispatches its `llm_execute` on. Only
+   * `userId` may subscribe to it; the tab that makes the call already has.
+   * Rejects when the gateway does not take it, so the call fails up front.
+   */
+  async openLlmRelayChannel(channel: string, userId: string): Promise<void> {
+    await this.httpPostAwait('/api/operations/init', {
+      meta: { scope: 'llm_call' },
+      operationId: channel,
+      userId,
+    });
+  }
+
+  /** The one-shot channel's calls are over: end its session. Best effort. */
+  async closeLlmRelayChannel(channel: string): Promise<void> {
+    try {
+      const res = await this.httpPostResponse('/api/operations/update-status', {
+        operationId: channel,
+        status: 'completed',
+      });
+      if (!res.ok) log('closeLlmRelayChannel %s: gateway returned %d', channel, res.status);
+    } catch (error) {
+      log('closeLlmRelayChannel failed for %s: %O', channel, error);
+    }
+  }
+
   // ─── Read / subscribe methods: delegate directly to inner ───
 
   async subscribeStreamEvents(

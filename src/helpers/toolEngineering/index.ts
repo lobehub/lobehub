@@ -2,6 +2,7 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import {
   createEnableChecker,
   type LobeToolManifest,
@@ -25,6 +26,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { getToolStoreState } from '@/store/tool';
 import {
   composioStoreSelectors,
@@ -143,6 +145,13 @@ export const createAgentToolsEngine = (
   pluginIds?: string[],
   /** Conversation context for context-aware builtin manifests (scope, isSubAgent). */
   manifestContext?: BuiltinToolResolveContext,
+  options: {
+    /**
+     * Whether the conversation has an attachment that can be sent as a preview. Enables
+     * `readAttachment` so the preview can be paged, as the server's tool discovery does.
+     */
+    hasOversizedFiles?: boolean;
+  } = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
@@ -159,9 +168,15 @@ export const createAgentToolsEngine = (
       // `currentAgentPlugins` already resolves to pinned-only identifiers.
       plugins: agentSelectors.currentAgentPlugins(agentState),
     },
-    disabledPluginIds: agentSelectors.currentAgentDisabledPlugins(agentState),
+    // Feature-flagged tools (e.g. lobe-dashboard) leave the pool while their
+    // flag is off for this user.
+    disabledPluginIds: [
+      ...agentSelectors.currentAgentDisabledPlugins(agentState),
+      ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
+    ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
     hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    hasOversizedFiles: options.hasOversizedFiles,
     // A `local` target only resolves on the desktop, where the host itself is
     // the machine: local tools are always reachable there.
     localExecutionReady: true,

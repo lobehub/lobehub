@@ -21,10 +21,40 @@ describe('IndexedDBQueryProjectionStorage', () => {
     });
   });
 
+  it('rejects a write that did not land, so the replica retries it', async () => {
+    vi.spyOn(localDatabase, 'initialize').mockResolvedValue();
+    vi.spyOn(localDatabase, 'set').mockRejectedValue(new Error('transaction aborted'));
+    const storage = new IndexedDBQueryProjectionStorage<string[]>({ namespace: 'projects' });
+
+    await expect(
+      storage.set({ queryKey: 'all', scope: 'personal' }, { data: ['x'], updatedAt: 1 }),
+    ).rejects.toThrow('transaction aborted');
+  });
+
   it('treats persistence failures as a cache miss', async () => {
     vi.spyOn(localDatabase, 'initialize').mockRejectedValue(new Error('unavailable'));
     const storage = new IndexedDBQueryProjectionStorage<string[]>({ namespace: 'projects' });
 
     await expect(storage.get({ queryKey: 'all', scope: 'personal' })).resolves.toBeUndefined();
+  });
+
+  it('reports a failed delete so the caller can retry it', async () => {
+    vi.spyOn(localDatabase, 'initialize').mockResolvedValue();
+    vi.spyOn(localDatabase, 'delete').mockRejectedValue(new Error('database closed'));
+    const storage = new IndexedDBQueryProjectionStorage<string[]>({ namespace: 'projects' });
+
+    await expect(storage.remove({ queryKey: 'all', scope: 'personal' })).rejects.toThrow(
+      'database closed',
+    );
+  });
+
+  it('rejects a strict read that failed, while get stays a cache miss', async () => {
+    vi.spyOn(localDatabase, 'initialize').mockResolvedValue();
+    vi.spyOn(localDatabase, 'get').mockRejectedValue(new Error('database closed'));
+    const storage = new IndexedDBQueryProjectionStorage<string[]>({ namespace: 'projects' });
+    const key = { queryKey: '__replica:index', scope: 'personal' };
+
+    await expect(storage.getStrict(key)).rejects.toThrow('database closed');
+    await expect(storage.get(key)).resolves.toBeUndefined();
   });
 });

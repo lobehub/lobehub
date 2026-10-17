@@ -1,4 +1,5 @@
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code';
+import { CredsApiName, CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import {
   UserInteractionApiName,
@@ -178,6 +179,31 @@ export const isHeteroInteractionIdentifier = (identifier: string) =>
   HETERO_CUSTOM_INTERACTION_IDENTIFIERS.has(identifier);
 
 /**
+ * Custom forms whose submit is an ordinary tool approval: the card performs
+ * its side effect itself (e.g. writing a secret to the credential store) and
+ * then lets the tool run, so the run never carries the form's input. The host
+ * drops the submit payload and approves; skip becomes reject-and-continue.
+ */
+export const isApprovalBackedInteraction = (identifier: string, apiName?: string) =>
+  identifier === CredsIdentifier && apiName === CredsApiName.requestCredsInput;
+
+type InteractionAction =
+  | { payload: Record<string, unknown>; type: 'submit' }
+  | { payload?: Record<string, unknown>; reason?: string; type: 'skip' }
+  | { payload?: Record<string, unknown>; type: 'cancel' };
+
+/**
+ * Maps an approval-backed form's action to the tool decision. The result has
+ * no room for the payload, so nothing the form submits can reach the run.
+ */
+export const toApprovalDecision = (
+  action: InteractionAction,
+): { type: 'approve' } | { reason?: string; type: 'reject' } =>
+  action.type === 'submit'
+    ? { type: 'approve' }
+    : { reason: action.type === 'skip' ? action.reason : undefined, type: 'reject' };
+
+/**
  * lobe-agent reuses the user-interaction `askUserQuestion` card. Unlike the
  * standalone tool (whose whole identifier is a custom interaction), lobe-agent
  * has other APIs (createPlan / clearTodos …) that must keep the default
@@ -187,6 +213,7 @@ export const isCustomInteractionIdentifier = (identifier: string, apiName?: stri
   identifier === UserInteractionIdentifier ||
   isLobeAgentAskUserQuestion(identifier, apiName) ||
   isHeteroInteractionIdentifier(identifier) ||
+  isApprovalBackedInteraction(identifier, apiName) ||
   Boolean(findCustomInteractionSubmitHandler(identifier, apiName));
 
 export const prepareCustomInteractionSubmit = async (

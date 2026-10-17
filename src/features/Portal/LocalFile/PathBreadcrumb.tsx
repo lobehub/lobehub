@@ -2,7 +2,7 @@
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 

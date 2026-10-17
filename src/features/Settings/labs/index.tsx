@@ -1,14 +1,14 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Alert, Skeleton, Switch, Tag } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Alert, Flexbox, Switch, Tag, Tooltip } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -55,7 +55,22 @@ const LabsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton.Text rows={5} />;
+    // Same groups as the loaded form: General always, Desktop only in Electron.
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          { rows: LAB_FEATURES.filter((feature) => !feature.desktopOnly).length, titleWidth: 72 },
+          ...(isDesktop
+            ? [
+                {
+                  rows: LAB_FEATURES.filter((feature) => feature.desktopOnly).length,
+                  titleWidth: 72,
+                },
+              ]
+            : []),
+        ]}
+      />
+    );
   }
 
   const checkedByFlag = Object.fromEntries(

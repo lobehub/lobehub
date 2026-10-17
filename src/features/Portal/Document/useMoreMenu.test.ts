@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   closeDocument: vi.fn(),
   confirmModal: vi.fn(),
   documentId: 'doc_1' as string | undefined,
+  exportMarkdown: vi.fn() as (() => Promise<void>) | undefined,
   isLoading: false,
   metaLocked: false,
   openRenameModal: vi.fn(),
@@ -20,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   url: 'https://app.lobehub.com/agent/agt_1/docs/doc_1' as string | undefined,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
   toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
@@ -47,6 +49,10 @@ vi.mock('./titleContext', () => ({
   }),
 }));
 
+vi.mock('./useMarkdownExport', () => ({
+  useMarkdownExport: () => mocks.exportMarkdown,
+}));
+
 vi.mock('./usePortalDocumentHeader', () => ({
   TITLE_MAX_LENGTH: 100,
   usePortalDocumentHeaderActions: () => ({
@@ -63,6 +69,7 @@ describe('useDocumentMoreMenu', () => {
     vi.clearAllMocks();
     mocks.agentDocumentId = 'adoc_1';
     mocks.documentId = 'doc_1';
+    mocks.exportMarkdown = vi.fn();
     mocks.isLoading = false;
     mocks.metaLocked = false;
     mocks.url = 'https://app.lobehub.com/agent/agt_1/docs/doc_1';
@@ -117,6 +124,7 @@ describe('useDocumentMoreMenu', () => {
       agentId: 'agt_1',
       documentId: 'doc_1',
       id: 'adoc_1',
+      withChildren: true,
     });
     expect(mocks.closeDocument).toHaveBeenCalledOnce();
   });
@@ -154,5 +162,21 @@ describe('useDocumentMoreMenu', () => {
     const { result } = renderHook(() => useDocumentMoreMenu());
 
     expect(result.current).toBeUndefined();
+  });
+
+  it('offers the markdown export as a menu action', () => {
+    const { result } = renderHook(() => useDocumentMoreMenu());
+    const item = result.current?.extraItems?.[0] as { key: string; onClick: () => void };
+
+    expect(item.key).toBe('export');
+    item.onClick();
+    expect(mocks.exportMarkdown).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the export out when the document cannot be exported', () => {
+    mocks.exportMarkdown = undefined;
+    const { result } = renderHook(() => useDocumentMoreMenu());
+
+    expect(result.current?.extraItems).toBeUndefined();
   });
 });

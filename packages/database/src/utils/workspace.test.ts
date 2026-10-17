@@ -18,6 +18,20 @@ describe('workspace utils', () => {
       expect(built.params).toStrictEqual(['user-1']);
     });
 
+    it('treats a blank workspace id as personal scope rather than as a workspace', () => {
+      // Reads already collapsed `''` because it is falsy. Pinning it keeps a
+      // future refactor of the predicate from turning a blank scope into
+      // `workspace_id = ''`, which matches nothing.
+      const condition = buildWorkspaceWhere(
+        { includeTrashed: true, userId: 'user-1', workspaceId: '' },
+        agents,
+      );
+      const built = new PgDialect().sqlToQuery(condition);
+
+      expect(built.sql).toBe('("agents"."user_id" = $1 and "agents"."workspace_id" is null)');
+      expect(built.params).toStrictEqual(['user-1']);
+    });
+
     it('scopes workspace reads with visibility filter when the column is present', () => {
       const condition = buildWorkspaceWhere(
         { includeTrashed: true, userId: 'user-1', workspaceId: 'ws-1' },
@@ -203,6 +217,46 @@ describe('workspace utils', () => {
     it('writes workspace payloads with creator and workspace id', () => {
       expect(
         buildWorkspacePayload({ userId: 'user-1', workspaceId: 'ws-1' }, { title: 'Team agent' }),
+      ).toEqual({
+        title: 'Team agent',
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+    });
+
+    /**
+     * @example A caller hands over a scope it "resolved" into `''`.
+     */
+    it('treats a blank workspace id as personal instead of writing a scope that cannot exist', () => {
+      // ROOT CAUSE:
+      //
+      // An empty scope is not a workspace. Whatever turns "no workspace" into
+      // `''` — an empty header, an env var that is present but blank, a `?? ''`
+      // on the way through a caller — the payload was written as
+      // `workspace_id: ''`, which the foreign key to `workspaces` rejects. The
+      // statement then fails whole, so nothing in that batch is persisted.
+      //
+      // Before: `''` was written through verbatim.
+      // After: blank collapses to `null`, i.e. personal data.
+      const personal = { title: 'Personal agent', userId: 'user-1', workspaceId: null };
+
+      expect(
+        buildWorkspacePayload({ userId: 'user-1', workspaceId: '' }, { title: 'Personal agent' }),
+      ).toEqual(personal);
+      expect(
+        buildWorkspacePayload(
+          { userId: 'user-1', workspaceId: '   ' },
+          { title: 'Personal agent' },
+        ),
+      ).toEqual(personal);
+      expect(
+        buildWorkspacePayload({ userId: 'user-1', workspaceId: null }, { title: 'Personal agent' }),
+      ).toEqual(personal);
+    });
+
+    it('trims a padded workspace id rather than writing it unreadable', () => {
+      expect(
+        buildWorkspacePayload({ userId: 'user-1', workspaceId: ' ws-1 ' }, { title: 'Team agent' }),
       ).toEqual({
         title: 'Team agent',
         userId: 'user-1',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseFileLinkHref } from './parse';
+import { getFileLinkOpenAction, parseFileLinkHref } from './parse';
 
 const ORIGIN = 'https://app.lobehub.com';
 
@@ -30,6 +30,35 @@ describe('parseFileLinkHref', () => {
     expect(parseFileLinkHref('https://example.com/f/not-ours', ORIGIN)).toBeNull();
   });
 
+  it('treats the official cloud hosts as one app', () => {
+    // Desktop cloud mode classifies against the gateway apex, while links
+    // written earlier still point at app.lobehub.com.
+    expect(
+      parseFileLinkHref('https://app.lobehub.com/f/file_abc123', 'https://lobehub.com'),
+    ).toEqual({ fileId: 'file_abc123' });
+    expect(
+      parseFileLinkHref('https://lobehub.com/f/file_abc123', 'https://app.lobehub.com'),
+    ).toEqual({ fileId: 'file_abc123' });
+  });
+
+  it('does not treat other official subdomains as the app', () => {
+    expect(
+      parseFileLinkHref('https://staging.app.lobehub.com/f/file_abc123', 'https://lobehub.com'),
+    ).toBeNull();
+    expect(
+      parseFileLinkHref(
+        'https://device-gateway.lobehub.com/f/file_abc123',
+        'https://app.lobehub.com',
+      ),
+    ).toBeNull();
+  });
+
+  it('does not treat a look-alike host as the official cloud', () => {
+    expect(
+      parseFileLinkHref('https://lobehub.com.evil.example/f/file_abc123', 'https://lobehub.com'),
+    ).toBeNull();
+  });
+
   it('does not match an absolute link when no currentOrigin is known', () => {
     expect(parseFileLinkHref(`${ORIGIN}/f/file_abc123`)).toBeNull();
   });
@@ -46,5 +75,31 @@ describe('parseFileLinkHref', () => {
   it('returns null for an empty href', () => {
     expect(parseFileLinkHref(undefined, ORIGIN)).toBeNull();
     expect(parseFileLinkHref('', ORIGIN)).toBeNull();
+  });
+});
+
+describe('getFileLinkOpenAction', () => {
+  const link = { fileId: 'file_1', label: 'report.md', linkHref: `${ORIGIN}/f/file_1` };
+
+  it('opens the owner-scoped preview by id for the file owner', () => {
+    expect(getFileLinkOpenAction({ ...link, isAgentShareVisitor: false })).toEqual({
+      kind: 'preview',
+      params: { fileId: 'file_1' },
+    });
+  });
+
+  // Regression (LOBE-14768): the visitor does not own the creator's file, so the
+  // id-only preview fetched nothing and showed "file unavailable".
+  it('previews from the public /f/:id link on the agent-share visitor page', () => {
+    expect(getFileLinkOpenAction({ ...link, isAgentShareVisitor: true })).toEqual({
+      kind: 'preview',
+      params: { fileId: 'file_1', source: { name: 'report.md', url: `${ORIGIN}/f/file_1` } },
+    });
+  });
+
+  it('opens the public link in a new tab when the visitor label names no file type', () => {
+    expect(
+      getFileLinkOpenAction({ ...link, isAgentShareVisitor: true, label: 'Download the deck' }),
+    ).toEqual({ kind: 'newTab', url: `${ORIGIN}/f/file_1` });
   });
 });

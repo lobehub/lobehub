@@ -1,15 +1,21 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, type RecentItem } from '@lobechat/types';
 
 import type { SidebarAgentItem } from '@/database/repositories/home';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 import type { ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
 import type { TabScope } from '../TabBar/scope';
+import type { ActiveTopic } from './selectActiveTopics';
 
 interface ResolveTrayNavigationSnapshotParams {
+  activeTopics?: ActiveTopic[];
   agents: SidebarAgentItem[];
   pinnedPages: ResolvedTab[];
   recentPages: ResolvedTab[];
+  recents?: RecentItem[];
   scope: TabScope;
 }
 
@@ -25,44 +31,31 @@ const getAgentIdFromUrl = (url: string): string | undefined => {
   return encodedId ? decodeURIComponent(encodedId) : undefined;
 };
 
-const fallbackAgentUrl = (scope: TabScope, agentId: string) => {
-  const prefix = scope.type === 'workspace' ? `/${encodeURIComponent(scope.slug)}` : '';
-  return `${prefix}/agent/${encodeURIComponent(agentId)}`;
-};
+const scopedPath = (scope: TabScope, path: string) =>
+  scope.type === 'workspace' ? `/${encodeURIComponent(scope.slug)}${path}` : path;
 
-const resolveRecentItem = (page: ResolvedTab, agentNames: ReadonlyMap<string, string>) => {
-  const pathname = new URL(page.tab.url, 'https://lobehub.local').pathname;
-  const segments = pathname.split('/').filter(Boolean);
-  const agentIndex = segments.indexOf('agent');
-  if (
-    agentIndex >= 0 &&
-    segments.length === agentIndex + 3 &&
-    segments[agentIndex + 1] &&
-    segments[agentIndex + 2]
-  ) {
-    const agentId = decodeURIComponent(segments[agentIndex + 1]);
-    const agentName = agentNames.get(agentId) || 'Untitled';
-    const agentSuffix = ` · ${agentName}`;
-    const title = page.meta.title.endsWith(agentSuffix)
-      ? page.meta.title.slice(0, -agentSuffix.length)
-      : page.meta.title;
-    return {
-      subtitle: agentName,
-      title,
-      url: page.tab.url,
-    };
-  }
+const fallbackAgentUrl = (scope: TabScope, agentId: string) =>
+  scopedPath(scope, `/agent/${encodeURIComponent(agentId)}`);
 
-  const pageIndex = segments.indexOf('page');
-  if (pageIndex >= 0 && segments.length === pageIndex + 2 && segments[pageIndex + 1]) {
-    return { subtitle: 'Page', title: page.meta.title, url: page.tab.url };
-  }
-};
+const activeTopicUrl = (scope: TabScope, { agentId, groupId, topicId }: ActiveTopic) =>
+  scopedPath(
+    scope,
+    groupId
+      ? GROUP_CHAT_TOPIC_URL(encodeURIComponent(groupId), encodeURIComponent(topicId))
+      : AGENT_CHAT_TOPIC_URL(encodeURIComponent(agentId ?? ''), encodeURIComponent(topicId)),
+  );
+
+const recentRoute = (item: RecentItem) =>
+  item.type === 'task'
+    ? taskDetailPath(item.id, item.agentId ?? undefined, item.slugTitle)
+    : item.routePath;
 
 export const resolveTrayNavigationSnapshot = ({
+  activeTopics = [],
   agents,
   pinnedPages,
   recentPages,
+  recents = [],
   scope,
 }: ResolveTrayNavigationSnapshotParams): TrayNavigationSnapshot => {
   const uniqueAgents = new Map<string, SidebarAgentItem>();
@@ -78,7 +71,21 @@ export const resolveTrayNavigationSnapshot = ({
     (a, b) => b.tab.lastVisited - a.tab.lastVisited,
   );
 
+  const active = activeTopics
+    .toSorted(
+      (a, b) => Number(b.status === 'waitingForHuman') - Number(a.status === 'waitingForHuman'),
+    )
+    .map((topic) => ({
+      status: topic.status,
+      subtitle: agentNames.get(topic.groupId ?? topic.agentId ?? ''),
+      title: topic.title || 'Untitled',
+      url: activeTopicUrl(scope, topic),
+    }));
+  const activeTopicIds = new Set(activeTopics.map(({ topicId }) => topicId));
+  const workspaceSlug = scope.type === 'workspace' ? scope.slug : undefined;
+
   return {
+    activeTopics: active,
     agents: [...uniqueAgents.values()].map((agent) => ({
       id: agent.id,
       title: agentDisplayName(agent, 'Untitled'),
@@ -87,8 +94,12 @@ export const resolveTrayNavigationSnapshot = ({
         fallbackAgentUrl(scope, agent.id),
     })),
     pinned: pinnedPages.map(({ meta, tab }) => ({ title: meta.title, url: tab.url })),
-    recent: recentPages
-      .map((page) => resolveRecentItem(page, agentNames))
-      .filter((item) => item !== undefined),
+    recent: recents
+      .filter((item) => !(item.type === 'topic' && activeTopicIds.has(item.id)))
+      .map((item) => ({
+        subtitle: item.agentId ? agentNames.get(item.agentId) : undefined,
+        title: item.title || 'Untitled',
+        url: buildWorkspaceAwarePath(recentRoute(item), workspaceSlug),
+      })),
   };
 };

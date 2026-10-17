@@ -14,12 +14,18 @@ import { isRecord, pickTrimmedString } from '@lobechat/utils';
  * env-dependent transitive imports) into its graph.
  */
 
+/** Kind of durable write the memory tool performed; only `create` writes are undoable. */
+export type MemoryActionOperation = 'create' | 'remove' | 'update';
+
 export interface MemoryActionTarget {
+  /** Layer-specific row id (e.g. `preferenceId`), used to open and undo the memory. */
   id?: string;
   memoryId?: string;
   memoryLayer?: LayersEnum;
+  operation?: MemoryActionOperation;
   summary?: string;
-  title: string;
+  /** The memory's own title. Absent when the write cannot be attributed to a titled tool call. */
+  title?: string;
   type: 'memory';
 }
 
@@ -44,17 +50,47 @@ const MEMORY_WRITE_TOOL_NAMES = new Set(
 );
 
 const MEMORY_WRITE_API_NAME_SET = new Set<string>(MEMORY_WRITE_API_NAMES);
-const MEMORY_WRITE_TARGET_BY_API_NAME: Record<string, { idKey: string; layer: LayersEnum }> = {
-  [MemoryApiName.addActivityMemory]: { idKey: 'activityId', layer: LayersEnum.Activity },
-  [MemoryApiName.addContextMemory]: { idKey: 'contextId', layer: LayersEnum.Context },
-  [MemoryApiName.addExperienceMemory]: { idKey: 'experienceId', layer: LayersEnum.Experience },
-  [MemoryApiName.addIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
-  [MemoryApiName.addPreferenceMemory]: { idKey: 'preferenceId', layer: LayersEnum.Preference },
-  [MemoryApiName.removeIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
-  [MemoryApiName.updateIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
+const MEMORY_WRITE_TARGET_BY_API_NAME: Record<
+  string,
+  { idKey: string; layer: LayersEnum; operation: MemoryActionOperation }
+> = {
+  [MemoryApiName.addActivityMemory]: {
+    idKey: 'activityId',
+    layer: LayersEnum.Activity,
+    operation: 'create',
+  },
+  [MemoryApiName.addContextMemory]: {
+    idKey: 'contextId',
+    layer: LayersEnum.Context,
+    operation: 'create',
+  },
+  [MemoryApiName.addExperienceMemory]: {
+    idKey: 'experienceId',
+    layer: LayersEnum.Experience,
+    operation: 'create',
+  },
+  [MemoryApiName.addIdentityMemory]: {
+    idKey: 'identityId',
+    layer: LayersEnum.Identity,
+    operation: 'create',
+  },
+  [MemoryApiName.addPreferenceMemory]: {
+    idKey: 'preferenceId',
+    layer: LayersEnum.Preference,
+    operation: 'create',
+  },
+  [MemoryApiName.removeIdentityMemory]: {
+    idKey: 'identityId',
+    layer: LayersEnum.Identity,
+    operation: 'remove',
+  },
+  [MemoryApiName.updateIdentityMemory]: {
+    idKey: 'identityId',
+    layer: LayersEnum.Identity,
+    operation: 'update',
+  },
 };
 const TOOL_NAME_SEPARATOR = '____';
-const DEFAULT_MEMORY_TARGET_TITLE = 'Memory saved';
 
 const getMemoryWriteApiNameFromToolName = (name: unknown) => {
   const toolName = getString(name);
@@ -121,11 +157,24 @@ interface MemoryToolCallSnapshot {
   identifier?: string;
 }
 
+/**
+ * Tool payloads on a message, including the flattened `assistantGroup` shape the
+ * runtime rebuilds `state.messages` into, where each block under `children`
+ * carries its own `tools` (with the result inlined).
+ */
+const getPersistedTools = (message: Record<string, unknown>): Record<string, unknown>[] => {
+  const blocks = Array.isArray(message.children) ? message.children.filter(isRecord) : [];
+
+  return [message, ...blocks].flatMap((item) =>
+    Array.isArray(item.tools) ? item.tools.filter(isRecord) : [],
+  );
+};
+
 const getToolCallsFromMessage = (message: unknown): MemoryToolCallSnapshot[] => {
   if (!isRecord(message)) return [];
 
   const toolCalls: MemoryToolCallSnapshot[] = [];
-  const persistedTools = Array.isArray(message.tools) ? message.tools : [];
+  const persistedTools = getPersistedTools(message);
 
   for (const tool of persistedTools) {
     if (!isRecord(tool)) continue;
@@ -212,6 +261,18 @@ const getMemoryToolResultIds = (state: AgentState) => {
     const ids = getMemoryIdsFromToolMessage(message);
 
     if (callId && ids) resultIds.set(callId, ids);
+
+    // Flattened groups inline each tool's result next to its call.
+    if (!isRecord(message)) continue;
+    for (const tool of getPersistedTools(message)) {
+      const toolCallId = getString(tool.id);
+      const result = isRecord(tool.result) ? tool.result : undefined;
+      const inlineIds =
+        result &&
+        getMemoryIdsFromToolMessage({ content: result.content, pluginState: result.state });
+
+      if (toolCallId && inlineIds) resultIds.set(toolCallId, inlineIds);
+    }
   }
 
   return resultIds;
@@ -252,22 +313,24 @@ const createTargetFromToolArguments = (
   return {
     ...((id ?? memoryId) ? { id: id ?? memoryId } : {}),
     ...(memoryId ? { memoryId } : {}),
-    ...(targetConfig ? { memoryLayer: targetConfig.layer } : {}),
+    ...(targetConfig ? { memoryLayer: targetConfig.layer, operation: targetConfig.operation } : {}),
     ...(summary ? { summary } : {}),
     title,
     type: 'memory',
   };
 };
 
-export const resolveMemoryActionTargetFromState = (
-  state: AgentState,
-): MemoryActionTarget | undefined => {
+/**
+ * Every confirmed memory write in the run, in call order. A writer may save
+ * several memories (e.g. a context and a preference) from one piece of feedback;
+ * each gets its own receipt.
+ */
+export const resolveMemoryActionTargetsFromState = (state: AgentState): MemoryActionTarget[] => {
   const resultIds = getMemoryToolResultIds(state);
+  const targets: MemoryActionTarget[] = [];
 
-  for (const message of [...(state.messages ?? [])].reverse()) {
-    const toolCalls = getToolCallsFromMessage(message).reverse();
-
-    for (const toolCall of toolCalls) {
+  for (const message of state.messages ?? []) {
+    for (const toolCall of getToolCallsFromMessage(message)) {
       if (!isMemoryWriteToolCall(toolCall)) continue;
       if (!toolCall.id) continue;
 
@@ -278,16 +341,27 @@ export const resolveMemoryActionTargetFromState = (
       if (!args) continue;
 
       const target = createTargetFromToolArguments(args, toolCall, confirmedResultIds);
-      if (target) return target;
+      if (target) targets.push(target);
     }
   }
+
+  return targets;
+};
+
+export const resolveMemoryActionTargetFromState = (
+  state: AgentState,
+): MemoryActionTarget | undefined => {
+  const targets = resolveMemoryActionTargetsFromState(state);
+  if (targets.length > 0) return targets.at(-1);
 
   const targetConfig = getSuccessfulMemoryWriteTargetConfig(state);
   if (!targetConfig) return;
 
+  // No titled tool call to attribute: leave the title out so clients render their localized
+  // "Memory saved" fallback instead of a server-side English string.
   return {
     memoryLayer: targetConfig.layer,
-    title: DEFAULT_MEMORY_TARGET_TITLE,
+    operation: targetConfig.operation,
     type: 'memory',
   };
 };

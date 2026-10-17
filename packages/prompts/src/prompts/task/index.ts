@@ -703,7 +703,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
           ? `cron "${task.schedulePattern}" (${task.scheduleTimezone || 'UTC'})`
           : task.automationMode;
     taskLines.push(
-      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do is still a successful run. NEVER set this task to completed (or any terminal status) — that permanently stops the loop.`,
+      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, mark this task completed as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
     );
   }
   taskLines.push(`Instruction: ${task.instruction}`);
@@ -811,6 +811,12 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     const budget = typeof goalLoop.maxRounds === 'number' ? ` of ${goalLoop.maxRounds}` : '';
     taskLines.push(
       `Goal loop${goalLoop.round ? ` — round ${goalLoop.round}${budget}` : ''}: earlier rounds did not fully meet the acceptance criteria. Focus on closing the gaps below instead of redoing finished work.`,
+    );
+    taskLines.push(
+      '  This round is verified on its own: evidence from earlier rounds does not carry over. Submit evidence to this run for every required criterion, not only the unresolved ones; re-upload an earlier artifact when it still shows the current behavior.',
+    );
+    taskLines.push(
+      '  Your final response is read as the deliverable. Describe the complete delivery as it now stands, not only what changed in this round — "no code changed this round" without that context reads as missing work.',
     );
     const reviewFeedback = [
       goalLoop.rejectComment,

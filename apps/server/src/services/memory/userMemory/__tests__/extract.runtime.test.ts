@@ -67,6 +67,27 @@ const resolveRuntimeKeyVaults = async (
 };
 
 describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
+  it('uses the embedding window independently of the extractor window', () => {
+    const executor = createExecutor({
+      agentLayerExtractor: {
+        model: 'chat-model',
+        provider: 'openai',
+        contextLimit: 32768,
+        layers: {
+          activity: 'chat-model',
+          context: 'chat-model',
+          experience: 'chat-model',
+          identity: 'chat-model',
+          preference: 'chat-model',
+        },
+      },
+      embedding: { model: 'text-embedding-3-small', provider: 'openai' },
+    });
+    const config = (executor as any).resolveUserMemoryServiceConfig();
+    expect(config.embeddingContextLimit).toBe(8192);
+    expect(config.extractorContextLimit).toBe(32768);
+  });
+
   it('drops fallback credentials when user memory provider is overridden', () => {
     const executor = createExecutor({
       embedding: {

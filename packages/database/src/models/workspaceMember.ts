@@ -7,7 +7,7 @@ import { devices } from '../schemas/device';
 import { messengerAccountLinks } from '../schemas/messengerAccountLink';
 import { tasks } from '../schemas/task';
 import { users } from '../schemas/user';
-import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
+import { workspaceInvitations, workspaceMembers, workspaceTeamMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { ilikeContains as containsIgnoreCase } from '../utils/like';
 import { ResourcePermissionModel } from './resourcePermission';
@@ -194,11 +194,11 @@ export class WorkspaceMemberModel {
       )
       .returning({ deviceId: devices.deviceId });
 
-    // Same reasoning one level up: a per-member resource grant only means
-    // anything while they belong to the workspace, and the soft delete is
-    // reactivated by `addMember`, so a grant left behind would silently restore
-    // their old access on re-invite. Workspace-wide rows carry no subject and
-    // stay.
+    // Same reasoning one level up: a per-member resource grant (or team
+    // membership) only means anything while they belong to the workspace, and
+    // the soft delete is reactivated by `addMember`, so a row left behind would
+    // silently restore their old access or teams on re-invite. Workspace-wide
+    // rows carry no subject and stay.
     //
     // Soft-delete first, then revoke, both in one transaction: the update takes
     // the membership row lock that a concurrent grant waits on, so a grant can
@@ -217,6 +217,15 @@ export class WorkspaceMemberModel {
         );
 
       await new ResourcePermissionModel(tx, workspaceId).removeMemberGrants(userId);
+
+      await tx
+        .delete(workspaceTeamMembers)
+        .where(
+          and(
+            eq(workspaceTeamMembers.workspaceId, workspaceId),
+            eq(workspaceTeamMembers.userId, userId),
+          ),
+        );
 
       await tx
         .update(tasks)

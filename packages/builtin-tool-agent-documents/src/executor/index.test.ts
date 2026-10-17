@@ -31,7 +31,11 @@ describe('AgentDocumentsExecutor.onAfterCall', () => {
     expect(onDocumentsMutated).toHaveBeenCalledWith({ documentId: undefined });
   });
 
+  // Folders and moves change what the sidebar tree shows; a tool_end for them
+  // (client or server runtime) must refresh it without a reload.
   it.each([
+    AgentDocumentsApiName.createFolder,
+    AgentDocumentsApiName.moveDocuments,
     AgentDocumentsApiName.removeDocument,
     AgentDocumentsApiName.renameDocument,
     AgentDocumentsApiName.copyDocument,

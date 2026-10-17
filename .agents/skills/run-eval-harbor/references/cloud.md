@@ -11,7 +11,14 @@ The external eval repository's ignored `.env` must contain:
 ```env
 LH_AGENT_ID=<selected-agent-id>
 LOBEHUB_CLI_API_KEY=<cloud-cli-api-key>
+# Workspace agents only:
+LOBEHUB_WORKSPACE_ID=<workspace-id>
 ```
+
+For a workspace agent, also set `LOBEHUB_WORKSPACE_ID` to the workspace that
+owns the agent. The Harbor adapter uses it both to scope the agent request and
+to enroll the task container with `lh connect --workspace`. Leave it unset for
+personal agents.
 
 For official LobeHub Cloud, leave `LH_SERVER_URL`, `LOBEHUB_SERVER`,
 `LH_GATEWAY_URL`, and `AGENT_GATEWAY_URL` unset so the CLI uses its official

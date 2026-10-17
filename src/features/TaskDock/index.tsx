@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import {
   CheckIcon,
   ChevronDownIcon,

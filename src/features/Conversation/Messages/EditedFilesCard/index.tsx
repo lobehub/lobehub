@@ -9,9 +9,7 @@ import {
   KindDot,
   LineStats,
 } from '@lobechat/shared-tool-ui/components';
-import { Center, Flexbox, PatchDiff } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Button, Center, createStaticStyles, cx, Flexbox, PatchDiff, Text } from '@lobehub/ui';
 import {
   ArrowUpRightIcon,
   ChevronDownIcon,

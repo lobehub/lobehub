@@ -105,6 +105,9 @@ export class EnvironmentInstanceModel {
    * stood when it was created (`configurationSnapshot`); editing the
    * environment afterwards changes what NEW instances are built from and
    * leaves existing ones exactly as they are.
+   *
+   * Oldest first, ties broken by id — the order `pickDefaultInstance` ranks
+   * by, so an environment's default instance is always the first of its rows.
    */
   query = async (params: { environmentId?: string } = {}): Promise<EnvironmentInstanceItem[]> =>
     this.db
@@ -119,7 +122,7 @@ export class EnvironmentInstanceModel {
             : undefined,
         ),
       )
-      .orderBy(asc(environmentInstances.createdAt));
+      .orderBy(asc(environmentInstances.createdAt), asc(environmentInstances.id));
 
   /** Readable: this is what a run resolves through, including in a published environment. */
   findById = async (id: string): Promise<EnvironmentInstanceItem | undefined> => {

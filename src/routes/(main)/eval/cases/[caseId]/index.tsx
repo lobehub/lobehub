@@ -1,7 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Center, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';

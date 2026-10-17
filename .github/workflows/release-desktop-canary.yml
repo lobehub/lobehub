@@ -9,8 +9,8 @@ name: Release Desktop Canary
 #   2. 手动触发 (workflow_dispatch)
 #
 # core-only 优先:
-#   先跑 release-desktop-core-ota.yml；只有 shellAbi 变了 (requires_full_release)
-#   或 core 没有变化 (skipped) 或手动 force_full 时才走全量打包。
+#   先跑 release-desktop-core-ota.yml；只有 shellAbi 变了或 stable 已追上当前壳版本
+#   (requires_full_release)、core 没有变化 (skipped)、手动 force_full 时才走全量打包。
 #
 # 并发策略:
 #   运行中的发布不会被后续 push 取消；等待队列仅保留最新一次运行

@@ -51,6 +51,14 @@ const unavailableSnapshot = (
   weekly: null,
 });
 
+/**
+ * Persisted windows merged with a live sample that came back unavailable keep
+ * the live reason, so the panel can say why the windows stopped refreshing.
+ */
+type ClaudeCodePanelSnapshot = ClaudeCodeQuotaSnapshot & {
+  refreshUnavailableReason?: ClaudeCodeQuotaSnapshot['reason'];
+};
+
 const isRateLimitError = (quota: ClaudeCodeQuotaSnapshot) => quota.error?.includes('429') ?? false;
 
 interface ClaudeCodeQuotaMenuProps {
@@ -79,8 +87,8 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
    */
   const fetchQuota = useCallback(
     async (
-      options?: FetchQuotaOptions<ClaudeCodeQuotaSnapshot>,
-    ): Promise<ClaudeCodeQuotaSnapshot> => {
+      options?: FetchQuotaOptions<ClaudeCodePanelSnapshot>,
+    ): Promise<ClaudeCodePanelSnapshot> => {
       const force = !!options?.force;
 
       // 1) Resolve the account to display — pinned for this agent, else the first.
@@ -158,7 +166,11 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       // reading wins. With no account resolved at all there is nothing to
       // attribute the sample to, so the live snapshot stands on its own.
       const merged = account ? buildClaudePanelSnapshot(account, readings, live) : null;
-      if (merged && hasRenderableWindow(merged)) return merged;
+      if (merged && hasRenderableWindow(merged)) {
+        return live?.status === 'unavailable' && live.reason
+          ? { ...merged, refreshUnavailableReason: live.reason }
+          : merged;
+      }
       return live ?? merged ?? unavailableSnapshot();
     },
     [agentId, deviceId, env, trustedDeviceAccounts],
@@ -197,9 +209,9 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
     [t],
   );
 
-  const getUnavailableText = useCallback(
-    (quota: ClaudeCodeQuotaSnapshot) => {
-      switch (quota.reason) {
+  const getReasonText = useCallback(
+    (reason: ClaudeCodeQuotaSnapshot['reason']) => {
+      switch (reason) {
         case 'credentials-expired': {
           return t('heteroAgent.claudeQuota.unavailableExpired');
         }
@@ -209,12 +221,26 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         case 'external-auth': {
           return t('heteroAgent.claudeQuota.unavailableExternalAuth');
         }
+        case 'request-blocked': {
+          return t('heteroAgent.claudeQuota.unavailableRequestBlocked');
+        }
         default: {
           return undefined;
         }
       }
     },
     [t],
+  );
+
+  const getUnavailableText = useCallback(
+    (quota: ClaudeCodeQuotaSnapshot) => getReasonText(quota.reason),
+    [getReasonText],
+  );
+
+  const getStaleNotice = useCallback(
+    (quota: ClaudeCodePanelSnapshot) =>
+      quota.refreshUnavailableReason ? getReasonText(quota.refreshUnavailableReason) : undefined,
+    [getReasonText],
   );
 
   const getErrorText = useCallback(
@@ -241,6 +267,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       fetchQuota={fetchQuota}
       getErrorText={getErrorText}
       getRefreshErrorText={getRefreshErrorText}
+      getStaleNotice={getStaleNotice}
       getUnavailableText={getUnavailableText}
       getWindows={getWindows}
       sourceKey={sourceKey}

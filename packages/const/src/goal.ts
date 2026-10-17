@@ -7,6 +7,8 @@
  * including human review (`review`) and the terminal `achieved` outcome.
  */
 export const goalStatuses = [
+  // Arranged but not started: the coordinator leaves it alone until `start`.
+  'draft',
   'planning',
   'running',
   'verifying',
@@ -163,3 +165,99 @@ export const ACCEPTANCE_REVIEW_ERRORED_ERROR =
  * Goal's status — the coordinator ignores it when choosing its next move.
  */
 export const GOAL_REPORT_TASK_TITLE = 'Write the Goal report';
+
+// ============================================
+// Batch rollout (STAMP) — one repeated mould, delivered as a class
+// ============================================
+
+/**
+ * Rollout trigger vocabulary. Kept in sync with the `GoalRolloutTrigger` union
+ * in `@lobechat/types` (type-tested here), mirroring the `goalStatuses`
+ * convention. `off` is explicit opt-out; an absent policy means the same thing.
+ */
+export const goalRolloutTriggers = ['canary', 'full', 'off'] as const;
+
+/**
+ * Fixed title of the `batch` container node that holds a repeated mould's
+ * probe, gate and waves. Stored in English as data; clients recognize it for
+ * localized copy, the same way as the acceptance and clarification titles.
+ */
+export const GOAL_BATCH_TITLE = 'Deliver the repeated batch';
+
+/**
+ * Graph features a client declares it can render, sent with the graph read.
+ * The server keeps newer node kinds from clients that do not declare them —
+ * a cached web bundle or an installed desktop app predates them — and returns
+ * a shape they already understand instead.
+ */
+export const GOAL_GRAPH_CAPABILITY = {
+  /** The `batch` node kind (repeated-mould rollouts). */
+  batch: 'batch',
+} as const;
+
+/**
+ * Fixed title of the Assay (gate) decision node inside a batch. The coordinator
+ * opens it to answer one question a person may have to settle: can this whole
+ * class run automatically?
+ */
+export const GOAL_BATCH_ASSAY_TITLE = 'Prove the batch runs automatically';
+
+/**
+ * Fixed title of the decision node a passed batch gate opens when the next wave
+ * waits on a person's approval. Each hold gets its own node: a node carries one
+ * decision, and the Assay keeps its own for a pattern break.
+ */
+export const GOAL_BATCH_RELEASE_TITLE = 'Approve releasing the next wave';
+
+/** Fixed title of the Template (recipe) finding node a batch distills. */
+export const GOAL_BATCH_TEMPLATE_TITLE = 'Batch recipe';
+
+/** Default probe size K — representative units that run before the gate. */
+export const ROLLOUT_CANARY_SIZE_DEFAULT = 5;
+/** Default mass wave size M — units released per wave after the gate passes. */
+export const ROLLOUT_WAVE_SIZE_DEFAULT = 5;
+/**
+ * Below this many structurally identical units the batch ceremony costs more
+ * than it saves, so the planner decomposes per unit instead.
+ */
+export const ROLLOUT_MIN_HOMOGENEOUS_UNITS = 10;
+/** Probes never exceed the planner's per-turn task cap. */
+export const ROLLOUT_MAX_CANARY_SIZE = 5;
+/**
+ * Prefix of the reason recorded when a batch hits a pattern break and the
+ * coordinator hands the choice to a person (revise the recipe vs. new class).
+ */
+export const PATTERN_BREAK_PAUSE_REASON = 'Batch pattern break needs a decision';
+
+/**
+ * The batch pattern-break gate's option ids. Shared by the server that opens the
+ * gate and the client that localizes it, the same way `GOAL_CLARIFICATION_OPTION`
+ * is; the human-facing labels live in the locale files, never in the payload.
+ */
+export const GOAL_BATCH_BREAK_OPTION = {
+  newClass: 'new_class',
+  revise: 'revise',
+} as const;
+
+/** Prefix of the reason recorded while a passed batch gate waits on a person to approve the release. */
+export const RELEASE_REVIEW_PAUSE_REASON = 'Batch release needs approval';
+
+/**
+ * The release-approval gate's option ids. `revise` shares the pattern break's
+ * id, but here the correction goes to the main Agent, whose rewritten plan
+ * returns to the same review; the probes are not run again.
+ */
+export const GOAL_BATCH_RELEASE_OPTION = {
+  release: 'release',
+  revise: GOAL_BATCH_BREAK_OPTION.revise,
+} as const;
+
+/** The release-approval question's fixed English tail, localized on the client. */
+export const GOAL_BATCH_RELEASE_QUESTION_TAIL = 'Release the next wave?';
+
+/**
+ * The batch pattern-break question's fixed English tail. The client strips it to
+ * reach the coordinator's dynamic reason, then renders the tail in the reader's
+ * language — mirroring the other coordinator question tails.
+ */
+export const GOAL_BATCH_BREAK_QUESTION_TAIL = 'How should this batch proceed?';

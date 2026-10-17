@@ -5,6 +5,12 @@ export {
   GrokBuildAdapter,
   QoderAdapter,
 } from './adapters';
+export {
+  appendAttachedFilesToPrompt,
+  buildAttachedFilesPrompt,
+  collectHeteroAttachedFiles,
+  type HeteroAttachedFileRef,
+} from './attachedFiles';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,
@@ -12,6 +18,8 @@ export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentDescriptor,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from './config';
@@ -37,8 +45,10 @@ export {
   HETEROGENEOUS_AGENT_CONFIGS,
   isHeterogeneousAgentAuthRequired,
   isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
   isRemoteHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
   OPENCODE_CLI_INSTALL_COMMANDS,
   OPENCODE_CLI_INSTALL_DOCS_URL,
   PI_CLI_INSTALL_COMMANDS,
@@ -95,7 +105,6 @@ export type {
   ResolveHeterogeneousProviderBindingResult,
   ServerDefaultHeterogeneousAgentType,
   ServerDefaultHeterogeneousIngress,
-  ServerDefaultHeterogeneousModelPolicy,
   ServerDefaultHeterogeneousTokenHeader,
 } from './providerBinding';
 export {

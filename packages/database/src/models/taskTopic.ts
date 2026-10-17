@@ -4,7 +4,7 @@ import {
   TRANSIENT_FAILED_RUN_STATUS,
 } from '@lobechat/const/goal';
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
-import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
@@ -298,6 +298,42 @@ export class TaskTopicModel {
     return result.length > 0;
   }
 
+  /**
+   * Put a settled run back in flight, because its topic is live again.
+   *
+   * A Task's run row is written at the two ends of a run the runner owns: the
+   * runner opens it (`running`, with the operation it dispatched) and the
+   * lifecycle closes it (terminal). A user answering a finished run in that
+   * run's own conversation starts a third kind of run — dispatched from the
+   * composer, never through `runTask` — so without this the row stays terminal
+   * while the topic it names is visibly working: the run card keeps its finished
+   * state, `TaskService.cancelTopic` refuses to stop the live run, and the
+   * detail page stops polling for it.
+   *
+   * Guarded on the row not already being `running`: a message queued behind a
+   * run that is still going must not steal that run's `operationId`, which is
+   * the only handle cancellation has on it.
+   *
+   * The trigger is restamped as `'manual'` for the same reason it is written at
+   * all: only automation ticks may spend the attempt budget, and a user replying
+   * in the run's conversation is not one. Leaving the previous value would make
+   * an orphaned answer settle as a tick and count against the schedule.
+   *
+   * Only the run row is written; clearing the topic's end stamp is the caller's
+   * to commit alongside it — see `TaskRunClaimRepo`.
+   */
+  async reopenSettledRun(topicId: string, operationId: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ operationId, status: 'running', trigger: 'manual' })
+      .where(
+        and(eq(taskTopics.topicId, topicId), ne(taskTopics.status, 'running'), this.ownership()),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    return result.length > 0;
+  }
+
   /** Undo {@link markTopicEnded}'s end stamp for a run that is live again. */
   async clearTopicEnded(topicId: string): Promise<void> {
     await this.db
@@ -419,8 +455,8 @@ export class TaskTopicModel {
   }
 
   /**
-   * A goal's spend and round count in one aggregate: how many runs those tasks
-   * produced and what they cost.
+   * Usage for one or more Tasks in one aggregate: how many runs they produced,
+   * their tokens, and what they cost.
    *
    * The Goal page renders these numbers and the coordinator enforces the budget
    * against them, so both read them from here — a second definition of "what
@@ -431,12 +467,30 @@ export class TaskTopicModel {
    * as a round but contribute nothing to the sum.
    */
   async sumRunCostByTaskIds(taskIds: string[]): Promise<{
-    byTask: { runs: number; taskId: string; totalCost: number; totalTokens: number }[];
+    byTask: {
+      runs: number;
+      taskId: string;
+      totalCost: number;
+      totalInputTokens: number;
+      totalOutputTokens: number;
+      totalTokens: number;
+    }[];
     runs: number;
     totalCost: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
     totalTokens: number;
   }> {
-    if (taskIds.length === 0) return { byTask: [], runs: 0, totalCost: 0, totalTokens: 0 };
+    if (taskIds.length === 0) {
+      return {
+        byTask: [],
+        runs: 0,
+        totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+      };
+    }
 
     // Grouped once, then folded — one round trip serves both the enforced
     // total and the per-Task breakdown the cost panel lists.
@@ -445,6 +499,8 @@ export class TaskTopicModel {
         runs: count(),
         taskId: taskTopics.taskId,
         totalCost: sql<string>`coalesce(sum(${topics.totalCost}), 0)`,
+        totalInputTokens: sql<string>`coalesce(sum(${topics.totalInputTokens}), 0)`,
+        totalOutputTokens: sql<string>`coalesce(sum(${topics.totalOutputTokens}), 0)`,
         totalTokens: sql<string>`coalesce(sum(${topics.totalTokens}), 0)`,
       })
       .from(taskTopics)
@@ -456,6 +512,8 @@ export class TaskTopicModel {
       runs: row.runs,
       taskId: row.taskId,
       totalCost: Number(row.totalCost ?? 0),
+      totalInputTokens: Number(row.totalInputTokens ?? 0),
+      totalOutputTokens: Number(row.totalOutputTokens ?? 0),
       totalTokens: Number(row.totalTokens ?? 0),
     }));
 
@@ -463,6 +521,8 @@ export class TaskTopicModel {
       byTask,
       runs: byTask.reduce((sum, row) => sum + row.runs, 0),
       totalCost: byTask.reduce((sum, row) => sum + row.totalCost, 0),
+      totalInputTokens: byTask.reduce((sum, row) => sum + row.totalInputTokens, 0),
+      totalOutputTokens: byTask.reduce((sum, row) => sum + row.totalOutputTokens, 0),
       totalTokens: byTask.reduce((sum, row) => sum + row.totalTokens, 0),
     };
   }

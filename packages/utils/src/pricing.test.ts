@@ -191,6 +191,28 @@ describe('pricing utilities (new)', () => {
     });
   });
 
+  describe('TTL cache-write lookups', () => {
+    it('display the default 5-minute price instead of the alphabetically first 1-hour price', () => {
+      const pricing: Pricing = {
+        units: [
+          {
+            lookup: {
+              originalPrices: { '1h': 24, '5m': 15 },
+              prices: { '1h': 20, '5m': 12.5 },
+              pricingParams: ['ttl'],
+            },
+            name: 'textInput_cacheWrite',
+            strategy: 'lookup',
+            unit: 'millionTokens',
+          },
+        ],
+      };
+
+      expect(getWriteCacheInputUnitRate(pricing)).toBe(12.5);
+      expect(getOriginalUnitRateByName(pricing, 'textInput_cacheWrite')).toBe(15);
+    });
+  });
+
   describe('wrapper helpers', () => {
     it('return the same values as getUnitRateByName for each unit', () => {
       const pricing: Pricing = {

@@ -67,23 +67,28 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
     hasPermission.mockResolvedValue(true);
   });
 
-  it('re-authorizes the durable running operation on each request', async () => {
-    const principal = await resolveActiveHeteroOperationPrincipal({
-      capability: 'model:invoke',
-      claims,
-      db: dbWithOperation(activeOperation()),
-      operationId: 'op-1',
-    });
+  it.each(['kimi-code', 'opencode'])(
+    're-authorizes a running %s operation on each request',
+    async (agentType) => {
+      const principal = await resolveActiveHeteroOperationPrincipal({
+        capability: 'model:invoke',
+        claims,
+        db: dbWithOperation(
+          activeOperation({ metadata: { agentType, serverDefaultHeterogeneous: true } }),
+        ),
+        operationId: 'op-1',
+      });
 
-    expect(principal).toEqual({
-      agentType: 'kimi-code',
-      operationId: 'op-1',
-      userId: 'user-1',
-      workspaceId: undefined,
-    });
-    expect(activeUser).toHaveBeenCalledWith(expect.anything(), 'user-1');
-    expect(hasPermission).toHaveBeenCalledOnce();
-  });
+      expect(principal).toEqual({
+        agentType,
+        operationId: 'op-1',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
+      expect(activeUser).toHaveBeenCalledWith(expect.anything(), 'user-1');
+      expect(hasPermission).toHaveBeenCalledOnce();
+    },
+  );
 
   it('rejects a token that does not grant the requested operation', async () => {
     await expect(
@@ -163,7 +168,7 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
   it.each([
     ['missing server-default marker', { agentType: 'kimi-code' }],
     ['missing agent type', { serverDefaultHeterogeneous: true }],
-    ['unsupported agent type', { agentType: 'opencode', serverDefaultHeterogeneous: true }],
+    ['unsupported agent type', { agentType: 'amp', serverDefaultHeterogeneous: true }],
   ])('rejects model invocation with %s in durable metadata', async (_label, metadata) => {
     await expect(
       resolveActiveHeteroOperationPrincipal({

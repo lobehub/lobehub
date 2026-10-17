@@ -72,7 +72,29 @@ export interface GoalPlanDraft {
 const decompositionSchema = z.object({
   /** Readings the plan relies on that the goal did not state. */
   assumptions: z.array(z.string()).default([]),
+  /** Why one planning pass is not enough; the main Agent plans instead. */
+  escalate: z.string().nullish(),
   problemStatement: z.string().min(1),
+  /**
+   * The planner's batch claim. Present only when it judged the goal to be one
+   * repeated mould; the coordinator validates it with `spec.ts` before creating
+   * a `batch`, so a planner that over-claims still decomposes normally.
+   */
+  rollout: z
+    .object({
+      recipeOutline: z.string().optional(),
+      repeatable: z.boolean(),
+      /** Honest count of the homogeneous units in the whole goal. */
+      unitCount: z.number().int().positive(),
+      /** Roster of every homogeneous unit, probes first, in delivery order. */
+      units: z.array(z.string().min(1)).default([]),
+      /** Axes the units vary along; a probe must cover each declared value. */
+      variants: z
+        .array(z.object({ axis: z.string().min(1), values: z.array(z.string()) }))
+        .default([]),
+    })
+    .nullable()
+    .optional(),
   /**
    * What the planner could not determine and would change the deliverable.
    * Defaulted so an older answer without the field still plans.
@@ -166,14 +188,14 @@ export class GoalCriteriaGeneratorService {
 
   /**
    * Plan the opening exploration structure for a goal that has no tasks yet:
-   * the core question plus 1–5 independent directions. Returns undefined on
-   * any model/schema failure so the coordinator can fall back to a single
-   * task seeded from the raw requirement instead of stalling the goal.
+   * the core question plus 1–5 independent directions. Throws on a model or
+   * schema failure; the coordinator then falls back to a single task seeded
+   * from the raw requirement and records why, instead of stalling the goal.
    */
   async decompose(params: {
     clarifications?: GoalClarificationAnswer[];
     requirement: string;
-  }): Promise<GoalDecompositionDraft | undefined> {
+  }): Promise<GoalDecompositionDraft> {
     const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
@@ -196,7 +218,13 @@ export class GoalCriteriaGeneratorService {
     const parsed = decompositionSchema.safeParse(raw);
     if (!parsed.success) {
       log('goal decomposition did not match schema: %O', parsed.error.flatten());
-      return undefined;
+      // Thrown, not swallowed: the coordinator records why it fell back.
+      throw new Error(
+        `The planner's answer did not match the decomposition schema: ${parsed.error.issues
+          .slice(0, 3)
+          .map((issue) => `${issue.path.join('.') || '(root)'} ${issue.message}`)
+          .join('; ')}`,
+      );
     }
     return parsed.data;
   }

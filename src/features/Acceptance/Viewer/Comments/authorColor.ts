@@ -1,4 +1,4 @@
-import { cssVar, useThemeMode } from 'antd-style';
+import { cssVar, useThemeMode } from '@lobehub/ui';
 import { useCallback } from 'react';
 
 /**

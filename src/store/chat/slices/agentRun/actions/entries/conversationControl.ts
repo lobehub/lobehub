@@ -27,6 +27,7 @@ import {
   aiAgentService,
   type ResolveAgentInterventionBySourceResult,
 } from '@/services/aiAgent';
+import { shareChatService } from '@/services/shareChat';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
@@ -182,13 +183,25 @@ export class ConversationControlActionImpl {
       this.#interventionResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
     this.#interventionResolutionRequestIds.set(resolutionKey, resolutionRequestId);
 
-    const result = await aiAgentService.resolveAgentInterventionBySource({
+    const sourceParams = {
       action: params.action,
       batchId: first.batchId,
       operationId: first.operationId,
       resolutionRequestId,
       targets: sourceTargets,
-    });
+    };
+    // A share visitor answers their own share run through the share-authorized
+    // mirror; the owner-scoped endpoint would reject them.
+    const agentShareId = params.context?.agentShareId;
+    const result = agentShareId
+      ? params.context?.topicId
+        ? await shareChatService.resolveInterventionBySource(
+            agentShareId,
+            params.context.topicId,
+            sourceParams,
+          )
+        : ({ handled: false } as const)
+      : await aiAgentService.resolveAgentInterventionBySource(sourceParams);
     if (result.handled) {
       this.#interventionResolutionRequestIds.delete(resolutionKey);
       if (result.state === 'claimed' && params.context) {
@@ -233,6 +246,10 @@ export class ConversationControlActionImpl {
    * Gateway backend.
    */
   #shouldUseGatewayResume = async (context: ConversationContext): Promise<boolean> => {
+    // A share run only ever executes on the server through the share gateway;
+    // the visitor has no local runtime nor access to the owner's agent config.
+    if (context.agentShareId) return true;
+
     const agentId = context.agentId;
     if (!agentId) return false;
 
@@ -549,7 +566,9 @@ export class ConversationControlActionImpl {
   };
 
   #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus): void => {
-    if (!context.topicId) return;
+    // A share visitor's topic belongs to the creator; the owner-scoped topic
+    // write would be rejected, and the share page has no topic status UI.
+    if (!context.topicId || context.agentShareId) return;
 
     const topicScope =
       context.scope === 'group' || context.scope === 'group_agent' ? context.scope : undefined;
@@ -660,6 +679,11 @@ export class ConversationControlActionImpl {
     branchIndex: number,
     context?: OptimisticUpdateContext,
   ): Promise<void> => {
+    const store = this.#get();
+    const messageContext = store.internal_getConversationContext(context);
+    // A branch change only changes the displayed reply; it does not authorize
+    // recovery of an old failure when its card mounts.
+    store.revokeHeteroAutoRetry(messageContext);
     await this.#get().optimisticUpdateMessageMetadata(
       messageId,
       { activeBranchIndex: branchIndex },
@@ -806,13 +830,18 @@ export class ConversationControlActionImpl {
       // the running marker intact and `#shouldUseGatewayResume` still flags
       // Gateway mode on retry.
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+      // A share run belongs to the agent's owner, so a server-side `remember`
+      // would write the OWNER's allow list (the share mirror rejects it). A
+      // visitor's "don't ask again" approves once and lands in their own allow
+      // list instead, which their share runs send as `userInterventionConfig`.
+      const remembersOnServer = !!options?.rememberToolKey && !effectiveContext.agentShareId;
       try {
         const sourceResolution = await this.tryResolveAgentInterventionBySource({
           action: {
             ...(options?.editedArguments && {
               edits: { [toolMessageId]: options.editedArguments },
             }),
-            scope: options?.rememberToolKey ? 'remember' : 'once',
+            scope: remembersOnServer ? 'remember' : 'once',
             type: 'approve_tool',
           },
           context: effectiveContext,
@@ -853,9 +882,9 @@ export class ConversationControlActionImpl {
               toolCallId,
             },
           });
-          if (options?.rememberToolKey) {
-            await useUserStore.getState().addToolToAllowList(options.rememberToolKey);
-          }
+        }
+        if (options?.rememberToolKey && !(sourceResolution.handled && remembersOnServer)) {
+          await useUserStore.getState().addToolToAllowList(options.rememberToolKey);
         }
         this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);
@@ -1010,12 +1039,10 @@ export class ConversationControlActionImpl {
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (!sourceResolution.handled) {
-        await aiAgentService.stopPendingApproval({
-          batchId,
-          operationId,
-          toolMessageIds: addressable,
-          topicId,
-        });
+        const stopParams = { batchId, operationId, toolMessageIds: addressable, topicId };
+        await (effectiveContext.agentShareId
+          ? shareChatService.stopPendingApproval(effectiveContext.agentShareId, stopParams)
+          : aiAgentService.stopPendingApproval(stopParams));
       }
       // Settle the cards locally. A group member's stop ends no stream this
       // client still listens on, so no refetch would ever land the aborted rows
@@ -1937,20 +1964,29 @@ export class ConversationControlActionImpl {
             : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
         );
       } else {
+        // The producer long-polls the server operation's stream. A gateway run's
+        // local op id is client-only, so an answer published under it never
+        // reaches the producer.
+        const remoteOperationId = operation?.metadata?.serverOperationId ?? operationId;
         const resolutionIntent = JSON.stringify(
           canonicalizeResolutionPayload({ actionType, payload: payload ?? {} }),
         );
-        const resolutionKey = `${operationId}:${toolCallId}:${resolutionIntent}`;
+        const resolutionKey = `${remoteOperationId}:${toolCallId}:${resolutionIntent}`;
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, resolutionRequestId, result: payload ?? {}, toolCallId }
+            ? {
+                operationId: remoteOperationId,
+                resolutionRequestId,
+                result: payload ?? {},
+                toolCallId,
+              }
             : {
                 cancelReason: 'user_cancelled',
                 cancelled: true,
-                operationId,
+                operationId: remoteOperationId,
                 resolutionRequestId,
                 toolCallId,
               },

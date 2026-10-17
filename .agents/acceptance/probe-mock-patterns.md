@@ -108,6 +108,8 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P89 | web           | any             | probe          | A layout before/after on one live page: swap only the changed files and let HMR settle; `getComputedStyle().bottom` is a used value, read `el.style.bottom`  |
 | P82 | web           | any             | drive          | Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups               |
 | P86 | electron, cli | any             | env, auth      | A session spawned by the desktop hetero runtime inherits `LOBEHUB_JWT` (production) and `ELECTRON_RUN_AS_NODE=1` — strip both before local Electron/CLI work |
+| P90 | any           | gateway         | env, fixture   | Closed loop through a local device-gateway with desktop + `lh connect` on ONE device: gateway worktree + `.dev.vars`, `--device-id`, Responses stub          |
+| P91 | any           | any             | env, probe     | A server-side before/after needs a dev-server restart after the file swap; never install `apps/desktop` / `apps/cli` deps while the server runs              |
 
 ## Choose the least invasive mechanism
 
@@ -2696,3 +2698,78 @@ matches nothing and the overlay reads as absent. Match on the inline style
 For "does A cover B", assert the rectangles rather than eyeballing the capture:
 `!(a.bottom <= b.top || b.bottom <= a.top)`. A banner whose top sliver is still
 visible looks fine in a thumbnail and is still broken.
+
+#### P90 · A local device-gateway closed loop, with the desktop app and `lh connect` on one device
+
+**applies-to:** surface=any · runtime=gateway · phase=env, fixture
+
+**Situation:** verifying anything the server sends to a device through the device
+gateway — tool calls, system info, RPC, message API — including how the gateway
+picks a connection when one device holds several clients (`desktop` + `cli`).
+
+**Doesn't work:**
+
+- The production gateway: it verifies the device JWT against the production JWKS and
+  needs the production service token.
+- `local-device-gateway-setup.sh` from a worktree: it writes `.dev.vars` into the
+  sibling `../device-gateway`, which does not exist next to `lobehub-worktrees/`.
+- A plain `lh connect` beside the dev desktop: the CLI derives its `deviceId` from the
+  machine id, the dev Electron instance does not, so they show up as two devices.
+- Web without the local agent-gateway: a normal agent then runs in the client runtime,
+  and nothing reaches the server-side device runtimes (P03 — no `agent_operations` row).
+- The dev Electron golden profile: it is `storageMode: cloud`, and its first launch
+  auto-opens a cloud OIDC page in the default browser — approving it signs the instance
+  into the production account.
+
+**Works:**
+
+1. **Gateways.** Run the device-gateway from its own worktree with
+   `wrangler dev --port <p>`, and the agent-gateway the same way (references/agent-gateway.md).
+   Write each `.dev.vars` by hand: `JWKS_PUBLIC_KEY` is the run's
+   `.records/env/agent-testing-jwks.json` with `d,p,q,dp,dq,qi` stripped, and
+   `SERVICE_TOKEN` is a fresh token. device-gateway does not ignore `.dev.vars`, so add
+   it to `info/exclude` before anything is committed.
+2. **Server env.** Export `DEVICE_GATEWAY_URL` / `DEVICE_GATEWAY_SERVICE_TOKEN` and
+   `AGENT_GATEWAY_URL` / `AGENT_GATEWAY_SERVICE_TOKEN` / `ENABLE_AGENT_GATEWAY=1` before
+   `init-dev-env.sh dev`.
+3. **Desktop.** Start `electron-dev.sh start <id>` with `DEVICE_GATEWAY_URL` set, and with
+   `LOBE_LOGIN_STATE_DIR` / `LOBE_GOLDEN_PROFILE` pointed at empty directories. The user
+   signs in once through the self-host option (`http://localhost:3010`, the seeded
+   account) and closes any lobehub.com page that opens. Confirm
+   `lobehub-settings.json` reads `selfHost` before trusting the instance.
+4. **CLI on the same device.** From `apps/cli`, with the seeded CLI env
+   (`.records/env/agent-testing-cli.env`), run
+   `bun src/index.ts connect --gateway http://localhost:<p> --device-id <desktop deviceId>`.
+   Check `POST /api/device/devices` lists both channels (`cli`, `desktop-dev`).
+5. **Drive.** Bind an agent to the device (`agencyConfig.executionTarget: device`,
+   `boundDeviceId`), set `tool.humanIntervention.approvalMode` to `auto-run`, and point
+   openai at a Responses-API stub that emits `lobe-activator____activateTools` and then
+   the tool under test (P41 explains the SSE shape). The `lh connect -v` log
+   (`Received system_info_request`, `[TOOL]`) shows which connection served each call.
+
+`holds-while: devices pick a channel label per client (desktop / desktop-dev / cli); lh connect accepts --device-id; the gateway authenticates the device JWT with JWKS_PUBLIC_KEY.`
+
+#### P91 · A server-side before/after by file swap needs a dev-server restart
+
+**applies-to:** surface=any · runtime=any · phase=env, probe
+
+**Situation:** proving a server change against canary on the same running stack by
+swapping the changed files (`git show origin/canary:<file> > <file>`).
+
+**Doesn't work:**
+
+- Relying on HMR after the swap. Server modules reload per request chain, so one turn
+  can run the old version of one module and the new version of another. Observed: an
+  op-start system-info read still carried the fix's `clientKinds` while the swapped-back
+  `auv.ts` did not, which produced a half-fixed run that proves nothing.
+- Installing `apps/desktop` or `apps/cli` deps while the dev server runs. Every
+  `/trpc/lambda/*` request then fails 500 with `module factory is not available`
+  (es-toolkit via `packages/utils/src/merge.ts`), and the OIDC sign-in page shows
+  `HTTP ERROR 500`.
+
+**Works:** install every standalone app first, then start the server. For each side of an
+A/B, swap the files with a bash loop (zsh does not word-split `$FILES`), restart with
+`init-dev-env.sh stop-dev` and then `dev`, wait for `config.getGlobalConfig` to return
+200, and only then drive the case. Restore from a backup and check it with `cmp`.
+
+`holds-while: init-dev-env.sh dev runs next dev with Turbopack; apps/desktop and apps/cli keep standalone node_modules.`

@@ -25,6 +25,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
   'comments',
+  'fork',
   'branching',
   'collapse',
   'divider',

@@ -22,7 +22,13 @@ const SETTLED_CALL_MEMORY = 200;
 
 export interface RelayRuntime {
   chat: (payload: any, options: { signal?: AbortSignal }) => Promise<Response>;
+  generateObject?: (payload: any, options: { signal?: AbortSignal }) => Promise<unknown>;
+  models?: () => Promise<unknown>;
+  pullModel?: (params: any, options: { signal?: AbortSignal }) => Promise<Response | undefined>;
 }
+
+/** A return value goes up as JSON text in parts of this size, well under the batch cap. */
+const RESULT_PART_CHARS = 32 * 1024;
 
 export interface LlmRelayExecutorDeps {
   clientId?: () => string;
@@ -38,6 +44,12 @@ export interface LlmRelayExecutorDeps {
 
 export interface ExecuteRelayCallOptions {
   /**
+   * The run whose gateway channel delivered the call, when it is not the
+   * call's own: a sub-agent's call rides its parent's channel. That run ending
+   * ends the call too ({@link LlmRelayExecutor.cancelOperation}).
+   */
+  channelOperationId?: string;
+  /**
    * Each protocol chunk this client produces for the call, as soon as it is
    * produced — for rendering the reply locally before the server's echo.
    * Only called once this client owns the call.
@@ -48,6 +60,7 @@ export interface ExecuteRelayCallOptions {
 type StopReason = LlmCancelData['reason'] | 'deadline' | 'operation_ended' | RelayUploadRejection;
 
 interface ActiveCall {
+  channelOperationId?: string;
   controller: AbortController;
   operationId: string;
   owned: boolean;
@@ -71,6 +84,17 @@ const toRelayError = (error: unknown, provider: string) => {
   const message = error instanceof Error ? error.message : String(error);
   return { error: { message }, errorType: 'ProviderBizError', message, provider };
 };
+
+/**
+ * `promise`, or an abort error once `signal` aborts — for provider calls that
+ * take no signal (`models`) and may never answer.
+ */
+const untilAborted = <T>(promise: Promise<T>, signal: AbortSignal) =>
+  new Promise<T>((resolve, reject) => {
+    if (signal.aborted) return reject(abortError());
+    signal.addEventListener('abort', () => reject(abortError()), { once: true });
+    promise.then(resolve, reject);
+  });
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -124,7 +148,8 @@ export class LlmRelayExecutor {
   }
 
   /**
-   * The run ended (stopped, failed, finished): drop its in-flight attempts.
+   * The run ended (stopped, failed, finished): drop its in-flight attempts,
+   * and those of sub-agents relayed on its channel.
    * Its `llm_cancel` can trail the terminal event, which closes the session
    * that would deliver it. Nothing more is uploaded — the server has already
    * settled the step, and a late `aborted` batch must not look like a lost
@@ -132,7 +157,8 @@ export class LlmRelayExecutor {
    */
   cancelOperation(operationId: string) {
     for (const call of this.active.values()) {
-      if (call.operationId === operationId) call.stop('operation_ended');
+      if (call.operationId === operationId || call.channelOperationId === operationId)
+        call.stop('operation_ended');
     }
   }
 
@@ -146,6 +172,7 @@ export class LlmRelayExecutor {
     let stopReason: StopReason | undefined;
 
     const call: ActiveCall = {
+      channelOperationId: options.channelOperationId,
       controller,
       operationId: data.operationId,
       owned: false,
@@ -229,6 +256,9 @@ export class LlmRelayExecutor {
         provider: data.provider,
         runtimeProvider: data.runtimeProvider,
       });
+      const method = data.method ?? 'chat';
+      if (method !== 'chat')
+        return await this.runMethod(method, runtime, payload, uploader, signal);
       response = await runtime.chat(payload, { signal });
     } catch (error) {
       if (signal.aborted) throw error;
@@ -254,6 +284,51 @@ export class LlmRelayExecutor {
     }
 
     if (signal.aborted) throw abortError();
+    return { reason: 'done' };
+  }
+
+  /**
+   * A non-chat call (one-shot relay): `generateObject` / `models` upload their
+   * return value as JSON parts, `pullModel` the provider's progress text.
+   */
+  private async runMethod(
+    method: Exclude<NonNullable<LlmExecuteData['method']>, 'chat'>,
+    runtime: RelayRuntime,
+    payload: Record<string, unknown>,
+    uploader: RelayBatchUploader,
+    signal: AbortSignal,
+  ): Promise<NonNullable<LlmRelayBatch['final']>> {
+    // Cancelled while the runtime was created: never start a call that may not
+    // see the abort (a download's listener misses an already-fired event).
+    if (signal.aborted) throw abortError();
+
+    if (method === 'pullModel') {
+      const response = await runtime.pullModel?.(payload, { signal });
+      if (!response) throw new Error('This provider cannot download models');
+      if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+      if (response.body) {
+        const decoder = new TextDecoder();
+        const reader = response.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          uploader.push({ data: decoder.decode(value, { stream: true }), type: 'progress' });
+        }
+      }
+      if (signal.aborted) throw abortError();
+      return { reason: 'done' };
+    }
+
+    const run = method === 'models' ? runtime.models : runtime.generateObject;
+    if (!run) throw new Error(`This provider does not support ${method}`);
+    const result = await untilAborted(run.call(runtime, payload, { signal }), signal);
+    if (signal.aborted) throw abortError();
+
+    // No parts reads as `undefined` on the server, as the direct runtime returns it.
+    const json = result === undefined ? '' : JSON.stringify(result);
+    for (let i = 0; i < json.length; i += RESULT_PART_CHARS) {
+      uploader.push({ data: json.slice(i, i + RESULT_PART_CHARS), type: 'result_part' });
+    }
     return { reason: 'done' };
   }
 

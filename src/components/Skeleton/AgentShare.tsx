@@ -1,18 +1,15 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
+import AgentProfileNavSkeleton from './AgentProfileNav';
 import SkeletonBar from './Bar';
 
 const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
   notice: css`
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
@@ -22,28 +19,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-end: 1px solid ${cssVar.colorBorder};
   `,
 }));
-
-/** Breadcrumb on the left, the profile tab switcher centred — same as `NavHeader` on the page. */
-const NavigationSkeleton = () => (
-  <Flexbox
-    horizontal
-    align={'center'}
-    className={styles.header}
-    flex={'none'}
-    height={44}
-    paddingInline={16}
-    style={{ position: 'relative' }}
-  >
-    <Flexbox horizontal align={'center'} gap={8}>
-      <SkeletonBar height={20} radius={'50%'} width={20} />
-      <SkeletonBar height={14} width={120} />
-    </Flexbox>
-    {/* Mirrors `AGENT_PROFILE_TABS_CENTER_STYLE`: centred on the header midpoint. */}
-    <Flexbox style={{ left: '50%', position: 'absolute', transform: 'translateX(-50%)' }}>
-      <SkeletonBar height={28} radius={14} width={280} />
-    </Flexbox>
-  </Flexbox>
-);
 
 const SettingRowSkeleton = ({ control, index }: { control: 'switch' | 'input'; index: number }) => (
   <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
@@ -123,7 +98,7 @@ export const AgentShareSettingsBodySkeleton = () => (
 /** Route-level skeleton for `/agent/:aid/share` (see `agentShareRouteMeta`). */
 const AgentShareSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    {chrome !== 'body' && <NavigationSkeleton />}
+    {chrome !== 'body' && <AgentProfileNavSkeleton />}
     <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
       <WideScreenContainer>
         <AgentShareSettingsBodySkeleton />

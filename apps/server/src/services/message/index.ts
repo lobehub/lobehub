@@ -8,6 +8,7 @@ import {
   type QueryMessageParams,
   type UIChatMessage,
   type UpdateMessageParams,
+  type WorkAccessScope,
 } from '@lobechat/types';
 import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
@@ -188,11 +189,14 @@ export class MessageService {
        * authorized may opt in.
        */
       allowShareVisitor?: boolean;
+      /** Agent Share boundary for the Work summaries (see `MessageModel.query`). */
+      workAccessScope?: WorkAccessScope;
     },
   ): Promise<UIChatMessage[]> {
     return this.messageModel.query(params, {
       ...this.getQueryOptions(),
       ...(options?.allowShareVisitor && { allowShareVisitor: true }),
+      ...(options?.workAccessScope && { workAccessScope: options.workAccessScope }),
     });
   }
 

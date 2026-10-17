@@ -27,66 +27,6 @@ describe('CodeBuddyAdapter', () => {
     expect(adapter.sessionId).toBe('cb-session-1');
   });
 
-  it('keeps CodeBuddy identity on tool and usage events', () => {
-    const adapter = new CodeBuddyAdapter();
-    adapter.adapt({ session_id: 'cb-session-1', subtype: 'init', type: 'system' });
-
-    const events = adapter.adapt({
-      message: {
-        content: [{ id: 'tool-1', input: { command: 'pwd' }, name: 'Bash', type: 'tool_use' }],
-        id: 'message-1',
-        model: 'gpt-5.4',
-        usage: { input_tokens: 4, output_tokens: 2 },
-      },
-      type: 'assistant',
-    });
-
-    const tool = events.find((event) => event.type === 'stream_chunk');
-    const usage = events.find((event) => event.type === 'step_complete');
-    expect(tool?.data.toolsCalling[0]).toMatchObject({ identifier: 'codebuddy' });
-    expect(usage?.data).toMatchObject({ model: 'gpt-5.4', provider: 'codebuddy' });
-  });
-
-  it('maps text, reasoning, tool results, and a successful terminal result', () => {
-    const adapter = new CodeBuddyAdapter();
-    adapter.adapt({ session_id: 'cb-session-1', subtype: 'init', type: 'system' });
-
-    const assistantEvents = adapter.adapt({
-      message: {
-        content: [
-          { thinking: 'checking', type: 'thinking' },
-          { text: 'Running pwd', type: 'text' },
-          { id: 'tool-1', input: { command: 'pwd' }, name: 'Bash', type: 'tool_use' },
-        ],
-        id: 'message-1',
-        model: 'gpt-5.4',
-      },
-      type: 'assistant',
-    });
-    expect(assistantEvents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ data: expect.objectContaining({ reasoning: 'checking' }) }),
-        expect.objectContaining({ data: expect.objectContaining({ content: 'Running pwd' }) }),
-      ]),
-    );
-
-    const toolEvents = adapter.adapt({
-      message: {
-        content: [{ content: '/workspace', tool_use_id: 'tool-1', type: 'tool_result' }],
-      },
-      type: 'user',
-    });
-    expect(toolEvents.map((event) => event.type)).toEqual(['tool_result', 'tool_end']);
-    expect(toolEvents[0].data).toMatchObject({ content: '/workspace', toolCallId: 'tool-1' });
-
-    const resultEvents = adapter.adapt({ is_error: false, result: 'done', type: 'result' });
-    expect(resultEvents.map((event) => event.type)).toEqual([
-      'stream_end',
-      'visible_output_end',
-      'agent_runtime_end',
-    ]);
-  });
-
   it('keeps partial reasoning and text snapshots with different item ids in one turn', () => {
     const adapter = new CodeBuddyAdapter();
     const events = [

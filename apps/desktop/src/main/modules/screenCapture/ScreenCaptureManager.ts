@@ -353,6 +353,7 @@ export class ScreenCaptureManager {
     }
 
     logger.info(`Opening screen capture permission settings; status=${status}`);
+    if (await this.app.permissionGuide.open('screen')) return;
     await requestScreenCaptureAccess();
   }
 

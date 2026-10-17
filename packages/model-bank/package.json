@@ -37,7 +37,7 @@
     "./giteeai": "./src/aiModels/giteeai.ts",
     "./github": "./src/aiModels/github.ts",
     "./githubCopilot": "./src/aiModels/githubCopilot.ts",
-    "./google": "./src/aiModels/google.ts",
+    "./google": "./src/aiModels/google/index.ts",
     "./glmCodingPlan": "./src/aiModels/glmCodingPlan.ts",
     "./groq": "./src/aiModels/groq.ts",
     "./higress": "./src/aiModels/higress.ts",

@@ -1,0 +1,173 @@
+import type { DeviceListItem } from '@lobechat/types';
+import { Block, Button, cssVar, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { FolderIcon, MessageSquarePlusIcon, PlusIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
+
+import AsyncError from '@/components/AsyncError';
+import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
+import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
+import {
+  useProjectDirectories,
+  useProjectDirectoryStore,
+  useProjectEnvironments,
+} from '@/store/projectWorkingDirectory';
+
+import { openAddDirectoryModal } from './AddDirectoryModal';
+import { openBindDirectoryModal } from './BindDirectoryModal';
+import { openProjectTopicModal } from './StartDirectoryModal';
+
+/**
+ * A device row restored from the persisted list (`onlineUnknown`) has not been
+ * confirmed yet, so its presence is left unsaid until `listDevices` answers.
+ */
+const DevicePresence = ({ device }: { device?: DeviceListItem }) => {
+  const { t } = useTranslation('project');
+  if (device?.onlineUnknown) return null;
+  return (
+    <Text fontSize={12} type="secondary">
+      {t(device?.online ? 'settings.deviceOnline' : 'settings.deviceOffline')}
+    </Text>
+  );
+};
+
+export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
+  const { t } = useTranslation('project');
+  const navigate = useWorkspaceAwareNavigate();
+  const [params, setParams] = useSearchParams();
+  const environmentId = params.get('environment') ?? '';
+  useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  const project = useCurrentProjectDetail(projectId);
+  const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const environments = useProjectEnvironments(projectId);
+  const directories = useProjectDirectories(projectId);
+  const deviceRequest = useDeviceStore((s) => s.useFetchDevices)(true);
+  const devices = useDeviceStore(deviceSelectors.deviceList);
+  const isDeviceListLoaded = useDeviceStore(deviceSelectors.isDeviceListLoaded);
+  const items = directories.filter((d) => !environmentId || d.environmentId === environmentId);
+  const error = environmentsRequest.error || directoriesRequest.error || deviceRequest.error;
+  return (
+    <Flexbox gap={20}>
+      <Flexbox gap={6}>
+        <Text fontSize={16} weight={600}>
+          {t('settings.workLocations')}
+        </Text>
+        <Text type="secondary">{t('settings.directoryDescription')}</Text>
+      </Flexbox>
+      <Flexbox horizontal gap={12} justify="space-between">
+        <Select
+          aria-label={t('directories.environment')}
+          value={environmentId || '__all__'}
+          options={[
+            { label: t('settings.allEnvironments'), value: '__all__' },
+            ...environments.map((env) => ({ label: env.name, value: env.id })),
+          ]}
+          onChange={(id) => setParams(id && id !== '__all__' ? { environment: id } : {})}
+        />
+        <Button
+          icon={PlusIcon}
+          type="primary"
+          onClick={() =>
+            environments.length
+              ? openAddDirectoryModal(projectId, environmentId || undefined)
+              : navigate(`/project/${projectId}/settings/environments`)
+          }
+        >
+          {t('settings.addDirectory')}
+        </Button>
+      </Flexbox>
+      {error ? (
+        <AsyncError
+          error={error}
+          onRetry={() =>
+            Promise.all([
+              environmentsRequest.revalidate(),
+              directoriesRequest.revalidate(),
+              deviceRequest.revalidate(),
+            ])
+          }
+        />
+      ) : null}
+      {error ? null : !directoriesRequest.hasData ||
+        !environmentsRequest.hasData ||
+        !isDeviceListLoaded ? (
+        <Text>{t('loading', { ns: 'common' })}</Text>
+      ) : !items.length ? (
+        <Flexbox gap={12} paddingBlock={24}>
+          <Text type="secondary">{t('settings.noDirectories')}</Text>
+          {!environments.length && (
+            <Button onClick={() => navigate(`/project/${projectId}/settings/environments`)}>
+              {t('settings.addEnvironment')}
+            </Button>
+          )}
+        </Flexbox>
+      ) : (
+        <Block padding={0} variant="outlined">
+          {items.map((directory, index) => (
+            <Flexbox
+              key={directory.id}
+              padding={16}
+              style={index ? { borderTop: `1px solid ${cssVar.colorBorderSecondary}` } : undefined}
+            >
+              <Flexbox horizontal align="center" gap={16} justify="space-between">
+                <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
+                  <Flexbox horizontal align="center" gap={8}>
+                    <Icon icon={FolderIcon} size={18} />
+                    <Text weight={500}>
+                      {directory.path.split(/[\\/]/).findLast(Boolean) || directory.name}
+                    </Text>
+                  </Flexbox>
+                  <Text fontSize={12} style={{ overflowWrap: 'anywhere' }} type="secondary">
+                    {directory.path}
+                  </Text>
+                  <Flexbox horizontal align="center" gap={8} wrap="wrap">
+                    {getDeviceIcon(
+                      devices.find((d) => d.deviceId === directory.deviceId)?.platform,
+                      14,
+                    )}
+                    <Text fontSize={12}>{directory.deviceName || directory.deviceId}</Text>
+                    <DevicePresence
+                      device={devices.find((d) => d.deviceId === directory.deviceId)}
+                    />
+                    <Text fontSize={12} type="secondary">
+                      · {directory.environmentName || t('directories.noEnvironment')}
+                    </Text>
+                  </Flexbox>
+                </Flexbox>
+                <Button
+                  disabled={Boolean(directory.instanceId) && !project?.project.coordinatorAgentId}
+                  icon={MessageSquarePlusIcon}
+                  size="small"
+                  onClick={() =>
+                    !directory.instanceId
+                      ? openBindDirectoryModal({
+                          projectId,
+                          deviceId: directory.deviceId,
+                          path: directory.path,
+                        })
+                      : openProjectTopicModal({
+                          projectId,
+                          coordinatorAgentId: project!.project.coordinatorAgentId,
+                          directories,
+                          initialDirectoryId: directory.id,
+                          title: t('directories.start'),
+                        })
+                  }
+                >
+                  {t(
+                    directory.instanceId
+                      ? 'settings.startDirectoryConversation'
+                      : 'directories.bind',
+                  )}
+                </Button>
+              </Flexbox>
+            </Flexbox>
+          ))}
+        </Block>
+      )}
+    </Flexbox>
+  );
+}

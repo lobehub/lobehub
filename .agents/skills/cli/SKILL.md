@@ -354,6 +354,7 @@ cd apps/cli && bun run cli:link
 See `references/` for each command group:
 
 - **Agent**: `references/agent.md` (CRUD, run, status)
+- **Goals**: `references/goal.md` (planning turn, state, events, lifecycle, decisions)
 - **Content Generation**: `references/generate.md` (text, image, video, tts, asr, download)
 - **Knowledge & Files**: `references/knowledge.md` (kb, file, doc)
 - **Conversation**: `references/conversation.md` (topic, message)

@@ -16,7 +16,10 @@ export function getServerHooks(): AgentHook[] {
   };
   return env.AGENT_HOOK_WEBHOOK_EVENTS!.map((type): AgentHook => {
     const id = `${SERVER_HOOK_PREFIX}${type}`;
-    if (type === 'beforeToolCall' && env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolCall') {
+    if (
+      (type === 'beforeToolCall' || type === 'afterToolCall') &&
+      env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolCall'
+    ) {
       return {
         id,
         type,

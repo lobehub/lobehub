@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Skeleton } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import React, { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

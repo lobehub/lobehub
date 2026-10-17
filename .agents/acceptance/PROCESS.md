@@ -233,7 +233,11 @@ bash "$GUARD" claim "$!"                               # the dev server this run
 
 `stop-owned` stops only what this run tagged or claimed, so a sibling run's browser
 and a dev server the user started are never in its kill set. `bash "$GUARD" check --json` gives one verdict on the same thresholds the watcher uses (0 green, 10
-yellow, 20 red). Thresholds and groups are in `PROJECT.md` §5.
+yellow, 20 red, 2 unknown/error). On macOS the watcher requires three consecutive
+red samples before stopping processes; inspect `events.jsonl` to distinguish
+pending confirmation from actual stops. An unknown pressure reading is not healthy
+and must be resolved, but never triggers termination. Platform policy and groups
+are in `PROJECT.md` §5.
 
 Generic capture helpers come from the installed skill, not the project layer:
 

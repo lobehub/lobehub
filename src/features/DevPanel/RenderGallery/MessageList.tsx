@@ -2,8 +2,7 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import {
@@ -170,7 +169,7 @@ const MessageList = memo<MessageListProps>(({ apis, mode }) => {
   }
 
   return (
-    <ConversationProvider hasInitMessages skipFetch context={context} messages={messages}>
+    <ConversationProvider context={context} messages={messages}>
       <InnerList />
     </ConversationProvider>
   );

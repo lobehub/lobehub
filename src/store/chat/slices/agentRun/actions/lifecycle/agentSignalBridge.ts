@@ -4,6 +4,8 @@ import type {
 } from '@lobechat/agent-signal/source';
 
 import { agentSignalService } from '@/services/agentSignal';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { getUserStoreState } from '@/store/user/store';
 
 type ClientAgentSignalSourceType = Extract<AgentSignalSourceType, `client.${string}`>;
 
@@ -22,15 +24,14 @@ const createSourceId = (sourceType: string, timestamp: number) => {
   return `${sourceType}:${timestamp}:${Math.random().toString(36).slice(2, 10)}`;
 };
 
+/**
+ * Skips the round trip once the user state says Labs → Self-evolving is off. Before the user
+ * state loads, the event is sent and the server gate decides.
+ */
 const shouldEmitClientAgentSignalSourceEvent = () => {
-  const serverConfigStore =
-    typeof window === 'undefined' ? undefined : window.global_serverConfigStore;
-  const serverConfigState = serverConfigStore?.getState();
+  const userState = getUserStoreState();
 
-  if (
-    serverConfigState?.serverConfigInit &&
-    serverConfigState.featureFlags.enableAgentSelfIteration !== true
-  ) {
+  if (userState?.isUserStateInit && !labPreferSelectors.enableSelfLearning(userState)) {
     return false;
   }
 

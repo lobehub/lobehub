@@ -29,7 +29,7 @@ vi.mock('@/store/file', () => ({
 
 const { messageSuccess } = vi.hoisted(() => ({ messageSuccess: vi.fn() }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { success: messageSuccess },
 }));

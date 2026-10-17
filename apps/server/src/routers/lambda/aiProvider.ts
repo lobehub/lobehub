@@ -21,8 +21,8 @@ import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 import {
@@ -94,12 +94,11 @@ export const aiProviderRouter = router({
       }
 
       try {
-        const modelRuntime = await initModelRuntimeFromDB(
-          ctx.serverDB,
-          ctx.userId,
-          input.id,
-          ctx.workspaceId ?? undefined,
-        );
+        // A device-only provider is checked through the requesting tab
+        // (one-shot relay); from the CLI it has no tab and reports so.
+        const modelRuntime = await initModelRuntimeForRequest(ctx.serverDB, ctx.userId, input.id, {
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
 
         const response = await modelRuntime.chat(
           {
@@ -113,8 +112,14 @@ export const aiProviderRouter = router({
           },
         );
 
-        // If we get a response without error, connectivity is ok
+        // If we get a response without error, connectivity is ok. A relayed
+        // call always streams: the device's provider error arrives as an
+        // `error` event in the body rather than as the status.
         if (response.ok) {
+          const body = await response.text();
+          const relayedError = /^event: error\ndata: (.*)$/m.exec(body);
+          if (relayedError) return { error: relayedError[1], model, ok: false };
+
           return { model, ok: true };
         }
 

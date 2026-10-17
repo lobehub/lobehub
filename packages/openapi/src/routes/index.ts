@@ -6,6 +6,7 @@ import ChatRoutes from './chat.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
+import ImRoutes from './im.route';
 import KnowledgeBasesRoutes from './knowledge-bases.route';
 import McpServersRoutes from './mcp-servers.route';
 import MemoriesRoutes from './memories.route';
@@ -17,6 +18,7 @@ import OpenAIRoutes from './openai.route';
 import PermissionsRoutes from './permissions.route';
 import { PluginsRoutes } from './plugins.route';
 import ProvidersRoutes from './providers.route';
+import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
 import AgentSignalsRoutes from './signals.route';
@@ -35,6 +37,7 @@ export default {
   'plugins': PluginsRoutes,
   'files': FileRoutes,
   'goals': GoalsRoutes,
+  'im': ImRoutes,
   'knowledge-bases': KnowledgeBasesRoutes,
   'mcp-servers': McpServersRoutes,
   'memories': MemoriesRoutes,
@@ -45,6 +48,7 @@ export default {
   'openai': OpenAIRoutes,
   'permissions': PermissionsRoutes,
   'providers': ProvidersRoutes,
+  'push-tokens': PushTokenRoutes,
   'responses': ResponsesRoutes,
   'roles': RolesRoutes,
   'signals': AgentSignalsRoutes,

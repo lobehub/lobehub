@@ -1,5 +1,4 @@
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { MailCheck, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

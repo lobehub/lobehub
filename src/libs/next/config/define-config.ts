@@ -143,7 +143,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/static/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -278,6 +278,10 @@ export function defineConfig(config: CustomNextConfig) {
       outputFileTracingIncludes: config.outputFileTracingIncludes,
     }),
     reactStrictMode: true,
+    // Old clients keep their image URLs; App routes take precedence over this fallback.
+    rewrites: async () => ({
+      fallback: [{ destination: '/static/app-images/:path*', source: '/app-images/:path*' }],
+    }),
     redirects: async () => [
       // Sitemap generation lives on the landing site; keep legacy app sitemap URLs crawlable.
       {

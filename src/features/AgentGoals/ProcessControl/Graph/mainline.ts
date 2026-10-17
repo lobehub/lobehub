@@ -1,6 +1,6 @@
 import type { GoalGraphNode } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
 

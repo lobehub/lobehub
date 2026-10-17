@@ -2,8 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Icon } from '@lobehub/ui';
 import {
   BadgeCheckIcon,
   BotIcon,
@@ -19,8 +18,12 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import {
+  agentDocumentActions,
+  agentDocumentSelectors,
+  useAgentDocumentStore,
+} from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
 
 import { useEntityLinkHostDismiss, useEntityLinkPortal } from '../host';
@@ -125,9 +128,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
-  const { data: agentDocuments, mutate: resolveAgentDocuments } = useClientDataSWR(
-    shouldResolveAgentDocument ? agentDocumentSWRKeys.documentsList(linkedAgentId) : null,
-    () => agentDocumentService.listDocuments({ agentId: linkedAgentId! }),
+  // Shares the agent's document-list replica with the documents panel, so the
+  // row id is usually known (or persisted) before the click; a click that beats
+  // the first sync resolves the list on demand.
+  const resolvedAgentId = shouldResolveAgentDocument ? linkedAgentId : undefined;
+  agentDocumentActions.useFetchDocumentList(resolvedAgentId);
+  const agentDocuments = useAgentDocumentStore(
+    agentDocumentSelectors.getDocumentList(resolvedAgentId),
   );
 
   const handleClick = useCallback(
@@ -215,7 +222,8 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         }
         case 'document': {
           const documents = shouldResolveAgentDocument
-            ? (agentDocuments ?? (await resolveAgentDocuments().catch(() => undefined)))
+            ? (agentDocuments ??
+              (await agentDocumentActions.fetchDocumentList(linkedAgentId!).catch(() => undefined)))
             : undefined;
           const agentDocumentId = documents?.find(
             (document) => document.documentId === reference.documentId,
@@ -251,7 +259,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       openVerifyReport,
       portalAvailable,
       reference,
-      resolveAgentDocuments,
+      linkedAgentId,
       shouldResolveAgentDocument,
     ],
   );

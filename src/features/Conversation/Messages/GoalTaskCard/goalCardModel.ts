@@ -84,6 +84,8 @@ const resolveStage = (
     case 'verifying': {
       return 'verifying';
     }
+    // A draft is still being arranged, whatever tasks it already holds.
+    case 'draft':
     case 'planning': {
       return 'planning';
     }

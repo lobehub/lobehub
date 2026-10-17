@@ -1,8 +1,8 @@
 import type { CrawlPluginState, CrawlResult } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 import { CopyButton, Flexbox, Highlighter, Icon, Markdown, stopPropagation } from '@lobehub/ui';
-import { Alert, Descriptions, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Descriptions, Segmented, Skeleton, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

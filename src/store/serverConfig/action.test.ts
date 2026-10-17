@@ -79,6 +79,7 @@ describe('ServerConfigAction', () => {
       expect(state.serverConfig).toBeDefined();
       expect(state.featureFlags).toBeDefined();
       expect(state.canAccessDevDock).toBe(true);
+      expect(state.serverConfigLoaded).toBe(true);
     });
 
     it('should mark server config as initialized when the fetch fails', () => {
@@ -90,6 +91,9 @@ describe('ServerConfigAction', () => {
       store.getState().useInitServerConfig();
 
       expect(store.getState().serverConfigInit).toBe(true);
+      // The fallback is not a loaded config: consumers that prune data
+      // against server-gated catalogs must keep waiting.
+      expect(store.getState().serverConfigLoaded).toBe(false);
       expect(store.getState().serverConfig).toEqual({ aiProvider: {}, telemetry: {} });
       expect(store.getState().canAccessDevDock).toBe(false);
     });

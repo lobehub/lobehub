@@ -15,6 +15,7 @@
     "./resolveImageSinglePrice": "./src/core/usageConverters/utils/resolveImageSinglePrice.ts",
     "./resolveVideoSinglePrice": "./src/core/usageConverters/utils/resolveVideoSinglePrice.ts",
     "./types/error": "./src/types/error.ts",
+    "./utils/anthropicToolSchema": "./src/utils/anthropicToolSchema.ts",
     "./utils/createError": "./src/utils/createError.ts",
     "./utils/modelExtendParams": "./src/utils/modelExtendParams.ts",
     "./utils/uriParser": "./src/utils/uriParser.ts",

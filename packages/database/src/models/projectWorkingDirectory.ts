@@ -212,14 +212,10 @@ export class ProjectWorkingDirectoryModel {
       .select()
       .from(topics)
       .where(and(eq(topics.id, topicId), buildWorkspaceWhere(this.scope(), topics)));
-    if (!topic?.projectWorkingDirectoryId) {
-      // The binding row is gone (directory deletion sets the FK null) but the
-      // topic still carries its project pin. Plain device-bound topics have no
-      // projectId and simply follow the normal device-resolution path.
-      if (topic?.projectId && topic?.metadata?.boundDeviceId)
-        throw new Error('Project directory binding no longer exists');
-      return;
-    }
+    // A project conversation without a directory (started outside one, or
+    // associated to the project alone) is device-bound like any other and
+    // follows the normal device-resolution path.
+    if (!topic?.projectWorkingDirectoryId) return;
     if (!topic.projectId) throw new Error('Project directory has no owning project');
     const directory = await this.resolve(topic.projectWorkingDirectoryId, topic.projectId);
     const source = getWorkingDirSourcePath(

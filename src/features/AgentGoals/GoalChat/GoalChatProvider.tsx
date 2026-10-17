@@ -6,7 +6,6 @@ import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface GoalChatProviderProps {
   /** The goal's responsible agent — the one the user asks about progress. */
@@ -60,23 +59,12 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
       [activeTopicId, agentId, goalId],
     );
 
-    const chatKey = useMemo(() => messageMapKey(context), [context]);
-    const replaceMessages = useChatStore((s) => s.replaceMessages);
-    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
     const operationState = useOperationState(context);
 
     if (!initialized) return null;
 
     return (
-      <ConversationProvider
-        context={context}
-        hasInitMessages={!!messages}
-        messages={messages}
-        operationState={operationState}
-        onMessagesChange={(msgs, ctx, meta) => {
-          replaceMessages(msgs, { context: ctx, source: meta?.source });
-        }}
-      >
+      <ConversationProvider context={context} operationState={operationState}>
         {children}
       </ConversationProvider>
     );

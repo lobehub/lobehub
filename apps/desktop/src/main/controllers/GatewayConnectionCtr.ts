@@ -4,6 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { DeviceControlDeps } from '@lobechat/device-control';
+import {
+  COMPUTER_USE_IDENTIFIER as AuvIdentifier,
+  toAuvToolOutput,
+} from '@lobechat/device-control/computer-use';
 import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 import type { HeterogeneousAgentCancellationSignal } from '@lobechat/heterogeneous-agents/protocol';
@@ -50,7 +54,6 @@ type AvailableRemotePlatformRuntime = Extract<RemotePlatformCommandRuntime, { av
 // Hardcoded (not imported) so the desktop main process keeps zero builtin-tool
 // package deps — importing one risks the @lobechat/types stub runtime leak.
 const BrowserIdentifier = 'lobe-browser';
-const AuvIdentifier = 'lobe-computer-use';
 
 function parseHermesSessionId(stderr: string): string | undefined {
   for (const line of stderr.split(/\r?\n/).reverse()) {
@@ -621,15 +624,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       throw new Error(`AUV tool "${apiName}" is not available on this device`);
     }
 
-    const result = await this.auvService.runCommand(args as AuvRunCommandParams);
-    return {
-      content: JSON.stringify(result),
-      ...(result.exitCode !== 0 && {
-        error: result.stderr || `Computer Use exited with code ${result.exitCode}`,
-      }),
-      state: result,
-      success: result.exitCode === 0,
-    };
+    return toAuvToolOutput(await this.auvService.runCommand(args as AuvRunCommandParams));
   }
 
   /**
@@ -867,15 +862,28 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
 
+    // Never inherit the launcher's conversation identity for a dispatched run.
+    const inheritedEnv = { ...process.env };
+    for (const key of [
+      'LOBEHUB_AGENT_ID',
+      'LOBEHUB_ASSISTANT_MESSAGE_ID',
+      'LOBEHUB_TASK_ID',
+      'LOBEHUB_WORKSPACE_ID',
+    ]) {
+      delete inheritedEnv[key];
+    }
+
     // Inject auth + workspace scope into child env so `lh notify` can
     // authenticate AND target the same workspace as the dispatched topic
     // (without LOBEHUB_WORKSPACE_ID, the CLI's notify falls back to personal
     // mode and the workspace topic 404s).
     const childEnv: NodeJS.ProcessEnv = {
-      ...process.env,
+      ...inheritedEnv,
+      ...(agentId && { LOBEHUB_AGENT_ID: agentId }),
       ...(accessToken && { LOBEHUB_JWT: accessToken }),
       LOBEHUB_OPERATION_ID: operationId,
       ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+      LOBEHUB_TOPIC_ID: topicId,
       ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
     };
     const sessionKey = parentOperationId ? operationId : topicId;

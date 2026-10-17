@@ -1,8 +1,17 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,
@@ -14,9 +23,9 @@ import {
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import ListSkeleton from '@/components/ListSkeleton';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { formatSize } from '@/utils/format';
 
 import { type SandboxSessionRecord, useInstances, useInstanceSessions } from './useEnvironmentData';
@@ -93,15 +102,36 @@ const duration = (session: SandboxSessionRecord, running: boolean): string | und
   return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} h`;
 };
 
+/**
+ * Where a run's conversation lives, or `undefined` when it has no page.
+ *
+ * A topic is addressed as `group/<groupId>/<topicId>` when it belongs to a
+ * group and `agent/<agentId>/<topicId>` otherwise — the topic alone does not
+ * resolve, and a bare `/chat?topic=<id>` resolves to nothing at all, which is
+ * what sent the panel's one way back into a run to the 404 page.
+ *
+ * A group topic carries an agent id too — the member that answered — so the
+ * group is checked FIRST; reading the agent would open that member's own
+ * surface instead of the conversation the run came from. The workspace prefix
+ * is added by `useWorkspaceAwareNavigate`, so it is absent here on purpose.
+ */
+export const conversationPath = (session: SandboxSessionRecord): string | undefined => {
+  if (session.management || !session.topicId) return undefined;
+  if (session.topicGroupId) return `/group/${session.topicGroupId}/${session.topicId}`;
+
+  return session.topicAgentId ? `/agent/${session.topicAgentId}/${session.topicId}` : undefined;
+};
+
 const SessionRow = memo<{ running: boolean; session: SandboxSessionRecord }>(
   ({ running, session }) => {
     const { t } = useTranslation('setting');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
 
     const isBuild = session.kind === 'build';
     /** No end recorded, and the lease says nobody is holding its instance. */
     const stale = !session.endedAt && !running;
     const elapsed = duration(session, running);
+    const conversation = conversationPath(session);
     // Three kinds of run, told apart by how they were started: a build from
     // the environment's specification, a console session from the file
     // browser, or a conversation — the common case, named by its topic.
@@ -173,9 +203,13 @@ const SessionRow = memo<{ running: boolean; session: SandboxSessionRecord }>(
         )}
         {/* Railway's "View logs" on the active deployment: the one thing to do
           with a run in progress is go to it. Only a conversation has somewhere
-          to go; a build and a console session have no page of their own. */}
-        {running && session.topicId && !session.management && (
-          <Button size={'small'} onClick={() => navigate(`/chat?topic=${session.topicId}`)}>
+          to go; a build and a console session have no page of their own.
+          A conversation is addressed as `agent/<agentId>/<topicId>` under the
+          active workspace, so the agent is required too and the navigate has
+          to be the workspace-aware one — a bare `/chat?topic=<id>` resolved to
+          nothing and sent the one way back into a run to the 404 page. */}
+        {running && conversation && (
+          <Button size={'small'} onClick={() => navigate(conversation)}>
             {t('environments.sessions.openConversation')}
           </Button>
         )}

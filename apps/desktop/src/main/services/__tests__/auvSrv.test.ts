@@ -86,7 +86,7 @@ describe('AuvService', () => {
     expect(sdk.startAuv).toHaveBeenCalledWith({
       binaryPath: '/opt/lobehub/bin/auv',
       listeners: ['unix:///private/auv/session.sock'],
-      noDiscovery: true,
+      noRegister: true,
       storeRoot: '/tmp/lobehub-storage/auv/store',
     });
     expect(daemon.connect).toHaveBeenCalledOnce();

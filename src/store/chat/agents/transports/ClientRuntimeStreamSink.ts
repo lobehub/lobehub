@@ -38,6 +38,10 @@ export class ClientRuntimeStreamSink implements StreamSink {
 
   async publishError({ error }: StreamErrorInput): Promise<void> {
     if (!this.session.assistantMessageId) return;
+    // `callLlm` rethrows the last attempt's provider error when Stop lands
+    // during a retry backoff. The user ended the run, so the reply must not
+    // render that error.
+    if (this.get().operations[this.operationId]?.status === 'cancelled') return;
 
     this.get().internal_dispatchMessage(
       {

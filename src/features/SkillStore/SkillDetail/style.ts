@@ -1,4 +1,4 @@
-import { createStaticStyles, responsive } from 'antd-style';
+import { createStaticStyles, responsive } from '@lobehub/ui';
 
 export const agentListStyles = createStaticStyles(({ css }) => ({
   item: css`

@@ -8,6 +8,7 @@ import { app, clipboard, Menu, shell } from 'electron';
 import { isDev } from '@/const/env';
 import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 
+import { assignMenuIds } from '../appMenuSnapshot';
 import { buildTrayMenuTemplate } from '../trayMenu';
 import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
@@ -18,6 +19,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
 
   buildAndSetAppMenu(options?: MenuOptions): Menu {
     const template = this.getAppMenuTemplate(options);
+    assignMenuIds(template);
     this.appMenu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(this.appMenu);
     return this.appMenu;
@@ -241,8 +243,8 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       template.push({
         label: t('dev.title'),
         submenu: [
-          { label: t('dev.reload'), role: 'reload' },
-          { label: t('dev.forceReload'), role: 'forceReload' },
+          this.buildReloadMenuItem(t('dev.reload')),
+          this.buildReloadMenuItem(t('dev.forceReload'), true),
           this.buildDevToolsMenuItem(t('dev.devTools')),
           { type: 'separator' },
           {

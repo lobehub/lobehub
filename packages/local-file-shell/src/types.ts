@@ -149,6 +149,24 @@ export interface ReadFileResult {
   truncated?: boolean;
 }
 
+/** Durable reference to an image uploaded to file storage. */
+export interface UploadedImageRecord {
+  id: string;
+  url: string;
+}
+
+/**
+ * {@link ReadFileResult} for an image path. The bytes are uploaded to file
+ * storage instead of being read as text, so a vision model can see the image.
+ */
+export interface ReadImageFileResult extends ReadFileResult {
+  /** File record id of the uploaded image; absent when the upload failed. */
+  imageFileId?: string;
+  /** Durable URL of the uploaded image; absent when the upload failed. */
+  imageUrl?: string;
+  isImage: true;
+}
+
 export interface WriteFileParams {
   content: string;
   /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */

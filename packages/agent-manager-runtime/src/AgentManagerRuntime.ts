@@ -23,6 +23,7 @@ import {
 } from '@lobechat/prompts';
 import {
   type BuiltinToolResult,
+  type DiscoverAssistantDetail,
   getPluginMode,
   type HeterogeneousProviderConfig,
   parsePluginEntry,
@@ -313,6 +314,12 @@ export class AgentManagerRuntime {
       const config = await this.agentService.getAgentConfigById(agentId);
 
       if (!config) {
+        // searchAgents can surface marketplace agents (short-code ids) that
+        // have no local agents row; read their detail through the market
+        // fallback instead of reporting a false "not found".
+        const marketDetail = await this.getMarketAgentDetail(agentId);
+        if (marketDetail) return marketDetail;
+
         return {
           content: `Agent "${agentId}" not found.`,
           success: false,
@@ -430,11 +437,18 @@ export class AgentManagerRuntime {
       let userTotal = 0;
       let marketTotal = 0;
 
-      // Search user's agents
+      // This is the CRUD surface: every id it returns can be forwarded to
+      // `removeAgent`/`updateAgent`, and the inbox is product-owned. Opt it out
+      // explicitly so the reserved assistant is never offered as a target here.
       if (source === 'user' || source === 'all') {
         const [userAgents, total] = await Promise.all([
-          this.agentService.queryAgents({ keyword: params.keyword, limit, offset }),
-          this.agentService.countAgents({ keyword: params.keyword }),
+          this.agentService.queryAgents({
+            includeInbox: false,
+            keyword: params.keyword,
+            limit,
+            offset,
+          }),
+          this.agentService.countAgents({ includeInbox: false, keyword: params.keyword }),
         ]);
         userTotal = total;
 
@@ -612,6 +626,89 @@ export class AgentManagerRuntime {
    * Queue prompt mutations by agent so later invocations cannot finish first
    * and then be overwritten by an older, slower stream.
    */
+  /**
+   * Marketplace fallback for getAgentDetail. searchAgents surfaces agents
+   * from the external market index (short-code identifiers), but those rows
+   * do not exist in the local agents table — reading their detail through
+   * the local path alone reports "not found" even though search found them.
+   * Project the market detail into the same shape getAgentDetail returns so
+   * callers can read (not edit) market agents.
+   */
+  private async getMarketAgentDetail(agentId: string): Promise<BuiltinToolResult | null> {
+    if (!this.discoverService.getAssistantDetail) return null;
+
+    let detail: DiscoverAssistantDetail | undefined;
+    try {
+      detail = await this.discoverService.getAssistantDetail({
+        identifier: agentId,
+        source: 'new',
+      });
+    } catch {
+      // Market lookup is best-effort: fall through to the local "not found".
+      return null;
+    }
+
+    const config = detail?.config as Record<string, any> | undefined;
+    if (!detail || !config) return null;
+
+    const plugins = config.plugins?.map((entry: any) => {
+      const { identifier, mode } = parsePluginEntry(entry);
+      return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+    }) as string[] | undefined;
+
+    // Marketplace configs can carry the model as an object
+    // ({ model, provider, parameters }) — extract the nested model/provider so
+    // the LLM-facing summary and GetAgentDetailRender never see "[object
+    // Object]" (same normalization as src/services/agent.ts).
+    let provider = config.provider as string | undefined;
+    let model = config.model as string | undefined;
+    if (model !== null && typeof model === 'object') {
+      const { model: modelName, provider: modelProvider } = model as {
+        model?: string;
+        provider?: string;
+      };
+      model = modelName;
+      provider = provider ?? modelProvider;
+    }
+    const systemRole = config.systemRole as string | undefined;
+
+    const parts: string[] = [];
+    if (detail.title) parts.push(`**${detail.title}**`);
+    if (detail.description) parts.push(detail.description);
+    if (model) parts.push(`Model: ${provider ? `${provider}/` : ''}${model}`);
+    if (plugins?.length) parts.push(`Plugins: ${plugins.join(', ')}`);
+    if (systemRole) parts.push(`System Prompt: ${systemRole}`);
+    parts.push(
+      'ℹ️ This is a marketplace agent (read-only). Install it into a workspace before editing.',
+    );
+
+    return {
+      content: parts.join('\n'),
+      state: {
+        agentId,
+        config: {
+          model,
+          openingMessage: config.openingMessage as string | undefined,
+          openingQuestions: config.openingQuestions as string[] | undefined,
+          plugins,
+          provider,
+          ...(config.agencyConfig && { runtime: describeHeterogeneousAgent(config.agencyConfig) }),
+          systemRole,
+        },
+        isMarket: true,
+        meta: {
+          avatar: detail.avatar,
+          backgroundColor: detail.backgroundColor,
+          description: detail.description,
+          tags: detail.tags,
+          title: detail.title,
+        },
+        success: true,
+      },
+      success: true,
+    };
+  }
+
   private async enqueuePromptUpdate<T>(agentId: string, update: () => Promise<T>): Promise<T> {
     const previousUpdate = AgentManagerRuntime.promptUpdateQueues.get(agentId);
     const previousSettled = previousUpdate

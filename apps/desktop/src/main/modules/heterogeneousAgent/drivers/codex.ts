@@ -5,7 +5,11 @@ import {
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
 } from '@lobechat/heterogeneous-agents/spawn';
-import type { CodexReasoningEffort, CodexServerDefaultCustomModel } from '@lobechat/types';
+import type {
+  CodexReasoningEffort,
+  CodexServerDefaultCustomModel,
+  ServerDefaultHeterogeneousModelDescriptor,
+} from '@lobechat/types';
 import {
   formatServerDefaultHeterogeneousModel,
   getCodexReasoningEffortLevels,
@@ -58,7 +62,20 @@ const CODEX_REASONING_LEVEL_DESCRIPTIONS = {
   high: 'Enhanced reasoning for complex tasks',
   low: 'Fast responses with lighter reasoning',
   max: 'Maximum reasoning depth for the hardest tasks',
+  medium: 'Balanced reasoning for everyday tasks',
 } as const satisfies Partial<Record<CodexReasoningEffort, string>>;
+
+/** Used when the model card names no window, as Pi's binding does. */
+const DEFAULT_CONTEXT_WINDOW = 128_000;
+
+/**
+ * The common `reasoning_effort` levels, for a reasoning model with no tuned
+ * entry; finer ones (xhigh, max) only where a model is known to take them.
+ */
+const GENERIC_REASONING_LEVELS = ['low', 'medium', 'high'] as const;
+
+/** An OpenAI model id: gpt-6-sol, o4-mini. */
+const OPENAI_MODEL = /^(?:gpt-|o\d)/;
 
 const CODEX_SERVER_DEFAULT_BASE_INSTRUCTIONS =
   'You are Codex, a coding agent working with the user in a shared workspace. Follow the provided instructions, use tools when helpful, verify your changes, and report results clearly.';
@@ -111,12 +128,56 @@ const sanitizeCodexProviderBindingEnv = (source: Record<string, string> | undefi
 
 const tomlString = (value: string): string => JSON.stringify(value);
 
-const buildServerDefaultModelCatalog = (
-  model: CodexServerDefaultCustomModel,
-  requestModel: string,
+/**
+ * Whether Codex ships its own catalog entry for the model, so none is written.
+ * The deployment's word decides; without it, an OpenAI-looking id is assumed
+ * native as before.
+ */
+const isNativeCodexModel = (
+  model: string,
+  descriptor: ServerDefaultHeterogeneousModelDescriptor | undefined,
+) =>
+  descriptor?.nativeResponses ??
+  (!isCodexServerDefaultCustomModel(model) && OPENAI_MODEL.test(model));
+
+/** Hand-tuned metadata when there is some, else the deployment's model card. */
+const resolveServerDefaultModelMetadata = (
+  model: string,
+  descriptor: ServerDefaultHeterogeneousModelDescriptor | undefined,
 ) => {
-  const metadata = CODEX_SERVER_DEFAULT_MODEL_METADATA[model];
-  const supportedReasoningLevels = getCodexReasoningEffortLevels(model).map((effort) => ({
+  if (isCodexServerDefaultCustomModel(model)) {
+    return {
+      ...CODEX_SERVER_DEFAULT_MODEL_METADATA[model],
+      inputModalities: ['text'],
+      reasoningLevels: getCodexReasoningEffortLevels(model),
+    };
+  }
+
+  const displayName = descriptor?.displayName?.trim() || model;
+  const reasoningLevels: readonly CodexReasoningEffort[] = descriptor?.abilities.reasoning
+    ? GENERIC_REASONING_LEVELS
+    : [];
+  return {
+    contextWindow:
+      descriptor?.contextWindowTokens && descriptor.contextWindowTokens > 0
+        ? descriptor.contextWindowTokens
+        : DEFAULT_CONTEXT_WINDOW,
+    defaultReasoningLevel: reasoningLevels.length > 0 ? ('medium' as const) : null,
+    description: `${displayName} via LobeHub.`,
+    displayName,
+    inputModalities: descriptor?.abilities.vision ? ['text', 'image'] : ['text'],
+    reasoningLevels,
+    truncationMode: 'tokens' as const,
+  };
+};
+
+const buildServerDefaultModelCatalog = (
+  model: string,
+  requestModel: string,
+  descriptor: ServerDefaultHeterogeneousModelDescriptor | undefined,
+) => {
+  const metadata = resolveServerDefaultModelMetadata(model, descriptor);
+  const supportedReasoningLevels = metadata.reasoningLevels.map((effort) => ({
     description: CODEX_REASONING_LEVEL_DESCRIPTIONS[effort] ?? `${effort} reasoning`,
     effort,
   }));
@@ -138,7 +199,7 @@ const buildServerDefaultModelCatalog = (
           display_name: metadata.displayName,
           effective_context_window_percent: 95,
           experimental_supported_tools: [],
-          input_modalities: ['text'],
+          input_modalities: metadata.inputModalities,
           max_context_window: metadata.contextWindow,
           priority: 0,
           shell_type: 'unified_exec',
@@ -236,10 +297,12 @@ export const codexDriver: HeterogeneousAgentDriver = {
       profileFiles: [{ content: config, path: 'config.toml' }],
     };
   },
-  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+  prepareServerDefaultBinding({ args, endpoint, env, model, modelDescriptor, profileDir }) {
     const requestModel = formatServerDefaultHeterogeneousModel(model);
-    const customModel = isCodexServerDefaultCustomModel(model) ? model : undefined;
-    const modelCatalogPath = customModel
+    // Codex has entries for OpenAI's models only; any other model is described
+    // to it, so every tool-capable relay model runs, new ones included.
+    const writesCatalog = !isNativeCodexModel(model, modelDescriptor);
+    const modelCatalogPath = writesCatalog
       ? path.join(profileDir, SERVER_DEFAULT_MODEL_CATALOG_FILE)
       : undefined;
     const config = [
@@ -262,10 +325,10 @@ export const codexDriver: HeterogeneousAgentDriver = {
       operationTokenEnvKey: SERVER_TOKEN_ENV,
       profileFiles: [
         { content: config, path: 'config.toml' },
-        ...(customModel
+        ...(writesCatalog
           ? [
               {
-                content: buildServerDefaultModelCatalog(customModel, requestModel),
+                content: buildServerDefaultModelCatalog(model, requestModel, modelDescriptor),
                 path: SERVER_DEFAULT_MODEL_CATALOG_FILE,
               },
             ]

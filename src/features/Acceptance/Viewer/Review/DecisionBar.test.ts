@@ -1,4 +1,4 @@
-import { ModalHost } from '@lobehub/ui/base-ui';
+import { ModalHost } from '@lobehub/ui';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as I18next from 'i18next';
 import { createElement } from 'react';

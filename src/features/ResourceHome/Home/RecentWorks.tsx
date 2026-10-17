@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -46,10 +45,7 @@ const RecentWorks = memo(() => {
       ) : (
         <div className={styles.grid}>
           {recent.map((item) => (
-            // `onRemoved` is required here: this list is `useSWRInfinite`-backed,
-            // and `useRemoveWork`'s global refresh skips `$inf$` keys, so without
-            // it a removed orphan card lingers until a page reload.
-            <WorkPreviewCard item={item} key={item.id} onOpen={openWork} onRemoved={reload} />
+            <WorkPreviewCard item={item} key={item.id} onOpen={openWork} />
           ))}
         </div>
       )}

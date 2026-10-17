@@ -2,17 +2,25 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { GroupedTopic } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Checkbox, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Checkbox,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useTopicItemDropdownMenu } from '@/features/AgentSidebar/Topic/List/Item/useDropdownMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
@@ -294,7 +302,7 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
         if (group.children.length === 0) return null;
         const title =
           groupBy === 'byProject'
-            ? getProjectGroupTitle(group.id, group.title, t)
+            ? getProjectGroupTitle(group, t)
             : group.title || getTimeGroupTitle(group.id, t);
         return (
           <Fragment key={group.id}>

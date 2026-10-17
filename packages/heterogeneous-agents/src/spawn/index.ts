@@ -16,14 +16,17 @@ export {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  type CodexAgentHandleOptions,
   CodexAppServerClient,
   type CodexAppServerClientOptions,
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
   CodexThreadSession,
   type CodexThreadSessionOptions,
+  createCodexAgentHandle,
   getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
+  pickCodexRunProvenance,
 } from '../codex';
 export type { UsageData } from '../types';
 export {
@@ -108,6 +111,18 @@ export {
   parseDroidAcpModelCatalog,
 } from './droidAcpSession';
 export {
+  detectDshCommand,
+  DSH_ACP_PROFILE_ARGS,
+  DSH_COMMAND,
+  DSH_MIN_VERSION,
+  DSH_VERSION_PATTERN,
+  DshAcpSession,
+  type DshAcpSessionHandle,
+  type DshAcpSessionOptions,
+  spawnDshAcpSession,
+  type SpawnDshAcpSessionOptions,
+} from './dshAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,
@@ -150,6 +165,7 @@ export {
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
 } from './claudeCodeDirectEnv';
+export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,

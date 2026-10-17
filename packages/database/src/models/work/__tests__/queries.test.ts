@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { topics, works } from '../../../schemas';
+import { files, topics, works } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -400,6 +400,16 @@ describe('WorkModel · queries', () => {
       toolIdentifier: 'lobe-task',
       toolName: 'createTask',
       topicId,
+    });
+    // The workspace gallery hides file Works whose persisted file is gone, so
+    // back this one with a live `files` row.
+    await serverDB.insert(files).values({
+      fileType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      id: 'file-gate',
+      name: 'report.pptx',
+      size: 1024,
+      url: 'files/file-gate.pptx',
+      userId,
     });
     // No threadId: the version's threadId stays null so the default (no-thread)
     // conversation query surfaces it alongside the task work.

@@ -1,5 +1,4 @@
-import { Alert, Button, Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Alert, Button, createStaticStyles, cx, Skeleton } from '@lobehub/ui';
 import { RotateCcw } from 'lucide-react';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';

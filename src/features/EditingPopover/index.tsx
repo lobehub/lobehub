@@ -2,7 +2,6 @@
 
 import { PopoverPopup, PopoverPortal, PopoverPositioner, PopoverRoot } from '@lobehub/ui';
 
-import AgentContent from './AgentContent';
 import GroupContent from './GroupContent';
 import { useEditingPopoverStore } from './store';
 
@@ -20,14 +19,7 @@ const EditingPopover = () => {
       <PopoverPortal>
         <PopoverPositioner anchor={target?.anchor ?? document.body} placement="bottomLeft">
           <PopoverPopup data-testid="editing-popover" style={{ padding: 4 }}>
-            {target?.type === 'agent' ? (
-              <AgentContent
-                avatar={target.avatar}
-                id={target.id}
-                title={target.title}
-                onClose={close}
-              />
-            ) : target ? (
+            {target ? (
               <GroupContent
                 avatar={target.avatar}
                 backgroundColor={target.backgroundColor}

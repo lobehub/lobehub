@@ -1,8 +1,6 @@
 import type { CSSProperties, PropsWithChildren } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useRouteError } from 'react-router';
 import { isRtlLang } from 'rtl-detect';
-import { href as antdStaticCssHref } from 'virtual:lobehub/antd-static-css';
-import { href as themeVarsCssHref } from 'virtual:lobehub/theme-vars-css';
 
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
@@ -35,8 +33,6 @@ export const Layout = ({ children }: PropsWithChildren) => {
         <Meta />
         <Links />
         <style dangerouslySetInnerHTML={{ __html: bodyBackground }} />
-        <link href={themeVarsCssHref} rel="stylesheet" />
-        <link href={antdStaticCssHref} rel="stylesheet" />
         <script dangerouslySetInnerHTML={{ __html: SERVER_CONFIG_PLACEHOLDER }} />
         <script
           dangerouslySetInnerHTML={{ __html: serializeAuthResources(locale) }}

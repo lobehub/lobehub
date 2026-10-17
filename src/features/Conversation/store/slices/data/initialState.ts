@@ -39,9 +39,16 @@ export interface DataState {
   refreshingRowId?: string;
 
   /**
-   * Skip internal message fetching (when external messages are provided)
+   * Do not sync the transcript (a static transcript, or a surface that must
+   * not read while another flow owns the rows)
    */
   skipFetch?: boolean;
+
+  /**
+   * Where the rows live: `chat` mirrors the chat store bucket of `context`
+   * (the default); `static` holds a transcript handed to the provider.
+   */
+  transcriptSource: 'chat' | 'static';
 }
 
 export const dataInitialState: DataState = {
@@ -49,4 +56,5 @@ export const dataInitialState: DataState = {
   displayMessages: [],
   isLoadingEarlierMessages: false,
   messagesInit: false,
+  transcriptSource: 'chat',
 };

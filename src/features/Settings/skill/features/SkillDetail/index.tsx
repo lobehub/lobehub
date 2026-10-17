@@ -2,9 +2,16 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Markdown, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Skeleton, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Markdown,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -17,7 +24,11 @@ import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkil
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import {
+  agentSkillsSelectors,
+  builtinToolSelectors,
+  lobehubSkillStoreSelectors,
+} from '@/store/tool/selectors';
 import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
@@ -203,7 +214,10 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   // Creator attribution for the row-level manage gate: agent skills carry it
   // on the skill row; connector-backed types on the connector row.
   const agentSkillRow = useToolStore(
-    (s) => (s.agentSkills || []).find((sk) => sk.id === identifier || sk.identifier === identifier),
+    (s) =>
+      agentSkillsSelectors
+        .getAgentSkills(s)
+        .find((sk) => sk.id === identifier || sk.identifier === identifier),
     isEqual,
   );
   const canManage = useResourceManageable(
@@ -374,7 +388,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
         <div
           style={{
             alignItems: 'center',
-            borderBlockEnd: '1px solid var(--ant-color-border-secondary)',
+            borderBlockEnd: '1px solid var(--lobe-color-border-secondary)',
             display: 'flex',
             flexShrink: 0,
             justifyContent: 'flex-end',

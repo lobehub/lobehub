@@ -1,7 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';

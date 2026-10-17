@@ -5,6 +5,8 @@ import {
   agentsToSessions,
   messages,
   sessions,
+  tasks,
+  taskTopics,
   threads,
   topics,
   workspaces,
@@ -21,6 +23,7 @@ import {
   assertCanPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
+import { TopicRunService } from '@/server/services/task/topicRun';
 
 import { aiAgentRouter } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
@@ -37,11 +40,18 @@ vi.mock('@/database/core/db-adaptor', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
-      createOperation: vi.fn().mockResolvedValue({
-        success: true,
-        operationId: 'mock-operation-id',
-        autoStarted: true,
-        messageId: 'mock-message-id',
+      createOperation: vi.fn(async (params: any) => {
+        // The real runtime invokes this before the run's first step, with the
+        // operation it is about to start; mirror it so the router's Task-run
+        // reopen path runs when a test seeds a Task run. It is a no-op for the
+        // ordinary conversation, which attaches no hooks.
+        await params?.onOperationCreated?.(params?.operationId);
+        return {
+          success: true,
+          operationId: params?.operationId ?? 'mock-operation-id',
+          autoStarted: true,
+          messageId: 'mock-message-id',
+        };
       }),
     };
   }),
@@ -217,6 +227,98 @@ describe('AI Agent Router Integration Tests', () => {
       await caller.execAgent({ agentId: testAgentId, prompt: 'undeclared single' });
       await caller.execAgents({ tasks: [{ agentId: testAgentId, prompt: 'undeclared' }] });
       expect(createOperationCalls()).toEqual([false, false]);
+    });
+
+    // Only a client that declares `file_works` gets file Work cards in the
+    // pushed snapshots; a released desktop crashes on that Work type.
+    it('forwards a declared file_works stream feature on both routes', async () => {
+      const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const createOperationCalls = () =>
+        vi
+          .mocked(AgentRuntimeService)
+          .mock.results.flatMap((r) => (r.value as any).createOperation.mock.calls)
+          .map(([params]) => params.acceptsFileWorks);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'single',
+        streamFeatures: ['file_works'],
+      });
+      await caller.execAgents({
+        tasks: [{ agentId: testAgentId, prompt: 'batch', streamFeatures: ['file_works'] }],
+      });
+      expect(createOperationCalls()).toEqual([true, true]);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgent({ agentId: testAgentId, prompt: 'undeclared single' });
+      await caller.execAgents({ tasks: [{ agentId: testAgentId, prompt: 'undeclared' }] });
+      expect(createOperationCalls()).toEqual([false, false]);
+    });
+
+    // Answering the same finished run twice concurrently: both sends resolve the
+    // row as ownable and dispatch, but only the first can reopen it — the second
+    // gets `already-running`. Its completion hook would otherwise settle a row it
+    // does not own (`onTopicComplete` completes the topic by id, without checking
+    // the operation), finishing the winner's run early and overwriting its
+    // handoff. The loser must be stopped, not left running. (Codex on #20582)
+    it('stops a send that loses the reopen race instead of letting its hook settle the winner', async () => {
+      const taskId = `task-race-${Date.now()}`;
+      const topicId = `tpc-race-${Date.now()}`;
+
+      await serverDB.insert(tasks).values({
+        createdByUserId: userId,
+        id: taskId,
+        identifier: 'T-RACE',
+        instruction: 'run',
+        seq: 1,
+        status: 'completed',
+      });
+      await serverDB.insert(topics).values({
+        completedAt: new Date('2026-10-01T00:00:00Z'),
+        id: topicId,
+        status: 'completed',
+        userId,
+      });
+      await serverDB.insert(taskTopics).values({
+        operationId: 'op-original',
+        seq: 1,
+        status: 'completed',
+        taskId,
+        topicId,
+        userId,
+      });
+
+      // The concurrent winner takes the row between this send's lookup and its
+      // own reopen, so the reopen loses the race.
+      const reopen = vi
+        .spyOn(TopicRunService.prototype, 'reopen')
+        .mockResolvedValue('already-running');
+      const stop = vi
+        .spyOn(AiAgentService.prototype, 'interruptTask')
+        .mockResolvedValue({ success: true } as any);
+
+      try {
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        await expect(
+          caller.execAgent({
+            agentId: testAgentId,
+            appContext: { topicId },
+            prompt: 'second answer',
+          }),
+        ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+        expect(reopen).toHaveBeenCalledTimes(1);
+        // The operation that lost the race is the one stopped — it is never left
+        // running with a completion hook attached.
+        expect(stop).toHaveBeenCalledTimes(1);
+        expect(stop.mock.calls[0][0].operationId).toBe(reopen.mock.calls[0][0].operationId);
+      } finally {
+        reopen.mockRestore();
+        stop.mockRestore();
+      }
     });
 
     it('should create a new topic when topicId is not provided', async () => {

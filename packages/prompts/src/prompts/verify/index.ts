@@ -83,7 +83,7 @@ ${deliverable}`
 }
 
 ## Your task
-Investigate whether the deliverable satisfies this check, judging against the run goal and the judging instruction. Weight the captured evidence above as primary Data; gather more yourself only where it's missing or insufficient. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`;
+Investigate whether the deliverable satisfies this check, judging against the run goal and the judging instruction. Weight the captured evidence above as primary Data; gather more yourself only where it's missing or insufficient. The deliverable may be a follow-up round's reply that only describes what that round changed: a statement that a round made no code change is not evidence that the work is missing, so check the work itself rather than reading it as an admission. When done, call \`submitVerifyResult\` exactly once with checkItemId="${checkItem.id}" and your verdict (passed / failed / uncertain) plus evidence and reasoning.`;
 
 /**
  * The send-back prompt for a rejected delivery. It points the agent at the CLI

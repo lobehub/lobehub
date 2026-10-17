@@ -3,8 +3,7 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -91,6 +90,9 @@ const HeterogeneousChatInput = memo(() => {
   // agent that `agencyConfig`/`isDeviceExecution` are computed from, instead of
   // the global (hijack-prone) active agent.
   const agentId = useConversationStore(contextSelectors.agentId);
+  // The conversation's own topic: a side-by-side pane must gate on its topic's
+  // device binding, not the main column's.
+  const topicId = useConversationStore(contextSelectors.topicId);
   const { isConfigured, goToConfig } = useHeteroAgentCloudConfig(agentId);
   const navigate = useWorkspaceAwareNavigate();
 
@@ -101,7 +103,10 @@ const HeterogeneousChatInput = memo(() => {
   // While the preference is loading, the merged config may still reflect only
   // the shared row — hold the input closed (below) instead of gating device
   // runs off a value that can flip once the override arrives.
-  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const scopeTopicId = topicId ?? null;
+  const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId, {
+    topicId: scopeTopicId,
+  });
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const providerType = heterogeneousProvider?.type;
   const isApiAuth = heterogeneousProvider?.authMode === 'api';
@@ -172,7 +177,11 @@ const HeterogeneousChatInput = memo(() => {
   // instead of failing at dispatch time.
   const isDeviceExecution = executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
 
-  const { status, refresh } = useRemoteAgentDeviceGuard({ agentId, enabled: isDeviceExecution });
+  const { status, refresh } = useRemoteAgentDeviceGuard({
+    agentId,
+    enabled: isDeviceExecution,
+    topicId: scopeTopicId,
+  });
 
   const goToAgentProfile = () => {
     if (agentId) navigate(`/agent/${agentId}/profile`);

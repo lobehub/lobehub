@@ -123,6 +123,86 @@ describe('codexDriver provider binding', () => {
     },
   );
 
+  it('describes any non-native relay model to Codex from its model card', async () => {
+    const profileDir = '/managed/codex';
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'kimi-k3',
+      modelDescriptor: {
+        abilities: { reasoning: true, vision: true },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        model: 'kimi-k3',
+        nativeResponses: false,
+      },
+      profileDir,
+    });
+    const config = plan.profileFiles?.find(({ path }) => path === 'config.toml')?.content ?? '';
+    const catalog = JSON.parse(
+      plan.profileFiles?.find(({ path }) => path === 'models.json')?.content ?? '{}',
+    );
+    const model = catalog.models?.[0];
+
+    expect(config).toContain(
+      `model_catalog_json = ${JSON.stringify(path.join(profileDir, 'models.json'))}`,
+    );
+    expect(model).toMatchObject({
+      context_window: 262_144,
+      default_reasoning_level: 'medium',
+      display_name: 'Kimi K3',
+      input_modalities: ['text', 'image'],
+      max_context_window: 262_144,
+      slug: 'lobehub/kimi-k3',
+      supports_parallel_tool_calls: true,
+      truncation_policy: { limit: 10_000, mode: 'tokens' },
+    });
+    expect(
+      model.supported_reasoning_levels.map(({ effort }: { effort: string }) => effort),
+    ).toEqual(['low', 'medium', 'high']);
+  });
+
+  it('falls back to defaults for a model it could not read the card of', async () => {
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'claude-sonnet-4-6',
+      profileDir: '/managed/codex',
+    });
+    const catalog = JSON.parse(
+      plan.profileFiles?.find(({ path }) => path === 'models.json')?.content ?? '{}',
+    );
+
+    expect(catalog.models?.[0]).toMatchObject({
+      context_window: 128_000,
+      default_reasoning_level: null,
+      display_name: 'claude-sonnet-4-6',
+      input_modalities: ['text'],
+      slug: 'lobehub/claude-sonnet-4-6',
+      supported_reasoning_levels: [],
+    });
+  });
+
+  it('leaves a native Responses model to the entry Codex ships for it', async () => {
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'gpt-7',
+      modelDescriptor: {
+        abilities: { reasoning: true, vision: true },
+        model: 'gpt-7',
+        nativeResponses: true,
+      },
+      profileDir: '/managed/codex',
+    });
+
+    expect(plan.profileFiles).toHaveLength(1);
+    expect(plan.profileFiles?.[0]?.content).not.toContain('model_catalog_json');
+  });
+
   it('writes a secret-free Responses provider config and injects the key through env', async () => {
     const plan = await codexDriver.prepareProviderBinding!(bindingContext());
     const config = plan.profileFiles?.[0]?.content ?? '';

@@ -25,6 +25,7 @@ export { createVerifierAgentRunner } from './agentVerifier';
 export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
+export { evidenceTypeForStoredFile } from './evidenceMedium';
 export {
   type ExecuteVerifyParams,
   type VerifierAgentRunner,
@@ -32,6 +33,7 @@ export {
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
 export { runVerifyOnCompletion } from './lifecycle';
+export { resolveLiveRoundForItem } from './liveRound';
 export {
   isHeterogeneousVerifyProvider,
   resolveVerifyModelConfig,

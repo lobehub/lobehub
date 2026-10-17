@@ -13,5 +13,6 @@ export type FileLoaderType =
   | 'text'
   | 'latex'
   | 'csv'
+  | 'excel'
   | 'epub'
   | 'ipynb';

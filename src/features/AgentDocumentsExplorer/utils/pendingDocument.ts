@@ -25,8 +25,10 @@ export const makePendingDocument = ({
   const now = new Date();
   return {
     category: AGENT_DOCUMENT_CATEGORY,
+    createdAt: now,
     description: null,
     documentId: id,
+    documentUpdatedAt: now,
     filename: title,
     fileType: isFolder ? CUSTOM_FOLDER_FILE_TYPE : CUSTOM_DOCUMENT_FILE_TYPE,
     id,

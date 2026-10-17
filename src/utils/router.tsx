@@ -1,6 +1,6 @@
 'use client';
 
-import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
+import { ConfigProvider, ThemeScope } from '@lobehub/ui';
 import * as m from 'motion/react-m';
 import { type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { lazy, memo, Suspense } from 'react';
@@ -153,14 +153,9 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
 
   return (
     <ConfigProvider motion={m}>
-      <ThemeProvider
-        appearance={appearance}
-        defaultAppearance={appearance}
-        defaultThemeMode={appearance}
-        theme={{ cssVar: { key: 'lobe-vars' } }}
-      >
+      <ThemeScope appearance={appearance}>
         <ErrorCapture error={error} resetPath={resetPath} />
-      </ThemeProvider>
+      </ThemeScope>
     </ConfigProvider>
   );
 };

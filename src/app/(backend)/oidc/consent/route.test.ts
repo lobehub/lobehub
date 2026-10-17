@@ -10,6 +10,14 @@ const mocks = vi.hoisted(() => ({
   getInteractionDetails: vi.fn(),
   getInteractionResult: vi.fn(),
   getUserAuth: vi.fn(),
+  findOrCreateGrants: vi.fn(),
+  resolveReviewAccess: vi.fn(),
+}));
+
+vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
+
+vi.mock('@/server/services/acceptanceReview/access', () => ({
+  resolveReviewAccess: mocks.resolveReviewAccess,
 }));
 
 vi.mock('debug', () => ({ default: () => vi.fn() }));
@@ -19,6 +27,7 @@ vi.mock('@lobechat/utils/server', () => ({ getUserAuth: mocks.getUserAuth }));
 vi.mock('@/server/services/oidc', () => ({
   OIDCService: {
     initialize: vi.fn(async () => ({
+      findOrCreateGrants: mocks.findOrCreateGrants,
       getInteractionDetails: mocks.getInteractionDetails,
       getInteractionResult: mocks.getInteractionResult,
     })),
@@ -65,5 +74,52 @@ describe('POST /oidc/consent', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.getInteractionResult).not.toHaveBeenCalled();
+  });
+
+  describe('acceptance review client', () => {
+    const RESOURCE = 'urn:lobehub:acceptance:7f0c9a7e-0000-4000-8000-000000000001';
+
+    beforeEach(() => {
+      mocks.getInteractionDetails.mockResolvedValue({
+        params: { client_id: 'lobehub-review', resource: RESOURCE },
+        prompt: {
+          details: { missingResourceScopes: { [RESOURCE]: ['acceptance:review'] } },
+          name: 'consent',
+        },
+      });
+      mocks.findOrCreateGrants.mockResolvedValue({
+        addOIDCClaims: vi.fn(),
+        addOIDCScope: vi.fn(),
+        addResourceScope: vi.fn(),
+        save: vi.fn(async () => 'grant-1'),
+      });
+    });
+
+    it('denies the grant when the reviewer cannot read the acceptance', async () => {
+      mocks.resolveReviewAccess.mockResolvedValue(null);
+
+      await POST(createRequest({ consent: 'accept', uid: 'uid-1' }));
+
+      expect(mocks.getInteractionResult).toHaveBeenCalledWith('uid-1', {
+        error: 'access_denied',
+        error_description: 'No access to this acceptance',
+      });
+      expect(mocks.findOrCreateGrants).not.toHaveBeenCalled();
+    });
+
+    it('grants a reviewer who can read the acceptance', async () => {
+      mocks.resolveReviewAccess.mockResolvedValue({ acceptance: {}, can: {} });
+
+      await POST(createRequest({ consent: 'accept', uid: 'uid-1' }));
+
+      expect(mocks.resolveReviewAccess).toHaveBeenCalledWith(
+        {},
+        'user-1',
+        '7f0c9a7e-0000-4000-8000-000000000001',
+      );
+      expect(mocks.getInteractionResult).toHaveBeenCalledWith('uid-1', {
+        consent: { grantId: 'grant-1' },
+      });
+    });
   });
 });

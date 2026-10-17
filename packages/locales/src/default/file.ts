@@ -349,6 +349,7 @@ export default {
   'pageList.copySuccess': 'Page copied',
   'pageList.copyTitle': 'Copy page',
   'pageList.copyTo': 'Copy to…',
+  'pageList.createFailed': 'Failed to create page',
   'pageList.duplicate': 'Duplicate',
   'pageList.empty': 'No pages yet. Click the button above to create your first one.',
   'pageList.filter.all': 'All',

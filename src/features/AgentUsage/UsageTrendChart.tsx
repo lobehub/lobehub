@@ -1,8 +1,7 @@
 'use client';
 
 import { BarChart, ChartTooltipFrame, ChartTooltipRow } from '@lobehub/charts';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Divider, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Block, Divider, Flexbox, Segmented, Skeleton, Text } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

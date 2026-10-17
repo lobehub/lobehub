@@ -1,6 +1,7 @@
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   CreateNewMessageParamsSchema,
+  omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
   UpdateMessagePluginSchema,
   UpdateMessageRAGParamsSchema,
@@ -124,7 +125,7 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
     value: z.object({
       content: z.string().optional(),
       heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
-      metadata: z.record(z.string(), z.any()).optional(),
+      metadata: z.object({}).passthrough().optional(),
       pluginError: z.any().optional(),
       pluginState: z.record(z.string(), z.any()).optional(),
     }),
@@ -170,7 +171,18 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const operations: MessageBatchOperation[] = await Promise.all(
-        input.operations.map(async (operation): Promise<MessageBatchOperation> => {
+        input.operations.map(async (rawOperation): Promise<MessageBatchOperation> => {
+          // Creates are passthrough, so a client could carry server-owned metadata.
+          const operation =
+            rawOperation.type === 'createMessage'
+              ? {
+                  ...rawOperation,
+                  message: {
+                    ...rawOperation.message,
+                    metadata: omitServerOwnedMessageMetadata(rawOperation.message.metadata),
+                  },
+                }
+              : rawOperation;
           if (
             operation.type !== 'createMessage' ||
             operation.message.agentId ||
@@ -354,8 +366,13 @@ export const messageRouter = router({
         await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
       }
 
-      // Create message with the resolved agentId
-      return ctx.messageService.createMessage({ ...input, agentId } as any);
+      // Create message with the resolved agentId. The input is passthrough, so
+      // server-owned metadata a client slipped in is dropped here.
+      return ctx.messageService.createMessage({
+        ...input,
+        agentId,
+        metadata: omitServerOwnedMessageMetadata(input.metadata),
+      } as any);
     }),
 
   /**
@@ -908,7 +925,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateMetadata(id, value, resolved);
+      return ctx.messageService.updateMetadata(id, omitServerOwnedMessageMetadata(value), resolved);
     }),
 
   updatePluginError: messageProcedure

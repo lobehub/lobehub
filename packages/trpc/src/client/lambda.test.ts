@@ -1,7 +1,7 @@
 import superjson from 'superjson';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { lambdaClient } from './lambda';
+import { lambdaClient, withLlmRelay } from './lambda';
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/services/_auth', () => ({ createHeaderWithAuth: async () => ({}) }));
@@ -150,6 +150,31 @@ describe('lambdaClient transport lanes', () => {
     expect(tokenUrl).toBeDefined();
     expect(tokenUrl).not.toContain('batch=1');
     expect(tokenUrl).not.toContain('agent.getAgentConfigById');
+  });
+
+  // One-shot relay: the server reads the channel this tab subscribed from the
+  // request headers, so the call carries its own headers and never shares a
+  // batch with calls that must not be relayed.
+  it('sends a call with one-shot relay headers unbatched, with its headers', async () => {
+    fetchMock.mockImplementation(respondByLane);
+    const relay = {
+      headers: { 'x-lobe-client-id': 'tab-1', 'x-lobe-llm-relay-channel': 'llmcall:u:abcdefgh' },
+    };
+
+    await Promise.all([
+      lambdaClient.agent.getAgentConfigById.query({ agentId: 'agt_test' }, withLlmRelay(relay)),
+      lambdaClient.agent.getAgentConfigById.query({ agentId: 'agt_other' }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const relayed = fetchMock.mock.calls.find(([, init]) =>
+      new Headers((init as RequestInit).headers).has('x-lobe-llm-relay-channel'),
+    );
+    expect(relayed).toBeDefined();
+    expect(String(relayed![0])).not.toContain('batch=1');
+    const headers = new Headers((relayed![1] as RequestInit).headers);
+    expect(headers.get('x-lobe-llm-relay-channel')).toBe('llmcall:u:abcdefgh');
+    expect(headers.get('x-lobe-client-id')).toBe('tab-1');
   });
 });
 

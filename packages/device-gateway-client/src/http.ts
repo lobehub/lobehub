@@ -1,4 +1,4 @@
-import type { DeviceMetricSample } from '@lobechat/types';
+import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -82,17 +82,32 @@ const toFailedToolCallResult = (failure: DeviceTransportFailure): DeviceToolCall
   success: false,
 });
 
+/** What a request asks a device to do, for choosing which client may serve it. */
+export type GatewayDispatchTarget =
+  | { identifier: string; kind: 'tool'; type: GatewayToolCallType }
+  | { kind: 'messageApi'; platform: string }
+  | { kind: 'rpc'; method: string };
+
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
+  /**
+   * Which device clients can serve a request, sent to the gateway as
+   * `clientKinds` so it skips connections of other clients (one device can
+   * hold the desktop app and `lh connect` at once). Return `undefined` when
+   * any client can. A gateway that predates `clientKinds` ignores it.
+   */
+  resolveClientKinds?: (target: GatewayDispatchTarget) => DeviceClient[] | undefined;
   serviceToken: string;
 }
 
 export class GatewayHttpClient {
   private gatewayUrl: string;
+  private resolveClientKinds?: GatewayHttpClientOptions['resolveClientKinds'];
   private serviceToken: string;
 
   constructor(options: GatewayHttpClientOptions) {
     this.gatewayUrl = options.gatewayUrl;
+    this.resolveClientKinds = options.resolveClientKinds;
     this.serviceToken = options.serviceToken;
   }
 
@@ -130,6 +145,11 @@ export class GatewayHttpClient {
 
   async executeToolCall(
     params: {
+      /**
+       * The device clients that may serve this call, when the caller already
+       * knows; otherwise `resolveClientKinds` decides from the tool identifier.
+       */
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -169,6 +189,7 @@ export class GatewayHttpClient {
 
   private async postToolCall(
     params: {
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -192,6 +213,13 @@ export class GatewayHttpClient {
       res = await this.post(
         '/api/device/tool-call',
         {
+          clientKinds: params.clientKinds?.length
+            ? params.clientKinds
+            : this.clientKindsFor({
+                identifier: toolCall.identifier,
+                kind: 'tool',
+                type: toolCall.type ?? 'tool',
+              }),
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,
@@ -256,6 +284,7 @@ export class GatewayHttpClient {
   ): Promise<DeviceMessageApiResult> {
     const res = await this.post('/api/device/message-api', {
       api,
+      clientKinds: this.clientKindsFor({ kind: 'messageApi', platform: api.platform }),
       deviceId: params.deviceId,
       timeout: params.timeout,
       userId: params.userId,
@@ -288,6 +317,8 @@ export class GatewayHttpClient {
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    /** Restricts the run to connections of these clients; omitted means any client. */
+    clientKinds?: DeviceClient[];
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */
@@ -361,6 +392,7 @@ export class GatewayHttpClient {
       '/api/device/rpc',
       {
         channel: params.channel,
+        clientKinds: this.clientKindsFor({ kind: 'rpc', method: rpc.method }),
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,
@@ -385,22 +417,31 @@ export class GatewayHttpClient {
     return { data: data.data, error: data.error, success: data.success ?? false };
   }
 
+  /**
+   * `options.clientKinds` asks for the info of a connection of those clients —
+   * e.g. the desktop app's `supportedTools` when `lh connect` is up as well.
+   */
   async getDeviceSystemInfo(
     userId: string,
     deviceId: string,
     workspaceId?: string,
-  ): Promise<{ success: boolean; systemInfo?: DeviceSystemInfo }> {
+    options?: { clientKinds?: DeviceClient[] },
+  ): Promise<{ error?: string; success: boolean; systemInfo?: DeviceSystemInfo }> {
     const res = await this.post(
       '/api/device/system-info',
-      { deviceId, userId, workspaceId },
+      { clientKinds: options?.clientKinds, deviceId, userId, workspaceId },
       { timeout: DEVICE_QUERY_TIMEOUT_MS },
     );
     if (!res.ok) {
-      return { success: false };
+      // Keep the gateway's reason (`TIMEOUT`, `DEVICE_OFFLINE`, `DEVICE_NOT_FOUND`):
+      // a device that did not answer is not a device that lacks a capability.
+      const data = (await res.json().catch(() => undefined)) as { error?: string } | undefined;
+      return { error: data?.error, success: false };
     }
 
     const data = await res.json();
     return {
+      error: data.error,
       success: data.success ?? false,
       systemInfo: data.systemInfo,
     };
@@ -487,6 +528,11 @@ export class GatewayHttpClient {
       throw new Error(`Device gateway /api/admin/tunnels responded ${res.status}`);
     }
     return true;
+  }
+
+  private clientKindsFor(target: GatewayDispatchTarget): DeviceClient[] | undefined {
+    const kinds = this.resolveClientKinds?.(target);
+    return kinds && kinds.length > 0 ? kinds : undefined;
   }
 
   private post(path: string, body: unknown, options?: { timeout?: number }): Promise<Response> {

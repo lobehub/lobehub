@@ -271,6 +271,24 @@ describe('GoalGraphModel', () => {
     expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
   });
 
+  it('treats a same-status write as a no-op instead of churning the graph', async () => {
+    // Re-activating an already-active node must not bump `updatedAt` or append
+    // an event: a coordinator retry loop does this on every tick, and the
+    // planning manager hashes these rows — churn made every in-flight
+    // planning turn submit into a stale snapshot.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'No churn' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Looped' });
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'active', 'first start');
+    const [before] = (await graphModel.getGraph(goal.id))!.nodes;
+    const eventsBefore = (await graphModel.getGraph(goal.id))!.events.length;
+
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'active', 'retry loop tick');
+
+    const [after] = (await graphModel.getGraph(goal.id))!.nodes;
+    expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+    expect((await graphModel.getGraph(goal.id))!.events.length).toBe(eventsBefore);
+  });
+
   it('refuses to bind a task to a node that is not a task node', async () => {
     // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
     // so the rule needs a test on the write path or nothing enforces it.
@@ -498,3 +516,68 @@ it.skipIf(process.env.TEST_SERVER_DB !== '1')(
     }
   },
 );
+describe('GoalGraphModel.removeDraftEdges', () => {
+  const seed = async (status: 'draft' | 'running') => {
+    const goal = await goalModel.create({ status, subjectType: 'standalone', title: 'Edges' });
+    const first = await graphModel.createNode(goal.id, { kind: 'task', title: 'First' });
+    const second = await graphModel.createNode(goal.id, { kind: 'task', title: 'Second' });
+    await graphModel.createEdge(goal.id, second!.id, first!.id, 'depends_on');
+    await graphModel.createEdge(goal.id, second!.id, first!.id, 'leads_to');
+    return { first: first!.id, goalId: goal.id, second: second!.id };
+  };
+
+  it('removes only the matching kind from a draft and records the unlink', async () => {
+    const { first, goalId, second } = await seed('draft');
+
+    const result = await graphModel.removeDraftEdges(
+      goalId,
+      { kind: 'depends_on', sourceNodeId: second, targetNodeId: first },
+      'wrong direction',
+    );
+
+    expect(result).toMatchObject({ status: 'removed' });
+    const graph = await graphModel.getGraph(goalId);
+    expect(graph?.edges.map((edge) => edge.kind)).toEqual(['leads_to']);
+    expect(graph?.events[0]).toMatchObject({
+      entityType: 'edge',
+      eventType: 'unlinked',
+      reason: 'wrong direction',
+    });
+  });
+
+  it('removes every edge between the pair when no kind is given', async () => {
+    const { first, goalId, second } = await seed('draft');
+
+    const result = await graphModel.removeDraftEdges(goalId, {
+      sourceNodeId: second,
+      targetNodeId: first,
+    });
+
+    expect(result.status === 'removed' && result.edgeIds).toHaveLength(2);
+    expect((await graphModel.getGraph(goalId))?.edges).toHaveLength(0);
+  });
+
+  it('leaves a started goal untouched', async () => {
+    const { first, goalId, second } = await seed('running');
+
+    const result = await graphModel.removeDraftEdges(goalId, {
+      sourceNodeId: second,
+      targetNodeId: first,
+    });
+
+    expect(result).toEqual({ goalStatus: 'running', status: 'not_draft' });
+    expect((await graphModel.getGraph(goalId))?.edges).toHaveLength(2);
+  });
+
+  it('does not touch another user goal', async () => {
+    const { first, goalId, second } = await seed('draft');
+
+    const result = await new GoalGraphModel(serverDB, otherUserId).removeDraftEdges(goalId, {
+      sourceNodeId: second,
+      targetNodeId: first,
+    });
+
+    expect(result).toEqual({ status: 'not_found' });
+    expect((await graphModel.getGraph(goalId))?.edges).toHaveLength(2);
+  });
+});

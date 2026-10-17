@@ -5,6 +5,7 @@ import { memo } from 'react';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { useAgentStore } from '@/store/agent';
 
+import { useTopicId } from '../hooks/useTopicId';
 import SandboxInstancePicker from './SandboxInstancePicker';
 import { useSandboxMode } from './useSandboxMode';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
@@ -31,7 +32,7 @@ interface SandboxStorageSectionProps {
  */
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
   const { status } = useSandboxStorageAccess(agentId);
-  const { selection, setSelection, topicId } = useSandboxMode(agentId);
+  const { selection, setSelection, topicId } = useSandboxMode(agentId, useTopicId());
   const agentIsPublic = useAgentStore((s) => s.agentMap[agentId]?.visibility === 'public');
 
   if (status === 'hidden') return null;

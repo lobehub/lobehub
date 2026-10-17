@@ -55,7 +55,7 @@ export interface CreateServerSelfIterationPolicyOptions {
  * - `reviewContextModel` is scoped to the current user
  *
  * Returns:
- * - `true` only when feature gate, workflow agent scope, and agent-level DB gate all pass
+ * - `true` only when feature gate, workflow agent scope, and agent ownership all pass
  */
 export const canRunSelfIterationSource = async (input: {
   agentId: string;

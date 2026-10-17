@@ -1,5 +1,5 @@
 import { FILE_URL } from '@lobechat/business-const';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import debug from 'debug';
 import { type TFunction } from 'i18next';
 import { type ChangeEvent } from 'react';

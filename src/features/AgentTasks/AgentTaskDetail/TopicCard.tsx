@@ -8,8 +8,7 @@ import {
   Markdown,
   stopPropagation,
 } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Avatar, confirmModal, cssVar, Tag, Text, toast } from '@lobehub/ui';
 import {
   ChevronDown,
   ChevronRight,

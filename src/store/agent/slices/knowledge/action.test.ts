@@ -1,13 +1,32 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+/**
+ * @vitest-environment happy-dom
+ *
+ * Imperative knowledge behaviour: the add / remove / toggle actions keep their
+ * `activeAgentId` guards and service parameters, and a knowledge mutation fans
+ * out to every loaded visibility surface through `internal_refreshAgentKnowledge`.
+ * The local-first wiring (hydration, cold start, scope switch) is covered by
+ * `replica.test.ts`.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mutate } from '@/libs/swr';
 import { agentService } from '@/services/agent';
-import { KnowledgeType } from '@/types/knowledgeBase';
-import { withSWR } from '~test-utils';
 
+import { initialState } from '../../initialState';
 import { useAgentStore } from '../../store';
+import { agentKnowledgeListKey } from './projection';
 
-// Mock agentService
+vi.mock('@/libs/swr', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@/libs/swr');
+  return { ...actual, mutate: vi.fn() };
+});
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => 'u1:personal',
+  isScopeTrusted: () => true,
+  useCacheScope: () => 'u1:personal',
+}));
+
 vi.mock('@/services/agent', () => ({
   AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: {
@@ -21,289 +40,144 @@ vi.mock('@/services/agent', () => ({
   },
 }));
 
-// Mock SWR mutate
-vi.mock('swr', async () => {
-  const actual = await vi.importActual('swr');
-  return {
-    ...actual,
-    mutate: vi.fn(),
-  };
-});
+const AGENT_ID = 'agent-1';
+const KNOWLEDGE_KEY = agentKnowledgeListKey({ agentId: AGENT_ID, visibility: 'private' });
+const SYNC_KEY = [
+  'replica:sync',
+  'agentKnowledgeList',
+  1,
+  'u1:personal',
+  KNOWLEDGE_KEY,
+  { agentId: AGENT_ID, visibility: 'private' },
+];
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  useAgentStore.setState({
-    activeAgentId: undefined,
-    agentMap: {},
-    builtinAgentIdMap: {},
-    updateAgentConfigSignal: undefined,
-    updateAgentMetaSignal: undefined,
+const reset = (activeAgentId?: string) => {
+  useAgentStore.setState({ ...initialState, activeAgentId });
+};
+
+/** Predicates the store handed to the scoped `mutate` (replica revalidations). */
+const revalidatePredicates = () =>
+  vi.mocked(mutate).mock.calls.map(([key]) => key as (k: unknown) => boolean);
+
+const expectKnowledgeRevalidated = () =>
+  expect(revalidatePredicates().some((predicate) => predicate(SYNC_KEY))).toBe(true);
+
+describe('KnowledgeSlice actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(mutate).mockResolvedValue(undefined as never);
+    vi.mocked(agentService.createAgentFiles).mockResolvedValue(undefined as never);
+    vi.mocked(agentService.createAgentKnowledgeBase).mockResolvedValue(undefined as never);
+    vi.mocked(agentService.deleteAgentFile).mockResolvedValue(undefined as never);
+    vi.mocked(agentService.deleteAgentKnowledgeBase).mockResolvedValue(undefined as never);
+    vi.mocked(agentService.toggleFile).mockResolvedValue(undefined as never);
+    vi.mocked(agentService.toggleKnowledgeBase).mockResolvedValue(undefined as never);
+    reset(AGENT_ID);
   });
-});
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-describe('KnowledgeSlice Actions', () => {
   describe('addFilesToAgent', () => {
     it('should not call service if no activeAgentId', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      await act(async () => {
-        await result.current.addFilesToAgent(['file-1', 'file-2']);
-      });
-
+      reset(undefined);
+      await useAgentStore.getState().addFilesToAgent(['file-1', 'file-2']);
       expect(agentService.createAgentFiles).not.toHaveBeenCalled();
     });
 
     it('should not call service if fileIds is empty', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.addFilesToAgent([]);
-      });
-
+      await useAgentStore.getState().addFilesToAgent([]);
       expect(agentService.createAgentFiles).not.toHaveBeenCalled();
     });
 
-    it('should call createAgentFiles with correct params', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.createAgentFiles).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.addFilesToAgent(['file-1', 'file-2'], true);
-      });
+    it('should call createAgentFiles with correct params and revalidate knowledge', async () => {
+      await useAgentStore.getState().addFilesToAgent(['file-1', 'file-2'], true);
 
       expect(agentService.createAgentFiles).toHaveBeenCalledWith(
-        'agent-1',
+        AGENT_ID,
         ['file-1', 'file-2'],
         true,
       );
+      expectKnowledgeRevalidated();
     });
   });
 
   describe('addKnowledgeBaseToAgent', () => {
     it('should not call service if no activeAgentId', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      await act(async () => {
-        await result.current.addKnowledgeBaseToAgent('kb-1');
-      });
-
+      reset(undefined);
+      await useAgentStore.getState().addKnowledgeBaseToAgent('kb-1');
       expect(agentService.createAgentKnowledgeBase).not.toHaveBeenCalled();
     });
 
     it('should call createAgentKnowledgeBase with enabled=true', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.createAgentKnowledgeBase).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.addKnowledgeBaseToAgent('kb-1');
-      });
-
-      expect(agentService.createAgentKnowledgeBase).toHaveBeenCalledWith('agent-1', 'kb-1', true);
+      await useAgentStore.getState().addKnowledgeBaseToAgent('kb-1');
+      expect(agentService.createAgentKnowledgeBase).toHaveBeenCalledWith(AGENT_ID, 'kb-1', true);
     });
   });
 
   describe('removeFileFromAgent', () => {
     it('should not call service if no activeAgentId', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      await act(async () => {
-        await result.current.removeFileFromAgent('file-1');
-      });
-
+      reset(undefined);
+      await useAgentStore.getState().removeFileFromAgent('file-1');
       expect(agentService.deleteAgentFile).not.toHaveBeenCalled();
     });
 
     it('should call deleteAgentFile with correct params', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.deleteAgentFile).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.removeFileFromAgent('file-1');
-      });
-
-      expect(agentService.deleteAgentFile).toHaveBeenCalledWith('agent-1', 'file-1');
+      await useAgentStore.getState().removeFileFromAgent('file-1');
+      expect(agentService.deleteAgentFile).toHaveBeenCalledWith(AGENT_ID, 'file-1');
     });
   });
 
   describe('removeKnowledgeBaseFromAgent', () => {
     it('should not call service if no activeAgentId', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      await act(async () => {
-        await result.current.removeKnowledgeBaseFromAgent('kb-1');
-      });
-
+      reset(undefined);
+      await useAgentStore.getState().removeKnowledgeBaseFromAgent('kb-1');
       expect(agentService.deleteAgentKnowledgeBase).not.toHaveBeenCalled();
     });
 
     it('should call deleteAgentKnowledgeBase with correct params', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.deleteAgentKnowledgeBase).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.removeKnowledgeBaseFromAgent('kb-1');
-      });
-
-      expect(agentService.deleteAgentKnowledgeBase).toHaveBeenCalledWith('agent-1', 'kb-1');
+      await useAgentStore.getState().removeKnowledgeBaseFromAgent('kb-1');
+      expect(agentService.deleteAgentKnowledgeBase).toHaveBeenCalledWith(AGENT_ID, 'kb-1');
     });
   });
 
   describe('toggleFile', () => {
     it('should not call service if no activeAgentId', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      await act(async () => {
-        await result.current.toggleFile('file-1', true);
-      });
-
+      reset(undefined);
+      await useAgentStore.getState().toggleFile('file-1', true);
       expect(agentService.toggleFile).not.toHaveBeenCalled();
     });
 
     it('should call toggleFile with correct params', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.toggleFile).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.toggleFile('file-1', true);
-      });
-
-      expect(agentService.toggleFile).toHaveBeenCalledWith('agent-1', 'file-1', true);
+      await useAgentStore.getState().toggleFile('file-1', true);
+      expect(agentService.toggleFile).toHaveBeenCalledWith(AGENT_ID, 'file-1', true);
     });
 
     it('should call toggleFile with open=false', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.toggleFile).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.toggleFile('file-1', false);
-      });
-
-      expect(agentService.toggleFile).toHaveBeenCalledWith('agent-1', 'file-1', false);
+      await useAgentStore.getState().toggleFile('file-1', false);
+      expect(agentService.toggleFile).toHaveBeenCalledWith(AGENT_ID, 'file-1', false);
     });
   });
 
   describe('toggleKnowledgeBase', () => {
     it('should not call service if no activeAgentId', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      await act(async () => {
-        await result.current.toggleKnowledgeBase('kb-1', true);
-      });
-
+      reset(undefined);
+      await useAgentStore.getState().toggleKnowledgeBase('kb-1', true);
       expect(agentService.toggleKnowledgeBase).not.toHaveBeenCalled();
     });
 
     it('should call toggleKnowledgeBase with correct params', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.toggleKnowledgeBase).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.toggleKnowledgeBase('kb-1', true);
-      });
-
-      expect(agentService.toggleKnowledgeBase).toHaveBeenCalledWith('agent-1', 'kb-1', true);
+      await useAgentStore.getState().toggleKnowledgeBase('kb-1', true);
+      expect(agentService.toggleKnowledgeBase).toHaveBeenCalledWith(AGENT_ID, 'kb-1', true);
     });
 
     it('should call toggleKnowledgeBase with open=false', async () => {
-      const { result } = renderHook(() => useAgentStore());
-
-      vi.mocked(agentService.toggleKnowledgeBase).mockResolvedValue(undefined as any);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      await act(async () => {
-        await result.current.toggleKnowledgeBase('kb-1', false);
-      });
-
-      expect(agentService.toggleKnowledgeBase).toHaveBeenCalledWith('agent-1', 'kb-1', false);
+      await useAgentStore.getState().toggleKnowledgeBase('kb-1', false);
+      expect(agentService.toggleKnowledgeBase).toHaveBeenCalledWith(AGENT_ID, 'kb-1', false);
     });
   });
 
-  describe('useFetchFilesAndKnowledgeBases', () => {
-    it('should fetch files and knowledge bases for active agent', async () => {
-      const mockData = [
-        { enabled: true, id: 'file-1', name: 'file1.txt', type: KnowledgeType.File },
-        { enabled: true, id: 'kb-1', name: 'KB 1', type: KnowledgeType.KnowledgeBase },
-      ];
-
-      vi.mocked(agentService.getFilesAndKnowledgeBases).mockResolvedValueOnce(mockData);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      const { result } = renderHook(
-        () => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'),
-        {
-          wrapper: withSWR,
-        },
-      );
-
-      await waitFor(() => expect(result.current.data).toEqual(mockData));
-
-      expect(agentService.getFilesAndKnowledgeBases).toHaveBeenCalledWith('agent-1', undefined);
-    });
-
-    it('should return empty array as fallback', async () => {
-      vi.mocked(agentService.getFilesAndKnowledgeBases).mockResolvedValueOnce([]);
-
-      act(() => {
-        useAgentStore.setState({ activeAgentId: 'agent-1' });
-      });
-
-      const { result } = renderHook(
-        () => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'),
-        {
-          wrapper: withSWR,
-        },
-      );
-
-      await waitFor(() => expect(result.current.data).toEqual([]));
+  describe('internal_refreshAgentKnowledge', () => {
+    it('revalidates the knowledge replica of the active scope', async () => {
+      await useAgentStore.getState().internal_refreshAgentKnowledge();
+      expectKnowledgeRevalidated();
     });
   });
 });

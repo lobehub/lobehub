@@ -123,7 +123,12 @@ export const isGemini3Model = (model?: string): boolean => {
 
   return (
     isGemini3OrAbove(model) ||
-    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4)
+    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4) ||
+    // Versioned Nano Banana ids (`gemini-nano-banana-2.1`) are Gemini 3 image models that accept
+    // `thinkingLevel`, like their `gemini-3.1-flash-image` predecessor.
+    (parsed?.family === 'nanoBanana' &&
+      parsed.majorVersion !== undefined &&
+      parsed.majorVersion >= 2)
   );
 };
 

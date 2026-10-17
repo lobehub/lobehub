@@ -68,16 +68,16 @@ describe('GoalCriteriaGeneratorService', () => {
       expect.objectContaining({ schema: expect.objectContaining({ name: 'goal_decomposition' }) }),
       expect.objectContaining({
         tracing: {
-          promptVersion: 'v6',
+          promptVersion: 'v9',
           scenario: 'goal_decompose',
           schemaName: 'goal_decomposition',
         },
       }),
     );
     generateObject.mockResolvedValueOnce({ ...draft, tasks: [{ title: 'Missing instruction' }] });
-    await expect(
-      service.decompose({ requirement: 'Upgrade office editing' }),
-    ).resolves.toBeUndefined();
+    await expect(service.decompose({ requirement: 'Upgrade office editing' })).rejects.toThrow(
+      'did not match the decomposition schema: tasks.0.instruction',
+    );
   });
 
   it('rejects criteria containing evidence values outside the supported enums', async () => {

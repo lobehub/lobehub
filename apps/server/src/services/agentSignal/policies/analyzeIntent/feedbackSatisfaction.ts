@@ -14,6 +14,7 @@ import { z } from 'zod';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
+import type { AgentSignalBudgetDecision } from '../../budget';
 import { classifySatisfaction, transitionToSignals } from '../../processors';
 import { defineSourceHandler } from '../../runtime/middleware';
 import type { ClassifierDiagnosticsService, SatisfactionClassifierService } from '../../services';
@@ -75,6 +76,12 @@ export interface FeedbackSatisfactionJudgeAgentModelConfig {
  * Options for constructing the feedback satisfaction source handler.
  */
 export interface CreateFeedbackSatisfactionJudgePolicyOptions {
+  /**
+   * Per-user daily cap checked before each classifier call.
+   *
+   * @default No cap. The server orchestrator wires the Redis-backed daily budget.
+   */
+  classifierBudget?: () => Promise<AgentSignalBudgetDecision>;
   /** Optional diagnostics sink for malformed structured classifier output. */
   classifierDiagnostics?: ClassifierDiagnosticsService;
   db?: LobeChatDatabase;
@@ -225,6 +232,7 @@ export const createFeedbackSatisfactionJudgeProcessor = (
       };
       const result = await classifySatisfaction(source, ctx, {
         diagnostics: options.classifierDiagnostics,
+        satisfactionBudget: options.classifierBudget,
         satisfactionClassifier: classifier,
       });
 

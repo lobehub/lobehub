@@ -1,5 +1,5 @@
-import { Rate as BaseRate, type RateProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Rate as BaseRate, type RateProps } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

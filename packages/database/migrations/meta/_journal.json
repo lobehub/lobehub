@@ -1232,6 +1232,48 @@
       "when": 1791169090046,
       "tag": "0175_environment_visibility_and_build_state",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1791652556178,
+      "tag": "0176_trash_project_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1791660970899,
+      "tag": "0177_agent_accounts_live_unique_and_goal_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "7",
+      "when": 1791724037738,
+      "tag": "0178_workspace_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1791738372458,
+      "tag": "0179_distinct_intervention_callbacks",
+      "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1792048616001,
+      "tag": "0180_task_archived_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1792164852926,
+      "tag": "0181_linear_integration",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -3,9 +3,19 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext, TaskDetailActivity } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import { copyToClipboard, DropdownMenu, Flexbox, Freeze } from '@lobehub/ui';
-import { ActionIcon, confirmModal, FloatingPanel, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  confirmModal,
+  copyToClipboard,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  FloatingPanel,
+  Freeze,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import {
   Copy,
   ExternalLink,
@@ -15,7 +25,7 @@ import {
   Share2,
   Trash,
 } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ChatList from '@/features/Conversation/ChatList';
@@ -31,7 +41,6 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useTaskStore } from '@/store/task';
@@ -43,6 +52,7 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
 import FeedbackInput from './FeedbackInput';
+import { TopicRuntimeConfig } from './TopicRuntimeConfig';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
 const DEFAULT_PANEL_HEIGHT = 'min(640px, calc(100dvh - 16px))';
@@ -50,20 +60,51 @@ const DEFAULT_PANEL_WIDTH = 640;
 const EXPANDED_PANEL_HEIGHT = 'calc(100dvh - 16px)';
 const EXPANDED_PANEL_WIDTH = 'min(960px, calc(100vw - 16px))';
 
+/** Identifies the conversation and optional Task activity hosted by a run drawer. */
 export interface TopicChatDrawerBodyProps {
+  /** The assignee that owns this Topic's messages and runtime. */
   agentId: string;
+  /** Whether the follow-up composer starts expanded. @default false */
   defaultInputExpanded?: boolean;
+  /** Whether to hide the collapse action once the composer is expanded. @default false */
   disableInputCollapse?: boolean;
+  /** Expand and focus the reply composer whenever this changes — bumped when the
+      drawer is opened with conversational intent (e.g. the brief's "Continue
+      chat"). */
+  inputFocusRequest?: number;
+  /** Latest operation for this Topic, retained after its running marker clears. */
+  operationId?: string | null;
   /**
    * The run to resume streaming from. Hosts that embed the body outside the
    * drawer pass it themselves; the drawer falls back to its own topic's run.
    */
   runningOperation?: TaskDetailActivity['runningOperation'];
+  /** The explicit Topic to render, independent of the active chat route. */
   topicId: string;
 }
 
+/**
+ * Renders a Task run conversation with its latest runtime receipt and follow-up composer.
+ *
+ * Use when:
+ * - Hosting the floating Task drawer or an embedded run conversation.
+ *
+ * Expects:
+ * - An explicit Topic and assignee; optional activity belongs to that same Topic.
+ *
+ * Returns:
+ * - The isolated conversation surface, reconnecting to its active gateway operation.
+ */
 export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
-  ({ agentId, defaultInputExpanded, disableInputCollapse, runningOperation, topicId }) => {
+  ({
+    agentId,
+    defaultInputExpanded,
+    disableInputCollapse,
+    inputFocusRequest,
+    operationId,
+    runningOperation,
+    topicId,
+  }) => {
     const isLogin = useUserStore(authSelectors.isLogin);
     const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
@@ -79,17 +120,21 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
       [agentId, topicId],
     );
 
-    const chatKey = messageMapKey(context);
-    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-    const replaceMessages = useChatStore((s) => s.replaceMessages);
     const operationState = useOperationState(context);
 
-    const drawerRunningOperation = useTaskStore(
-      (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
-    );
+    const drawerActivity = useTaskStore((s) => {
+      const activity = taskActivitySelectors.activeDrawerTopicActivity(s);
+      return activity?.id === topicId ? activity : undefined;
+    });
+    const currentRunningOperation = runningOperation ?? drawerActivity?.runningOperation;
+    const currentOperationId =
+      operationId ??
+      runningOperation?.operationId ??
+      drawerActivity?.runningOperation?.operationId ??
+      drawerActivity?.operationId;
     // Pass this drawer's agent explicitly — the run drawer also mounts on the
     // home surface, where the chat store's `activeAgentId` is unset.
-    useGatewayReconnect(topicId, runningOperation ?? drawerRunningOperation, agentId);
+    useGatewayReconnect(topicId, currentRunningOperation, agentId);
 
     const itemContent = useCallback(
       (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,
@@ -97,17 +142,16 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     );
 
     return (
-      <ConversationProvider
-        context={context}
-        hasInitMessages={!!messages}
-        messages={messages}
-        operationState={operationState}
-        onMessagesChange={(msgs, ctx, meta) => {
-          replaceMessages(msgs, { context: ctx, source: meta?.source });
-        }}
-      >
+      <ConversationProvider context={context} operationState={operationState}>
         <TaskCardScopeProvider value={true}>
           <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
+            <Flexbox align={'flex-start'} paddingInline={12}>
+              <TopicRuntimeConfig
+                agentId={agentId}
+                operationId={currentOperationId}
+                topicId={topicId}
+              />
+            </Flexbox>
             <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
               <ChatList disableActionsBar itemContent={itemContent} />
             </Flexbox>
@@ -115,6 +159,7 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
               <FeedbackInput
                 defaultExpanded={defaultInputExpanded}
                 disableCollapse={disableInputCollapse}
+                focusRequest={inputFocusRequest}
               />
             </Flexbox>
           </Flexbox>
@@ -134,12 +179,31 @@ const TopicChatDrawer = memo(() => {
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
   const drawerTitle = useTaskStore(taskDetailSelectors.topicDrawerTitle);
+  const inputFocusRequest = useTaskStore(taskDetailSelectors.topicDrawerFocusRequest);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
   const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const showArtifactPortal = useTopicDrawerArtifactPortal();
   const closeArtifact = useChatStore((s) => s.closeArtifact);
+
+  // The portal state is global: an artifact left open when this drawer closes
+  // would make the next opening of the same topic land on the artifact instead
+  // of the conversation, so the drawer takes its artifact down with it.
+  const handleClose = useCallback(() => {
+    if (showArtifactPortal) closeArtifact();
+    closeTopicDrawer();
+  }, [closeArtifact, closeTopicDrawer, showArtifactPortal]);
+
+  // A request to write ("Continue chat") needs the conversation and its
+  // composer. Each request is handled once, so an artifact the user opens
+  // afterwards from inside the conversation is left alone.
+  const handledFocusRequestRef = useRef(inputFocusRequest);
+  useEffect(() => {
+    if (!inputFocusRequest || inputFocusRequest === handledFocusRequestRef.current) return;
+    handledFocusRequestRef.current = inputFocusRequest;
+    if (showArtifactPortal) closeArtifact();
+  }, [closeArtifact, inputFocusRequest, showArtifactPortal]);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
   const { allowed: canEditTask } = usePermission('create_content');
@@ -349,7 +413,7 @@ const TopicChatDrawer = memo(() => {
           overflow: 'hidden',
         },
       }}
-      onClose={closeTopicDrawer}
+      onClose={handleClose}
     >
       {/* `open` already proves both ids. The body deliberately does NOT wait for a
           task: a run opened from the home inbox may have no parent task at all,
@@ -361,7 +425,13 @@ const TopicChatDrawer = memo(() => {
               <PortalContent onClose={closeArtifact} />
             </Flexbox>
           ) : (
-            <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />
+            <TopicChatDrawerBody
+              agentId={agentId!}
+              inputFocusRequest={inputFocusRequest}
+              operationId={activity?.runningOperation?.operationId ?? activity?.operationId}
+              runningOperation={activity?.runningOperation}
+              topicId={topicId!}
+            />
           ))}
       </Freeze>
     </FloatingPanel>

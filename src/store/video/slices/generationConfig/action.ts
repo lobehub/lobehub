@@ -18,6 +18,13 @@ import {
   preserveSupportedParams,
 } from '../../../utils/preserveSupportedParams';
 import type { VideoStore } from '../../store';
+import {
+  applyImageInputs,
+  normalizeImageInputMode,
+  pickImageInputs,
+  type VideoImageInputMode,
+  type VideoImageInputs,
+} from './imageInputMode';
 
 export function getVideoModelAndDefaults(model: string, provider: string) {
   const enabledVideoModelList = aiProviderSelectors.enabledVideoModelList(getAiInfraStoreState());
@@ -113,22 +120,25 @@ export class GenerationConfigActionImpl {
   };
 
   setModelAndProviderOnSelect = (model: string, provider: string): void => {
-    const previousParameters = this.#get().parameters;
+    const { imageInputMode: previousMode, parameters: previousParameters } = this.#get();
     const { defaultValues, parametersSchema } = getVideoModelAndDefaults(model, provider);
-    const parameters = preserveVideoInputParams(
-      previousParameters,
-      defaultValues,
+    const { imageInputMode, parameters } = normalizeImageInputMode(
+      preserveVideoInputParams(previousParameters, defaultValues, parametersSchema),
       parametersSchema,
+      previousMode,
     );
 
     this.#set(
       {
         editingDraftSnapshot: undefined,
         editingGenerationId: undefined,
+        imageInputMode,
         model,
         parameters,
         parametersSchema,
         provider,
+        // Stashed images were sized for the previous model's slots
+        stashedImageInputs: {},
       },
       false,
       `setModelAndProviderOnSelect/${model}/${provider}`,
@@ -141,6 +151,82 @@ export class GenerationConfigActionImpl {
         lastSelectedVideoProvider: provider,
       });
     }
+  };
+
+  /**
+   * Load a previous generation's model and settings, including its images. The image input mode
+   * follows the images, so reference-mode settings reopen in reference mode.
+   */
+  reuseVideoSettings = (model: string, provider: string, config?: RuntimeVideoGenParams): void => {
+    this.setModelAndProviderOnSelect(model, provider);
+    if (!config) return;
+
+    const { imageInputMode, parameters, parametersSchema } = this.#get();
+    // The reused images replace the draft's instead of mixing with them
+    const merged: Record<string, unknown> = { ...parameters };
+    for (const key of ['imageUrl', 'imageUrls', 'endImageUrl']) {
+      if (key in merged) merged[key] = key === 'imageUrls' ? [] : null;
+    }
+    for (const [key, value] of Object.entries(config)) {
+      if (value !== undefined) merged[key] = value;
+    }
+
+    this.#set(
+      normalizeImageInputMode(merged as RuntimeVideoGenParams, parametersSchema, imageInputMode),
+      false,
+      `reuseVideoSettings/${model}/${provider}`,
+    );
+  };
+
+  /**
+   * Switch between start/end frames and references. The outgoing mode's images are stashed and
+   * the incoming mode's stash restored, so only the active mode's images are submitted.
+   */
+  setImageInputMode = (mode: VideoImageInputMode): void => {
+    const { imageInputMode, parameters, stashedImageInputs } = this.#get();
+    if (mode === imageInputMode) return;
+
+    this.#set(
+      {
+        imageInputMode: mode,
+        parameters: applyImageInputs(parameters, mode, stashedImageInputs[mode]),
+        stashedImageInputs: {
+          ...stashedImageInputs,
+          [imageInputMode]: pickImageInputs(parameters, imageInputMode),
+          [mode]: undefined,
+        },
+      },
+      false,
+      `setImageInputMode/${mode}`,
+    );
+  };
+
+  /**
+   * Set one image input of `mode`. Uploads land here with the mode they started in: when the user
+   * switched modes while they were in flight, the images join that mode's stash instead of the
+   * submitted parameters, which would otherwise mix both modes and change the provider endpoint.
+   */
+  setImageInputForMode = <K extends keyof VideoImageInputs>(
+    mode: VideoImageInputMode,
+    key: K,
+    value: VideoImageInputs[K],
+  ): void => {
+    const { imageInputMode, stashedImageInputs } = this.#get();
+    if (mode === imageInputMode) {
+      this.setParamOnInput(key, value as RuntimeVideoGenParamsValue);
+      return;
+    }
+
+    this.#set(
+      {
+        stashedImageInputs: {
+          ...stashedImageInputs,
+          [mode]: { ...stashedImageInputs[mode], [key]: value },
+        },
+      },
+      false,
+      `setImageInputForMode/${mode}/${key}`,
+    );
   };
 
   setParamOnInput = <K extends RuntimeVideoGenParamsKeys>(

@@ -14,10 +14,13 @@ import {
 } from '@/types/topic';
 import {
   getTopicSortTime,
+  groupTopicsByAgent,
+  groupTopicsByDevice,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
   groupTopicsByUpdatedTime,
+  type TopicDeviceDirectory,
 } from '@/utils/client/topic';
 
 import { type ChatStoreState } from '../../initialState';
@@ -200,7 +203,7 @@ const getTopicReasoningConfigForModel =
 
 /**
  * Everything a topic pins for a heterogeneous run — the model/provider columns
- * plus `metadata.heteroEffort`. Undefined when nothing is pinned, so callers
+ * plus `metadata.heteroEffort` / `heteroSpeed`. Undefined when nothing is pinned, so callers
  * can pass it straight to `applyTopicModelToHeterogeneousProvider`.
  */
 export const resolveTopicHeteroPin = (
@@ -208,11 +211,13 @@ export const resolveTopicHeteroPin = (
 ): HeterogeneousTopicPin | undefined => {
   if (!topic) return undefined;
   const effort = topic.metadata?.heteroEffort;
-  if (!topic.model && effort === undefined) return undefined;
+  const speed = topic.metadata?.heteroSpeed;
+  if (!topic.model && effort === undefined && speed === undefined) return undefined;
 
   return {
     ...(topic.model ? { model: topic.model, provider: topic.provider || '' } : {}),
     ...(effort === undefined ? {} : { effort }),
+    ...(speed === undefined ? {} : { speed }),
   };
 };
 
@@ -300,6 +305,17 @@ const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
   return [...topics].sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
 };
 
+// The active topic the sidebar pins into its list — except one the user just
+// archived while on it, which must hide at once (see `justArchivedTopicId`).
+// With archived topics shown, it keeps its pin so it survives the page slice.
+const sidebarActiveTopic = (
+  s: ChatStoreState,
+  includeCompleted: boolean,
+): ChatTopic | undefined => {
+  const topic = currentActiveTopic(s);
+  return !includeCompleted && topic && topic.id === s.justArchivedTopicId ? undefined : topic;
+};
+
 // Limit topics for sidebar display based on user's page size preference
 const displayTopicsForSidebar =
   (pageSize: number, sortBy: TopicSortBy = 'updatedAt', includeCompleted = true) =>
@@ -307,46 +323,62 @@ const displayTopicsForSidebar =
     const topics = currentTopicsWithoutSystemTriggers(s);
     if (!topics) return undefined;
 
-    const visibleTopics = includeCompleted
-      ? topics
-      : topics.filter((topic) => topic.status !== 'completed');
-
-    // Favorites first, then sorted by the chosen timestamp, then page-sliced
-    const favTopics = visibleTopics.filter((t) => t.favorite);
-    const rest = visibleTopics.filter((t) => !t.favorite);
-    const pagedTopics = [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(
-      0,
+    return selectSidebarTopics(
+      topics,
       pageSize,
+      sortBy,
+      includeCompleted,
+      sidebarActiveTopic(s, includeCompleted),
     );
-    const activeTopic = currentActiveTopic(s);
+  };
 
-    // A search result or direct URL can open a topic outside the sidebar's
-    // first page (or an archived topic excluded by the completed filter). Keep
-    // the configured page intact and add that one active row so selection never
-    // disappears merely because the route target was filtered out. An injected
-    // favorite stays in the favorite prefix instead of falling below regular rows.
-    if (
-      activeTopic &&
-      activeTopic.trigger !== 'cron' &&
-      !pagedTopics.some((topic) => topic.id === activeTopic.id)
-    ) {
-      if (activeTopic.favorite) {
-        const pagedFavorites = pagedTopics.filter((topic) => topic.favorite);
-        const pagedRest = pagedTopics.filter((topic) => !topic.favorite);
+export const selectSidebarTopics = (
+  topics: ChatTopic[],
+  pageSize: number,
+  sortBy: TopicSortBy = 'updatedAt',
+  includeCompleted = true,
+  activeTopic?: ChatTopic,
+): ChatTopic[] => {
+  const visibleTopics = includeCompleted
+    ? topics
+    : topics.filter((topic) => topic.status !== 'completed');
 
-        return [...sortTopics([...pagedFavorites, activeTopic], sortBy), ...pagedRest];
-      }
+  // Favorites first, then sorted by the chosen timestamp, then page-sliced
+  const favTopics = visibleTopics.filter((t) => t.favorite);
+  const rest = visibleTopics.filter((t) => !t.favorite);
+  const pagedTopics = [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(
+    0,
+    pageSize,
+  );
 
-      return [...pagedTopics, activeTopic];
+  // A search result or direct URL can open a topic outside the sidebar's
+  // first page (or an archived topic excluded by the completed filter). Keep
+  // the configured page intact and add that one active row so selection never
+  // disappears merely because the route target was filtered out. An injected
+  // favorite stays in the favorite prefix instead of falling below regular rows.
+  if (
+    activeTopic &&
+    activeTopic.trigger !== 'cron' &&
+    !pagedTopics.some((topic) => topic.id === activeTopic.id)
+  ) {
+    if (activeTopic.favorite) {
+      const pagedFavorites = pagedTopics.filter((topic) => topic.favorite);
+      const pagedRest = pagedTopics.filter((topic) => !topic.favorite);
+
+      return [...sortTopics([...pagedFavorites, activeTopic], sortBy), ...pagedRest];
     }
 
-    return pagedTopics;
-  };
+    return [...pagedTopics, activeTopic];
+  }
+
+  return pagedTopics;
+};
 
 const getGroupFn = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
 ) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
@@ -363,6 +395,17 @@ const getGroupFn = (
         ...group,
         title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
       }));
+  }
+  if (groupMode === 'byAgent') {
+    // Agent names come from row metadata (project feeds join them per topic);
+    // buckets without attribution stay title-less and the group item names
+    // them from its agent context.
+    return (topics: ChatTopic[]) => groupTopicsByAgent(topics, field);
+  }
+  if (groupMode === 'byDevice') {
+    // Device names resolve at render time from the directory and device
+    // registries, so groups stay title-less here.
+    return (topics: ChatTopic[]) => groupTopicsByDevice(topics, field, directories);
   }
   return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
 };
@@ -392,6 +435,14 @@ const buildGroupedTopics = (
     : groupFn(topics);
 };
 
+export const groupSidebarTopics = (
+  topics: ChatTopic[],
+  groupMode: TopicGroupMode,
+  sortBy: TopicSortBy,
+  loadingTopicIds?: ReadonlySet<string>,
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds, directories));
+
 const groupedTopicsSelector =
   (groupFn: typeof groupTopicsByTime = groupTopicsByTime) =>
   (s: ChatStoreState): GroupedTopic[] => {
@@ -416,7 +467,7 @@ const groupedTopicsForSidebar =
     // buckets straight from `topic.status`.
     const loadingTopicIds =
       groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
-    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
+    return groupSidebarTopics(limitedTopics, groupMode, sortBy, loadingTopicIds);
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {

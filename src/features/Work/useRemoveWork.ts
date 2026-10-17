@@ -1,5 +1,5 @@
 import type { WorkListBaseItem } from '@lobechat/types';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

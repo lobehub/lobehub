@@ -86,7 +86,9 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
 
   // Agent documents
   copyDocument: 'workflow.toolDisplayName.copyDocument',
+  createFolder: 'workflow.toolDisplayName.createFolder',
   listDocuments: 'workflow.toolDisplayName.listDocuments',
+  moveDocuments: 'workflow.toolDisplayName.moveDocuments',
   readDocument: 'workflow.toolDisplayName.readDocument',
   removeDocument: 'workflow.toolDisplayName.removeDocument',
   renameDocument: 'workflow.toolDisplayName.renameDocument',

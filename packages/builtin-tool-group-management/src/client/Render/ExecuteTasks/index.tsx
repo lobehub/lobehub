@@ -3,8 +3,8 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Accordion, Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { Accordion, Avatar, Text } from '@lobehub/ui';
+import { createStaticStyles, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

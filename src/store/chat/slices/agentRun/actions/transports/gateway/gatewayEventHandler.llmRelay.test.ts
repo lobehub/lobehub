@@ -105,7 +105,10 @@ describe('createGatewayEventHandler — LLM relay', () => {
     });
 
     handler(makeEvent('llm_execute', execute()));
-    expect(relay.execute).toHaveBeenCalledWith(execute(), { onOutput: expect.any(Function) });
+    expect(relay.execute).toHaveBeenCalledWith(execute(), {
+      channelOperationId: 'op-1',
+      onOutput: expect.any(Function),
+    });
 
     emit({ data: 'Hello', type: 'text' });
     emit({ data: ' world', type: 'text' });

@@ -1,5 +1,5 @@
 import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

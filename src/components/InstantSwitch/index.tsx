@@ -1,5 +1,5 @@
-import type { SwitchProps } from '@lobehub/ui/base-ui';
-import { Switch } from '@lobehub/ui/base-ui';
+import type { SwitchProps } from '@lobehub/ui';
+import { Switch } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
 interface InstantSwitchProps {

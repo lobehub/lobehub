@@ -20,6 +20,7 @@ export type ScheduleTickOutcome =
   { ran: true; taskIdentifier: string } | { ran: false; reason: ScheduleTickSkipReason };
 
 export type ScheduleTickSkipReason =
+  | 'archived'
   | 'human-waiting'
   | 'in-flight'
   | 'max-executions-reached'
@@ -56,6 +57,11 @@ export async function runScheduleTick(
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
+  }
+  // Archived tasks are hidden from every list; never run them out of sight.
+  if (task.archivedAt) {
+    log('skip task=%s reason=archived', taskId);
+    return { ran: false, reason: 'archived' };
   }
   const wsId = task.workspaceId ?? undefined;
   if (task.automationMode !== 'schedule') {

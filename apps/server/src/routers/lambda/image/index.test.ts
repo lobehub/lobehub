@@ -227,6 +227,7 @@ describe('imageRouter', () => {
       return callback(tx);
     });
 
+    mockAsyncCallerCreateImage.mockResolvedValue(undefined);
     mockCreateAsyncCaller.mockResolvedValue({
       image: {
         createImage: mockAsyncCallerCreateImage,
@@ -556,6 +557,33 @@ describe('imageRouter', () => {
       expect(mockAsyncCallerCreateImage).toHaveBeenCalledWith(
         expect.objectContaining({ workspaceId: 'workspace-1' }),
       );
+    });
+
+    it('does not fail the request or the tasks when the background call rejects', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      mockAsyncCallerCreateImage.mockRejectedValue(
+        new Error('Unexpected token \'<\', "<!DOCTYPE "... is not valid JSON'),
+      );
+
+      try {
+        const caller = imageRouter.createCaller(createMockCtx());
+        const result = await caller.createImage(createDefaultInput());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(result.success).toBe(true);
+        expect(mockAsyncTaskModelUpdate).not.toHaveBeenCalled();
+        expect(unhandled).not.toHaveBeenCalled();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Async image task %s request failed: %O',
+          expect.any(String),
+          expect.any(Error),
+        );
+      } finally {
+        process.off('unhandledRejection', unhandled);
+        consoleErrorSpy.mockRestore();
+      }
     });
 
     it('should handle async caller creation failure', async () => {

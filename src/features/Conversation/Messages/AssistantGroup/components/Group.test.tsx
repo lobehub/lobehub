@@ -31,7 +31,7 @@ vi.mock('@/store/chat/slices/operation/selectors', () => ({
 }));
 
 // Mock the council list so importing Group doesn't pull in the AgentCouncil
-// render chain (→ shared-tool-ui inspectors → antd-style `keyframes`), which is
+// render chain (→ shared-tool-ui inspectors → `@lobehub/ui` `keyframes`), which is
 // out of scope for this unit test.
 vi.mock('../../AgentCouncil/components/CouncilList', () => ({
   default: ({ members }: { members?: unknown[] }) => <div>council:{members?.length ?? 0}</div>,

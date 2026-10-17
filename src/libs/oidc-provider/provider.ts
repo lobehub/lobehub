@@ -7,8 +7,10 @@ import urlJoin from 'url-join';
 import { UserModel } from '@/database/models/user';
 import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
+import { OIDC_ISSUER_PATH, OIDC_ROUTES } from '@/libs/oidc-provider/routes';
 import { normalizeLocale } from '@/locales/resources';
 
+import { accessTokenTTL, isAcceptanceReviewClient, reviewResourceServer } from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
 import { defaultClaims, defaultClients, defaultScopes } from './config';
@@ -67,6 +69,10 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
     // Added: client-based CORS control logic
     clientBasedCORS(ctx, origin, client) {
+      // The review toolbar runs on whatever origin the delivered product is
+      // previewed on; its token is scoped to one acceptance by audience.
+      if (isAcceptanceReviewClient(client?.clientId)) return true;
+
       // Check if the client allows this origin
       // A common strategy is to allow origins of all registered redirect_uris
       if (!client || !client.redirectUris) {
@@ -145,6 +151,14 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
         getResourceServerInfo: (ctx, resourceIndicator) => {
           logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
+          const review = reviewResourceServer(
+            ctx.oidc.client?.clientId,
+            resourceIndicator,
+            ctx.oidc.params?.resource,
+          );
+          if (review === 'reject') throw new errors.InvalidTarget();
+          if (review) return review;
+
           if (resourceIndicator === API_AUDIENCE) {
             logProvider('Indicator matches API_AUDIENCE, returning JWT config.'); // <-- Add this log line
             return {
@@ -310,24 +324,19 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     // mounted under it and the adapter hands it the untouched pathname. A route
     // left at its default (e.g. `/jwks`) is therefore unreachable: the request
     // arrives as `/oidc/jwks` and the provider answers 404.
-    routes: {
-      authorization: '/oidc/auth',
-      code_verification: '/oidc/device',
-      device_authorization: '/oidc/device/auth',
-      end_session: '/oidc/session/end',
-      jwks: '/oidc/jwks',
-      token: '/oidc/token',
-      userinfo: '/oidc/me',
-    },
+    routes: { ...OIDC_ROUTES },
     // 3. Scopes definition
     scopes: defaultScopes,
 
     // 8. Token TTL
-    ttl: oidcArtifactTTL,
+    ttl: {
+      ...oidcArtifactTTL,
+      AccessToken: (ctx, token) => accessTokenTTL(token, oidcArtifactTTL.AccessToken),
+    },
   };
 
   // Create provider instance
-  const baseUrl = urlJoin(appEnv.APP_URL!, '/oidc');
+  const baseUrl = urlJoin(appEnv.APP_URL!, OIDC_ISSUER_PATH);
 
   const provider = new Provider(baseUrl, configuration);
   provider.proxy = true;

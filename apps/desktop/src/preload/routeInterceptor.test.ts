@@ -129,7 +129,7 @@ describe('setupRouteInterceptors', () => {
       // An absolute LobeHub URL: a different origin than `app://renderer`, but the
       // renderer has claimed it and will open it in the portal itself.
       const link = document.createElement('a');
-      link.href = 'https://app.lobehub.com/verify/run-1';
+      link.href = 'https://app.lobehub.com/acceptance/acc-1';
       link.setAttribute(RENDERER_HANDLED_LINK_ATTR, 'true');
       document.body.append(link);
 

@@ -1,7 +1,5 @@
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox, ScrollShadow } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Button, createStaticStyles, cx, Flexbox, ScrollShadow } from '@lobehub/ui';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 

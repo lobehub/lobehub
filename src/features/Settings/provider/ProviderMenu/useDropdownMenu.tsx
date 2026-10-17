@@ -1,4 +1,4 @@
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { LucideCheck } from 'lucide-react';
 import { useMemo } from 'react';
@@ -21,7 +21,7 @@ interface DropdownMenuProps {
 export const useProviderDropdownMenu = ({
   onSortChange,
   sortType,
-}: DropdownMenuProps): MenuProps['items'] => {
+}: DropdownMenuProps): DropdownItem[] => {
   const { t } = useTranslation('modelProvider');
 
   return useMemo(() => {
@@ -51,6 +51,6 @@ export const useProviderDropdownMenu = ({
         sfSymbol: sortType === SortType.AlphabeticalDesc ? 'checkmark' : undefined,
       },
     ];
-    return items as MenuProps['items'];
+    return items as DropdownItem[];
   }, [sortType, onSortChange, t]);
 };

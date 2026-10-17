@@ -204,15 +204,15 @@ export const projectRouter = router({
     }
   }),
 
+  // Keep the released API contract so old clients receive a clear business error.
+  // Project moves are paused while project-scoped task numbering is redesigned.
   moveTask: projectWriteProcedure
     .input(idInput.extend({ taskId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const rows = requireResult(await ctx.projectModel.moveTaskTree(input.id, input.taskId));
-        return { data: rows, message: `${rows.length} task(s) moved`, success: true };
-      } catch (error) {
-        mapProjectError(error, 'moveTask');
-      }
+    .mutation(async () => {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Moving tasks between projects is temporarily disabled',
+      });
     }),
 
   rejectCompletion: projectWriteProcedure

@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Badge } from '@lobehub/ui/base-ui';
+import { ActionIcon, Badge } from '@lobehub/ui';
 import {
   CropIcon,
   EraserIcon,

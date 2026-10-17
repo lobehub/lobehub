@@ -1,6 +1,5 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { createModal, Tabs } from '@lobehub/ui/base-ui';
+import { createModal, Flexbox, Tabs } from '@lobehub/ui';
 import { t } from 'i18next';
 import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +45,9 @@ const ShareMessageModalContent = memo<ShareMessageModalContentProps>(({ message 
       {
         children: (
           <ShareDataProvider context={context}>
-            <SharePdf message={message} />
+            <Flexbox style={{ height: 'min(70vh, 720px)' }}>
+              <SharePdf message={message} />
+            </Flexbox>
           </ShareDataProvider>
         ),
         key: Tab.PDF,

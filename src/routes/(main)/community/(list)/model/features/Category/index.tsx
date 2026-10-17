@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Icon, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
@@ -11,14 +10,16 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
+import { modelSelectors } from '@/store/discover/selectors';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
 import { useCategory } from './useCategory';
 
 const Category = memo(() => {
-  const useModelCategories = useDiscoverStore((s) => s.useModelCategories);
+  const useModelCategories = useDiscoverStore((s) => s.useFetchModelCategories);
   const { category = 'all', q } = useQuery() as { category?: string; q?: string };
-  const { data: items = [] } = useModelCategories({ q });
+  const { queryKey } = useModelCategories({ q });
+  const items = useDiscoverStore(modelSelectors.modelCategories(queryKey));
   const navigate = useWorkspaceAwareNavigate();
   const cates = useCategory();
 

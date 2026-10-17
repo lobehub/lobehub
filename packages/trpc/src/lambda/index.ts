@@ -8,12 +8,14 @@
  * @link https://trpc.io/docs/v11/procedures
  */
 
+import { databaseError } from '../middleware/databaseError';
 import { openTelemetry } from '../middleware/openTelemetry';
 import { upstreamError } from '../middleware/upstreamError';
 import { userAuth } from '../middleware/userAuth';
 import { trpc } from './init';
 import { apiKeyScopeGuard } from './middleware/apiKeyScope';
 import { heteroOperationAuth } from './middleware/heteroOperationAuth';
+import { llmRelayRequest } from './middleware/llmRelayRequest';
 import { oidcAuth } from './middleware/oidcAuth';
 
 /**
@@ -26,7 +28,7 @@ export const router = trpc.router;
  * Create an unprotected procedure
  * @link https://trpc.io/docs/v11/procedures
  **/
-const baseProcedure = trpc.procedure.use(openTelemetry).use(upstreamError);
+const baseProcedure = trpc.procedure.use(openTelemetry).use(upstreamError).use(databaseError);
 
 // `apiKeyScopeGuard` also covers public procedures: `createLambdaContext`
 // authenticates an `X-API-Key` before procedure selection, and several public
@@ -37,7 +39,13 @@ export const publicProcedure = baseProcedure.use(apiKeyScopeGuard);
 // procedure that asserts that the user is logged in
 // `apiKeyScopeGuard` narrows API-key-authenticated calls to the key's scopes;
 // session/OIDC auth and full-access keys pass through untouched.
-export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth).use(apiKeyScopeGuard);
+// `llmRelayRequest` relays the procedure's LLM calls to a device-only provider
+// back to the requesting tab (one-shot relay).
+export const authedProcedure = baseProcedure
+  .use(oidcAuth)
+  .use(userAuth)
+  .use(apiKeyScopeGuard)
+  .use(llmRelayRequest);
 
 // procedure for hetero-agent ingest/finish endpoints — requires a `hetero-operation` JWT
 export const heteroAuthedProcedure = baseProcedure.use(heteroOperationAuth).use(userAuth);

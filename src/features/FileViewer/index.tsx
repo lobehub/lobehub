@@ -1,8 +1,7 @@
 'use client';
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
-import { Center } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui/base-ui';
+import { Center, Spin } from '@lobehub/ui';
 import type { CSSProperties, JSXElementConstructor, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 
@@ -108,6 +107,8 @@ interface FileViewerProps extends FileListItem {
   imageTools?: ReactNode;
   /** Host close action, surfaced in the image viewer's top bar. */
   onClose?: () => void;
+  /** Forwarded to the PDF renderer; see {@link PDFViewerProps.showChunkHighlights}. */
+  showChunkHighlights?: boolean;
   style?: CSSProperties;
 }
 
@@ -151,7 +152,7 @@ const usePDFRenderer = (enabled: boolean) => {
  * Preview any file type.
  */
 const FileViewer = memo<FileViewerProps>((props) => {
-  const { id, style, fileType, url, name, imageTools, onClose } = props;
+  const { id, style, fileType, url, name, imageTools, onClose, showChunkHighlights } = props;
   const isPDF = isPdfFile({ fileName: name, fileType, path: url });
   const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
 
@@ -166,7 +167,7 @@ const FileViewer = memo<FileViewerProps>((props) => {
 
     if (pdfRendererState.status === 'ready') {
       const { Renderer } = pdfRendererState;
-      return <Renderer fileId={id} url={url} />;
+      return <Renderer fileId={id} showChunkHighlights={showChunkHighlights} url={url} />;
     }
 
     return (

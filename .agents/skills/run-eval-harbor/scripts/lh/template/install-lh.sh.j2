@@ -41,6 +41,16 @@ for bin in node npm; do
   [[ "$bin_path" == "/usr/local/bin/$bin" ]] || ln -sf "$bin_path" "/usr/local/bin/$bin"
 done
 
+{% if not use_system_cli %}
+cat >/opt/lh-dev/run-lh.sh <<'LH_RUNNER'
+#!/usr/bin/env bash
+set -euo pipefail
+exec node /opt/lh-dev/dist/index.js "$@"
+LH_RUNNER
+chmod +x /opt/lh-dev/run-lh.sh
+{% endif %}
+
+{% if install_cli %}
 {% if use_system_cli %}
 npm install -g "$CLI_PACKAGE"
 lh_path="$(command -v lh)"
@@ -49,11 +59,6 @@ lh_path="$(command -v lh)"
 {% else %}
 test -f /opt/lh-dev/package.json
 test -f /opt/lh-dev/dist/index.js
-cat >/opt/lh-dev/run-lh.sh <<'LH_RUNNER'
-#!/usr/bin/env bash
-set -euo pipefail
-exec node /opt/lh-dev/dist/index.js "$@"
-LH_RUNNER
-chmod +x /opt/lh-dev/run-lh.sh
 /opt/lh-dev/run-lh.sh --version
+{% endif %}
 {% endif %}

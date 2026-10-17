@@ -1,0 +1,33 @@
+name = "no-unguarded-response-field"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component or hook file from the LobeHub web client.
+
+Why this rule exists: the web client does not ship in lockstep with the server it talks to. The desktop renderer updates on its own channel, a canary client reaches a cloud that has not deployed yet, and a self-hosted server can be months older than the client. Whenever the server adds a field to a response, some live client meets a server that does not send it. The incident behind this rule: an acceptance bundle gained `pullRequests`, the header did `pullRequests.length > 0`, an older server sent no such field, and `Cannot read properties of undefined (reading 'length')` took down the whole route. A client read of a response collection must therefore survive the field being absent.
+
+Report a field of a SERVER RESPONSE that the file dereferences in a way that THROWS when the field is undefined, with no fallback on the path. Throwing dereferences: `.length`, `.map` / `.filter` / `.some` / `.every` / `.find` / `.findIndex` / `.reduce` / `.forEach` / `.flatMap` / `.includes` / `.join` / `.slice` / `.at` / `.sort`, `for … of`, array spread `[...x]`, `Object.keys` / `Object.values` / `Object.entries`, and a property access one level deeper (`data.summary.total`). Object spread `{...x}` and `new Set(x)` accept undefined and do not count. On the CALLER side, handing a field onward as an argument or a prop (`partition(data.agents)`, `setItems(data.items)`, `<List items={data.items} />`) is not a dereference in this file; never guess what an imported function does with it. The RECEIVING side is different: a component or function whose own prop or parameter is typed as a slice of a response type (`pullRequests: AcceptanceBundle['pullRequests']`) and that iterates it IS in scope — that is exactly the incident.
+
+First rule out local bridges: a value read through anything imported from `@/services/electron/*` (whatever the service is called, e.g. `imessageBridgeService`), `window.electron`, `ipcRenderer`, or the device gateway is NEVER a server response, even when it flows through `useClientDataSWR`. Stop there for that value.
+
+Otherwise, a value is a server response only when this file shows it:
+- the `data` (or a destructured alias) of `useSWR`, `useClientDataSWR`, `useSWRInfinite`, `useOnlyFetchOnceSWR`, or of a same-repo hook that wraps them and returns a fetched payload (`useAcceptanceBundle`, `useFetch*` returning `data`);
+- the awaited result of a `*Service.*` call, `lambdaClient.*`, `edgeClient.*`, `trpc.*`, or `fetch(...).json()`;
+- a prop, parameter or variable whose declared type is carved out of a response type: an indexed access into a type named like a payload (`AcceptanceBundle['pullRequests']`, `Bundle['rounds'][number]`), `Awaited<ReturnType<typeof someService.method>>[...]`, or `inferRouterOutputs` / `RouterOutput[...]`.
+
+A fallback is anything that makes the dereference safe when the field is missing: `?? []`, `?? {}`, `|| []`, optional chaining on the field itself (`x?.length`, `x?.map`), a destructuring or parameter default (`{ pullRequests = [] }`), or an earlier guard on the same field (`if (!x) return`, `Array.isArray(x)`, `x && x.map(...)`). Guarding only the outer `data` (`if (!data) return null`) is NOT a fallback for its fields.
+
+Report EVERY unguarded throwing dereference as its own finding, anchored on the line of that dereference — never fold several sites into one finding on the first of them. Only findings on lines a pull request adds or changes are kept, so a new read of an old field must carry its own anchor, and an untouched old read must not stand in for it. Name the field and where it comes from (hook, service call or type). The suggestion must normalize the field once where it is read (`const pullRequests = data.pullRequests ?? []`, or a destructuring default) rather than sprinkling `?.` at every use.
+
+Do not report — these are the places the rule does not apply:
+- the payload root itself: `data.items` before `data` resolves, or a response that IS the array (`service.list().then((data) => data.filter(...))`). Only report a named field INSIDE an object payload — a server that lacks the endpoint fails the request, it does not send a partial payload;
+- a field passed as an argument or prop (`partition(data.agents)`, `<List items={data.items} />`). The dereference happens in the callee, which this file cannot see; do not guess what an imported helper does with it;
+- scalar fields that are rendered, compared or formatted (`{data.title}`, `data.count > 0`, `` `#${pr.number}` ``, `formatDate(data.createdAt)`): an undefined scalar renders nothing or compares false; it does not crash;
+- values that come from a zustand store or its selectors, React state, context, URL params, `localStorage`, constants, or something the file built itself — even if they were originally fetched; the store owns normalization;
+- props or parameters typed with a plain interface or an element type (`items: Item[]`, `pullRequests: PullRequestLink[]`) rather than a slice of a response type. The file cannot see where those come from;
+- an array the client derived from a response (`data.items.map(...)` is one finding at `.map`; the `.filter` chained after it is not another);
+- local bridges rather than the server: anything imported from `@/services/electron/*` whatever the service is named (`imessageBridgeService`, `electronDevtoolsService`), `window.electron`, `ipcRenderer`, the device gateway, the local file system;
+- fields the server type itself marks optional (`field?:`) when the file already handles them — TypeScript forces that path;
+- test files, stories, fixtures and mock data.
+
+If an exclusion applies, return no finding. If you cannot tell from this file whether the value is a server response, return no finding rather than a low-confidence guess.
+"""

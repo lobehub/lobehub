@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Unable to generate this answer",
   "unknownError.title": "Oops, the request took a nap",
   "unknownError.traceIdLabel": "Trace ID:",
+  "unknownError.troubleshoot": "Troubleshoot",
   "unlock.addProxyUrl": "Add OpenAI proxy URL (optional)",
   "unlock.apiKey.description": "Enter your {{name}} API Key to start the session",
   "unlock.apiKey.imageGenerationDescription": "Enter your {{name}} API Key to start generating",

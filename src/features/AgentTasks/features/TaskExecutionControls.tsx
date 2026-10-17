@@ -13,18 +13,16 @@ import { FolderIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import {
   getWorkingDirectoryName,
   getWorkingDirectoryPathString,
 } from '@/helpers/workingDirectoryPath';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import TaskDeviceChip from './TaskDeviceChip';
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskRepoChip from './TaskRepoChip';
 import TaskWorkingDirectoryChip from './TaskWorkingDirectoryChip';
+import { useTaskExecutionAvailability } from './useTaskExecutionAvailability';
 import { useTaskRunTarget } from './useTaskRunTarget';
 
 interface TaskExecutionControlsProps {
@@ -65,12 +63,7 @@ const TaskExecutionControlsInner = memo<
   Omit<TaskExecutionControlsProps, 'assigneeAgentId'> & { assigneeAgentId: string }
 >(({ assigneeAgentId, disabled, onChange, value }) => {
   const { t } = useTranslation('chat');
-  const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(assigneeAgentId));
-  const { isAgentRuntimeMode, isPreferenceLoading } = useEffectiveAgentMode(assigneeAgentId);
-  // Heterogeneous agents always execute somewhere; a plain agent only has an
-  // execution environment in agent mode (chat mode means "no tools, no device").
-  // Same gate the chat composer uses for this cluster.
-  const canExecuteSomewhere = isHetero || isAgentRuntimeMode;
+  const canExecuteSomewhere = useTaskExecutionAvailability(assigneeAgentId);
 
   const target = useTaskRunTarget(assigneeAgentId, value?.boundDeviceId);
 
@@ -113,7 +106,7 @@ const TaskExecutionControlsInner = memo<
     [emit, target.deviceId, value],
   );
 
-  if (isPreferenceLoading || !canExecuteSomewhere) return null;
+  if (!canExecuteSomewhere) return null;
 
   // What the run actually starts in: the task's own choice first, then the
   // chain the runtime falls back to. Shown as the muted hint so "inherit" is

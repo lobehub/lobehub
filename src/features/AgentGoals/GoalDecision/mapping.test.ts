@@ -5,7 +5,7 @@ import {
 } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
-import { goalGateCategory, toGateAnswer, toGateQuestion } from './mapping';
+import { gateAnswerProblem, goalGateCategory, toGateAnswer, toGateQuestion } from './mapping';
 
 const recover = [
   { id: 'retry', label: 'Retry task' },
@@ -115,5 +115,18 @@ describe('toGateAnswer', () => {
         [{ questionId: 'd2', text: 'Both, desktop first', type: 'text' }],
       ),
     ).toEqual({ optionId: 'all', resolution: 'Both, desktop first' });
+  });
+});
+
+describe('gateAnswerProblem', () => {
+  it('requires a correction to revise a batch recipe', () => {
+    expect(gateAnswerProblem({ optionId: 'revise' })).toBe('correctionRequired');
+    expect(gateAnswerProblem({ optionId: 'revise', resolution: '  ' })).toBe('correctionRequired');
+    expect(gateAnswerProblem({ optionId: 'revise', resolution: '补上冷启动' })).toBeUndefined();
+  });
+
+  it('leaves every other answer alone', () => {
+    expect(gateAnswerProblem({ optionId: 'new_class' })).toBeUndefined();
+    expect(gateAnswerProblem({ optionId: 'retry' })).toBeUndefined();
   });
 });

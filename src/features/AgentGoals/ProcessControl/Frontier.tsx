@@ -1,9 +1,17 @@
 'use client';
 
 import type { AcceptanceStatus } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Divider, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { ChevronDown, ChevronRight, History, ListTodo, Plus } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,10 +32,11 @@ import AssigneeProfileAvatar from './AssigneeProfileAvatar';
 import {
   coordinatorGateReason,
   coordinatorNodeTitleKey,
-  coordinatorReasonCopy,
+  coordinatorReasonCopies,
   viewGateKind,
 } from './coordinatorCopy';
 import type { FrontierItem, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
+import ReleaseGateEntry from './ReleaseGateEntry';
 import { useElapsed } from './useElapsed';
 
 /**
@@ -185,10 +194,10 @@ RowGlyph.displayName = 'GoalFrontierRowGlyph';
 
 const AttemptReason = memo<{ reason?: string | null }>(({ reason }) => {
   const { t } = useTranslation('chat');
-  const copy = coordinatorReasonCopy(reason);
+  const copies = coordinatorReasonCopies(reason);
   return (
     <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
-      {copy ? t(copy.key as any, copy.params) : (reason ?? '')}
+      {copies ? copies.map((copy) => t(copy.key as any, copy.params)).join('; ') : (reason ?? '')}
     </Text>
   );
 });
@@ -380,59 +389,85 @@ const GateCard = memo<{
   goalAgentId?: string | null;
   numbers: Map<string, number>;
   onSelect: (nodeId: string) => void;
+  /** Set when this gate is a held batch release reviewed on its own page. */
+  releaseGateAcceptanceId?: string;
   subject?: GoalNodeView;
   view: GoalNodeView;
-}>(({ actions, canEdit, category, goalAgentId, numbers, onSelect, subject, view }) => {
-  const { t } = useTranslation('chat');
-  const gateSummary = useGateSummary();
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-  const taskSubject = subject?.node.kind === 'task' ? subject : undefined;
-  const subjectTitle =
-    subject?.node.kind === 'task'
-      ? (() => {
-          const key = coordinatorNodeTitleKey(subject);
-          return key ? t(key as any) : subject.node.title;
-        })()
-      : undefined;
-  return (
-    <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
-      <GoalDecisionCase
-        agentId={goalAgentId}
-        basis={view.node.description}
-        canAnswer={canEdit}
-        category={category}
-        decision={view.decision!}
-        evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
-        summary={gateSummary(category, subjectTitle)}
-        footer={
-          // A goal-level question (the main Agent asking about the goal itself)
-          // stopped no Task, so there is no run to open.
-          taskSubject ? (
-            <GateLinks
-              ledgerOpen={ledgerOpen}
-              subject={taskSubject}
-              onOpen={() => onSelect(taskSubject.node.id)}
-              onToggleLedger={() => setLedgerOpen(!ledgerOpen)}
-            />
-          ) : undefined
-        }
-        task={
-          taskSubject && subjectTitle
-            ? {
-                description: taskSubject.node.description,
-                onOpen: () => onSelect(taskSubject.node.id),
-                title:
-                  numbers.get(taskSubject.node.id) !== undefined
-                    ? `#${numbers.get(taskSubject.node.id)} ${subjectTitle}`
-                    : subjectTitle,
-              }
-            : undefined
-        }
-        onDecide={(optionId, resolution) => actions.decide(view.decision!.id, optionId, resolution)}
-      />
-    </div>
-  );
-});
+}>(
+  ({
+    actions,
+    canEdit,
+    category,
+    goalAgentId,
+    numbers,
+    onSelect,
+    releaseGateAcceptanceId,
+    subject,
+    view,
+  }) => {
+    const { t } = useTranslation('chat');
+    const gateSummary = useGateSummary();
+    const [ledgerOpen, setLedgerOpen] = useState(false);
+    const taskSubject = subject?.node.kind === 'task' ? subject : undefined;
+    const subjectTitle =
+      subject?.node.kind === 'task'
+        ? (() => {
+            const key = coordinatorNodeTitleKey(subject);
+            return key ? t(key as any) : subject.node.title;
+          })()
+        : undefined;
+    if (releaseGateAcceptanceId)
+      return (
+        <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+          <ReleaseGateEntry
+            acceptanceId={releaseGateAcceptanceId}
+            decision={view.decision!}
+            goalId={view.node.goalId}
+          />
+        </div>
+      );
+    return (
+      <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+        <GoalDecisionCase
+          agentId={goalAgentId}
+          basis={view.node.description}
+          canAnswer={canEdit}
+          category={category}
+          decision={view.decision!}
+          evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
+          summary={gateSummary(category, subjectTitle)}
+          footer={
+            // A goal-level question (the main Agent asking about the goal itself)
+            // stopped no Task, so there is no run to open.
+            taskSubject ? (
+              <GateLinks
+                ledgerOpen={ledgerOpen}
+                subject={taskSubject}
+                onOpen={() => onSelect(taskSubject.node.id)}
+                onToggleLedger={() => setLedgerOpen(!ledgerOpen)}
+              />
+            ) : undefined
+          }
+          task={
+            taskSubject && subjectTitle
+              ? {
+                  description: taskSubject.node.description,
+                  onOpen: () => onSelect(taskSubject.node.id),
+                  title:
+                    numbers.get(taskSubject.node.id) !== undefined
+                      ? `#${numbers.get(taskSubject.node.id)} ${subjectTitle}`
+                      : subjectTitle,
+                }
+              : undefined
+          }
+          onDecide={(optionId, resolution) =>
+            actions.decide(view.decision!.id, optionId, resolution)
+          }
+        />
+      </div>
+    );
+  },
+);
 
 GateCard.displayName = 'GoalGateCard';
 
@@ -453,9 +488,9 @@ const FrontierRow = memo<{
   const coordinatorTitleKey = coordinatorNodeTitleKey(view);
   const gateKind = item.kind === 'gate' ? viewGateKind(view) : undefined;
   const rawGateReason = gateKind ? coordinatorGateReason(view.decision?.question) : undefined;
-  const gateReasonCopy = coordinatorReasonCopy(rawGateReason);
-  const gateReasonText = gateReasonCopy
-    ? t(gateReasonCopy.key as any, gateReasonCopy.params)
+  const gateReasonCopies = coordinatorReasonCopies(rawGateReason);
+  const gateReasonText = gateReasonCopies
+    ? gateReasonCopies.map((copy) => t(copy.key as any, copy.params)).join('; ')
     : rawGateReason;
 
   // Gate rows carry no tag: the expanded card with its action buttons already
@@ -623,9 +658,14 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
           goalAgentId={graph.goal.agentId}
           key={item.key}
           numbers={numbers}
-
           subject={item.view.gateSubjectId ? graph.byId[item.view.gateSubjectId] : undefined}
+
           view={item.view}
+          releaseGateAcceptanceId={
+            graph.goal.config?.rolloutState?.releaseReviewNodeId === item.view.node.id
+              ? graph.goal.config.rolloutState.releaseGateAcceptanceId
+              : undefined
+          }
           onSelect={onSelect}
         />
       ))}

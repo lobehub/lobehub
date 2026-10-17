@@ -3,8 +3,8 @@ import type {
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestMergeMethod,
 } from '@lobechat/types';
-import { Button, type DropdownItem, SplitButton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, type DropdownItem, SplitButton } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

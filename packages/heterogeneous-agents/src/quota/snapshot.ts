@@ -62,10 +62,12 @@ export type CodexRateLimitResetOutcome =
 /**
  * Why the quota can't be shown. `external-auth` means the agent is configured
  * with an API key / custom base url, so subscription quota does not apply;
- * the credential reasons mean no fresh OAuth login was found on this machine.
+ * the credential reasons mean no fresh OAuth login was found on this machine;
+ * `request-blocked` means Anthropic refused the sampling machine's network
+ * (region / missing proxy) before checking the login.
  */
 export type ClaudeCodeQuotaUnavailableReason =
-  'credentials-expired' | 'credentials-not-found' | 'external-auth';
+  'credentials-expired' | 'credentials-not-found' | 'external-auth' | 'request-blocked';
 
 export interface ClaudeCodeScopedWeekly {
   /** Display name of the model the window is scoped to, e.g. "Fable". */

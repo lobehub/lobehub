@@ -1,6 +1,14 @@
-import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text, Upload } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  FileTypeIcon,
+  Flexbox,
+  Icon,
+  Text,
+  Upload,
+} from '@lobehub/ui';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

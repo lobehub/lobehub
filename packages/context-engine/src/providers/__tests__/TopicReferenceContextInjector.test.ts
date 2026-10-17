@@ -63,7 +63,8 @@ describe('TopicReferenceContextInjector', () => {
     expect(result.messages).toHaveLength(3);
     const lastContent = result.messages[2].content as string;
     expect(lastContent).toContain('<referred_topics hint=');
-    expect(lastContent).toContain('getTopicContext tool');
+    expect(lastContent).toContain('lh topic view');
+    expect(lastContent).not.toContain('getTopicContext');
     expect(lastContent).toContain(
       '<topic id="topic-1" title="React Hooks Discussion" type="summary">',
     );
@@ -90,7 +91,7 @@ describe('TopicReferenceContextInjector', () => {
     const lastContent = result.messages[0].content as string;
 
     expect(lastContent).toContain('<pending_topics');
-    expect(lastContent).toContain('getTopicContext');
+    expect(lastContent).toContain('lh topic view');
     expect(lastContent).toContain('<topic id="topic-no-summary" title="Old Chat" />');
     expect(lastContent).not.toContain('</topic>');
     expect(result.metadata.topicReferenceInjected).toBe(true);

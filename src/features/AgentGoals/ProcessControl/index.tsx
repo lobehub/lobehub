@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, type AccordionItemType, Tag, Text } from '@lobehub/ui/base-ui';
+import { Accordion, type AccordionItemType, Flexbox, Tag, Text } from '@lobehub/ui';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -88,7 +87,6 @@ const ProcessControl = memo<ProcessControlProps>(
     // advances entirely on its own — the only legitimate human control over its
     // pace is pause/resume.
     const canAct = canEdit && !isGoalClosed(graph);
-    const hasExperiments = graph.nodes.some((view) => view.node.kind === 'experiment');
 
     const map = (
       <Graph
@@ -103,8 +101,9 @@ const ProcessControl = memo<ProcessControlProps>(
     );
 
     const process = (
-      <Flexbox gap={20}>
-        {hasExperiments && map}
+      <Flexbox gap={40}>
+        {/* What waits on the reader comes first; the map explains it below. The
+            wide gap keeps the two reading as separate sections, not one block. */}
         <Flexbox gap={12}>
           <Frontier
             actions={actions}
@@ -115,13 +114,14 @@ const ProcessControl = memo<ProcessControlProps>(
           />
         </Flexbox>
 
-        {!hasExperiments && map}
+        {map}
 
         <Accordion
           defaultValue={['deliverables', 'findings', 'activity']}
-          gap={0}
+          gap={16}
           indicatorPlacement="inline"
-          styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
+          // One left edge for headings and their content, so a section's rows
+          // line up under its title instead of sitting on an indent.
           items={
             [
               // The structured acceptance standard the terminal goal acceptance is
@@ -184,6 +184,10 @@ const ProcessControl = memo<ProcessControlProps>(
               },
             ].filter(Boolean) as AccordionItemType[]
           }
+          styles={{
+            panel: { paddingInline: 0 },
+            trigger: { paddingBlock: 8, paddingInline: 0 },
+          }}
         />
       </Flexbox>
     );

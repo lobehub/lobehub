@@ -3,4 +3,8 @@ export type {
   TopicLookupResult,
   TopicMessageItem,
 } from './resolveTopicReferences';
-export { parseReferTopicTags, resolveTopicReferences } from './resolveTopicReferences';
+export {
+  mentionsTopic,
+  parseReferTopicTags,
+  resolveTopicReferences,
+} from './resolveTopicReferences';

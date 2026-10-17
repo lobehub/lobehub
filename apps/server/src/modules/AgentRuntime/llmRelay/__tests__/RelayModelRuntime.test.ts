@@ -65,11 +65,13 @@ const createStreamManager = () => {
 const createRuntime = (
   streamManager: any,
   deadlines = { claimMs: 2000, firstChunkMs: 2000, idleMs: 2000, totalMs: 5000 },
+  channelOperationId?: string,
 ) =>
   new RelayModelRuntime({
     assistantMessageId: 'msg_1',
     attempt: 1,
     callId: CALL_ID,
+    channelOperationId,
     deadlines,
     operationId: 'op_1',
     preferredClientId: 'tab-a',
@@ -365,6 +367,142 @@ describe('RelayModelRuntime + llm-relay handlers', () => {
   });
 });
 
+describe('RelayModelRuntime non-chat methods', () => {
+  beforeEach(() => {
+    vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');
+    redis = new FakeRedis();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('runs generateObject on the device and resolves to its uploaded result', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager);
+    const objectPayload = {
+      messages: [{ content: 'Title this', role: 'user' as const }],
+      model: 'llama3',
+      schema: { name: 'title', schema: { properties: {}, type: 'object' as const } },
+    };
+
+    const result = runtime.generateObject(objectPayload);
+    const execute = await waitForExecute(events);
+    expect(execute.method).toBe('generateObject');
+
+    const payloadRes = await llmRelayPayload(buildContext(CALL_ID, { lease: execute.leaseToken }));
+    expect(await payloadRes.json()).toEqual(objectPayload);
+
+    // The value arrives as JSON text in parts, possibly across batches.
+    await post(execute.leaseToken, {
+      chunks: [{ data: '{"title":', type: 'result_part' }],
+      clientId: 'tab-a',
+      seq: 1,
+    });
+    await post(execute.leaseToken, {
+      chunks: [{ data: '"Hello"}', type: 'result_part' }],
+      clientId: 'tab-a',
+      final: { reason: 'done' },
+      seq: 2,
+    });
+
+    await expect(result).resolves.toEqual({ title: 'Hello' });
+    expect(redis.peek(llmRelayKeys.payload(CALL_ID))).toBeUndefined();
+  });
+
+  it('rejects generateObject with the provider error the device reported', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager);
+
+    const result = runtime.generateObject({ messages: [], model: 'llama3' } as any);
+    const { leaseToken } = await waitForExecute(events);
+    const providerError = { errorType: 'OllamaServiceUnavailable', provider: 'ollama' };
+    await post(leaseToken, {
+      chunks: [],
+      clientId: 'tab-a',
+      final: { error: providerError, reason: 'error' },
+      seq: 1,
+    });
+
+    await expect(result).rejects.toEqual(providerError);
+  });
+
+  it('fails generateObject as ClientLlmExecutorUnavailable when nobody claims it', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager, {
+      claimMs: 50,
+      firstChunkMs: 2000,
+      idleMs: 2000,
+      totalMs: 5000,
+    });
+
+    await expect(runtime.models()).rejects.toMatchObject({
+      error: { reason: 'claim_timeout' },
+      errorType: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+    });
+    expect(events.find((e) => e.type === 'llm_execute')?.data.method).toBe('models');
+    expect(events.some((e) => e.type === 'llm_cancel')).toBe(true);
+  });
+
+  it('streams pullModel progress and ends a failed download with an error line', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager);
+
+    const response = await runtime.pullModel({ model: 'llama3' });
+    const execute = await waitForExecute(events);
+    expect(execute).toMatchObject({ method: 'pullModel', model: 'llama3' });
+
+    await post(execute.leaseToken, {
+      chunks: [{ data: '{"status":"pulling","completed":1,"total":2}\n', type: 'progress' }],
+      clientId: 'tab-a',
+      seq: 1,
+    });
+    await post(execute.leaseToken, {
+      chunks: [],
+      clientId: 'tab-a',
+      final: { error: { message: 'disk full' }, reason: 'error' },
+      seq: 2,
+    });
+
+    const lines = (await response.text())
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(lines).toEqual([
+      { completed: 1, status: 'pulling', total: 2 },
+      { error: 'disk full', status: 'error' },
+    ]);
+  });
+
+  // The chat route hands trace headers in `options.headers`; every provider
+  // runtime sets them on its Response, and the browser stores the trace id
+  // with the message from there.
+  it('sets the response headers the caller hands to chat (trace ids)', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager);
+
+    const response = runtime.chat(payload, { headers: { 'x-lobe-chat-trace-id': 'trace-1' } });
+    const execute = await waitForExecute(events);
+    await post(execute.leaseToken, {
+      chunks: [],
+      clientId: 'tab-a',
+      final: { reason: 'done' },
+      seq: 1,
+    });
+
+    expect((await response).headers.get('x-lobe-chat-trace-id')).toBe('trace-1');
+  });
+
+  it('keeps method off the chat dispatch, for executors that predate it', async () => {
+    const { events, manager } = createStreamManager();
+    const runtime = createRuntime(manager);
+
+    void runtime.chat(payload).catch(() => {});
+    const execute = await waitForExecute(events);
+    expect(execute).not.toHaveProperty('method');
+  });
+});
+
 describe('RelayModelRuntime over a gateway with relay routes', () => {
   beforeEach(() => {
     vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');
@@ -453,6 +591,55 @@ describe('RelayModelRuntime over a gateway with relay routes', () => {
     });
     expect(manager.closeLlmCall).toHaveBeenCalledWith('op_1', CALL_ID);
     expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+  });
+
+  it("runs a sub-agent's call over its parent's channel, still naming the sub-agent's run", async () => {
+    const { executes, manager } = createGatewayManager();
+    const controller = new AbortController();
+    const response = await createRuntime(manager, undefined, 'parent_op').chat(payload, {
+      signal: controller.signal,
+    });
+    const consumed = consumeStreamUntilDone(response);
+    await vi.waitFor(() => expect(executes).toHaveLength(1));
+
+    expect(manager.sendLlmExecute).toHaveBeenCalledWith(
+      'parent_op',
+      expect.objectContaining({ callId: CALL_ID, operationId: 'op_1', preferredClientId: 'tab-a' }),
+    );
+
+    await post(executes[0].leaseToken, { chunks: [], clientId: 'tab-a', seq: 1 });
+    controller.abort();
+
+    await expect(consumed).rejects.toMatchObject({ name: 'AbortError' });
+    expect(manager.sendLlmCancel).toHaveBeenCalledWith('parent_op', {
+      callId: CALL_ID,
+      reason: 'interrupted',
+      stepIndex: 0,
+    });
+    expect(manager.closeLlmCall).toHaveBeenCalledWith('parent_op', CALL_ID);
+  });
+
+  it("falls back to a stream event on the parent's channel without relay routes", async () => {
+    const published: { operationId: string; type: string }[] = [];
+    const manager = {
+      publishStreamEvent: vi.fn(async (operationId: string, event: any) => {
+        published.push({ operationId, type: event.type });
+        return 'event-id';
+      }),
+    };
+    const controller = new AbortController();
+    const response = await createRuntime(manager, undefined, 'parent_op').chat(payload, {
+      signal: controller.signal,
+    });
+    const consumed = consumeStreamUntilDone(response);
+    await vi.waitFor(() => expect(published).toHaveLength(1));
+    controller.abort();
+    await expect(consumed).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(published).toEqual([
+      { operationId: 'parent_op', type: 'llm_execute' },
+      { operationId: 'parent_op', type: 'llm_cancel' },
+    ]);
   });
 
   it('fails as ClientLlmExecutorUnavailable when the gateway refuses the dispatch', async () => {

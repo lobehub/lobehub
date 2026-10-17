@@ -1,5 +1,5 @@
 import type { ModelParamsSchema } from '../standard-parameters';
-import type { AIImageModelCard } from '../types/aiModel';
+import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 export const fluxSchnellParamsSchema: ModelParamsSchema = {
   height: { default: 1024, max: 1536, min: 512, step: 1 },
@@ -221,6 +221,110 @@ const falImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...falImageModels];
+const falVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      "ByteDance's Seedance 2.5 on fal, generating up to 30-second single-shot videos with native audio from text, first/last frames, or up to 30 reference images.",
+    displayName: 'Seedance 2.5',
+    enabled: true,
+    // One card for the fal app; the runtime picks text-to-video, image-to-video or
+    // reference-to-video from the supplied images.
+    id: 'bytedance/seedance-2.5',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+      },
+      duration: { default: 5, max: 30, min: 4, step: 1 },
+      endImageUrl: { default: null, maxFileSize: 30 * 1024 * 1024, requiresImageUrl: true },
+      generateAudio: { default: true },
+      imageUrl: { default: null, maxFileSize: 30 * 1024 * 1024 },
+      imageUrls: { default: [], maxCount: 30, maxFileSize: 30 * 1024 * 1024 },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      // 5 seconds at the default 720p 16:9
+      approximatePricePerVideo: 2.33,
+      units: [
+        {
+          // Output tokens: width × height × (24 × seconds + 1) / 1024, with or without audio
+          // (see meterVideoOutputTokens); input images are not billed. fal lists $0.0214 / 1K
+          // tokens but bills 1080p at 1.094× the tokens (measured on every aspect ratio), so
+          // its rate is 21.4 × 1.094
+          lookup: {
+            prices: { '1080p': 23.4116, '480p': 21.4, '720p': 21.4 },
+            pricingParams: ['resolution'],
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-08-12',
+    type: 'video',
+  },
+  {
+    description:
+      "fal's post-trained MiniMax H3 with stronger prompt adherence and aesthetics, supporting text-to-video, first/last-frame image-to-video, and reference-to-video with native audio.",
+    displayName: 'H3 Max',
+    enabled: true,
+    // One card for the fal app; the runtime picks text-to-video, image-to-video or
+    // reference-to-video from the supplied images.
+    id: 'minimax/h3-max',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+      },
+      duration: { default: 5, max: 15, min: 5, step: 1 },
+      endImageUrl: { default: null },
+      imageUrl: { default: null },
+      imageUrls: {
+        aspectRatio: { max: 2.5, min: 0.4 },
+        default: [],
+        maxCount: 9,
+      },
+      prompt: { default: '' },
+      promptExtend: { default: 'balanced', enum: ['disabled', 'balanced', 'quality'] },
+      resolution: { default: '768P', enum: ['480P', '768P', '1080P'] },
+      seed: { default: null },
+    },
+    pricing: {
+      // 5 seconds at the default 768P
+      approximatePricePerVideo: 0.4,
+      units: [
+        {
+          lookup: {
+            prices: { '1080P': 0.16, '480P': 0.05, '768P': 0.08 },
+            pricingParams: ['resolution'],
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+        {
+          // Reference tokens above 4,096 per request at $0.02 / 1K; tokens per image follow the
+          // aspect ratio (see countVideoReferenceImageTokens)
+          mode: 'graduated',
+          name: 'imageInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0, upTo: 4096 },
+            { rate: 20, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-09-01',
+    type: 'video',
+  },
+];
+
+export const allModels = [...falImageModels, ...falVideoModels];
 
 export default allModels;

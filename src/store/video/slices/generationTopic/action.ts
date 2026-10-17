@@ -1,11 +1,9 @@
 import { chainSummaryGenerationTitle } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import type { SWRResponse } from 'swr';
 
 import { LOADING_FLAT } from '@/const/message';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { videoKeys } from '@/libs/swr/keys';
+import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
 import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
@@ -18,10 +16,47 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import type { VideoStore } from '../../store';
 import type { GenerationTopicVisibility } from './initialState';
+import { GENERATION_TOPICS_KEY, generationTopicsResource } from './projection';
 import { type GenerationTopicDispatch, generationTopicReducer } from './reducer';
 import { generationTopicSelectors } from './selectors';
 
 const n = setNamespace('videoGenerationTopic');
+
+const TOPICS_PARAMS = {} as Record<string, never>;
+
+/**
+ * Result of the topic-list sync. `data` mirrors the SWR-era shape the shared
+ * generation layout reads (`data !== undefined` marks the list as loaded at
+ * least once, so an absent routed topic is a settled "not found"); the replica
+ * flags are what the owner should use going forward.
+ */
+export interface GenerationTopicsSyncResult extends ReplicaSyncResult {
+  data?: ImageGenerationTopic[];
+  /** A request is in flight and the list has never loaded. */
+  isLoading: boolean;
+  /** Alias of `revalidate`. */
+  mutate: () => Promise<unknown>;
+}
+
+/**
+ * The topic list keeps its long-standing flat field (`generationTopics`) as the
+ * replica view, gated by `isGenerationTopicsInit` so a loaded-but-empty list
+ * stays distinguishable from one that was never fetched — and so `hydrate` is
+ * not skipped by an always-array view.
+ *
+ * The cache scope (`${userId}:${workspaceId}`) owns the partition: a switch
+ * clears the view before paint, so one identity's topics can never render under
+ * another.
+ */
+const generationTopicsLens: ReplicaLens<VideoStore, ImageGenerationTopic[]> = {
+  clear: () => ({ generationTopics: [], isGenerationTopicsInit: false }),
+  get: (state) => (state.isGenerationTopicsInit ? state.generationTopics : undefined),
+  keys: (state) => (state.isGenerationTopicsInit ? [GENERATION_TOPICS_KEY] : []),
+  set: (_state, _key, data) =>
+    data
+      ? { generationTopics: data, isGenerationTopicsInit: true }
+      : { generationTopics: [], isGenerationTopicsInit: false },
+};
 
 type Setter = StoreSetter<VideoStore>;
 
@@ -31,11 +66,22 @@ export const createGenerationTopicSlice = (set: Setter, get: () => VideoStore, _
 export class GenerationTopicActionImpl {
   readonly #get: () => VideoStore;
   readonly #set: Setter;
+  readonly #topics;
 
   constructor(set: Setter, get: () => VideoStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#topics = createReplicaSlice(generationTopicsResource, {
+      actionPrefix: n('generationTopics'),
+      fetcher: () => generationTopicService.getAllGenerationTopics('video'),
+      get,
+      // An unchanged list must not re-render the sidebar / command menu.
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'generationTopicsReplica',
+      view: generationTopicsLens,
+    });
   }
 
   createGenerationTopic = async (prompts: string[]): Promise<string> => {
@@ -56,13 +102,11 @@ export class GenerationTopicActionImpl {
     const tmpId = Date.now().toString();
     const { newGenerationTopicVisibility } = this.#get();
 
-    this.#get().internal_dispatchGenerationTopic(
-      {
-        type: 'addTopic',
-        value: { id: tmpId, title: '', visibility: newGenerationTopicVisibility },
-      },
-      'internal_createGenerationTopic',
-    );
+    // 1. Optimistic update - add temporary topic
+    this.#get().internal_dispatchGenerationTopic({
+      type: 'addTopic',
+      value: { id: tmpId, title: '', visibility: newGenerationTopicVisibility },
+    });
 
     this.#get().internal_updateGenerationTopicLoading(tmpId, true);
 
@@ -84,15 +128,16 @@ export class GenerationTopicActionImpl {
     );
   };
 
-  internal_dispatchGenerationTopic = (payload: GenerationTopicDispatch, action?: any): void => {
-    const nextTopics = generationTopicReducer(this.#get().generationTopics, payload);
-
-    if (isEqual(nextTopics, this.#get().generationTopics)) return;
-
-    this.#set(
-      { generationTopics: nextTopics },
-      false,
-      action ?? n(`dispatchGenerationTopic/${payload.type}`),
+  /**
+   * Optimistic write into the topic-list replica. Not persisted on its own: the
+   * follow-up `refreshGenerationTopics` confirms the server value and persists
+   * that, so a local placeholder never outlives the request that created it.
+   */
+  internal_dispatchGenerationTopic = (payload: GenerationTopicDispatch): void => {
+    this.#topics.update(
+      GENERATION_TOPICS_KEY,
+      (topics) => generationTopicReducer(topics, payload),
+      { persist: false },
     );
   };
 
@@ -121,24 +166,21 @@ export class GenerationTopicActionImpl {
     topicId: string,
     coverUrl: string,
   ): Promise<void> => {
-    const {
-      internal_dispatchGenerationTopic,
-      internal_updateGenerationTopicLoading,
-      refreshGenerationTopics,
-    } = this.#get();
+    const { internal_dispatchGenerationTopic, internal_updateGenerationTopicLoading } = this.#get();
 
-    internal_dispatchGenerationTopic(
-      { id: topicId, type: 'updateTopic', value: { coverUrl } },
-      'internal_updateGenerationTopicCover/optimistic',
-    );
+    // 1. Optimistic update - immediately show the new cover URL in UI
+    internal_dispatchGenerationTopic({ type: 'updateTopic', id: topicId, value: { coverUrl } });
 
+    // 2. Set loading state
     internal_updateGenerationTopicLoading(topicId, true);
 
     try {
       await generationTopicService.updateTopicCover(topicId, coverUrl);
 
-      await refreshGenerationTopics();
+      // 3. Refresh data to get the final processed cover URL from S3
+      await this.#get().refreshGenerationTopics();
     } finally {
+      // 4. Clear loading state
       internal_updateGenerationTopicLoading(topicId, false);
     }
   };
@@ -158,10 +200,7 @@ export class GenerationTopicActionImpl {
   };
 
   internal_updateGenerationTopicTitleInSummary = (id: string, title: string): void => {
-    this.#get().internal_dispatchGenerationTopic(
-      { id, type: 'updateTopic', value: { title } },
-      'updateGenerationTopicTitleInSummary',
-    );
+    this.#get().internal_dispatchGenerationTopic({ type: 'updateTopic', id, value: { title } });
   };
 
   openNewGenerationTopic = (): void => {
@@ -176,8 +215,28 @@ export class GenerationTopicActionImpl {
     );
   };
 
+  /**
+   * Fetch orchestration for every surface that renders the topic list (sidebar,
+   * routed workspace, command menu). The list is read through
+   * `generationTopicSelectors`, not from this return value.
+   */
+  useFetchGenerationTopics = (enabled: boolean): GenerationTopicsSyncResult => {
+    const sync = this.#topics.useSync(TOPICS_PARAMS, { enabled });
+    const { generationTopics, isGenerationTopicsInit } = this.#get();
+
+    return {
+      data: isGenerationTopicsInit ? generationTopics : undefined,
+      error: sync.error,
+      isHydrated: sync.isHydrated,
+      isLoading: sync.isValidating && !isGenerationTopicsInit,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+      revalidate: sync.revalidate,
+    };
+  };
+
   refreshGenerationTopics = async (): Promise<void> => {
-    await mutate(videoKeys.generationTopics());
+    await this.#topics.revalidate();
   };
 
   removeGenerationTopic = async (id: string): Promise<void> => {
@@ -295,18 +354,6 @@ export class GenerationTopicActionImpl {
     const { internal_updateGenerationTopicCover } = this.#get();
     await internal_updateGenerationTopicCover(topicId, coverUrl);
   };
-
-  useFetchGenerationTopics = (enabled: boolean): SWRResponse<ImageGenerationTopic[]> =>
-    useClientDataSWR<ImageGenerationTopic[]>(
-      enabled ? videoKeys.generationTopics() : null,
-      () => generationTopicService.getAllGenerationTopics('video'),
-      {
-        onSuccess: (data) => {
-          if (isEqual(data, this.#get().generationTopics)) return;
-          this.#set({ generationTopics: data }, false, n('useFetchGenerationTopics'));
-        },
-      },
-    );
 }
 
 export type GenerationTopicAction = Pick<

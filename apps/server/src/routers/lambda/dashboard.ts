@@ -1,3 +1,5 @@
+import { DASHBOARD_TITLE_MAX_LENGTH, DashboardApiName } from '@lobechat/builtin-tool-dashboard';
+import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import { DASHBOARD_VISIBILITIES } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -5,15 +7,20 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { DashboardModel } from '@/database/models/dashboard';
+import { DASHBOARD_MAX_ITEMS, DashboardModel } from '@/database/models/dashboard';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
+import { createDashboardToolService, resolveClientTopic } from '@/server/services/widget/agentTool';
 
+import { assertDashboardEnabled } from './_helpers/dashboardFeatureGate';
 import { mapWidgetError, notFound } from './_helpers/widgetError';
 
 const dashboardProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  // Off by default (runtime flag `dashboard`); covers `runAgentTool` too.
+  await assertDashboardEnabled(ctx.userId);
   const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
@@ -43,8 +50,10 @@ const layoutSchema = z.object({
   y: z.number().int().min(0),
 });
 
-const fail = (error: unknown, operation: string): never =>
-  mapWidgetError(error, 'dashboard', operation);
+// A declaration (not an arrow const) so `fail(...)` narrows control flow as `never`.
+function fail(error: unknown, operation: string): never {
+  return mapWidgetError(error, 'dashboard', operation);
+}
 
 /**
  * Dashboards (boards) and the placement of widgets on them. Widgets
@@ -88,13 +97,34 @@ export const dashboardRouter = router({
         metadata,
         projectId: z.string().nullish(),
         sortOrder: z.number().int().optional(),
-        title: z.string().min(1).max(200),
+        title: z.string().min(1).max(DASHBOARD_TITLE_MAX_LENGTH),
         visibility: visibility.optional(),
+        /**
+         * Place this widget on the new board in the same transaction: a widget
+         * that cannot be placed rolls the board back, so no empty board is left.
+         */
+        widgetId: uuid.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const data = await ctx.dashboardModel.create(input);
+        const { widgetId, ...boardInput } = input;
+        if (!widgetId) {
+          const data = await ctx.dashboardModel.create(boardInput);
+          return { data, message: 'Dashboard created', success: true };
+        }
+
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const data = await ctx.serverDB.transaction(async (tx) => {
+          const txDB = tx as LobeChatDatabase;
+          const board = await new DashboardModel(txDB, ctx.userId, workspaceId).create(boardInput);
+          const item = await new DashboardService(txDB, ctx.userId, workspaceId).placeWidget(
+            board.id,
+            widgetId,
+          );
+          if (!item) throw notFound('Widget');
+          return board;
+        });
         return { data, message: 'Dashboard created', success: true };
       } catch (error) {
         fail(error, 'create dashboard');
@@ -143,7 +173,7 @@ export const dashboardRouter = router({
     }),
 
   removeItems: dashboardWriteProcedure
-    .input(z.object({ dashboardId: uuid, itemIds: z.array(uuid).max(200) }))
+    .input(z.object({ dashboardId: uuid, itemIds: z.array(uuid).max(DASHBOARD_MAX_ITEMS) }))
     .mutation(async ({ ctx, input }) => {
       try {
         const data = await ctx.dashboardService.removeItems(input.dashboardId, input.itemIds);
@@ -162,6 +192,53 @@ export const dashboardRouter = router({
       fail(error, 'restore dashboard');
     }
   }),
+
+  /**
+   * Execute one `lobe-dashboard` tool call for an agent run driven by the
+   * client runtime. The server agent runtime executes the same runtime and
+   * service in-process; both scope created widgets to the conversation's
+   * agent and (for a project topic) project. Publishing still requires the
+   * user's approval, which the agent runtime enforces before dispatching.
+   */
+  runAgentTool: dashboardWriteProcedure
+    .input(
+      z.object({
+        apiName: z.enum(Object.values(DashboardApiName) as [string, ...string[]]),
+        args: z.record(z.string(), z.unknown()),
+        context: z
+          .object({
+            agentId: z.string().nullish(),
+            messageId: z.string().nullish(),
+            operationId: z.string().nullish(),
+            topicId: z.string().nullish(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const context = input.context ?? {};
+      const topic = await resolveClientTopic(
+        ctx.serverDB,
+        context.topicId,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const runtime = new DashboardExecutionRuntime(
+        createDashboardToolService(ctx.serverDB, {
+          agentId: context.agentId ?? undefined,
+          messageId: context.messageId ?? undefined,
+          operationId: context.operationId ?? undefined,
+          projectId: topic.projectId,
+          topicId: topic.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      );
+      const method = runtime[input.apiName as keyof DashboardExecutionRuntime] as (
+        args: unknown,
+      ) => ReturnType<DashboardExecutionRuntime['listDashboards']>;
+      return method.call(runtime, input.args);
+    }),
 
   trash: dashboardWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
@@ -182,7 +259,7 @@ export const dashboardRouter = router({
           icon: z.string().max(100).nullish(),
           metadata,
           sortOrder: z.number().int().optional(),
-          title: z.string().min(1).max(200).optional(),
+          title: z.string().min(1).max(DASHBOARD_TITLE_MAX_LENGTH).optional(),
           visibility: visibility.optional(),
         }),
       }),
@@ -197,7 +274,10 @@ export const dashboardRouter = router({
       }
     }),
 
-  /** Persist a drag-and-drop result; ids not on this board are ignored. */
+  /**
+   * Persist a drag-and-drop result; ids not on this board are ignored. Fails
+   * with NOT_FOUND when nothing was saved (not the creator, or stale items).
+   */
   updateItemLayouts: dashboardWriteProcedure
     .input(
       z.object({
@@ -210,12 +290,15 @@ export const dashboardRouter = router({
               sortOrder: z.number().int().optional(),
             }),
           )
-          .max(200),
+          .max(DASHBOARD_MAX_ITEMS),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
         const data = await ctx.dashboardService.saveLayout(input.dashboardId, input.patches);
+        // Nothing saved means the caller cannot change this board (only its
+        // creator can) or none of the items are on it — never report success.
+        if (input.patches.length > 0 && data === 0) throw notFound('Dashboard or its items');
         return { data, message: 'Layout saved', success: true };
       } catch (error) {
         fail(error, 'save layout');

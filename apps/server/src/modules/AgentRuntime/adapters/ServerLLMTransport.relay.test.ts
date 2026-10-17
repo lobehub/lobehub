@@ -177,6 +177,55 @@ describe('ServerLLMTransport · LLM relay', () => {
     expect(redriven).not.toBe(dead);
   });
 
+  describe("a sub-agent relaying on its parent's channel", () => {
+    beforeEach(() => {
+      vi.mocked(resolveLlmExecutionSite).mockResolvedValue({
+        channelOperationId: 'parent-op',
+        preferredClientId: 'tab-a',
+        runtimeProvider: 'ollama',
+        site: 'client',
+      });
+    });
+
+    it("dispatches the child's attempts on the parent's channel", async () => {
+      const { ctx } = createCtx();
+      relay.chat.mockImplementation(answerWith('ok'));
+
+      await new ServerLLMTransport(ctx).runAttempt(createInput());
+
+      expect(RelayModelRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callId: expect.stringMatching(CALL_ID_1),
+          channelOperationId: 'parent-op',
+          operationId: 'op-1',
+          preferredClientId: 'tab-a',
+        }),
+      );
+    });
+
+    it("sends the child's context-compression call to the same executor and channel", async () => {
+      const { ctx } = createCtx();
+      relay.chat.mockImplementation(answerWith('summary'));
+
+      const result = await new ServerLLMTransport(ctx).stream({
+        messages: [{ content: 'Summarize', role: 'user' }],
+        model: 'llama3',
+        provider: 'ollama',
+      });
+
+      expect(result.content).toBe('summary');
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+      expect(RelayModelRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callId: expect.stringMatching(/^op-1:2:[\w-]+:1:stream1$/),
+          channelOperationId: 'parent-op',
+          operationId: 'op-1',
+          preferredClientId: 'tab-a',
+        }),
+      );
+    });
+  });
+
   it('fails fast with ClientLlmExecutorUnavailable when no client can execute the provider', async () => {
     const { ctx } = createCtx();
     vi.mocked(resolveLlmExecutionSite).mockResolvedValue({

@@ -1,7 +1,7 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

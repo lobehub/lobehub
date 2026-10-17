@@ -1,70 +1,63 @@
 'use client';
 
-import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import type { LucideIcon } from 'lucide-react';
 import {
   Bell,
   Check,
   FolderOpen,
+  Loader2Icon,
   Mic,
+  Monitor,
   MonitorCog,
-  SquareArrowOutUpRight,
   Undo2Icon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import LobeMessage from '../components/LobeMessage';
 import OnboardingFooterActions from '../components/OnboardingFooterActions';
+import type { PermissionId, PermissionStatus } from './usePermissionStatuses';
+import { GUIDED_PERMISSIONS, PERMISSION_IDS, usePermissionStatuses } from './usePermissionStatuses';
 
-type PermissionMeta = {
-  descriptionKey: string;
-  icon: typeof Bell;
-  iconColor: string;
-  id: number;
-  titleKey: string;
-};
-
-type PermissionButtonKey = 'screen3.actions.grantAccess' | 'screen3.actions.openSettings';
-type PermissionItem = PermissionMeta & {
-  buttonKey: PermissionButtonKey;
-  granted: boolean;
-};
-
-const permissionMetas: PermissionMeta[] = [
-  {
-    descriptionKey: 'screen3.permissions.1.description',
-    icon: Bell,
-    iconColor: '#FFCB47',
-    id: 1,
-    titleKey: 'screen3.permissions.1.title',
-  },
-  {
-    descriptionKey: 'screen3.permissions.2.description',
-    icon: FolderOpen,
-    iconColor: '#67AF3F',
-    id: 2,
-    titleKey: 'screen3.permissions.2.title',
-  },
-  {
-    descriptionKey: 'screen3.permissions.3.description',
-    icon: Mic,
-    iconColor: '#4A77FF',
-    id: 3,
-    titleKey: 'screen3.permissions.3.title',
-  },
-  {
+const PERMISSION_META: Record<
+  PermissionId,
+  { descriptionKey: string; icon: LucideIcon; titleKey: string }
+> = {
+  accessibility: {
     descriptionKey: 'screen3.permissions.4.description',
     icon: MonitorCog,
-    iconColor: '#7A45D3',
-    id: 4,
     titleKey: 'screen3.permissions.4.title',
   },
-];
+  fullDisk: {
+    descriptionKey: 'screen3.permissions.2.description',
+    icon: FolderOpen,
+    titleKey: 'screen3.permissions.2.title',
+  },
+  microphone: {
+    descriptionKey: 'screen3.permissions.microphone.description',
+    icon: Mic,
+    titleKey: 'screen3.permissions.microphone.title',
+  },
+  notification: {
+    descriptionKey: 'screen3.permissions.1.description',
+    icon: Bell,
+    titleKey: 'screen3.permissions.1.title',
+  },
+  screen: {
+    descriptionKey: 'screen3.permissions.screen.description',
+    icon: Monitor,
+    titleKey: 'screen3.permissions.screen.title',
+  },
+};
+
+const resolveDescriptionKey = (id: PermissionId, status: PermissionStatus) => {
+  if (status === 'pending') {
+    return GUIDED_PERMISSIONS.has(id) ? 'screen3.hint.guide' : 'screen3.hint.prompt';
+  }
+  if (status === 'incomplete') return 'screen3.hint.incomplete';
+  return PERMISSION_META[id].descriptionKey;
+};
 
 interface PermissionsStepProps {
   onBack: () => void;
@@ -73,87 +66,7 @@ interface PermissionsStepProps {
 
 const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('desktop-onboarding');
-  const [permissions, setPermissions] = useState<PermissionItem[]>(() =>
-    permissionMetas.map((p) => ({
-      ...p,
-      buttonKey: 'screen3.actions.grantAccess',
-      granted: false,
-    })),
-  );
-
-  const checkAllPermissions = useCallback(async () => {
-    const ipc = ensureElectronIpc();
-    if (!ipc) return;
-    const state = await ipc.system.getAppState();
-    const isMac = state.platform === 'darwin';
-    if (!isMac) {
-      // If not on macOS, assume all permissions are granted
-      setPermissions((prev) => prev.map((p) => ({ ...p, granted: true })));
-      return;
-    }
-
-    const notifStatus = await ipc.notification.getNotificationPermissionStatus();
-    const micStatus = await ipc.system.getMediaAccessStatus('microphone');
-    const screenStatus = await ipc.system.getMediaAccessStatus('screen');
-    const accessibilityStatus = await ipc.system.getAccessibilityStatus();
-    // Full Disk Access can now be checked by attempting to read protected directories
-    const fullDiskStatus = await ipc.system.getFullDiskAccessStatus();
-
-    setPermissions((prev) =>
-      prev.map((p) => {
-        if (p.id === 1) return { ...p, granted: notifStatus === 'authorized' };
-        // Full Disk Access status is detected by reading protected directories
-        if (p.id === 2)
-          return { ...p, buttonKey: 'screen3.actions.openSettings', granted: fullDiskStatus };
-        if (p.id === 3)
-          return { ...p, granted: micStatus === 'granted' && screenStatus === 'granted' };
-        if (p.id === 4) return { ...p, granted: accessibilityStatus };
-        return p;
-      }),
-    );
-  }, []);
-
-  useEffect(() => {
-    checkAllPermissions();
-  }, [checkAllPermissions]);
-
-  // Listen for window focus event from Electron main process
-  // This is more reliable than browser focus events in Electron environment
-  useWatchBroadcast('windowFocused', () => {
-    checkAllPermissions();
-  });
-
-  const handlePermissionRequest = async (permissionId: number) => {
-    const ipc = ensureElectronIpc();
-    if (!ipc) return;
-    switch (permissionId) {
-      case 1: {
-        await ipc.notification.requestNotificationPermission();
-        break;
-      }
-      case 2: {
-        // Use native prompt dialog for Full Disk Access
-        await ipc.system.promptFullDiskAccessIfNotGranted();
-        break;
-      }
-      case 3: {
-        await ipc.system.requestMicrophoneAccess();
-        await ipc.system.requestScreenAccess();
-        break;
-      }
-      case 4: {
-        await ipc.system.requestAccessibilityAccess();
-        break;
-      }
-      default: {
-        break;
-      }
-    }
-    // Re-check permissions after a short delay to allow system dialogs
-    setTimeout(() => {
-      void checkAllPermissions();
-    }, 1000);
-  };
+  const { request, statuses } = usePermissionStatuses();
 
   return (
     <Flexbox gap={16} style={{ height: '100%', minHeight: '100%' }}>
@@ -162,52 +75,82 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
         <Text as={'p'}>{t('screen3.description')}</Text>
       </Flexbox>
       <Block gap={12} padding={4} style={{ width: '100%' }} variant={'outlined'}>
-        {permissions.map((permission) => (
-          <Block
-            horizontal
-            align={'center'}
-            clickable={!permission.granted}
-            gap={16}
-            key={permission.id}
-            paddingBlock={8}
-            paddingInline={'12px 12px'}
-            variant={'borderless'}
-            style={{
-              background: permission.granted ? cssVar.colorFillSecondary : undefined,
-              borderColor: permission.granted ? cssVar.colorSuccess : undefined,
-            }}
-            onClick={() => !permission.granted && handlePermissionRequest(permission.id)}
-          >
-            <Block align={'center'} height={40} justify={'center'} variant={'outlined'} width={40}>
-              <Icon color={cssVar.colorTextDescription} icon={permission.icon} size={20} />
-            </Block>
-            <Flexbox gap={2} style={{ flex: 1 }}>
-              <Text weight={500}>{t(permission.titleKey as any)}</Text>
-              <Text color={cssVar.colorTextSecondary} fontSize={12}>
-                {t(permission.descriptionKey as any)}
-              </Text>
-            </Flexbox>
-            {permission.granted ? (
-              <Icon color={cssVar.colorSuccess} icon={Check} size={20} />
-            ) : (
-              <Button
-                icon={SquareArrowOutUpRight}
-                iconPosition={'end'}
-                size={'small'}
-                type={'text'}
+        {PERMISSION_IDS.map((id) => {
+          const status = statuses[id];
+          const meta = PERMISSION_META[id];
+          const actionable = status === 'idle' || status === 'incomplete';
+
+          return (
+            <Block
+              horizontal
+              align={'center'}
+              clickable={actionable}
+              gap={16}
+              key={id}
+              paddingBlock={8}
+              paddingInline={'12px 12px'}
+              variant={'borderless'}
+              style={{
+                background:
+                  status === 'granted'
+                    ? cssVar.colorFillSecondary
+                    : status === 'pending'
+                      ? cssVar.colorPrimaryBg
+                      : undefined,
+                boxShadow:
+                  status === 'pending' ? `inset 0 0 0 1px ${cssVar.colorPrimaryBorder}` : undefined,
+              }}
+              onClick={actionable ? () => void request(id) : undefined}
+            >
+              <Block
+                align={'center'}
+                height={40}
+                justify={'center'}
+                variant={'outlined'}
+                width={40}
                 style={{
-                  color: cssVar.colorTextSecondary,
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handlePermissionRequest(permission.id);
+                  background: status === 'pending' ? cssVar.colorBgContainer : undefined,
                 }}
               >
-                {t(permission.buttonKey)}
-              </Button>
-            )}
-          </Block>
-        ))}
+                <Icon color={cssVar.colorTextDescription} icon={meta.icon} size={20} />
+              </Block>
+              <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
+                <Text weight={500}>{t(meta.titleKey as any)}</Text>
+                <Text color={cssVar.colorTextSecondary} fontSize={12}>
+                  {t(resolveDescriptionKey(id, status) as any)}
+                </Text>
+              </Flexbox>
+              {status === 'granted' && <Icon color={cssVar.colorSuccess} icon={Check} size={20} />}
+              {status === 'pending' && (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  gap={6}
+                  style={{ color: cssVar.colorPrimaryText, flexShrink: 0, fontSize: 13 }}
+                >
+                  <Icon spin icon={Loader2Icon} size={14} />
+                  {t('screen3.actions.waiting')}
+                </Flexbox>
+              )}
+              {actionable && (
+                <Button
+                  size={'small'}
+                  style={{ flexShrink: 0 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void request(id);
+                  }}
+                >
+                  {t(
+                    status === 'incomplete'
+                      ? 'screen3.actions.continue'
+                      : 'screen3.actions.grantAccess',
+                  )}
+                </Button>
+              )}
+            </Block>
+          );
+        })}
       </Block>
       <OnboardingFooterActions
         left={

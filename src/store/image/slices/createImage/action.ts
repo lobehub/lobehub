@@ -1,5 +1,8 @@
-import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
+import { toast } from '@lobehub/ui';
+import { t } from 'i18next';
+
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
+import { isGenerationPromptModerationError } from '@/business/client/isGenerationPromptModerationError';
 import { imageService } from '@/services/image';
 import { type StoreSetter } from '@/store/types';
 
@@ -24,7 +27,11 @@ export class CreateImageActionImpl {
   }
 
   async createImage() {
-    this.#set({ isCreating: true }, false, 'createImage/startCreateImage');
+    this.#set(
+      { blockedPrompt: undefined, isCreating: true },
+      false,
+      'createImage/startCreateImage',
+    );
 
     const store = this.#get();
     const imageNum = imageGenerationConfigSelectors.imageNum(store);
@@ -95,7 +102,10 @@ export class CreateImageActionImpl {
         'createImage/clearPrompt',
       );
     } catch (error) {
-      handleGenerationPromptModerationError(error);
+      // A rejected prompt is shown on the prompt input, where the user fixes it.
+      if (isGenerationPromptModerationError(error)) {
+        this.#set({ blockedPrompt: parameters.prompt }, false, 'createImage/promptBlocked');
+      }
       handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {
@@ -110,6 +120,10 @@ export class CreateImageActionImpl {
         this.#set({ isCreating: false }, false, 'createImage/endCreateImage');
       }
     }
+  }
+
+  dismissBlockedPrompt() {
+    this.#set({ blockedPrompt: undefined }, false, 'dismissBlockedPrompt');
   }
 
   async recreateImage(generationBatchId: string) {
@@ -143,7 +157,11 @@ export class CreateImageActionImpl {
       // 3. Refresh generation batches to show the real data
       await store.refreshGenerationBatches();
     } catch (error) {
-      handleGenerationPromptModerationError(error);
+      // Regenerating reuses the batch's prompt, not the input's, so there is no
+      // input to annotate; fall back to a toast.
+      if (isGenerationPromptModerationError(error)) {
+        toast.error(t('generation.promptModeration.blocked', { ns: 'common' }));
+      }
       handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {

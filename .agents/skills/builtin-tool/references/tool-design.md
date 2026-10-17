@@ -446,9 +446,7 @@ This entry is what `packages/builtin-tools/src/index.ts` and `identifiers.ts` im
   "main": "./src/index.ts",
   "name": "@lobechat/builtin-tool-<name>",
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd": "^6",
-    "antd-style": "*",
+    "@lobehub/ui": "^6",
     "lucide-react": "*",
     "react": "*",
     "react-i18next": "*"

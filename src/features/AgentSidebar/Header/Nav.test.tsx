@@ -102,17 +102,20 @@ vi.mock('@/store/global', () => ({
     selector({ toggleCommandMenu: toggleCommandMenuMock }),
 }));
 
+interface ServerConfigTestState {
+  featureFlags: { isAgentEditable: boolean };
+  serverConfigInit: boolean;
+}
+
 vi.mock('@/store/serverConfig', () => ({
-  featureFlagsSelectors: (state: { featureFlags: { isAgentEditable: boolean } }) =>
-    state.featureFlags,
-  useServerConfigStore: (
-    selector: (state: { featureFlags: { isAgentEditable: boolean } }) => unknown,
-  ) => selector({ featureFlags: { isAgentEditable: true } }),
+  featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
+  useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
+    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
 }));
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) =>
-    selector({ preference: { lab: labMock } }),
+    selector({ isUserStateInit: true, preference: { lab: labMock } }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({

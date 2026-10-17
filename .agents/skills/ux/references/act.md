@@ -317,7 +317,7 @@ per Feedback §4.2 and §3.1's confirm → in-progress(locked) → done/**error*
 - [ ] Unrecoverable / wide-blast action requires an explicit deliberate gesture (type-to-confirm / checkbox), not a one-click danger button. _(Certainty)_
 - [ ] The destructive run is wrapped so a partial failure is reported (what failed), never silent half-completion. _(Meaningful・Certainty)_
 
-## 3.8 Secrets are revealed once, stored hashed, masked thereafter・Certainty・Meaningful
+## 3.8 Secrets are revealed once, stored safely, masked thereafter・Certainty・Meaningful
 
 A surface that mints a **secret** — an API key, a personal access token, a webhook signing
 secret — carries a security-shaped class norm every mature product follows (GitHub / OpenAI /
@@ -330,16 +330,54 @@ key stays viewable — hides the missing one-time-reveal screen (the create resu
 only because the secret is wrongly re-viewable). The one-time reveal is also a §3.5
 persistent-result state, not a toast: the user must be able to copy before dismissing.
 
+**Hashed or encrypted depends on who checks the secret.** Hash a secret the product only ever
+_verifies_ by comparison (an API key, a personal access token: the server hashes the presented
+value and compares). A **protocol credential** the server must use in plaintext — an OAuth
+client secret that `oidc-provider` compares during client authentication, a webhook signing
+secret the server signs with — cannot be hashed; store it **reversibly encrypted** (key vault /
+KMS), decrypt only inside the component that needs it, and still never return it to a browser
+after the one-time reveal. Hashing a protocol credential breaks the flow; storing a
+verify-only key reversibly widens the blast radius. Pick by the consumer, not by the word
+"secret".
+
+**When to mint, and where the reveal lives.** Distinguish a secret that _is_ the created
+thing (an API key, a personal access token: the user created it to get the value) from a
+credential that _belongs to_ a larger entity (an OAuth app's client secret, a webhook's signing
+secret). For the first, the reveal is the create result. For the second, don't mint the secret
+as a side effect of creating the entity: the user has just landed on a page with other setup
+to do and is not ready to store it. Give the credential row a **Generate** action instead; once
+one exists the row shows it masked with **Rotate** (confirmed, since rotating breaks live
+deployments). The reveal that follows the user's own Generate / Rotate click is a **focused
+modal** — the user asked for exactly this value and must copy it before doing anything else —
+with Copy, a neutral "you won't see it again after closing" line (no warning-coloured block:
+the reveal is routine, not an alarm), an explicit "I've saved it", and no mask-click dismiss.
+What the modal must never do is open unprompted over a page the user just navigated to. An
+entity whose secret has not been generated yet must be unusable server-side, not half-configured.
+Changing when a server issues a secret is a contract change: keep the old behaviour as the
+default for clients that don't ask for the new one.
+
 > ❌ Settings **API Key**: `ApiKeyModel.query()` decrypts and returns the **full plaintext** on
 > every list fetch (`packages/database/src/models/apiKey.ts`), the table masks client-side only
 > with an eye-toggle that re-reveals at will, and create just closes the modal (result discarded)
 > — no one-time reveal. ✅ Hash at rest; return plaintext only from `createApiKey`; list returns
 > a masked prefix; on create, show a persistent reveal panel (full key + Copy + warning).
+>
+> ❌ Settings **OAuth Apps**, pre-fix: creating a web app minted its client secret and opened a
+> "Your client secret" **modal** over the new app's page, dismissable by ✕ with no confirmation.
+> A first fix moved it to a yellow inline card at the top of the page; the owner rejected that
+> too (too loud, and still revealed at creation, when they weren't ready). ✅ Web apps are
+> created without a secret; the Credentials card's secret row offers **Generate secret**, reveals
+> the value once in place (neutral outlined box, Copy, "I've saved it"), then shows it masked with
+> **Rotate**. Until a secret exists the OIDC adapter treats the client as not found
+> (`oauth-apps/features/AppDetail/CredentialsCard.tsx`, `libs/oidc-provider/adapter.ts`).
 
 **Checklist**
 
 - [ ] A minted secret is shown in full exactly once at creation (persistent reveal + Copy + "won't see again"), not a toast. _(Meaningful・Certainty)_
-- [ ] Secret stored hashed at rest; list / detail return a masked prefix, never re-reveal plaintext. _(Certainty)_
+- [ ] At rest: a verify-only secret (API key, PAT) is hashed; a protocol credential the server needs in plaintext (OAuth client secret, signing secret) is reversibly encrypted and decrypted only where used. Either way, list / detail return a masked value and never re-reveal plaintext. _(Certainty)_
+- [ ] A credential that belongs to a larger entity is generated on demand from its own row, not minted at entity creation; the entity is unusable until it exists. _(Natural・Certainty)_
+- [ ] The reveal follows the user's own Generate / Rotate click in a focused, neutral modal (Copy, "I've saved it", no mask dismiss) — never a modal popped unprompted on page arrival. _(Natural・Certainty)_
+- [ ] Changing when the server issues a secret keeps the old behaviour as the default for clients that don't opt in. _(Certainty)_
 
 ## 3.9 A store of data about the user owes correction, retain-without-use, export & undo・Meaningful・Certainty
 

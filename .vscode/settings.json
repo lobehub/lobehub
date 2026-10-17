@@ -58,7 +58,7 @@
   "stylelint.validate": [
     "css",
     "postcss",
-    // make stylelint work with tsx antd-style css template string
+    // make stylelint work with tsx css template strings
     "typescriptreact"
   ],
   "vitest.disableWorkspaceWarning": true,

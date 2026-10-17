@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Image, Text, Tooltip } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { BadgeCheck, Ban, MessageSquareX } from 'lucide-react';
 import { memo } from 'react';

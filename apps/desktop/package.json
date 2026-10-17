@@ -51,12 +51,12 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
-    "@auv-js/cli": "0.0.28",
-    "@auv-js/sdk": "0.0.28",
-    "@lobehub/fluent-emoji": "^4.1.1",
+    "@auv-js/cli": "0.0.33",
+    "@auv-js/sdk": "0.0.33",
+    "@lobehub/fluent-emoji": "^5.0.0",
     "@lydell/node-pty": "1.2.0-beta.15",
     "electron-log": "^5.4.4",
-    "electron-sparkle-updater": "0.5.2",
+    "electron-sparkle-updater": "0.5.3",
     "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
     "node-screenshots": "^0.2.8"
@@ -77,6 +77,7 @@
     "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-mac-notifications": "workspace:*",
+    "@lobechat/electron-mac-permission-guide": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",

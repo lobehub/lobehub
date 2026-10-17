@@ -203,6 +203,17 @@ describe('BriefModel', () => {
       expect(rows[1].brief.priority).toBe('normal');
     });
 
+    // Run failures go to the notification center; legacy error rows must not
+    // take "Needs you" slots (they are urgent, so they would sort first).
+    it('should leave error briefs out of the home feed', async () => {
+      const model = new BriefModel(serverDB, userId);
+      await model.create({ priority: 'urgent', summary: 'x', title: 'Failed', type: 'error' });
+      await model.create({ priority: 'normal', summary: 'y', title: 'Decide', type: 'decision' });
+
+      const rows = await model.listUnresolvedEnriched();
+      expect(rows.map((row) => row.brief.title)).toEqual(['Decide']);
+    });
+
     it('should join the producing agent and parent task status in one query', async () => {
       await serverDB.insert(agents).values({
         avatar: '🤖',

@@ -1,8 +1,16 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';

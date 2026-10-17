@@ -2,7 +2,6 @@ import path from 'node:path';
 
 import tsconfigPaths from 'vite-tsconfig-paths';
 
-import { antdStaticCssOptions, themeVarsCssOptions } from './staticCssOptions.mjs';
 import { createShareRrConfig } from './vite.config.shared.mts';
 
 const appRoot = path.resolve(import.meta.dirname);
@@ -37,5 +36,4 @@ export default createShareRrConfig({
         }),
       ]
     : undefined,
-  staticCss: { antd: antdStaticCssOptions, themeVars: themeVarsCssOptions },
 });

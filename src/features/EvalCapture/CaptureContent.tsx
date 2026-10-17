@@ -1,9 +1,18 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Divider, Segmented, Select, Text, TextArea, toast } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Flexbox,
+  Icon,
+  Segmented,
+  Select,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { ChevronRight } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

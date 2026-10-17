@@ -1,11 +1,11 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
 import { kebabCase } from 'es-toolkit/compat';
 import { Heading2, Heading3, Heading4, Heading5 } from 'lucide-react';
 import { type ComponentProps, type FC, type ReactNode } from 'react';
 import { Children, isValidElement, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useToc } from './useToc';
 
@@ -50,6 +50,7 @@ const styles = createStaticStyles(({ cx, css, cssVar }) => ({
 
 const createHeading = (Tag: `h${1 | 2 | 3 | 4 | 5 | 6}`) => {
   const Heading: FC<ComponentProps<'h2'>> = ({ children, className, style, ...props }) => {
+    const { t } = useTranslation('discover');
     const { setToc, setFinished } = useToc();
     const text = useMemo(() => extractTextChildren(children), [children]);
     const id = kebabCase(text);
@@ -85,7 +86,7 @@ const createHeading = (Tag: `h${1 | 2 | 3 | 4 | 5 | 6}`) => {
       >
         {children}
         <a
-          aria-label="Permalink for this section"
+          aria-label={t('toc.permalink')}
           className={styles.anchor}
           href={`#${id}`}
           style={{ scrollMarginTop: 96 }}

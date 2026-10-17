@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "无法生成这条回答",
   "unknownError.title": "糟糕，请求打了个盹",
   "unknownError.traceIdLabel": "追踪 ID：",
+  "unknownError.troubleshoot": "一键排查",
   "unlock.addProxyUrl": "添加 OpenAI 代理地址（可选）",
   "unlock.apiKey.description": "输入你的 {{name}} API Key，即可开始会话",
   "unlock.apiKey.imageGenerationDescription": "输入你的 {{name}} API Key，即可开始生成",

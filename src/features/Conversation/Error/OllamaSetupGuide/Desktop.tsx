@@ -1,5 +1,5 @@
 import { Ollama } from '@lobehub/icons';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 

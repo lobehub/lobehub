@@ -1,6 +1,6 @@
 'use client';
 
-import { createGlobalStyle, cssVar } from 'antd-style';
+import { createGlobalStyle, cssVar } from '@lobehub/ui';
 
 import { HIGHLIGHT_REGISTRY } from './highlights';
 

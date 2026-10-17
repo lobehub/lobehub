@@ -1,12 +1,28 @@
 'use client';
 
-import { copyToClipboard, Flexbox, Popover, usePopoverContext } from '@lobehub/ui';
-import { Button, Checkbox, confirmModal, Divider, Select, Text, toast } from '@lobehub/ui/base-ui';
 import {
-  FileOutputIcon,
+  Button,
+  Center,
+  Checkbox,
+  confirmModal,
+  copyToClipboard,
+  cx,
+  Flexbox,
+  Icon,
+  Input,
+  Popover,
+  Switch,
+  Text,
+  toast,
+  usePopoverContext,
+} from '@lobehub/ui';
+import {
+  ChevronRightIcon,
+  CopyIcon,
+  DownloadIcon,
+  GlobeIcon,
   ImageIcon,
   KeyRoundIcon,
-  LinkIcon,
   LockIcon,
   PaperclipIcon,
   WrenchIcon,
@@ -244,81 +260,59 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
     );
   }
 
-  const visibilityOptions = [
-    {
-      icon: <LockIcon size={14} />,
-      label: t('shareModal.link.permissionPrivate'),
-      value: 'private',
-    },
-    {
-      disabled: !canPublishLink,
-      icon: <LinkIcon size={14} />,
-      label: t('shareModal.link.permissionLink'),
-      value: 'link',
-    },
-  ];
-
-  const getVisibilityHint = () => {
-    // Why the link option is greyed out matters more than restating what
-    // "private" means — a member who can't publish needs to know who to ask.
-    if (!canPublishLink && currentVisibility === 'private') return publishRestrictedReason;
-
-    switch (currentVisibility) {
-      case 'private': {
-        return t('shareModal.link.privateHint');
-      }
-      case 'link': {
-        return t('shareModal.link.linkHint');
-      }
-    }
-  };
+  const isLinkShared = currentVisibility === 'link';
+  const linkRestricted = !canPublishLink && !isLinkShared;
 
   return (
-    <Flexbox className={styles.container} gap={12} ref={containerRef}>
-      <Text strong>{t('shareModal.popover.title')}</Text>
+    <Flexbox className={styles.panel} ref={containerRef}>
+      <Flexbox className={styles.section} gap={10}>
+        <Flexbox horizontal align={'center'} gap={10}>
+          <Center className={cx(styles.badge, isLinkShared && styles.badgeActive)} flex={'none'}>
+            <Icon icon={isLinkShared ? GlobeIcon : LockIcon} size={16} />
+          </Center>
+          <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
+            <Text strong type={linkRestricted ? 'secondary' : undefined}>
+              {t('shareModal.popover.linkShare')}
+            </Text>
+            <Text fontSize={12} type={'secondary'}>
+              {isLinkShared ? t('shareModal.popover.linkOn') : t('shareModal.popover.linkOff')}
+            </Text>
+          </Flexbox>
+          <Switch
+            aria-label={t('shareModal.popover.linkShare')}
+            checked={isLinkShared}
+            disabled={updating || linkRestricted}
+            loading={updating}
+            onChange={(checked) => handleVisibilityChange(checked ? 'link' : 'private')}
+          />
+        </Flexbox>
 
-      <Flexbox gap={4}>
-        <Text type="secondary">{t('shareModal.popover.visibility')}</Text>
-        <Select
-          disabled={updating}
-          options={visibilityOptions}
-          style={{ width: '100%' }}
-          value={currentVisibility}
-          labelRender={({ value }) => {
-            const option = visibilityOptions.find((o) => o.value === value);
-            return (
-              <Flexbox horizontal align="center" gap={8}>
-                {option?.icon}
-                {option?.label}
-              </Flexbox>
-            );
-          }}
-          optionRender={(option) => (
-            <Flexbox horizontal align="center" gap={8}>
-              {visibilityOptions.find((o) => o.value === option.value)?.icon}
-              {option.label}
-            </Flexbox>
-          )}
-          onChange={handleVisibilityChange}
-        />
-      </Flexbox>
+        {linkRestricted && <div className={styles.notice}>{publishRestrictedReason}</div>}
 
-      <Text className={styles.hint} type="secondary">
-        {getVisibilityHint()}
-      </Text>
-
-      <Divider style={{ margin: '4px 0' }} />
-
-      <Flexbox horizontal align="center" justify="space-between">
-        <Button icon={FileOutputIcon} size="small" type="text" onClick={handleOpenModal}>
-          {t('shareModal.popover.export')}
-        </Button>
-        {currentVisibility !== 'private' && (
-          <Button icon={LinkIcon} size="small" type="primary" onClick={handleCopyLink}>
-            {t('shareModal.copyLink')}
-          </Button>
+        {isLinkShared && shareUrl && (
+          <Flexbox horizontal gap={6}>
+            <Input
+              readOnly
+              aria-label={t('shareModal.link')}
+              className={styles.url}
+              value={shareUrl}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <Button icon={CopyIcon} type={'primary'} onClick={handleCopyLink}>
+              {t('copy', { ns: 'common' })}
+            </Button>
+          </Flexbox>
         )}
       </Flexbox>
+
+      <div className={styles.divider} />
+
+      <button className={styles.exportRow} type={'button'} onClick={handleOpenModal}>
+        <Icon className={styles.exportIcon} icon={DownloadIcon} size={16} />
+        <span className={styles.exportLabel}>{t('shareModal.popover.export')}</span>
+        <span className={styles.exportHint}>{t('shareModal.popover.exportFormats')}</span>
+        <Icon className={styles.exportIcon} icon={ChevronRightIcon} size={14} />
+      </button>
     </Flexbox>
   );
 });

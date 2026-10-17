@@ -4,7 +4,6 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
-import { antdStaticCssOptions, themeVarsCssOptions } from './staticCssOptions.mjs';
 import { createAuthRrConfig } from './vite.config.shared.mts';
 
 const appRoot = path.resolve(import.meta.dirname);
@@ -30,5 +29,4 @@ export default createAuthRrConfig({
         }),
       ]
     : undefined,
-  staticCss: { antd: antdStaticCssOptions, themeVars: themeVarsCssOptions },
 });

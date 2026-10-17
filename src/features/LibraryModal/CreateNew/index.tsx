@@ -1,4 +1,4 @@
-import { createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { createModal, useModalContext } from '@lobehub/ui';
 import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

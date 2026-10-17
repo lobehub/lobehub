@@ -20,6 +20,12 @@ export interface OAuthAppItem {
 
 export interface CreateOAuthAppParams {
   description?: string;
+  /**
+   * Whether a web app gets its client secret at creation (returned once as
+   * `clientSecret`). Clients that generate it on demand send `false`; older
+   * clients omit it and rely on the server default of `true`.
+   */
+  issueSecret?: boolean;
   logoUri?: string;
   name: string;
   redirectUris?: string[];

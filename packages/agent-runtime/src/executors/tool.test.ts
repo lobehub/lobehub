@@ -176,6 +176,41 @@ describe('tool executors', () => {
     expect(result.newState.usage.tools.totalCalls).toBe(1);
   });
 
+  it('deduplicates activatedTools persisted in one tool result (PR #20791 P2 regression)', async () => {
+    // persistActivatedTools updates its dedup set inside the filter: a result
+    // listing the same plugin twice (e.g. two wire names of one plugin both
+    // resolved to the same identifier) must be appended once.
+    runTool = vi.fn().mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: 'Tool result',
+        executionTime: 100,
+        state: {
+          activatedTools: [
+            { identifier: 'lobe-web-browsing' },
+            { identifier: 'lobe-web-browsing' },
+          ],
+        },
+        success: true,
+      },
+    });
+    host.transports.tools!.run = runTool;
+
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolCalling: createToolCall(),
+      },
+      type: 'call_tool',
+    };
+
+    const result = await callTool(host)(instruction, createState());
+
+    const stepTools = result.newState.activatedStepTools ?? [];
+    expect(stepTools).toHaveLength(1);
+    expect(stepTools[0]).toMatchObject({ id: 'lobe-web-browsing', source: 'discovery' });
+  });
+
   it('parks single client-source tools without invoking the transport runner', async () => {
     const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
       payload: {

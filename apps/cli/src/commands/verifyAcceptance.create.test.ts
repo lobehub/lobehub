@@ -18,6 +18,7 @@ const ensure = vi.fn();
 const publishFlow = vi.fn();
 const createRun = vi.fn();
 const attachRun = vi.fn();
+const getUserState = vi.fn();
 let output: ReturnType<typeof vi.spyOn>;
 
 const run = async (args: string[]) => {
@@ -36,9 +37,11 @@ beforeEach(() => {
       publishFlow: { mutate: publishFlow },
       attachRun: { mutate: attachRun },
     },
+    user: { getUserState: { query: getUserState } },
     verify: { createRun: { mutate: createRun } },
   } as unknown as Awaited<ReturnType<typeof getTrpcClient>>);
   ensure.mockImplementation(async (input) => ({ ...input, id: acceptanceId, status: 'pending' }));
+  getUserState.mockResolvedValue({ settings: { general: { responseLanguage: 'en-US' } } });
 });
 
 afterEach(() => {
@@ -152,6 +155,43 @@ describe('acceptance create', () => {
       expect(created.subject.subjectId).not.toBe(acceptanceId);
       expect(jsonOutput()).toEqual({ flowId: 'flow-1' });
       expect(createRun).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+});
+
+describe('acceptance create report language', () => {
+  it('rejects a requirement in the wrong language before creating anything', async () => {
+    getUserState.mockResolvedValue({ settings: { general: { responseLanguage: 'zh-CN' } } });
+
+    await expect(run(['create', '--requirement', requirement, '--json'])).rejects.toThrow(
+      '--requirement',
+    );
+    expect(ensure).not.toHaveBeenCalled();
+  });
+
+  it('rejects a flow whose checks are in the wrong language before publishing', async () => {
+    getUserState.mockResolvedValue({ settings: { general: { responseLanguage: 'zh-CN' } } });
+    const dir = await mkdtemp(path.join(tmpdir(), 'lh-flow-language-'));
+    const file = path.join(dir, 'flow.json');
+    await writeFile(
+      file,
+      JSON.stringify({
+        definition: {
+          edges: [],
+          entryNodeId: 'n1',
+          nodes: [{ check: { definition: {}, id: 'c1', title: 'Retry payment' }, id: 'n1' }],
+          title: '支付恢复',
+        },
+      }),
+    );
+
+    try {
+      await expect(run(['flow', 'publish', acceptanceId, '--file', file])).rejects.toThrow(
+        'nodes[c1].check.title',
+      );
+      expect(publishFlow).not.toHaveBeenCalled();
     } finally {
       await rm(dir, { force: true, recursive: true });
     }

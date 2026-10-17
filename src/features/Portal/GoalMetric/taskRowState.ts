@@ -48,3 +48,11 @@ export const taskRowSpan = (
   const endedAt = last.endedAt ?? (state === 'running' ? undefined : view.heartbeatAt);
   return { endedAt, startedAt: first.startedAt };
 };
+
+/**
+ * A metric row backed by a real Task opens that Task's detail directly — the
+ * node drill-down would only repeat the row and add one more click. Other node
+ * kinds (findings, decisions…) have no Task to open and keep the drill-down.
+ */
+export const metricRowTaskId = (view: GoalNodeView): string | undefined =>
+  view.node.kind === 'task' ? (view.node.taskId ?? undefined) : undefined;

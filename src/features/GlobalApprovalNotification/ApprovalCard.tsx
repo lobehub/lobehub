@@ -1,8 +1,8 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
-import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
+import { agentDisplayName } from '@lobechat/types';
+import { ActionIcon, Avatar } from '@lobehub/ui';
 import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,6 @@ import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -49,13 +48,6 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
 
   const chatKey = useMemo(() => messageMapKey(context), [context]);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const handleMessagesChange = useCallback(
-    (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
-      replaceMessages(next, { context: ctx, source: meta?.source });
-    },
-    [replaceMessages],
-  );
 
   const operationState = useOperationState(context);
   const meta = useAgentStore(agentSelectors.getAgentMetaById(context.agentId));
@@ -140,14 +132,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
   if (!activeIntervention) return null;
 
   return (
-    <ConversationProvider
-      skipFetch
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={handleMessagesChange}
-    >
+    <ConversationProvider skipFetch context={context} operationState={operationState}>
       <div data-pending-hotkey-scope className={styles.card}>
         <div className={styles.header}>
           <Avatar

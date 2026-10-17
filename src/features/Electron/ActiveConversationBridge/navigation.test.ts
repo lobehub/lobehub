@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { resolveActiveConversationCoordinate } from './coordinate';
 import { subscribeActiveConversationNavigation } from './navigation';
@@ -20,6 +21,7 @@ describe('active conversation navigation', () => {
       },
       false,
     );
+    useProjectDirectoryStore.setState({ projectTopicsMap: {} }, false);
   });
 
   it('turns one atomic topic and thread store change into one active-tab navigation', () => {
@@ -70,6 +72,26 @@ describe('active conversation navigation', () => {
     useChatStore.setState({ activeTopicId: 'topic-b' }, false);
 
     expect(navigate).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('rewrites the project conversation url when the active topic changes', () => {
+    useProjectDirectoryStore.setState(
+      { projectTopicsMap: { prj_1: [{ agentId: 'agent-a', id: 'tpc_1' } as any] } },
+      false,
+    );
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/project/prj_1/conversation/tpc_1',
+    });
+    const navigate = vi.fn();
+    projectActiveConversationCoordinate(coordinate);
+    const unsubscribe = subscribeActiveConversationNavigation(() => coordinate, navigate);
+
+    useChatStore.setState({ activeTopicId: 'tpc_2' }, false);
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/project/prj_1/conversation/tpc_2', { replace: true });
     unsubscribe();
   });
 });

@@ -66,7 +66,8 @@ vi.mock('@/hooks/useFetchMemoryForTopic', () => ({ useFetchTopicMemories: vi.fn(
 vi.mock('@/hooks/useFetchNotebookDocuments', () => ({ useFetchNotebookDocuments: vi.fn() }));
 
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWRWithSync: () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: () => ({
     data: undefined,
     error: undefined,
     isLoading: false,
@@ -77,6 +78,11 @@ vi.mock('@/libs/swr', () => ({
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
   getCacheScope: () => 'user-1:personal',
+  // `@/services/document/invalidation` (reached through the Portal document
+  // hooks) now imports `@/libs/replica`, whose module init builds the SWR-backed
+  // replica scope and therefore reads all three helpers.
+  isScopeTrusted: () => true,
+  useCacheScope: () => 'user-1:personal',
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -85,11 +91,29 @@ vi.mock('@/store/agent', () => ({
   ) => selector({ useFetchAgentConfig: chatListMocks.useFetchAgentConfig }),
 }));
 
+// The chat store holds each conversation's rows; the provider mirrors its bucket.
+const chatState = vi.hoisted(() => ({
+  activeAgentId: 'agt_old',
+  creatingTopicIds: [] as string[],
+  dbMessagesMap: {} as Record<string, unknown[]>,
+  messagesMap: {} as Record<string, unknown[]>,
+  useFetchMessages: vi.fn(() => ({
+    error: undefined,
+    isLoading: false,
+    isValidating: false,
+    mutate: async () => undefined,
+  })),
+}));
+
 vi.mock('@/store/chat', () => ({
-  getChatStoreState: () => ({}),
-  useChatStore: (
-    selector: (state: { activeAgentId: string; creatingTopicIds: string[] }) => unknown,
-  ) => selector({ activeAgentId: 'agt_old', creatingTopicIds: [] }),
+  getChatStoreState: () => chatState,
+  useChatStore: Object.assign(
+    (selector: (state: typeof chatState) => unknown) => selector(chatState),
+    {
+      getState: () => chatState,
+      subscribe: () => () => {},
+    },
+  ),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -100,11 +124,15 @@ vi.mock('@/store/chat/selectors', () => ({
 
 vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: vi.fn(),
-  useServerConfigStore: () => ({ enableAgentSelfIteration: false }),
+  useServerConfigStore: () => ({}),
 }));
 
 vi.mock('@/store/user', () => ({ useUserStore: () => false }));
-vi.mock('@/store/user/selectors', () => ({ authSelectors: {}, settingsSelectors: {} }));
+vi.mock('@/store/user/selectors', () => ({
+  authSelectors: {},
+  labPreferSelectors: {},
+  settingsSelectors: {},
+}));
 
 const oldContext = {
   agentId: 'agt_old',
@@ -159,16 +187,26 @@ const OverlayHeightSetter = () => {
   return <button onClick={() => setChatInputOverlayHeight(48)}>set overlay height</button>;
 };
 
-const renderChatList = (messages?: UIChatMessage[]) =>
-  render(
-    <ConversationProvider
-      context={oldContext}
-      hasInitMessages={messages !== undefined}
-      messages={messages}
-    >
+/** Seed the chat store bucket of a conversation (`undefined` = not loaded yet). */
+const seedBucket = (context: ConversationContext, messages?: UIChatMessage[]) => {
+  const key = messageMapKey(context);
+  if (messages) {
+    chatState.dbMessagesMap[key] = messages;
+    chatState.messagesMap[key] = messages;
+  } else {
+    delete chatState.dbMessagesMap[key];
+    delete chatState.messagesMap[key];
+  }
+};
+
+const renderChatList = (messages?: UIChatMessage[]) => {
+  seedBucket(oldContext, messages);
+  return render(
+    <ConversationProvider context={oldContext}>
       <ChatList welcome={<div>WELCOME</div>} />
     </ConversationProvider>,
   );
+};
 
 describe('ConversationProvider', () => {
   beforeEach(() => {
@@ -176,6 +214,9 @@ describe('ConversationProvider', () => {
     chatListMocks.isStreaming = false;
     chatListMocks.refreshError.error = undefined;
     chatListMocks.refreshError.isRetrying = false;
+    chatState.dbMessagesMap = {};
+    chatState.messagesMap = {};
+    seedBucket(oldContext, oldMessages);
   });
 
   it('keeps the same store instance across context changes', () => {
@@ -186,13 +227,13 @@ describe('ConversationProvider', () => {
     };
 
     const { rerender } = render(
-      <ConversationProvider hasInitMessages context={oldContext} messages={oldMessages}>
+      <ConversationProvider context={oldContext}>
         <ApiProbe />
       </ConversationProvider>,
     );
 
     rerender(
-      <ConversationProvider context={nextContext} hasInitMessages={false}>
+      <ConversationProvider context={nextContext}>
         <ApiProbe />
       </ConversationProvider>,
     );
@@ -208,7 +249,7 @@ describe('ConversationProvider', () => {
     };
 
     const { rerender } = render(
-      <ConversationProvider hasInitMessages context={oldContext} messages={oldMessages}>
+      <ConversationProvider context={oldContext}>
         <ApiCapture />
       </ConversationProvider>,
     );
@@ -217,11 +258,13 @@ describe('ConversationProvider', () => {
     const fakeScrollMethods = {
       getItemOffset: vi.fn(),
       getItemSize: vi.fn(),
+      getScrollElement: vi.fn(() => null),
       getScrollOffset: vi.fn(),
       getScrollSize: vi.fn(),
       getTotalCount: vi.fn(),
       getViewportSize: vi.fn(),
       scrollTo: vi.fn(),
+      scrollToEnd: vi.fn(),
       scrollToIndex: vi.fn(),
     };
 
@@ -229,6 +272,7 @@ describe('ConversationProvider', () => {
       api!.setState({
         activeIndex: 3,
         atBottom: false,
+        autoScrollDetached: true,
         chatInputOverlayHeight: 48,
         editor: fakeEditor,
         heteroOverloadRetryAttempts: { msg_old: 2 },
@@ -247,7 +291,7 @@ describe('ConversationProvider', () => {
     });
 
     rerender(
-      <ConversationProvider context={nextContext} hasInitMessages={false}>
+      <ConversationProvider context={nextContext}>
         <ApiCapture />
       </ConversationProvider>,
     );
@@ -265,6 +309,7 @@ describe('ConversationProvider', () => {
     expect(state.scheduledSendAt).toBeUndefined();
     expect(state.activeIndex).toBeNull();
     expect(state.atBottom).toBe(true);
+    expect(state.autoScrollDetached).toBe(false);
     expect(state.isScrolling).toBe(false);
     expect(state.visibleItems.size).toBe(0);
 
@@ -277,13 +322,13 @@ describe('ConversationProvider', () => {
     const snapshots: Snapshot[] = [];
 
     const { rerender } = render(
-      <ConversationProvider hasInitMessages context={oldContext} messages={oldMessages}>
+      <ConversationProvider context={oldContext}>
         <Probe expectedContext={oldContext} snapshots={snapshots} />
       </ConversationProvider>,
     );
 
     rerender(
-      <ConversationProvider context={nextContext} hasInitMessages={false}>
+      <ConversationProvider context={nextContext}>
         <Probe expectedContext={nextContext} snapshots={snapshots} />
       </ConversationProvider>,
     );
@@ -326,8 +371,9 @@ describe('ConversationProvider', () => {
   });
 
   it('reserves composer overlay space in the settled empty welcome', () => {
+    seedBucket(oldContext, []);
     const { container } = render(
-      <ConversationProvider hasInitMessages context={oldContext} messages={[]}>
+      <ConversationProvider context={oldContext}>
         <ChatList welcome={<div>WELCOME</div>} />
         <OverlayHeightSetter />
       </ConversationProvider>,
@@ -343,6 +389,17 @@ describe('ConversationProvider', () => {
 
   it('renders a settled message list through the virtualized list', () => {
     renderChatList(oldMessages);
+
+    expect(screen.getByTestId('virtualized-list')).toHaveTextContent('msg_old');
+  });
+
+  it('renders a static transcript without reading the chat store', () => {
+    seedBucket(oldContext);
+    render(
+      <ConversationProvider context={oldContext} messages={oldMessages}>
+        <ChatList welcome={<div>WELCOME</div>} />
+      </ConversationProvider>,
+    );
 
     expect(screen.getByTestId('virtualized-list')).toHaveTextContent('msg_old');
   });

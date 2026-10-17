@@ -1,8 +1,7 @@
 'use client';
 
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, cssVar } from '@lobehub/ui';
 import { CheckIcon, LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -29,6 +29,7 @@ import debug from 'debug';
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
+import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
@@ -50,6 +51,11 @@ import {
   isLhCommand,
   preprocessLhCommand,
 } from '@/server/services/toolExecution/preprocessLhCommand';
+import {
+  canonicalUserSkillIdentifier,
+  readTaskSkillIds,
+  UserSkillService,
+} from '@/server/services/userSkill';
 
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
@@ -143,6 +149,12 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private fileModel: FileModel;
   private serverDB: LobeChatDatabase;
   private topicId?: string;
+  /**
+   * The run this runtime belongs to. Handed to `preprocessLhCommand` so a
+   * sandbox `lh agent run` carries `LOBEHUB_OPERATION_ID`, exactly as the device
+   * and heterogeneous runtimes do.
+   */
+  private operationId?: string;
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
@@ -174,6 +186,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      */
     isSkillGranted?: (identifier: string) => boolean;
     marketService: MarketService;
+    operationId?: string;
     resourceService: SkillResourceService;
     /**
      * Persistence for this run, resolved once by the factory. Every sandbox
@@ -203,6 +216,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.fileModel = options.fileModel;
     this.serverDB = options.serverDB;
     this.topicId = options.topicId;
+    this.operationId = options.operationId;
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
@@ -287,6 +301,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       this.userId,
       workspaceId,
       this.shareVisitorBlocked,
+      this.operationId,
     );
 
     return { command: result.command, error: result.error };
@@ -937,6 +952,10 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       fileService,
       isSkillGranted,
       marketService,
+      // The run this runtime belongs to, so an `lh agent run` it preprocesses in
+      // the cloud sandbox can be attributed to the agent that launched it — the
+      // device branch below carries the same id for its own routing.
+      operationId: context.operationId,
       resourceService,
       sandboxCwd: sandbox.cwd,
       sandboxInstanceId: sandbox.environment,
@@ -1078,6 +1097,49 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       projectSkills: projectSkills?.filter((skill) =>
         isSkillReachable(`${skill.source ?? 'project'}:${skill.name}`),
       ),
+      // The user's own skill library is read per call, for the one name asked
+      // for — it grows with every goal batch, and this factory runs per tool
+      // call. Same carrier shape as above, under the recovered workspace (a
+      // dispatched or resumed run may not carry it on the context).
+      resolveSkill: async (requested) => {
+        // Models vary the casing of a name, as the preloaded lookup tolerates.
+        const name = canonicalUserSkillIdentifier(requested);
+        if (!name || !isSkillReachable(name)) return undefined;
+        const [skill] = await new UserSkillService(
+          context.serverDB!,
+          context.userId!,
+          workspaceId,
+          context.agentVisibility,
+        )
+          .loadRuntimeSkills([name], {
+            // Only the generated skills this run's own Task names are trusted
+            // past a public agent's visibility — never a name the model chose.
+            trustedGenerated: context.taskId
+              ? readTaskSkillIds(
+                  (
+                    await new TaskModel(context.serverDB!, context.userId!, workspaceId).findById(
+                      context.taskId,
+                    )
+                  )?.config,
+                )
+              : [],
+          })
+          .catch((error) => {
+            log('failed to load user skill %s: %O', name, error);
+            return [];
+          });
+        return (
+          skill && {
+            content: skill.body,
+            description: skill.description,
+            identifier: skill.identifier,
+            name: skill.name,
+            resources: skill.resources,
+            source: 'builtin' as const,
+            title: skill.title,
+          }
+        );
+      },
       service,
     });
   },

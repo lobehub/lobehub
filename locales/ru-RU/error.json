@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Не удалось сгенерировать этот ответ",
   "unknownError.title": "Упс, запрос вздремнул",
   "unknownError.traceIdLabel": "Идентификатор трассировки:",
+  "unknownError.troubleshoot": "Устранение неполадок",
   "unlock.addProxyUrl": "Добавить прокси-URL OpenAI (необязательно)",
   "unlock.apiKey.description": "Введите ваш API-ключ {{name}}, чтобы начать сессию",
   "unlock.apiKey.imageGenerationDescription": "Введите ваш API-ключ {{name}}, чтобы начать генерацию",

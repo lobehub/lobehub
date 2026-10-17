@@ -1,6 +1,6 @@
 'use client';
 
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
+import { Form, useForm } from '@lobehub/ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

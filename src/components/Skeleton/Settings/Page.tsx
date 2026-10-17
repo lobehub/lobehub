@@ -8,13 +8,40 @@ import SettingContainer from '@/features/Setting/SettingContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from '../Bar';
+import { MessengerPlatformDetailSkeleton } from './MessengerDetail';
 import SettingsProfileSkeleton from './Profile';
 import SettingsSectionSkeleton from './Section';
+import { SettingsSectionsBody } from './Sections';
+import { SETTINGS_SECTION_SHAPES } from './sectionShapes';
+
+type SettingsSkeletonBody =
+  | { kind: 'messengerDetail'; platform: string }
+  | { kind: 'profile' }
+  | { kind: 'section' }
+  | { kind: 'sections'; tab: string };
+
+export const resolveSettingsSkeletonBody = (pathname: string): SettingsSkeletonBody => {
+  const [, tab = 'profile', sub] = pathname.match(/\/settings\/([^/]+)(?:\/([^/]+))?/) ?? [];
+
+  if (tab === 'profile') return { kind: 'profile' };
+  if (tab === 'messenger' && sub) return { kind: 'messengerDetail', platform: sub };
+  if (Object.hasOwn(SETTINGS_SECTION_SHAPES, tab)) return { kind: 'sections', tab };
+  return { kind: 'section' };
+};
+
+export const SettingsBodySkeleton = () => {
+  const body = resolveSettingsSkeletonBody(useLocation().pathname);
+
+  if (body.kind === 'profile') return <SettingsProfileSkeleton />;
+  if (body.kind === 'messengerDetail')
+    return <MessengerPlatformDetailSkeleton platform={body.platform} />;
+  if (body.kind === 'sections')
+    return <SettingsSectionsBody shape={SETTINGS_SECTION_SHAPES[body.tab]} />;
+  return <SettingsSectionSkeleton />;
+};
 
 const SettingsPageSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
-  const { pathname } = useLocation();
-  const tab = pathname.match(/\/settings\/([^/]+)/)?.[1] ?? 'profile';
-  const profile = tab === 'profile';
+  const profile = resolveSettingsSkeletonBody(useLocation().pathname).kind === 'profile';
 
   return (
     <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -24,7 +51,7 @@ const SettingsPageSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
         </NavHeader>
       )}
       <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
-        {profile ? <SettingsProfileSkeleton /> : <SettingsSectionSkeleton />}
+        <SettingsBodySkeleton />
       </SettingContainer>
     </Flexbox>
   );

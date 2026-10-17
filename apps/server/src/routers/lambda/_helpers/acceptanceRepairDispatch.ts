@@ -6,6 +6,7 @@ import { GoalModel } from '@/database/models/goal';
 import { TopicModel } from '@/database/models/topic';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { GoalService } from '@/server/services/goal';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import type { AcceptanceService } from '@/server/services/verify';
@@ -130,6 +131,7 @@ export const dispatchAcceptanceRepair = async (
   // aggregate converges when the repair round lands.
   try {
     await service.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+    notifyAcceptance(acceptance.id, 'session');
   } catch (error) {
     console.error('[acceptance] marking %s repairing failed: %O', acceptance.id, error);
   }

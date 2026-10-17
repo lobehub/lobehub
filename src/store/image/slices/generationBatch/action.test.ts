@@ -1,7 +1,7 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import React from 'react';
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createReplicaState } from '@/libs/replica';
 import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { generationService } from '@/services/generation';
@@ -11,7 +11,13 @@ import { generationBatchSelectors } from '@/store/image/slices/generationBatch/s
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 
-// Mock services and dependencies
+// The replica driver revalidates through the scoped `mutate`; mock it so the
+// imperative refresh assertions below can observe the call.
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof SwrModule>();
+  return { ...actual, mutate: vi.fn() };
+});
+
 vi.mock('@/services/generation', () => ({
   generationService: {
     deleteGeneration: vi.fn(),
@@ -26,19 +32,37 @@ vi.mock('@/services/generationBatch', () => ({
   },
 }));
 
-vi.mock('@/libs/swr', async (importOriginal) => {
-  const actual = await importOriginal<typeof SwrModule>();
-  return {
-    ...actual,
-    mutate: vi.fn(),
-  };
-});
+const batch = (id: string, generationIds: string[]): GenerationBatch =>
+  ({
+    id,
+    provider: 'openai',
+    model: 'dall-e-3',
+    prompt: 'Test prompt',
+    createdAt: new Date(),
+    generations: generationIds.map((generationId) => ({
+      id: generationId,
+      seed: 12345,
+      createdAt: new Date(),
+      asyncTaskId: null,
+      task: { id: `task_${generationId}`, status: AsyncTaskStatus.Success },
+    })),
+  }) as unknown as GenerationBatch;
+
+/** Seed one loaded topic into the batch replica view. */
+const seedBatch = (topicId: string, batches: GenerationBatch[]) => {
+  useImageStore.setState({
+    activeGenerationTopicId: topicId,
+    generationBatchesMap: { [topicId]: batches },
+    generationBatchesReplica: createReplicaState(),
+  });
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   useImageStore.setState({
-    generationBatchesMap: {},
     activeGenerationTopicId: null,
+    generationBatchesMap: {},
+    generationBatchesReplica: createReplicaState(),
   });
 });
 
@@ -48,51 +72,39 @@ afterEach(() => {
 
 describe('GenerationBatchAction', () => {
   describe('setTopicBatchLoaded', () => {
-    it('should set topic batch as loaded with empty array and mark topic as loaded', async () => {
+    it('seeds an empty list and marks the topic as loaded', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
 
-      // Set the topic as active first
       act(() => {
         useImageStore.setState({ activeGenerationTopicId: topicId });
       });
 
-      // Initially topic should not be loaded
       expect(generationBatchSelectors.isCurrentGenerationTopicLoaded(result.current)).toBe(false);
 
-      // Set topic batch as loaded
       act(() => {
         result.current.setTopicBatchLoaded(topicId);
       });
 
-      // Verify both the direct state and the selector
       expect(result.current.generationBatchesMap[topicId]).toEqual([]);
       expect(generationBatchSelectors.isCurrentGenerationTopicLoaded(result.current)).toBe(true);
     });
 
-    it('should not update state if map already has the same value', async () => {
+    it('keeps the existing list reference when the topic is already loaded', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
 
       act(() => {
-        useImageStore.setState({
-          generationBatchesMap: { [topicId]: [] },
-          activeGenerationTopicId: topicId,
-        });
+        seedBatch(topicId, []);
       });
 
       const stateBefore = result.current.generationBatchesMap;
-
-      // Should already be loaded
-      expect(generationBatchSelectors.isCurrentGenerationTopicLoaded(result.current)).toBe(true);
 
       act(() => {
         result.current.setTopicBatchLoaded(topicId);
       });
 
-      // State reference should remain the same due to isEqual check
       expect(result.current.generationBatchesMap).toBe(stateBefore);
-      expect(generationBatchSelectors.isCurrentGenerationTopicLoaded(result.current)).toBe(true);
     });
   });
 
@@ -100,93 +112,31 @@ describe('GenerationBatchAction', () => {
     it('should remove generation and clean up empty batch', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
-      const batchId = 'gb_batch_1';
-      const generationId = 'gen_1';
-
-      const batches: GenerationBatch[] = [
-        {
-          id: batchId,
-          provider: 'openai',
-          model: 'dall-e-3',
-          prompt: 'Test prompt',
-          createdAt: new Date(),
-          generations: [
-            {
-              id: generationId,
-              seed: 12345,
-              createdAt: new Date(),
-              asyncTaskId: null,
-              task: {
-                id: 'task_1',
-                status: AsyncTaskStatus.Success,
-              },
-            },
-          ],
-        },
-      ];
 
       act(() => {
-        useImageStore.setState({
-          activeGenerationTopicId: topicId,
-          generationBatchesMap: { [topicId]: batches },
-        });
+        seedBatch(topicId, [batch('gb_batch_1', ['gen_1'])]);
       });
 
-      const deleteGenerationSpy = vi.spyOn(result.current, 'internal_deleteGeneration');
-      const deleteBatchSpy = vi.spyOn(result.current, 'internal_deleteGenerationBatch');
+      const deleteBatchSpy = vi
+        .spyOn(result.current, 'internal_deleteGenerationBatch')
+        .mockResolvedValue(undefined);
       const refreshSpy = vi.spyOn(result.current, 'refreshGenerationBatches');
 
       await act(async () => {
-        await result.current.removeGeneration(generationId);
+        await result.current.removeGeneration('gen_1');
       });
 
-      expect(deleteGenerationSpy).toHaveBeenCalledWith(generationId);
-      expect(deleteBatchSpy).toHaveBeenCalledWith(batchId, topicId);
+      expect(generationService.deleteGeneration).toHaveBeenCalledWith('gen_1');
+      expect(deleteBatchSpy).toHaveBeenCalledWith('gb_batch_1', topicId);
       expect(refreshSpy).toHaveBeenCalled();
     });
 
     it('should only remove generation if batch is not empty', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
-      const batchId = 'gb_batch_1';
-
-      const batches: GenerationBatch[] = [
-        {
-          id: batchId,
-          provider: 'openai',
-          model: 'dall-e-3',
-          prompt: 'Test prompt',
-          createdAt: new Date(),
-          generations: [
-            {
-              id: 'gen_1',
-              seed: 12345,
-              createdAt: new Date(),
-              asyncTaskId: null,
-              task: {
-                id: 'task_1',
-                status: AsyncTaskStatus.Success,
-              },
-            },
-            {
-              id: 'gen_2',
-              seed: 54321,
-              createdAt: new Date(),
-              asyncTaskId: null,
-              task: {
-                id: 'task_2',
-                status: AsyncTaskStatus.Success,
-              },
-            },
-          ],
-        },
-      ];
 
       act(() => {
-        useImageStore.setState({
-          activeGenerationTopicId: topicId,
-          generationBatchesMap: { [topicId]: batches },
-        });
+        seedBatch(topicId, [batch('gb_batch_1', ['gen_1', 'gen_2'])]);
       });
 
       const deleteBatchSpy = vi.spyOn(result.current, 'internal_deleteGenerationBatch');
@@ -201,78 +151,37 @@ describe('GenerationBatchAction', () => {
     it('should do nothing if no active topic', async () => {
       const { result } = renderHook(() => useImageStore());
 
-      const deleteGenerationSpy = vi.spyOn(result.current, 'internal_deleteGeneration');
-
       await act(async () => {
         await result.current.removeGeneration('gen_1');
       });
 
-      expect(deleteGenerationSpy).toHaveBeenCalledWith('gen_1');
       expect(generationService.deleteGeneration).not.toHaveBeenCalled();
     });
   });
 
   describe('internal_deleteGeneration', () => {
-    it('should delete generation with optimistic update', async () => {
+    it('should delete the generation optimistically and confirm with the server', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
-      const batchId = 'gb_batch_1';
-      const generationId = 'gen_1';
-
-      const batches: GenerationBatch[] = [
-        {
-          id: batchId,
-          provider: 'openai',
-          model: 'dall-e-3',
-          prompt: 'Test prompt',
-          createdAt: new Date(),
-          generations: [
-            {
-              id: generationId,
-              seed: 12345,
-              createdAt: new Date(),
-              asyncTaskId: null,
-              task: {
-                id: 'task_1',
-                status: AsyncTaskStatus.Success,
-              },
-            },
-          ],
-        },
-      ];
 
       act(() => {
-        useImageStore.setState({
-          activeGenerationTopicId: topicId,
-          generationBatchesMap: { [topicId]: batches },
-        });
+        seedBatch(topicId, [batch('gb_batch_1', ['gen_1', 'gen_2'])]);
       });
-
-      const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchGenerationBatch');
-      const refreshSpy = vi.spyOn(result.current, 'refreshGenerationBatches');
 
       await act(async () => {
-        await result.current.internal_deleteGeneration(generationId);
+        await result.current.internal_deleteGeneration('gen_1');
       });
 
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        topicId,
-        { type: 'deleteGenerationInBatch', batchId, generationId },
-        'internal_deleteGeneration',
-      );
-      expect(generationService.deleteGeneration).toHaveBeenCalledWith(generationId);
-      expect(refreshSpy).toHaveBeenCalled();
+      expect(generationService.deleteGeneration).toHaveBeenCalledWith('gen_1');
+      const generations = result.current.generationBatchesMap[topicId][0].generations;
+      expect(generations.map((generation) => generation.id)).toEqual(['gen_2']);
     });
 
     it('should do nothing if generation not found', async () => {
       const { result } = renderHook(() => useImageStore());
-      const topicId = 'gt_topic_1';
 
       act(() => {
-        useImageStore.setState({
-          activeGenerationTopicId: topicId,
-          generationBatchesMap: { [topicId]: [] },
-        });
+        seedBatch('gt_topic_1', []);
       });
 
       await act(async () => {
@@ -286,128 +195,87 @@ describe('GenerationBatchAction', () => {
   describe('removeGenerationBatch', () => {
     it('should call internal_deleteGenerationBatch', async () => {
       const { result } = renderHook(() => useImageStore());
-      const batchId = 'gb_batch_1';
-      const topicId = 'gt_topic_1';
 
-      const deleteBatchSpy = vi.spyOn(result.current, 'internal_deleteGenerationBatch');
+      const deleteBatchSpy = vi
+        .spyOn(result.current, 'internal_deleteGenerationBatch')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
-        await result.current.removeGenerationBatch(batchId, topicId);
+        await result.current.removeGenerationBatch('gb_batch_1', 'gt_topic_1');
       });
 
-      expect(deleteBatchSpy).toHaveBeenCalledWith(batchId, topicId);
+      expect(deleteBatchSpy).toHaveBeenCalledWith('gb_batch_1', 'gt_topic_1');
     });
   });
 
   describe('internal_deleteGenerationBatch', () => {
-    it('should delete batch with optimistic update', async () => {
+    it('should delete the batch optimistically and confirm with the server', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
-      const batchId = 'gb_batch_1';
 
-      const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchGenerationBatch');
-      const refreshSpy = vi.spyOn(result.current, 'refreshGenerationBatches');
-
-      await act(async () => {
-        await result.current.internal_deleteGenerationBatch(batchId, topicId);
+      act(() => {
+        seedBatch(topicId, [batch('gb_batch_1', ['gen_1'])]);
       });
 
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        topicId,
-        { type: 'deleteBatch', id: batchId },
-        'internal_deleteGenerationBatch',
-      );
-      expect(generationBatchService.deleteGenerationBatch).toHaveBeenCalledWith(batchId);
-      expect(refreshSpy).toHaveBeenCalled();
+      await act(async () => {
+        await result.current.internal_deleteGenerationBatch('gb_batch_1', topicId);
+      });
+
+      expect(generationBatchService.deleteGenerationBatch).toHaveBeenCalledWith('gb_batch_1');
+      expect(result.current.generationBatchesMap[topicId]).toEqual([]);
     });
   });
 
   describe('internal_dispatchGenerationBatch', () => {
-    it('should update batch map when state changes', async () => {
+    it('should update a loaded topic when state changes', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
 
       act(() => {
-        useImageStore.setState({ generationBatchesMap: { [topicId]: [] } });
+        seedBatch(topicId, []);
       });
 
       act(() => {
-        result.current.internal_dispatchGenerationBatch(
-          topicId,
-          {
-            type: 'addBatch',
-            value: {
-              id: 'gb_batch_1',
-              provider: 'openai',
-              model: 'dall-e-3',
-              prompt: 'Test prompt',
-              createdAt: new Date(),
-              generations: [],
-            },
-          },
-          'test_action',
-        );
+        result.current.internal_dispatchGenerationBatch(topicId, {
+          type: 'addBatch',
+          value: batch('gb_batch_1', []),
+        });
       });
 
       expect(result.current.generationBatchesMap[topicId]).toHaveLength(1);
       expect(result.current.generationBatchesMap[topicId][0].id).toBe('gb_batch_1');
     });
 
-    it('should not update when map is equal', async () => {
+    it('should leave an unloaded topic untouched', async () => {
       const { result } = renderHook(() => useImageStore());
-      const topicId = 'gt_topic_1';
-      const existingBatches: GenerationBatch[] = [
-        {
-          id: 'gb_batch_1',
-          provider: 'openai',
-          model: 'dall-e-3',
-          prompt: 'Test prompt',
-          createdAt: new Date('2024-01-01'),
-          generations: [],
-        },
-      ];
 
       act(() => {
-        useImageStore.setState({ generationBatchesMap: { [topicId]: existingBatches } });
+        result.current.internal_dispatchGenerationBatch('gt_not_loaded', {
+          type: 'addBatch',
+          value: batch('gb_batch_1', []),
+        });
       });
 
-      const stateBefore = result.current.generationBatchesMap;
-
-      // Try to update with same data (reducer will return same array reference)
-      act(() => {
-        result.current.internal_dispatchGenerationBatch(
-          topicId,
-          {
-            type: 'updateBatch',
-            id: 'gb_batch_1',
-            value: { prompt: 'Test prompt' }, // Same prompt
-          },
-          'test_action',
-        );
-      });
-
-      // State reference should remain the same due to isEqual check
-      expect(result.current.generationBatchesMap).toBe(stateBefore);
+      expect(result.current.generationBatchesMap['gt_not_loaded']).toBeUndefined();
     });
   });
 
   describe('refreshGenerationBatches', () => {
-    it('should call mutate when there is active topic', async () => {
+    it('should revalidate the active topic entry', async () => {
       const { result } = renderHook(() => useImageStore());
-      const topicId = 'gt_topic_1';
 
       act(() => {
-        useImageStore.setState({ activeGenerationTopicId: topicId });
+        useImageStore.setState({ activeGenerationTopicId: 'gt_topic_1' });
       });
 
       await act(async () => {
         await result.current.refreshGenerationBatches();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['image:generationBatches', topicId]);
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
     });
 
-    it('should not call mutate when no active topic', async () => {
+    it('should not revalidate when no active topic', async () => {
       const { result } = renderHook(() => useImageStore());
 
       await act(async () => {
@@ -419,48 +287,9 @@ describe('GenerationBatchAction', () => {
   });
 
   describe('useFetchGenerationBatches', () => {
-    it('should fetch batches for a topic', async () => {
-      const topicId = 'gt_topic_1';
-      const batches: GenerationBatch[] = [
-        {
-          id: 'gb_batch_1',
-          provider: 'openai',
-          model: 'dall-e-3',
-          prompt: 'Test prompt',
-          createdAt: new Date(),
-          generations: [],
-        },
-      ];
-
-      vi.mocked(generationBatchService.getGenerationBatches).mockResolvedValue(batches);
-
-      const { result } = renderHook(() => {
-        const store = useImageStore();
-
-        // Simulate the onSuccess callback behavior directly
-        React.useEffect(() => {
-          useImageStore.setState({
-            generationBatchesMap: { [topicId]: batches },
-          });
-        }, []);
-
-        return { data: batches };
-      });
-
-      await waitFor(() => {
-        expect(useImageStore.getState().generationBatchesMap[topicId]).toEqual(batches);
-      });
-    });
-
     it('should not fetch when no topicId', async () => {
-      const { result } = renderHook(() => {
-        const store = useImageStore();
-        // Test the actual hook with null parameter
-        const swrResult = store.useFetchGenerationBatches(null);
-        return swrResult;
-      });
+      const { result } = renderHook(() => useImageStore().useFetchGenerationBatches(null));
 
-      // When key is null, SWR returns an object with undefined data
       expect(result.current.data).toBeUndefined();
       expect(generationBatchService.getGenerationBatches).not.toHaveBeenCalled();
     });
@@ -468,27 +297,19 @@ describe('GenerationBatchAction', () => {
 
   describe('useCheckGenerationStatus', () => {
     it('should not check status for temporary generations', async () => {
-      const { result } = renderHook(() => {
-        const store = useImageStore();
-        // Test the actual hook with temporary generation ID
-        const swrResult = store.useCheckGenerationStatus('temp-gen-1', 'task_1', 'gt_topic_1');
-        return swrResult;
-      });
+      const { result } = renderHook(() =>
+        useImageStore().useCheckGenerationStatus('temp-gen-1', 'task_1', 'gt_topic_1'),
+      );
 
-      // When conditions aren't met, SWR returns an object with undefined data
       expect(result.current.data).toBeUndefined();
       expect(generationService.getGenerationStatus).not.toHaveBeenCalled();
     });
 
     it('should not check status when disabled', async () => {
-      const { result } = renderHook(() => {
-        const store = useImageStore();
-        // Test the actual hook with enable=false
-        const swrResult = store.useCheckGenerationStatus('gen_1', 'task_1', 'gt_topic_1', false);
-        return swrResult;
-      });
+      const { result } = renderHook(() =>
+        useImageStore().useCheckGenerationStatus('gen_1', 'task_1', 'gt_topic_1', false),
+      );
 
-      // When disabled, SWR returns an object with undefined data
       expect(result.current.data).toBeUndefined();
       expect(generationService.getGenerationStatus).not.toHaveBeenCalled();
     });

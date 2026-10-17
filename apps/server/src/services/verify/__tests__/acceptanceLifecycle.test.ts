@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   acceptanceEnsureForSubject: vi.fn(),
   acceptanceUpdate: vi.fn(),
   agentExec: vi.fn(),
+  carryPassedResultsForward: vi.fn(),
 
   confirmPlan: vi.fn(),
   ensureForOperation: vi.fn(),
@@ -46,6 +47,9 @@ vi.mock('../acceptanceService', async (original) => ({
   }),
 }));
 
+vi.mock('../carryForward', () => ({
+  carryPassedResultsForward: mocks.carryPassedResultsForward,
+}));
 vi.mock('../planGenerator', () => ({
   VerifyPlanGeneratorService: vi.fn(function () {
     return {
@@ -387,6 +391,18 @@ describe('Verify acceptance lifecycle', () => {
       }),
     );
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
+    // Checks the repair was not asked to fix keep their earned verdict.
+    expect(mocks.carryPassedResultsForward).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      expect.objectContaining({
+        excludeItemIds: ['check-1'],
+        operationId: 'repair-operation',
+        sourceRunId: 'source-run',
+        targetRunId: 'repair-run',
+      }),
+      'workspace-1',
+    );
   });
 });
 

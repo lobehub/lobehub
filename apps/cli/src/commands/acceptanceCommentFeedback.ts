@@ -28,6 +28,14 @@ export const collectCommentFeedback = (
       root.evidenceId && root.rect
         ? { comment: item.content, evidenceId: root.evidenceId, rect: root.rect }
         : undefined;
+    const page = root.source
+      ? {
+          locations: root.source.targets.flatMap((target) =>
+            target.code ? [`${target.code.file}:${target.code.line}`] : [],
+          ),
+          url: root.source.url,
+        }
+      : undefined;
 
     return [
       {
@@ -44,6 +52,7 @@ export const collectCommentFeedback = (
         createdAt: item.createdAt.toISOString(),
         fileIds: item.attachments.map((attachment) => attachment.id),
         kind: 'comment' as const,
+        page,
         parentCommentId: item.parentCommentId ?? undefined,
         roundIndex: item.contextRoundIndex ?? root.contextRoundIndex ?? 0,
         threadId: root.id,

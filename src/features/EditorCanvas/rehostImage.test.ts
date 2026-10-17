@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fileService } from '@/services/file';
@@ -8,7 +8,7 @@ import { getFileIdForUrl, registerAttachment } from './attachmentRegistry';
 import { needsImageRehost, rehostImage } from './rehostImage';
 
 vi.mock('@/services/file', () => ({ fileService: { rehostImage: vi.fn() } }));
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: vi.fn() } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: vi.fn() } }));
 vi.mock('i18next', () => ({ t: (key: string) => key }));
 
 const setWindowUrl = (url: string) => {

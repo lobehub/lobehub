@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
 
-import { styles } from './styles';
+import { NODE_GUTTER, styles } from './styles';
 
 /** A persisted event, shared by the interactive discussion and read-only report. */
 const TimelineEvent = ({
@@ -21,10 +21,10 @@ const TimelineEvent = ({
 }) => {
   const time = useActivityTime(at);
   return (
-    <Flexbox horizontal align={'flex-start'} className={styles.timelineEntry} gap={12}>
+    <Flexbox horizontal align={'flex-start'} className={styles.timelineEntry} gap={NODE_GUTTER}>
       <span className={styles.timelineNode}>
         <span className={styles.eventDot}>
-          <Icon icon={icon} size={12} />
+          <Icon icon={icon} size={14} />
         </span>
       </span>
       <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>

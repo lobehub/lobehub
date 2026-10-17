@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { openRenameModal } from '@/components/RenameModal';
@@ -24,6 +24,7 @@ export const useVerifyReportMoreMenu = (): PortalMoreMenuConfig | undefined => {
 
   return {
     copyId: runId,
+    // Only a run inside an acceptance has a page to link to.
     copyLink: reportUrl,
     refresh,
     rename:
@@ -35,12 +36,7 @@ export const useVerifyReportMoreMenu = (): PortalMoreMenuConfig | undefined => {
               onSave: async (next) => {
                 try {
                   await verifyService.updateRunTitle(runId, next);
-                  await Promise.all([
-                    refresh(),
-                    globalMutate(
-                      (key) => Array.isArray(key) && key[0] === verifyKeys.reportSummaries.root,
-                    ),
-                  ]);
+                  await refresh();
                   toast.success(t('workspace.renameSuccess'));
                 } catch (error) {
                   console.error('[verify-report:rename]', error);

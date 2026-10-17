@@ -1,6 +1,7 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
 
+export * from './archive';
 export * from './execution';
 
 // ── Task type aliases ──
@@ -327,6 +328,8 @@ export interface TaskSubtaskProgress {
 
 export interface TaskItem {
   accessedAt: Date;
+  /** Set when the user archives the task; archived tasks are hidden from lists by default. */
+  archivedAt: Date | null;
   assigneeAgentId: string | null;
   assigneeUserId: string | null;
   automationMode: TaskAutomationMode | null;
@@ -376,6 +379,7 @@ export type TaskListItem = TaskItem & {
 
 export interface NewTask {
   accessedAt?: Date;
+  archivedAt?: Date | null;
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
   automationMode?: TaskAutomationMode | null;
@@ -427,6 +431,8 @@ export interface TaskDetailSubtaskRunningTopic {
 }
 
 export interface TaskDetailSubtask {
+  /** ISO time the subtask was archived; null when it is not archived. */
+  archivedAt?: string | null;
   assignee?: TaskDetailSubtaskAssignee | null;
   /** Human assignee (workspace member). Coexists with `assignee` (agent). */
   assigneeUserId?: string | null;
@@ -596,6 +602,8 @@ export interface TaskRunVerifySummary {
 export interface TaskDetailData {
   activities?: TaskDetailActivity[];
   agentId?: string | null;
+  /** ISO time the user archived the task; null when it is not archived. */
+  archivedAt?: string | null;
   // null/undefined = no automation configured
   automationMode?: TaskAutomationMode | null;
   checkpoint?: CheckpointConfig;

@@ -8,6 +8,7 @@ import {
   createLocalFileScopeKey,
   createSandboxLocalFileScopeKey,
   getLocalFileTabId,
+  isRemoteLocalFile,
 } from './helpers';
 import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
@@ -80,6 +81,8 @@ const agentDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.AgentDetail);
   return view?.agentId;
 };
+
+const memoryDetailView = (s: ChatStoreState) => getViewData(s, PortalViewType.MemoryDetail);
 
 // Artifact selectors
 const currentArtifact = (s: ChatStoreState): PortalArtifact | undefined => {
@@ -159,6 +162,7 @@ const currentFile = (s: ChatStoreState): PortalFile | undefined => {
 
 const previewFileId = (s: ChatStoreState) => currentFile(s)?.fileId;
 const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
+const previewFileSource = (s: ChatStoreState) => currentFile(s)?.source;
 
 // Local File selectors
 const currentLocalFileScopeWorkingDirectory = (s: ChatStoreState): string | undefined =>
@@ -227,6 +231,9 @@ const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => 
   );
 };
 
+const isCurrentLocalFileRemote = (s: ChatStoreState): boolean =>
+  isRemoteLocalFile(currentLocalFile(s));
+
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
@@ -261,6 +268,8 @@ const taskResultId = (s: ChatStoreState): string | undefined => {
   const view = getStackViewData(s, PortalViewType.TaskResult);
   return view?.taskId;
 };
+
+const dashboardWidgetView = (s: ChatStoreState) => getViewData(s, PortalViewType.DashboardWidget);
 
 // Goal detail drill-down selectors
 const goalPortalId = (s: ChatStoreState): string | undefined =>
@@ -349,10 +358,12 @@ export const chatPortalSelectors = {
   // File preview data
   currentFile,
   previewFileId,
+  previewFileSource,
   chunkText,
 
   // Goal drill-down data
   goalMetricView,
+  dashboardWidgetView,
   goalNodeView,
   goalPortalId,
   goalReportChapterView,
@@ -362,12 +373,16 @@ export const chatPortalSelectors = {
   activeLocalFileId,
   activeLocalFilePath,
   currentLocalFile,
+  isCurrentLocalFileRemote,
   dirtyLocalFileContents,
   isLocalFileDirty,
   localFileBuffer,
   localFilePath,
   localFileWorkingDirectory,
   openLocalFiles,
+
+  // Memory detail data
+  memoryDetailView,
 
   // Message detail data
   messageDetailId,

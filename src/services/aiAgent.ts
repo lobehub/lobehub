@@ -3,6 +3,7 @@ import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
   ClientLlmWaitItem,
   ExecAgentAppContext,
+  ExecAgentClientIds,
   ExecAgentLlmExecutor,
   ExecAgentResult,
   ResumeClientLlmWaitResult,
@@ -19,7 +20,7 @@ import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
 
 /** Gateway stream features every run started from this client handles. */
-const STREAM_FEATURES: AgentStreamClientFeature[] = ['member_runtime_end'];
+const STREAM_FEATURES: AgentStreamClientFeature[] = ['file_works', 'member_runtime_end'];
 
 /** An older server's strict input schema rejected the `streamFeatures` key. */
 const isUnknownStreamFeaturesError = (error: unknown): boolean => {
@@ -138,7 +139,7 @@ export interface ExecAgentTaskParams {
    * `newTopic.id` / `newUserMessage.id` / `newAssistantMessage.id`. Fresh
    * sends only; resume / regeneration must not replay them.
    */
-  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
+  clientIds?: ExecAgentClientIds;
   /**
    * Server runs the composer tracked on this conversation at send time. The
    * server records them only when this send has to stop a run the client left
@@ -171,6 +172,8 @@ export interface ExecAgentTaskParams {
   resumeApprovals?: ResumeApprovalParam[];
   /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
   resumeToolResult?: ResumeToolResultParam;
+  /** Skill identifiers the user selected in this message; the server injects their bodies. */
+  selectedSkillIds?: string[];
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
   selectedToolIds?: string[];
   slug?: string;
@@ -194,6 +197,10 @@ export interface ExecSubAgentTaskParams {
   /** Optional for Single Agent mode, required for Group mode */
   groupId?: string;
   instruction: string;
+  /** This tab runs the sub-agent's device-only LLM calls (with {@link llmRelayChannel}). */
+  llmExecutor?: ExecAgentLlmExecutor;
+  /** The one-shot relay channel this tab stands by on for the sub-agent's LLM calls. */
+  llmRelayChannel?: string;
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
@@ -335,12 +342,33 @@ class AiAgentService {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }
 
+  /** This tab stopped standing by on the relay channel it named in `execSubAgentTask`. */
+  async releaseSubAgentLlmRelay(params: { channel: string }) {
+    return await lambdaClient.aiAgent.releaseSubAgentLlmRelay.mutate(params);
+  }
+
   /**
    * Get SubAgent task status by threadId
    * Works for both Group and Single Agent mode tasks
    */
   async getSubAgentTaskStatus(params: GetSubAgentTaskStatusParams) {
     return await lambdaClient.aiAgent.getSubAgentTaskStatus.query(params);
+  }
+
+  /**
+   * Authoritative terminal outcome of a server run, by its operation id.
+   *
+   * The leaked-run sweep needs it to tell a run that COMPLETED from one that
+   * failed / was interrupted: only a completion may drain the follow-up the user
+   * queued behind it (a failed run keeps its queue, like every terminal path).
+   * The terminal frame that would have carried this outcome is exactly what the
+   * leak lost.
+   *
+   * Resolves `null` when the server no longer holds the run (its state expired).
+   * Callers must treat that as UNKNOWN, never as a completion.
+   */
+  async getOperationStatus(params: { operationId: string }) {
+    return await lambdaClient.aiAgent.getOperationStatus.query(params);
   }
 
   /**

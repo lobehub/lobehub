@@ -1,9 +1,7 @@
 'use client';
 
 import type { GroupedTopic } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, responsive } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, responsive, Text } from '@lobehub/ui';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -56,7 +54,7 @@ const TopicGrid = memo<TopicGridProps>(({ groups, agentId, showGroupTitles, grou
         if (group.children.length === 0) return null;
         const title =
           groupBy === 'byProject'
-            ? getProjectGroupTitle(group.id, group.title, t)
+            ? getProjectGroupTitle(group, t)
             : group.title || getTimeGroupTitle(group.id, t);
         return (
           <Fragment key={group.id}>

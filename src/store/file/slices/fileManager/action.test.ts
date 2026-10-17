@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
+import { createReplicaState } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 import { fileService } from '@/services/file';
@@ -66,10 +67,15 @@ beforeEach(() => {
       creatingChunkingTaskIds: [],
       creatingEmbeddingTaskIds: [],
       dockUploadFileList: [],
+      fileDetailMap: {},
+      fileDetailReplica: createReplicaState(),
       fileList: [],
+      fileListMeta: undefined,
+      fileListReplica: createReplicaState(),
+      folderBreadcrumbMap: {},
+      folderBreadcrumbReplica: createReplicaState(),
       resourceList: [],
       resourceMap: new Map(),
-      queryListParams: undefined,
     },
     false,
   );
@@ -936,7 +942,7 @@ describe('FileManagerActions', () => {
   });
 
   describe('refreshFileList', () => {
-    it('should refresh knowledge caches and revalidate resources by default', async () => {
+    it('should revalidate the list replica and revalidate resources by default', async () => {
       const { result } = renderHook(() => useStore());
       const revalidateResourcesSpy = vi
         .spyOn(resourceHooks, 'revalidateResources')
@@ -946,9 +952,8 @@ describe('FileManagerActions', () => {
         await result.current.refreshFileList();
       });
 
-      expect(mutate).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
-        revalidate: true,
-      });
+      // The replica's revalidate fans the list entry out through the SWR driver.
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
       expect(revalidateResourcesSpy).toHaveBeenCalledTimes(1);
     });
 
@@ -962,9 +967,7 @@ describe('FileManagerActions', () => {
         await result.current.refreshFileList({ revalidateResources: false });
       });
 
-      expect(mutate).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
-        revalidate: true,
-      });
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
       expect(revalidateResourcesSpy).not.toHaveBeenCalled();
     });
   });
@@ -1129,7 +1132,22 @@ describe('FileManagerActions', () => {
     });
   });
 
-  describe('useFetchFileItem', () => {
+  describe('useFetchKnowledgeItem', () => {
+    const mockFile: FileListItem = {
+      chunkCount: null,
+      chunkingError: null,
+      createdAt: new Date(),
+      embeddingError: null,
+      fileType: 'text/plain',
+      finishEmbedding: false,
+      id: 'file-1',
+      name: 'test.txt',
+      size: 100,
+      sourceType: 'file',
+      updatedAt: new Date(),
+      url: 'http://example.com/test.txt',
+    };
+
     it('should not fetch when id is undefined', () => {
       const { result } = renderHook(() => useStore());
 
@@ -1138,120 +1156,129 @@ describe('FileManagerActions', () => {
       expect(lambdaClient.file.getFileItemById.query).not.toHaveBeenCalled();
     });
 
-    it('should fetch file item when id is provided', async () => {
+    it('reads the fetched item from the replica view when id is provided', async () => {
       const { result } = renderHook(() => useStore());
-
-      const mockFile: FileListItem = {
-        chunkCount: null,
-        chunkingError: null,
-        createdAt: new Date(),
-        embeddingError: null,
-        fileType: 'text/plain',
-        finishEmbedding: false,
-        id: 'file-1',
-        name: 'test.txt',
-        size: 100,
-        sourceType: 'file',
-        updatedAt: new Date(),
-        url: 'http://example.com/test.txt',
-      };
 
       vi.mocked(lambdaClient.file.getFileItemById.query).mockResolvedValue(mockFile);
 
-      const { result: swrResult } = renderHook(
+      const { result: itemResult } = renderHook(
         () => result.current.useFetchKnowledgeItem('file-1'),
         { wrapper: withSWR },
       );
 
       await waitFor(() => {
-        expect(swrResult.current.data).toEqual(mockFile);
+        expect(itemResult.current.data).toEqual(mockFile);
       });
+      // The value is the replica view, not a value flowing out of the hook.
+      expect(useStore.getState().fileDetailMap['file-1']?.file).toEqual(mockFile);
     });
-  });
 
-  describe('useFetchKnowledgeItems', () => {
-    it('should fetch file list with params', async () => {
+    it('maps a server "not found" to undefined data instead of a permanent loading state', async () => {
       const { result } = renderHook(() => useStore());
 
-      const mockFiles: FileListItem[] = [
-        {
-          chunkCount: null,
-          chunkingError: null,
-          createdAt: new Date(),
-          embeddingError: null,
-          fileType: 'text/plain',
-          finishEmbedding: false,
-          id: 'file-1',
-          name: 'test1.txt',
-          size: 100,
-          sourceType: 'file',
-          updatedAt: new Date(),
-          url: 'http://example.com/test1.txt',
-        },
-        {
-          chunkCount: null,
-          chunkingError: null,
-          createdAt: new Date(),
-          embeddingError: null,
-          fileType: 'text/plain',
-          finishEmbedding: false,
-          id: 'file-2',
-          name: 'test2.txt',
-          size: 200,
-          sourceType: 'file',
-          updatedAt: new Date(),
-          url: 'http://example.com/test2.txt',
-        },
-      ];
+      // `getKnowledgeItem` resolves `null` (not a throw) for a missing document id.
+      vi.mocked(lambdaClient.file.getFileItemById.query).mockResolvedValue(undefined as any);
 
-      vi.mocked(lambdaClient.file.getKnowledgeItems.query).mockResolvedValue({
-        hasMore: false,
-        items: mockFiles,
-      });
-
-      const params = { category: 'all' as any };
-      const { result: swrResult } = renderHook(
-        () => result.current.useFetchKnowledgeItems(params),
+      const { result: itemResult } = renderHook(
+        () => result.current.useFetchKnowledgeItem('file-missing'),
         { wrapper: withSWR },
       );
 
       await waitFor(() => {
-        expect(swrResult.current.data).toEqual(mockFiles);
+        expect(itemResult.current.data).toBeUndefined();
+        expect(itemResult.current.isLoading).toBe(false);
       });
+      expect(useStore.getState().fileDetailMap['file-missing']).toEqual({ file: null });
     });
 
-    it('should update store state on successful fetch', async () => {
+    it('treats a NOT_FOUND from the file endpoint as a confirmed absence, not an error', async () => {
       const { result } = renderHook(() => useStore());
 
-      const mockFiles: FileListItem[] = [
-        {
-          chunkCount: null,
-          chunkingError: null,
-          createdAt: new Date(),
-          embeddingError: null,
-          fileType: 'text/plain',
-          finishEmbedding: false,
-          id: 'file-1',
-          name: 'test.txt',
-          size: 100,
-          sourceType: 'file',
-          updatedAt: new Date(),
-          url: 'http://example.com/test.txt',
-        },
-      ];
+      // `getFileItemById` throws NOT_FOUND for a deleted / inaccessible `file_*`.
+      vi.mocked(lambdaClient.file.getFileItemById.query).mockRejectedValue(
+        Object.assign(new Error('File not found'), { data: { code: 'NOT_FOUND' } }),
+      );
+
+      const { result: itemResult } = renderHook(
+        () => result.current.useFetchKnowledgeItem('file-deleted'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => {
+        expect(itemResult.current.data).toBeUndefined();
+        expect(itemResult.current.isLoading).toBe(false);
+      });
+      // Not an error state: the response folded a "not found" page value.
+      expect(itemResult.current.error).toBeUndefined();
+      expect(useStore.getState().fileDetailMap['file-deleted']).toEqual({ file: null });
+    });
+  });
+
+  describe('useFetchKnowledgeItems', () => {
+    const makeFile = (id: string, size = 100): FileListItem => ({
+      chunkCount: null,
+      chunkingError: null,
+      createdAt: new Date(),
+      embeddingError: null,
+      fileType: 'text/plain',
+      finishEmbedding: false,
+      id,
+      name: `${id}.txt`,
+      size,
+      sourceType: 'file',
+      updatedAt: new Date(),
+      url: `http://example.com/${id}.txt`,
+    });
+
+    it('paints the fetched head page into the store list view', async () => {
+      const { result } = renderHook(() => useStore());
+      const mockFiles = [makeFile('file-1'), makeFile('file-2', 200)];
 
       vi.mocked(lambdaClient.file.getKnowledgeItems.query).mockResolvedValue({
         hasMore: false,
         items: mockFiles,
       });
 
-      const params = { category: 'all' as any };
-      renderHook(() => result.current.useFetchKnowledgeItems(params), { wrapper: withSWR });
-
-      await waitFor(() => {
-        expect(result.current.fileList).toEqual(mockFiles);
-        expect(result.current.queryListParams).toEqual(params);
+      renderHook(() => result.current.useFetchKnowledgeItems({ category: 'all' }), {
+        wrapper: withSWR,
       });
+
+      await waitFor(() => expect(useStore.getState().fileList).toEqual(mockFiles));
+      expect(useStore.getState().fileListMeta?.hasMore).toBe(false);
+      expect(lambdaClient.file.getKnowledgeItems.query).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'all', limit: 50, offset: 0 }),
+      );
+    });
+
+    it('appends the next page through the replica when loadMoreKnowledgeItems runs', async () => {
+      const { result } = renderHook(() => useStore());
+      const firstPage = Array.from({ length: 50 }, (_, i) => makeFile(`file-${i}`));
+      const secondPage = Array.from({ length: 5 }, (_, i) => makeFile(`file-${50 + i}`));
+
+      vi.mocked(lambdaClient.file.getKnowledgeItems.query).mockImplementation(
+        async (params: any) =>
+          (params?.offset ?? 0) === 0
+            ? { hasMore: true, items: firstPage }
+            : { hasMore: false, items: secondPage },
+      );
+
+      renderHook(() => result.current.useFetchKnowledgeItems({ category: 'all', limit: 50 }), {
+        wrapper: withSWR,
+      });
+      await waitFor(() => expect(useStore.getState().fileList).toHaveLength(50));
+      expect(useStore.getState().fileListMeta?.hasMore).toBe(true);
+
+      await act(async () => {
+        await useStore.getState().loadMoreKnowledgeItems();
+      });
+
+      const list = useStore.getState().fileList;
+      expect(list).toHaveLength(55);
+      expect(list[50].id).toBe('file-50');
+      expect(useStore.getState().fileListMeta?.hasMore).toBe(false);
+      expect(lambdaClient.file.getKnowledgeItems.query).toHaveBeenLastCalledWith(
+        expect.objectContaining({ limit: 50, offset: 50 }),
+      );
     });
   });
 });

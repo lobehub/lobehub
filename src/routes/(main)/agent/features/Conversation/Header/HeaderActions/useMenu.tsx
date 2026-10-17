@@ -1,8 +1,16 @@
 'use client';
 
-import type { DropdownItem } from '@lobehub/ui';
-import { Block, copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui/base-ui';
+import {
+  Block,
+  confirmModal,
+  copyToClipboard,
+  type DropdownItem,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import {
   Clock3Icon,
   Copy,
@@ -126,7 +134,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
               `header-actions-history-${docId}`,
             );
 
-            editor.setDocument('json', JSON.stringify(result.editorData));
+            editor.setDocument('json', JSON.stringify(result.editorData), { keepId: true });
             markDirty(docId);
             await performSave(docId, undefined, {
               restoreFromHistoryId: item.id,

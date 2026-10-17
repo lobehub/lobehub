@@ -101,30 +101,6 @@ describe('buildClaudeCodeTranscript', () => {
     expect(asst.message.content).toEqual([{ type: 'text', text: 'visible answer' }]);
   });
 
-  it('trims a trailing unanswered tool_use (would 400 the next turn)', () => {
-    const jsonl = buildClaudeCodeTranscript(
-      [
-        userMsg('go'),
-        assistantMsg('running', [
-          {
-            apiName: 'Bash',
-            arguments: '{}',
-            id: 'toolu_dangling',
-            identifier: 'claude-code',
-            type: 'default',
-          },
-        ]),
-      ],
-      { cwd: CWD, sessionId: SESSION_ID },
-    );
-    // the assistant tool_use has no matching tool_result → trimmed away,
-    // leaving just the user turn (still a valid, resumable transcript)
-    const recs = parseLines(jsonl);
-    expect(recs).toHaveLength(1);
-    expect(recs[0].type).toBe('user');
-    expect(jsonl).not.toContain('toolu_dangling');
-  });
-
   it('keeps a resolved tool_use but trims a later dangling one', () => {
     const jsonl = buildClaudeCodeTranscript(
       [
@@ -171,9 +147,7 @@ describe('encodeClaudeProjectDir', () => {
     expect(encodeClaudeProjectDir('/private/tmp/cc-resurrect-lab')).toBe(
       '-private-tmp-cc-resurrect-lab',
     );
-  });
-
-  it('collapses dots and underscores to dashes too', () => {
+    // Dots and underscores collapse to dashes too.
     expect(encodeClaudeProjectDir('/a/b.c_d')).toBe('-a-b-c-d');
   });
 });

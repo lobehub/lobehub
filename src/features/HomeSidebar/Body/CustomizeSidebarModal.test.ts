@@ -31,4 +31,14 @@ describe('CustomizeSidebarModal', () => {
     expect(getSortableSidebarItemIds(false).has('memory')).toBe(true);
     expect(getSortableSidebarItemIds(true).has('memory')).toBe(false);
   });
+
+  it('offers Dashboards only while the dashboard flag is on, and never in workspace mode', () => {
+    expect(getSortableSidebarItemIds(false).has('dashboard')).toBe(false);
+    expect(getSortableSidebarItemIds(false, { dashboardEnabled: true }).has('dashboard')).toBe(
+      true,
+    );
+    expect(getSortableSidebarItemIds(true, { dashboardEnabled: true }).has('dashboard')).toBe(
+      false,
+    );
+  });
 });

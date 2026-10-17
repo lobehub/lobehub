@@ -9,7 +9,7 @@ import { delayed } from '@/components/Skeleton/Delayed';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import PageExplorer from '@/features/PageExplorer';
 import MobilePageHeader from '@/features/Pages/MobilePageHeader';
-import { usePageStore } from '@/store/page';
+import { pageActions, usePageStore } from '@/store/page';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
 const MobilePageDetail = memo(() => {
@@ -20,8 +20,7 @@ const MobilePageDetail = memo(() => {
 
   // Mobile mounts no page list, so load this page into the store directly —
   // PageEditor reads title, emoji and workspace lock state from it.
-  const useFetchPageDetail = usePageStore((s) => s.useFetchPageDetail);
-  useFetchPageDetail(pageId);
+  pageActions.useFetchPageDetail(pageId);
 
   useUnmount(() => {
     usePageStore.setState({ selectedPageId: undefined });

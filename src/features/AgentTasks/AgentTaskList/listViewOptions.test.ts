@@ -45,6 +45,12 @@ describe('normalizeTaskListViewOptions', () => {
     expect(options.nestedSubTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks);
   });
 
+  it('hides archived tasks by default and keeps an explicit choice', () => {
+    expect(normalizeTaskListViewOptions().showArchived).toBe(false);
+    expect(normalizeTaskListViewOptions({ groupBy: 'priority' }).showArchived).toBe(false);
+    expect(normalizeTaskListViewOptions({ showArchived: true }).showArchived).toBe(true);
+  });
+
   it('preserves an explicit sub-task choice', () => {
     const options = normalizeTaskListViewOptions({ nestedSubTasks: false, showSubTasks: true });
 

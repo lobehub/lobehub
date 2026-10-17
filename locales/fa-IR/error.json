@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "قادر به تولید این پاسخ نیست",
   "unknownError.title": "اوه، درخواست به خواب رفت",
   "unknownError.traceIdLabel": "شناسه ردیابی:",
+  "unknownError.troubleshoot": "عیب‌یابی",
   "unlock.addProxyUrl": "افزودن آدرس پراکسی OpenAI (اختیاری)",
   "unlock.apiKey.description": "کلید API {{name}} خود را وارد کنید تا جلسه آغاز شود",
   "unlock.apiKey.imageGenerationDescription": "کلید API {{name}} خود را وارد کنید تا تولید تصویر آغاز شود",

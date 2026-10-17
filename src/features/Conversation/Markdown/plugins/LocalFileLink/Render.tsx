@@ -2,8 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { A, Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { A, createStaticStyles, Tooltip } from '@lobehub/ui';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 

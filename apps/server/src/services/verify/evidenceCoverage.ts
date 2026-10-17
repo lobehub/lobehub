@@ -13,6 +13,27 @@ export const readRequiredEvidence = (
 };
 
 /**
+ * Same-medium types that also satisfy a declared requirement. The gate checks
+ * that an artifact of the right medium exists; whether it proves the criterion
+ * is the judge's call. Without this, a recording uploaded as `video` against a
+ * `gif` requirement, or a CLI log uploaded as `text` against `transcript`,
+ * failed every repair round on a label while the judge never saw the artifact.
+ * A GIF is a run of screenshots, and judges receive it as a frame sheet (see
+ * `renderGifFrameSheet`), so it also answers a `screenshot` requirement — a GIF
+ * uploaded as `screenshot` is stored as `gif`, which otherwise failed the gate
+ * on the very artifact it asked for. `dom_snapshot` and `audio` have no
+ * substitute.
+ */
+const SATISFIED_BY: Partial<Record<VerifyEvidenceType, VerifyEvidenceType[]>> = {
+  gif: ['video'],
+  markdown: ['text', 'transcript'],
+  screenshot: ['gif'],
+  text: ['markdown', 'transcript'],
+  transcript: ['text', 'markdown'],
+  video: ['gif'],
+};
+
+/**
  * Which required evidence types are still missing for a criterion — pure, so the
  * structural gate is unit-testable without a database. Returns `[]` when the
  * item declares no evidence requirement (nothing to gate on).
@@ -23,7 +44,9 @@ export const coverageGaps = (
 ): VerifyEvidenceType[] => {
   if (!required?.length) return [];
   const present = new Set(evidence.map((e) => e.type));
-  return [...new Set(required.map((r) => r.type))].filter((t) => !present.has(t));
+  return [...new Set(required.map((r) => r.type))].filter(
+    (t) => !present.has(t) && !SATISFIED_BY[t]?.some((alt) => present.has(alt)),
+  );
 };
 
 /**

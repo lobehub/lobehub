@@ -23,6 +23,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { FilesTabs } from '@/types/files';
 
+import { isResourceCategoryActive } from './categoryActive';
+
 interface CategoryItem {
   icon: LucideIcon;
   isBusiness?: boolean;
@@ -37,11 +39,6 @@ const CategoryMenu = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const businessCategories = useBusinessResourceCategories();
   const location = useActiveLocation();
-  // In Work-gallery mode (/resource/works) no file category is selected, so
-  // suppress the category highlight — otherwise "Home" reads as active
-  // alongside the active Work entry. Match by suffix: the pathname may carry a
-  // workspace prefix.
-  const worksActive = location.pathname.endsWith('/resource/works');
 
   // Two groups below the fixed Home entry: file-based categories (uploaded
   // files by type) and LobeHub business entities (pages, works, webpages),
@@ -127,11 +124,7 @@ const CategoryMenu = memo(() => {
       {groups.map((group, groupIndex) => (
         <Flexbox gap={1} key={groupIndex}>
           {group.map((item) => {
-            const isActive =
-              item.key === 'works'
-                ? worksActive
-                : !worksActive &&
-                  (item.isBusiness ? location.pathname === item.url : activeKey === item.key);
+            const isActive = isResourceCategoryActive(item, activeKey, location.pathname);
             return (
               <Link
                 key={item.key}

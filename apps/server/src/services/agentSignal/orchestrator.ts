@@ -12,6 +12,7 @@ import { createSourceEvent } from '@lobechat/agent-signal/source';
 
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 
+import { acquireAgentSignalDailyBudget } from './budget';
 import type {
   AgentSignalEmitOptions,
   AgentSignalExecutionContext,
@@ -26,6 +27,9 @@ import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
 import { createSelfIterationCompletionHandler } from './services/selfIteration/completion';
+import { createServerSelfReviewBriefWriter } from './services/selfIteration/review/brief';
+import { resolveSelfReviewBriefTextTranslator } from './services/selfIteration/review/briefTextTranslator';
+import { claimNightlyReviewTopics } from './services/selfIteration/review/topicQuota';
 import { emitSourceEvent } from './sources';
 import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
 import type { AgentSignalReceiptStore, AgentSignalSourceEventStore } from './store/types';
@@ -98,22 +102,37 @@ const createPolicyOptions = (
   options: ExecuteAgentSignalSourceEventOptions,
   procedurePolicyOptions: NonNullable<CreateDefaultAgentSignalPoliciesOptions['procedure']>,
 ): CreateDefaultAgentSignalPoliciesOptions => {
-  // Nightly review writes its Daily Brief in-run via the builtin review
-  // serverRuntime primitive, so the orchestrator no longer injects a brief
-  // writer default.
+  // Nightly review writes proposal Daily Briefs in-run via the builtin review
+  // serverRuntime primitive; the completion handler only writes the ideas brief.
   const policyOptions = options.policyOptions;
 
   return {
     completion: {
       onSelfIterationCompleted: async (input) => {
-        await createSelfIterationCompletionHandler(
-          options.receiptStore ? { receiptStore: options.receiptStore } : {},
-        )(input);
+        await createSelfIterationCompletionHandler({
+          // Idea-only nightly reviews get their Daily Brief from the completion
+          // path; proposal briefs are still written in-run by the review tool.
+          ideasBrief: {
+            resolveTranslator: () =>
+              resolveSelfReviewBriefTextTranslator(context.db, context.userId),
+            writer: createServerSelfReviewBriefWriter(
+              context.db,
+              context.userId,
+              context.workspaceId,
+            ),
+          },
+          ...(options.receiptStore ? { receiptStore: options.receiptStore } : {}),
+        })(input);
         await new ExpertiseIngestionService(
           context.db,
           context.userId,
           context.workspaceId,
-        ).ingestSelfReview(input);
+        ).ingestSelfReview(
+          input,
+          // The nightly expertise pass shares the night's per-user topic quota with the
+          // review itself. Store-injected runs (evals, isolated tests) stay unmetered.
+          options.store ? {} : { claimNightlyTopics: claimNightlyReviewTopics },
+        );
       },
     },
     feedbackDomainJudge: {
@@ -123,6 +142,17 @@ const createPolicyOptions = (
       workspaceId: context.workspaceId,
     },
     feedbackSatisfactionJudge: {
+      // Every satisfaction call bills the user's provider; cap it per user per day.
+      // Store-injected runs (evals, isolated tests) avoid ambient Redis by contract.
+      ...(options.store
+        ? {}
+        : {
+            classifierBudget: () =>
+              acquireAgentSignalDailyBudget({
+                kind: 'feedback-classifier',
+                userId: context.userId,
+              }),
+          }),
       db: context.db,
       ...policyOptions?.feedbackSatisfactionJudge,
       userId: context.userId,

@@ -127,6 +127,8 @@ export const BrowserManifest: BuiltinToolManifest = {
   ],
   // `client`: runs in the desktop renderer (local runtime). `server`: cloud
   // agent runs proxy each call back to the bound device via deviceGateway.
+  // The browser panel lives in the desktop app; `lh connect` has none.
+  deviceClients: ['desktop'],
   executors: ['client', 'server'],
   identifier: BrowserIdentifier,
   meta: {

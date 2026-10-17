@@ -693,7 +693,9 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
-      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'ws-dev-1', workspaceId);
+      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'ws-dev-1', workspaceId, {
+        maxAgeMs: expect.any(Number),
+      });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('ws-dev-1');
@@ -741,7 +743,9 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
       // Personal principal: third arg must stay undefined (not this.workspaceId).
-      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'personal-dev-1', undefined);
+      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'personal-dev-1', undefined, {
+        maxAgeMs: expect.any(Number),
+      });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('personal-dev-1');
@@ -752,6 +756,57 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
         hostname: 'personal-mac',
         platform: 'darwin',
       });
+    });
+
+    it('routes a workspace local run to the requested personal desktop without an override', async () => {
+      const workspaceId = 'ws-1';
+      service = new AiAgentService(mockDb, userId, { workspaceId });
+
+      const { deviceGateway } = await import('@/server/services/deviceGateway');
+      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+
+      // Workspace pool holds another machine; the desktop sending the run is
+      // only enrolled in the caller's personal pool.
+      mockQueryWorkspaceDevices.mockResolvedValue([
+        {
+          deviceId: 'ws-dev-1',
+          friendlyName: null,
+          hostname: 'workspace-server',
+          lastSeenAt: new Date('2026-10-13T00:00:00.000Z'),
+          platform: 'linux',
+        },
+      ]);
+      mockQueryDeviceList.mockImplementation(async (_uid: string, wsId?: string) => {
+        if (wsId)
+          return [
+            { deviceId: 'ws-dev-1', hostname: 'workspace-server', online: true, platform: 'linux' },
+          ];
+        return [
+          {
+            deviceId: 'personal-dev-1',
+            hostname: 'personal-mac',
+            online: true,
+            platform: 'darwin',
+          },
+        ];
+      });
+      mockQueryDeviceSystemInfo.mockResolvedValue(systemInfoFixture);
+
+      // Stored `local` target with no per-user override (no boundDeviceId).
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
+      );
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        deviceId: 'personal-dev-1',
+        localDeviceId: 'personal-dev-1',
+        prompt: 'Hello',
+      });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('personal-dev-1');
+      expect(createOpArgs.activeDeviceScope).toBe('personal');
     });
 
     it('should not fail createOperation when system info query returns null', async () => {

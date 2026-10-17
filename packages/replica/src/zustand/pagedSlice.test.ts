@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 
 import { testDriver as driver } from '../../tests/testDriver';
 import { definePagedReplica, defineReplica } from '../core/defineReplica';
+import { REPLICA_INDEX_KEY } from '../core/engine';
 import { linkReplicaEntity } from '../core/entity';
 import { singleEntity } from '../core/entityAdapters';
 import type { ReplicaPagedData, ReplicaPageResult } from '../core/paging';
@@ -37,8 +38,11 @@ const scope: ReplicaScope = {
 
 const createMemoryStorage = <T>() => {
   const rows = new Map<string, ReplicaRow<T>>();
+  const read: ReplicaStorage<T>['get'] = async ({ queryKey, scope }) =>
+    rows.get(`${scope}|${queryKey}`);
   const storage: ReplicaStorage<T> = {
-    get: async ({ queryKey, scope }) => rows.get(`${scope}|${queryKey}`),
+    get: read,
+    getStrict: read,
     remove: async ({ queryKey, scope }) => {
       rows.delete(`${scope}|${queryKey}`);
     },
@@ -363,5 +367,163 @@ describe('entity changes for entries that are not loaded', () => {
     topic.update('a', (r) => ({ ...r, title: 'other-user' }));
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(listStorage.rows.get(listKey)?.data.items[0].title).toBe('a');
+  });
+});
+
+describe('entity removals vs reads in flight', () => {
+  /** Hold every `get` of `storage` for `queryKey` until released (the row is read first). */
+  const holdReads = <T>(storage: ReplicaStorage<T>, queryKey: string) => {
+    const originalGet = storage.get;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    storage.get = async (key) => {
+      const value = await originalGet(key);
+      if (key.queryKey === queryKey) await held;
+      return value;
+    };
+    return () => release();
+  };
+
+  const persisted = async () => {
+    const first = setup();
+    first.list.replace(params, pageOf(params));
+    first.detail.replace('a', row('a'));
+    await vi.waitFor(() => {
+      expect(
+        first.listStorage.rows.get(`user-1|${first.listResource.storageKey(params)}`),
+      ).toBeDefined();
+      expect(first.detailStorage.rows.get('user-1|a')).toBeDefined();
+    });
+    const second = setup(undefined, {
+      detailStorage: first.detailStorage,
+      listStorage: first.listStorage,
+    });
+    return { ...second, topic: linkReplicaEntity<Row>([second.list, second.detail]) };
+  };
+
+  it('a hydrate that read its row before the entity was deleted paints it without the entity', async () => {
+    const { detail, detailStorage, list, listResource, listStorage, store, topic } =
+      await persisted();
+    const releaseList = holdReads(listStorage.storage, listResource.storageKey(params));
+    const releaseDetail = holdReads(detailStorage.storage, 'a');
+
+    const listHydrate = list.hydrate(params);
+    const detailHydrate = detail.hydrate('a');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    topic.remove('a');
+    releaseList();
+    releaseDetail();
+    await Promise.all([listHydrate, detailHydrate]);
+
+    expect(ids(store.getState().lists.o1)).toEqual(['b']);
+    expect(store.getState().lists.o1.total).toBe(4);
+    expect(store.getState().details.a).toBeUndefined();
+  });
+
+  it('an explicit slice.removeEntity beats a hydrate already reading', async () => {
+    const { list, listResource, listStorage, store } = await persisted();
+    const release = holdReads(listStorage.storage, listResource.storageKey(params));
+
+    const hydration = list.hydrate(params);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    list.removeEntity('a');
+    release();
+    await hydration;
+
+    expect(ids(store.getState().lists.o1)).toEqual(['b']);
+  });
+
+  it('updateEntity with a mapper returning undefined still deletes, whatever its arity', async () => {
+    const { list, listResource, listStorage, store } = await persisted();
+    list.replace({ owner: 'o2', pageSize: 2 }, { items: [row('a'), row('x')], total: 2 });
+
+    list.updateEntity<Row>('a', (_item) => undefined);
+
+    expect(ids(store.getState().lists.o2)).toEqual(['x']);
+    // The unloaded persisted row loses it too.
+    await vi.waitFor(() =>
+      expect(ids(listStorage.rows.get(`user-1|${listResource.storageKey(params)}`)?.data)).toEqual([
+        'b',
+      ]),
+    );
+  });
+
+  it('never invokes an entity mapper speculatively', () => {
+    const ctx = setup();
+    ctx.list.replace(params, pageOf(params));
+    const mapper = vi.fn(() => row('a', 'renamed'));
+
+    ctx.list.updateEntity<Row>('a', mapper, { persist: false });
+
+    // Once to probe the loaded value, once inside the confirmed update.
+    expect(mapper).toHaveBeenCalledTimes(2);
+    expect(ctx.store.getState().lists.o1.items[0].title).toBe('renamed');
+  });
+
+  it('keeps every guard a pending hydrate needs, however many, and releases them after', async () => {
+    const { list, listResource, listStorage, store } = await persisted();
+    const many = { owner: 'o9', pageSize: 600 };
+    const items = Array.from({ length: 600 }, (_, index) => row(`x${index}`));
+    listStorage.rows.set(`user-1|${listResource.storageKey(many)}`, {
+      data: { currentPage: 0, hasMore: false, items, pageSize: 600, total: 600 },
+      updatedAt: 1,
+    });
+    const release = holdReads(listStorage.storage, listResource.storageKey(many));
+
+    const hydration = list.hydrate(many);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // A batch delete larger than any fixed window, while the read is pending.
+    for (const item of items) list.removeEntity(item.id);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    release();
+    await hydration;
+    expect(ids(store.getState().lists.o9)).toEqual([]);
+
+    // Once that read settled the guards are released: a row this session never
+    // patched (not indexed) hydrates as stored.
+    const later = { owner: 'o10', pageSize: 2 };
+    listStorage.rows.set(`user-1|${listResource.storageKey(later)}`, {
+      data: { currentPage: 0, hasMore: false, items: [row('x0')], pageSize: 2, total: 1 },
+      updatedAt: 1,
+    });
+    await list.hydrate(later);
+    expect(ids(store.getState().lists.o10)).toEqual(['x0']);
+  });
+
+  it('a server value holding the entity again lifts the removal', async () => {
+    const { list, listResource, listStorage, store, topic } = await persisted();
+    topic.remove('a');
+    // Restored on the server: a head response holds it again.
+    list.replace(params, pageOf(params));
+    expect(ids(store.getState().lists.o1)).toEqual(['a', 'b']);
+
+    // Another entry persisted with the entity hydrates it as stored.
+    const other = { owner: 'o3', pageSize: 2 };
+    listStorage.rows.set(`user-1|${listResource.storageKey(other)}`, {
+      data: { currentPage: 0, hasMore: false, items: [row('a')], pageSize: 2, total: 1 },
+      updatedAt: 1,
+    });
+    await list.hydrate(other);
+    expect(ids(store.getState().lists.o3)).toEqual(['a']);
+  });
+});
+
+describe('linkReplicaEntity.clear', () => {
+  it('wipes every linked resource in memory and storage', async () => {
+    const ctx = setup();
+    ctx.list.replace(params, pageOf(params));
+    ctx.detail.replace('a', row('a'));
+    await vi.waitFor(() => expect(ctx.detailStorage.rows.get('user-1|a')).toBeDefined());
+    const topic = linkReplicaEntity<Row>([ctx.list, ctx.detail]);
+
+    const purge = topic.clear();
+    expect(ctx.store.getState().lists).toEqual({});
+    expect(ctx.store.getState().details).toEqual({});
+    expect(await purge).toBe(true);
+    // Only the (emptied) index rows remain.
+    const dataRows = (rows: Map<string, unknown>) =>
+      [...rows.keys()].filter((key) => !key.endsWith(REPLICA_INDEX_KEY));
+    expect(dataRows(ctx.listStorage.rows)).toEqual([]);
+    expect(dataRows(ctx.detailStorage.rows)).toEqual([]);
   });
 });

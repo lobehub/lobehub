@@ -1,4 +1,4 @@
-import { createStaticStyles, keyframes } from 'antd-style';
+import { createStaticStyles, keyframes } from '@lobehub/ui';
 import { memo } from 'react';
 
 const rippleAnim = keyframes`

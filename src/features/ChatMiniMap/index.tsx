@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import { cx, Flexbox } from '@lobehub/ui';
 import { memo, useRef, useState } from 'react';
 
 import { MinimapIndicator } from './MinimapIndicator';

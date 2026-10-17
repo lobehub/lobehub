@@ -1,6 +1,5 @@
-import { Icon } from '@lobehub/ui';
-import { Button, InputPassword, Text } from '@lobehub/ui/base-ui';
-import { Form, type FormInstance } from '@lobehub/ui/base-ui/form';
+import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
+import { Form, type FormInstance } from '@lobehub/ui/form';
 import { Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

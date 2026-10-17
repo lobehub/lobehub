@@ -2,7 +2,7 @@
 // builtin MCP server (`mcp__lobe_cc__browser_*`, mounted by
 // `apps/desktop/.../browserMcpTools.ts`).
 //
-// Kept free of React / antd-style / lucide imports — same reason as
+// Kept free of React / @lobehub/ui / lucide imports — same reason as
 // `linearMcpLabels`: the workflow-summary path (`toolDisplayNames.ts`) pulls
 // `formatBrowserMcpShortLabel` and must not drag the inspector component in.
 

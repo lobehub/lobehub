@@ -22,12 +22,17 @@ export const useOpenChatSettingsHotkey = () => {
   return useHotkeyById(HotkeyEnum.OpenChatSettings, openChatSettings);
 };
 
-export const useToggleTerminalPanelHotkey = () => {
+/**
+ * `enabled` defaults to the desktop gate, where a local shell always exists.
+ * The web build passes its own condition — there the panel can only open once a
+ * device is connected, so the binding must stay off until one is.
+ */
+export const useToggleTerminalPanelHotkey = (enabled: boolean = isDesktop) => {
   const toggleTerminalPanel = useGlobalStore((s) => s.toggleTerminalPanel);
 
   return useHotkeyById(HotkeyEnum.ToggleTerminalPanel, () => toggleTerminalPanel(), {
     enableOnContentEditable: true,
-    enabled: isDesktop,
+    enabled,
   });
 };
 

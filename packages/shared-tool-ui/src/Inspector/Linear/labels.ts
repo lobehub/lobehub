@@ -2,7 +2,7 @@
 // adapter (apiName='mcp__claude_ai_Linear__get_issue', …) and the LobeHub
 // built-in Linear skill (bare apiName='get_issue', …).
 //
-// Kept free of React / antd-style imports so the workflow-summary path can
+// Kept free of React / @lobehub/ui imports so the workflow-summary path can
 // pull these helpers without dragging the inspector component (and its
 // style modules) into tests transitively.
 

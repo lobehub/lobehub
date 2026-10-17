@@ -1,6 +1,6 @@
 'use client';
 
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -89,7 +89,7 @@ export const usePortalDocumentTitle = () => {
             if (ticket !== saveTicketRef.current) return result;
             // Revalidate the caches other surfaces read titles from
             // (working-sidebar tree, standalone document page read
-            // `agent:documentsList`), mirroring the full-page editor's
+            // the agent document-list replica), mirroring the full-page editor's
             // post-rename list refresh.
             void invalidateDocumentMutation({ agentId: agentId ?? undefined, documentId });
             return result;
@@ -158,7 +158,6 @@ export const usePortalDocumentHeaderActions = () => {
   const refresh = useCallback(async () => {
     if (!documentId) return;
     await invalidateDocumentMutation({
-      agentDocumentId,
       agentId: agentDocumentId ? (agentId ?? undefined) : undefined,
       documentId,
     });

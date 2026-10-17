@@ -1,16 +1,12 @@
 import { type GoogleGenAIOptions } from '@google/genai';
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import {
-  SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG,
-  SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
-} from '@lobechat/heterogeneous-agents';
+import { SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES } from '@lobechat/heterogeneous-agents';
 import {
   AgentRuntimeError,
   mergeModelRuntimeHooks,
   ModelRuntime,
   type ModelRuntimeHooks,
 } from '@lobechat/model-runtime';
-import { parseClaudeModelId } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
 import {
@@ -23,22 +19,21 @@ import {
   type GithubCopilotKeyVault,
   type OAuthDeviceFlowKeyVault,
   type OpenAICompatibleKeyVault,
+  type ServerDefaultHeterogeneousModelDescriptor,
   type SuperGrokKeyVault,
   type VertexAIKeyVault,
 } from '@lobechat/types';
-import { isCodexServerDefaultCustomModel } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import type { AiFullModelCard } from 'model-bank';
 import { isAiModelVisible, ModelProvider } from 'model-bank';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
-import { loadModels } from '@/business/client/model-bank/loadModels';
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { type LobeChatDatabase } from '@/database/type';
 import { getLLMConfig } from '@/envs/llm';
-import { getServerGlobalConfig } from '@/server/globalConfig';
+import { getServerAiProviderConfig } from '@/server/globalConfig';
 import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh';
 
@@ -551,39 +546,19 @@ export type ServerDefaultHeterogeneousModels = Record<
  * `lobehub/${catalogId}`. The operation token remains the source of truth and
  * the request must match that selection.
  *
- * Tool-capable agent policies accept any tool-capable chat model; the
- * `parseClaudeModelId` arm keeps Claude ids eligible in deployments whose
- * catalog omits `abilities`. Codex retains its narrower policy: it
- * accepts native Responses models plus an explicit set of tool-capable relay
- * models configured through its custom model-catalog path.
+ * Every CLI accepts the same enabled, visible chat models unless the catalog
+ * explicitly marks tool calling as unsupported. Missing capability metadata
+ * and custom model IDs do not disqualify a model or prove CLI compatibility.
  */
-const supportsServerDefaultHeterogeneousAgent = (
-  agentType: ServerDefaultHeterogeneousAgentType,
-  model: Pick<AiFullModelCard, 'abilities' | 'id' | 'visible'>,
-) => {
-  if (!isAiModelVisible(model)) return false;
-
-  const config = SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG[agentType];
-  const { modelPolicy } = config;
-  if (modelPolicy === 'tool-capable') {
-    return parseClaudeModelId(model.id) !== undefined || model.abilities?.functionCall === true;
-  }
-
-  return (
-    isResponsesAPIModel(model.id) ||
-    (isCodexServerDefaultCustomModel(model.id) && model.abilities?.functionCall === true)
-  );
-};
+const isServerDefaultHeterogeneousModelCandidate = (
+  model: Pick<AiFullModelCard, 'abilities' | 'visible'>,
+) => isAiModelVisible(model) && model.abilities?.functionCall !== false;
 
 const getEnabledServerChatModels = async (provider: ModelProvider) => {
-  const providerConfig = (await getServerGlobalConfig()).aiProvider[provider];
+  const providerConfig = await getServerAiProviderConfig(provider);
   if (!providerConfig?.enabled) return [];
 
-  const models =
-    providerConfig.serverModelLists ??
-    (await loadModels()).filter((model) => model.providerId === provider);
-
-  return models.filter((model) => model.enabled && model.type === 'chat');
+  return providerConfig.serverModelLists.filter((model) => model.enabled && model.type === 'chat');
 };
 
 const findEnabledServerChatModel = async (provider: string, model: string) => {
@@ -608,7 +583,7 @@ const toServerModelSelection = (provider: string, modelConfig: AiFullModelCard) 
   provider,
 });
 
-/** Return compatible models from the single deployment-owned relay provider. */
+/** Return visible chat models from the single deployment-owned relay provider. */
 export const getServerDefaultHeterogeneousModels = async () => {
   const models = {} as ServerDefaultHeterogeneousModels;
   for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
@@ -616,10 +591,9 @@ export const getServerDefaultHeterogeneousModels = async () => {
   }
 
   for (const model of await getEnabledServerChatModels(ModelProvider.LobeHub)) {
+    if (!isServerDefaultHeterogeneousModelCandidate(model)) continue;
     for (const agentType of SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES) {
-      if (supportsServerDefaultHeterogeneousAgent(agentType, model)) {
-        models[agentType].push({ model: model.id });
-      }
+      models[agentType].push({ model: model.id });
     }
   }
 
@@ -630,15 +604,41 @@ export const getServerDefaultHeterogeneousModels = async () => {
 export const resolveServerModel = async (provider: string, model: string) =>
   toServerModelSelection(provider, await findEnabledServerChatModel(provider, model));
 
-/** Resolve a model only when it belongs to the selected CLI's relay runtime path. */
-export const resolveServerDefaultHeterogeneousModel = async (
-  agentType: ServerDefaultHeterogeneousAgentType,
-  model: string,
-) => {
+const findServerDefaultHeterogeneousModel = async (model: string) => {
   const modelConfig = await findEnabledServerChatModel(ModelProvider.LobeHub, model);
-  if (!supportsServerDefaultHeterogeneousAgent(agentType, modelConfig)) {
+  if (!isServerDefaultHeterogeneousModelCandidate(modelConfig)) {
     throw new Error('The selected server model is not compatible with this heterogeneous agent');
   }
+  return modelConfig;
+};
+
+/** Describe a compatible model so a CLI can be told about one it has no entry for. */
+export const describeServerDefaultHeterogeneousModel = async (
+  _agentType: ServerDefaultHeterogeneousAgentType,
+  model: string,
+): Promise<ServerDefaultHeterogeneousModelDescriptor> => {
+  const modelConfig = await findServerDefaultHeterogeneousModel(model);
+  return {
+    abilities: {
+      reasoning: modelConfig.abilities?.reasoning === true,
+      vision: modelConfig.abilities?.vision === true,
+    },
+    ...(modelConfig.contextWindowTokens && {
+      contextWindowTokens: modelConfig.contextWindowTokens,
+    }),
+    ...(modelConfig.displayName && { displayName: modelConfig.displayName }),
+    ...(modelConfig.maxOutput && { maxOutput: modelConfig.maxOutput }),
+    model: modelConfig.id,
+    nativeResponses: isResponsesAPIModel(modelConfig.id),
+  };
+};
+
+/** Resolve a model only when it belongs to the selected CLI's relay runtime path. */
+export const resolveServerDefaultHeterogeneousModel = async (
+  _agentType: ServerDefaultHeterogeneousAgentType,
+  model: string,
+) => {
+  const modelConfig = await findServerDefaultHeterogeneousModel(model);
 
   return {
     ...toServerModelSelection(ModelProvider.LobeHub, modelConfig),

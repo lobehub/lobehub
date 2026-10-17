@@ -7,6 +7,7 @@ import { deviceGateway, type DeviceSystemInfo } from '@/server/services/deviceGa
 const log = debug('lobe-server:ai-agent-service');
 
 type UserSettings = Awaited<ReturnType<UserModel['getUserSettings']>>;
+type UserPreferenceRow = Awaited<ReturnType<UserModel['getUserPreference']>>;
 
 export interface RunFactsSource {
   db: LobeChatDatabase;
@@ -34,6 +35,13 @@ export interface RunFacts {
     scope?: 'personal' | 'workspace',
   ) => Promise<DeviceSystemInfo | undefined>;
   /**
+   * The run user's `users.preference`. Read for the Labs → Self-evolving switch, which gates
+   * both expertise injection and the self-feedback intent tool of the same turn.
+   *
+   * Rejects when the read fails; the failure is remembered, not retried.
+   */
+  userPreference: () => Promise<UserPreferenceRow>;
+  /**
    * A user's settings row. Asked for the market access token when resolving
    * LobeHub skills and for the memory / timezone settings of the turn.
    * Defaults to the run's own user; a share-visitor turn asks for the visitor.
@@ -58,6 +66,15 @@ const memoize = <T>(read: (key: string) => Promise<T>) => {
 
 const KEY_SEPARATOR = String.fromCodePoint(0);
 
+/**
+ * How old a device's system-info answer may be when a send reuses it. The
+ * answer only changes when the client upgrades or the daemon moves, and the
+ * send path asked for it on every turn (240–620ms over the device's
+ * WebSocket); three minutes covers a burst of sends without hiding a client
+ * upgrade for long.
+ */
+export const DEVICE_SYSTEM_INFO_MAX_AGE_MS = 3 * 60 * 1000;
+
 export const createRunFacts = ({ db, userId, workspaceId }: RunFactsSource): RunFacts => {
   const readDeviceSystemInfo = memoize(async (key: string) => {
     const [deviceId, scope] = key.split(KEY_SEPARATOR);
@@ -68,6 +85,7 @@ export const createRunFacts = ({ db, userId, workspaceId }: RunFactsSource): Run
       userId,
       deviceId,
       scope === 'workspace' ? workspaceId : undefined,
+      { maxAgeMs: DEVICE_SYSTEM_INFO_MAX_AGE_MS },
     );
   });
 
@@ -84,9 +102,23 @@ export const createRunFacts = ({ db, userId, workspaceId }: RunFactsSource): Run
     }
   });
 
+  let userPreference: Promise<UserPreferenceRow> | undefined;
+  const readUserPreference = () => {
+    userPreference ??= (async () => {
+      try {
+        return await new UserModel(db, userId).getUserPreference();
+      } catch (error) {
+        log('runFacts: failed to read preference for %s: %O', userId, error);
+        throw error;
+      }
+    })();
+    return userPreference;
+  };
+
   return {
     deviceSystemInfo: (deviceId, scope) =>
       readDeviceSystemInfo([deviceId, scope ?? 'personal'].join(KEY_SEPARATOR)),
+    userPreference: readUserPreference,
     userSettings: (targetUserId) => readUserSettings(targetUserId ?? userId),
   };
 };

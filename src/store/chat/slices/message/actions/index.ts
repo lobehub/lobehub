@@ -13,11 +13,14 @@ import { type MessageQueryAction } from './query';
 import { MessageQueryActionImpl } from './query';
 import { type MessageRuntimeStateAction } from './runtimeState';
 import { MessageRuntimeStateActionImpl } from './runtimeState';
+import { type MessageTranscriptAction } from './transcript';
+import { MessageTranscriptActionImpl } from './transcript';
 
 export type ChatMessageAction = MessagePublicApiAction &
   MessageOptimisticUpdateAction &
   MessageQueryAction &
   MessageRuntimeStateAction &
+  MessageTranscriptAction &
   MessageInternalsAction;
 
 /**
@@ -40,5 +43,6 @@ export const chatMessage: StateCreator<
     new MessageOptimisticUpdateActionImpl(...params),
     new MessageQueryActionImpl(...params),
     new MessageRuntimeStateActionImpl(...params),
+    new MessageTranscriptActionImpl(...params),
     new MessageInternalsActionImpl(...params),
   ]);

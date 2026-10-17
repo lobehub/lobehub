@@ -1,5 +1,5 @@
 import type { AppProcessRow } from '@lobechat/electron-client-ipc';
-import type { TreeDataNode } from '@lobehub/ui/base-ui';
+import type { TreeDataNode } from '@lobehub/ui';
 
 import type { Activity, ProcessRow } from '../state';
 

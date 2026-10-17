@@ -2,20 +2,19 @@
 
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
-import { mutate } from '@/libs/swr';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
 import type { StoreSetter } from '@/store/types';
 import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
+import { documentDetailResource } from '../document/projection';
 import type { DocumentDispatch } from './reducer';
 import { documentReducer } from './reducer';
 
@@ -263,7 +262,7 @@ export class EditorActionImpl {
     if (doc.contentFormat === 'skillMarkdown') {
       if (hasValidEditorData) {
         try {
-          editor.setDocument('json', JSON.stringify(doc.editorData));
+          editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
           return;
         } catch {
           console.warn(
@@ -285,7 +284,7 @@ export class EditorActionImpl {
     // Set content from document state
     if (hasValidEditorData) {
       try {
-        editor.setDocument('json', JSON.stringify(doc.editorData));
+        editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
         return;
       } catch {
         // Fallback to markdown if JSON fails
@@ -333,6 +332,9 @@ export class EditorActionImpl {
     metadata?: SaveMetadata,
     options?: SaveExecutionOptions,
   ): Promise<void> => {
+    // Capture the identity before the request: the detail replica must not be
+    // refreshed under a new account / workspace if one switches mid-save.
+    const scope = documentDetailResource.scope.get();
     const { documents, internal_dispatchDocument } = this.#get();
     const doc = documents[id];
     if (!doc) return;
@@ -402,6 +404,32 @@ export class EditorActionImpl {
         },
       });
 
+      // The server now holds this body. Mirror it into the detail replica: its
+      // IndexedDB row is what a reload paints before the network answers, so
+      // leaving the pre-edit body there would render stale content — and keep
+      // rendering it when the confirming read is slow or fails.
+      const cachedDetail = this.#get().documentDetailMap[id]?.document;
+      if (cachedDetail) {
+        this.#get().internal_adoptDocumentDetail(
+          id,
+          {
+            ...cachedDetail,
+            content: currentContent,
+            editorData: currentEditorData,
+            // Mirror the metadata this save wrote, exactly as the server applies
+            // it (`title` also renames `filename`; `metadata` is replaced). A
+            // stale title / emoji here would be republished by the next body
+            // save and painted by a reload whose confirming read fails.
+            ...(metadata?.title !== undefined
+              ? { filename: metadata.title, title: metadata.title }
+              : {}),
+            ...(metadata?.emoji ? { metadata: { emoji: metadata.emoji } } : {}),
+            updatedAt: savedAt ?? cachedDetail.updatedAt,
+          },
+          scope,
+        );
+      }
+
       if (this.#get().documents[id]?.isDirty && doc.autoSave !== false) {
         this.#get().triggerDebouncedSave(id);
       }
@@ -446,6 +474,12 @@ export class EditorActionImpl {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
     if (errorCode !== 'CONFLICT') throw error;
 
+    // Capture the identity BEFORE the request, like the sync and prefetch paths.
+    // An account / workspace switch while the read is in flight must not
+    // reconcile the previous identity's row into the new identity's editor
+    // state, nor persist it into the new scope's replica partition.
+    const scope = documentDetailResource.scope.get();
+
     let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
     try {
       latest = await documentService.getDocumentById(id);
@@ -453,10 +487,14 @@ export class EditorActionImpl {
       throw error;
     }
     if (!latest?.updatedAt) throw error;
+    // The identity moved on while we were fetching: this reconciliation is stale.
+    if (scope !== documentDetailResource.scope.get()) throw error;
 
     const outcome = this.reconcileRemote(id, latest);
     if (outcome === 'adopted') {
-      void mutate(documentSWRKeys.editor(id), latest, { revalidate: false });
+      // Feed the adopted row back into the detail replica so the next sync
+      // reconciles against it instead of re-adopting a stale server read.
+      this.#get().internal_adoptDocumentDetail(id, latest, scope);
     }
     if (outcome === 'adopted' || !canRetry) throw error;
 

@@ -4,7 +4,10 @@ import type {
   CodexRateLimitResetResult,
   KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
-import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousProviderBindingReference,
+  LocalHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -22,7 +25,7 @@ class HeterogeneousAgentService {
   }
 
   async startSession(params: {
-    agentType?: string;
+    agentType?: LocalHeterogeneousAgentType;
     args?: string[];
     command: string;
     cwd?: string;

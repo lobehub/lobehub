@@ -133,8 +133,7 @@ export interface AgentShareVisitorContext {
   skillGrants?: string[];
   /**
    * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
-   * target outside `toolManifestMap` (e.g. `activateSkill`,
-   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * target outside `toolManifestMap` (e.g. `activateSkill`) can apply the same allowlist the assembled tool set
    * already enforces.
    */
   toolGrants?: AgentShareToolGrant[];

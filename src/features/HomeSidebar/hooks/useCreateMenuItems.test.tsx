@@ -89,10 +89,7 @@ vi.mock('@/store/home', () => ({
 }));
 
 vi.mock('@/store/page', () => ({
-  usePageStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      createNewPage: createNewPageMock,
-    }),
+  pageActions: { createNewPage: createNewPageMock },
 }));
 
 const isActionItem = (

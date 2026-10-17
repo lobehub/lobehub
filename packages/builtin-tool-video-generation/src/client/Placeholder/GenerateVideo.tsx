@@ -2,7 +2,7 @@
 
 import type { BuiltinPlaceholderProps } from '@lobechat/types';
 import { Block, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { GenerateVideoParams } from '../../types';

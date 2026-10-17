@@ -53,6 +53,7 @@ venv/
 node_modules/
 *.lock
 package-lock.json
+!apps/desktop/scripts/security-policy-runtime/package-lock.json
 bun.lockb
 .pnpm-store/
 

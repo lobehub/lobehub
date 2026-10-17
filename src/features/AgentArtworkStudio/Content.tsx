@@ -2,7 +2,7 @@
 
 import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
 import type { AgentProfile } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

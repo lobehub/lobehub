@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as workspaceHooks from '@/business/client/hooks/useActiveWorkspaceId';
+import { cacheScope } from '@/libs/replica';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { useToolStore } from '../../store';
@@ -27,9 +27,14 @@ const listByAgentQuery = lambdaClient.connector.listByAgent.query as unknown as 
 
 const connector = (identifier: string) => ({ id: identifier, identifier, tools: [] });
 
+let scopeSpy: ReturnType<typeof vi.spyOn>;
+
 describe('createConnectorSlice — scope guard', () => {
   beforeEach(() => {
     useToolStore.setState({ ...initialConnectorState });
+    // The guard captures the full cache scope (user + workspace), not just the
+    // workspace id, so the tests drive the scope string directly.
+    scopeSpy = vi.spyOn(cacheScope, 'get').mockReturnValue('user-a:personal');
   });
 
   afterEach(() => {
@@ -37,17 +42,16 @@ describe('createConnectorSlice — scope guard', () => {
     vi.clearAllMocks();
   });
 
-  // The connector list is workspace-scoped server-side but lands in one global
+  // The connector list is identity-scoped server-side but lands in one global
   // store bucket, so a response that resolves after the active scope moved on
   // must be dropped. Booting straight into a workspace URL is exactly that: the
   // tree mounts once in personal context before the URL→store sync resolves the
   // slug, so a personal query is already in flight when the workspace switch
   // fires its own — and the personal one landing last is what made a business
   // workspace list the user's PERSONAL tools.
-  it('drops a fetchConnectors response that resolves after the scope changed', async () => {
-    const wsSpy = vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue(null);
+  it('drops a fetchConnectors response that resolves after the workspace changed', async () => {
     listQuery.mockImplementation(async () => {
-      wsSpy.mockReturnValue('ws-1');
+      scopeSpy.mockReturnValue('user-a:ws-1');
       return [connector('personal-tool')];
     });
 
@@ -60,8 +64,25 @@ describe('createConnectorSlice — scope guard', () => {
     expect(useToolStore.getState().isConnectorsInit).toBe(false);
   });
 
+  // The gap a workspace-only guard leaves open: two signed-in users in personal
+  // context both have a `null` workspace, so the scope must include the user or
+  // user A's inventory lands in user B's partition after an account switch.
+  it('drops a fetchConnectors response that resolves after the signed-in user changed', async () => {
+    listQuery.mockImplementation(async () => {
+      scopeSpy.mockReturnValue('user-b:personal');
+      return [connector('user-a-tool')];
+    });
+
+    const { result } = renderHook(() => useToolStore());
+    await act(async () => {
+      await result.current.fetchConnectors();
+    });
+
+    expect(useToolStore.getState().connectors).toEqual([]);
+    expect(useToolStore.getState().isConnectorsInit).toBe(false);
+  });
+
   it('writes a fetchConnectors response that resolves in the same scope', async () => {
-    vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
     listQuery.mockResolvedValue([connector('workspace-tool')]);
 
     const { result } = renderHook(() => useToolStore());
@@ -74,9 +95,8 @@ describe('createConnectorSlice — scope guard', () => {
   });
 
   it('drops a fetchAgentBoundConnectors response that resolves after the scope changed', async () => {
-    const wsSpy = vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
     listAgentBoundQuery.mockImplementation(async () => {
-      wsSpy.mockReturnValue(null);
+      scopeSpy.mockReturnValue('user-b:personal');
       return [connector('agent-bound')];
     });
 
@@ -90,9 +110,8 @@ describe('createConnectorSlice — scope guard', () => {
   });
 
   it('drops a fetchAgentConnectors response that resolves after the scope changed', async () => {
-    const wsSpy = vi.spyOn(workspaceHooks, 'getActiveWorkspaceId').mockReturnValue('ws-1');
     listByAgentQuery.mockImplementation(async () => {
-      wsSpy.mockReturnValue('ws-2');
+      scopeSpy.mockReturnValue('user-a:ws-2');
       return [connector('agent-owned')];
     });
 

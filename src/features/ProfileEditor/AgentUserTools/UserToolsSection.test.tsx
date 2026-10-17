@@ -45,14 +45,25 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 vi.mock('@/features/ProfileEditor/AgentTool', () => ({ default: () => null }));
 vi.mock('@/features/ProfileEditor/PluginTag', () => ({ default: () => null }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
-}));
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 // Apply the real selectors against the mock state.
 vi.mock('@/store/tool', () => ({

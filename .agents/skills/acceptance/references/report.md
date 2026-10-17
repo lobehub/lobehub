@@ -34,9 +34,17 @@ never point a second ingest at a directory you already published:
 # $1 = subject key (see Directory layout), $2 = a short slug for this round.
 new_round() {
   dir=".acceptances/$1/$(date +%Y%m%d-%H%M%S)-$2"
-  mkdir -p "$dir/assets" && printf '%s' "$dir"
+  mkdir -p "$dir/assets" || return
+  # Fresh clones and worktrees never carry the self-ignoring file, so seed it
+  # before anything is written; an existing one is left untouched.
+  [ -e .acceptances/.gitignore ] || printf '*\n' > .acceptances/.gitignore || return
+  printf '%s' "$dir"
 }
 ```
+
+Run it from the repository root. It is the only supported way to create a round
+directory by hand: it keeps the whole tree out of `git status` before the first
+`result.json` or screenshot exists.
 
 ```bash
 # A. first external-project round — creates a standalone acceptance.
@@ -100,8 +108,11 @@ Three things the shape buys, none of them cosmetic:
 - **The tree is git-invisible.** `.acceptances/.gitignore` contains `*`, which
   ignores the whole directory including itself, so evidence binaries never land
   as untracked noise and the project's own `.gitignore` is never rewritten.
-  Create that file before writing evidence; a general-purpose skill installer
-  does not seed it. `lh acceptance run ingest` also ensures it exists.
+  The file ignores itself, so a fresh clone or worktree never has it, and a
+  general-purpose skill installer does not seed it either. `new_round` creates
+  it before anything is written; `lh acceptance install` and
+  `lh acceptance run ingest` also ensure it exists, but ingest runs only after
+  the round has already been written.
 
 Writing a round somewhere else still works — `ingest` takes an explicit path —
 but then keeping it out of git is on you.
@@ -402,7 +413,11 @@ Choose the layout by comparison intent, not by the source image dimensions:
   full width matters more than simultaneous scanning, such as a very wide,
   shallow toolbar or timeline strip.
 
-A comparison pair means the same view in two states — sequential steps of a
+A comparison pair means the same view, reached by the same operation and held
+in the same state, on the pre-change code (`before`) and the delivered code
+(`after`). Two states of one build — loading vs loaded, empty vs filled — are
+ordinary evidence, not a pair; a skeleton change pairs the old skeleton with
+the new one, and the loaded page goes in plain evidence. Sequential steps of a
 flow are ordinary ordered evidence with captions, not a pair.
 
 ### Video chapters

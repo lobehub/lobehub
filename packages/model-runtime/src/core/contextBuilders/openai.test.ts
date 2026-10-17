@@ -3,6 +3,7 @@ import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage } from '../../types';
+import { clearReferenceImageCache } from '../../utils/referenceImageCache';
 import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
 import {
@@ -1622,6 +1623,7 @@ describe('convertOpenAIResponseInputs', () => {
 describe('convertImageUrlToFile', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    clearReferenceImageCache();
   });
 
   afterEach(() => {
@@ -1732,7 +1734,23 @@ describe('convertImageUrlToFile', () => {
         expect(result).toHaveProperty('type', testCase.contentType || 'image/png');
 
         vi.clearAllMocks();
+        clearReferenceImageCache();
       }
+    });
+
+    it('should reuse one download for repeated conversions of the same URL', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+        headers: new Headers({ 'content-type': 'image/png' }),
+      } satisfies Partial<Response>);
+
+      const first = await convertImageUrlToFile('https://example.com/reference.png');
+      const second = await convertImageUrlToFile('https://example.com/reference.png');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(first).not.toBe(second);
+      expect(second).toHaveProperty('type', 'image/png');
     });
 
     it('should throw error when HTTP request fails', async () => {

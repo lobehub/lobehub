@@ -29,14 +29,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     ...(await importOriginal<object>()),
     ContextMenuHost: () => React.createElement('div', { 'data-testid': 'context-menu-host' }),
     setContextMenuInterceptor: vi.fn(),
-  };
-});
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
-  const React = await import('react');
-
-  return {
-    ...(await importOriginal<object>()),
     ModalHost: () => React.createElement('div', { 'data-testid': 'base-modal-host' }),
     ToastHost: () => React.createElement('div', { 'data-testid': 'toast-host' }),
   };

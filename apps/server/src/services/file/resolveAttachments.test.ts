@@ -94,6 +94,15 @@ describe('resolveAttachmentMetadata', () => {
 
     expect(mocks.findByIds).toHaveBeenCalledWith(['file-visitor'], fileAccessScope);
     expect(result.orderedFileIds).toEqual(['file-visitor']);
+    // The model input layer reads the type to keep formats such as SVG out of vision parts.
+    expect(result.imageList).toEqual([
+      {
+        alt: 'cat.png',
+        id: 'file-visitor',
+        mimeType: 'image/png',
+        url: 'https://storage.example.com/agent-share/cat.png',
+      },
+    ]);
   });
 
   it('passes share provenance into document parsing', async () => {

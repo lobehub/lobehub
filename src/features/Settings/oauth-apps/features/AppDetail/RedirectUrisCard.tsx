@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Button, createStaticStyles, Flexbox, Input, Text } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +17,11 @@ import {
 import SectionCard from './SectionCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  empty: css`
+    padding: 16px;
+    border: 1px dashed ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius};
+  `,
   fieldError: css`
     font-size: 12px;
     color: ${cssVar.colorError};
@@ -53,8 +56,9 @@ interface RedirectUrisCardProps {
 
 /**
  * The redirect URIs a web app may send users back to. A freshly created app has
- * none, which is a legitimate "not yet configured" state shown as a warning;
- * once the user opens the editor, a save needs at least one URI.
+ * none, which is a legitimate "not yet configured" state: it reads as the next
+ * setup step with its own button, not as a warning competing with the one-time
+ * secret card above it. Once the editor is open, a save needs at least one URI.
  */
 const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit }) => {
   const { t } = useTranslation('auth');
@@ -83,14 +87,15 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
     <SectionCard
       title={t('oauthApp.redirectUris.title')}
       extra={
-        !editing && (
+        !editing &&
+        saved.length > 0 && (
           <Button
             disabled={!canEdit}
             icon={<PencilIcon size={14} />}
             size={'small'}
             onClick={startEditing}
           >
-            {t(saved.length > 0 ? 'oauthApp.detail.edit' : 'oauthApp.redirectUris.configure')}
+            {t('oauthApp.detail.edit')}
           </Button>
         )
       }
@@ -180,7 +185,23 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
           ))}
         </Flexbox>
       ) : (
-        <Alert showIcon message={t('oauthApp.redirectUris.empty')} type={'warning'} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.empty}
+          gap={16}
+          justify={'space-between'}
+        >
+          <Text type={'secondary'}>{t('oauthApp.redirectUris.empty')}</Text>
+          <Button
+            disabled={!canEdit}
+            icon={<PlusIcon size={14} />}
+            style={{ flex: 'none' }}
+            onClick={startEditing}
+          >
+            {t('oauthApp.redirectUris.add')}
+          </Button>
+        </Flexbox>
       )}
     </SectionCard>
   );

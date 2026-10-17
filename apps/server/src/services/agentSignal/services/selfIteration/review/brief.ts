@@ -1,3 +1,4 @@
+import { getSelfReviewBriefDetails } from '@lobechat/agent-signal/brief';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import type { BriefArtifactDocument, BriefMetadata } from '@lobechat/types';
@@ -7,7 +8,7 @@ import type { BriefItem, NewBrief } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import type { EvidenceRef, RunResult } from '../types';
-import { ActionStatus, ReviewRunStatus } from '../types';
+import { ActionStatus } from '../types';
 import {
   createSelfReviewBriefText,
   type SelfReviewBriefTextActionSummaries,
@@ -52,7 +53,7 @@ export interface SelfReviewBriefMetadata {
   /** User-local review date in YYYY-MM-DD form. */
   localDate: string;
   /** Coarse user-visible outcome selected by the projection service. */
-  outcome: 'applied' | 'error' | 'ideas' | 'proposal';
+  outcome: 'applied' | 'ideas' | 'proposal';
   /** Durable receipt ids linked to this brief. */
   receiptIds: string[];
   /** Frozen self-review proposal state for approve/dismiss flows. */
@@ -182,6 +183,35 @@ const findExistingProposalBrief = async ({
       proposal?.proposalKey === incomingProposal.proposalKey &&
       ACTIVE_PROPOSAL_REFRESH_STATUSES.has(proposal.status)
     );
+  });
+};
+
+/**
+ * Finds an unresolved ideas-only nightly brief already written for the same agent
+ * and user-local date, so a replayed completion reuses it instead of adding a
+ * duplicate. Mirrors {@link findExistingProposalBrief}'s bounded unresolved read.
+ */
+const findExistingIdeasBrief = async ({
+  agentId,
+  localDate,
+  model,
+  trigger,
+}: {
+  agentId: string;
+  localDate: string;
+  model: BriefModel;
+  trigger: typeof NIGHTLY_REVIEW_BRIEF_TRIGGER;
+}) => {
+  const rows = await model.listUnresolvedByAgentAndTrigger({
+    agentId,
+    limit: 20,
+    trigger,
+  });
+
+  return rows.find((row) => {
+    const metadata = getNightlySelfReviewBriefMetadata(row.metadata);
+
+    return metadata?.outcome === 'ideas' && metadata.localDate === localDate;
   });
 };
 
@@ -348,13 +378,14 @@ const getReceiptIds = (result: RunResult) => [
 ];
 
 const getOutcome = (
-  result: RunResult,
   counts: SelfReviewBriefActionCounts,
   ideas: SelfReviewIdea[] = [],
 ): SelfReviewBriefMetadata['outcome'] | undefined => {
   if (counts.proposed > 0) return 'proposal';
   if (counts.applied > 0) return 'applied';
-  if (counts.failed > 0 || result.status === ReviewRunStatus.Failed) return 'error';
+  // A failed nightly run is housekeeping the user cannot act on, so it no
+  // longer mints an `error` brief in "Needs you"; failures stay in receipts
+  // and traces. Ideas recorded before the failure still surface.
   if (ideas.length > 0) return 'ideas';
 
   return;
@@ -384,6 +415,17 @@ const collectActionSummaries = (
   }
 
   return summaries;
+};
+
+/**
+ * A proposal-level summary exists only when every proposed action carries the
+ * same one (the `createSelfReviewProposal` tool stamps its summary on each
+ * action). Distinct per-action summaries describe actions, not the proposal.
+ */
+const getSharedProposalSummary = (summaries: string[]) => {
+  const unique = new Set(summaries);
+
+  return unique.size === 1 ? [...unique][0] : undefined;
 };
 
 const collectBriefArtifactDocuments = ({
@@ -488,7 +530,7 @@ export const createBriefSelfReviewService = () => ({
    *
    * Use when:
    * - Nightly review handlers have already executed self-review actions
-   * - Noop reviews should remain silent while applied/proposal/error outcomes surface
+   * - Noop and failed reviews stay silent while applied/proposal/ideas outcomes surface
    *
    * Expects:
    * - `result.actions` contains executor-order action results
@@ -501,16 +543,11 @@ export const createBriefSelfReviewService = () => ({
     input: ProjectNightlyReviewBriefInput,
   ): SelfReviewBriefProjection | undefined => {
     const actionCounts = countActions(input.result, input.plan);
-    const outcome = getOutcome(input.result, actionCounts, input.ideas);
+    const outcome = getOutcome(actionCounts, input.ideas);
 
     if (!outcome) return;
 
-    const copy = createSelfReviewBriefText({
-      actionCounts,
-      actionSummaries: collectActionSummaries(input.result, input.plan),
-      outcome,
-      t: input.t,
-    });
+    const actionSummaries = collectActionSummaries(input.result, input.plan);
     const proposal =
       outcome === 'proposal' && input.plan
         ? buildSelfReviewProposalFromPlan({
@@ -520,21 +557,32 @@ export const createBriefSelfReviewService = () => ({
             now: input.reviewWindowEnd,
             plan: input.plan,
             results: input.result.actions,
+            summary: getSharedProposalSummary(actionSummaries.proposed),
           })
         : undefined;
+    const metadata = createNightlySelfReviewBriefMetadata({
+      actionCounts,
+      evidenceRefs: input.evidenceRefs ?? [],
+      input,
+      outcome,
+      proposal,
+    });
+    // Read the details back from the metadata the card will also read, so the
+    // persisted text and the inline card describe the proposal identically.
+    const copy = createSelfReviewBriefText({
+      actionCounts,
+      actionSummaries,
+      details: getSelfReviewBriefDetails(metadata),
+      outcome,
+      t: input.t,
+    });
     const artifacts = createBriefArtifacts({ ideas: input.ideas, proposal });
 
     return {
       ...(proposal ? { actions: AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS } : {}),
       agentId: input.agentId,
       ...(artifacts ? { artifacts } : {}),
-      metadata: createNightlySelfReviewBriefMetadata({
-        actionCounts,
-        evidenceRefs: input.evidenceRefs ?? [],
-        input,
-        outcome,
-        proposal,
-      }),
+      metadata,
       priority: copy.priority,
       summary: copy.summary,
       title: copy.title,
@@ -555,7 +603,8 @@ export const createBriefSelfReviewService = () => ({
  * - `db` and `userId` belong to the source-event owner
  *
  * Returns:
- * - A writer whose `writeDailyBrief` method creates or refreshes proposal briefs
+ * - A writer whose `writeDailyBrief` method creates or refreshes proposal briefs, and
+ *   reuses an existing ideas brief for the same agent + local date
  */
 export const createServerSelfReviewBriefWriter = (
   db: LobeChatDatabase,
@@ -585,7 +634,28 @@ export const createServerSelfReviewBriefWriter = (
         },
         async (span) => {
           try {
-            if (!incomingProposal || !brief.agentId) return model.create(brief);
+            if (!brief.agentId) return model.create(brief);
+
+            if (!incomingProposal) {
+              const incomingMetadata = brief.metadata.agentSignal.nightlySelfReview;
+              if (incomingMetadata.outcome !== 'ideas') return model.create(brief);
+
+              // Ideas briefs are one per agent + local date: a replayed completion
+              // reuses the existing row instead of writing a duplicate.
+              const existingIdeasBrief = await findExistingIdeasBrief({
+                agentId: brief.agentId,
+                localDate: incomingMetadata.localDate,
+                model,
+                trigger: brief.trigger,
+              });
+              if (existingIdeasBrief) {
+                span.setAttribute('agent.signal.brief.deduped', true);
+
+                return existingIdeasBrief;
+              }
+
+              return model.create(brief);
+            }
 
             const now = incomingProposal.updatedAt;
             const existingBrief = await findExistingProposalBrief({

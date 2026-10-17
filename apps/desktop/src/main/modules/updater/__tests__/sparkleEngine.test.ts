@@ -3,14 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SparkleEngine } from '../sparkleEngine';
 
-const { mockLoadBridge, mockAppOn } = vi.hoisted(() => ({
+const { mockLoadBridge, mockAppOn, mockFetch } = vi.hoisted(() => ({
   mockAppOn: vi.fn(),
+  mockFetch: vi.fn(),
   mockLoadBridge: vi.fn(),
 }));
 
 vi.mock('electron-sparkle-updater', () => ({ loadSparkleBridge: mockLoadBridge }));
 
-vi.mock('electron', () => ({ app: { isPackaged: true, on: mockAppOn } }));
+vi.mock('electron', () => ({
+  app: { isPackaged: true, on: mockAppOn },
+  net: { fetch: mockFetch },
+}));
 
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
@@ -20,6 +24,7 @@ const createBridge = () => {
   let handler: ((event: SparkleBridgeEvent) => void) | null | undefined;
   const bridge: SparkleBridge = {
     checkForUpdates: vi.fn(),
+    discardDownloadedUpdate: vi.fn(),
     init: vi.fn().mockReturnValue(true),
     installUpdateNow: vi.fn(),
     installUpdateOnQuit: vi.fn(),
@@ -118,6 +123,71 @@ describe('SparkleEngine', () => {
     emit({ type: 'update-downloaded', version: '2.0.0' });
     await check;
     expect(complete).toHaveBeenCalledOnce();
+  });
+
+  describe('with an update already downloaded', () => {
+    const appcast = (...versions: string[]) =>
+      new Response(
+        `<rss><channel>${versions
+          .map((v) => `<item><sparkle:shortVersionString>${v}</sparkle:shortVersionString></item>`)
+          .join('')}</channel></rss>`,
+      );
+
+    const downloadedSetup = async () => {
+      const ctx = setup();
+      ctx.engine.configure('canary');
+      const check = ctx.engine.checkForUpdates();
+      ctx.emit({ type: 'update-available', version: '2.0.0-canary.1' });
+      ctx.emit({ type: 'update-downloaded', version: '2.0.0-canary.1' });
+      await check;
+      vi.mocked(ctx.bridge.checkForUpdates).mockClear();
+      return ctx;
+    };
+
+    beforeEach(() => mockFetch.mockReset());
+
+    it('discards the stale download and checks again when the appcast has a newer release', async () => {
+      const { bridge, emit, engine } = await downloadedSetup();
+      mockFetch.mockResolvedValue(appcast('2.0.0-canary.2', '2.0.0-canary.1'));
+      const downloaded = vi.fn();
+      engine.on('update-downloaded', downloaded);
+
+      const check = engine.checkForUpdates();
+      await vi.waitFor(() => expect(bridge.checkForUpdates).toHaveBeenCalledOnce());
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/canary\/appcast-[^/]+\.xml$/),
+        { cache: 'no-store' },
+      );
+      expect(bridge.discardDownloadedUpdate).toHaveBeenCalledOnce();
+      expect(downloaded).not.toHaveBeenCalled();
+
+      emit({ type: 'update-available', version: '2.0.0-canary.2' });
+      emit({ type: 'update-downloaded', version: '2.0.0-canary.2' });
+      await check;
+      expect(downloaded).toHaveBeenCalledWith(
+        expect.objectContaining({ version: '2.0.0-canary.2' }),
+      );
+    });
+
+    it.each(['the appcast has nothing newer', 'the appcast is unavailable'])(
+      'keeps the download when %s',
+      async (scenario) => {
+        const { bridge, engine } = await downloadedSetup();
+        if (scenario.includes('nothing newer'))
+          mockFetch.mockResolvedValue(appcast('2.0.0-canary.1'));
+        else mockFetch.mockResolvedValue(new Response('nope', { status: 503 }));
+        const downloaded = vi.fn();
+        engine.on('update-downloaded', downloaded);
+
+        await engine.checkForUpdates();
+
+        expect(bridge.discardDownloadedUpdate).not.toHaveBeenCalled();
+        expect(bridge.checkForUpdates).not.toHaveBeenCalled();
+        expect(downloaded).toHaveBeenCalledWith(
+          expect.objectContaining({ version: '2.0.0-canary.1' }),
+        );
+      },
+    );
   });
 
   it('maps the Sparkle lifecycle onto electron-updater events', () => {

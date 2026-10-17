@@ -888,5 +888,29 @@ describe('topicSelectors', () => {
       expect(grouped.map((g) => g.id)).toEqual(['favorite', 'pending', 'active']);
       expect(grouped[1].children.map((t) => t.id)).toEqual(['failed']);
     });
+
+    it('should group by boundDeviceId in byDevice mode', () => {
+      const state = createStateWithTopics([
+        {
+          id: 'on-device-x',
+          title: 'On device X',
+          favorite: false,
+          metadata: { boundDeviceId: 'device-x' },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'unbound',
+          title: 'Unbound',
+          favorite: false,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+
+      const grouped = topicSelectors.groupedTopicsForSidebar(20, 'updatedAt', 'byDevice')(state);
+
+      expect(grouped.map((g) => g.id)).toEqual(['device:device-x', 'no-device']);
+    });
   });
 });

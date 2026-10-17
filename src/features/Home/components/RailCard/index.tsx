@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
@@ -47,18 +45,24 @@ interface RailCardProps {
    */
   collapsed?: boolean;
   count?: number;
+  /**
+   * The rows on screen are the local copy and a refresh is in flight: a small
+   * spinner beside the count, so the user knows newer data may still arrive.
+   */
+  loading?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   title?: ReactNode;
 }
 
 const RailCard = memo<RailCardProps>(
-  ({ action, children, collapsed = false, count, onCollapsedChange, title }) => {
+  ({ action, children, collapsed = false, count, loading, onCollapsedChange, title }) => {
     const heading = (
       <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
         <Text ellipsis className={homeType.sectionLabel}>
           {title}
         </Text>
         {count !== undefined && <CountBadge count={count} />}
+        {loading && <Spin size="small" variant="network" />}
         {onCollapsedChange && (
           <Icon
             className={'home-rail-card-chevron'}

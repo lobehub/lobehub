@@ -63,11 +63,13 @@ const setupStores = ({
   agencyConfig,
   deviceDefaultCwd,
   legacyWorkingDirectory,
+  topicMetadata,
   topicWorkingDirectory,
 }: {
   agencyConfig?: unknown;
   deviceDefaultCwd?: string;
   legacyWorkingDirectory?: string;
+  topicMetadata?: object;
   topicWorkingDirectory?: string;
 } = {}) => {
   effectiveAgencyConfig.agencyConfig = agencyConfig;
@@ -77,7 +79,7 @@ const setupStores = ({
       ? { 'agent-1': legacyWorkingDirectory }
       : {},
   };
-  const chatState = { topicMetadata: undefined, topicWorkingDirectory };
+  const chatState = { topicMetadata, topicWorkingDirectory };
   const deviceState = { deviceDefaultCwd, useFetchDevices: vi.fn() };
   const electronState = { gatewayDeviceInfo: { deviceId: 'device-A' } };
   const userState = {};
@@ -161,6 +163,24 @@ describe('useEffectiveWorkingDirectory', () => {
     setupStores({
       agencyConfig: { workingDirByDevice: { 'device-A': '/repo/agent-default' } },
       topicWorkingDirectory: '/repo/other-pane-topic',
+    });
+
+    const { result } = renderHook(() =>
+      useEffectiveWorkingDirectory('agent-1', {
+        homeFallback: false,
+        topicId: null,
+      }),
+    );
+
+    expect(result.current).toBe('/repo/agent-default');
+  });
+
+  it('does not inherit the active topic directory config for a new-topic pane', () => {
+    setupStores({
+      agencyConfig: { workingDirByDevice: { 'device-A': '/repo/agent-default' } },
+      topicMetadata: {
+        workingDirectoryConfig: { path: '/repo/other-pane-topic', repoType: 'git' },
+      },
     });
 
     const { result } = renderHook(() =>

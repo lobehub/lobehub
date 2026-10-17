@@ -2,19 +2,34 @@
 
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Input, InputPassword, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Input,
+  InputPassword,
+  Select,
+  Spin,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import {
+  CLAUDE_CODE_TOKEN_CRED_KEY,
+  type ClaudeCodeTokenStatus,
+  resolveClaudeCodeTokenStatus,
+} from '@/helpers/claudeCodeTokenCred';
 import { usePermission } from '@/hooks/usePermission';
-import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
-
-// Fixed cred key for Claude Code OAuth token — never changes
-const CLAUDE_TOKEN_CRED_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
+import { refreshScopedCreds, useCredsForContext, usePersonalCreds } from '@/hooks/useScopedCreds';
+import { saveClaudeCodeToken } from '@/services/claudeCodeToken';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -113,103 +128,148 @@ interface CloudHeterogeneousConfigProps {
 
 // ── Claude Code Token section ──────────────────────────────────────────────
 interface TokenSectionProps {
-  existingCred: UserCredSummary | undefined;
+  inWorkspace: boolean;
   onEnvChange: (patch: Record<string, string>) => void;
   onSaved: () => void;
+  /** The caller's own token, if any — saving updates it instead of adding a duplicate key. */
+  personalCred?: { id: number; type?: string };
+  tokenStatus: ClaudeCodeTokenStatus;
 }
 
-const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChange }) => {
-  const { t } = useTranslation('setting');
-  const { allowed: canEdit } = usePermission('edit_own_content');
-  const [editing, setEditing] = useState(!existingCred);
-  const [tokenInput, setTokenInput] = useState('');
-  const [saving, setSaving] = useState(false);
+const TokenSection = memo<TokenSectionProps>(
+  ({ inWorkspace, onEnvChange, onSaved, personalCred, tokenStatus }) => {
+    const { t } = useTranslation('setting');
+    const { allowed: canEdit } = usePermission('edit_own_content');
+    const configured = tokenStatus.status === 'configured';
+    const [editing, setEditing] = useState(!configured);
+    const [tokenInput, setTokenInput] = useState('');
+    const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
-    if (!canEdit) return;
+    if (tokenStatus.status === 'unknown') {
+      return (
+        <Flexbox gap={8}>
+          <Flexbox horizontal align="center" gap={6}>
+            <KeyRound size={12} />
+            <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
+          </Flexbox>
+          <Flexbox horizontal align="center" gap={8}>
+            <Text fontSize={12} type={'warning'}>
+              {t('heterogeneousStatus.cloud.tokenLookupError')}
+            </Text>
+            <Button size={'small'} onClick={onSaved}>
+              {t('heterogeneousStatus.cloud.tokenRetry')}
+            </Button>
+          </Flexbox>
+        </Flexbox>
+      );
+    }
 
-    const token = tokenInput.trim();
-    if (!token) return;
-    setSaving(true);
-    try {
-      await lambdaClient.market.creds.createKV.mutate({
-        key: CLAUDE_TOKEN_CRED_KEY,
-        name: 'Claude Code OAuth Token',
-        type: 'kv-env',
-        values: { [CLAUDE_TOKEN_CRED_KEY]: token },
-      });
-      onEnvChange({ CLAUDE_CODE_CRED_KEY: CLAUDE_TOKEN_CRED_KEY });
+    const handleSave = async () => {
+      if (!canEdit) return;
+
+      const token = tokenInput.trim();
+      if (!token) return;
+      setSaving(true);
+      const result = await saveClaudeCodeToken({ inWorkspace, personalCred, token });
+      setSaving(false);
+      // Refetch either way: a failed share leaves the token saved but unusable
+      // here, which the refreshed status shows as the "not shared" warning.
+      onSaved();
+
+      if (!result.ok) {
+        toast.error(
+          t(
+            (
+              {
+                save: 'heterogeneousStatus.cloud.tokenSaveError',
+                share: 'creds.share.error',
+                type: 'heterogeneousStatus.cloud.tokenTypeMismatch',
+              } as const
+            )[result.failedStep],
+          ),
+        );
+        return;
+      }
+
+      onEnvChange({ CLAUDE_CODE_CRED_KEY: CLAUDE_CODE_TOKEN_CRED_KEY });
       setTokenInput('');
       setEditing(false);
-      onSaved();
-    } finally {
-      setSaving(false);
-    }
-  };
+    };
 
-  return (
-    <Flexbox gap={8}>
-      <Flexbox horizontal align="center" justify="space-between">
-        <Flexbox horizontal align="center" gap={6}>
-          <KeyRound size={12} />
-          <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
-        </Flexbox>
-        {existingCred && !editing && (
-          <span
-            className={styles.manageLink}
-            onClick={() => {
-              if (!canEdit) return;
-
-              setEditing(true);
-            }}
-          >
-            {t('heterogeneousStatus.cloud.tokenChange')}
-          </span>
-        )}
-      </Flexbox>
-
-      {existingCred && !editing ? (
-        <Flexbox horizontal align="center" gap={8}>
-          <Tag
-            color="success"
-            icon={<CheckCircle2 size={11} />}
-            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-          >
-            {existingCred.maskedPreview ?? existingCred.name}
-          </Tag>
-        </Flexbox>
-      ) : (
-        <Flexbox horizontal gap={8}>
-          <InputPassword
-            autoComplete="new-password"
-            autoFocus={!!existingCred}
-            disabled={!canEdit}
-            placeholder={t('heterogeneousStatus.cloud.tokenPlaceholder')}
-            style={{ flex: 1 }}
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            onPressEnter={handleSave}
-          />
-          <Button disabled={!canEdit} loading={saving} type="primary" onClick={handleSave}>
-            {t('heterogeneousStatus.cloud.tokenSave')}
-          </Button>
-          {existingCred && (
-            <Button
+    return (
+      <Flexbox gap={8}>
+        <Flexbox horizontal align="center" justify="space-between">
+          <Flexbox horizontal align="center" gap={6}>
+            <KeyRound size={12} />
+            <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
+          </Flexbox>
+          {configured && tokenStatus.editable && !editing && (
+            <span
+              className={styles.manageLink}
               onClick={() => {
-                setEditing(false);
-                setTokenInput('');
+                if (!canEdit) return;
+
+                setEditing(true);
               }}
             >
-              {t('heterogeneousStatus.cloud.tokenCancel')}
-            </Button>
+              {t('heterogeneousStatus.cloud.tokenChange')}
+            </span>
           )}
         </Flexbox>
-      )}
 
-      <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.tokenDesc')}</span>
-    </Flexbox>
-  );
-});
+        {configured && !editing ? (
+          <Flexbox horizontal align="center" gap={8}>
+            <Tag
+              color="success"
+              icon={<CheckCircle2 size={11} />}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              {tokenStatus.display}
+            </Tag>
+          </Flexbox>
+        ) : (
+          <Flexbox horizontal gap={8}>
+            <InputPassword
+              autoComplete="new-password"
+              autoFocus={configured}
+              disabled={!canEdit}
+              placeholder={t('heterogeneousStatus.cloud.tokenPlaceholder')}
+              style={{ flex: 1 }}
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              onPressEnter={handleSave}
+            />
+            <Button disabled={!canEdit} loading={saving} type="primary" onClick={handleSave}>
+              {t('heterogeneousStatus.cloud.tokenSave')}
+            </Button>
+            {configured && (
+              <Button
+                onClick={() => {
+                  setEditing(false);
+                  setTokenInput('');
+                }}
+              >
+                {t('heterogeneousStatus.cloud.tokenCancel')}
+              </Button>
+            )}
+          </Flexbox>
+        )}
+
+        {tokenStatus.status === 'personalNotShared' && (
+          <Text fontSize={12} type={'warning'}>
+            {t(
+              tokenStatus.sharedElsewhere
+                ? 'heterogeneousStatus.cloud.tokenSharedElsewhere'
+                : 'heterogeneousStatus.cloud.tokenNotShared',
+            )}
+          </Text>
+        )}
+
+        <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.tokenDesc')}</span>
+      </Flexbox>
+    );
+  },
+);
 
 // ── Repo list section ──────────────────────────────────────────────────────
 // Profile page: manage the list of repos (add / delete only).
@@ -289,6 +349,7 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
+    const inWorkspace = !!useActiveWorkspaceId();
 
     const currentEnv = provider.env ?? {};
     const storedGithubCredKey = currentEnv.GITHUB_CRED_KEY ?? '';
@@ -300,14 +361,24 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
       }
     })();
 
+    const { data: personalCreds, error: personalError, isLoading } = usePersonalCreds();
     const {
-      data: credsData,
-      isLoading,
-      refetch,
-    } = lambdaQuery.market.creds.list.useQuery(undefined);
-    const allCreds: UserCredSummary[] = credsData?.data ?? [];
+      data: contextCreds,
+      error: contextError,
+      isLoading: isContextLoading,
+    } = useCredsForContext();
+    const allCreds: UserCredSummary[] = personalCreds ?? [];
 
-    const claudeTokenCred = allCreds.find((c) => c.key === CLAUDE_TOKEN_CRED_KEY);
+    // A failed lookup is unknown, not missing: offering save/share can't fix it.
+    const tokenStatus: ClaudeCodeTokenStatus =
+      contextError || personalError
+        ? { status: 'unknown' }
+        : resolveClaudeCodeTokenStatus({
+            contextCreds: contextCreds ?? [],
+            inWorkspace,
+            personalCreds: allCreds,
+          });
+    const personalTokenCred = allCreds.find((c) => c.key === CLAUDE_CODE_TOKEN_CRED_KEY);
     const githubCreds = allCreds.filter(
       (c) => c.type === 'oauth' && c.oauthProvider?.toLowerCase().includes('github'),
     );
@@ -337,7 +408,7 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
       saveEnv({ GITHUB_REPOS: JSON.stringify(nextRepos) });
     };
 
-    if (isLoading) {
+    if (isLoading || isContextLoading) {
       return (
         <Flexbox align="center" justify="center" style={{ paddingBlock: 32 }}>
           <Spin size="small" />
@@ -350,9 +421,11 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
         <Flexbox gap={16}>
           {/* ── Claude Code OAuth Token ── */}
           <TokenSection
-            existingCred={claudeTokenCred}
+            inWorkspace={inWorkspace}
+            personalCred={personalTokenCred}
+            tokenStatus={tokenStatus}
             onEnvChange={saveEnv}
-            onSaved={() => refetch()}
+            onSaved={() => void refreshScopedCreds()}
           />
 
           <div className={styles.sectionDivider} />

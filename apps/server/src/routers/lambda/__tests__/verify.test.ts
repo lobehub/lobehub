@@ -2,6 +2,7 @@ import { getHTTPStatusCodeFromError } from '@trpc/server/http';
 import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as FileModelModule from '@/database/models/file';
 import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { verifyRouter } from '@/server/routers/lambda/verify';
 import { FileService } from '@/server/services/file';
@@ -13,6 +14,7 @@ const modelMocks = vi.hoisted(() => ({
   createRun: vi.fn(),
   deleteResult: vi.fn(),
   deleteRun: vi.fn(),
+  findFileById: vi.fn(),
   findRunByOperation: vi.fn(),
   findRunById: vi.fn(),
   findResultById: vi.fn(),
@@ -21,6 +23,7 @@ const modelMocks = vi.hoisted(() => ({
   generateGoalPlan: vi.fn(),
   getFullFileUrl: vi.fn(),
   getServerDB: vi.fn(async () => ({})),
+  listResultsByRun: vi.fn(),
   updateRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
@@ -34,6 +37,7 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
     return {
       delete: modelMocks.deleteResult,
       findById: modelMocks.findResultById,
+      listByRun: modelMocks.listResultsByRun,
       upsertByCheckItem: modelMocks.upsertByCheckItem,
     };
   }),
@@ -50,6 +54,16 @@ vi.mock('@/database/models/verifyRun', () => ({
     };
   }),
 }));
+
+// Keep the real statics (the report bundle resolves file metadata through
+// `FileModel.getFileById`); only the instance lookup the write paths use is stubbed.
+vi.mock('@/database/models/file', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileModelModule>();
+  class FileModel extends actual.FileModel {
+    findById = modelMocks.findFileById as unknown as actual.FileModel['findById'];
+  }
+  return { ...actual, FileModel };
+});
 
 vi.mock('@/database/models/verifyEvidence', () => ({
   VerifyEvidenceModel: vi.fn(function () {
@@ -109,6 +123,8 @@ describe('verifyRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modelMocks.getServerDB.mockResolvedValue({});
+    modelMocks.listResultsByRun.mockResolvedValue([]);
+    modelMocks.findFileById.mockResolvedValue(undefined);
     vi.mocked(FileService).mockImplementation(function () {
       return {
         getFullFileUrl: modelMocks.getFullFileUrl,
@@ -654,6 +670,64 @@ describe('verifyRouter', () => {
           required: false,
           verifierType: 'llm',
         }),
+      );
+    });
+
+    it('lands evidence for a repaired check on the repair round, not the settled one', async () => {
+      const plan = [{ id: 'item-1', index: 0, required: true, title: 'mutation gif' }];
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'round-1', plan, status: 'failed' });
+      modelMocks.listResultsByRun.mockImplementation(async (runId: string) =>
+        runId === 'round-1'
+          ? [{ checkItemId: 'item-1', repairOperationId: 'repair-op-2' }]
+          : [{ checkItemId: 'item-1', repairOperationId: null }],
+      );
+      modelMocks.findRunByOperation.mockResolvedValueOnce({
+        id: 'round-2',
+        plan,
+        status: 'planned',
+      });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({
+        id: 'result-2',
+        verifyRunId: 'round-2',
+      });
+      modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+
+      await createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [{ fileId: 'files-1', type: 'gif' }],
+        verifyRunId: 'round-1',
+      });
+
+      expect(modelMocks.findRunByOperation).toHaveBeenCalledWith('repair-op-2');
+      expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
+        expect.objectContaining({ checkItemId: 'item-1', verifyRunId: 'round-2' }),
+      );
+      expect(modelMocks.createEvidence).toHaveBeenCalledWith(
+        expect.objectContaining({ checkResultId: 'result-2', type: 'gif' }),
+      );
+    });
+
+    it('stores a GIF uploaded as video as a gif, not a video', async () => {
+      // Builders without a gif type labelled their GIFs `video`; the acceptance
+      // page then played an animated image in a video player that failed to load.
+      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1', plan: [] });
+      modelMocks.findFileById.mockResolvedValueOnce({
+        fileType: 'image/gif',
+        id: 'files-gif',
+        name: 'rename.gif',
+      });
+      modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+      modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+
+      await createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [{ fileId: 'files-gif', type: 'video' }],
+        verifyRunId: 'run-1',
+      });
+
+      expect(modelMocks.findFileById).toHaveBeenCalledWith('files-gif');
+      expect(modelMocks.createEvidence).toHaveBeenCalledWith(
+        expect.objectContaining({ fileId: 'files-gif', type: 'gif' }),
       );
     });
 

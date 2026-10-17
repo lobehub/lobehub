@@ -7,11 +7,6 @@ import type { VerifyEvidenceChapter } from '@lobechat/types';
  */
 export const VIDEO_FPS = 30;
 
-export const PLAYBACK_RATES = [0.5, 1, 1.5, 2] as const;
-
-/** How long a claim stays on screen after its frame, like a subtitle. */
-export const CLAIM_CAPTION_SECONDS = 2;
-
 export { formatVideoTimestamp as formatVideoTime } from '@lobechat/const/verify';
 
 /**
@@ -39,45 +34,12 @@ export const formatVideoClock = (seconds: number) => {
  */
 export const frameOf = (seconds: number) => Math.floor(seconds * VIDEO_FPS + 1e-6);
 
-/**
- * The time to seek to for a frame step. It lands on frame centres, so
- * repeated steps never skip a frame or show the same one twice.
- */
-export const steppedTime = (current: number, frames: number, duration: number) =>
-  Math.min(Math.max((frameOf(current) + frames + 0.5) / VIDEO_FPS, 0), duration);
-
 export const stepsOf = (chapters: VerifyEvidenceChapter[]) =>
   chapters.filter((chapter) => chapter.kind === 'step');
 
 /** What the agent claims (`check`) or disclosed (`flag`) — the parts a reviewer audits. */
 export const claimsOf = (chapters: VerifyEvidenceChapter[]) =>
   chapters.filter((chapter) => chapter.kind !== 'step');
-
-/** The step the playhead is in, for the "frame 210 · Scroll #3" readout. */
-export const stepAt = (chapters: VerifyEvidenceChapter[], time: number) =>
-  stepsOf(chapters).findLast((chapter) => chapter.t <= time + 0.01);
-
-/** The claim to caption at this time: from its frame until it has been read. */
-export const claimAt = (chapters: VerifyEvidenceChapter[], time: number) =>
-  claimsOf(chapters)
-    .filter(
-      (chapter) => time >= chapter.t - 0.5 / VIDEO_FPS && time < chapter.t + CLAIM_CAPTION_SECONDS,
-    )
-    // The most recent claim wins, whatever order the chapters arrived in.
-    .reduce<VerifyEvidenceChapter | undefined>(
-      (latest, chapter) => (!latest || chapter.t >= latest.t ? chapter : latest),
-      undefined,
-    );
-
-/**
- * Every claim on the frame being captioned. Two claims can share a frame; the
- * caption is where each one is read and disputed, so none may hide behind
- * another.
- */
-export const claimsAt = (chapters: VerifyEvidenceChapter[], time: number) => {
-  const latest = claimAt(chapters, time);
-  return latest ? claimsOf(chapters).filter((chapter) => chapter.t === latest.t) : [];
-};
 
 /**
  * Whether a region drawn on the frame at `start` belongs on screen. Paused, it

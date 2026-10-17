@@ -220,6 +220,7 @@ export default {
     'This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.',
   'response.WorkspaceFrozenByRiskControl':
     'This workspace was auto-frozen by risk control and cannot run requests. Please contact support to review the status.',
+  'unknownError.troubleshoot': 'Troubleshoot',
   'workspaceBillingInactive.bannerHint': 'Click for details',
   'workspaceBillingInactive.bannerTitle': 'Workspace subscription inactive',
   'workspaceBillingInactive.confirm': 'Got it',

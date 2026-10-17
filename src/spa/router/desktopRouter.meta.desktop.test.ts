@@ -1,4 +1,4 @@
-import { HomeIcon, ImageIcon } from 'lucide-react';
+import { HomeIcon, Image, ImageIcon, Video } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
@@ -33,6 +33,16 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
     expect(staticMeta.icon).toBe(ImageIcon);
   });
 
+  it.each([
+    ['/image', Image, 'navigation.image'],
+    ['/video', Video, 'navigation.video'],
+  ])('uses the generation page title and icon for %s', (path, icon, titleKey) => {
+    const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, path);
+
+    expect(staticMeta.icon).toBe(icon);
+    expect(staticMeta.titleKey).toBe(titleKey);
+  });
+
   it('resolves a static agent meta and its DynamicMeta runner', () => {
     const matched = matchRouteMeta(mainAreaMetaRoutes, '/agent/agt_1');
 
@@ -47,5 +57,33 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
 
     expect(staticMeta.titleKey).toBe('navigation.chat');
     expect(staticMeta.icon).toBeDefined();
+  });
+
+  it('resolves project conversation meta with a dynamic title runner', () => {
+    const matched = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/conversation/tpc_1');
+
+    expect(matched.static.titleKey).toBe('project:topics.title');
+    expect(matched.static.icon).toBeDefined();
+    expect(matched.meta?.DynamicMeta).toBeDefined();
+    expect(matched.params.projectId).toBe('prj_1');
+    expect(matched.params.topicId).toBe('tpc_1');
+  });
+
+  // Regression: the project acceptance section reused `acceptanceRouteMeta`,
+  // whose DynamicMeta cannot read an `:acceptanceId` here, so every project
+  // acceptance tab was persisted with the generic fallback title.
+  it('resolves project acceptance meta with its own static title and no runner', () => {
+    const matched = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/acceptance');
+
+    expect(matched.static.titleKey).toBe('project:sections.acceptance');
+    expect(matched.static.icon).toBeDefined();
+    expect(matched.meta?.DynamicMeta).toBeUndefined();
+  });
+
+  it('resolves project meta for workspace-scoped tab urls', () => {
+    const matched = matchRouteMeta(mainAreaMetaRoutes, '/team-x/project/prj_1/conversation/tpc_1');
+
+    expect(matched.static.titleKey).toBe('project:topics.title');
+    expect(matched.params.projectId).toBe('prj_1');
   });
 });

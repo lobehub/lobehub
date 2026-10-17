@@ -5,9 +5,11 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./computer-use": "./src/computerUse.ts",
     "./file-preview": "./src/filePreview.ts",
     "./metrics": "./src/metrics/index.ts",
     "./project-file-index": "./src/projectFileIndex.ts",
+    "./rpc-clients": "./src/rpcClients.ts",
     "./skill-directory": "./src/skillDirectory.ts",
     "./workspace": "./src/workspace.ts"
   },

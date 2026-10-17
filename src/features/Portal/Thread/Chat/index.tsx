@@ -223,11 +223,6 @@ const ThreadChat = memo(() => {
     [chatKey, portalThread?.metadata?.sourceToolCallId, threadMetadataResolved],
   );
 
-  // Subscribe directly to dbMessagesMap for reactive updates
-  // This ensures optimistic updates work (read/write use same key)
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-
   // Get operation state for reactive updates
   const operationState = useOperationState(context);
 
@@ -276,14 +271,9 @@ const ThreadChat = memo(() => {
       actionsBar={actionsBarConfig}
       composerTarget={composerTarget}
       context={context}
-      hasInitMessages={!!messages}
       hooks={hooks}
-      messages={messages}
       operationState={operationState}
       skipFetch={isCreatingNewThread}
-      onMessagesChange={(msgs, ctx, meta) => {
-        replaceMessages(msgs, { context: ctx, source: meta?.source });
-      }}
     >
       <ThreadChatContent
         composerWritable={composerTarget.writable}

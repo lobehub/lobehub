@@ -18,6 +18,16 @@ export interface EnvironmentResourceRequirements {
   memoryGiB?: number;
 }
 
+/**
+ * What an environment is for, as the person who made it chose it.
+ *
+ * `files` is a folder someone hands files to for an agent to work on; `code`
+ * checks out a repository and runs setup. Presentation only: it decides which
+ * form and which entries the product shows, and never reaches the execution
+ * plane — see {@link environmentKind} for how an environment without one reads.
+ */
+export type EnvironmentKind = 'files' | 'code';
+
 /** Portable definition, shared by device, sandbox and cluster instances. No credentials. */
 export interface EnvironmentConfiguration {
   bootstrapCommand?: string;
@@ -48,6 +58,13 @@ export interface EnvironmentConfiguration {
    * the machine has and cannot enforce a restriction at all.
    */
   internetAccess?: boolean;
+  /**
+   * Chosen at creation; absent on environments made before there was a
+   * choice, which {@link environmentKind} reads from what they configure.
+   * Stored with the rest of the definition but stripped from every copy sent
+   * to the execution plane, so adding it changes no build's digest.
+   */
+  kind?: EnvironmentKind;
   /**
    * Run every time work resumes in an instance, after whatever was built is
    * restored — refreshing a checkout, reapplying a migration.
@@ -90,3 +107,46 @@ export interface EnvironmentInstanceConfiguration {
  * form at creation, visible, and removable.
  */
 export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as const;
+
+/**
+ * The kind an environment reads as.
+ *
+ * The stored choice when there is one. An environment made before the choice
+ * existed is not backfilled; it is read from what it configures instead — a
+ * repository or a setup command is code work, and anything else is a folder of
+ * files.
+ */
+export const environmentKind = (
+  environment:
+    | {
+        configuration?: Pick<
+          EnvironmentConfiguration,
+          'bootstrapCommand' | 'kind' | 'sources'
+        > | null;
+      }
+    | null
+    | undefined,
+): EnvironmentKind => {
+  const configuration = environment?.configuration;
+  if (configuration?.kind === 'files' || configuration?.kind === 'code') return configuration.kind;
+
+  return (configuration?.sources?.length ?? 0) > 0 ||
+    Boolean(configuration?.bootstrapCommand?.trim())
+    ? 'code'
+    : 'files';
+};
+
+/**
+ * A definition as the execution plane receives it: without the fields that are
+ * only the product's own (today, {@link EnvironmentConfiguration.kind}). The
+ * execution plane digests what it is sent to decide which build a snapshot
+ * belongs to, so a presentation field passed through would mark every
+ * existing instance as built from a different specification.
+ */
+export const toExecutionConfiguration = (
+  configuration: EnvironmentConfiguration,
+): EnvironmentConfiguration => {
+  const { kind: _kind, ...rest } = configuration;
+
+  return rest;
+};

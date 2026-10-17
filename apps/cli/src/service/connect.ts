@@ -17,6 +17,34 @@ const SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 const ENV_NAME_PATTERN = /^[A-Z_]\w*$/i;
 const SERVICE_ENV_FILE_NAME = 'connect-service.env';
 
+/**
+ * Exit code for workspace failures worth retrying (EX_TEMPFAIL). It sits outside the
+ * unit's `SuccessExitStatus`, so `Restart=on-failure` restarts the service child.
+ */
+export const CONNECT_RETRYABLE_EXIT_CODE = 75;
+
+// Server refusals that a restart cannot fix; retrying them would only loop.
+const PERMANENT_TRPC_ERROR_CODES = new Set([
+  'BAD_REQUEST',
+  'CONFLICT',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'UNAUTHORIZED',
+]);
+
+/** Exit code for a failed workspace operation (token mint, refresh, device registration): 1 for refusals, 75 otherwise. */
+export function getWorkspaceFailureExitCode(error: unknown): number {
+  const code = (error as { data?: { code?: string } } | null)?.data?.code;
+  return code && PERMANENT_TRPC_ERROR_CODES.has(code) ? 1 : CONNECT_RETRYABLE_EXIT_CODE;
+}
+
+export interface ConnectServiceOptions {
+  /** With `workspace`: enroll into the shared pool visible to every member. */
+  public?: boolean;
+  /** Enroll this machine as a device of the given workspace (workspace members). */
+  workspace?: string;
+}
+
 export interface ConnectServiceStatus {
   active: boolean;
   enabled: boolean;
@@ -60,7 +88,14 @@ function getExecErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function renderUnit(): string {
+function buildServiceConnectArgs(options: ConnectServiceOptions): string[] {
+  const args = ['connect', '--service-child'];
+  if (options.workspace) args.push('--workspace', options.workspace);
+  if (options.public) args.push('--public');
+  return args;
+}
+
+function renderUnit(options: ConnectServiceOptions): string {
   const quoteSystemdValue = (value: string): string =>
     `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
   const escapeSystemdEnvValue = (value: string): string =>
@@ -70,7 +105,7 @@ function renderUnit(): string {
   const logPath = path.join(cliHomeDir, 'daemon.log');
   const envFilePath = getServiceEnvFilePath();
   const scriptPath = fs.realpathSync(process.argv[1]!);
-  const execStart = [process.execPath, scriptPath, 'connect', '--service-child']
+  const execStart = [process.execPath, scriptPath, ...buildServiceConnectArgs(options)]
     .map(quoteSystemdValue)
     .join(' ');
 
@@ -79,8 +114,9 @@ function renderUnit(): string {
     `Description=${CLI_DISPLAY_NAME} connect service`,
     'After=network-online.target',
     'Wants=network-online.target',
-    'StartLimitIntervalSec=60',
-    'StartLimitBurst=10',
+    // No start-rate limit: transient workspace startup failures exit 75 and must
+    // keep retrying through outages of any length; RestartSec spaces the attempts.
+    'StartLimitIntervalSec=0',
     '',
     '[Service]',
     'Type=simple',
@@ -93,7 +129,7 @@ function renderUnit(): string {
     `StandardError=append:${logPath}`,
     'Restart=on-failure',
     'SuccessExitStatus=0 1 2',
-    'RestartSec=1',
+    'RestartSec=5',
     'TimeoutStopSec=20',
     '',
     '[Install]',
@@ -172,17 +208,26 @@ function assertConnectServiceAuthAvailable(): void {
   );
 }
 
-export function installConnectService(): void {
+export function installConnectService(options: ConnectServiceOptions = {}): void {
+  if (options.public && !options.workspace) {
+    throw new Error('--public requires --workspace.');
+  }
+
   requireLinuxSystemd();
   assertNoConnectDaemonRunning();
   assertConnectServiceAuthAvailable();
 
   writeServiceEnvironmentFile();
   fs.mkdirSync(getUserServiceDir(), { mode: 0o700, recursive: true });
-  fs.writeFileSync(path.join(getUserServiceDir(), SERVICE_NAME), renderUnit(), { mode: 0o644 });
+  fs.writeFileSync(path.join(getUserServiceDir(), SERVICE_NAME), renderUnit(options), {
+    mode: 0o644,
+  });
 
   systemctl(['daemon-reload'], 'inherit');
-  systemctl(['enable', '--now', SERVICE_NAME], 'inherit');
+  systemctl(['enable', SERVICE_NAME], 'inherit');
+  // `enable --now` leaves an already-active unit on its old ExecStart; restart so
+  // a reinstall with different connect args takes effect immediately.
+  systemctl(['restart', SERVICE_NAME], 'inherit');
 }
 
 export function uninstallConnectService(): boolean {

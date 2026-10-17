@@ -45,7 +45,10 @@ interface ProjectStore extends ProjectStoreState {
   }) => Promise<ProjectListItem>;
   deleteProject: (id: string) => Promise<void>;
   refreshProjectList: () => Promise<void>;
-  updateProject: (id: string, input: { name: string }) => Promise<ProjectListItem>;
+  updateProject: (
+    id: string,
+    input: Parameters<typeof projectService.update>[1],
+  ) => Promise<ProjectListItem>;
   /** Fetch orchestration only; read the value with `useCurrentProjectDetail`. */
   useFetchProjectDetail: (idOrSlug?: string) => ReplicaSyncResult;
   /** Fetch orchestration only; read the rows with `useCurrentProjectList`. */
@@ -136,6 +139,13 @@ const EMPTY_PROJECTS: ProjectListItem[] = [];
 
 export const useCurrentProjectList = () =>
   useProjectStore((state) => state.projectListMap[PROJECT_LIST_KEY] ?? EMPTY_PROJECTS);
+
+/**
+ * Every project of the active scope, or `undefined` until the list first loads
+ * — for callers that must tell "not loaded" from "no projects".
+ */
+export const useLoadedProjectList = () =>
+  useProjectStore((state): ProjectListItem[] | undefined => state.projectListMap[PROJECT_LIST_KEY]);
 
 export const useCurrentProjectDetail = (idOrSlug?: string) =>
   useProjectStore((state) => (idOrSlug ? state.projectDetailMap[idOrSlug] : undefined));

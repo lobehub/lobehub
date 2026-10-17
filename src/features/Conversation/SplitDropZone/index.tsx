@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { PanelRight } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +13,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     position: absolute;
     z-index: 20;
-    inset: 8px;
+
+    /* The chat input below overlaps this zone's last 12px, so the bottom
+       inset clears it to keep the highlight off the input. */
+    inset-block: 8px 16px;
+    inset-inline: 8px;
 
     border: 2px dashed ${cssVar.colorInfoBorder};
     border-radius: ${cssVar.borderRadiusLG};
@@ -27,7 +29,6 @@ const styles = createStaticStyles(({ css }) => ({
     position: relative;
     flex: 1;
     min-height: 0;
-    margin-block-end: 8px;
   `,
 }));
 

@@ -1,9 +1,19 @@
 'use client';
 
 import type { HeteroQuotaWindow } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Alert,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  Skeleton,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronDownIcon, GaugeIcon, RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -42,16 +52,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorError};
 
     background: ${cssVar.colorErrorBg};
-  `,
-  refreshNotice: css`
-    padding: 8px;
-    border: 1px solid ${cssVar.colorWarningBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    color: ${cssVar.colorWarningText};
-
-    background: ${cssVar.colorWarningBg};
   `,
   header: css`
     padding-block-end: 6px;
@@ -217,6 +217,11 @@ interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   getErrorText?: (quota: S) => string | undefined;
   /** Localized explanation for a manual refresh error when stale data is preserved. */
   getRefreshErrorText?: (quota: S) => string | undefined;
+  /**
+   * Localized notice for a snapshot that still renders preserved windows but
+   * whose latest live refresh could not run (e.g. the network was blocked).
+   */
+  getStaleNotice?: (quota: S) => string | undefined;
   /** Localized explanation for `status: 'unavailable'`; falls back to `error`. */
   getUnavailableText?: (quota: S) => string | undefined;
   getWindows: (quota: S) => QuotaWindowItem[];
@@ -247,6 +252,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   fetchQuota,
   getErrorText,
   getRefreshErrorText,
+  getStaleNotice,
   getUnavailableText,
   getWindows,
   hasExtraData,
@@ -491,7 +497,11 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     quota?.status === 'error' && hasQuotaData
       ? getRefreshErrorText?.(quota) || t('heteroAgent.quota.refreshFailed')
       : undefined;
-  const refreshErrorText = manualRefreshErrorText || staleSnapshotErrorText;
+  const staleNoticeText = quota && hasQuotaData ? getStaleNotice?.(quota) : undefined;
+  const refreshErrorText = manualRefreshErrorText || staleSnapshotErrorText || staleNoticeText;
+  // An unavailable / error explanation stays readable while a retry runs;
+  // swapping it for a skeleton every poll made it look like data was loading.
+  const hasStatusMessage = quota?.status === 'unavailable' || quota?.status === 'error';
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -578,12 +588,13 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
             disabled={loading}
             icon={RefreshCwIcon}
             size={'small'}
+            spin={loading}
             onClick={() => void loadQuota({ manual: true })}
           />
         </Tooltip>
       </Flexbox>
 
-      {loading && !hasQuotaData ? (
+      {loading && !hasQuotaData && !hasStatusMessage ? (
         <Flexbox gap={8}>
           <Skeleton height={18} />
           <Skeleton height={18} />
@@ -602,7 +613,16 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           {quota && renderHeader?.(quota, { applyQuota, formatDuration, now })}
           <Flexbox gap={10}>{windows.map((item) => renderQuotaWindow(item))}</Flexbox>
           {quota && renderFooter?.(quota, { applyQuota, formatDuration, now })}
-          {refreshErrorText && <div className={styles.refreshNotice}>{refreshErrorText}</div>}
+          {refreshErrorText && (
+            // Stale windows stay the subject; the notice only annotates them.
+            <Alert
+              showIcon
+              styles={{ title: { color: cssVar.colorTextSecondary, fontSize: 12 } }}
+              title={refreshErrorText}
+              type={'warning'}
+              variant={'plain'}
+            />
+          )}
         </>
       ) : (
         <div className={styles.emptyState}>{t('heteroAgent.quota.noData')}</div>

@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type React from 'react';
 
 const resolveCssVar = (ref: string, context: Element): string => {

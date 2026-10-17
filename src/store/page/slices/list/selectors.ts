@@ -1,15 +1,26 @@
 import { useGlobalStore } from '@/store/global';
 import { type LobeDocument } from '@/types/document';
 
-import { type PageState } from '../../initialState';
+import type { PageState } from '../../initialState';
+import { PAGE_LIST_KEY } from '../../projection';
+
+const EMPTY_DOCUMENTS: LobeDocument[] = [];
+
+const pageList = (s: PageState) => s.pageListMap[PAGE_LIST_KEY];
+
+const sidebarPageSize = (): number => useGlobalStore.getState().status.pagePageSize || 20;
 
 /**
- * Check if documents are still loading (undefined means not yet loaded)
+ * Whether the page list has a value to show (hydrated from IndexedDB or
+ * confirmed by the server). Its absence is the only loading signal.
  */
-const isDocumentsLoading = (s: PageState): boolean => s.documents === undefined;
+const isPageListInit = (s: PageState): boolean => pageList(s) !== undefined;
+
+/** Documents are still loading (the list entry has no value yet). */
+const isDocumentsLoading = (s: PageState): boolean => !isPageListInit(s);
 
 const getFilteredDocuments = (s: PageState): LobeDocument[] => {
-  const docs = s.documents ?? [];
+  const docs = pageList(s)?.items ?? EMPTY_DOCUMENTS;
 
   const { searchKeywords, showOnlyPagesNotInLibrary } = s;
 
@@ -46,11 +57,8 @@ const getFilteredDocuments = (s: PageState): LobeDocument[] => {
 };
 
 // Limited filtered documents for sidebar display
-const getFilteredDocumentsLimited = (s: PageState): LobeDocument[] => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  const allDocs = getFilteredDocuments(s);
-  return allDocs.slice(0, pageSize);
-};
+const getFilteredDocumentsLimited = (s: PageState): LobeDocument[] =>
+  getFilteredDocuments(s).slice(0, sidebarPageSize());
 
 // Workspace-mode sidebar buckets: split filtered docs into "private" (creator
 // only) and "workspace-shared". Personal-mode `visibility` is meaningless — the
@@ -63,15 +71,11 @@ const getWorkspaceFilteredDocuments = (s: PageState): LobeDocument[] =>
 
 // Bucket-scoped, sidebar-sized page slices — mirror the Limited helper for the
 // dual-accordion Pages sidebar so each bucket paginates independently.
-const getPrivateFilteredDocumentsLimited = (s: PageState): LobeDocument[] => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  return getPrivateFilteredDocuments(s).slice(0, pageSize);
-};
+const getPrivateFilteredDocumentsLimited = (s: PageState): LobeDocument[] =>
+  getPrivateFilteredDocuments(s).slice(0, sidebarPageSize());
 
-const getWorkspaceFilteredDocumentsLimited = (s: PageState): LobeDocument[] => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  return getWorkspaceFilteredDocuments(s).slice(0, pageSize);
-};
+const getWorkspaceFilteredDocumentsLimited = (s: PageState): LobeDocument[] =>
+  getWorkspaceFilteredDocuments(s).slice(0, sidebarPageSize());
 
 const privateFilteredDocumentsCount = (s: PageState): number =>
   getPrivateFilteredDocuments(s).length;
@@ -79,40 +83,35 @@ const privateFilteredDocumentsCount = (s: PageState): number =>
 const workspaceFilteredDocumentsCount = (s: PageState): number =>
   getWorkspaceFilteredDocuments(s).length;
 
-const hasMorePrivateFilteredDocuments = (s: PageState): boolean => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  return getPrivateFilteredDocuments(s).length > pageSize;
-};
+const hasMorePrivateFilteredDocuments = (s: PageState): boolean =>
+  getPrivateFilteredDocuments(s).length > sidebarPageSize();
 
-const hasMoreWorkspaceFilteredDocuments = (s: PageState): boolean => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  return getWorkspaceFilteredDocuments(s).length > pageSize;
-};
+const hasMoreWorkspaceFilteredDocuments = (s: PageState): boolean =>
+  getWorkspaceFilteredDocuments(s).length > sidebarPageSize();
 
+/**
+ * One page as the loaded list holds it, falling back to the by-id projection
+ * for pages outside it (mobile mounts no sidebar; a deep link may land before
+ * the list fetches). Returns the stored object, so a component subscribing to
+ * this selector keeps a stable reference until the page actually changes.
+ */
 const getDocumentById = (docId: string | undefined) => (s: PageState) => {
   if (!docId) return undefined;
-
-  // Find in documents array
-  return s.documents?.find((doc) => doc.id === docId);
+  return pageList(s)?.items.find((doc) => doc.id === docId) ?? s.pageDetailMap[docId];
 };
 
-const hasMoreDocuments = (s: PageState): boolean => s.hasMoreDocuments;
+const hasMoreDocuments = (s: PageState): boolean => Boolean(pageList(s)?.hasMore);
 
-const isLoadingMoreDocuments = (s: PageState): boolean => s.isLoadingMoreDocuments;
+const isLoadingMoreDocuments = (s: PageState): boolean => Boolean(pageList(s)?.isLoadingMore);
 
-const documentsTotal = (s: PageState): number => s.documentsTotal;
+const documentsTotal = (s: PageState): number => pageList(s)?.total ?? 0;
 
 // Check if filtered documents have more than displayed
-const hasMoreFilteredDocuments = (s: PageState): boolean => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  const allDocs = getFilteredDocuments(s);
-  return allDocs.length > pageSize;
-};
+const hasMoreFilteredDocuments = (s: PageState): boolean =>
+  getFilteredDocuments(s).length > sidebarPageSize();
 
 // Get total count of filtered documents
-const filteredDocumentsCount = (s: PageState): number => {
-  return getFilteredDocuments(s).length;
-};
+const filteredDocumentsCount = (s: PageState): number => getFilteredDocuments(s).length;
 
 export const listSelectors = {
   documentsTotal,
@@ -130,6 +129,7 @@ export const listSelectors = {
   hasMoreWorkspaceFilteredDocuments,
   isDocumentsLoading,
   isLoadingMoreDocuments,
+  isPageListInit,
   privateFilteredDocumentsCount,
   workspaceFilteredDocumentsCount,
 };

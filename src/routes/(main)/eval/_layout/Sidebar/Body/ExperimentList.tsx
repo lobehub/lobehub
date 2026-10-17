@@ -1,14 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
   Button,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { Beaker, RotateCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

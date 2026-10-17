@@ -203,7 +203,7 @@ describe('resolveForTopic', () => {
     });
   });
 
-  it('blocks disabled environments and a removed directory instead of falling back', async () => {
+  it('blocks a disabled environment instead of falling back', async () => {
     const directory = await repo.bind(base);
     const topic = await createPinnedTopic(directory);
     const row = await model.resolve(directory.id);
@@ -212,10 +212,16 @@ describe('resolveForTopic', () => {
       .set({ enabled: false })
       .where(eq(environments.id, row.environmentId));
     await expect(model.resolveForTopic(topic.id)).rejects.toThrow('disabled');
-    await db
-      .delete(projectWorkingDirectories)
-      .where(eq(projectWorkingDirectories.id, directory.id));
-    await expect(model.resolveForTopic(topic.id)).rejects.toThrow('no longer exists');
+  });
+
+  it('leaves project conversations without a directory to the device-resolution path', async () => {
+    const topic = await new TopicModel(db, userId).create({
+      agentId: 'directory-agent',
+      metadata: { boundDeviceId: base.deviceId, workingDirectory: base.path },
+      projectId: base.projectId,
+      title: 'Project chat',
+    });
+    expect(await model.resolveForTopic(topic.id)).toBeUndefined();
   });
 
   it('returns nothing for conversations without a project pin', async () => {

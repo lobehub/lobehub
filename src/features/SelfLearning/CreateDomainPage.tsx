@@ -1,18 +1,20 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  createStaticStyles,
+  cssVar,
   Divider,
+  Flexbox,
+  Icon,
   Input,
   Popover,
   Spin,
   Text,
   TextArea,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import {
   AnchorIcon,
   ArrowLeftIcon,

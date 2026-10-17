@@ -1,21 +1,33 @@
 'use client';
 
-import { Tooltip } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import type { BotSenderMetadata } from '@lobechat/types';
+import { cssVar, Tooltip } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import Avatar from '@/components/Avatar';
 
 /**
- * Resolves a topic creator's profile from the *active workspace* members.
- * `useAuthorInfo` is a business slot: cloud resolves the member profile, the
- * open-source build is a no-op — and it returns `undefined` without an active
- * workspace, so all creator-avatar UI disappears in personal mode.
+ * Prefer the bot-channel initiator over the account that owns the bot.
+ * Ordinary topics resolve their creator from active workspace members; the
+ * open-source business slot returns undefined for those member profiles.
+ * Creator identity is a workspace-only cue, so personal mode ignores the bot
+ * initiator too and the row keeps its own platform icon.
  */
-export const useTopicCreator = (userId?: string) => useAuthorInfo(userId);
+export const useTopicCreator = (userId?: string, botCreator?: BotSenderMetadata | null) => {
+  const author = useAuthorInfo(userId);
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  return botCreator && hasActiveWorkspace
+    ? {
+        avatar: botCreator.avatar,
+        fullName: botCreator.fullName || botCreator.username || botCreator.id,
+      }
+    : author;
+};
 
 interface TopicCreatorAvatarProps {
+  botCreator?: BotSenderMetadata | null;
   /**
    * Optional mini node (execution status, bot platform icon, PR marker, …)
    * overlaid at the avatar's bottom-right corner. The creator stays the
@@ -29,68 +41,68 @@ interface TopicCreatorAvatarProps {
 }
 
 /**
- * Round creator avatar for a workspace topic row's leading icon slot — it
- * replaces the default `#` placeholder so the shared list reads like a
- * conversation list. Renders nothing when the creator doesn't resolve
- * (personal mode / unknown member).
+ * Round creator avatar for a topic row, with an optional status/platform badge.
+ * Renders nothing when neither a bot initiator nor a workspace member resolves.
  */
-const TopicCreatorAvatar = memo<TopicCreatorAvatarProps>(({ userId, size = 20, corner }) => {
-  const author = useTopicCreator(userId);
+const TopicCreatorAvatar = memo<TopicCreatorAvatarProps>(
+  ({ userId, size = 20, corner, botCreator }) => {
+    const author = useTopicCreator(userId, botCreator);
 
-  if (!author) return null;
+    if (!author) return null;
 
-  const avatar = (
-    <Tooltip title={author.fullName}>
-      <Avatar
-        avatar={author.avatar ?? undefined}
-        name={author.fullName ?? undefined}
-        shape={'circle'}
-        size={size}
-        style={{ flex: 'none' }}
-        title={author.fullName ?? undefined}
-      />
-    </Tooltip>
-  );
+    const avatar = (
+      <Tooltip title={author.fullName}>
+        <Avatar
+          avatar={author.avatar ?? undefined}
+          name={author.fullName ?? undefined}
+          shape={'circle'}
+          size={size}
+          style={{ flex: 'none' }}
+          title={author.fullName ?? undefined}
+        />
+      </Tooltip>
+    );
 
-  if (!corner) return avatar;
+    if (!corner) return avatar;
 
-  return (
-    <span style={{ display: 'inline-flex', lineHeight: 0, position: 'relative' }}>
-      {avatar}
-      <span
-        style={{
-          alignItems: 'center',
-          // Solid panel background so the badge glyph reads cleanly instead of
-          // colliding with the avatar underneath; the ring blends it into the
-          // sidebar like a Slack/Discord presence badge.
-          background: cssVar.colorBgLayout,
-          borderRadius: '50%',
-          bottom: -4,
-          boxShadow: `0 0 0 1.5px ${cssVar.colorBgLayout}`,
-          display: 'inline-flex',
-          height: 13,
-          justifyContent: 'center',
-          lineHeight: 0,
-          position: 'absolute',
-          right: -4,
-          width: 13,
-        }}
-      >
+    return (
+      <span style={{ display: 'inline-flex', lineHeight: 0, position: 'relative' }}>
+        {avatar}
         <span
           style={{
             alignItems: 'center',
+            // Solid panel background so the badge glyph reads cleanly instead of
+            // colliding with the avatar underneath; the ring blends it into the
+            // sidebar like a Slack/Discord presence badge.
+            background: cssVar.colorBgLayout,
+            borderRadius: '50%',
+            bottom: -4,
+            boxShadow: `0 0 0 1.5px ${cssVar.colorBgLayout}`,
             display: 'inline-flex',
+            height: 13,
             justifyContent: 'center',
-            transform: 'scale(0.75)',
-            transformOrigin: 'center',
+            lineHeight: 0,
+            position: 'absolute',
+            right: -4,
+            width: 13,
           }}
         >
-          {corner}
+          <span
+            style={{
+              alignItems: 'center',
+              display: 'inline-flex',
+              justifyContent: 'center',
+              transform: 'scale(0.75)',
+              transformOrigin: 'center',
+            }}
+          >
+            {corner}
+          </span>
         </span>
       </span>
-    </span>
-  );
-});
+    );
+  },
+);
 
 TopicCreatorAvatar.displayName = 'TopicCreatorAvatar';
 

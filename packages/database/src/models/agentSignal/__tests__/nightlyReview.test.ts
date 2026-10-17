@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -23,27 +23,48 @@ const enabledUserWithoutTimezoneId = 'nightly-review-enabled-user-utc';
 const disabledUserId = 'nightly-review-disabled-user';
 const otherUserId = 'nightly-review-other-user';
 
+/** Users the nightly scan may list: Labs → Self-evolving is the user-level gate. */
+const SELF_LEARNING_ON = { lab: { enableSelfLearning: true } };
+
+const withSelfLearning = <T extends object>(rows: T | T[]) =>
+  (Array.isArray(rows) ? rows : [rows]).map((row) => ({ preference: SELF_LEARNING_ON, ...row }));
+
 beforeEach(async () => {
   await serverDB.delete(users);
 });
 
 describe('AgentSignalNightlyReviewModel', () => {
   describe('listEligibleUsers', () => {
-    it('lists all users regardless of the lab opt-in preference', async () => {
-      await serverDB.insert(users).values([
-        {
-          createdAt: new Date('2026-05-01T00:00:00.000Z'),
-          id: enabledUserId,
-        },
-        {
-          createdAt: new Date('2026-05-02T00:00:00.000Z'),
-          id: enabledUserWithoutTimezoneId,
-        },
-        {
-          createdAt: new Date('2026-05-03T00:00:00.000Z'),
-          id: disabledUserId,
-        },
-      ]);
+    /**
+     * The Labs → Self-evolving switch replaced the per-user `agent_self_iteration` flag lookup
+     * that ran after the scan; filtering in SQL keeps opted-out users out of the fan-out.
+     *
+     * @example
+     * expect(result.map((user) => user.id)).toEqual([enabledUserId, enabledUserWithoutTimezoneId]);
+     */
+    it('lists only users who turned Self-evolving on in Labs', async () => {
+      await serverDB.insert(users).values(
+        withSelfLearning([
+          {
+            createdAt: new Date('2026-05-01T00:00:00.000Z'),
+            id: enabledUserId,
+          },
+          {
+            createdAt: new Date('2026-05-02T00:00:00.000Z'),
+            id: enabledUserWithoutTimezoneId,
+          },
+          {
+            createdAt: new Date('2026-05-03T00:00:00.000Z'),
+            id: disabledUserId,
+            preference: { lab: { enableSelfLearning: false } },
+          },
+          {
+            createdAt: new Date('2026-05-04T00:00:00.000Z'),
+            id: otherUserId,
+            preference: {},
+          },
+        ]),
+      );
       await serverDB.insert(userSettings).values({
         general: { timezone: 'Asia/Shanghai' },
         id: enabledUserId,
@@ -64,25 +85,32 @@ describe('AgentSignalNightlyReviewModel', () => {
           id: enabledUserWithoutTimezoneId,
           timezone: 'UTC',
         },
-        {
-          createdAt: new Date('2026-05-03T00:00:00.000Z'),
-          id: disabledUserId,
-          timezone: 'UTC',
-        },
       ]);
     });
 
+    it('drops whitelisted users whose Self-evolving switch is off', async () => {
+      await serverDB
+        .insert(users)
+        .values([{ createdAt: new Date('2026-05-01T00:00:00.000Z'), id: disabledUserId }]);
+
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      expect(await model.listEligibleUsers({ whitelist: [disabledUserId] })).toEqual([]);
+    });
+
     it('uses cursor and whitelist filters for targeted scheduling pages', async () => {
-      await serverDB.insert(users).values([
-        {
-          createdAt: new Date('2026-05-01T00:00:00.000Z'),
-          id: enabledUserId,
-        },
-        {
-          createdAt: new Date('2026-05-02T00:00:00.000Z'),
-          id: enabledUserWithoutTimezoneId,
-        },
-      ]);
+      await serverDB.insert(users).values(
+        withSelfLearning([
+          {
+            createdAt: new Date('2026-05-01T00:00:00.000Z'),
+            id: enabledUserId,
+          },
+          {
+            createdAt: new Date('2026-05-02T00:00:00.000Z'),
+            id: enabledUserWithoutTimezoneId,
+          },
+        ]),
+      );
 
       const model = new AgentSignalNightlyReviewModel(serverDB);
 
@@ -115,10 +143,10 @@ describe('AgentSignalNightlyReviewModel', () => {
       // Before: created_at .000123 > replayed cursor .000, so the same user was returned again.
       // After: the cursor id restores the exact (created_at, id) tuple inside PostgreSQL.
       await serverDB.execute(sql`
-        INSERT INTO users (id, created_at, updated_at, last_active_at)
+        INSERT INTO users (id, created_at, updated_at, last_active_at, preference)
         VALUES
-          ('nightly-review-microsecond-cursor', '2026-05-01T00:00:00.000123Z', NOW(), NOW()),
-          ('nightly-review-microsecond-next', '2026-05-02T00:00:00.000456Z', NOW(), NOW())
+          ('nightly-review-microsecond-cursor', '2026-05-01T00:00:00.000123Z', NOW(), NOW(), ${JSON.stringify(SELF_LEARNING_ON)}::jsonb),
+          ('nightly-review-microsecond-next', '2026-05-02T00:00:00.000456Z', NOW(), NOW(), ${JSON.stringify(SELF_LEARNING_ON)}::jsonb)
       `);
 
       const model = new AgentSignalNightlyReviewModel(serverDB);
@@ -144,16 +172,18 @@ describe('AgentSignalNightlyReviewModel', () => {
      * review time — drifted later every day.
      *
      * The activity floor is a strict superset of every per-user review window, so narrowing on
-     * it can only skip a dispatch the local-window check would have skipped anyway. The window
-     * itself stays in the service layer, which resolves timezones through `Intl`; pushing it
-     * into SQL would make the scan depend on the database's tzdata build agreeing with `Intl`,
-     * and it buys little at the busiest hour anyway.
+     * it can only skip a dispatch the local-window check would have skipped anyway. The local
+     * window is also prefiltered here (see `listEligibleUsers local-hour prefilter`), but only as
+     * a widened superset: the exact window stays in the service layer, which resolves timezones
+     * through `Intl` and does not depend on the database's tzdata build.
      */
     const seedActivity = async () => {
-      await serverDB.insert(users).values([
-        { createdAt: new Date('2026-05-01T00:00:00.000Z'), id: enabledUserId },
-        { createdAt: new Date('2026-05-02T00:00:00.000Z'), id: otherUserId },
-      ]);
+      await serverDB.insert(users).values(
+        withSelfLearning([
+          { createdAt: new Date('2026-05-01T00:00:00.000Z'), id: enabledUserId },
+          { createdAt: new Date('2026-05-02T00:00:00.000Z'), id: otherUserId },
+        ]),
+      );
       await serverDB.insert(userSettings).values([
         { general: { timezone: 'Asia/Shanghai' }, id: enabledUserId },
         { general: { timezone: 'America/New_York' }, id: otherUserId },
@@ -215,10 +245,12 @@ describe('AgentSignalNightlyReviewModel', () => {
      * expect(result).toEqual([]);
      */
     it('ignores workspace activity when deciding who is a candidate', async () => {
-      await serverDB.insert(users).values({
-        createdAt: new Date('2026-05-01T00:00:00.000Z'),
-        id: enabledUserId,
-      });
+      await serverDB.insert(users).values(
+        withSelfLearning({
+          createdAt: new Date('2026-05-01T00:00:00.000Z'),
+          id: enabledUserId,
+        }),
+      );
       const [workspace] = await serverDB
         .insert(workspaces)
         .values({
@@ -277,12 +309,97 @@ describe('AgentSignalNightlyReviewModel', () => {
     });
   });
 
+  describe('listEligibleUsers local-hour prefilter', () => {
+    /**
+     * ROOT CAUSE:
+     *
+     * Every hourly fire dispatched one QStash execute workflow per recently active user, and ~22
+     * of every 24 of those runs only discovered inside the workflow that the user's local clock
+     * was outside 02:00-04:00. The prefilter drops those rows before pagination fans out.
+     *
+     * At 2026-05-03T18:30Z it is 02:30 in Shanghai, 14:30 in New York and 18:30 in UTC.
+     */
+    const at = new Date('2026-05-03T18:30:00.000Z');
+    const shanghaiUserId = 'nightly-tz-shanghai';
+    const newYorkUserId = 'nightly-tz-new-york';
+    const missingTimezoneUserId = 'nightly-tz-missing';
+    const invalidTimezoneUserId = 'nightly-tz-invalid';
+
+    const seedTimezones = async () => {
+      await serverDB.insert(users).values(
+        withSelfLearning([
+          { createdAt: new Date('2026-05-01T00:00:00.000Z'), id: shanghaiUserId },
+          { createdAt: new Date('2026-05-02T00:00:00.000Z'), id: newYorkUserId },
+          { createdAt: new Date('2026-05-03T00:00:00.000Z'), id: missingTimezoneUserId },
+          { createdAt: new Date('2026-05-04T00:00:00.000Z'), id: invalidTimezoneUserId },
+        ]),
+      );
+      await serverDB.insert(userSettings).values([
+        { general: { timezone: 'Asia/Shanghai' }, id: shanghaiUserId },
+        { general: { timezone: 'America/New_York' }, id: newYorkUserId },
+        { general: { timezone: 'Invalid/Zone' }, id: invalidTimezoneUserId },
+      ]);
+    };
+
+    it('keeps only users whose local hour is inside the window', async () => {
+      await seedTimezones();
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listEligibleUsers({
+        localHourWindow: { at, endHourExclusive: 5, startHour: 1 },
+      });
+
+      // Shanghai is in-window; an unrecognised zone passes through for the exact check upstream;
+      // New York (14:30) and the UTC fallback (18:30) are dropped.
+      expect(result.map((item) => item.id)).toEqual([shanghaiUserId, invalidTimezoneUserId]);
+    });
+
+    it('evaluates a missing timezone as UTC', async () => {
+      await seedTimezones();
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listEligibleUsers({
+        localHourWindow: {
+          at: new Date('2026-05-03T02:30:00.000Z'),
+          endHourExclusive: 4,
+          startHour: 2,
+        },
+      });
+
+      expect(result.map((item) => item.id)).toEqual([missingTimezoneUserId, invalidTimezoneUserId]);
+    });
+
+    it('keeps pagination stable across filtered rows', async () => {
+      await seedTimezones();
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const firstPage = await model.listEligibleUsers({
+        limit: 1,
+        localHourWindow: { at, endHourExclusive: 5, startHour: 1 },
+      });
+      const secondPage = await model.listEligibleUsers({
+        cursor: firstPage[0],
+        limit: 1,
+        localHourWindow: { at, endHourExclusive: 5, startHour: 1 },
+      });
+      const thirdPage = await model.listEligibleUsers({
+        cursor: secondPage[0],
+        limit: 1,
+        localHourWindow: { at, endHourExclusive: 5, startHour: 1 },
+      });
+
+      expect(firstPage.map((item) => item.id)).toEqual([shanghaiUserId]);
+      expect(secondPage.map((item) => item.id)).toEqual([invalidTimezoneUserId]);
+      expect(thirdPage).toEqual([]);
+    });
+  });
+
   describe('listActiveAgentTargets', () => {
     const chatConfigForSelfIteration = (enabled?: boolean) =>
       enabled === undefined ? {} : { selfIteration: { enabled } };
 
     const seedNightlyCapabilityTargets = async (caseName: string, blockedEnabled?: boolean) => {
-      await serverDB.insert(users).values({ id: enabledUserId });
+      await serverDB.insert(users).values(withSelfLearning({ id: enabledUserId }));
 
       const [lobeAiAgent, blockedAgent, enabledAgent] = await serverDB
         .insert(agents)
@@ -336,14 +453,18 @@ describe('AgentSignalNightlyReviewModel', () => {
     };
 
     /**
-     * @example
-     * expect(result.map((item) => item.agentId)).toEqual(['nightly-lobe-ai-disabled']).
+     * There is no per-agent switch any more: Labs → Self-evolving is the only control, so legacy
+     * `selfIteration.enabled: false` / `optedOut: true` values left in stored configs are ignored.
      */
-    it('includes Lobe AI when the agent switch is disabled and excludes non-Lobe disabled agents', async () => {
+    it('targets every active agent regardless of legacy per-agent self-iteration values', async () => {
       const { blockedAgent, enabledAgent, lobeAiAgent } = await seedNightlyCapabilityTargets(
-        'disabled',
+        'legacy',
         false,
       );
+      await serverDB
+        .update(agents)
+        .set({ chatConfig: { selfIteration: { enabled: false, optedOut: true } } })
+        .where(eq(agents.id, lobeAiAgent.id));
 
       const model = new AgentSignalNightlyReviewModel(serverDB);
 
@@ -352,31 +473,17 @@ describe('AgentSignalNightlyReviewModel', () => {
         windowStart: new Date('2026-05-03T00:00:00.000Z'),
       });
 
-      expect(result.map((item) => item.agentId)).toEqual([enabledAgent.id, lobeAiAgent.id]);
-      expect(result.map((item) => item.agentId)).not.toContain(blockedAgent.id);
-    });
-
-    /**
-     * @example
-     * expect(result.map((item) => item.agentId)).toEqual(['nightly-lobe-ai-implicit']).
-     */
-    it('includes Lobe AI when the agent switch is missing and excludes non-Lobe implicit agents', async () => {
-      const { blockedAgent, enabledAgent, lobeAiAgent } =
-        await seedNightlyCapabilityTargets('implicit');
-
-      const model = new AgentSignalNightlyReviewModel(serverDB);
-
-      const result = await model.listActiveAgentTargets(enabledUserId, {
-        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
-        windowStart: new Date('2026-05-03T00:00:00.000Z'),
-      });
-
-      expect(result.map((item) => item.agentId)).toEqual([enabledAgent.id, lobeAiAgent.id]);
-      expect(result.map((item) => item.agentId)).not.toContain(blockedAgent.id);
+      expect(result.map((item) => item.agentId)).toEqual([
+        enabledAgent.id,
+        blockedAgent.id,
+        lobeAiAgent.id,
+      ]);
     });
 
     it('returns non-virtual agents with activity and failure counts inside the review window', async () => {
-      await serverDB.insert(users).values([{ id: enabledUserId }, { id: otherUserId }]);
+      await serverDB
+        .insert(users)
+        .values(withSelfLearning([{ id: enabledUserId }, { id: otherUserId }]));
       await serverDB.insert(userSettings).values({
         general: { timezone: 'America/New_York' },
         id: enabledUserId,
@@ -497,7 +604,7 @@ describe('AgentSignalNightlyReviewModel', () => {
         },
         {
           agentId: disabledAgent.id,
-          content: 'disabled agent should not schedule',
+          content: 'a legacy per-agent off value no longer blocks scheduling',
           createdAt: new Date('2026-05-03T14:30:00.000Z'),
           id: 'nightly-message-disabled',
           role: 'user',
@@ -538,6 +645,17 @@ describe('AgentSignalNightlyReviewModel', () => {
 
       expect(result).toEqual([
         {
+          agentId: disabledAgent.id,
+          failedToolCallCount: 0,
+          firstActivityAt: new Date('2026-05-03T14:30:00.000Z'),
+          lastActivityAt: new Date('2026-05-03T14:30:00.000Z'),
+          messageCount: 1,
+          name: null,
+          timezone: 'America/New_York',
+          title: 'Disabled agent',
+          topicCount: 1,
+        },
+        {
           agentId: legacyAgent.id,
           failedToolCallCount: 0,
           firstActivityAt: new Date('2026-05-03T14:00:00.000Z'),
@@ -561,7 +679,6 @@ describe('AgentSignalNightlyReviewModel', () => {
         },
       ]);
       expect(result.map((item) => item.agentId)).not.toContain(inactiveAgent.id);
-      expect(result.map((item) => item.agentId)).not.toContain(disabledAgent.id);
       expect(result.map((item) => item.agentId)).not.toContain(virtualAgent.id);
       expect(result.map((item) => item.agentId)).not.toContain(otherUserAgent.id);
 
@@ -591,7 +708,7 @@ describe('AgentSignalNightlyReviewModel', () => {
       // Agent-share visitor topics keep the creator's userId on both the topic
       // and its messages, but a non-null topics.senderId marks the topic as
       // visitor traffic that must not feed the creator's own nightly review.
-      await serverDB.insert(users).values({ id: enabledUserId });
+      await serverDB.insert(users).values(withSelfLearning({ id: enabledUserId }));
       await serverDB.insert(agents).values({
         chatConfig: { selfIteration: { enabled: true } },
         id: 'nightly-share-agent',

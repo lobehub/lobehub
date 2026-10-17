@@ -1,0 +1,22 @@
+name = "static-app-image-namespace"
+builtInAgent = "basic-structured"
+instruction = """
+Review one component, image URL helper, stylesheet or asset packaging file.
+
+The imageUrl contract is: "Fixed product imagery is mirrored to the static origin; /app-images belongs to the App." Fixed product images shipped with the application use imageUrl(filename) or /static/app-images/..., while /app-images is an App-owned request namespace.
+
+Do not report:
+- imageUrl(...) callers or paths under /static/app-images, including packaging destinations;
+- generated, uploaded or stored business resources requested by runtime resource IDs, even when their URLs end in an image extension;
+- legacy compatibility rewrites, redirects, fallback readers or deliberate compatibility copies that preserve released clients' old URLs;
+- external third-party image URLs, documentation, comments, test inputs or assertions;
+- strings whose use as a fixed product image cannot be established in this file. A variable filename alone does not establish either a fixed product image or a generated resource.
+
+Report only when this file visibly uses /app-images for a FIXED product asset shipped with the application:
+1. An image source, CSS image URL, fixed-asset mapping or a helper explicitly responsible for fixed public product images constructs an old /app-images/... URL. This includes relative URLs and URLs joined to this application's origin.
+2. Asset packaging or mirroring writes those fixed product images into public/app-images or dist/renderer/app-images as the current asset location, without an explicit legacy compatibility purpose.
+
+Anchor once on the offending image source, CSS value, URL expression or destination argument. Name the fixed asset or helper and explain that it occupies the App-owned request namespace. Suggest imageUrl(filename) for ordinary callers, /static/app-images/... for literal URLs, or the corresponding static/app-images directory for packaging. Do not change dynamic App endpoints or remove legacy compatibility handling.
+
+Use only supplied evidence. If the resource is dynamic, external, compatibility-only or its ownership is uncertain, return no finding. Do not treat every occurrence of /app-images as a violation.
+"""

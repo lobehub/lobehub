@@ -142,4 +142,30 @@ describe('useRemoteAgentDeviceGuard', () => {
 
     await waitFor(() => expect(result.current.status).toBe('no-device'));
   });
+
+  // A side-by-side portal pane pins its own device while the main column's
+  // topic, still globally active, is bound elsewhere.
+  it("checks the device bound to the conversation's own topic", async () => {
+    mockedUseEffectiveAgencyConfig.mockImplementation((_agentId, options) => ({
+      agencyConfig: {
+        boundDeviceId: options?.topicId === 'pane-topic' ? 'pane-device' : 'main-device',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'codex' },
+      },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    }));
+    mockedListDevices.mockResolvedValue([
+      { deviceId: 'main-device', online: false },
+      { deviceId: 'pane-device', online: true },
+    ] as never);
+
+    const { result } = renderHook(() =>
+      useRemoteAgentDeviceGuard({ agentId: 'agent-1', topicId: 'pane-topic' }),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe('ok'));
+  });
 });

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
@@ -81,6 +81,16 @@ describe('TaskSubtaskProgressTag', () => {
     render(<TaskSubtaskProgressTag progress={{ completed: 2, total: 3 }} />);
 
     expect(screen.getByText('2/3')).toBeInTheDocument();
+  });
+
+  it('keeps the progress badge on one line when a narrow card row squeezes it', () => {
+    render(<TaskSubtaskProgressTag progress={{ completed: 1, total: 2 }} />);
+
+    const text = screen.getByText('1/2');
+    const badge = text.parentElement!;
+
+    expect(text).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(badge).toHaveStyle({ flex: 'none' });
   });
 
   it('uses the list summary until detail is refreshed, then yields to a newer list summary', async () => {

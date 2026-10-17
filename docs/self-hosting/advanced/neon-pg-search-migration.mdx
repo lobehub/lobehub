@@ -9,11 +9,11 @@ tags:
   - Self-hosting
 ---
 
-# Migrate from pg\_search on Neon
+# Migrate from pg_search on Neon
 
 According to [Neon's `pg_search` notice](https://neon.com/docs/extensions/pg_search), Neon no longer offers the extension to new projects. If Neon has notified you that `pg_search` will also be retired from an existing project, complete this guide before the deadline in that notice. Timelines can differ between projects, so use the notice sent for your project. This migration changes only the search backend; source data such as chat history remains in the existing PostgreSQL database.
 
-This guide is for an existing LobeHub instance that has already applied the historical database migrations. For a new database, first read the database limitations in [Full-Text Search](/docs/self-hosting/advanced/full-text-search).
+This guide is for an existing LobeHub instance. A new database without `pg_search` needs no migration: set `FTS_SEARCH_PROVIDER=pg_like` before the first start, as described in [Full-Text Search](/docs/self-hosting/advanced/full-text-search).
 
 ## 1. Check whether you need to migrate
 
@@ -44,7 +44,7 @@ Elastic Cloud and Docker Elasticsearch are the same search backend in different 
   The current LobeHub Elasticsearch sync worker is a persistent process and cannot run as-is inside a Vercel-only deployment. Choose `pg_like` unless you also operate a persistent server for that worker.
 </Callout>
 
-## 3. Migrate to pg\_like (recommended)
+## 3. Migrate to pg_like (recommended)
 
 1. **Upgrade and back up.** Upgrade LobeHub to a version that includes `pg_like`, then create a backup using your database provider's normal process.
 

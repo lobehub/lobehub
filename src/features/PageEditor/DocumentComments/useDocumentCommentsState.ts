@@ -5,7 +5,7 @@ import type {
   DocumentCommentThread,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { type RefObject, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

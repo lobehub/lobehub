@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Không thể tạo câu trả lời này",
   "unknownError.title": "Rất tiếc, yêu cầu đã tạm nghỉ",
   "unknownError.traceIdLabel": "ID Dấu vết:",
+  "unknownError.troubleshoot": "Khắc phục sự cố",
   "unlock.addProxyUrl": "Thêm URL proxy OpenAI (tùy chọn)",
   "unlock.apiKey.description": "Nhập API Key {{name}} của bạn để bắt đầu phiên",
   "unlock.apiKey.imageGenerationDescription": "Nhập API Key {{name}} của bạn để bắt đầu tạo hình ảnh",

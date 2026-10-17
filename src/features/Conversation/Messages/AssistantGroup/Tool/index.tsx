@@ -1,7 +1,6 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, Divider, Skeleton } from '@lobehub/ui/base-ui';
+import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 
@@ -189,6 +188,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
               isArgumentsStreaming={isArgumentsStreaming}
               isExpanded={isToolDetailExpand}
               isToolCalling={isToolCalling}
+              messageId={assistantMessageId}
               result={result}
               toolCallId={id}
               toolCallStartTime={toolCallStartTime}

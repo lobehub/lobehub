@@ -13,8 +13,8 @@ Fragment-level readability and convention adherence. Look at each changed hunk i
 - Leftover `console.log` / `console.debug` — use the `debug` package or remove
 - Missing `return await` inside try/catch (the rejection escapes the catch) — <https://typescript-eslint.io/rules/return-await/>
 - Hardcoded user-facing strings — must go through i18n keys (`packages/locales/src/default/<namespace>.ts`, named `{feature}.{context}.{action|status}`)
-- `antd` imports where `@lobehub/ui` (or `@lobehub/ui/base-ui`) wraps the same component — base-ui first, then `@lobehub/ui`, antd last
-- Hardcoded colors / raw CSS values — use `antd-style` tokens; prefer `createStaticStyles` + `cssVar.*` over `createStyles` + `token` unless styles need runtime computation
+- `antd` / `antd-style` imports — both are gone; use the `@lobehub/ui` component and its `createStaticStyles` / `cssVar` / `cx`
+- Hardcoded colors / raw CSS values — use `cssVar.*` tokens with `createStaticStyles` from `@lobehub/ui`
 - Dead code, commented-out blocks, unused exports introduced by this diff
 - Comments: missing on hacky/non-obvious logic; stale after a signature change; or merely restating the code
 - Nesting ≥ 3 levels that early returns / lookup tables would flatten

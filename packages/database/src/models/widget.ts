@@ -251,7 +251,12 @@ export class WidgetModel {
       await this.trashRegistry(tx).register(
         {
           deletedAt: now,
-          root: { resourceId: widget.id, resourceType: 'widget', title: widget.title },
+          root: {
+            projectId: widget.projectId,
+            resourceId: widget.id,
+            resourceType: 'widget',
+            title: widget.title,
+          },
         },
         tx,
       );
@@ -556,6 +561,48 @@ export class WidgetModel {
       .limit(1);
 
     return run;
+  }
+
+  /**
+   * The newest usable preview run of one version's content — what a publish
+   * approval was shown, however far the run history has rolled on. Unlike
+   * {@link listRuns} this is keyed by version, so it keeps answering after
+   * the version's runs leave the newest-N window.
+   *
+   * The lookup matches by content hash, exactly like the publish gate
+   * ({@link hasSucceededRunForContentHash}): a draft row that reuses an
+   * earlier version's content is tried by that version's successful dry run,
+   * so the review must find the same run or a same-content draft would
+   * deadlock its own approval.
+   */
+  async findPreviewRun(widgetId: string, versionId: string) {
+    if (!isUuid(versionId)) return undefined;
+    const widget = await this.findById(widgetId);
+    if (!widget) return undefined;
+
+    const [version] = await this.db
+      .select({ contentHash: widgetVersions.contentHash })
+      .from(widgetVersions)
+      .where(and(eq(widgetVersions.id, versionId), eq(widgetVersions.widgetId, widgetId)))
+      .limit(1);
+    if (!version) return undefined;
+
+    const [row] = await this.db
+      .select({ run: widgetRuns })
+      .from(widgetRuns)
+      .innerJoin(widgetVersions, eq(widgetRuns.versionId, widgetVersions.id))
+      .where(
+        and(
+          eq(widgetRuns.widgetId, widgetId),
+          eq(widgetRuns.trigger, 'preview'),
+          inArray(widgetRuns.status, [...WIDGET_RUN_OUTPUT_STATUSES]),
+          eq(widgetVersions.contentHash, version.contentHash),
+        ),
+      )
+      .orderBy(desc(widgetRuns.createdAt))
+      .limit(1);
+
+    return row?.run;
   }
 
   /**

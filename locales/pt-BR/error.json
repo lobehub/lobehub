@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Não foi possível gerar esta resposta",
   "unknownError.title": "Ops, a solicitação tirou uma soneca",
   "unknownError.traceIdLabel": "ID de Rastreamento:",
+  "unknownError.troubleshoot": "Solucionar problemas",
   "unlock.addProxyUrl": "Adicionar URL de proxy do OpenAI (opcional)",
   "unlock.apiKey.description": "Insira sua chave de API {{name}} para iniciar a sessão",
   "unlock.apiKey.imageGenerationDescription": "Insira sua chave de API {{name}} para começar a gerar",

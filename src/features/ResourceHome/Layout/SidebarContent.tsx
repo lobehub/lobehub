@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { AccordionRoot } from '@lobehub/ui/base-ui';
+import { AccordionRoot, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';

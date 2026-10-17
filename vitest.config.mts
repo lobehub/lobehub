@@ -203,13 +203,6 @@ export default defineConfig({
         client: {
           enabled: true,
           rolldownOptions: {
-            // CJS deps bundled into the chunk (antd-style) call `require('react/jsx-runtime')`.
-            // Rolldown's ESM interop only works when a real `require` is in scope, and the dep
-            // optimizer cannot set `output.banner`, so inject the shim through `output.intro`.
-            output: {
-              intro:
-                'import { createRequire as __vitestCreateRequire } from "node:module"; const require = __vitestCreateRequire(import.meta.url);',
-            },
             // Dep optimization bypasses Vite plugins, so mirror the resolveId hacks here.
             plugins: [
               {
@@ -233,14 +226,16 @@ export default defineConfig({
             ],
           },
           // Setting `exclude` here replaces the root optimizeDeps.exclude; the node
-          // builtins must stay listed or vite swaps them for browser shims
-          exclude: ['crypto', 'util', 'tty'],
+          // builtins must stay listed or vite swaps them for browser shims.
+          // Vitest itself excludes `react`, which externalizes every `react/*`
+          // subpath, but vite only builds a `require()` facade for exact entries,
+          // so CJS deps in the chunk (re-resizable) need the jsx runtimes listed.
+          exclude: ['crypto', 'util', 'tty', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
           // Every imported subpath must be prebundled together: a subpath left to
           // vite-node loads a second copy of the library whose MotionProvider /
           // modal-stack contexts don't match the chunk's
           include: [
             '@lobehub/ui',
-            '@lobehub/ui/base-ui',
             '@lobehub/ui/icons',
             '@lobehub/ui/mobile',
             '@lobehub/ui/chat',

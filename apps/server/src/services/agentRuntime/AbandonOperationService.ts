@@ -31,7 +31,7 @@ const log = debug('lobe-server:abandon-operation');
  * when the durable row, the run row or the terminal hook fails here, the run
  * ends with a row still claiming to be `running` and nothing left to report it
  * — a Task that never settles, a Goal that waits on it, and a user looking at a
- * spinner (LOBE-12391). Those failures get a real log line; the ones that only
+ * spinner. Those failures get a real log line; the ones that only
  * cost a retry stay on `debug`.
  */
 const reportSettleFailure = (message: string, context: unknown): void => {

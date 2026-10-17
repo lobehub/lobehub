@@ -27,6 +27,12 @@ seam), report it there instead; never emit the same finding twice.
   extend. Pay special attention to one-off helpers that hide a single narrow branch at a generic
   property such as `type`, `status`, or `mode`; keep variant policy in its owning layer or make the
   exceptional condition explicit at the decision point.
+- **Patch instead of a necessary local refactor**: a change appends positional parameters, flags,
+  branches, or wrappers to preserve the old shape even though the new requirement exposes its
+  limitations. A smaller diff is not sufficient justification: identify concrete ambiguity,
+  duplicated policy, or coupled call sites, then prefer the smallest coherent refactor of the
+  affected interface and callers. Do not use this rule to demand unrelated cleanup or break a
+  released contract.
 - **Partial refactor**: a renamed concept leaves stale filenames, tests, exports, docs, or adjacent
   identifiers; a compatibility alias, forwarding wrapper, or `const newName = oldName` remains even
   though no caller needs it. Complete the semantic rename across the affected unit, following the
@@ -63,6 +69,19 @@ type: getBlockErrorType(finishReason);
 `type` and `getBlockErrorType` read like the generic owner of error classification, but the helper
 only hides one image-generation condition. Keep the condition explicit at the decision point when
 that is clearest, or move the policy into the image/provider adapter that owns it.
+
+### Extending a positional interface instead of clarifying it
+
+```ts
+// Adding request context to an internal service:
+new FollowUpActionService(db, userId, undefined, userAgent);
+```
+
+Appending another optional positional parameter makes callers depend on argument order and
+placeholder values. When these internal callers can migrate together, use a typed options object
+such as `new FollowUpActionService({ db, userId, userAgent })` and update them together. Judge the
+actual call-site ambiguity and compatibility boundary, not a universal parameter-count threshold;
+do not turn a local refactor into a redesign of the service or its public APIs.
 
 ### Rename that stops at the exported symbol
 
@@ -133,7 +152,9 @@ Run five focused passes:
 1. **Scope locality**: name each new condition/helper and ask whether its vocabulary is narrower than
    the file or abstraction containing it. Trace the pipeline and existing extension seams before
    deciding the code belongs elsewhere. A narrow report does not prove the root cause is narrow.
-2. **Refactor closure**: for renamed concepts, search both old and new names across symbols,
+2. **Refactor closure**: first check whether an additive patch avoids a necessary local interface
+   change solely to minimize the diff; trace affected callers and compatibility constraints. For
+   renamed concepts, search both old and new names across symbols,
    filenames, exports, tests, docs, and import paths. Search every alias/wrapper for callers. Keep a
    compatibility shim only when a released caller or staged migration needs it, and require a
    deprecation/removal story.

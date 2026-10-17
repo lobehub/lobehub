@@ -402,7 +402,7 @@ list, not just that the dialog opened.
 
 #### L-D13 — Picking `cssVar` color-scale steps by antd-palette intuition
 
-**Wrong approach:** choose antd-style palette steps (`cssVar.blue1` for a tint,
+**Wrong approach:** choose palette steps (`cssVar.blue1` for a tint,
 `cssVar.blue6` for the primary line) from the standard antd 10-step palette in
 your head, and judge the result from the code alone.
 

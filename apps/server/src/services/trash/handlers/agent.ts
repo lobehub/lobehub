@@ -23,6 +23,7 @@ export const agentEntry = (agent: AgentItem, childCount: number) => ({
     backgroundColor: agent.backgroundColor,
     childCount,
   },
+  projectId: null,
   resourceId: agent.id,
   resourceType: 'agent' as const,
   title: agent.title,
@@ -71,6 +72,7 @@ export const softDeleteAgent = async (
       ...topics.map((topic) => topicEntry(topic)),
       ...topiclessMessages.map((message) => ({
         meta: { role: message.role },
+        projectId: null,
         resourceId: message.id,
         resourceType: 'message' as const,
         title: message.content?.trim().slice(0, MESSAGE_TITLE_LENGTH) || null,

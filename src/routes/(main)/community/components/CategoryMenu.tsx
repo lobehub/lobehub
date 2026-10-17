@@ -1,7 +1,7 @@
 'use client';
 
-import { List, type ListClickInfo, type ListItemType } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { List, type ListClickInfo, type ListItemType } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { type CSSProperties, memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

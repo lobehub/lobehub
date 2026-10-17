@@ -40,7 +40,17 @@ export const AcceptanceEvidenceManifest: BuiltinToolManifest = {
                 },
                 fileId: { description: 'An existing LobeHub artifact file id.', type: 'string' },
                 type: {
-                  enum: ['markdown', 'screenshot', 'text', 'video'],
+                  description:
+                    'Use the type the criterion requires (listCriteria shows it). gif, screenshot and video must cite a fileId.',
+                  enum: [
+                    'dom_snapshot',
+                    'gif',
+                    'markdown',
+                    'screenshot',
+                    'text',
+                    'transcript',
+                    'video',
+                  ],
                   type: 'string',
                 },
               },

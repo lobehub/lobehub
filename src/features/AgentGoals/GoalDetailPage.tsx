@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
 import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +18,7 @@ import RightPanel from '@/features/RightPanel';
 import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
+import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -67,6 +66,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
+  const startGoal = useGoalStore((s) => s.startGoal);
+  // The server lets only a draft's creator or a workspace owner launch it.
+  const canStart = useResourceManageable(snapshot?.goal.userId);
 
   const buildAgentPath = useAgentRoutePath(agentId ?? '');
 
@@ -81,6 +83,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // While the exploration map runs fullscreen its overlay carries the portal
   // panel; ours unmounts so exactly one PortalContent is alive at a time.
   const [graphFullscreen, setGraphFullscreen] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   // Same per-view width grammar as the conversation portal, but remembered
   // under the 'goal' scope: resizing here never affects the chat surface.
@@ -237,6 +240,34 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               {/* Pause/resume above the requirement document — its reviewed
                   home. The status glyph keeps the "running" animation; this
                   button is only the control. */}
+              {/* A draft is still being arranged: nothing has been dispatched,
+                  and starting it is the one explicit move into running. */}
+              {goal.status === 'draft' && (
+                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
+                  {canEdit && canStart && (
+                    <Button
+                      icon={PlayIcon}
+                      loading={starting}
+                      type={'primary'}
+                      onClick={async () => {
+                        setStarting(true);
+                        try {
+                          await startGoal(goal.id);
+                        } catch (error) {
+                          toast.error((error as Error).message);
+                        } finally {
+                          setStarting(false);
+                        }
+                      }}
+                    >
+                      {t('goalProcess.start')}
+                    </Button>
+                  )}
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalProcess.draft')}
+                  </Text>
+                </Flexbox>
+              )}
               {canPause && (
                 <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
                   <Button

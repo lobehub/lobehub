@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Grid } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Grid } from '@lobehub/ui';
 import { useLocation } from 'react-router';
 
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';

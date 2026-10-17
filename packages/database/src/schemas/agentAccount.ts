@@ -4,6 +4,7 @@ import type {
   AgentAccountKind,
   AgentAccountStatus,
 } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -95,15 +96,17 @@ export const agentAccounts = pgTable(
     ...timestamps,
   },
   (t) => [
-    // One agent cannot mount the same account twice.
-    uniqueIndex('agent_accounts_agent_kind_provider_identifier_unique').on(
-      t.agentId,
-      t.kind,
-      t.provider,
-      t.identifier,
-    ),
-    // Inbound routing: an incoming message/call resolves to exactly one account.
-    uniqueIndex('agent_accounts_provider_identifier_unique').on(t.provider, t.identifier),
+    // One agent cannot mount the same live account twice. Revoked rows stay
+    // for audit but no longer hold the handle, so it can be bound again.
+    uniqueIndex('agent_accounts_agent_kind_provider_identifier_unique')
+      .on(t.agentId, t.kind, t.provider, t.identifier)
+      .where(sql`${t.status} <> 'revoked'`),
+    // Inbound routing: an incoming message/call resolves to exactly one live
+    // account. Partial for the same reason — a released number or address must
+    // not stay locked to the agent that gave it up.
+    uniqueIndex('agent_accounts_provider_identifier_unique')
+      .on(t.provider, t.identifier)
+      .where(sql`${t.status} <> 'revoked'`),
     index('agent_accounts_agent_id_idx').on(t.agentId),
     index('agent_accounts_user_id_idx').on(t.userId),
     index('agent_accounts_workspace_id_idx').on(t.workspaceId),

@@ -75,7 +75,13 @@ export const EXPERTISE_ACTOR_TYPES = ['agent', 'user', 'system'] as const;
  * acceptance-driven run inherits that acceptance's own subject rather than inventing one.
  * `standalone` exists because 36 of this owner's 193 acceptances carry no in-product subject.
  */
-export const EXPERTISE_SUBJECT_TYPES = ['topic', 'task', 'document', 'standalone'] as const;
+export const EXPERTISE_SUBJECT_TYPES = [
+  'topic',
+  'task',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 /**
  * Two values only. There used to be a third, false_positive, and in practice it was systematically
  * misused: the model recorded "this rule does not apply to this topic" as fp (fp 29 > pass 19 on

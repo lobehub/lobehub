@@ -26,6 +26,13 @@ describe('getGoalTaskProgress', () => {
     );
   });
 
+  it('reads a seeded draft as not started rather than executing', () => {
+    // A draft already holds its tasks, but none of them runs until it is started.
+    expect(getGoalTaskProgress({ criteriaCount: 2, status: 'draft', taskTotal: 4 }).phase).toBe(
+      'draft',
+    );
+  });
+
   it('lets a waiting decision gate outrank the goal status', () => {
     // A goal keeps its `running` row while a gate is open; the card must still
     // read as blocked on the user, not as work in progress.

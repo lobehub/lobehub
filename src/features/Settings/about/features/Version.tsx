@@ -4,10 +4,8 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, Skeleton, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { memo, Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
+import { Block, Button, createStaticStyles, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
@@ -27,19 +25,23 @@ import {
 import { APP_VERSION } from './appVersion';
 import { formatOtaVersionLabel, getDisplayedOtaVersion } from './otaVersion';
 
-let otaVersionPromise: Promise<string | null> | undefined;
-
-const getOtaVersion = () => {
-  otaVersionPromise ??= rendererOtaService.getStatus().then(getDisplayedOtaVersion);
-
-  return otaVersionPromise;
-};
-
 const OtaVersionTag = memo(() => {
-  const otaVersion = use(getOtaVersion());
+  const [otaVersion, setOtaVersion] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    rendererOtaService
+      .getStatus()
+      .then((status) => {
+        if (active) setOtaVersion((version) => version ?? getDisplayedOtaVersion(status));
+      })
+      .catch(console.error);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useWatchBroadcast('coreUpdateApplied', setOtaVersion);
 
   if (!otaVersion) return null;
-
   return <Tag style={{ minWidth: 60 }}>{formatOtaVersionLabel(otaVersion)}</Tag>;
 });
 
@@ -212,11 +214,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
               v{APP_VERSION}
             </Tag>
 
-            {isDesktop && (
-              <Suspense fallback={<Skeleton height={22} radius={6} width={60} />}>
-                <OtaVersionTag />
-              </Suspense>
-            )}
+            {isDesktop && <OtaVersionTag />}
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

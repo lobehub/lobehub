@@ -29,7 +29,7 @@ Apply the same shape to the project layer's file. Never narrate the reading.
 ## Checklist
 
 - **M1** Open every screenshot with Read before `pass`; greps and element counts never decide. Presence/absence of a UI section is asserted on structured state, never on page text.
-- **M5** Before/after is a `comparison` pair with exactly one `before` and one `after`; never a stale shot loose in `evidence`, never a hand-composed image, never sequential flow steps.
+- **M5** Before/after is a `comparison` pair of pre-change vs delivered code in the same state, with exactly one `before` and one `after`; never a stale shot loose in `evidence`, never a hand-composed image, never sequential flow steps, never loading vs loaded of one build.
 - **M6** Prove the running instance loads your working-tree code by measuring a changed value. After a direct fixture write, cold-load and assert at the layer the behavior reads, not where you wrote.
 - **M12** A UI chip/badge is supporting evidence; the payload, request body, DB row, or side effect is the proof.
 - **M13** A GIF's last frame is its headline — end on the asserted state or say in `observation` why it ends elsewhere.
@@ -62,12 +62,14 @@ that drives it or a located DOM node, never a substring.
 
 **Trap:** a stale "before" shot loose in a passed case's `evidence` (the page
 headings each image by filename, so it reads as the current result); two shots
-hand-composed into one image; or two sequential steps of a flow tagged as
-`before`/`after`.
+hand-composed into one image; two sequential steps of a flow tagged as
+`before`/`after`; or two states of the delivered build, such as a skeleton
+tagged `before` and the loaded page tagged `after`.
 
-**Rule:** one view in two states = a `comparison` pair with a shared `id`,
-exactly one `before` and one `after`, one pair per case; the page owns the
-labeling. Flow steps are ordered evidence with captions. Shape in
+**Rule:** the same view in the same state on the pre-change and delivered code
+= a `comparison` pair with a shared `id`, exactly one `before` and one `after`,
+one pair per case; the page owns the labeling. Other states of one build and
+flow steps are ordered evidence with captions. Shape in
 [report.md](./report.md#beforeafter-comparison-pairs).
 
 ### M6 — Verifying against a build or cache that is not your code

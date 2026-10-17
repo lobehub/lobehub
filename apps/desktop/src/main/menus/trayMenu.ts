@@ -1,9 +1,10 @@
-import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
+import type { TrayActiveTopicItem, TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { MenuItemConstructorOptions } from 'electron';
 import { app as electronApp } from 'electron';
 
 import type { App } from '@/core/App';
 
+const ACTIVE_LIMIT = 5;
 const PINNED_LIMIT = 3;
 const RECENT_AGENT_LIMIT = 3;
 const RECENT_LIMIT = 5;
@@ -20,12 +21,21 @@ const createSection = (
 ): MenuItemConstructorOptions[] =>
   items.length > 0 ? [{ enabled: false, label }, ...items, { type: 'separator' }] : [];
 
-export const buildTrayMenuTemplate = (
+export const buildDockMenuTemplate = (
   app: App,
   snapshot: TrayNavigationSnapshot,
+  { includeAgents = false }: { includeAgents?: boolean } = {},
 ): MenuItemConstructorOptions[] => {
   const t = app.i18n.ns('menu');
-  const appName = electronApp.getName();
+  const activeItems = (status: TrayActiveTopicItem['status']) =>
+    (snapshot.activeTopics ?? [])
+      .filter((topic) => topic.status === status)
+      .slice(0, ACTIVE_LIMIT)
+      .map(({ subtitle, title, url }) => ({
+        click: () => openRoute(app, url),
+        label: title,
+        sublabel: subtitle,
+      }));
   const pinnedItems = snapshot.pinned.slice(0, PINNED_LIMIT).map(({ title, url }) => ({
     click: () => openRoute(app, url),
     label: title,
@@ -51,19 +61,11 @@ export const buildTrayMenuTemplate = (
     });
   }
 
-  if (snapshot.recent.length > RECENT_LIMIT) {
-    recentItems.push({
-      click: () => {
-        app.browserManager.showMainWindow();
-        app.browserManager.getMainWindow().broadcast('openRecentlyViewed');
-      },
-      label: t('tray.more'),
-    });
-  }
-
   return [
+    ...createSection(t('tray.waitingForHuman'), activeItems('waitingForHuman')),
+    ...createSection(t('tray.running'), activeItems('running')),
     ...createSection(t('tray.pinned'), pinnedItems),
-    ...createSection(t('tray.recentAgents'), agentItems),
+    ...(includeAgents ? createSection(t('tray.recentAgents'), agentItems) : []),
     ...createSection(t('tray.recent'), recentItems),
     {
       accelerator: 'Alt+Shift+Space',
@@ -82,6 +84,18 @@ export const buildTrayMenuTemplate = (
       },
       label: t('tray.newChat'),
     },
+  ];
+};
+
+export const buildTrayMenuTemplate = (
+  app: App,
+  snapshot: TrayNavigationSnapshot,
+): MenuItemConstructorOptions[] => {
+  const t = app.i18n.ns('menu');
+  const appName = electronApp.getName();
+
+  return [
+    ...buildDockMenuTemplate(app, snapshot, { includeAgents: true }),
     { type: 'separator' },
     {
       click: () => app.browserManager.showMainWindow(),

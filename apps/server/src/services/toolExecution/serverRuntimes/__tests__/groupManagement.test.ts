@@ -62,6 +62,26 @@ describe('groupManagementRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe('AGENT_MEMBER_START_FAILED');
     });
+
+    it('surfaces per-member start failure reasons when the runner reports them', async () => {
+      run.mockResolvedValue({
+        errors: ['The model provider returned an empty completion.'],
+        started: false,
+        startedCount: 0,
+      });
+      const result = await runtime().speak({ agentId: 'agent-a' }, makeCtx());
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('AGENT_MEMBER_START_FAILED');
+      expect(result.content).toContain('The model provider returned an empty completion.');
+    });
+
+    it('keeps the opaque fallback message when the runner reports no reasons', async () => {
+      run.mockResolvedValue({ started: false, startedCount: 0 });
+      const result = await runtime().delegate({ agentId: 'agent-a', reason: 'take over' }, makeCtx());
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('AGENT_MEMBER_START_FAILED');
+      expect(result.content).toBe('Agent member(s) failed to start.');
+    });
   });
 
   describe('broadcast', () => {

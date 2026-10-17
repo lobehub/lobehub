@@ -1,6 +1,5 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { Tooltip } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, toast, Tooltip } from '@lobehub/ui';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
@@ -216,7 +215,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         <div
           style={{
             alignItems: 'center',
-            borderBlockEnd: '1px solid var(--ant-color-border-secondary)',
+            borderBlockEnd: '1px solid var(--lobe-color-border-secondary)',
             display: 'flex',
             flexShrink: 0,
             gap: 8,
@@ -351,7 +350,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
           {connectorDescription && (
             <div
               style={{
-                color: 'var(--ant-color-text-secondary)',
+                color: 'var(--lobe-color-text-secondary)',
                 fontSize: 13,
                 lineHeight: 1.6,
                 marginBottom: 16,

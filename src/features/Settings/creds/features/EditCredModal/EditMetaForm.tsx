@@ -1,10 +1,9 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Input, TextArea } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
+import { Button, createStaticStyles, Input, TextArea } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { useMutation } from '@tanstack/react-query';
-import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 

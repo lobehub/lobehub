@@ -1,9 +1,19 @@
 'use client';
 
-import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal, Input, Text, TextArea, toast, Upload } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { cssVar } from 'antd-style';
+import {
+  Center,
+  confirmModal,
+  cssVar,
+  Flexbox,
+  Icon,
+  Input,
+  Text,
+  TextArea,
+  toast,
+  Tooltip,
+  Upload,
+} from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

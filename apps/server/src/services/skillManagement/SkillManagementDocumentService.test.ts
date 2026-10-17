@@ -26,12 +26,10 @@ import type { SkillAgentDocument } from './types';
 const now = new Date('2026-05-02T00:00:00.000Z');
 const backingDocumentUpdatedAt = new Date('2026-05-03T00:00:00.000Z');
 
-const createSnapshot = vi.fn(
-  async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
-    content,
-    editorData: { markdown: content, root: { children: [{ type: 'paragraph' }], type: 'root' } },
-  }),
-);
+const createSnapshot = vi.fn(async (content: string): Promise<AgentDocumentEditorSnapshot> => ({
+  content,
+  editorData: { markdown: content, root: { children: [{ type: 'paragraph' }], type: 'root' } },
+}));
 
 const expectedEditorData = (content: string) => ({
   markdown: content,
@@ -368,6 +366,27 @@ describe('SkillManagementDocumentService', () => {
     expect(detail?.index.documentId).toBe('document-2');
   });
 
+  it('strips frontmatter pasted into bodyMarkdown instead of failing the save', async () => {
+    const { service } = createService();
+
+    const detail = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown:
+        '---\nname: stale-name\ndescription: Stale description\n---\n\n# Skill\n\n- Step one.',
+      description: 'Canonical description',
+      name: 'release-writer',
+      title: 'Release Writer',
+    });
+
+    expect(detail.content).toBe(
+      skillContent('release-writer', 'Canonical description', '# Skill\n\n- Step one.'),
+    );
+    expect(detail.frontmatter).toEqual({
+      description: 'Canonical description',
+      name: 'release-writer',
+    });
+  });
+
   it('converts a hinted source document into the index while preserving ids', async () => {
     const { agentDocumentModel, service } = createService();
     const source = await agentDocumentModel.create('agent-1', 'draft-skill', '# Draft', {
@@ -518,6 +537,29 @@ describe('SkillManagementDocumentService', () => {
         },
       }),
     );
+  });
+
+  it('strips pasted frontmatter when replacing the skill index', async () => {
+    const { service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Researches APIs',
+      name: 'researcher',
+      title: 'Researcher',
+    });
+
+    const detail = await service.replaceSkillIndex({
+      agentId: 'agent-1',
+      bodyMarkdown: '---\nname: other\ndescription: Stale\n---\n\n# Better\n\nBody.',
+      name: 'researcher',
+    });
+
+    expect(detail?.content).toBe(
+      skillContent('researcher', 'Researches APIs', '# Better\n\nBody.'),
+    );
+    expect(detail?.frontmatter).toEqual({ description: 'Researches APIs', name: 'researcher' });
+    expect(created.index.agentDocumentId).toBe(detail?.index.agentDocumentId);
   });
 
   it('resolves a target skill from either the bundle or index agent document id', async () => {

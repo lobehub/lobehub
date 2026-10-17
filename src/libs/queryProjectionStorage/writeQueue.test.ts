@@ -10,6 +10,7 @@ describe('QueryProjectionWriteQueue', () => {
     const calls: number[] = [];
     const storage: QueryProjectionStorage<number> = {
       get: vi.fn(),
+      getStrict: vi.fn(),
       remove: vi.fn(),
       set: vi.fn(async (_key, projection) => {
         calls.push(projection.data);

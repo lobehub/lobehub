@@ -206,7 +206,7 @@ describe('persisted topic list across a reload', () => {
     await act(async () => {
       await session1.result.current.revalidate();
     });
-    await waitFor(() => expect(persistSpy).toHaveBeenCalled());
+    // The pinned value equals the stored row, so the engine may skip the write.
     await Promise.all(persistSpy.mock.results.map(({ value }) => value));
     expect(await persistedTopicStatus(scope)).toBe('active');
     session1.unmount();

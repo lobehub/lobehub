@@ -3,14 +3,13 @@ import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
-import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import type { ConversationContext } from '@/features/Conversation';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface PageAgentProviderProps {
   children: ReactNode;
@@ -94,26 +93,15 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
       [selectedAgentId, activeTopicId, pageId, syncActiveAgent],
     );
 
-    // Get messages from ChatStore based on context
-    const chatKey = useMemo(() => messageMapKey(context), [context]);
-    const replaceMessages = useChatStore((s) => s.replaceMessages);
-    const messages = useChatStore((s) => (chatKey ? s.dbMessagesMap[chatKey] : undefined));
-
     // Get operation state for reactive updates
     const operationState = useOperationState(context);
 
-    if (!pageAgentId) return <ConversationSegmentSkeleton />;
+    // This provider wraps the whole editor, so its wait has to keep the editor's
+    // shape; a conversation skeleton here replaces the page with a chat layout.
+    if (!pageAgentId) return <SurfaceSkeleton variant={'editor'} />;
 
     return (
-      <ConversationProvider
-        context={context}
-        hasInitMessages={!!messages}
-        messages={messages}
-        operationState={operationState}
-        onMessagesChange={(msgs, ctx, meta) => {
-          replaceMessages(msgs, { context: ctx, source: meta?.source });
-        }}
-      >
+      <ConversationProvider context={context} operationState={operationState}>
         {children}
       </ConversationProvider>
     );

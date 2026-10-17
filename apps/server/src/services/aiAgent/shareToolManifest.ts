@@ -19,7 +19,7 @@ const hasExactApiSet = (
  * Transitional bridge between Agent Share policy filtering and builtin-owned
  * restricted manifests.
  *
- * Keep this adapter separate from `shareGate.ts`: a future shared tool
+ * Keep this adapter separate from `shareGate/`: a future shared tool
  * finalization pipeline can move the same optional resolver without retaining
  * Agent Share-specific registry lookup or Documents/Memory knowledge in the
  * gate. The exact-set check prevents a tool-owned projection from widening the

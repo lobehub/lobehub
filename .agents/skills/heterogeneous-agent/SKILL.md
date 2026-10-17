@@ -1,6 +1,6 @@
 ---
 name: heterogeneous-agent
-description: 'Use for Claude Code/Codex external-agent adapters, IPC, event mapping, sessions, persistence and tool-call chains.'
+description: 'Use for external-agent launchers and execution identity, Claude Code/Codex adapters, IPC, event mapping, sessions, persistence and tool-call chains.'
 ---
 
 # Heterogeneous Agent Development
@@ -11,6 +11,7 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 
 - Adding or changing a driver under `apps/desktop/src/main/modules/heterogeneousAgent/drivers/`
 - Editing an adapter under `packages/heterogeneous-agents/src/adapters/`
+- Changing CLI/Desktop dispatch launchers, including OpenClaw/Hermes, or debugging task-comment authorship
 - Debugging `heteroAgentRawLine` transport, `window.__HETERO_AGENT_TRACE`, or `executeHeterogeneousAgent`
 - Fixing Claude Code stream-json bugs such as duplicate partial/full chunks, broken `message.id` boundaries, missing `tool_result`, TodoWrite state drift, or subagent thread routing
 - Fixing Codex JSONL bugs such as mixed multi-tool messages, broken turn boundaries, or missing tool-result mapping
@@ -56,6 +57,25 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 - `tool_result` must resolve an existing `toolMsgIdByCallId`.
 - Subagent chunks must stay in thread scope and must not be forwarded into the main assistant stream.
 - Never clear the global `toolMsgIdByCallId` map at main step boundaries.
+
+## Dispatched Run Identity
+
+A connector or desktop process can itself run inside another Agent's conversation. Its inherited environment identifies the launcher, not the dispatched Agent.
+
+- Build child identity from the current dispatch. Clear inherited `LOBEHUB_AGENT_ID`, `LOBEHUB_ASSISTANT_MESSAGE_ID`, `LOBEHUB_TASK_ID`, and `LOBEHUB_WORKSPACE_ID`; replace `LOBEHUB_TOPIC_ID` and `LOBEHUB_OPERATION_ID` with the dispatched values. Inject optional context only when supplied by the current dispatch; absent values must not retain ancestor identity.
+- Keep authorship independent of authentication. Clearing `LOBEHUB_JWT` or falling back to user credentials must not change the executing Agent. Never infer the author from the topic owner or task assignee.
+- In `apps/cli/src/commands/task/lifecycle.ts`, `lh task comment` must refuse to post when topic or operation context exists but the Agent ID is missing or blank. Ordinary terminal comments without execution identity remain user-authored. Misattributed Agent progress can otherwise become human `<user_feedback>` in later task runs.
+
+Check all four launch surfaces when changing this contract or adding a launcher:
+
+| Surface                 | Entry point                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| CLI Agent dispatch      | `apps/cli/src/device/agentRun.ts` — `spawnHeteroAgentRun` (Agent ID forwarded by `apps/cli/src/commands/connect.ts`) |
+| CLI OpenClaw/Hermes     | `apps/cli/src/tools/heteroTask.ts` — `runHeteroTask`                                                                 |
+| Desktop Agent dispatch  | `apps/desktop/src/main/controllers/HeterogeneousAgentImpl.ts` — `spawnLhHeteroExec`                                  |
+| Desktop OpenClaw/Hermes | `apps/desktop/src/main/controllers/GatewayConnectionCtr.ts` — `runHeteroTask`                                        |
+
+Regression coverage must include a clean environment, conflicting ancestor identity, and missing current Agent/optional context. Check both OpenClaw and Hermes on CLI and Desktop, plus task comments after JWT fallback. Mocked spawn assertions verify environment construction, not end-to-end propagation through an external runtime.
 
 ## Common Bug Patterns
 

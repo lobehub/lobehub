@@ -18,6 +18,10 @@ const QUESTION_TAILS = [
   /\.?\s*Fix it, then retry or retire this task node\?$/,
   /\.?\s*Retry Goal acceptance or fail this Goal\?$/,
   /\.?\s*Retry Goal acceptance, abandon it, or fail this Goal\?$/,
+  // The batch pattern-break gate (see `GoalService.openPatternBreakGate`).
+  /\.?\s*How should this batch proceed\?$/,
+  // The batch release-approval gate (see `GoalService.openReleaseReview`).
+  /\.?\s*Release the next wave\?$/,
 ];
 
 export const coordinatorGateReason = (question?: string | null): string | undefined => {
@@ -110,6 +114,30 @@ const REASON_PATTERNS: Array<{
     pattern:
       /^Automatic recovery could not (start the next attempt|restart an abandoned operation)$/,
   },
+  // A passed batch gate held for approval (see `GoalService.routeRolloutRelease`).
+  {
+    key: 'goalProcess.gate.reason.batchReleaseProbes',
+    params: ['revision', 'wave', 'count'],
+    pattern:
+      /^Experiments of v(\d+) finished; start batch execution with wave (\d+) \((\d+) units?\)$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchReleaseRevised',
+    params: ['version', 'wave', 'count'],
+    pattern:
+      /^The main Agent revised the plan to v(\d+) from your correction; approve releasing wave (\d+) \((\d+) units?\)$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchReleaseEscalated',
+    params: ['wave', 'count'],
+    pattern: /^The main Agent asked you to approve releasing wave (\d+) \((\d+) units?\)$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchReleaseNoAgent',
+    params: ['wave', 'count'],
+    pattern:
+      /^Batch gate passed and no main Agent could review the release; approve releasing wave (\d+) \((\d+) units?\)$/,
+  },
   {
     // A run that failed outright leaves its runtime error type as the reason
     // (e.g. `InvalidProviderAPIKey`). The code stays visible for support; the
@@ -120,10 +148,47 @@ const REASON_PATTERNS: Array<{
   },
 ];
 
-export const coordinatorReasonCopy = (reason?: string | null): LocalizedCopyRef | undefined => {
-  if (!reason) return undefined;
-  const trimmed = reason.trim();
-  for (const { key, param, params, pattern } of REASON_PATTERNS) {
+/**
+ * The batch gate's blockers — the finite sentences `evaluateRolloutGate`
+ * withholds a wave for. A pattern break joins every blocker it hit with `; `,
+ * so each is mapped on its own and the parts rejoin.
+ */
+const BATCH_BLOCKER_PATTERNS: ReasonPattern[] = [
+  {
+    key: 'goalProcess.gate.reason.batchUnsettled',
+    params: ['count'],
+    pattern: /^(\d+) unit\(s\) have not settled$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchBroken',
+    params: ['count'],
+    pattern: /^(\d+) unit\(s\) did not succeed$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchOpenDecision',
+    pattern: /^a human decision is still open in this batch$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchTemplateIncomplete',
+    pattern: /^the batch template is incomplete$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.batchUntestedAxes',
+    params: ['axes'],
+    pattern: /^untested axes: (.+)$/,
+  },
+];
+
+interface ReasonPattern {
+  key: string;
+  param?: string;
+  /** Names for several capture groups, in order; `param` names just the first. */
+  params?: string[];
+  pattern: RegExp;
+}
+
+const matchReason = (patterns: ReasonPattern[], trimmed: string): LocalizedCopyRef | undefined => {
+  for (const { key, param, params, pattern } of patterns) {
     const match = pattern.exec(trimmed);
     if (!match) continue;
     const names = params ?? (param ? [param] : []);
@@ -133,4 +198,29 @@ export const coordinatorReasonCopy = (reason?: string | null): LocalizedCopyRef 
     return { key, ...(names.length > 0 ? { params: values } : {}) };
   }
   return undefined;
+};
+
+export const coordinatorReasonCopy = (reason?: string | null): LocalizedCopyRef | undefined => {
+  if (!reason) return undefined;
+  const trimmed = reason.trim();
+  return matchReason(REASON_PATTERNS, trimmed) ?? matchReason(BATCH_BLOCKER_PATTERNS, trimmed);
+};
+
+/**
+ * Every coordinator reason in a stored gate question, in order. A batch gate
+ * lists each blocker it hit at once, joined by `; ` (see `evaluateRolloutGate`),
+ * so they are localized one by one and the parts rejoin — the reader sees no
+ * English left in the sentence. All-or-nothing: one unrecognized sentence means
+ * the question is not (fully) coordinator-authored, or an error message happened
+ * to contain `; `, so the stored copy is kept rather than half-translated.
+ */
+export const coordinatorReasonCopies = (reason?: string | null): LocalizedCopyRef[] | undefined => {
+  if (!reason) return undefined;
+  const trimmed = reason.trim();
+  const single = coordinatorReasonCopy(trimmed);
+  if (single) return [single];
+  const segments = trimmed.split(/;\s+/).filter(Boolean);
+  if (segments.length < 2) return undefined;
+  const refs = segments.map((segment) => coordinatorReasonCopy(segment));
+  return refs.every((ref): ref is LocalizedCopyRef => !!ref) ? refs : undefined;
 };

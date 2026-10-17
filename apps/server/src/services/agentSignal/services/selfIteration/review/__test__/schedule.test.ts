@@ -232,8 +232,65 @@ describe('nightlyReviewScheduleService', () => {
       expect(deps.listEligibleUsers).toHaveBeenCalledWith({
         activeSince: new Date('2026-05-02T12:05:00.000Z'),
         limit: 50,
+        // The SQL prefilter is the 02:00-04:00 window widened by one hour on each side.
+        localHourWindow: { at: requestedAt, endHourExclusive: 5, startHour: 1 },
         requestedAt,
       });
+    });
+
+    /**
+     * ROOT CAUSE:
+     *
+     * Pagination fanned every recently active user out to its own QStash execute workflow, and
+     * ~22 of 24 of those runs exited after discovering the user was outside the local 02:00-04:00
+     * window. The exact window now runs in the paginate step (and the Labs → Self-evolving switch
+     * in the SQL scan), so ineligible users never cost a message or a workflow run.
+     *
+     * At 2026-05-03T18:30Z: Shanghai is 02:30 (in), Tokyo is 03:30 (in), Bangkok is 01:30 (passes
+     * the widened SQL prefilter, out of the exact window), New York is 14:30 (out).
+     */
+    it('drops users outside the exact night window', async () => {
+      const deps = createDeps();
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      deps.listEligibleUsers.mockResolvedValue([
+        { createdAt, id: 'shanghai', timezone: 'Asia/Shanghai' },
+        { createdAt, id: 'tokyo', timezone: 'Asia/Tokyo' },
+        { createdAt, id: 'bangkok', timezone: 'Asia/Bangkok' },
+        { createdAt, id: 'new-york', timezone: 'America/New_York' },
+      ]);
+      const service = createSelfReviewScheduleService(deps);
+
+      const page = await service.listEligibleUsersPage({
+        limit: 50,
+        requestedAt: new Date('2026-05-03T18:30:00.000Z'),
+      });
+
+      expect(page.users.map((user) => user.id)).toEqual(['shanghai', 'tokyo']);
+      expect(page.nextCursor).toBeUndefined();
+    });
+
+    /**
+     * Filtering must never truncate the traversal: the cursor follows the scanned rows, so a full
+     * page whose users were all filtered out still continues to the next page.
+     *
+     * @example
+     * expect(page).toEqual({ nextCursor: { createdAt, id: 'user-2' }, users: [] });
+     */
+    it('keeps the next cursor when every scanned user is filtered out', async () => {
+      const deps = createDeps();
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      deps.listEligibleUsers.mockResolvedValue([
+        { createdAt, id: 'user-1', timezone: 'America/New_York' },
+        { createdAt, id: 'user-2', timezone: 'Europe/London' },
+      ]);
+      const service = createSelfReviewScheduleService(deps);
+
+      const page = await service.listEligibleUsersPage({
+        limit: 2,
+        requestedAt: new Date('2026-05-03T18:30:00.000Z'),
+      });
+
+      expect(page).toEqual({ nextCursor: { createdAt, id: 'user-2' }, users: [] });
     });
 
     /**

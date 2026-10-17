@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Не може да се генерира този отговор",
   "unknownError.title": "Опа, заявката си почива",
   "unknownError.traceIdLabel": "Идентификатор на следа:",
+  "unknownError.troubleshoot": "Отстраняване на проблеми",
   "unlock.addProxyUrl": "Добавете OpenAI прокси URL (по избор)",
   "unlock.apiKey.description": "Въведете вашия {{name}} API ключ, за да започнете сесията",
   "unlock.apiKey.imageGenerationDescription": "Въведете вашия {{name}} API ключ, за да започнете генериране",

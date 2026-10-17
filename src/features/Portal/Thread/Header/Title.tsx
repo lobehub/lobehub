@@ -1,4 +1,4 @@
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 
 import { useChatStore } from '@/store/chat';
 

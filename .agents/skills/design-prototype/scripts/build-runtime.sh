@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Build the design-prototype runtime (real design system, bundled once) and
-# vendor babel-standalone next to it, so prototypes are single HTML files that
-# run offline over file://.
+# Build the design-prototype runtime (real design system, bundled once): a JS
+# IIFE plus the @lobehub/ui stylesheets (theme.css + global.css + style.css)
+# that esbuild emits as a sibling .css. Vendors babel-standalone next to them,
+# so prototypes are single HTML files that run offline over file://.
 #
 # Usage:
 #   bash .agents/skills/design-prototype/scripts/build-runtime.sh [out-dir]
@@ -20,7 +21,7 @@ cd "$REPO_ROOT"
 "$ESBUILD" "$SKILL_DIR/assets/entry.mjs" \
   --bundle --format=iife --global-name=__PROTO_DEPS_NS__ \
   --platform=browser --define:process.env.NODE_ENV='"production"' --minify \
-  --loader:.css=empty --loader:.woff=dataurl --loader:.woff2=dataurl \
+  --loader:.woff=dataurl --loader:.woff2=dataurl \
   --loader:.svg=dataurl --loader:.png=dataurl \
   --outfile="$OUT_DIR/lobe-prototype-runtime.js"
 
@@ -30,5 +31,5 @@ if [ ! -s "$BABEL" ]; then
   curl -fsSL "https://unpkg.com/@babel/standalone@7.26.4/babel.min.js" -o "$BABEL"
 fi
 
-ls -lh "$OUT_DIR/lobe-prototype-runtime.js" "$BABEL" | awk '{print $5, $NF}'
+ls -lh "$OUT_DIR/lobe-prototype-runtime.js" "$OUT_DIR/lobe-prototype-runtime.css" "$BABEL" | awk '{print $5, $NF}'
 echo "done → $OUT_DIR"

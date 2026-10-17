@@ -1,3 +1,9 @@
+import {
+  formatSelfReviewBriefSummary,
+  formatSelfReviewBriefTitle,
+  type SelfReviewBriefDetails,
+} from '@lobechat/agent-signal/brief';
+
 import home from '@/locales/default/home';
 
 /**
@@ -42,8 +48,14 @@ export interface SelfReviewBriefTextInput {
   actionCounts: SelfReviewBriefTextActionCounts;
   /** User-visible action summaries grouped by outcome status. */
   actionSummaries: SelfReviewBriefTextActionSummaries;
+  /**
+   * Proposal actions or ideas read back from the brief metadata. When present,
+   * the title names the main change and the summary describes it instead of
+   * the generic count copy.
+   */
+  details?: SelfReviewBriefDetails;
   /** Coarse outcome selected by the projection service. */
-  outcome: 'applied' | 'error' | 'ideas' | 'proposal';
+  outcome: 'applied' | 'ideas' | 'proposal';
   /** Locale-aware translator for the `home` namespace. Defaults to English resources. */
   t?: SelfReviewBriefTextTranslator;
 }
@@ -59,7 +71,7 @@ export interface SelfReviewBriefText {
   /** User-visible Daily Brief title. */
   title: string;
   /** Daily Brief display type. */
-  type: 'decision' | 'error' | 'insight';
+  type: 'decision' | 'insight';
 }
 
 const defaultTranslate: SelfReviewBriefTextTranslator = (key, options = {}) => {
@@ -106,6 +118,24 @@ const withDetails = (summary: string, heading: string, details: string[] = []) =
 export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): SelfReviewBriefText => {
   const t = input.t ?? defaultTranslate;
 
+  const details = input.details;
+
+  if (input.outcome === 'proposal' && details?.kind === 'proposal') {
+    return {
+      priority: 'normal',
+      summary:
+        formatSelfReviewBriefSummary(details, t) ||
+        actionCountKey({
+          count: input.actionCounts.proposed,
+          pluralKey: 'brief.agentSignal.selfReview.proposal.summary_plural',
+          singularKey: 'brief.agentSignal.selfReview.proposal.summary',
+          t,
+        }),
+      title: formatSelfReviewBriefTitle(details, t),
+      type: 'decision',
+    };
+  }
+
   if (input.outcome === 'proposal') {
     const summary = actionCountKey({
       count: input.actionCounts.proposed,
@@ -126,18 +156,13 @@ export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): Self
     };
   }
 
-  if (input.outcome === 'error') {
-    const summary = t('brief.agentSignal.selfReview.error.summary');
-
+  if (input.outcome === 'ideas' && details?.kind === 'ideas') {
     return {
-      priority: 'normal',
-      summary: withDetails(
-        summary,
-        t('brief.agentSignal.selfReview.error.heading'),
-        input.actionSummaries.failed,
-      ),
-      title: t('brief.agentSignal.selfReview.error.title'),
-      type: 'error',
+      priority: 'info',
+      summary:
+        formatSelfReviewBriefSummary(details, t) || t('brief.agentSignal.selfReview.ideas.summary'),
+      title: formatSelfReviewBriefTitle(details, t),
+      type: 'insight',
     };
   }
 

@@ -6,6 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { ExpertiseRuleRepository } from '../../repositories/expertiseRules';
 import {
   agents,
+  documents,
   expertiseBindings,
   expertiseDomains,
   expertiseHits,
@@ -886,6 +887,163 @@ describe('ExpertiseModel', () => {
       .from(expertiseLessons)
       .where(inArray(expertiseLessons.id, [first, agentLesson]));
     expect(rows.every((row) => row.status === 'active')).toBe(true);
+  });
+
+  it('numbers a material run after a concurrent writer holding the same domain', async () => {
+    await seedRuleGroup();
+    let release!: () => void;
+    let reportLocked!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const locked = new Promise<void>((resolve) => {
+      reportLocked = resolve;
+    });
+    // Another writer (ingestion, a second distillation) takes the domain lock and numbers a run.
+    const other = serverDB.transaction(async (tx) => {
+      await tx
+        .select({ id: expertiseDomains.id })
+        .from(expertiseDomains)
+        .where(eq(expertiseDomains.id, 'rules-domain'))
+        .for('update');
+      reportLocked();
+      await released;
+      await new ExpertiseModel(tx as LobeChatDatabase, userId).insertMaterialRun({
+        domainId: 'rules-domain',
+        reflectionKey: 'material:text:other',
+        subjectId: 'other',
+        subjectType: 'standalone',
+      });
+    });
+    await locked;
+
+    const distilling = new ExpertiseRuleRepository(serverDB, userId).commitDistilled(
+      { subjectId: null, subjectType: 'standalone', title: 'notes', type: 'text' },
+      [
+        {
+          domainId: 'rules-domain',
+          kind: 'create',
+          quote: 'always rebase',
+          rule: { title: 'Rebase before delivering' },
+        },
+      ],
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    release();
+
+    const settled = await Promise.allSettled([other, distilling]);
+    expect(settled.map(({ status }) => status)).toEqual(['fulfilled', 'fulfilled']);
+    const runs = await serverDB
+      .select({ runIndex: expertiseRuns.runIndex })
+      .from(expertiseRuns)
+      .where(eq(expertiseRuns.domainId, 'rules-domain'));
+    expect(new Set(runs.map(({ runIndex }) => runIndex)).size).toBe(runs.length);
+  });
+
+  it("refuses to number a run or file a rule into another user's domain", async () => {
+    await seedRuleGroup();
+
+    const results = await new ExpertiseRuleRepository(serverDB, userId).commitDistilled(
+      { subjectId: null, subjectType: 'standalone', title: 'notes', type: 'text' },
+      [
+        {
+          domainId: 'rules-foreign-domain',
+          kind: 'create',
+          quote: 'always rebase',
+          rule: { title: 'Rebase before delivering' },
+        },
+      ],
+    );
+
+    expect(results).toEqual([]);
+    const runs = await serverDB
+      .select({ id: expertiseRuns.id })
+      .from(expertiseRuns)
+      .where(eq(expertiseRuns.domainId, 'rules-foreign-domain'));
+    expect(runs).toEqual([]);
+    expect(
+      await new ExpertiseModel(serverDB, userId).insertMaterialRun({
+        domainId: 'rules-foreign-domain',
+        reflectionKey: 'material:text:x',
+        subjectId: 'x',
+        subjectType: 'standalone',
+      }),
+    ).toBeNull();
+  });
+
+  it('files rules distilled from a document and records a restatement on the rule it repeats', async () => {
+    const { first } = await seedRuleGroup();
+    await serverDB.insert(documents).values({
+      content: '交付前必须 rebase 到 canary。',
+      fileType: 'markdown',
+      id: 'distill-doc',
+      source: 'document',
+      sourceType: 'api',
+      title: '工程规范',
+      totalCharCount: 20,
+      totalLineCount: 1,
+      userId,
+    });
+    const repository = new ExpertiseRuleRepository(serverDB, userId);
+
+    const results = await repository.commitDistilled(
+      { subjectId: 'distill-doc', subjectType: 'document', title: '工程规范', type: 'document' },
+      [
+        {
+          domainId: 'rules-domain',
+          kind: 'create',
+          quote: '交付前必须 rebase 到 canary。',
+          rule: { enforcement: 'block', title: '交付前先 rebase 到 canary' },
+        },
+        { intoId: first, kind: 'merge', quote: '证据只拍成功路径' },
+      ],
+    );
+
+    expect(results.map(({ kind }) => kind)).toEqual(['create', 'merge']);
+    const created = results[0].id;
+    const model = new ExpertiseModel(serverDB, userId);
+    const rules = (await model.listRules()).flatMap((group) => group.rules);
+    // Read from a material: counted apart from rejections and conversations, and not "yours".
+    expect(rules.find(({ id }) => id === created)).toMatchObject({
+      authored: false,
+      conversationHitCount: 0,
+      enforcement: 'block',
+      materialHitCount: 1,
+      rejectionHitCount: 0,
+    });
+    expect(rules.find(({ id }) => id === first)).toMatchObject({ materialHitCount: 1 });
+
+    const [source] = await model.listLessonSources(created);
+    expect(source).toMatchObject({
+      documentId: 'distill-doc',
+      example: '交付前必须 rebase 到 canary。',
+      fromAcceptance: false,
+      materialType: 'document',
+      where: '工程规范',
+    });
+  });
+
+  it('keeps quotes read from a material out of how reliably a rule is practised', async () => {
+    const { first } = await seedRuleGroup();
+
+    const [created] = await new ExpertiseRuleRepository(serverDB, userId).commitDistilled(
+      { subjectId: null, subjectType: 'standalone', title: 'notes', type: 'text' },
+      [
+        {
+          domainId: 'rules-domain',
+          kind: 'create',
+          quote: 'always rebase',
+          rule: { title: 'Rebase before delivering' },
+        },
+        { intoId: first, kind: 'merge', quote: 'shoot the success path' },
+      ],
+    );
+
+    const model = new ExpertiseModel(serverDB, userId);
+    expect(await model.reliabilitySeries(['rules-domain'])).toEqual([]);
+    const lessons = await model.listLessonsWithRecent(['rules-domain']);
+    expect(lessons.find(({ id }) => id === created.id)?.recent).toEqual([]);
+    expect(lessons.find(({ id }) => id === first)?.recent).toEqual([]);
   });
 
   it('moves an unencumbered rule in place with a fresh code', async () => {

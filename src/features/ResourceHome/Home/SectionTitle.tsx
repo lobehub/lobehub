@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Spin } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,18 +30,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface SectionTitleProps {
+  /** The cards are the local copy and a refresh is in flight. */
+  loading?: boolean;
   title: string;
   /** Target path of the "view all" affordance; omitted when there is no fuller view. */
   viewAllUrl?: string;
 }
 
-const SectionTitle = memo<SectionTitleProps>(({ title, viewAllUrl }) => {
+const SectionTitle = memo<SectionTitleProps>(({ loading, title, viewAllUrl }) => {
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
 
   return (
     <Flexbox horizontal align={'center'} justify={'space-between'}>
-      <h2 className={styles.title}>{title}</h2>
+      <Flexbox horizontal align={'center'} gap={8}>
+        <h2 className={styles.title}>{title}</h2>
+        {loading && <Spin size="small" variant="network" />}
+      </Flexbox>
       {viewAllUrl && (
         <button className={styles.viewAll} type={'button'} onClick={() => navigate(viewAllUrl)}>
           {t('home.viewAll')}

@@ -36,15 +36,8 @@ interface ChatListProps {
 }
 
 const ChatList = memo<ChatListProps>(({ context, ids, messages }) => {
-  const hasInitMessages = messages.length > 0;
-
   return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={hasInitMessages}
-      messages={messages}
-      skipFetch={true}
-    >
+    <ConversationProvider context={context} messages={messages}>
       <ChatListContent ids={ids} />
     </ConversationProvider>
   );

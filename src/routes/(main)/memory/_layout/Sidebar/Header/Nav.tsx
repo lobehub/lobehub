@@ -16,11 +16,10 @@ import { Link } from 'react-router';
 
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
@@ -51,7 +50,7 @@ const Nav = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('memory');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const enableSelfLearning = useUserStore(labPreferSelectors.enableSelfLearning);
+  const { enabled: enableSelfLearning } = useSelfLearningSurface();
 
   /**
    * Four groups, separated by space rather than rules: what the whole section is (home), what it
@@ -79,8 +78,8 @@ const Nav = memo(() => {
           url: '/memory',
         },
       ],
-      // Self-evolving is still an alpha lab: the group disappears with the flag rather than
-      // sitting there disabled, so the sidebar of everyone else reads exactly as before.
+      // Shown to the self-iteration rollout and to Labs opt-ins; for everyone else the group
+      // disappears rather than sitting there disabled, so their sidebar reads exactly as before.
       ...(enableSelfLearning
         ? [
             [

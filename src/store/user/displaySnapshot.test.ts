@@ -52,6 +52,40 @@ describe('user display snapshot', () => {
     expect(readUserDisplaySnapshot('user-b')).toEqual({ avatar: 'avatar-b' });
   });
 
+  it('keeps the profile and allowlisted settings, never secrets or entitlement', () => {
+    writeUserDisplaySnapshot('user-a', {
+      email: 'a@example.com',
+      fullName: 'Ada',
+      interests: ['ai', 3 as any],
+      isFreePlan: true,
+      onboarding: { finishedAt: 'x' },
+      settings: {
+        general: { fontSize: 15 },
+        keyVaults: { openai: { apiKey: 'sk-secret' } },
+        languageModel: { openai: { enabled: true } },
+        market: { accessToken: 'market-token' },
+        unknownSection: { token: 'x' },
+      },
+      subscriptionPlan: 'pro',
+      username: 'ada',
+    } as any);
+
+    expect(readUserDisplaySnapshot('user-a')).toEqual({
+      email: 'a@example.com',
+      fullName: 'Ada',
+      interests: ['ai'],
+      settings: {
+        general: { fontSize: 15 },
+        languageModel: { openai: { enabled: true } },
+      },
+      username: 'ada',
+    });
+    const raw = JSON.stringify({ ...localStorage });
+    expect(raw).not.toContain('sk-secret');
+    expect(raw).not.toContain('market-token');
+    expect(raw).not.toContain('subscriptionPlan');
+  });
+
   it('ignores malformed persisted data', () => {
     vi.spyOn(localStorage, 'getItem').mockReturnValue('{malformed');
 

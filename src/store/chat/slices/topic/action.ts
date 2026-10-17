@@ -9,12 +9,13 @@ import {
 import {
   type ChatTopicMetadata,
   type HeterogeneousReasoningEffort,
+  type HeterogeneousSpeedMode,
   type MessageMapScope,
   RequestTrigger,
   type UIChatMessage,
   type UpdateTopicMetadataInput,
 } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import type { AiModelReasoningConfig } from 'model-bank';
@@ -316,8 +317,28 @@ export class ChatTopicActionImpl {
     this.#set({ allTopicsDrawerOpen: true }, false, n('openAllTopicsDrawer'));
   };
 
+  /**
+   * Stage (or clear) the project working directory the next topic creation
+   * binds to.
+   *
+   * `+` on a project group opens a blank conversation *without* creating a row;
+   * this records which directory that blank conversation belongs to, and
+   * `internal_createTopic` applies it when the first message creates the topic.
+   * Without it the deferred row would be born with only a path — outside the
+   * project list, the sidebar's project grouping and its execution routing.
+   */
+  setPendingNewTopicDirectory = (value?: {
+    agentId: string;
+    projectWorkingDirectoryId: string;
+  }): void => {
+    this.#set({ pendingNewTopicDirectory: value }, false, n('setPendingNewTopicDirectory'));
+  };
+
   openNewTopicOrSaveTopic = async (): Promise<void> => {
     const { switchTopic, saveToTopic, refreshMessages, activeTopicId } = this.#get();
+    // An explicit new topic supersedes whatever a group "+" staged — the user
+    // asked for a plain conversation, not one inside that project directory.
+    this.#get().setPendingNewTopicDirectory();
     const hasTopic = !!activeTopicId;
 
     if (hasTopic) switchTopic(null);
@@ -403,6 +424,39 @@ export class ChatTopicActionImpl {
     await switchTopic(newTopicId);
   };
 
+  /**
+   * Fork the active topic from one of its messages: copy the conversation
+   * prefix (first message → `messageId`) into a separate new topic, then switch
+   * to it. The source topic keeps its full history untouched.
+   */
+  forkTopic = async (messageId: string): Promise<string | undefined> => {
+    const { activeTopicId, refreshTopic, switchTopic } = this.#get();
+    if (!activeTopicId) return;
+
+    const topic = topicSelectors.getTopicById(activeTopicId)(this.#get());
+
+    const loadingToast = toast.loading(t('forkLoading', { ns: 'topic' }));
+
+    try {
+      const newTopicId = await topicService.forkTopic({
+        id: activeTopicId,
+        messageId,
+        newTitle: t('forkTitle', { ns: 'topic', title: topic?.title ?? '' }),
+      });
+
+      await refreshTopic();
+      await switchTopic(newTopicId);
+      toast.success(t('forkSuccess', { ns: 'topic' }));
+
+      return newTopicId;
+    } catch (error) {
+      console.error('[forkTopic] Failed to fork topic:', error);
+      toast.error(t('forkFailed', { ns: 'topic' }));
+    } finally {
+      loadingToast.close();
+    }
+  };
+
   importTopic = async (data: string): Promise<string | undefined> => {
     const { activeAgentId, activeGroupId, refreshTopic, switchTopic } = this.#get();
 
@@ -434,7 +488,9 @@ export class ChatTopicActionImpl {
 
   summaryTopicTitle = async (topicId: string, messages: UIChatMessage[]): Promise<void> => {
     const { internal_updateTopicTitleInSummary } = this.#get();
-    const topic = topicSelectors.getTopicById(topicId)(this.#get());
+    const topic =
+      topicSelectors.getTopicById(topicId)(this.#get()) ??
+      (await topicService.getTopicDetail(topicId));
     if (!topic) return;
 
     const messagesForTitle = normalizeTopicTitleMessages(messages);
@@ -621,12 +677,12 @@ export class ChatTopicActionImpl {
    * Model + pin land in one server write (`topic.updateTopicModel`) so a run or
    * a concurrent switch can never see the new model with the old model's pin.
    * Optimistically mirrors the server merge: `reasoningConfig` is replaced,
-   * `heteroEffort` only when given.
+   * `heteroEffort` and `heteroSpeed` only when given.
    */
   #writeTopicModelPin = async (
     id: string,
     value: {
-      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>;
       model: string;
       provider: string;
     },
@@ -718,10 +774,10 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Apply a heterogeneous (Claude Code / Codex) model + effort selection to one
-   * topic. When the selector pairs a model switch with an effort reset (the new
-   * model does not support the current effort) both land in the same write, so
-   * the topic never carries a model with an effort it cannot run.
+   * Apply a heterogeneous (Claude Code / Codex) model, effort and speed
+   * selection to one topic. When the selector pairs a model switch with an
+   * effort or speed reset (the new model does not support it) everything lands
+   * in the same write, so the topic never carries a model with a pin it cannot run.
    */
   updateTopicHeteroPin = async (
     id: string,
@@ -729,19 +785,30 @@ export class ChatTopicActionImpl {
       effort,
       model,
       provider,
-    }: { effort?: HeterogeneousReasoningEffort; model?: string; provider: string },
+      speed,
+    }: {
+      effort?: HeterogeneousReasoningEffort;
+      model?: string;
+      provider: string;
+      speed?: HeterogeneousSpeedMode;
+    },
   ): Promise<void> => {
-    if (model === undefined) {
-      if (effort !== undefined) await this.#get().updateTopicHeteroEffort(id, effort);
-      return;
-    }
-    /** Model resets and later effort selections must share one persistence order. */
+    const metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed'> = {
+      ...(effort === undefined ? {} : { heteroEffort: effort }),
+      ...(speed === undefined ? {} : { heteroSpeed: speed }),
+    };
+    const hasMetadata = Object.keys(metadata).length > 0;
+    if (model === undefined && !hasMetadata) return;
+
+    /** Model resets and later effort/speed selections must share one persistence order. */
     await this.#enqueueTopicEffortWrite(id, () =>
-      this.#writeTopicModelPin(id, {
-        metadata: effort === undefined ? undefined : { heteroEffort: effort },
-        model,
-        provider,
-      }),
+      model === undefined
+        ? this.#writeTopicEffortPin(id, metadata)
+        : this.#writeTopicModelPin(id, {
+            metadata: hasMetadata ? metadata : undefined,
+            model,
+            provider,
+          }),
     );
   };
 
@@ -784,7 +851,7 @@ export class ChatTopicActionImpl {
    */
   #writeTopicEffortPin = async (
     id: string,
-    metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>,
+    metadata: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>,
   ): Promise<void> => {
     const { activeAgentId, activeGroupId } = this.#get();
     const containerKey =
@@ -1159,6 +1226,19 @@ export class ChatTopicActionImpl {
         }),
       );
 
+      // Mirror sweep: a run the SERVER has already retired can still leave this
+      // tab holding a `running` local op — its terminal frame never landed (a
+      // lost socket, a hibernated DO buffer, or an intervention continuation
+      // dispatched on a new operation). Such a topic is idle on the server, so it
+      // never appears in the `statuses: ['running']` query above; derive the
+      // candidates from the local op map instead. Fire-and-forget: the sidebar
+      // should not wait on a per-topic server read.
+      void this.#get()
+        .settleAllUnbackedTopicRuns()
+        .catch((err) =>
+          console.error('[cleanupStaleRunningTopics] unbacked local run sweep failed:', err),
+        );
+
       const cleanedCount = cleanedResults.filter(Boolean).length;
 
       if (cleanedCount > 0) {
@@ -1278,8 +1358,9 @@ export class ChatTopicActionImpl {
     );
   };
 
-  autoRenameTopicTitle = async (id: string): Promise<void> => {
-    const { activeAgentId: agentId, summaryTopicTitle } = this.#get();
+  autoRenameTopicTitle = async (id: string, topicAgentId?: string): Promise<void> => {
+    const { activeAgentId, summaryTopicTitle } = this.#get();
+    const agentId = topicAgentId ?? activeAgentId;
 
     const messages = await messageService.getMessages({ agentId, topicId: id });
 
@@ -1554,6 +1635,12 @@ export class ChatTopicActionImpl {
       return;
 
     const epoch = ++this.#switchTopicEpoch;
+    // A staged project directory only describes the blank conversation it was
+    // opened from; moving to a real topic ends that window. Cleared here (after
+    // the guards) so a switch the guards dropped does not discard it.
+    if (id) {
+      this.#set({ pendingNewTopicDirectory: undefined }, false, n('clearPendingNewTopicDirectory'));
+    }
 
     this.#set(
       { activeTopicId: id || (null as any), activeThreadId: undefined },
@@ -1707,6 +1794,11 @@ export class ChatTopicActionImpl {
     ]);
   };
 
+  /** Revalidate one topic's by-id detail, e.g. after a dispatch wrote a new receipt. */
+  refreshTopicDetail = async (topicId: string): Promise<void> => {
+    await this.#topicDetail.revalidate(topicId);
+  };
+
   internal_replaceTopicId = (params: {
     agentId?: string;
     groupId?: string;
@@ -1824,13 +1916,28 @@ export class ChatTopicActionImpl {
   };
 
   internal_createTopic = async (params: CreateTopicParams): Promise<string> => {
+    // A blank conversation opened from a project group's "+" carries the
+    // directory it belongs to — fold it into the create call so the row is born
+    // inside that project. Only for the agent it was staged on: a pending
+    // directory must never land on another agent's topic.
+    const pending = this.#get().pendingNewTopicDirectory;
+    const targetSessionId = params.sessionId ?? this.#get().activeAgentId;
+    const pendingDirectoryId =
+      pending && pending.agentId === targetSessionId
+        ? pending.projectWorkingDirectoryId
+        : undefined;
+    const createParams: CreateTopicParams = pendingDirectoryId
+      ? { ...params, projectWorkingDirectoryId: pendingDirectoryId }
+      : params;
+
     const tmpId = Date.now().toString();
     this.#get().internal_dispatchTopic(
-      { type: 'addTopic', value: { ...params, id: tmpId } },
+      { type: 'addTopic', value: { ...createParams, id: tmpId } },
       'internal_createTopic',
     );
 
-    const topicId = await topicService.createTopic(params);
+    const topicId = await topicService.createTopic(createParams);
+    if (pendingDirectoryId) this.#get().setPendingNewTopicDirectory();
     await this.#get().refreshTopic();
 
     return topicId;

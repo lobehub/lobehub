@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const MIN_IMAGE_SIZE = 64;
 export const MAX_SIZE_DESKTOP = 200;

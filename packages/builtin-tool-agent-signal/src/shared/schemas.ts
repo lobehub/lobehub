@@ -22,6 +22,41 @@ const obj = (
   required: readonly string[] = [],
 ): Record<string, unknown> => ({ properties, required: [...required], type: 'object' });
 
+const selfReviewProposalActionsSchema = {
+  items: {
+    additionalProperties: true,
+    properties: {
+      actionType: {
+        description:
+          'Kind of change. proposal_only records an idea without a change. Use the field name actionType, not type.',
+        enum: [
+          'create_skill',
+          'refine_skill',
+          'consolidate_skill',
+          'refine_prompt',
+          'write_memory',
+          'proposal_only',
+        ],
+        type: 'string',
+      },
+      operation: {
+        ...freeObj,
+        description:
+          'Domain operation, e.g. { domain: "skill", operation: "create", input: { name, title, description, bodyMarkdown } }.',
+      },
+      rationale: str,
+      target: {
+        ...freeObj,
+        description: 'Target such as { skillName }, { skillDocumentId } or { agentId }.',
+      },
+    },
+    required: ['actionType'],
+    type: 'object',
+  },
+  minItems: 1,
+  type: 'array',
+} as const;
+
 const evidenceRefsSchema = {
   items: {
     properties: {
@@ -161,7 +196,13 @@ export const REVIEW_TOOL_APIS: ToolApiSpec[] = [
     description: 'Create one user-visible self-review proposal for later approval.',
     name: 'createSelfReviewProposal',
     parameters: obj(
-      { actions: freeArr, idempotencyKey: str, metadata: freeObj, proposalKey: str, summary: str },
+      {
+        actions: selfReviewProposalActionsSchema,
+        idempotencyKey: str,
+        metadata: freeObj,
+        proposalKey: str,
+        summary: str,
+      },
       ['idempotencyKey', 'proposalKey', 'summary', 'actions'],
     ),
   },

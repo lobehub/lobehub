@@ -3,7 +3,7 @@
 import { memo, type ReactNode, useCallback } from 'react';
 
 import { PageEditor } from '@/features/PageEditor';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
 interface PageExplorerProps {
   /** Forwarded to PageEditor. */
@@ -24,8 +24,6 @@ interface PageExplorerProps {
  * Work together with a sidebar @/features/Pages/PageLayout/Body
  */
 const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader, rightPanel }) => {
-  const updatePageOptimistically = usePageStore((s) => s.updatePageOptimistically);
-
   // Get document title and emoji from PageStore
   const document = usePageStore(pageSelectors.getDocumentById(pageId));
   const title = document?.title;
@@ -34,16 +32,16 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader,
   // Optimistic update handlers for title and emoji
   const handleTitleChange = useCallback(
     (newTitle: string) => {
-      updatePageOptimistically(pageId, { title: newTitle });
+      pageActions.updatePageOptimistically(pageId, { title: newTitle });
     },
-    [pageId, updatePageOptimistically],
+    [pageId],
   );
 
   const handleEmojiChange = useCallback(
     (newEmoji: string | undefined) => {
-      updatePageOptimistically(pageId, { emoji: newEmoji });
+      pageActions.updatePageOptimistically(pageId, { emoji: newEmoji });
     },
-    [pageId, updatePageOptimistically],
+    [pageId],
   );
 
   return (

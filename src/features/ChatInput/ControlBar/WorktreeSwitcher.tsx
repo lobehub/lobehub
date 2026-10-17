@@ -1,18 +1,21 @@
 import { deriveWorktreePath, type DeviceGitWorktreeListItem } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  Icon,
   Input,
   Spin,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import {
   CheckIcon,
   FolderPlusIcon,
@@ -37,6 +40,7 @@ import { useTranslation } from 'react-i18next';
 import { gitService } from '@/services/git';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
+import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
 
@@ -319,20 +323,6 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
-  triggerAnchor: css`
-    display: inline-flex;
-    flex: none;
-  `,
-  /* Custom row triggers (overview panel) must fill the stretched trigger, or the
-     popup-open background paints wider than the row's own hover background. */
-  triggerFill: css`
-    display: flex;
-    width: 100%;
-
-    > * {
-      flex: 1;
-    }
-  `,
 }));
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
@@ -428,12 +418,16 @@ interface WorktreeSwitcherProps {
   currentBranch: string;
   detached?: boolean;
   deviceId?: string;
+  /** Mounted but inert while a stale-first branch awaits confirmation. */
+  disabled?: boolean;
   isGithub: boolean;
   onWorktreesChange?: () => Promise<unknown> | unknown;
   path: string;
   /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
   placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   sourcePath: string;
+  /** The conversation the switch is recorded on; omitted, the global active topic. */
+  topicId?: string | null;
   worktrees: DeviceGitWorktreeListItem[];
 }
 
@@ -444,11 +438,13 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     currentBranch,
     detached,
     deviceId,
+    disabled = false,
     isGithub,
     onWorktreesChange,
     path,
     placement = 'topLeft',
     sourcePath,
+    topicId,
     worktrees,
   }) => {
     const { t } = useTranslation('device');
@@ -462,7 +458,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // duplicate delete if the dropdown is reopened mid-removal.
     const [removingPaths, setRemovingPaths] = useState<Set<string>>(() => new Set());
     const currentRowRef = useRef<HTMLDivElement>(null);
-    const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath });
+    const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath, topicId });
 
     // Clear the query each time the dropdown closes so it reopens unfiltered.
     useEffect(() => {
@@ -514,7 +510,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
           return;
         }
 
-        await switchWorktree(worktree.path);
+        await switchWorktree(worktree.path, worktree.detached ? undefined : worktree.branch);
         setOpen(false);
       },
       [switchWorktree],
@@ -585,7 +581,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
 
         // Point the conversation at the freshly created worktree, then reconcile
         // the list so the new row (now `current`) appears.
-        await switchWorktree(result.worktreePath ?? worktreePath);
+        await switchWorktree(result.worktreePath ?? worktreePath, branch);
         await onWorktreesChange?.();
         return undefined;
       },
@@ -645,9 +641,18 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     );
 
     return (
-      <DropdownMenuRoot open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div className={children ? styles.triggerFill : undefined}>
+      <DropdownMenuRoot
+        open={!disabled && open}
+        onOpenChange={(next) => {
+          if (!disabled) setOpen(next);
+        }}
+      >
+        <DropdownMenuTrigger>
+          <div
+            aria-disabled={disabled}
+            className={gitMenuTriggerStyles.trigger}
+            data-disabled={disabled || undefined}
+          >
             {open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}
           </div>
         </DropdownMenuTrigger>

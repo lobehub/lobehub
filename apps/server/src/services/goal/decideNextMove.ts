@@ -21,6 +21,7 @@ import type {
 import { toMetricScale } from '@lobechat/types';
 
 import { isGoalReportNode } from './report';
+import type { RolloutGateResult } from './rolloutGate';
 
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
@@ -214,6 +215,12 @@ export interface GoalMoveInput {
    */
   metricCriteria?: GoalMetricCriteriaState;
   /**
+   * The repeated batch's gate verdict, present only once the wave it released
+   * has fully settled. Absent while a wave is running — the ordinary frontier
+   * owns that tick.
+   */
+  rolloutGate?: RolloutGateResult;
+  /**
    * The responsible Task of every candidate that has one, keyed by task id.
    * A candidate whose task id is absent from the map has lost its row.
    */
@@ -262,6 +269,7 @@ export const decideNextMove = ({
   frontier,
   graph,
   metricCriteria,
+  rolloutGate,
   tasksById,
 }: GoalMoveInput): GoalMove => {
   const { candidates, chosen } = frontier;
@@ -294,6 +302,27 @@ export const decideNextMove = ({
       branch: 'pending_decision',
       focusNodeId: pendingDecision.nodeId,
       message: pendingDecision.question,
+      outcome: 'waiting_human',
+    };
+  }
+
+  // A repeated batch settles its own gate before the terminal phase: a passed
+  // gate releases the next wave, a blocked one hands the stall to a person
+  // rather than letting the goal look finished while units remain undelivered.
+  if (rolloutGate) {
+    if (rolloutGate.met) {
+      return {
+        ...base,
+        branch: 'rollout_gate',
+        message: 'Batch gate passed; release the next wave',
+        outcome: 'advanced',
+      };
+    }
+    return {
+      ...base,
+      branch: 'pattern_break',
+      focusNodeId: graph.goal.config?.rolloutState?.assayNodeId,
+      message: rolloutGate.blockers.join('; ') || 'Batch gate is blocked',
       outcome: 'waiting_human',
     };
   }

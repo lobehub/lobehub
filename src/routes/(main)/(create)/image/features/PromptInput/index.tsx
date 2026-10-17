@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Divider, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Divider, Flexbox, Switch, Tabs, Text } from '@lobehub/ui';
 import { Images } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +18,7 @@ import {
   ConfigAction,
   GenerationMediaModeSegment,
   GenerationModelNotice,
+  GenerationPromptBlockedNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineImageReference,
@@ -93,7 +93,7 @@ const PromptExtendItem = memo(() => {
     const options = enumValues.map((item) => ({
       disabled: !canCreate,
       key: item,
-      label: item,
+      label: t(`config.promptExtend.options.${item}`, { defaultValue: item }),
     }));
 
     return (
@@ -150,6 +150,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   } = useImageReferenceUpload();
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
+  const blockedPrompt = useImageStore(createImageSelectors.blockedPrompt);
+  const dismissBlockedPrompt = useImageStore((s) => s.dismissBlockedPrompt);
+  // Editing the prompt dismisses the notice: it only describes the submitted text.
+  const isPromptBlocked = blockedPrompt !== undefined && blockedPrompt === value;
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const activeGenerationTopicId = useImageStore(generationTopicSelectors.activeGenerationTopicId);
   const activeGenerationTopic = useImageStore((s) =>
@@ -288,6 +292,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         isCreating={isCreating}
         isDarkMode={isDarkMode}
         value={value}
+        header={
+          isPromptBlocked ? (
+            <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
+          ) : undefined
+        }
         inlineContent={
           showInlineRef ? (
             <InlineImageReference

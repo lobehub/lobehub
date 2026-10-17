@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserModel } from '@/database/models/user';
+import { TaskSearchRepo } from '@/database/repositories/taskSearch';
 import { DiscoverService } from '@/server/services/discover';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
@@ -17,6 +18,8 @@ vi.mock('@/database/models/user', () => ({
   UserModel: Object.assign(vi.fn(), { findById: vi.fn() }),
 }));
 
+vi.mock('@/database/repositories/taskSearch', () => ({ TaskSearchRepo: vi.fn() }));
+
 vi.mock('@/server/services/discover', () => ({
   DiscoverService: vi.fn(),
 }));
@@ -27,6 +30,7 @@ describe('searchRouter', () => {
   const getPluginList = vi.fn();
   const getUserSettings = vi.fn();
   const search = vi.fn();
+  const searchTasks = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,6 +39,10 @@ describe('searchRouter', () => {
     getPluginList.mockResolvedValue({ items: [] });
     getUserSettings.mockResolvedValue({ market: { accessToken: 'market-token' } });
     search.mockResolvedValue([]);
+    searchTasks.mockResolvedValue([]);
+    vi.mocked(TaskSearchRepo).mockImplementation(function () {
+      return { search: searchTasks } as unknown as TaskSearchRepo;
+    });
     vi.mocked(UserModel.findById).mockResolvedValue({
       email: 'user@example.com',
       fullName: 'Test User',
@@ -105,6 +113,38 @@ describe('searchRouter', () => {
     );
     expect(UserModel.findById).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
+    expect(searchTasks).not.toHaveBeenCalled();
+  });
+
+  it('looks up only tasks for a task-typed search', async () => {
+    const taskResult = { id: 'task_1', identifier: 'T-827', title: 'CMDK', type: 'task' };
+    searchTasks.mockResolvedValue([taskResult]);
+    const caller = searchRouter.createCaller({
+      userId: 'test-user',
+      workspaceId: 'ws_1',
+    } as any);
+
+    const result = await caller.query({ limitPerType: 50, query: 'T-827', type: 'task' });
+
+    expect(result).toEqual([taskResult]);
+    // Scoped to the caller and active workspace, like TaskModel reads.
+    expect(vi.mocked(TaskSearchRepo).mock.calls[0].slice(1)).toEqual(['test-user', 'ws_1']);
+    expect(searchTasks).toHaveBeenCalledWith({ limit: 50, query: 'T-827' });
+    expect(createFtsSearchRepo).not.toHaveBeenCalled();
+    expect(getAssistantList).not.toHaveBeenCalled();
+  });
+
+  it('merges task matches into the untyped command-menu search', async () => {
+    const localResult = { id: 'local-agent', title: 'Local Agent', type: 'agent' };
+    const taskResult = { id: 'task_1', identifier: 'T-827', title: 'CMDK', type: 'task' };
+    search.mockResolvedValue([localResult]);
+    searchTasks.mockResolvedValue([taskResult]);
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    const result = await caller.query({ includeMarketplace: false, query: 'T-827' });
+
+    expect(result).toEqual([localResult, taskResult]);
+    expect(searchTasks).toHaveBeenCalledWith({ limit: 5, query: 'T-827' });
   });
 
   it('keeps untyped searches including the marketplace by default', async () => {
@@ -154,6 +194,31 @@ describe('searchRouter', () => {
     expect(getPluginList).not.toHaveBeenCalled();
     expect(UserModel.findById).not.toHaveBeenCalled();
     expect(getUserSettings).not.toHaveBeenCalled();
+  });
+
+  it.each(['mcp', 'communityAgent'] as const)(
+    'caps the %s Market API page size at its maximum',
+    async (type) => {
+      getAssistantList.mockResolvedValue({ items: [] });
+      const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+      // The command menu requests 50 per type in its typed view.
+      await caller.query({ limitPerType: 50, query: 'github', type });
+
+      const listFn = type === 'mcp' ? getMcpList : getAssistantList;
+      expect(listFn).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 40 }),
+        ...(type === 'communityAgent' ? [expect.anything()] : []),
+      );
+    },
+  );
+
+  it('keeps the requested limit for the locally paged legacy plugin catalog', async () => {
+    const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+    await caller.query({ limitPerType: 50, query: 'github', type: 'plugin' });
+
+    expect(getPluginList).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 50 }));
   });
 
   it('returns a typed error when the community agent market search fails', async () => {

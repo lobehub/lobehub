@@ -3,7 +3,7 @@ import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
-import { readTaskExecutionConfig } from '@lobechat/types';
+import { getHeterogeneousTaskModelProvider, readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -16,7 +16,9 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
-import { TaskLifecycleService } from '@/server/services/taskLifecycle';
+import { resolveMissingTaskModelConfig } from '@/server/services/task/modelSnapshot';
+import { createTaskRunHooks } from '@/server/services/task/runHooks';
+import { readTaskSkillIds } from '@/server/services/userSkill';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
 import {
@@ -31,6 +33,8 @@ export interface RunTaskParams {
   /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
   additionalPluginIds?: string[];
   continueTopicId?: string;
+  /** Explicit device target for this run only. The Task itself does not retain the binding. */
+  deviceId?: string;
   extraPrompt?: string;
   /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
   maxSteps?: number;
@@ -60,7 +64,6 @@ export class TaskRunnerService {
   private agentModel: AgentModel;
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
-  private taskLifecycle: TaskLifecycleService;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
   private topicModel: TopicModel;
@@ -77,7 +80,6 @@ export class TaskRunnerService {
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
     this.briefModel = new BriefModel(db, userId, workspaceId);
-    this.taskLifecycle = new TaskLifecycleService(db, userId, workspaceId);
   }
 
   /**
@@ -107,6 +109,7 @@ export class TaskRunnerService {
       additionalPluginIds,
       taskId: idOrIdentifier,
       continueTopicId,
+      deviceId,
       extraPrompt,
       maxSteps,
       trigger = 'manual',
@@ -115,6 +118,14 @@ export class TaskRunnerService {
     const task = await this.taskModel.resolve(idOrIdentifier);
     if (!task) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+    }
+    // Archived tasks are hidden from every list, so a run would go unseen.
+    // Every execution path (manual, tick, dependency unlock, goal) lands here.
+    if (task.archivedAt) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Restore this archived task before running it',
+      });
     }
 
     // Track whether *this* invocation transitioned the task to 'running'. The
@@ -205,6 +216,17 @@ export class TaskRunnerService {
             message: 'The task changed or was deleted before its run could start.',
           });
         }
+        // An archive that committed between the read above and this write is
+        // visible on the returned row: hand the status back and refuse the run.
+        if (started.archivedAt) {
+          await this.taskModel.updateStatusIfCurrent(task.id, 'running', task.status, {
+            error: task.error ?? null,
+          });
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Restore this archived task before running it',
+          });
+        }
         weSetRunning = true;
       } else if (task.error) {
         await this.taskModel.update(task.id, { error: null });
@@ -216,10 +238,7 @@ export class TaskRunnerService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      const taskId = task.id;
       const taskIdentifier = task.identifier;
-      const taskLifecycle = this.taskLifecycle;
-      const userId = this.userId;
 
       const checkpoint = this.taskModel.getCheckpointConfig(task);
       const reviewConfig = this.taskModel.getReviewConfig(task);
@@ -246,16 +265,25 @@ export class TaskRunnerService {
       if (additionalPluginIds) pluginIds.push(...additionalPluginIds);
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
+      // Skills the task itself names for every run — a goal batch's units name
+      // the batch's plan skill — so a re-run or a manual run loads them too.
+      pluginIds.push(...readTaskSkillIds(taskConfig));
 
       // Backfill model snapshot for tasks created before the snapshot logic
       // landed, or whose assignee was set after creation. Once written, the
       // task is pinned to this model regardless of later agent default changes.
+      // Only missing fields are filled: a legacy model-only override keeps its model.
       if (typeof taskConfig.model !== 'string' || typeof taskConfig.provider !== 'string') {
         const snapshot = await this.agentModel.getAgentModelConfig(agentRef);
         if (snapshot) {
-          await this.taskModel.updateTaskConfig(task.id, snapshot);
-          taskConfig.model = snapshot.model;
-          taskConfig.provider = snapshot.provider;
+          const agencyConfig = await this.agentModel.getAgentAgencyConfig(agentRef);
+          const missing = resolveMissingTaskModelConfig(
+            taskConfig,
+            snapshot,
+            getHeterogeneousTaskModelProvider(agencyConfig?.heterogeneousProvider),
+          );
+          await this.taskModel.updateTaskConfig(task.id, missing);
+          Object.assign(taskConfig, missing);
         }
       }
 
@@ -289,36 +317,17 @@ export class TaskRunnerService {
       const result = await aiAgentService.execAgent({
         ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
         additionalPluginIds: pluginIds,
+        ...(deviceId && { deviceId }),
         ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
         ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
-        hooks: [
-          {
-            handler: async (event) => {
-              await taskLifecycle.onTopicComplete({
-                errorCode: event.errorType,
-                errorMessage: event.errorMessage,
-                lastAssistantContent: event.lastAssistantContent,
-                operationId: event.operationId,
-                reason: event.reason || 'done',
-                runTrigger: trigger,
-                taskId,
-                taskIdentifier,
-                topicId: event.topicId,
-              });
-            },
-            id: 'task-on-complete',
-            type: 'onComplete' as const,
-            webhook: {
-              // `runTrigger` rides in the static body so the production webhook
-              // callback (which reconstructs onTopicComplete params server-side)
-              // knows whether this was a manual run or an automation tick.
-              body: { runTrigger: trigger, taskId, taskIdentifier, userId },
-              delivery: 'qstash' as const,
-              fallback: 'none' as const,
-              url: '/api/workflows/task/on-topic-complete',
-            },
-          },
-        ],
+        hooks: createTaskRunHooks({
+          db: this.db,
+          taskId: task.id,
+          taskIdentifier: task.identifier,
+          trigger,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }),
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
         ...(maxSteps ? { maxSteps } : {}),
         prompt,
@@ -499,6 +508,8 @@ export class TaskRunnerService {
     const result: CascadeResult = { failed: [], paused: [], started: [] };
 
     for (const task of unlocked) {
+      // An archived dependent stays idle; restoring it leaves it ready to run.
+      if (task.archivedAt) continue;
       if (await this.shouldHoldForCheckpoint(task)) {
         await this.taskModel.updateStatus(task.id, 'paused');
         result.paused.push(task.identifier);
@@ -509,6 +520,8 @@ export class TaskRunnerService {
         await this.runTask({ taskId: task.id });
         result.started.push(task.identifier);
       } catch (error) {
+        // Archived after discovery: the runner refused it, nothing failed.
+        if (error instanceof TRPCError && error.code === 'PRECONDITION_FAILED') continue;
         const message = error instanceof Error ? error.message : 'Failed to start task';
         log('cascadeOnCompletion: runTask failed for %s: %s', task.identifier, message);
         // Best-effort: mark as paused so the user can see why it didn't run.

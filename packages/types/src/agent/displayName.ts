@@ -45,6 +45,17 @@ export function agentDisplayName(
 }
 
 /**
+ * The field a rename writes: whichever one the resolved label is showing.
+ *
+ * A rename surface binds to {@link agentDisplayName}, so it must write back to
+ * the field that label came from — writing `title` under a named agent would
+ * silently rewrite its role and leave the visible name untouched. `name` wins
+ * whenever it is set, exactly like the label does; a blank name is absent.
+ */
+export const agentRenameField = (agent: AgentNameFields): 'name' | 'title' =>
+  firstNonBlank(agent?.name) ? 'name' : 'title';
+
+/**
  * Resolve the supporting label shown beside an agent's primary name: its role.
  *
  * Only an agent with a personal name has one — an agent without a name already

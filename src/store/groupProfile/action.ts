@@ -2,11 +2,13 @@ import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
+import { createReplicaSlice, createReplicaState, recordLens } from '@/libs/replica';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 
 import { type SaveState, type SaveStatus, type State } from './initialState';
 import { initialState } from './initialState';
+import { groupProfileSaveResource } from './projection';
 
 type SaveContentPayload = {
   content: string;
@@ -26,6 +28,8 @@ type Setter = StoreSetter<Store>;
 export class ActionImpl {
   #debouncedSave: ReturnType<typeof debounce>;
   #get: () => Store;
+  /** Local-first replica of the per-tab save status (`saveStateMap` is its view). */
+  #saveStates;
   #set: Setter;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
@@ -33,6 +37,14 @@ export class ActionImpl {
     void _api;
     this.#get = get;
     this.#set = set;
+
+    this.#saveStates = createReplicaSlice(groupProfileSaveResource, {
+      actionPrefix: 'groupProfile/save',
+      get,
+      set,
+      stateKey: 'saveStateMapReplica',
+      view: recordLens<Store, SaveState>('saveStateMap'),
+    });
 
     this.#debouncedSave = debounce(
       async (payload: SaveContentPayload) => {
@@ -55,17 +67,15 @@ export class ActionImpl {
   }
 
   #updateSaveStatusInternal = (tabId: string, status: SaveStatus) => {
-    const { saveStateMap } = this.#get();
-    const currentState = saveStateMap[tabId] || DEFAULT_SAVE_STATE;
-    this.#set({
-      saveStateMap: {
-        ...saveStateMap,
-        [tabId]: {
-          ...currentState,
-          lastUpdatedTime: status === 'saved' ? new Date() : currentState.lastUpdatedTime,
-          saveStatus: status,
-        },
-      },
+    // Write through the replica engine so the view and its bookkeeping slot
+    // (`saveStateMapReplica`) always move together.
+    this.#saveStates.update(tabId, (current) => {
+      const previous = current ?? DEFAULT_SAVE_STATE;
+      return {
+        ...previous,
+        lastUpdatedTime: status === 'saved' ? new Date() : previous.lastUpdatedTime,
+        saveStatus: status,
+      };
     });
   };
 
@@ -82,6 +92,25 @@ export class ActionImpl {
         // Ignore errors during streaming updates
       }
     }
+  };
+
+  /**
+   * Drop everything the profile page put in the store when it unmounts. The
+   * view (`saveStateMap`) and its replica bookkeeping are cleared together, so
+   * a later visit never sees a stale entry.
+   */
+  clearProfileState = (): void => {
+    this.#set(
+      {
+        activeTabId: 'group',
+        editor: undefined,
+        editorState: undefined,
+        saveStateMap: {},
+        saveStateMapReplica: createReplicaState(),
+      },
+      false,
+      'clearProfileState',
+    );
   };
 
   finishStreaming = async (

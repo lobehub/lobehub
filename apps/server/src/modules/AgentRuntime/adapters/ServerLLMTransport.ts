@@ -39,9 +39,11 @@ import {
   chatSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { toAgentShareVisitorIds } from '@lobechat/types';
+import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
+import { type AiModelConfig, ModelProvider } from 'model-bank';
 
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AiModelModel } from '@/database/models/aiModel';
+import { initModelRuntimeFromDB, resolveServerModel } from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
@@ -72,6 +74,19 @@ const getErrorMessage = (error: unknown): string => {
 const SERVER_LLM_RETRY_POLICY = {
   noRetryProviders: [BRANDING_PROVIDER],
 };
+
+/**
+ * Providers that address the request model by the card's
+ * `config.deploymentName` (their adapters read the field and build the final
+ * request model from it). Gating the injected field to this set keeps the
+ * internal mapping from leaking upstream through adapters that don't consume
+ * it (OpenAI-compatible factories forward unknown payload fields).
+ */
+const DEPLOYMENT_NAME_PROVIDERS = new Set<string>([
+  ModelProvider.Azure,
+  ModelProvider.Spark,
+  ModelProvider.Volcengine,
+]);
 
 const NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
 const NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS = NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
@@ -277,6 +292,14 @@ export class ServerLLMTransport implements LLMTransport {
   >();
 
   /**
+   * Deployment names the live catalog resolved for a run's model, per
+   * provider:model. The run's attempts share one resolution (retries included)
+   * instead of paying a catalog read per attempt; a resolution failure is not
+   * cached — a later attempt may succeed after a transient catalog error.
+   */
+  private readonly resolvedDeploymentNames = new Map<string, Promise<string | undefined>>();
+
+  /**
    * Output of the latest relayed attempt that failed after producing some,
    * per assistant message. A re-dispatch that never gets claimed (the tab that
    * ran the attempt is gone) ends the step with nothing of its own to keep.
@@ -340,29 +363,54 @@ export class ServerLLMTransport implements LLMTransport {
     payload: LLMStreamPayload,
     handlers?: Parameters<LLMTransport['stream']>[1],
   ): Promise<LLMStreamResult> {
-    const runtime = await this.createStreamRuntime(payload.provider);
+    const { runtime, state } = await this.createStreamRuntime(payload.provider);
+    // `stream()` only serves context compression. Deployment-catalog providers
+    // (Azure, Volcengine Ark, Spark) address the request model by the card's
+    // `config.deploymentName` — the same mapping `runAttemptWithRuntime`
+    // applies from the run's frozen cards. The snapshot is authoritative once
+    // it applies: a frozen card without a `deploymentName` freezes that
+    // absence, so steps in the same run never disagree about the endpoint
+    // (`readFrozenModelFacts` already merged the user alias into the card at
+    // freeze time). Only a snapshot with no matching card resolves the
+    // deployment catalog live, and an unresolvable one keeps the bare id.
+    const frozenCard = state?.modelRuntimeConfig?.modelFacts?.cards.find(
+      (card) =>
+        card.providerId === payload.provider &&
+        (card.id === payload.model || card.deploymentName === payload.model),
+    );
+    const deploymentName = !DEPLOYMENT_NAME_PROVIDERS.has(payload.provider)
+      ? undefined
+      : frozenCard
+        ? frozenCard.deploymentName
+        : await this.resolveStreamDeploymentName(payload.provider, payload.model);
     const { provider: _provider, ...runtimePayload } = payload;
     let content = '';
     let usage: LLMStreamResult['usage'];
     let streamError: unknown;
 
-    const response = await runtime.chat(runtimePayload as any, {
-      callback: {
-        onCompletion: async (data: any) => {
-          if (data.usage) usage = data.usage;
+    const response = await runtime.chat(
+      { ...runtimePayload, ...(deploymentName && { deploymentName }) } as any,
+      {
+        callback: {
+          onCompletion: async (data: any) => {
+            if (data.usage) usage = data.usage;
+          },
+          onError: async (errorData: unknown) => {
+            streamError = errorData;
+            handlers?.onError?.(errorData);
+          },
+          onText: async (text: string) => {
+            content += text;
+            handlers?.onText?.(text);
+          },
         },
-        onError: async (errorData: unknown) => {
-          streamError = errorData;
-          handlers?.onError?.(errorData);
-        },
-        onText: async (text: string) => {
-          content += text;
-          handlers?.onText?.(text);
-        },
+        // `stream()` only serves context compression. Without a trigger, RouterRuntime
+        // rejects the call in development (skipping compression) and bills it as
+        // trigger=null in production.
+        metadata: { topicId: this.ctx.topicId, trigger: RequestTrigger.ContextCompression },
+        user: this.ctx.userId,
       },
-      metadata: { topicId: this.ctx.topicId },
-      user: this.ctx.userId,
-    });
+    );
 
     await consumeStreamUntilDone(response);
 
@@ -389,13 +437,94 @@ export class ServerLLMTransport implements LLMTransport {
     }
     if (site.site === 'client') {
       this.relayStreamCount += 1;
-      return this.createRelayRuntime(provider, site, {
-        attempt: 1,
-        callId: `${buildLlmRelayCallId(this.ctx.operationId, this.ctx.stepIndex, this.relayGeneration, 1)}:stream${this.relayStreamCount}`,
-      });
+      return {
+        runtime: this.createRelayRuntime(provider, site, {
+          attempt: 1,
+          callId: `${buildLlmRelayCallId(this.ctx.operationId, this.ctx.stepIndex, this.relayGeneration, 1)}:stream${this.relayStreamCount}`,
+        }),
+        state,
+      };
     }
 
-    return this.createModelRuntime(provider);
+    return { runtime: await this.createModelRuntime(provider), state };
+  }
+
+  /**
+   * Live deployment-name resolution for a compression model outside the run's
+   * frozen cards. Best effort: compression is an optimization, so an unknown
+   * model keeps the bare id instead of failing the run.
+   */
+  private async resolveStreamDeploymentName(provider: string, model: string) {
+    // The user's own model row first — a user-configured deployment alias
+    // (`ai_models.config.deploymentName`) must win over the bundled card, and
+    // a custom model has no bundled card at all. The deployment-owned catalog
+    // behind `resolveServerModel` never sees this row, so without the read a
+    // custom alias is replaced by the bundled alias or dropped, and the
+    // request 404s on the user's endpoint.
+    if (this.ctx.serverDB && this.ctx.userId) {
+      try {
+        const row = await new AiModelModel(
+          this.ctx.serverDB,
+          this.ctx.userId,
+          this.ctx.workspaceId,
+        ).findByIdAndProvider(model, provider);
+        const userAlias = (row?.config as AiModelConfig | null)?.deploymentName;
+        if (userAlias) return userAlias;
+      } catch (error) {
+        // A user-row read failure must not kill the catalog fallback below,
+        // but the fallback can yield a bundled alias (or fail) and 404
+        // downstream, so the failed lookup must stay diagnosable.
+        log(
+          '[%s] deploymentName user-row lookup failed for %s:%s; falling back to the global catalog: %s',
+          `${this.ctx.operationId}:${this.ctx.stepIndex}`,
+          provider,
+          model,
+          getErrorMessage(error),
+        );
+      }
+    }
+    try {
+      const resolved = await resolveServerModel(provider, model);
+      return resolved.deploymentName;
+    } catch (error) {
+      log(
+        '[%s] deploymentName catalog resolution failed for %s:%s; keeping the bare model id: %s',
+        `${this.ctx.operationId}:${this.ctx.stepIndex}`,
+        provider,
+        model,
+        getErrorMessage(error),
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Live deployment-name resolution for a run attempt whose operation has no
+   * frozen `modelFacts` snapshot (agent-signal memory actions, persisted
+   * operations predating `modelFacts`). Same best-effort contract as
+   * `resolveStreamDeploymentName`: an unresolvable model keeps the bare id.
+   * The run's attempts share one resolution per provider:model (retries
+   * included) instead of paying a catalog read per attempt.
+   */
+  private resolveAttemptDeploymentName(provider: string, model: string) {
+    const key = `${provider}:${model}`;
+    let promise = this.resolvedDeploymentNames.get(key);
+    if (!promise) {
+      promise = this.resolveStreamDeploymentName(provider, model).finally(() => {
+        // Keep failures out of the cache so a transient catalog error doesn't
+        // pin the bare id for the rest of the run.
+        if (promise) {
+          promise.then(
+            (resolved) => {
+              if (!resolved) this.resolvedDeploymentNames.delete(key);
+            },
+            () => this.resolvedDeploymentNames.delete(key),
+          );
+        }
+      });
+      this.resolvedDeploymentNames.set(key, promise);
+    }
+    return promise;
   }
 
   private createRelayRuntime(
@@ -408,6 +537,7 @@ export class ServerLLMTransport implements LLMTransport {
 
     return new RelayModelRuntime({
       ...call,
+      channelOperationId: site.channelOperationId,
       operationId: this.ctx.operationId,
       preferredClientId: site.preferredClientId,
       provider,
@@ -502,6 +632,29 @@ export class ServerLLMTransport implements LLMTransport {
     if (!resolved) throw new Error('Resolved tools are required for a server LLM attempt');
 
     const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+    // Providers that address models by a deployment/catalog name (Azure,
+    // Volcengine Ark, Spark) resolve the request model from the card's
+    // `config.deploymentName`. The run froze the matching card at operation
+    // creation, so the mapping needs no bank or DB read per attempt. The
+    // snapshot is authoritative once it applies: a frozen card without a
+    // `deploymentName` freezes that absence, so attempts in the same run
+    // never disagree about the endpoint. Live resolution serves only
+    // operations whose snapshot has no matching card (agent-signal memory
+    // actions, persisted operations predating `modelFacts`) — the same
+    // mapping `stream()` applies for compression models. Frozen and live
+    // aliases sit behind the same provider gate: adapters that don't consume
+    // the field (OpenAI-compatible factories forward unknown payload fields)
+    // must never see the internal mapping on the wire.
+    const frozenCard = input.state.modelRuntimeConfig?.modelFacts?.cards.find(
+      (card) =>
+        card.providerId === input.provider &&
+        (card.id === input.model || card.deploymentName === input.model),
+    );
+    const deploymentName = !DEPLOYMENT_NAME_PROVIDERS.has(input.provider)
+      ? undefined
+      : frozenCard
+        ? frozenCard.deploymentName
+        : await this.resolveAttemptDeploymentName(input.provider, input.model);
     const chatPayload = {
       messages: input.context.messages as ChatStreamPayload['messages'],
       model: input.model,
@@ -511,6 +664,7 @@ export class ServerLLMTransport implements LLMTransport {
       ...(typeof input.context.preserveThinking === 'boolean' && {
         preserveThinking: input.context.preserveThinking,
       }),
+      ...(deploymentName && { deploymentName }),
     };
     const operationLogId = `${this.ctx.operationId}:${this.ctx.stepIndex}`;
     const attempt = createServerCallLlmAttempt({

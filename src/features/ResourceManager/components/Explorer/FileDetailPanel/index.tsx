@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, DraggablePanel } from '@lobehub/ui/base-ui';
-import { cssVar, useTheme } from 'antd-style';
+import { ActionIcon, cssVar, DraggablePanel, Flexbox, useTheme } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { DownloadIcon, InfoIcon, PanelRightCloseIcon } from 'lucide-react';
 import { memo, useState } from 'react';

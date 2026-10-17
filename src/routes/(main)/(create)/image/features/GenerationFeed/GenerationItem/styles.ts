@@ -1,4 +1,4 @@
-import { createStaticStyles, cx, keyframes } from 'antd-style';
+import { createStaticStyles, cx, keyframes } from '@lobehub/ui';
 
 const shimmer = keyframes`
   0% {

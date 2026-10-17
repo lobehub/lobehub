@@ -1,4 +1,4 @@
-import { Accordion, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -39,6 +39,9 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
   return (
     <Accordion
       indicatorPlacement="inline"
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={[]}
+      variant={'borderless'}
       items={[
         {
           key: 'execution-record',
@@ -49,9 +52,6 @@ const ThreadExecutionSummary = memo<ThreadExecutionSummaryProps>(({ messageId })
           ),
         },
       ]}
-      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
-      value={[]}
-      variant={'borderless'}
       onValueChange={handleValueChange}
     />
   );

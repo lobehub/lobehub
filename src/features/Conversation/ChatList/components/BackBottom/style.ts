@@ -1,5 +1,4 @@
-import { lobeStaticStylish } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, lobeStaticStylish } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: cx(

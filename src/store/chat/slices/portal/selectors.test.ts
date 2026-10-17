@@ -345,6 +345,34 @@ describe('chatDockSelectors', () => {
     });
   });
 
+  describe('isCurrentLocalFileRemote', () => {
+    it.each([
+      ['local', {}, false],
+      ['remote device', { deviceId: 'remote-device' }, true],
+      ['cloud sandbox', { sandboxTopicId: 'topic-a' }, true],
+    ])('identifies a %s file', (_label, source, expected) => {
+      const file = { filePath: '/work/index.html', workingDirectory: '', ...source };
+      const state = createState({
+        activeLocalFilePath: file.filePath,
+        activeTopicId: 'topic-a',
+        openLocalFiles: [file],
+      });
+      expect(chatPortalSelectors.isCurrentLocalFileRemote(state)).toBe(expected);
+    });
+
+    it('follows the active tab when local and remote files share the same path', () => {
+      const local = { filePath: '/work/index.html', workingDirectory: '/work' };
+      const remote = { ...local, deviceId: 'remote-device' };
+      const state = createState({
+        activeLocalFileId: createLocalFileTabId(remote),
+        openLocalFiles: [local, remote],
+      });
+      expect(chatPortalSelectors.isCurrentLocalFileRemote(state)).toBe(true);
+      state.activeLocalFileId = createLocalFileTabId(local);
+      expect(chatPortalSelectors.isCurrentLocalFileRemote(state)).toBe(false);
+    });
+  });
+
   describe('currentLocalFile', () => {
     it('should return undefined when activeLocalFilePath is undefined', () => {
       expect(chatPortalSelectors.currentLocalFile(createState())).toBeUndefined();

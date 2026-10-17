@@ -23,12 +23,16 @@ const historyCompress = (s: UserStore) => currentSystemAgent(s).historyCompress;
 const generationTopic = (s: UserStore) => currentSystemAgent(s).generationTopic;
 const inputCompletion = (s: UserStore) => currentSystemAgent(s).inputCompletion;
 const followUpAction = (s: UserStore) => currentSystemAgent(s).followUpAction;
+const goal = (s: UserStore) => currentSystemAgent(s).goal;
+const expertise = (s: UserStore) => currentSystemAgent(s).expertise;
 
 export const systemAgentSelectors = {
   agentMeta,
   asr,
+  expertise,
   followUpAction,
   generationTopic,
+  goal,
   historyCompress,
   inputCompletion,
   isAsrConfigured,

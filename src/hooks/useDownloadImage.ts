@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useMemoizedFn } from 'ahooks';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

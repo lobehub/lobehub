@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Divider, Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -13,6 +11,7 @@ import { agentService } from '@/services/agent';
 
 import { type AgentItemData } from './AgentItem';
 import AvailableAgentList from './AvailableAgentList';
+import { selectAddableAgents } from './selectAddableAgents';
 import SelectedAgentList from './SelectedAgentList';
 import { useAgentSelectionStore } from './store';
 
@@ -48,16 +47,17 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
     const selectedAgentIds = useAgentSelectionStore((s) => s.selectedAgentIds);
     const clearSelection = useAgentSelectionStore((s) => s.clearSelection);
 
-    // Fetch agents from the new API (non-virtual agents only)
+    // Fetch non-virtual agents; the inbox is excluded unless a caller opts in
     const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR(
       open ? groupKeys.queryAgents() : null,
       () => agentService.queryAgents(),
     );
 
-    // Filter out existing members
-    const availableAgents = useMemo<AgentItemData[]>(() => {
-      return allAgents.filter((agent) => !existingMembers.includes(agent.id));
-    }, [allAgents, existingMembers]);
+    // Filter out existing members and the inbox, which cannot join a group
+    const availableAgents = useMemo<AgentItemData[]>(
+      () => selectAddableAgents(allAgents, existingMembers),
+      [allAgents, existingMembers],
+    );
 
     // Clear selection when modal closes
     useEffect(() => {

@@ -1,16 +1,17 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   SkeletonAvatar,
   SkeletonText,
   Tag,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

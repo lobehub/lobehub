@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { LayersEnum, MemorySourceType, MergeStrategyEnum, TypesEnum } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,15 +37,12 @@ const userMemoryModel = new UserMemoryModel(serverDB, userId);
  * @returns Normalized random vector
  */
 function generateRandomEmbedding(dimensions: number = 1024): number[] {
-  const vector = new Array(dimensions).fill(0).map(() => Math.random() * 2 - 1); // Random values between -1 and 1
+  const vector = Array.from({ length: dimensions }, () => Math.random() * 2 - 1); // Random values between -1 and 1
 
   // Normalize the vector
   const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
   return vector.map((val) => val / magnitude);
 }
-
-const mockEmbedding = generateRandomEmbedding();
-const mockEmbedding2 = generateRandomEmbedding();
 
 function createAxisVector(dimensions: number = 1024, index: number = 0): number[] {
   return Array.from({ length: dimensions }, (_, i) => (i === index ? 1 : 0));
@@ -1249,7 +1246,10 @@ describe('UserMemoryModel', () => {
       const created = await userMemoryModel.create(
         generateRandomCreateUserMemoryExperienceParams(),
       );
-
+      // Backdate both stamps: create (DB now()) and update (JS clock) can share a millisecond.
+      await serverDB.execute(
+        sql`UPDATE user_memories SET created_at = created_at - interval '1 minute', updated_at = created_at - interval '1 minute' WHERE id = ${created.id}`,
+      );
       await userMemoryModel.update(created.id, {
         memoryCategory: 'updated-category',
         summary: 'Updated summary',
@@ -1263,7 +1263,7 @@ describe('UserMemoryModel', () => {
       expect(updated?.memoryCategory).toBe('updated-category');
       expect(updated?.summary).toBe('Updated summary');
       expect(updated?.title).toBe('Updated title');
-      expect(updated?.updatedAt.getTime()).toBeGreaterThan(created.createdAt.getTime());
+      expect(updated?.updatedAt.getTime()).toBeGreaterThan(updated!.createdAt.getTime());
     });
 
     it('ignores updates for memories owned by other users', async () => {

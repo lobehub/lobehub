@@ -9,14 +9,12 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -27,11 +25,9 @@ import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { saveToast } from '@/store/utils/saveToast';
 
-import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import { useTaskStatusChange } from '../features/useTaskStatusChange';
-import { taskDetailPath } from '../shared/taskDetailPath';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
   buildKanbanColumns,
@@ -39,6 +35,7 @@ import {
   canDropTaskIntoKanbanColumn,
   findKanbanTask,
   getKanbanAssigneeUpdate,
+  getKanbanColumnCreateDefaults,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
@@ -78,7 +75,6 @@ interface KanbanBoardProps {
 const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const { agentId, emptyDescription, myTaskScope, options, projectId, routeScope } = props;
   const { t } = useTranslation('chat');
-  const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
   const groupBy = normalizeKanbanGroupBy(options.groupBy);
   const excludeStatuses = options.hideCompleted ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
@@ -86,9 +82,10 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the groups are read by.
-  const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList(
-    buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
-  );
+  const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
+    ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
+    includeArchived: options.showArchived,
+  });
   // Each board query (scope, dimension, filters) is its own store entry, so the
   // settled signal and the groups always describe the same board.
   const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit(queryKey));
@@ -228,19 +225,6 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
     setActiveTask(null);
   }, []);
 
-  const handleCreateTask = useCallback(() => {
-    if (!canEditTask) return;
-    createTaskModal({
-      agentId,
-      lockAssignee: !!agentId,
-      projectId,
-      onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name));
-      },
-      showInlineToggle: false,
-    });
-  }, [agentId, canEditTask, navigate, projectId]);
-
   const handleHideColumn = useCallback(
     (columnKey: string) => {
       const next = Array.from(new Set([...hiddenColumns, columnKey]));
@@ -330,30 +314,31 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       <Flexbox horizontal className={styles.board}>
         {visibleColumns.map((col) => {
           const group = currentTaskGroups.find((item) => item.key === col.key);
+          // "My tasks" offers no create entry (its list view has none either):
+          // a task created there carries neither the member assignment nor —
+          // under `created` — any guarantee it lands in the column it was
+          // started from.
+          const createDefaults = myTaskScope
+            ? undefined
+            : getKanbanColumnCreateDefaults(groupBy, col);
           const droppable =
             canEditTask &&
             col.droppable &&
             (!activeTask || canDropTaskIntoKanbanColumn(activeTask, groupBy, col));
           return (
             <KanbanColumn
+              agentId={agentId}
               columnKey={col.key}
+              createDefaults={canEditTask ? createDefaults : undefined}
               droppable={droppable}
               groupBy={groupBy}
               groupMeta={col.groupMeta}
               key={col.key}
+              projectId={projectId}
               routeScope={routeScope}
               tasks={(group?.tasks ?? []) as TaskListItem[]}
               total={group?.total ?? 0}
               onHide={groupBy === 'status' ? () => handleHideColumn(col.key) : undefined}
-              onCreate={
-                // "My tasks" offers no create entry (its list view has none
-                // either): a task created here carries neither the member
-                // assignment nor — under `created` — any guarantee it lands
-                // in the column it was started from.
-                groupBy === 'status' && col.key === 'backlog' && !myTaskScope
-                  ? handleCreateTask
-                  : undefined
-              }
             />
           );
         })}

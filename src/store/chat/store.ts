@@ -29,6 +29,7 @@ import { type ChatThreadAction } from './slices/thread/action';
 import { ChatThreadActionImpl } from './slices/thread/action';
 import { type ChatTopicAction } from './slices/topic/action';
 import { ChatTopicActionImpl } from './slices/topic/action';
+import { subscribeJustArchivedTopic } from './slices/topic/justArchived';
 import { type ChatTranslateAction } from './slices/translate/action';
 import { ChatTranslateActionImpl } from './slices/translate/action';
 import { type VoiceMessageAction } from './slices/voiceMessage/action';
@@ -99,6 +100,8 @@ export const useChatStore = createWithEqualityFn<ChatStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+subscribeJustArchivedTopic(useChatStore);
 
 expose('chat', useChatStore);
 

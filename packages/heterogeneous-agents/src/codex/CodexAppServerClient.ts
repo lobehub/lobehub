@@ -5,6 +5,7 @@ import { spawnManaged } from '@lobechat/utils/managedProcess';
 import { isRecord, pickString } from '@lobechat/utils/object';
 
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
+import { getCodexProcessEnv } from './environment';
 import type {
   ClientNotification,
   InitializeParams,
@@ -110,6 +111,7 @@ export class CodexAppServerClient {
   private connectionError?: Error;
   private connected = false;
   private consumerCount = 0;
+  private readonly claimedThreads = new Set<string>();
   private generationSequence = 0;
   private hasConnected = false;
   private nextRequestId = 0;
@@ -126,7 +128,10 @@ export class CodexAppServerClient {
   private reconnectExhaustedEpoch?: number;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
 
-  constructor(private readonly options: CodexAppServerClientOptions) {}
+  constructor(private readonly options: CodexAppServerClientOptions) {
+    // A shared child (including reconnects) must never inherit the first run's identity.
+    this.options = { ...options, env: getCodexProcessEnv(options.env) };
+  }
 
   get isConnected(): boolean {
     return this.connected && !this.connectionError;
@@ -149,6 +154,24 @@ export class CodexAppServerClient {
     };
   }
 
+  /**
+   * Claims a native thread for one local session. Conflicting claims throw without disturbing
+   * the owner; the returned release callback is idempotent.
+   */
+  acquireThread(threadId: string): () => void {
+    if (this.closedByHost)
+      throw new CodexAppServerConnectionError('Codex app-server client closed by host');
+    if (this.claimedThreads.has(threadId))
+      throw new Error(`Codex thread already has an active session: ${threadId}`);
+    this.claimedThreads.add(threadId);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.claimedThreads.delete(threadId);
+    };
+  }
+
   /** Process-global options must stay identical while this long-lived client is reused. */
   canReuseFor(
     options: Pick<CodexAppServerClientOptions, 'args' | 'commandPath' | 'cwd' | 'env'>,
@@ -167,8 +190,8 @@ export class CodexAppServerClient {
       return false;
     }
 
-    const currentEnv = Object.entries(this.options.env).filter(([, value]) => value !== undefined);
-    const nextEnv = Object.entries(options.env).filter(([, value]) => value !== undefined);
+    const currentEnv = Object.entries(this.options.env);
+    const nextEnv = Object.entries(getCodexProcessEnv(options.env));
     return (
       currentEnv.length === nextEnv.length &&
       currentEnv.every(([key, value]) => options.env[key] === value)

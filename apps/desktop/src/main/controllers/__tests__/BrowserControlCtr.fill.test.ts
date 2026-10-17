@@ -54,6 +54,22 @@ describe('fillScript on a native select', () => {
     expect(select.selectedIndex).toBe(1);
   });
 
+  it('matches the rendered label of an option with a label attribute', () => {
+    document.body.innerHTML = `
+      <select aria-label="Language">
+        <option value="zh" label="Chinese">中文（简体）</option>
+        <option value="en" label="English">English (US)</option>
+      </select>`;
+    const select = document.querySelector('select')!;
+    (window as any).__lobeBrowserRefs = { e1: select };
+
+    expect(JSON.parse((0, eval)(fillScript('e1', 'English')))).toEqual({ ok: true });
+    expect(select.value).toBe('en');
+    expect(JSON.parse((0, eval)(fillScript('e1', 'French'))).error).toBe(
+      'no option matches "French"; options: Chinese, English',
+    );
+  });
+
   it('lists the available options when nothing matches', () => {
     const { result, value } = fillSelect('Curse');
 

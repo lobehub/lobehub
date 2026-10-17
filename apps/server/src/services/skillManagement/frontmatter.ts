@@ -92,6 +92,29 @@ const parseMatter = (content: string): ParsedMatterResult => {
 };
 
 /**
+ * Remove a leading frontmatter-looking block from a pasted body and return the
+ * remaining body, or `undefined` when the block is not actually frontmatter.
+ *
+ * A thematic break followed by prose (`---\n\nIntroduction\n\n---`) parses to
+ * a YAML scalar, a list parses to an array, and malformed YAML throws — none
+ * of them is a metadata mapping, so the body must be kept verbatim rather than
+ * silently losing content through the second delimiter.
+ */
+const stripPastedFrontmatter = (body: string): string | undefined => {
+  let parsed: { content: string; data: unknown };
+  try {
+    parsed = matter(body);
+  } catch {
+    return undefined;
+  }
+
+  const { content, data } = parsed;
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return undefined;
+
+  return content.trimStart();
+};
+
+/**
  * Renders skill index content from structured metadata and body Markdown.
  *
  * Before:
@@ -99,18 +122,40 @@ const parseMatter = (content: string): ParsedMatterResult => {
  *
  * After:
  * - "---\nname: review\ndescription: Review PRs\n---\n# Review\n\n## Workflow\n- Check tests."
+ *
+ * Models often paste a full SKILL.md-shaped body that already carries a
+ * frontmatter block. Frontmatter is always rendered from the structured
+ * fields (`name` / `description`), so a well-formed leading metadata block is
+ * stripped from the body instead of failing the save; a block that only looks
+ * like frontmatter (a thematic break around prose) is kept verbatim, and an
+ * unclosed block is rejected.
  */
 export const renderSkillIndexContent = (input: RenderSkillIndexContentInput): string => {
   const name = validateSkillName(input.name);
   const description = normalizeFrontmatterScalar(input.description, 'description');
-  const body = input.bodyMarkdown.trimStart();
+  let body = input.bodyMarkdown.trimStart();
 
   if (!body) {
     throw new Error('Skill bodyMarkdown is required');
   }
 
   if (body.startsWith('---')) {
-    throw new Error('Skill bodyMarkdown must not include YAML frontmatter');
+    if (!FRONTMATTER_BLOCK_PATTERN.test(body)) {
+      throw new Error('Skill bodyMarkdown must close YAML frontmatter');
+    }
+    body = stripPastedFrontmatter(body) ?? body;
+    if (!body) {
+      throw new Error('Skill bodyMarkdown is required');
+    }
+
+    if (body.startsWith('---')) {
+      // The block parsed to prose (a thematic break around text, a list, or
+      // malformed YAML) and is kept verbatim. matter.stringify() would
+      // re-parse the leading delimiter and corrupt the output, so compose the
+      // structured frontmatter block manually.
+      const block = matter.stringify('', { description, name }).replace(/\n+$/, '\n');
+      return block + body;
+    }
   }
 
   return matter

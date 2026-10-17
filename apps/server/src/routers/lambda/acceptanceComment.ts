@@ -5,6 +5,7 @@ import type {
   AcceptanceCommentList,
   AcceptanceCommentReaction,
 } from '@lobechat/types';
+import { reviewAnchorSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -29,6 +30,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { createEvidenceFileResolver } from '@/server/services/verify/evidenceFiles';
 
 import { resolveAcceptanceCommentAccess } from './_helpers/acceptanceCommentAccess';
@@ -62,6 +64,7 @@ const createSchema = z
     editorData: z.unknown().optional(),
     kind: z.enum(['approval', 'comment', 'proposal']).optional(),
     parentCommentId: z.string().trim().min(1).max(64).optional(),
+    source: reviewAnchorSchema.optional(),
   })
   .refine(
     (value) =>
@@ -72,6 +75,10 @@ const createSchema = z
   .refine((value) => !(value.parentCommentId && value.anchor), {
     message: 'A reply cannot carry its own anchor',
     path: ['anchor'],
+  })
+  .refine((value) => !(value.parentCommentId && value.source), {
+    message: 'A reply cannot carry its own page anchor',
+    path: ['source'],
   })
   .refine((value) => !(value.parentCommentId && value.kind === 'approval'), {
     message: 'An approval is a thread root',
@@ -252,6 +259,16 @@ const enrich = async (
     reactionsByComment.set(row.parentCommentId, byEmoji);
   }
 
+  // The reporter's console errors and user agent are diagnostics for whoever
+  // fixes the page, not something every link holder should read.
+  const sourceOf = (row: AcceptanceCommentRow) => {
+    if (!row.source) return null;
+    const own = Boolean(scope.userId) && row.authorUserId === scope.userId;
+    if (own || scope.canModerate) return row.source;
+    const { env: _env, ...rest } = row.source;
+    return rest;
+  };
+
   return rows
     .filter((row) => row.kind !== 'reaction')
     .map((row) => ({
@@ -284,6 +301,7 @@ const enrich = async (
       rect: row.anchorRect,
       resolvedAt: row.resolvedAt,
       resolvedByUserId: row.resolvedByUserId,
+      source: sourceOf(row),
       updatedAt: row.updatedAt,
     }));
 };
@@ -420,6 +438,7 @@ export const acceptanceCommentRouter = router({
         editorData: input.editorData as never,
         kind: input.kind,
         parentCommentId: input.parentCommentId,
+        source: input.source,
         /*
          * The ceiling travels INTO the write so it is counted and charged in
          * one transaction: checked out here it would be advisory only, and a
@@ -442,6 +461,7 @@ export const acceptanceCommentRouter = router({
         visibility: access.acceptance.visibility,
         workspaceId: access.acceptance.workspaceId,
       });
+      notifyAcceptance(access.acceptance.id, 'comments', ctx.userId);
       return { data: item, success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -481,6 +501,7 @@ export const acceptanceCommentRouter = router({
         comment.id,
         own ? { authorUserId: ctx.userId } : { moderator: true },
       );
+      notifyAcceptance(comment.acceptanceId, 'comments', ctx.userId);
       return { data: { deleted: result !== false }, success: true };
     }),
 
@@ -558,6 +579,7 @@ export const acceptanceCommentRouter = router({
         input.resolved,
         ctx.userId,
       );
+      notifyAcceptance(comment.acceptanceId, 'comments', ctx.userId);
       return { data: { resolvedAt: row?.resolvedAt ?? null }, success: true };
     }),
 });

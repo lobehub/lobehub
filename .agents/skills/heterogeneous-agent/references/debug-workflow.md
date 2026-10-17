@@ -160,7 +160,6 @@ If the repo already contains useful references, inspect these first:
 If you only need boundary semantics or tool persistence behavior, prefer existing adapter tests under:
 
 - `packages/heterogeneous-agents/src/adapters/claudeCode.test.ts`
-- `packages/heterogeneous-agents/src/adapters/claudeCode.e2e.test.ts`
 
 ## 3. Compare Raw And Adapted Events
 

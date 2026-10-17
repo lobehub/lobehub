@@ -2,7 +2,7 @@ import type { DocumentCommentJson } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorProps } from '@lobehub/editor/react';
 import { useEditor } from '@lobehub/editor/react';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import type { Ref } from 'react';
 import { memo, useCallback, useImperativeHandle } from 'react';
 

@@ -15,6 +15,7 @@ import {
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    archive: vi.fn(),
     cancelTopic: vi.fn(),
     deleteTopic: vi.fn(),
     run: vi.fn(),
@@ -51,6 +52,24 @@ const listTasks = (state = useTaskStore.getState()) => state.taskListMap.list.it
 const boardGroups = (state = useTaskStore.getState()) => state.taskGroupListMap.board.groups;
 
 describe('TaskLifecycleSliceAction', () => {
+  describe('archiveTask', () => {
+    it('resolves once the write commits, even if the refresh afterwards fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.archive).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh failed'));
+
+      await expect(useTaskStore.getState().archiveTask('T-1', true)).resolves.toBeUndefined();
+      expect(taskService.archive).toHaveBeenCalledWith('T-1', true);
+      vi.mocked(mutate).mockReset();
+    });
+
+    it('still rejects when the archive write itself fails', async () => {
+      vi.mocked(taskService.archive).mockRejectedValue(new Error('BAD_REQUEST'));
+
+      await expect(useTaskStore.getState().archiveTask('T-1', true)).rejects.toThrow('BAD_REQUEST');
+    });
+  });
+
   describe('runTask', () => {
     it('should optimistically set status to running and call service', async () => {
       vi.mocked(taskService.run).mockResolvedValue({ success: true } as any);

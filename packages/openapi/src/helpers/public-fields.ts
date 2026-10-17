@@ -338,7 +338,7 @@ export const projectPublicSession = (value: SessionItem): PublicSession =>
 export const projectPublicTopic = (value: TopicItem): PublicTopic =>
   pickPublicFields(value, PUBLIC_TOPIC_FIELDS);
 
-export const projectPublicMessage = (value: MessageItem): PublicMessage =>
+export const projectPublicMessage = (value: PublicMessage): PublicMessage =>
   pickPublicFields(value, PUBLIC_MESSAGE_FIELDS);
 
 export const projectPublicEvalRun = (value: AgentEvalRunItem): PublicEvalRun =>

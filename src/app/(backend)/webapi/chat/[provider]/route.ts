@@ -4,7 +4,9 @@ import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
-import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
+import { runRouteWithLlmRelayRequest } from '@/server/modules/AgentRuntime/llmRelay/requestScope';
+import { createTraceOptions } from '@/server/modules/ModelRuntime';
 import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { getTracePayload } from '@/utils/trace';
@@ -21,26 +23,33 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
   try {
     const workspaceId = await resolveValidWorkspaceIdFromRequest({ req, serverDB, userId });
 
-    // ============  1. init chat model   ============ //
-    const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId);
+    // A provider only the user's device reaches is relayed back to the
+    // requesting tab (one-shot relay); the channel stays open while the
+    // response streams.
+    return await runRouteWithLlmRelayRequest(req, userId, async () => {
+      // ============  1. init chat model   ============ //
+      const modelRuntime = await initModelRuntimeForRequest(serverDB, userId, provider, {
+        workspaceId,
+      });
 
-    // ============  2. create chat completion   ============ //
+      // ============  2. create chat completion   ============ //
 
-    const data = (await req.json()) as ChatStreamPayload;
+      const data = (await req.json()) as ChatStreamPayload;
 
-    const tracePayload = getTracePayload(req);
+      const tracePayload = getTracePayload(req);
 
-    let traceOptions = {};
-    // If user enable trace
-    if (tracePayload?.enabled) {
-      traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
-    }
+      let traceOptions = {};
+      // If user enable trace
+      if (tracePayload?.enabled) {
+        traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
+      }
 
-    return await modelRuntime.chat(data, {
-      user: userId,
-      ...traceOptions,
-      metadata: { topicId: req.headers.get(REQUEST_TOPIC_ID_HEADER) ?? undefined },
-      signal: req.signal,
+      return await modelRuntime.chat(data, {
+        user: userId,
+        ...traceOptions,
+        metadata: { topicId: req.headers.get(REQUEST_TOPIC_ID_HEADER) ?? undefined },
+        signal: req.signal,
+      });
     });
   } catch (e) {
     const {

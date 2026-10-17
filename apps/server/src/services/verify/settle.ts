@@ -17,6 +17,7 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
+import { AcceptanceService } from './acceptanceService';
 import { reviewGoalDelivery } from './goalReview';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
@@ -179,6 +180,17 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
+    // A Goal graph task is steered by its coordinator, which reads a paused task
+    // as "start another attempt". A failed lookup counts as Goal so a failure
+    // never silently skips the retry.
+    let goal: Awaited<ReturnType<GoalModel['findByGraphTask']>> | 'unknown';
+    try {
+      goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(taskOperation.taskId);
+    } catch (error) {
+      log('verify-settle goal lookup failed for task %s: %O', taskOperation.taskId, error);
+      goal = 'unknown';
+    }
+
     // The review already retries a check whose review could not run. An
     // `errored` result here is the reviewer's problem, and another builder
     // attempt would only re-deliver into the same broken review.
@@ -252,6 +264,20 @@ export const driveTaskFromVerify = async (
             : 'verify failed → recurring task %s remains scheduled',
           taskOperation.taskId,
         );
+      } else if (
+        outcome === 'failed' &&
+        run.acceptanceId &&
+        !goal &&
+        // A failed round still delivers the Acceptance — the verdict is advice and
+        // the user's accept / reject decides, so the task follows the Acceptance
+        // and completes. A reject that already landed (or lands mid-write) keeps
+        // the task open instead, falling through to the pause below.
+        (await new AcceptanceService(db, userId, workspaceId).completeTaskForDelivery(
+          run.acceptanceId,
+          taskOperation.taskId,
+        )) === 'completed'
+      ) {
+        log('verify failed → acceptance delivered → task %s completed', taskOperation.taskId);
       } else {
         // Verification outcomes belong to the task itself. Do not create an inbox
         // brief here: a verifier rejection/error is not a separate user todo.
@@ -309,10 +335,7 @@ export const driveTaskFromVerify = async (
     // this is the server-side driver for long-horizon goals, and without it a
     // goal only progresses while some client keeps ticking it.
     try {
-      const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(
-        taskOperation.taskId,
-      );
-      if (goal) {
+      if (goal && goal !== 'unknown') {
         await scheduleGoalAdvance({ goalId: goal.id, trigger: 'settle', userId, workspaceId });
         log('verify-settle → queued goal advance for %s', goal.id);
       }

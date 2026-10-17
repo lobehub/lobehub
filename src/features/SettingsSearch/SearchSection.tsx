@@ -1,10 +1,11 @@
 'use client';
 
 import { Flexbox, SearchBar } from '@lobehub/ui';
-import { memo, type PropsWithChildren, useState } from 'react';
+import { memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SearchResults from './SearchResults';
+import { useImeAwareQuery } from './useImeAwareQuery';
 import { useSettingsSearch } from './useSettingsSearch';
 
 /**
@@ -16,7 +17,7 @@ import { useSettingsSearch } from './useSettingsSearch';
  */
 const SearchSection = memo<PropsWithChildren>(({ children }) => {
   const { t } = useTranslation('setting');
-  const [query, setQuery] = useState('');
+  const { inputProps, query } = useImeAwareQuery();
   const { isIndexing, results } = useSettingsSearch(query);
 
   const showResults = !!query.trim();
@@ -27,9 +28,8 @@ const SearchSection = memo<PropsWithChildren>(({ children }) => {
         <SearchBar
           allowClear
           placeholder={t('settingsSearch.placeholder')}
-          value={query}
           variant={'filled'}
-          onInputChange={setQuery}
+          {...inputProps}
         />
       </Flexbox>
       {showResults ? (

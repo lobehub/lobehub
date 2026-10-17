@@ -5,6 +5,7 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson } from '../utils/format';
+import { assertReportLanguage, flowLanguageFields } from './acceptanceLanguage';
 
 /** Agent entry point: author a graph before exercising the product, then append real visits. */
 export function attachAcceptanceFlowCommands(acceptance: Command) {
@@ -17,6 +18,9 @@ export function attachAcceptanceFlowCommands(acceptance: Command) {
     .action(async (id: string, options: { file: string }) => {
       const client = await getTrpcClient();
       const input = JSON.parse(await readFile(options.file, 'utf8'));
+      // Planning is the earliest write in a flow-first acceptance: catching the
+      // wrong language here saves executing and recording a whole round in it.
+      await assertReportLanguage(client, flowLanguageFields(input.definition));
       outputJson(await client.acceptance.publishFlow.mutate({ ...input, id }));
     });
   flow.command('view <acceptanceId>').action(async (id: string) => {
@@ -70,6 +74,7 @@ export function attachAcceptanceFlowCommands(acceptance: Command) {
     .action(async (id: string, options: { file: string }) => {
       const client = await getTrpcClient();
       const input = JSON.parse(await readFile(options.file, 'utf8'));
+      await assertReportLanguage(client, [{ path: 'observation', text: input.observation }]);
       outputJson(await client.acceptance.recordFlowStep.mutate({ ...input, id }));
     });
   flow

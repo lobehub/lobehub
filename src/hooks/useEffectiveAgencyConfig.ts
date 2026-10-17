@@ -111,6 +111,13 @@ export const useEffectiveAgencyConfig = (
       agentId,
     ),
   );
+  // A project-directory topic runs in its bound directory, so its execution
+  // target is owned by the binding rather than the picker.
+  const isProjectDirectoryTopic = useChatStore(
+    (s) =>
+      !!bindingTopicId &&
+      !!topicSelectors.getTopicById(bindingTopicId)(s)?.projectWorkingDirectoryId,
+  );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
     {
@@ -129,7 +136,10 @@ export const useEffectiveAgencyConfig = (
     agencyConfig,
     canDisplayExecutionTarget: !!agentId && !isPreferenceLoading,
     canSelectExecutionTarget:
-      !!agentId && !isPreferenceLoading && agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
+      !!agentId &&
+      !isProjectDirectoryTopic &&
+      !isPreferenceLoading &&
+      agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
     isPreferenceLoading,
     workspaceScoped,
   };

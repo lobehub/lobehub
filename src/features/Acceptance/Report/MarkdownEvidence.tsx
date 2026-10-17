@@ -1,8 +1,16 @@
 'use client';
 
-import { Center, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Markdown,
+  Text,
+} from '@lobehub/ui';
 import { ChevronRight, FileText } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

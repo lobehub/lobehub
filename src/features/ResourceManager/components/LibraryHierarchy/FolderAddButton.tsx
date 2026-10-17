@@ -7,7 +7,7 @@ import {
 } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { type DropdownItem, DropdownMenu, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, toast, Upload } from '@lobehub/ui/base-ui';
+import { ActionIcon, toast, Upload } from '@lobehub/ui';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback, useId, useMemo, useState } from 'react';

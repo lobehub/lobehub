@@ -475,9 +475,9 @@ describe('WorkModel · workspace document visibility', () => {
     // so the UI renders "document deleted" + a remove action instead of a live
     // card that 404s on open.
     expect(ownerView[0].resourceDeleted).toBe(true);
+    // The resource-page gallery hides the orphan instead (resourceLiveFilter).
     const { items } = await ownerWorks.listByWorkspace({});
-    expect(items).toHaveLength(1);
-    expect(items[0].resourceDeleted).toBe(true);
+    expect(items).toHaveLength(0);
     expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
   });
 

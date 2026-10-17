@@ -29,6 +29,10 @@ const toResponsesError = (error: { code?: string | null; message?: string | null
     type: AgentRuntimeErrorType.ProviderBizError,
   }) satisfies ChatMessageError;
 
+type ResponsesStreamContext = StreamContext & {
+  responseTools?: Map<number, { id: string; index: number; name: string; namespace?: string }>;
+};
+
 const transformOpenAIStream = (
   chunk:
     | OpenAI.Responses.ResponseStreamEvent
@@ -48,7 +52,7 @@ const transformOpenAIStream = (
         item_id: string;
         type: 'response.output_text.annotation.added';
       },
-  streamContext: StreamContext,
+  streamContext: ResponsesStreamContext,
   payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
   // handle the first chunk error
@@ -86,6 +90,7 @@ const transformOpenAIStream = (
 
       case 'response.output_item.added': {
         switch (chunk.item.type) {
+          case 'custom_tool_call':
           case 'function_call': {
             streamContext.toolIndex =
               typeof streamContext.toolIndex === 'undefined' ? 0 : streamContext.toolIndex + 1;
@@ -94,14 +99,27 @@ const transformOpenAIStream = (
               index: streamContext.toolIndex,
               name: chunk.item.name,
             };
+            const namespace = chunk.item.namespace ? { namespace: chunk.item.namespace } : {};
+            streamContext.responseTools ??= new Map();
+            streamContext.responseTools.set(chunk.output_index, {
+              ...streamContext.tool,
+              ...namespace,
+            });
 
             return {
               data: [
                 {
-                  function: { arguments: chunk.item.arguments, name: chunk.item.name },
+                  function: {
+                    arguments:
+                      chunk.item.type === 'custom_tool_call'
+                        ? chunk.item.input
+                        : chunk.item.arguments,
+                    name: chunk.item.name,
+                  },
+                  ...namespace,
                   id: chunk.item.call_id,
                   index: streamContext.toolIndex!,
-                  type: 'function',
+                  type: chunk.item.type === 'custom_tool_call' ? 'custom' : 'function',
                 } satisfies StreamToolCallChunkData,
               ],
               id: streamContext.id,
@@ -113,14 +131,16 @@ const transformOpenAIStream = (
         return { data: chunk.item, id: streamContext.id, type: 'data' };
       }
 
+      case 'response.custom_tool_call_input.delta':
       case 'response.function_call_arguments.delta': {
+        const tool = streamContext.responseTools?.get(chunk.output_index) ?? streamContext.tool;
         return {
           data: [
             {
-              function: { arguments: chunk.delta, name: streamContext.tool?.name },
-              id: streamContext.tool?.id,
-              index: streamContext.toolIndex!,
-              type: 'function',
+              function: { arguments: chunk.delta, name: tool?.name },
+              id: tool?.id,
+              index: tool?.index ?? streamContext.toolIndex!,
+              type: chunk.type === 'response.custom_tool_call_input.delta' ? 'custom' : 'function',
             } satisfies StreamToolCallChunkData,
           ],
           id: streamContext.id,

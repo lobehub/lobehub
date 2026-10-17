@@ -2,8 +2,8 @@
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { RadioGroup } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { RadioGroup } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

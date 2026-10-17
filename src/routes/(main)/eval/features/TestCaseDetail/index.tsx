@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Breadcrumb, Button, Tag, Text, TextArea, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Breadcrumb,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tag,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
 import { FileText, Pencil } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -69,9 +77,10 @@ export interface TestCaseDetailProps {
   testCase: {
     datasetId: string;
     content?: {
+      expected?: string;
       input?: string;
       messages?: Array<{ content?: unknown; role?: string }>;
-    } & Record<string, unknown>;
+    };
     evalConfig?: Record<string, unknown> | null;
     evalMode?: string | null;
     id: string;
@@ -117,7 +126,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     if (!patch) return stop();
     setSaving(true);
     try {
-      await updateTestCase(testCase.id, testCase.datasetId, patch);
+      await updateTestCase(testCase.id, patch);
       stop();
     } catch (error) {
       toast.error((error as Error)?.message ?? t('testCaseDetail.saveFailed'));

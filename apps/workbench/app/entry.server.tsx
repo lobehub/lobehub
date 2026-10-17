@@ -1,10 +1,7 @@
-import { createCache } from '@ant-design/cssinjs';
-import { buildInlineAntdStyle } from '@lobehub/ui/static-css/runtime';
-import { extractStaticStyle, StyleProvider } from 'antd-style';
+import { extractStaticStyle } from '@lobehub/ui';
 import { renderToReadableStream } from 'react-dom/server';
 import type { EntryContext } from 'react-router';
 import { ServerRouter } from 'react-router';
-import { styleKeys } from 'virtual:lobehub/antd-static-css';
 
 export default async function handleRequest(
   request: Request,
@@ -13,12 +10,9 @@ export default async function handleRequest(
   routerContext: EntryContext,
 ) {
   let status = responseStatusCode;
-  const antdCache = createCache();
 
   const stream = await renderToReadableStream(
-    <StyleProvider cache={antdCache} speedy={false}>
-      <ServerRouter context={routerContext} url={request.url} />
-    </StyleProvider>,
+    <ServerRouter context={routerContext} url={request.url} />,
     {
       // This response is fully buffered. Keep completed Suspense content inline
       // instead of sending a fallback and a hidden segment that needs browser JS.
@@ -33,15 +27,13 @@ export default async function handleRequest(
   await stream.allReady;
   const html = await new Response(stream).text();
 
-  const inlineAntd = buildInlineAntdStyle(antdCache, { styleKeys });
-  const emotionTags = extractStaticStyle(html, { includeAntd: false })
+  const emotionTags = extractStaticStyle(html)
     .map((item) => item.tag)
     .join('');
 
   responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
-  responseHeaders.set('x-workbench-antd-uncovered', String(inlineAntd.uncovered.length));
 
-  return new Response(html.replace('</head>', `${inlineAntd.html}${emotionTags}</head>`), {
+  return new Response(html.replace('</head>', `${emotionTags}</head>`), {
     headers: responseHeaders,
     status,
   });

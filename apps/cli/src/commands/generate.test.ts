@@ -99,15 +99,67 @@ describe('generate command', () => {
   }
 
   describe('text', () => {
+    const jsonResponse = (body: unknown) =>
+      new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+
+    const sseResponse = (events: Array<{ data: unknown; event?: string }>, chunkSize = 7) => {
+      const raw = events
+        .map(({ data, event }) =>
+          [
+            'id: chat_test',
+            event ? `event: ${event}` : undefined,
+            `data: ${typeof data === 'string' && data === '[DONE]' ? data : JSON.stringify(data)}`,
+            '',
+            '',
+          ]
+            .filter((line) => line !== undefined)
+            .join('\n'),
+        )
+        .join('');
+      const encoder = new TextEncoder();
+      // Split into small chunks so events straddle read() boundaries
+      const stream = new ReadableStream({
+        start(controller) {
+          for (let i = 0; i < raw.length; i += chunkSize) {
+            controller.enqueue(encoder.encode(raw.slice(i, i + chunkSize)));
+          }
+          controller.close();
+        },
+      });
+      return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
+    };
+
+    /** Gemini reply as emitted by `/webapi/chat/*` */
+    const geminiEvents = [
+      { data: { content: 'Hello there', partType: 'text' }, event: 'content_part' },
+      { data: { content: ', how are you?', partType: 'text' }, event: 'content_part' },
+      { data: 'STOP', event: 'stop' },
+      { data: { totalInputTokens: 6, totalOutputTokens: 7 }, event: 'usage' },
+      { data: { latency: 650, ttft: 607 }, event: 'speed' },
+    ];
+
+    /** OpenAI Responses reply as emitted by `/webapi/chat/*` */
+    const openaiEvents = [
+      { data: 'in_progress', event: 'data' },
+      { data: { type: 'response.in_progress' }, event: 'data' },
+      { data: 'encrypted-signature', event: 'reasoning_signature' },
+      { data: 'Hello', event: 'text' },
+      { data: ', world', event: 'text' },
+      { data: { type: 'response.completed' }, event: 'data' },
+      { data: { totalTokens: 272 }, event: 'usage' },
+    ];
+
+    const writtenText = () =>
+      stdoutSpy.mock.calls.map(([chunk]: [unknown]) => String(chunk)).join('');
+
     it('should default to non-streaming and output plain text', async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
-          json: vi.fn().mockResolvedValue({
-            choices: [{ message: { content: 'Response text' } }],
-          }),
-          ok: true,
-        }),
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponse({ choices: [{ message: { content: 'Response text' } }] }),
+          ),
       );
 
       const program = createProgram();
@@ -127,13 +179,7 @@ describe('generate command', () => {
         model: 'gpt-4o-mini',
         usage: { completion_tokens: 5, prompt_tokens: 10 },
       };
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          json: vi.fn().mockResolvedValue(responseBody),
-          ok: true,
-        }),
-      );
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(responseBody)));
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello', '--json']);
@@ -141,19 +187,31 @@ describe('generate command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(responseBody, null, 2));
     });
 
-    it('should stream when --stream is explicitly passed', async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'),
-          );
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
+    it('should collect SSE text when the server ignores non-streaming mode', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents)));
 
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ body: stream, ok: true }));
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello']);
+
+      expect(writtenText()).toBe('Hello there, how are you?\n');
+      expect(log.error).not.toHaveBeenCalled();
+    });
+
+    it('should output collected SSE as JSON when --json is used without --stream', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents)));
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hello', '--json']);
+
+      expect(JSON.parse(consoleSpy.mock.calls[0][0] as string)).toEqual({
+        content: 'Hello there, how are you?',
+        finishReason: 'STOP',
+        usage: { totalInputTokens: 6, totalOutputTokens: 7 },
+      });
+    });
+
+    it('should stream Gemini content parts without printing the stop reason', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents)));
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
@@ -162,18 +220,118 @@ describe('generate command', () => {
       const body = JSON.parse(fetchCall[1]!.body as string);
       expect(body.stream).toBe(true);
 
-      expect(stdoutSpy).toHaveBeenCalledWith('Hello');
+      expect(writtenText()).toBe('Hello there, how are you?\n');
+    });
+
+    it('should stream only text events from the LobeHub protocol', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(openaiEvents)));
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
+
+      expect(writtenText()).toBe('Hello, world\n');
+    });
+
+    it('should keep reasoning parts out of the reply text', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          sseResponse([
+            // Gemini thought parts, as emitted by the google stream transformer
+            {
+              data: {
+                content: 'Thinking...',
+                inReasoning: true,
+                partType: 'text',
+                thoughtSignature: 'sig',
+              },
+              event: 'reasoning_part',
+            },
+            { data: 'more thoughts', event: 'reasoning' },
+            { data: { content: 'Answer', partType: 'text' }, event: 'content_part' },
+          ]),
+        ),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--json']);
+
+      expect(JSON.parse(consoleSpy.mock.calls[0][0] as string)).toMatchObject({
+        content: 'Answer',
+        reasoning: 'Thinking...more thoughts',
+      });
+    });
+
+    it('should warn when an image model replies without text', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          sseResponse([
+            { data: { content: 'iVBORw0KGgo=', partType: 'image' }, event: 'content_part' },
+            { data: 'STOP', event: 'stop' },
+          ]),
+        ),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Draw a cat']);
+
+      expect(writtenText()).toBe('\n');
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('generate image'));
+    });
+
+    it('should stream plain OpenAI chat-completion chunks', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            sseResponse([
+              { data: { choices: [{ delta: { content: 'Hello' } }] } },
+              { data: '[DONE]' },
+            ]),
+          ),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
+
+      expect(writtenText()).toBe('Hello\n');
+    });
+
+    it('should print each SSE event as a JSON line with --stream --json', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents.slice(0, 3))));
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream', '--json']);
+
+      expect(consoleSpy.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual(
+        geminiEvents.slice(0, 3),
+      );
+    });
+
+    it('should exit when the SSE stream reports an error', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          sseResponse([
+            { data: 'Partial', event: 'text' },
+            { data: { message: 'quota exceeded' }, event: 'error' },
+          ]),
+        ),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('quota exceeded'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
     it('should parse provider from model string', async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
-          json: vi.fn().mockResolvedValue({
-            choices: [{ message: { content: 'ok' } }],
-          }),
-          ok: true,
-        }),
+        vi.fn().mockResolvedValue(jsonResponse({ choices: [{ message: { content: 'ok' } }] })),
       );
 
       const program = createProgram();
@@ -196,11 +354,7 @@ describe('generate command', () => {
     it('should exit on error response', async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
-          ok: false,
-          status: 500,
-          text: vi.fn().mockResolvedValue('Internal error'),
-        }),
+        vi.fn().mockResolvedValue(new Response('Internal error', { status: 500 })),
       );
 
       const program = createProgram();

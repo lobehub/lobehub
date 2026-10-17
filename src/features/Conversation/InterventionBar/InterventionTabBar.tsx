@@ -1,6 +1,4 @@
-import { Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Button, cx, Tooltip } from '@lobehub/ui';
 import { CheckCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

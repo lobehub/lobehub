@@ -20,8 +20,10 @@ export interface ListAgentSignalReceiptsParams {
 
 export interface RollbackAgentSignalReceiptParams {
   agentDocumentId?: string;
-  documentId: string;
-  historyId: string;
+  /** Skill receipts only. */
+  documentId?: string;
+  /** Skill receipts only. */
+  historyId?: string;
   receiptId: string;
 }
 

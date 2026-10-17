@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +27,7 @@ const AgentConnectorUsage = memo<{
       gap={12}
       justify="space-between"
       style={{
-        background: 'var(--ant-color-fill-quaternary)',
+        background: 'var(--lobe-color-fill-quaternary)',
         borderRadius: 8,
         marginBottom: 16,
         padding: '10px 12px',

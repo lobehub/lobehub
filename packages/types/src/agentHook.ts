@@ -92,10 +92,13 @@ export const serializedAgentHookSchema = z
     ) {
       ctx.addIssue({ code: 'custom', message: 'Matchers are only supported for tool events' });
     }
-    if (hook.webhook.responseHandling === 'toolCall' && hook.type !== 'beforeToolCall') {
+    if (
+      hook.webhook.responseHandling === 'toolCall' &&
+      !['beforeToolCall', 'afterToolCall'].includes(hook.type)
+    ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'toolCall response handling requires beforeToolCall',
+        message: 'toolCall response handling requires beforeToolCall or afterToolCall',
       });
     }
   });

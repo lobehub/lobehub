@@ -11,10 +11,15 @@ import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { hasActiveWorkspaceMembership } from '@/database/models/workspace';
+import { normalizeWorkspaceId } from '@/database/utils/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import {
+  type LlmRelayRequest,
+  readLlmRelayRequest,
+} from '@/server/modules/AgentRuntime/llmRelay/requestScope';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 import { getRequestClientIP } from '@/utils/requestClientIP';
 
@@ -95,6 +100,12 @@ export interface AuthContext {
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
+  /**
+   * The browser tab this request came from, when it subscribed a one-shot
+   * relay channel for the request's LLM calls (provider only reachable from
+   * the user's device). See `runWithLlmRelayRequest`.
+   */
+  llmRelay?: LlmRelayRequest;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
@@ -127,6 +138,7 @@ export const createContextInner = async (params?: {
   authFailure?: string;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
+  llmRelay?: LlmRelayRequest;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
@@ -148,6 +160,7 @@ export const createContextInner = async (params?: {
     apiKeyScopes: params?.apiKeyScopes,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
+    llmRelay: params?.llmRelay,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
     oidcClientId: params?.oidcClientId,
@@ -156,7 +169,12 @@ export const createContextInner = async (params?: {
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,
-    workspaceId: params?.workspaceId,
+    // A blank scope is not a workspace. Callers that "resolve" one (an empty
+    // header, a blank env var, a `?? ''` on the way through) would otherwise
+    // hand `''` to every model, and each write would fail on the `workspaces`
+    // foreign key instead of landing in personal data. `undefined` is how the
+    // rest of the context already spells "no workspace".
+    workspaceId: normalizeWorkspaceId(params?.workspaceId) ?? undefined,
   };
 };
 
@@ -197,9 +215,15 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   log('marketAccessToken from cookie:', marketAccessToken ? '[HIDDEN]' : 'undefined');
   const workspaceId = request.headers.get('X-Workspace-Id')?.trim() || undefined;
 
+  // One-shot relay headers name one channel for one procedure: procedures of a
+  // batch would share it (and its call ids). The browser sends relayed calls
+  // unbatched, so a batch is never relayed.
+  const isBatch = request.nextUrl.searchParams.get('batch') === '1';
+
   const commonContext = {
     clientMetadata,
     clientIp,
+    llmRelay: isBatch ? undefined : readLlmRelayRequest(request.headers),
     marketAccessToken,
     userAgent,
     workspaceId,

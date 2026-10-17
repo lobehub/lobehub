@@ -7,6 +7,7 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import type { EditLockService } from '@/server/services/editLock';
 import type { TaskService } from '@/server/services/task';
 
+import { assertArchivedTaskStaysIdle } from './archiveGuard';
 import { assertResultingScheduleValid } from './scheduleValidation';
 
 /**
@@ -135,6 +136,7 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
 
   const resolved = await resolveOrThrow(ctx.taskModel, id);
   assertResultingScheduleValid(resolved, data);
+  assertArchivedTaskStaysIdle(resolved, data);
 
   // Collaborative edit lock: reject writes to a workspace task another member
   // is actively editing. Inert until a client acquires the lock.

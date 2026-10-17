@@ -24,14 +24,17 @@ const groupModelsByProvider = (models: LobeDefaultAiModelListItem[]) =>
 
 export const genServerAiProvidersConfig = async (
   specificConfig: Record<any, ProviderSpecificConfig>,
+  providers: ModelProvider[] = Object.values(ModelProvider),
+  models?: LobeDefaultAiModelListItem[],
 ) => {
   const llmConfig = getLLMConfig() as Record<string, any>;
-  const builtinModels = groupModelsByProvider(await loadModels());
+  const allModels = models ?? (await loadModels());
+  const builtinModels = groupModelsByProvider(allModels);
   const staticModels = AiModels as unknown as Record<string, AiFullModelCard[] | undefined>;
 
-  // Process all providers concurrently
+  // Process only the requested providers, sharing one catalog snapshot.
   const providerConfigs = await Promise.all(
-    Object.values(ModelProvider).map(async (provider) => {
+    providers.map(async (provider) => {
       const providerUpperCase = provider.toUpperCase();
       const hasStaticModels = Object.hasOwn(staticModels, provider);
       const staticProviderModels = hasStaticModels ? staticModels[provider] : undefined;
@@ -48,8 +51,14 @@ export const genServerAiProvidersConfig = async (
 
       // Process extractEnabledModels and transformToAiModelList concurrently
       const [enabledModels, serverModelLists] = await Promise.all([
-        extractEnabledModels(provider, modelString, providerConfig.withDeploymentName || false),
+        extractEnabledModels(
+          provider,
+          modelString,
+          providerConfig.withDeploymentName || false,
+          allModels,
+        ),
         transformToAiModelList({
+          builtinModels: allModels,
           defaultModels: aiModels || [],
           modelString,
           providerId: provider,

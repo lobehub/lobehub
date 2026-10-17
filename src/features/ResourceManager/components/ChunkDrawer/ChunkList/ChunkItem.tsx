@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { useFileStore } from '@/store/file';

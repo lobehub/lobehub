@@ -14,6 +14,12 @@ import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from '../taskAcceptance';
 
 vi.mock('../goalReview', () => ({ reviewGoalDelivery: vi.fn() }));
+const { completeTaskForDelivery } = vi.hoisted(() => ({ completeTaskForDelivery: vi.fn() }));
+vi.mock('../acceptanceService', () => ({
+  AcceptanceService: vi.fn(function () {
+    return { completeTaskForDelivery };
+  }),
+}));
 vi.mock('../taskAcceptance', () => ({
   attachTaskRunToAcceptance: vi.fn(),
   resolveTaskAcceptance: vi.fn(),
@@ -412,6 +418,7 @@ describe('driveTaskFromVerify', () => {
       .mockImplementation(async (_db, _userId, params) => params.run);
     vi.mocked(scheduleGoalAdvance).mockClear();
     goalFindByTask.mockReset();
+    completeTaskForDelivery.mockReset().mockResolvedValue('completed');
     [
       runClaimTaskDrive,
       runFindByOperation,
@@ -557,6 +564,78 @@ describe('driveTaskFromVerify', () => {
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
     // Creator is told it failed verification (reason 'error'), not a passed result.
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
+  });
+
+  it('failed with an Acceptance → completes the task, since the Acceptance is now delivered', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(completeTaskForDelivery).toHaveBeenCalledWith('acceptance-1', 'task-1');
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    // The creator still hears the verdict: the round did not pass.
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
+  });
+
+  it('failed with an Acceptance → pauses when the task could not be completed', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    completeTaskForDelivery.mockResolvedValue('skipped');
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
+  it('failed with a rejected Acceptance → keeps the task open (paused)', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    completeTaskForDelivery.mockResolvedValue('rejected');
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
+  it('failed Goal task with an Acceptance → still pauses so the coordinator retries', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(completeTaskForDelivery).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
+  it('failed with an Acceptance → pauses when the Goal lookup fails', async () => {
+    runFindByOperation.mockResolvedValue({
+      acceptanceId: 'acceptance-1',
+      id: 'run-1',
+      metadata: null,
+      status: 'failed',
+    });
+    goalFindByTask.mockRejectedValue(new Error('db down'));
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(completeTaskForDelivery).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
   });
 
   it('errored → pauses without an inbox brief; never claims the delivery "did not pass"', async () => {

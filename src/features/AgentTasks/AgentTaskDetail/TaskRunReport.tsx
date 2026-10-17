@@ -1,8 +1,7 @@
 'use client';
 
 import type { TaskDetailActivity } from '@lobechat/types';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { ActionIcon, Avatar, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { MessageCircle, MessagesSquare } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GoalNodeView } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 
-import { taskRowSpan, taskRowState, taskRowStateLabelKey } from './taskRowState';
+import { metricRowTaskId, taskRowSpan, taskRowState, taskRowStateLabelKey } from './taskRowState';
 
 const STARTED = new Date('2026-09-26T10:00:00Z');
 const HEARTBEAT = new Date('2026-09-26T10:20:00Z');
@@ -65,5 +65,21 @@ describe('taskRowState', () => {
 
     expect(taskRowState(queued)).toBe('queued');
     expect(taskRowSpan(queued)).toBeUndefined();
+  });
+});
+
+describe('metricRowTaskId', () => {
+  it('opens the Task detail for a Task row backed by a real Task', () => {
+    const task = view({ node: { kind: 'task', status: 'resolved', taskId: 'task_1' } } as never);
+
+    expect(metricRowTaskId(task)).toBe('task_1');
+  });
+
+  it('keeps the node drill-down for nodes without a Task', () => {
+    const planned = view({ node: { kind: 'task', status: 'pending' } } as never);
+    const finding = view({ node: { kind: 'finding', status: 'resolved', taskId: 't' } } as never);
+
+    expect(metricRowTaskId(planned)).toBeUndefined();
+    expect(metricRowTaskId(finding)).toBeUndefined();
   });
 });

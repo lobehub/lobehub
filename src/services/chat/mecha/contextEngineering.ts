@@ -1,3 +1,4 @@
+import { LobeHubIdentifier } from '@lobechat/builtin-skills/manifests';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { isDesktop } from '@lobechat/const';
@@ -9,6 +10,7 @@ import type {
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
+import { mentionsTopic } from '@lobechat/context-engine';
 import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from '@lobechat/mecha';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
@@ -59,6 +61,11 @@ interface ContextEngineeringContext {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
   /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
@@ -113,6 +120,7 @@ interface ContextEngineeringContext {
 // REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
 export const contextEngineering = async ({
   additionalContexts,
+  attachmentPreviewFileIds,
   messages = [],
   manifests,
   tools,
@@ -292,6 +300,9 @@ export const contextEngineering = async ({
         plugins,
         disabledPluginIds,
         agentChatConfigSelectors.skillActivateMode(agentStoreState),
+        // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
+        // which the lobehub skill teaches.
+        mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
       )
     ).skills;
   }
@@ -320,7 +331,11 @@ export const contextEngineering = async ({
       systemRole,
     },
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
-    fileContext: { enabled: true, includeFileUrl: !isDesktop },
+    fileContext: {
+      enabled: true,
+      includeFileUrl: !isDesktop,
+      previewFileIds: attachmentPreviewFileIds,
+    },
     model: {
       capabilities: { isCanUseAudio, isCanUseFC, isCanUseVideo, isCanUseVision },
       displayName: getRuntimeModelDisplayName(model, provider),

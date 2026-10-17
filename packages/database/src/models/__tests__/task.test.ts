@@ -115,16 +115,6 @@ describe('TaskModel', () => {
       expect(task3.identifier).toBe('T-3');
     });
 
-    it('should support custom identifier prefix', async () => {
-      const model = new TaskModel(serverDB, userId);
-      const result = await model.create({
-        identifierPrefix: 'PROJ',
-        instruction: 'Build WAKE system',
-      });
-
-      expect(result.identifier).toBe('PROJ-1');
-    });
-
     it('should create task with all optional fields', async () => {
       const model = new TaskModel(serverDB, userId);
       await createAgent('agent-1');

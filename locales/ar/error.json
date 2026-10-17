@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "غير قادر على إنشاء هذه الإجابة",
   "unknownError.title": "عذرًا، الطلب أخذ قسطًا من الراحة",
   "unknownError.traceIdLabel": "معرّف التتبع:",
+  "unknownError.troubleshoot": "استكشاف الأخطاء وإصلاحها",
   "unlock.addProxyUrl": "إضافة عنوان وكيل OpenAI (اختياري)",
   "unlock.apiKey.description": "أدخل مفتاح API الخاص بـ {{name}} لبدء الجلسة",
   "unlock.apiKey.imageGenerationDescription": "أدخل مفتاح API الخاص بـ {{name}} لبدء التوليد",

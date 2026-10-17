@@ -1,4 +1,4 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 /**
  * The composer's working-directory chip — for a run on a machine and for one in
@@ -27,6 +27,14 @@ export const workingDirectoryChipStyles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  /** Shown, not picked — e.g. a directory owned by the conversation's project. */
+  readonly: css`
+    cursor: default;
+
+    &:hover {
+      background: transparent;
     }
   `,
   label: css`

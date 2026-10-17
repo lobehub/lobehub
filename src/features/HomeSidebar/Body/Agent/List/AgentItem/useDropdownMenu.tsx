@@ -1,12 +1,12 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
+  agentRenameField,
   SessionDefaultGroup,
   type SidebarAgentLabel,
   type SidebarVisibility,
 } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
-import { openEditingPopover } from '@/features/EditingPopover/store';
+import { openRenameModal } from '@/components/RenameModal';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -52,7 +52,6 @@ import { getAgentPublishErrorKey } from './agentMenuVisibility';
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 interface UseAgentDropdownMenuParams {
-  anchor: HTMLElement | null;
   avatar?: string;
   backgroundColor?: string;
   group: string | undefined;
@@ -65,6 +64,8 @@ interface UseAgentDropdownMenuParams {
    * surfaces on the agents list page (ItemActions), where labels render.
    */
   labelsEnabled?: boolean;
+  /** The agent's personal name — the row label is this when set, the role otherwise. */
+  name?: string | null;
   openCreateGroupModal: () => void;
   pinned: boolean;
   slug?: string | null;
@@ -74,20 +75,20 @@ interface UseAgentDropdownMenuParams {
 }
 
 export const useAgentDropdownMenu = ({
-  anchor,
   avatar,
   backgroundColor,
   group,
   id,
   labels,
   labelsEnabled,
+  name,
   openCreateGroupModal,
   pinned,
   slug,
   title,
   userId,
   visibility,
-}: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
+}: UseAgentDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common', 'setting']);
   const navigate = useWorkspaceAwareNavigate();
 
@@ -103,9 +104,21 @@ export const useAgentDropdownMenu = ({
     isEqual,
   );
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const [pinAgent, duplicateAgent, updateAgentGroup, removeAgent, toggleAgentLabel] = useHomeStore(
-    (s) => [s.pinAgent, s.duplicateAgent, s.updateAgentGroup, s.removeAgent, s.toggleAgentLabel],
-  );
+  const [
+    pinAgent,
+    duplicateAgent,
+    updateAgentGroup,
+    removeAgent,
+    toggleAgentLabel,
+    updateAgentMeta,
+  ] = useHomeStore((s) => [
+    s.pinAgent,
+    s.duplicateAgent,
+    s.updateAgentGroup,
+    s.removeAgent,
+    s.toggleAgentLabel,
+    s.updateAgentMeta,
+  ]);
 
   // Label picker: the shared registry (archived labels only stay listed while
   // still applied to this agent, so they can be unchecked but not re-added).
@@ -237,9 +250,22 @@ export const useAgentDropdownMenu = ({
                 label: t('rename', { ns: 'common' }),
                 onClick: (info: any) => {
                   info.domEvent?.stopPropagation();
-                  if (anchor) {
-                    openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
-                  }
+                  openRenameModal({
+                    defaultValue: title,
+                    onSave: async (newName) => {
+                      try {
+                        // The row shows `name` when the agent has one and the role
+                        // otherwise; the rename writes back to that same field.
+                        await updateAgentMeta(id, { [agentRenameField({ name })]: newName });
+                      } catch (error) {
+                        console.error('[agent:rename]', error);
+                        toast.error(t('operationFailed', { ns: 'common' }));
+                        // The shared modal closes on a resolved save; re-throw so the
+                        // typed name survives for a retry.
+                        throw error;
+                      }
+                    },
+                  });
                 },
                 sfSymbol: 'pencil',
               },
@@ -557,10 +583,9 @@ export const useAgentDropdownMenu = ({
                 : []),
             ]
           : []),
-      ] as MenuProps['items'],
+      ] as DropdownItem[],
     [
       activeWorkspaceId,
-      anchor,
       canCreate,
       canConfigure,
       canEdit,
@@ -571,11 +596,13 @@ export const useAgentDropdownMenu = ({
       id,
       avatar,
       title,
+      name,
       pinAgent,
       duplicateAgent,
       updateAgentGroup,
       removeAgent,
       toggleAgentLabel,
+      updateAgentMeta,
       pickerLabels,
       assignedLabelIds,
       canCreateLabel,

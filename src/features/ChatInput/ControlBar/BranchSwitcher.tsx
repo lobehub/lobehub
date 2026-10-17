@@ -1,7 +1,10 @@
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
-import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
+  copyToClipboard,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenuFooter,
   DropdownMenuHeader,
   DropdownMenuItem,
@@ -11,10 +14,11 @@ import {
   DropdownMenuRoot,
   DropdownMenuScrollViewport,
   DropdownMenuTrigger,
+  Icon,
   Input,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import {
   CheckIcon,
   CopyIcon,
@@ -45,6 +49,7 @@ import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
+import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
 import { openRenameBranchModal } from './RenameBranchModal';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
@@ -55,28 +60,23 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  triggerAnchor: css`
-    display: inline-flex;
-    flex: none;
-  `,
-  /* See WorktreeSwitcher.triggerFill — keeps a full-row custom trigger's hover
-     background aligned with the popup-open background. */
-  triggerFill: css`
-    display: flex;
-    width: 100%;
-
-    > * {
-      flex: 1;
-    }
-  `,
   footer: css`
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
   header: css`
     padding: 0;
   `,
+  // Fill the list slot like `list` does, so the footer stays pinned to the
+  // bottom of the fixed-height popup while loading / empty.
   emptyState: css`
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 0;
     padding-block: 12px;
+
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
@@ -159,7 +159,13 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     min-height: 0;
   `,
+  // The base popup only becomes a flex column once the virtual list mounts;
+  // force it so the loading / empty placeholder can fill the list slot too.
   popup: css`
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
     width: 300px;
     height: 360px;
   `,
@@ -234,6 +240,8 @@ interface BranchSwitcherProps {
   placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
   /** The repo the conversation is anchored to (worktrees hang off it). */
   sourcePath: string;
+  /** The conversation the switch is recorded on; omitted, the global active topic. */
+  topicId?: string | null;
   /** Used to route a checkout into the worktree that already holds the branch. */
   worktrees: DeviceGitWorktreeListItem[];
 }
@@ -252,6 +260,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onOptimisticCheckout,
     placement = 'topLeft',
     sourcePath,
+    topicId,
     worktrees,
     children,
   }) => {
@@ -260,7 +269,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     const [search, setSearch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
     const currentRowRef = useRef<HTMLDivElement>(null);
-    const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath });
+    const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath, topicId });
 
     const {
       data: branches = [],
@@ -344,7 +353,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
           setBusyBranch(branch);
           onOpenChange(false);
           try {
-            await switchWorktree(owner.path);
+            await switchWorktree(owner.path, branch);
           } finally {
             onAfterCheckout?.();
             setBusyBranch(null);
@@ -474,8 +483,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div className={styles.triggerFill}>{children}</div>
+        <DropdownMenuTrigger>
+          <div className={gitMenuTriggerStyles.trigger}>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>

@@ -1,6 +1,6 @@
 // Fixture: a Segmented that only filters the same list.
 import { Flexbox } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
+import { Segmented } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

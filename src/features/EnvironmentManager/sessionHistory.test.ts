@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { runningSessionIds, withoutBuildVehicles } from './SessionHistorySection';
+import { conversationPath, runningSessionIds, withoutBuildVehicles } from './SessionHistorySection';
 
 const session = (overrides: Partial<any>): any => ({
   buildId: null,
@@ -15,6 +15,8 @@ const session = (overrides: Partial<any>): any => ({
   sessionUserId: 'user_1',
   snapshotBytes: null,
   startedAt: '2026-09-24T02:00:00.000Z',
+  topicAgentId: null,
+  topicGroupId: null,
   topicId: null,
   topicTitle: null,
   ...overrides,
@@ -152,5 +154,35 @@ describe('runningSessionIds', () => {
 
   it('does not match an instance it has no id for', () => {
     expect(running([session({ instanceId: null })], holding('inst-a'))).toEqual([]);
+  });
+});
+
+describe('conversationPath', () => {
+  it('addresses the conversation by its agent, not by the topic alone', () => {
+    // `/chat?topic=<id>` is not a route: it rendered the 404 page, so the one
+    // way back from a running run into the conversation went nowhere.
+    expect(conversationPath(session({ topicAgentId: 'agt_1', topicId: 'tpc_1' }))).toBe(
+      '/agent/agt_1/tpc_1',
+    );
+  });
+
+  it('offers nothing when the agent is unknown', () => {
+    // The topic is another member's, or was deleted — a link built from half
+    // the address would 404 exactly like the old one did.
+    expect(conversationPath(session({ topicAgentId: null, topicId: 'tpc_1' }))).toBeUndefined();
+  });
+
+  it('sends a group run back to the group, not to the member that answered', () => {
+    // A group topic carries an agent id too — the member whose turn it was.
+    // Reading that first opens a different conversation than the run came from.
+    expect(
+      conversationPath(session({ topicAgentId: 'agt_1', topicGroupId: 'grp_1', topicId: 'tpc_1' })),
+    ).toBe('/group/grp_1/tpc_1');
+  });
+
+  it('offers nothing for a management session', () => {
+    expect(
+      conversationPath(session({ management: true, topicAgentId: 'agt_1', topicId: 'tpc_1' })),
+    ).toBeUndefined();
   });
 });

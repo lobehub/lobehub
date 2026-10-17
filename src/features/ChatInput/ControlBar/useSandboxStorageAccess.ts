@@ -11,6 +11,8 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { useTopicId } from '../hooks/useTopicId';
+
 /**
  * What the composer should show where the sandbox working directory goes:
  *
@@ -36,7 +38,8 @@ export interface SandboxStorageAccessResult {
  */
 const useRunsInSandbox = (agentId: string): boolean => {
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const topicId = useTopicId();
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
 
   return (

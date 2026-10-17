@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Checkbox, Switch, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Checkbox, createStaticStyles, Flexbox, Switch, Text } from '@lobehub/ui';
 import { Check } from 'lucide-react';
 import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';

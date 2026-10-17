@@ -1,6 +1,10 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
-import { RequestTrigger } from '@lobechat/types';
+import {
+  type AgentOperationStatus,
+  isAgentOperationInFlight,
+  RequestTrigger,
+} from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
@@ -13,6 +17,7 @@ import {
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkModel } from '@/database/models/work';
@@ -56,6 +61,21 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'max_steps' ||
   reason === 'cost_limit' ||
   reason === 'tool_call_repeat_limit';
+
+/**
+ * The topic status a finished run leaves behind, mirroring what the client
+ * writes for the same outcome (`executeGatewayAgent`'s `onSessionComplete`) and
+ * what `agentNotify` does for the remote path: only a clean finish is something
+ * the user may not have watched (`unread`); every other ending is an
+ * interruption they already saw (`active`).
+ *
+ * Agrees with the one existing server-side settle, too:
+ * `ServerOperationStore.clearRunningMark` hardcodes `unread`, and it only ever
+ * runs from the `finish` executor — the success path, where this helper returns
+ * `unread` as well.
+ */
+const topicStatusForTerminalRun = (status: string): 'active' | 'unread' =>
+  status === 'done' ? 'unread' : 'active';
 
 /**
  * Triggers whose completion recalls the user with a push notification. Beyond
@@ -241,7 +261,12 @@ export class CompletionLifecycle {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
       persisted = false;
-      log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
+      // Hook configuration may contain inline authorization headers. Never log
+      // a database error that could repeat its bound metadata parameters.
+      const hooks = params.metadata?._hooks;
+      if (hooks && (!Array.isArray(hooks) || hooks.length > 0))
+        log('[%s] Failed to record operation start (non-fatal)', params.operationId);
+      else log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }
 
     // Auto-instantiate the task's verify plan at run start so the completion gate
@@ -419,6 +444,12 @@ export class CompletionLifecycle {
       return (own ?? 0) + child;
     };
 
+    let completionDurable = false;
+    let conflictingTerminalOwner = false;
+    // The status the durable row actually carries. Usually this callback's own,
+    // but NOT when a terminal owner got there first with a different one — see
+    // the fallback below.
+    let durableStatus: AgentOperationStatus = status;
     try {
       const accepted = await this.agentOperationModel.recordCompletion(operationId, {
         completedAt,
@@ -451,15 +482,39 @@ export class CompletionLifecycle {
         // the scalar columns — the reporting surface — carry the whole tree.
         usage: state?.usage ?? null,
       });
-      if (!accepted) {
+      if (accepted) {
+        completionDurable = true;
+      } else {
         const operation = await this.agentOperationModel.findById(operationId);
         // Preserve the historical best-effort behavior when no durable start
         // row exists, but never let a conflicting terminal owner be replaced.
-        if (operation) return false;
+        conflictingTerminalOwner = !!operation;
+        // Someone else wrote a terminal row: the run is over even though this
+        // call is not the one that recorded it.
+        completionDurable = conflictingTerminalOwner;
+        // `recordCompletion` only refuses a row that is ALREADY terminal with a
+        // different status than this callback carries (its `where` matches every
+        // in-flight status, plus an equal one). So the row it refused is the
+        // authoritative outcome, and the topic must be settled for what landed —
+        // not for what this late callback is carrying. Two racing terminal
+        // callbacks (`done` vs `error`/`interrupted`) would otherwise write
+        // whichever one arrived second, `unread` and `active` included.
+        if (operation) durableStatus = operation.status;
       }
     } catch (error) {
       log('[%s] Failed to persist operation completion (non-fatal): %O', operationId, error);
     }
+
+    // The run is over durably — converge the topic's running mark, or it outlives
+    // the run (see `settleTopicRunningMark`). Deliberately not attempted when the
+    // completion above did not land: a DB error or a missing start row leaves the
+    // operation's own end unproven, and a mark cleared on an unproven ending
+    // reads as settled while `agent_operations` still says `running`.
+    if (completionDurable) {
+      await this.settleTopicRunningMark({ operationId, status: durableStatus, topicId });
+    }
+
+    if (conflictingTerminalOwner) return false;
 
     // The topic rollup's tool / human-interaction stats derive from the
     // operation rows written above (`recomputeTopicUsage` reads their usage/cost
@@ -478,6 +533,80 @@ export class CompletionLifecycle {
     }
 
     return true;
+  }
+
+  /**
+   * Drop the topic's `runningOperation` mark when a run reaches its terminal row.
+   *
+   * The ONLY server-side settle used to be `ServerOperationStore.clearRunningMark`,
+   * and it runs from a single place: the `finish` executor. Every ending that
+   * never emits a `finish` instruction therefore wrote a terminal
+   * `agent_operations` row and left the topic exactly as the run's start had left
+   * it — `status = 'running'` with `metadata.runningOperation` naming an operation
+   * that had already finished:
+   *
+   * - a Stop is persisted at the step boundary (`AgentRuntimeService.executeStep`
+   *   sets the state to `interrupted` once the in-flight step returns), and the
+   *   following delivery usually finds the operation already terminal;
+   * - `interruptOperation` settles a client-parked run itself, and
+   *   `buildShareAbortResult` settles a revoked share visitor run;
+   * - a loop stopped by `max_steps` / `cost_limit` ends without the agent asking
+   *   to finish.
+   *
+   * Nothing then revisited the row: the client's own settle is a single attempt
+   * that a transient server refusal discards, and the client watchdog only runs
+   * with that user's sidebar open. Observed 2026-10-13 on a self-hosted
+   * deployment as a topic shown "running" for 45 minutes whose operation row had
+   * been `interrupted` since 03:33:58Z with `topics.updated_at` frozen at the
+   * run's start — `settleRunningOperation` always bumps `updated_at`, so that
+   * timestamp is proof no settle ever reached the row. 16 rows of the same shape,
+   * the oldest two months old.
+   *
+   * Persisting the terminal row is the moment the run is over, so converging
+   * here covers every ending above (and any future one) instead of adding a call
+   * to each caller. Compare-and-clear, exactly as the executor's adapter does:
+   * only the operation the mark names — or one of its children — may drop it, so
+   * a newer run that claimed the topic meanwhile is left alone and answers
+   * `conflict`. Best-effort: a topic that cannot be reached must not fail the
+   * completion it already persisted.
+   */
+  private async settleTopicRunningMark(params: {
+    operationId: string;
+    status: AgentOperationStatus;
+    topicId?: string;
+  }): Promise<void> {
+    const { operationId, status, topicId } = params;
+
+    // No topic to settle (a sub-agent run, a bot thread, a verify pass).
+    if (!topicId) return;
+    // Only an ending may drop the mark. Not merely the parked three: the fallback
+    // above settles for the status read back from the row rather than one this
+    // callback authored, and `idle` / `running` are no more of an ending than a
+    // pause is. `isAgentOperationInFlight` is the shared authority for both.
+    if (isAgentOperationInFlight(status)) return;
+    // A lease-expired abandon settles the topic on its own path with its own
+    // status (`AbandonOperationService`); leave that one to it.
+    if (status === 'abandoned') return;
+
+    try {
+      const topicModel = new TopicModel(this.serverDB, this.userId, this.workspaceId, undefined, {
+        includeShareVisitor: this.includeShareVisitor,
+      });
+
+      const settled = await topicModel.settleRunningOperation(
+        topicId,
+        operationId,
+        topicStatusForTerminalRun(status),
+      );
+
+      // `missing` (another writer already cleared it) and `conflict` (a newer run
+      // owns the mark) are both correct no-ops, not failures.
+      if (settled.status !== 'settled') {
+        log('[%s] Topic running mark left alone: %s', operationId, settled.status);
+      }
+    } catch (error) {
+      log('[%s] Failed to settle the topic running mark (non-fatal): %O', operationId, error);
+    }
   }
 
   /** Best-effort child-usage rollup — a DB hiccup must not fail the completion write. */
@@ -569,6 +698,38 @@ export class CompletionLifecycle {
         } catch (error) {
           log(
             '[completion-lifecycle] failed to hydrate Agent Signal marker op=%s: %O',
+            operationId,
+            error,
+          );
+        }
+      }
+      // A memory-writer run's terminal state may not carry the tool calls that
+      // name the written memory (messages live in the DB). When the receipt would
+      // fall back to a generic "Memory saved" with no id, re-read the run's own
+      // thread so it can name the memory and offer undo.
+      const memoryTargetUnresolved = selfIteration?.mutations.some((mutation) => {
+        const target = isRecord(mutation.data) ? mutation.data.target : undefined;
+        return !isRecord(target) || !target.id;
+      });
+      if (selfIteration?.marker.kind === 'memory' && memoryTargetUnresolved && runOrigin.threadId) {
+        try {
+          const messages = await this.messageModel.query(
+            {
+              agentId: runOrigin.agentId,
+              threadId: runOrigin.threadId,
+              topicId: runOrigin.topicId,
+            },
+            { allowShareVisitor: true },
+          );
+          selfIteration =
+            extractSelfIterationCompletionPayload({
+              ...state,
+              messages,
+              origin: { ...runOrigin, signal: selfIteration.marker, userId: selfIteration.userId },
+            }) ?? selfIteration;
+        } catch (error) {
+          log(
+            '[completion-lifecycle] failed to load memory-writer messages op=%s: %O',
             operationId,
             error,
           );

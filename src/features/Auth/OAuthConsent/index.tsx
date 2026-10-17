@@ -73,6 +73,7 @@ const InteractionContent = memo(() => {
 
   return (
     <Consent
+      acceptanceReview={data.acceptanceReview}
       clientId={data.clientId}
       clientMetadata={data.clientMetadata}
       redirectUri={data.redirectUri}

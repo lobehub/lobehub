@@ -35,6 +35,27 @@ export abstract class BaseMenuPlatform {
     ];
   }
 
+  protected buildReloadMenuItem(label: string, ignoreCache = false): MenuItemConstructorOptions {
+    return {
+      accelerator: ignoreCache ? 'CmdOrCtrl+Shift+R' : 'CmdOrCtrl+R',
+      click: (_item, win) => {
+        const target =
+          win && 'webContents' in win ? (win as BrowserWindow) : BrowserWindow.getFocusedWindow();
+        if (!target) return;
+        const operation = () => {
+          if (ignoreCache) target.webContents.reloadIgnoringCache();
+          else target.webContents.reload();
+        };
+        const browser = [...this.app.browserManager.browsers.values()].find(
+          (browser) => browser.webContents === target.webContents,
+        );
+        if (browser) browser.runWithUnloadConfirmation(operation);
+        else operation();
+      },
+      label,
+    };
+  }
+
   protected buildDevToolsMenuItem(label: string, accelerator?: string): MenuItemConstructorOptions {
     return {
       accelerator,

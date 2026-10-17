@@ -1,6 +1,4 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Highlighter, Tag } from '@lobehub/ui';
 import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

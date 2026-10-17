@@ -1,15 +1,14 @@
-import { goalStatuses } from '@lobechat/const/goal';
+import { goalStatuses, ROLLOUT_MAX_CANARY_SIZE } from '@lobechat/const/goal';
 import { MAX_GOAL_METRIC_CRITERIA, summarizeGoalSupervision } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { GoalModel } from '@/database/models/goal';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
+import { graphForClient } from '@/server/services/goal/graphCompat';
 import { GoalManagerService, goalPlanSchema } from '@/server/services/goal/manager';
 import {
   DEFAULT_MANAGER_MAX_TURNS,
@@ -17,6 +16,7 @@ import {
 } from '@/server/services/goal/recoveryPolicy';
 import { GoalReportStore, type SubmitGoalReportInput } from '@/server/services/goal/reportStore';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+import { GoalStartService } from '@/server/services/goal/start';
 import { GoalWaitService, goalWakeEventSchema } from '@/server/services/goal/wait';
 import {
   HeteroOperationPrincipalError,
@@ -24,25 +24,9 @@ import {
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { goalGraphEditProcedures } from './goalGraphEdit';
+import { goalProcedure, goalWriteProcedure, idInput, mapGoalError } from './goalProcedures';
 
-const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
-  opts.next({
-    ctx: {
-      goalModel: new GoalModel(
-        opts.ctx.serverDB,
-        opts.ctx.userId,
-        opts.ctx.workspaceId ?? undefined,
-      ),
-      goalService: new GoalService(
-        opts.ctx.serverDB,
-        opts.ctx.userId,
-        opts.ctx.workspaceId ?? undefined,
-      ),
-    },
-  }),
-);
-const goalWriteProcedure = goalProcedure.use(withScopedPermission('agent:update'));
-const idInput = z.object({ id: z.string() });
 /**
  * A wrap-up report submitted from a run. The metadata passes through as a
  * record: `GoalReportStore.submit` parses it with the report schema and checks
@@ -106,6 +90,19 @@ const conversationGoalInput = z.object({
           operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
         })
         .optional(),
+      /**
+       * Batch roll-out policy for a goal that is one repeated mould. Omit it and
+       * the planner's own homogeneity claim decides; `off` forbids a batch even
+       * when the planner claims one.
+       */
+      rollout: z
+        .object({
+          canarySize: z.number().int().min(2).max(ROLLOUT_MAX_CANARY_SIZE).optional(),
+          minHomogeneousUnits: z.number().int().min(1).max(200).optional(),
+          trigger: z.enum(['canary', 'full', 'off']),
+          waveSize: z.number().int().min(1).max(50).optional(),
+        })
+        .optional(),
       schedule: z
         .object({
           /** ISO-8601 instant; past it the coordinator stops dispatching. */
@@ -126,16 +123,25 @@ const conversationGoalInput = z.object({
       }),
     )
     .optional(),
+  /**
+   * Open a conversation goal as a draft that runs only once `start` launches
+   * it. Sent by a CLI that has `lh goal start`; ignored for a standalone goal.
+   */
+  draft: z.boolean().optional(),
   problemDescription: z.string().optional(),
   projectId: z.string().optional(),
   requirement: z.string().optional(),
   title: z.string().min(1),
-  /** Seed task nodes, in dependency-free order. */
+  /** Seed task nodes; `dependsOn` names other seeds by title. */
   tasks: z
     .array(
       z.union([
         z.string().min(1),
-        z.object({ description: z.string().optional(), title: z.string().min(1) }),
+        z.object({
+          dependsOn: z.array(z.string().min(1)).optional(),
+          description: z.string().optional(),
+          title: z.string().min(1),
+        }),
       ]),
     )
     .optional(),
@@ -176,15 +182,161 @@ const bindTopicResponse = ({
   turnToken,
 });
 
-function mapGoalError(error: unknown, operation: string): never {
-  if (error instanceof TRPCError) throw error;
-  console.error(`[goal:${operation}]`, error);
-  throw new TRPCError({
-    cause: error,
-    code: 'INTERNAL_SERVER_ERROR',
-    message: `Failed to ${operation} goal`,
+/** `<ISO>|<event id>` — opaque to callers, so the pair can change shape later. */
+const encodeEventCursor = (cursor: { createdAt: Date; id: string }) =>
+  `${cursor.createdAt.toISOString()}|${cursor.id}`;
+
+const decodeEventCursor = (raw: string) => {
+  const separator = raw.lastIndexOf('|');
+  const createdAt = separator > 0 ? new Date(raw.slice(0, separator)) : new Date(Number.NaN);
+  const id = separator > 0 ? raw.slice(separator + 1) : '';
+  if (Number.isNaN(createdAt.getTime()) || !id) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid events cursor' });
+  }
+  return { createdAt, id };
+};
+
+/**
+ * Events paging is cursor-based, not offset-based: the feed is live and events
+ * are PREPENDED while a goal runs, so an offset taken on page one re-serves a row
+ * that a later insert pushed down.
+ */
+const eventsInput = idInput.extend({
+  cursor: z.string().min(1).optional(),
+  entityType: z.enum(['goal', 'node', 'edge', 'decision', 'task']).optional(),
+  eventType: z
+    .enum([
+      'created',
+      'updated',
+      'activated',
+      'resolved',
+      'rejected',
+      'retired',
+      'linked',
+      'unlinked',
+    ])
+    .optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
+const planContextInput = idInput.extend({
+  operationId: z.string().min(1).optional(),
+  // A refused `lh goal plan` re-reads this with the plan it just submitted, so
+  // the plan-specific guards it was refused on (`existing_work`,
+  // `acceptance_escalate_only`, `wait_unsettled`, `wait_until_past`) are
+  // re-evaluated. Without it the read would report `ok` and explain nothing.
+  plan: goalPlanSchema.optional(),
+  token: z.string().min(1).optional(),
+});
+
+type EventsInput = z.infer<typeof eventsInput>;
+type PlanContextInput = z.infer<typeof planContextInput>;
+
+/** Shared by the ordinary and the operation-authenticated read; the caller builds the manager. */
+const readPlanContext = (manager: GoalManagerService, input: PlanContextInput) =>
+  manager.admission(input.id, {
+    operationId: input.operationId,
+    plan: input.plan,
+    token: input.token,
   });
-}
+
+const readEvents = async (goalService: GoalService, input: EventsInput) => {
+  const page = await goalService.listEvents(input.id, {
+    cursor: input.cursor ? decodeEventCursor(input.cursor) : undefined,
+    entityType: input.entityType,
+    eventType: input.eventType,
+    limit: input.limit ?? 50,
+  });
+  return {
+    events: page.events,
+    nextCursor: page.nextCursor ? encodeEventCursor(page.nextCursor) : null,
+  };
+};
+
+/**
+ * The Goal reads a device / gateway planning run needs.
+ *
+ * Those runs hold a `hetero-operation` JWT, and `oidcAuth` deliberately refuses
+ * it on ordinary authed routes so a leaked sandbox token cannot be replayed
+ * elsewhere — which left a planner unable to read the very Goal it plans, and
+ * made `lh goal state` (and the refusal explanation) unauthorized in exactly the
+ * runs that need them. These mirror the ordinary reads for that caller only:
+ * writes stay on `goalWriteProcedure`, and scope comes from the operation's own
+ * principal.
+ *
+ * The capability is `hetero:ingest` rather than `goal:manage` because the token
+ * a takeover planning turn holds never carries `goal:manage` — that is granted
+ * only to the `/goal` message that creates a goal, so requiring it would leave
+ * the planner locked out. `hetero:ingest` is what the same token already uses to
+ * submit its plan.
+ *
+ * `allowTerminalOperation` is deliberately unset: reads of a run that has already
+ * ended are an ordinary-session job, so the token works exactly while its turn
+ * runs.
+ *
+ * Scope is the operation's principal AND its Goal: every endpoint calls
+ * `GoalManagerService.assertOperationOwnsTurn`, so a token reaches exactly the
+ * Goal whose current turn it holds — not any Goal in the workspace whose id it
+ * learns.
+ */
+const goalOperationReadProcedure = heteroAuthedProcedure.use(serverDatabase).use(async (opts) => {
+  if (opts.ctx.heteroAuthKind !== 'operation' || !opts.ctx.heteroOperation) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'An operation-bound token is required',
+    });
+  }
+  let principal;
+  try {
+    principal = await resolveActiveHeteroOperationPrincipal({
+      capability: 'hetero:ingest',
+      claims: opts.ctx.heteroOperation,
+      db: opts.ctx.serverDB,
+      operationId: opts.ctx.heteroOperation.operation_id,
+    });
+  } catch (error) {
+    if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+    throw new TRPCError({
+      cause: error,
+      code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+      message: error.message,
+    });
+  }
+  return opts.next({
+    ctx: {
+      goalManager: new GoalManagerService(
+        opts.ctx.serverDB,
+        principal.userId,
+        principal.workspaceId,
+      ),
+      goalService: new GoalService(opts.ctx.serverDB, principal.userId, principal.workspaceId),
+      // The operation the token was minted for — not an id the caller supplies.
+      heteroOperationId: principal.operationId,
+      userId: principal.userId,
+      workspaceId: principal.workspaceId ?? null,
+    },
+  });
+});
+
+/** What `start` folds into a batch: the probes that run first, and the recipe every unit follows. */
+const startRolloutInput = z
+  .object({
+    probeNodeIds: z.array(z.string().min(1)).min(2).max(10),
+    recipe: z.string().trim().min(1).max(8000),
+    trigger: z.enum(['canary', 'full']).optional(),
+    unitNodeIds: z.array(z.string().min(1)).max(60).optional(),
+    variants: z
+      .array(
+        z.object({
+          axis: z.string().trim().min(1).max(120),
+          values: z.array(z.string().trim().min(1).max(120)).min(1).max(20),
+        }),
+      )
+      .max(10)
+      .optional(),
+  })
+  .strict();
+const startInput = idInput.extend({ rollout: startRolloutInput.optional() });
 
 export const goalRouter = router({
   wake: goalWriteProcedure
@@ -291,6 +443,75 @@ export const goalRouter = router({
     ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
     return { data, success: true };
   }),
+  /** Launch a draft goal; until now the coordinator has left its graph alone. */
+  start: goalWriteProcedure.input(startInput).mutation(async ({ ctx, input }) => {
+    // A draft is its creator's arrangement: in a shared workspace only they or
+    // an owner may launch it (and, with a rollout, fold its seed nodes away).
+    const goal = await ctx.goalModel.findById(input.id);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+    try {
+      const data = await new GoalStartService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).start(input.id, { rollout: input.rollout });
+      await scheduleGoalAdvance({
+        goalId: input.id,
+        trigger: 'start',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { data, message: 'Goal started', success: true };
+    } catch (error) {
+      mapGoalError(error, 'start');
+    }
+  }),
+  /** `start` from the goal agent's own run, authenticated by its operation token. */
+  startOperation: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(startInput.extend({ operationId: z.string().min(1) }))
+    .mutation(async ({ ctx, input: { operationId, ...input } }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'hetero:ingest',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      try {
+        const data = await new GoalStartService(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).start(input.id, { operationId, rollout: input.rollout });
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'start',
+          userId: principal.userId,
+          workspaceId: principal.workspaceId,
+        });
+        return { data, message: 'Goal started', success: true };
+      } catch (error) {
+        mapGoalError(error, 'start');
+      }
+    }),
   submitPlan: goalWriteProcedure
     .input(
       idInput.extend({
@@ -312,62 +533,7 @@ export const goalRouter = router({
       });
       return { data, success: true };
     }),
-  addEdge: goalWriteProcedure
-    .input(
-      idInput.extend({
-        kind: z.enum([
-          'contains',
-          'answers',
-          'decomposes',
-          'depends_on',
-          'derived_from',
-          'investigates',
-          'produces',
-          'supports',
-          'contradicts',
-          'leads_to',
-        ]),
-        sourceNodeId: z.string().uuid(),
-        targetNodeId: z.string().uuid(),
-      }),
-    )
-    .mutation(async ({ ctx, input: { id, ...input } }) => {
-      try {
-        return {
-          data: await ctx.goalService.addEdge(
-            id,
-            input.sourceNodeId,
-            input.targetNodeId,
-            input.kind,
-          ),
-          success: true,
-        };
-      } catch (error) {
-        mapGoalError(error, 'addEdge');
-      }
-    }),
-
-  addNode: goalWriteProcedure
-    .input(
-      idInput.extend({
-        description: z.string().optional(),
-        kind: z.enum(['problem', 'experiment', 'task', 'finding', 'decision']),
-        scopeId: z.string().uuid().optional(),
-        questionId: z.string().uuid().optional(),
-        priority: z.number().int().optional(),
-        status: z
-          .enum(['proposed', 'active', 'waiting', 'resolved', 'rejected', 'retired'])
-          .optional(),
-        title: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ ctx, input: { id, ...input } }) => {
-      try {
-        return { data: await ctx.goalService.addNode(id, input), success: true };
-      } catch (error) {
-        mapGoalError(error, 'addNode');
-      }
-    }),
+  ...goalGraphEditProcedures,
 
   /**
    * `/goal` from a conversation run authenticated by its operation token (device
@@ -549,7 +715,8 @@ export const goalRouter = router({
             });
             return { data: graph, message: 'Goal created', success: true, turnToken };
           }
-          const data = await ctx.goalService.create(input);
+          const { draft: _draft, ...standaloneInput } = input;
+          const data = await ctx.goalService.create(standaloneInput);
           // A goal is not a document — creating one means starting it. The
           // coordinator takes it from here without a client holding a loop open.
           await scheduleGoalAdvance({
@@ -797,11 +964,85 @@ export const goalRouter = router({
     }
   }),
 
-  graph: goalProcedure.input(idInput).query(async ({ ctx, input }) => {
+  graph: goalProcedure
+    .input(
+      idInput.extend({
+        /** Graph features this client renders (see `GOAL_GRAPH_CAPABILITY`). */
+        capabilities: z.array(z.string()).max(20).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return {
+          data: graphForClient(await ctx.goalService.graph(input.id), input.capabilities),
+          success: true,
+        };
+      } catch (error) {
+        mapGoalError(error, 'graph');
+      }
+    }),
+
+  /**
+   * Why `submitPlan` would accept or refuse a plan right now, without writing.
+   *
+   * `lh goal state` renders it and a refused `lh goal plan` re-reads it, so the
+   * CLI explains a refusal from the same predicates the write path uses — the
+   * manager and review snapshots a client cannot see from the graph alone.
+   */
+  planContext: goalProcedure.input(planContextInput).query(async ({ ctx, input }) => {
     try {
+      const manager = new GoalManagerService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      return { data: await readPlanContext(manager, input), success: true };
+    } catch (error) {
+      mapGoalError(error, 'read the plan context of');
+    }
+  }),
+
+  /**
+   * The goal's audit trail, newest first, paged past the capped copy `graph`
+   * bundles. `lh goal events` reads it.
+   */
+  events: goalProcedure.input(eventsInput).query(async ({ ctx, input }) => {
+    try {
+      return { data: await readEvents(ctx.goalService, input), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list events of');
+    }
+  }),
+
+  // The same three reads for a planning run that holds an operation token, which
+  // the ordinary `goalProcedure` above refuses — see `goalOperationReadProcedure`.
+
+  graphOperation: goalOperationReadProcedure.input(idInput).query(async ({ ctx, input }) => {
+    try {
+      await ctx.goalManager.assertOperationOwnsTurn(input.id, ctx.heteroOperationId);
       return { data: await ctx.goalService.graph(input.id), success: true };
     } catch (error) {
       mapGoalError(error, 'graph');
+    }
+  }),
+
+  planContextOperation: goalOperationReadProcedure
+    .input(planContextInput)
+    .query(async ({ ctx, input }) => {
+      try {
+        await ctx.goalManager.assertOperationOwnsTurn(input.id, ctx.heteroOperationId);
+        return { data: await readPlanContext(ctx.goalManager, input), success: true };
+      } catch (error) {
+        mapGoalError(error, 'read the plan context of');
+      }
+    }),
+
+  eventsOperation: goalOperationReadProcedure.input(eventsInput).query(async ({ ctx, input }) => {
+    try {
+      await ctx.goalManager.assertOperationOwnsTurn(input.id, ctx.heteroOperationId);
+      return { data: await readEvents(ctx.goalService, input), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list events of');
     }
   }),
 

@@ -11,11 +11,10 @@ const fixturePlugin: Plugin = {
     if (id !== ENTRY_ID) return;
 
     return `
-      import { ConfigProvider, ErrorBoundary, Flexbox } from '@lobehub/ui';
-      import { Button } from '@lobehub/ui/base-ui';
+      import { Button, ConfigProvider, ErrorBoundary, Flexbox } from '@lobehub/ui';
       export { ConfigProvider, ErrorBoundary, Flexbox, Button };
       export * from '@lobehub/ui/brand';
-      export const loadToast = () => import('@lobehub/ui/base-ui');
+      export const loadToast = () => import('@lobehub/ui');
     `;
   },
   resolveId(id) {
@@ -70,12 +69,11 @@ describe('lobeUiImports', () => {
 
     expect(code).toContain('@lobehub/ui/es/ConfigProvider/');
     expect(code).toContain('@lobehub/ui/es/Flex/FlexBasic');
-    expect(code).toContain('@lobehub/ui/es/base-ui/');
+    expect(code).toContain('@lobehub/ui/es/Button/');
     expect(code).toContain('react-error-boundary');
     expect(code).not.toMatch(/from ["']react-error-boundary["']/);
     expect(code).not.toMatch(/from ["']@lobehub\/ui["']/);
-    expect(code).not.toMatch(/from ["']@lobehub\/ui\/base-ui["']/);
     expect(code).toContain('@lobehub/ui/es/brand/index');
-    expect(code).toContain('@lobehub/ui/es/base-ui/index');
+    expect(code).toContain('@lobehub/ui/es/index');
   });
 });

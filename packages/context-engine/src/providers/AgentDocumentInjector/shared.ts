@@ -33,10 +33,10 @@ export interface AgentContextDocument {
   description?: string;
   filename: string;
   /**
-   * Title of the containing `custom/folder` document, resolved at the
-   * DB→context mapping boundary (folder rows themselves never reach the
-   * injector). Present only when the doc lives in a folder; used by the
-   * progressive index to fold same-folder siblings into one summary row.
+   * Title of the containing parent — a `custom/folder`, or an ordinary document
+   * that holds nested docs (e.g. a workflow with its run records) — resolved at
+   * the DB→context mapping boundary. Present only when the doc has such a
+   * parent; used by the progressive index to fold siblings into one summary row.
    */
   folderTitle?: string;
   id?: string;
@@ -48,6 +48,8 @@ export interface AgentContextDocument {
    * model passes to `listDocuments(parentId=…)` to expand a folded folder.
    */
   parentId?: string | null;
+  /** What `parentId` points at; `document` parents fold under a 📄 row instead of 📁. */
+  parentKind?: 'document' | 'folder';
   policyId?: string | null;
   policyLoad?: AgentDocumentPolicyLoad;
   policyLoadFormat?: AgentDocumentLoadFormat;
@@ -255,9 +257,11 @@ function buildIndexTable(
 }
 
 const FOLDER_ICON = '📁';
+const PARENT_DOCUMENT_ICON = '📄';
 
 interface FolderGroup {
   docs: AgentContextDocument[];
+  kind: 'document' | 'folder';
   parentId: string;
   title: string;
 }
@@ -295,8 +299,14 @@ function partitionFolders(docs: AgentContextDocument[]): {
 
   const folders: FolderGroup[] = [];
   for (const [parentId, group] of byParent) {
-    if (group.length >= 2) folders.push({ docs: group, parentId, title: group[0].folderTitle! });
-    else flat.push(...group);
+    if (group.length >= 2) {
+      folders.push({
+        docs: group,
+        kind: group[0].parentKind ?? 'folder',
+        parentId,
+        title: group[0].folderTitle!,
+      });
+    } else flat.push(...group);
   }
   return { flat, folders };
 }
@@ -334,7 +344,7 @@ function buildFolderTable(folders: FolderGroup[], context: AgentDocumentFilterCo
         f.docs.filter((doc) => isNewSinceUserMessage(doc, context)).length,
       ),
       time: newestTime(f.docs),
-      title: `${FOLDER_ICON} ${truncate(f.title, TITLE_MAX_WIDTH)}`,
+      title: `${f.kind === 'document' ? PARENT_DOCUMENT_ICON : FOLDER_ICON} ${truncate(f.title, TITLE_MAX_WIDTH)}`,
     }))
     .sort((a, b) => b.time - a.time);
 
@@ -418,9 +428,16 @@ export function combineDocuments(
         `Docs marked ${NEW_SINCE_USER_MESSAGE_MARK} (or counted that way in a folder row) were created after the user's latest message — by you or elsewhere (another topic, or the user). A marked doc you created was new; creating it did not overwrite an existing doc.`,
       );
     }
-    if (folders.length > 0) {
+    const folderCount = folders.filter((f) => f.kind === 'folder').length;
+    const parentDocCount = folders.length - folderCount;
+    if (folderCount > 0) {
       headerLines.push(
-        `${folders.length} folder${folders.length === 1 ? '' : 's'} collapsed (${FOLDER_ICON}) — call listDocuments(parentId=<id>) to list a folder's docs.`,
+        `${folderCount} folder${folderCount === 1 ? '' : 's'} collapsed (${FOLDER_ICON}) — call listDocuments(parentId=<id>) to list a folder's docs.`,
+      );
+    }
+    if (parentDocCount > 0) {
+      headerLines.push(
+        `${parentDocCount} document${parentDocCount === 1 ? '' : 's'} with nested docs collapsed (${PARENT_DOCUMENT_ICON}, e.g. a workflow and its run records) — the parent itself is listed by title; call listDocuments(parentId=<id>) to list what is nested under it.`,
       );
     }
 

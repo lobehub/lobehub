@@ -1,11 +1,10 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
+import { MemoryListBoundary } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -35,10 +34,7 @@ const ContextsArea = memo(() => {
   const contextsPage = useUserMemoryStore((s) => s.contextsPage);
   const contextsInit = useUserMemoryStore((s) => s.contextsInit);
   const contextsTotal = useUserMemoryStore((s) => s.contextsTotal);
-  const contextsSearchError = useUserMemoryStore((s) => s.contextsSearchError);
-  const contextsSearchLoading = useUserMemoryStore((s) => s.contextsSearchLoading);
   const useFetchContexts = useUserMemoryStore((s) => s.useFetchContexts);
-  const resetContextsList = useUserMemoryStore((s) => s.resetContextsList);
 
   const sortOptions = [
     { label: t('filter.sort.createdAt'), value: 'capturedAt' },
@@ -50,15 +46,11 @@ const ContextsArea = memo(() => {
   const apiSort =
     sortValue === 'capturedAt' ? undefined : (sortValue as 'scoreImpact' | 'scoreUrgency');
 
-  useResetMemoryList({
-    query: searchValue,
-    resetList: resetContextsList,
-    sort: apiSort,
-    viewMode,
-  });
-
   // Call SWR hook to fetch data
-  const { data, isLoading, mutate } = useFetchContexts({
+  // Each search / sort is its own replica entry: the hook selects it before
+  // paint, so the previous query's rows never show under this one. `error` is
+  // this query's failure while it has nothing painted.
+  const { data, error, isLoading, mutate } = useFetchContexts({
     page: contextsPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -111,10 +103,9 @@ const ContextsArea = memo(() => {
           />
           <MemoryListBoundary
             data={data}
-            error={contextsSearchError}
+            error={error}
             isInitialized={contextsInit}
             isLoading={isLoading}
-            isResetting={contextsSearchLoading}
             loading={<Loading viewMode={viewMode} />}
             onRetry={() => void mutate()}
           >

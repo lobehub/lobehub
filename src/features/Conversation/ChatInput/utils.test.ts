@@ -7,6 +7,7 @@ import {
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   toChatInputMessages,
+  toDisplayableSendErrorMessage,
 } from './utils';
 
 const tokenMessages = [
@@ -236,5 +237,40 @@ describe('getConversationChatInputUiState', () => {
       showSendWhileGenerating: false,
       showStopButton: true,
     });
+  });
+});
+
+describe('toDisplayableSendErrorMessage', () => {
+  /**
+   * @example A send fails before the server's databaseError middleware strips it.
+   */
+  it('drops a raw database error instead of showing SQL and its bound values', () => {
+    // ROOT CAUSE:
+    //
+    // `inputSendErrorMsg` is the failed call's `error.message` verbatim. Drizzle
+    // stringifies a failed statement as `Failed query: <sql>\nparams: <values>`,
+    // so this notice used to render the whole INSERT together with every bound
+    // parameter — including the user's own message text — with no way for the
+    // user to act on it.
+    //
+    // Before: the raw dump was rendered as-is.
+    // After: the caller substitutes localized generic copy.
+    const raw =
+      'Failed query: insert into "messages" ("id", "role", "content") values ($1, $2, $3)\n' +
+      'params: msg_1,user,a user message';
+
+    expect(toDisplayableSendErrorMessage(raw)).toBeUndefined();
+  });
+
+  it('keeps a message the user can act on', () => {
+    expect(toDisplayableSendErrorMessage('Internal server error (ref: db_abc123def456)')).toBe(
+      'Internal server error (ref: db_abc123def456)',
+    );
+  });
+
+  it('trims surrounding whitespace and treats blank input as nothing to show', () => {
+    expect(toDisplayableSendErrorMessage('  Network error  ')).toBe('Network error');
+    expect(toDisplayableSendErrorMessage('   ')).toBeUndefined();
+    expect(toDisplayableSendErrorMessage()).toBeUndefined();
   });
 });

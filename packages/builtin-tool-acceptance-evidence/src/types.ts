@@ -3,7 +3,8 @@ export const AcceptanceEvidenceApiName = {
   submitEvidence: 'submitEvidence',
 } as const;
 
-export type AcceptanceEvidenceType = 'markdown' | 'screenshot' | 'text' | 'video';
+export type AcceptanceEvidenceType =
+  'dom_snapshot' | 'gif' | 'markdown' | 'screenshot' | 'text' | 'transcript' | 'video';
 
 export interface SubmitAcceptanceEvidenceParams {
   checkItemId: string;

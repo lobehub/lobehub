@@ -15,6 +15,26 @@ vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
   useAgentManagementAccess: () => managementAccess,
 }));
 
+const topicState = vi.hoisted(() => ({
+  activeTopicId: 'topic-1',
+  topic: undefined as
+    | {
+        agentId?: string;
+        metadata?: { boundDeviceId?: string };
+        projectWorkingDirectoryId?: string;
+      }
+    | undefined,
+}));
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (s: typeof topicState) => unknown) => selector(topicState),
+}));
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: {
+    getTopicById: (id: string) => (s: typeof topicState) =>
+      id === s.activeTopicId ? s.topic : undefined,
+  },
+}));
+
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
@@ -72,6 +92,7 @@ const setupStores = ({
 describe('useEffectiveAgencyConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    topicState.topic = undefined;
     managementAccess.canManageAgent = false;
     managementAccess.isAccessLoading = false;
   });
@@ -242,6 +263,21 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current.agencyConfig).toEqual(sharedConfig);
+  });
+
+  it('pins the conversation device without changing the agent default', () => {
+    setupStores();
+    topicState.topic = {
+      agentId: 'agent-1',
+      metadata: { boundDeviceId: 'project-device' },
+      projectWorkingDirectoryId: 'directory-1',
+    };
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('project-device');
+    expect(result.current.canSelectExecutionTarget).toBe(false);
+    const defaults = renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
+    expect(defaults.result.current.agencyConfig).toEqual(sharedConfig);
+    expect(sharedConfig.boundDeviceId).toBe('creator-device');
   });
 
   it('returns undefined config when agentId is missing', () => {

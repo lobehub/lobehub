@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "Bu yanıt oluşturulamadı",
   "unknownError.title": "Hata, istek kısa bir mola verdi",
   "unknownError.traceIdLabel": "İzleme Kimliği:",
+  "unknownError.troubleshoot": "Sorun Gider",
   "unlock.addProxyUrl": "OpenAI proxy URL'si ekle (isteğe bağlı)",
   "unlock.apiKey.description": "Oturuma başlamak için {{name}} API Anahtarınızı girin",
   "unlock.apiKey.imageGenerationDescription": "Görsel oluşturmaya başlamak için {{name}} API Anahtarınızı girin",

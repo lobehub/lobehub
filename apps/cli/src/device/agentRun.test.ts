@@ -128,23 +128,27 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
 
-  it('replaces the launcher conversation context with the dispatched run', async () => {
-    for (const key of ['AGENT', 'TASK', 'OPERATION', 'TOPIC', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
-      vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
-    }
-    const child = makeFakeChild();
-    spawnMock.mockReturnValue(child);
+  it.each([undefined, 'agt_dispatched'])(
+    'replaces the launcher conversation context with dispatched agent %s',
+    async (agentId) => {
+      for (const key of ['AGENT', 'TASK', 'OPERATION', 'TOPIC', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+        vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
+      }
+      const child = makeFakeChild();
+      spawnMock.mockReturnValue(child);
 
-    const ack = spawnHeteroAgentRun({ ...baseParams, assistantMessageId: undefined });
-    const env = spawnMock.mock.calls[0][2].env;
-    expect(env.LOBEHUB_OPERATION_ID).toBe('op');
-    expect(env.LOBEHUB_TOPIC_ID).toBe('tpc');
-    for (const key of ['AGENT', 'TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
-      expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
-    }
-    child.emit('spawn');
-    await expect(ack).resolves.toEqual({ status: 'accepted' });
-  });
+      const ack = spawnHeteroAgentRun({ ...baseParams, agentId, assistantMessageId: undefined });
+      const env = spawnMock.mock.calls[0][2].env;
+      expect(env.LOBEHUB_OPERATION_ID).toBe('op');
+      expect(env.LOBEHUB_TOPIC_ID).toBe('tpc');
+      expect(env.LOBEHUB_AGENT_ID).toBe(agentId);
+      for (const key of ['TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+        expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
+      }
+      child.emit('spawn');
+      await expect(ack).resolves.toEqual({ status: 'accepted' });
+    },
+  );
 
   it('starts the wrapper from home so its inner preflight can report a missing cwd', async () => {
     const missingCwd = '/missing';

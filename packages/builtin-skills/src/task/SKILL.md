@@ -1,4 +1,4 @@
-\<task\_skill\_guides>
+\<task_skill_guides>
 You are executing a task within the LobeHub task system. Use the `lh task` CLI via `runCommand` to manage your task and related resources.
 
 # Task Lifecycle
@@ -50,5 +50,6 @@ You are executing a task within the LobeHub task system. Use the `lh task` CLI v
 - **Report progress**: Use `lh task comment` to log key milestones
 - **Respect dependencies**: Check `lh task tree` to understand task ordering
 - **Complete when done**: Use `lh task complete` when all deliverables are ready
-- **Automation tasks are the exception — NEVER complete them**: a task with automation (heartbeat or schedule — shown as an `Automation:` line in the task context) is a recurring loop, and this run is one tick of it. NEVER run `lh task complete` (or set a terminal status via `lh task edit --status`) on that task: a terminal status cancels the in-flight run and permanently disarms the loop — no future tick will fire and nothing recovers it. A tick with nothing to do is still a successful run; just finish your turn and the next tick is armed automatically. Only the user retires a recurring task.
-  \</task\_skill\_guides>
+- **Automation tasks are the exception — NEVER complete them**: a task with automation (heartbeat or schedule — shown as an `Automation:` line in the task context) is a recurring loop, and this run is one tick of it. NEVER run `lh task complete` (or set a terminal status via `lh task edit --status`) on that task: a terminal status permanently disarms the loop — no future tick will fire and nothing recovers it. A tick with nothing to do, or whose condition is not met yet, is still a successful run; just finish your turn and the next tick is armed automatically. Only the user retires a recurring task.
+- **End conditions**: the one exception is when the instruction itself defines when the loop ends ("until X", "stop once Y", "after Z is merged") and this tick has verified it is now met. Then run `lh task complete <id>` as your final step: it is finalized after this run finishes and retires the loop. Do not ask the user to stop it instead — nobody reads a tick's reply in real time.
+  \</task_skill_guides>

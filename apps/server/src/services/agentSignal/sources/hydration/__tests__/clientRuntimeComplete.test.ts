@@ -83,6 +83,7 @@ describe('resolveClientRuntimeCompleteFeedbackSource', () => {
         payload: {
           agentId: 'client-agent',
           anchorMessageId: assistantMessageId,
+          isConversationRoot: true,
           message: 'Please remember this workflow.',
           messageId: parentMessageId,
           threadId: 'client-thread',

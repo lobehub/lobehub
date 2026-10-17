@@ -2,7 +2,10 @@
 import type { RouteObject } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
+import {
+  agentChatDesktopRouteMeta,
+  agentRouteMeta,
+} from '@/routes/(main)/agent/features/routeMeta';
 
 import { agentChatTopicListLoader } from './agentChatTopicListLoader';
 import { desktopRoutes } from './desktopRouter.config';
@@ -24,10 +27,11 @@ const flatten = (routes: RouteObject[]): RouteObject[] =>
 /**
  * The chat routes are the ones carrying the agent chat meta (index + `:topicId`);
  * every other agent sub-route (docs, goals, profile, …) has its own meta.
+ * Desktop uses agentChatDesktopRouteMeta so the working-sidebar skeleton can differ.
  */
-const chatRoutes = (routes: RouteObject[]) =>
+const chatRoutes = (routes: RouteObject[], meta: unknown) =>
   flatten(routes).filter(
-    (route) => (route.handle as { meta?: unknown } | undefined)?.meta === agentRouteMeta,
+    (route) => (route.handle as { meta?: unknown } | undefined)?.meta === meta,
   );
 
 // The hydration itself is covered elsewhere; this guards the wiring, which is the
@@ -39,14 +43,14 @@ describe('agent chat topic list loader wiring', () => {
   });
 
   it('pre-hydrates the topic list on every desktop agent chat route', () => {
-    const routes = chatRoutes(desktopRoutes);
+    const routes = chatRoutes(desktopRoutes, agentChatDesktopRouteMeta);
 
     expect(routes.length).toBeGreaterThan(0);
     expect(routes.map((route) => route.loader)).toEqual(routes.map(() => agentChatTopicListLoader));
   });
 
   it('pre-hydrates the topic list on the mobile agent chat routes too', () => {
-    const routes = chatRoutes(mobileRoutes);
+    const routes = chatRoutes(mobileRoutes, agentRouteMeta);
 
     expect(routes.length).toBeGreaterThan(0);
     expect(routes.map((route) => route.loader)).toEqual(routes.map(() => agentChatTopicListLoader));

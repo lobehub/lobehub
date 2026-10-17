@@ -1,7 +1,7 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Block, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Block, Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Avatar,
   Button,
@@ -14,8 +14,7 @@ import {
   TextArea,
   toast,
   Upload,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import {
   ArrowLeft,
   CircleHelp,
@@ -263,11 +262,13 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
         pagination={false}
         rowKey={'accountId'}
         size={'middle'}
-        emptyText={
-          <Text style={{ fontSize: 13 }} type="secondary">
-            {t('user.workspaceProfile.settings.members.empty')}
-          </Text>
-        }
+        locale={{
+          emptyText: (
+            <Text style={{ fontSize: 13 }} type="secondary">
+              {t('user.workspaceProfile.settings.members.empty')}
+            </Text>
+          ),
+        }}
       />
     </SettingCard>
   );

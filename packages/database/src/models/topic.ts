@@ -67,6 +67,7 @@ import {
   trashStamp,
 } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { topicMetadataWithCreator } from './topicCreator';
 import { recomputeTopicUsage } from './topicUsage';
 
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
@@ -84,6 +85,32 @@ type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> 
  */
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 const TASK_CALLBACK_RESERVATION_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * The device a topic runs on: the one its in-flight run was dispatched to,
+ * else the one its turns are pinned to. The live dispatch wins because a run
+ * does not always follow the pin — an `auto` target, an explicit request
+ * device or a fixed workspace target can send it elsewhere. The `deviceId`
+ * filter of `TopicModel.queryTopics` applies the same precedence in SQL.
+ */
+export const getTopicDeviceId = (
+  metadata: Pick<ChatTopicMetadata, 'boundDeviceId' | 'runningOperation'> | null | undefined,
+): string | undefined => metadata?.runningOperation?.deviceId ?? metadata?.boundDeviceId;
+
+/**
+ * Whether a turn start currently holds the topic's short start reservation.
+ * A writer that changes where the topic runs must respect it as it would a
+ * `runningOperation`: the reserving turn may already have resolved its target.
+ */
+export const hasLiveTaskCallbackReservation = (
+  metadata: Pick<ChatTopicMetadata, 'taskCallbackReservation'> | null | undefined,
+  now = Date.now(),
+): boolean => {
+  const reservation = metadata?.taskCallbackReservation;
+  if (!reservation) return false;
+  const reservedAt = Date.parse(reservation.reservedAt);
+  return Number.isFinite(reservedAt) && now - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+};
 /**
  * How long an operation that still claims `running` / `idle` may hold the topic
  * against a background start before it is treated as abandoned.
@@ -512,7 +539,6 @@ export class TopicModel {
    * it — and use {@link mine} (which skips this helper).
    */
   private notShareVisitor = () => (this.includeShareVisitor ? undefined : notShareVisitorTopic());
-  // **************** Query *************** //
 
   query = async ({
     agentId,
@@ -587,7 +613,6 @@ export class TopicModel {
     // abandoned `running` row from a crashed earlier run sorts below the live
     // one. Not scoped by `ownership()` — in a workspace the run may have been
     // started by another member, and the topic join is already ownership-gated.
-    // Same shape as the `queryTopics` feed's column of the same name.
     const runStartedAtSubquery = this.db
       .select({ value: agentOperations.startedAt })
       .from(agentOperations)
@@ -649,7 +674,6 @@ export class TopicModel {
       editingGroupId ? sql`${topics.metadata}->>'editingGroupId' = ${editingGroupId}` : undefined,
     );
 
-    // If groupId is provided, query topics by groupId directly
     if (groupId) {
       const whereCondition = and(
         this.ownership(),
@@ -677,7 +701,7 @@ export class TopicModel {
                 favorite: topics.favorite,
                 historySummary: topics.historySummary,
                 id: topics.id,
-                metadata: topics.metadata,
+                metadata: topicMetadataWithCreator(this.db, this.messageOwnership()),
                 projectId: topics.projectId,
                 projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
                 model: topics.model,
@@ -758,7 +782,7 @@ export class TopicModel {
                 favorite: topics.favorite,
                 historySummary: topics.historySummary,
                 id: topics.id,
-                metadata: topics.metadata,
+                metadata: topicMetadataWithCreator(this.db, this.messageOwnership()),
                 projectId: topics.projectId,
                 projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
                 model: topics.model,
@@ -833,7 +857,7 @@ export class TopicModel {
               favorite: topics.favorite,
               historySummary: topics.historySummary,
               id: topics.id,
-              metadata: topics.metadata,
+              metadata: topicMetadataWithCreator(this.db, this.messageOwnership()),
               projectId: topics.projectId,
               projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
               model: topics.model,
@@ -998,10 +1022,18 @@ export class TopicModel {
    * markdown, and a list only ever renders the head of it.
    */
   queryTopics = async ({
+    deviceId,
     statuses,
     pageSize = 200,
     withLastMessage,
   }: {
+    /**
+     * Only topics on this device — the one its in-flight run was dispatched to
+     * (`metadata.runningOperation.deviceId`), else the one its turns are
+     * pinned to (`metadata.boundDeviceId`). See {@link getTopicDeviceId},
+     * which applies the same precedence in memory.
+     */
+    deviceId?: string;
     pageSize?: number;
     statuses?: string[];
     withLastMessage?: boolean;
@@ -1027,6 +1059,9 @@ export class TopicModel {
       visibleParentWhere,
       statuses && statuses.length > 0
         ? inArray(topics.status, statuses as ChatTopicStatus[])
+        : undefined,
+      deviceId
+        ? sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'deviceId', ${topics.metadata} ->> 'boundDeviceId') = ${deviceId}`
         : undefined,
     );
 
@@ -1079,6 +1114,7 @@ export class TopicModel {
       return this.db
         .select({
           ...getTableColumns(topics),
+          metadata: topicMetadataWithCreator(this.db, this.messageOwnership()),
           parentVisibility: parentVisibilityColumn,
           runStartedAt: runStartedAtColumn,
         })
@@ -1117,6 +1153,7 @@ export class TopicModel {
     const rows = await this.db
       .select({
         ...getTableColumns(topics),
+        metadata: topicMetadataWithCreator(this.db, this.messageOwnership()),
         lastAssistantMessage: sql<string | null>`(${lastAssistantMessageSubquery})`.as(
           'last_assistant_message',
         ),
@@ -1137,6 +1174,38 @@ export class TopicModel {
           ? `${row.lastAssistantMessage.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
           : row.lastAssistantMessage,
     }));
+  };
+
+  /**
+   * Who started each topic's current run. Workspace topics are co-editable, so
+   * the member running a topic now can differ from its creator (`topics.userId`);
+   * the latest top-level running operation records the actual initiator — the
+   * same row `runStartedAt` reads. Topics whose run never wrote an operation
+   * row (client-executed runs) are absent; callers fall back to the creator.
+   *
+   * Not scoped by {@link ownership}: in a workspace the run may belong to
+   * another member, and callers pass ids from an ownership-gated topic read.
+   */
+  findRunInitiators = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([agentOperations.topicId], {
+        topicId: agentOperations.topicId,
+        userId: agentOperations.userId,
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          inArray(agentOperations.topicId, topicIds),
+          eq(agentOperations.status, 'running'),
+          isNull(agentOperations.parentOperationId),
+          isNotNull(agentOperations.startedAt),
+        ),
+      )
+      .orderBy(agentOperations.topicId, desc(agentOperations.startedAt));
+
+    return new Map(rows.flatMap((row) => (row.topicId ? [[row.topicId, row.userId]] : [])));
   };
 
   /**
@@ -1584,7 +1653,14 @@ export class TopicModel {
     });
   };
 
-  duplicate = async (topicId: string, newTitle?: string) => {
+  /**
+   * Copy a topic into a new one.
+   *
+   * `options.upToMessageId` narrows the copy to the ancestor chain ending at
+   * that message (first message → that message) — the "fork from here" path.
+   * Without it the whole topic is copied, matching the duplicate action.
+   */
+  duplicate = async (topicId: string, newTitle?: string, options?: { upToMessageId?: string }) => {
     return this.db.transaction(async (tx) => {
       // find original topic
       const originalTopic = await tx.query.topics.findFirst({
@@ -1594,6 +1670,13 @@ export class TopicModel {
       if (!originalTopic) {
         throw new Error(`Topic with id ${topicId} not found`);
       }
+
+      // A copy is a brand-new topic: stamp its own timestamps instead of
+      // inheriting the source's. The sidebar sorts and groups by the latest
+      // activity time (`topicActivityAt`, i.e. the newest message), so a copy
+      // that kept the source's date would re-file itself under the source's
+      // original day instead of showing up as what it is — activity now.
+      const copiedAt = new Date();
 
       // copy topic
       const [duplicatedTopic] = await tx
@@ -1605,19 +1688,46 @@ export class TopicModel {
               ...originalTopic,
               ...COPIED_TOPIC_USAGE_RESET,
               clientId: null,
+              createdAt: copiedAt,
               id: this.genId(),
               title: newTitle || originalTopic?.title,
+              updatedAt: copiedAt,
             },
           ),
         )
         .returning();
 
       // Find messages associated with the original topic, ordered by createdAt
-      const originalMessages = await tx
+      const topicMessages = await tx
         .select()
         .from(messages)
         .where(and(eq(messages.topicId, topicId), this.messageOwnership()))
         .orderBy(messages.createdAt);
+
+      // A fork copies only the selected prefix of the conversation (first
+      // message → `upToMessageId`), so sibling branches left behind by
+      // regenerate stay in the source topic; a duplicate copies the whole topic.
+      let originalMessages = topicMessages;
+      if (options?.upToMessageId) {
+        const byId = new Map(topicMessages.map((message) => [message.id, message]));
+        const selected = byId.get(options.upToMessageId);
+        if (!selected) {
+          throw new Error(`Message with id ${options.upToMessageId} not found in topic ${topicId}`);
+        }
+
+        // Walk up to the root, then reverse back to root → selected so parents
+        // are inserted before their children.
+        const chain: typeof topicMessages = [];
+        const visited = new Set<string>();
+        let cursor: (typeof topicMessages)[number] | undefined = selected;
+        while (cursor && !visited.has(cursor.id)) {
+          visited.add(cursor.id);
+          chain.push(cursor);
+          cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+        }
+
+        originalMessages = chain.reverse();
+      }
 
       // Find all messagePlugins for this topic
       const messageIds = originalMessages.map((m) => m.id);
@@ -1646,9 +1756,15 @@ export class TopicModel {
 
       // copy messages sequentially to respect foreign key constraints
       const duplicatedMessages: DBMessageItem[] = [];
-      for (const message of originalMessages) {
+      for (const [index, message] of originalMessages.entries()) {
         const newId = idMap.get(message.id)!;
         const newParentId = message.parentId ? idMap.get(message.parentId) || null : null;
+
+        // Retime the copy to the copy moment while preserving its internal
+        // order (monotonic, 1ms apart, ending at `copiedAt`). The sidebar's
+        // activity key is the newest message time, so carrying the source's
+        // timestamps would keep the new topic in the source's date group.
+        const messageAt = new Date(copiedAt.getTime() - (originalMessages.length - 1 - index));
 
         // Update tool IDs in tools array
         let newTools = message.tools;
@@ -1664,6 +1780,7 @@ export class TopicModel {
           .values({
             ...message,
             clientId: null,
+            createdAt: messageAt,
             id: newId,
             // A duplicate consumed no tokens: mark it so usage reports do not
             // count the source's generation twice (the figures themselves stay
@@ -1672,6 +1789,7 @@ export class TopicModel {
             parentId: newParentId,
             tools: newTools,
             topicId: duplicatedTopic.id,
+            updatedAt: messageAt,
           })
           .returning()) as DBMessageItem[];
 
@@ -1794,6 +1912,18 @@ export class TopicModel {
     return this.db
       .delete(topics)
       .where(and(inArray(topics.id, ids), this.ownership(), this.notShareVisitor()));
+  };
+
+  /**
+   * Hard delete by id that also reaches rows already in the recycle bin —
+   * same ownership + share-visitor guards as {@link batchDelete}, scoped with
+   * {@link trashScope} (`includeTrashed`) instead of {@link ownership}. For
+   * cascade paths that own their id list: a linked topic sitting in the
+   * recycle bin must not survive its parent's deletion and resurrect as a
+   * sidebar orphan when the user later restores it.
+   */
+  batchDeleteIncludingTrashed = async (ids: string[]) => {
+    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.trashScope()));
   };
 
   /**
@@ -2279,7 +2409,7 @@ export class TopicModel {
    * statement, so neither a concurrent switch nor an in-flight run can observe
    * the new model paired with the previous model's pin. `reasoningConfig` is
    * model-keyed and therefore always replaced (dropped when not provided);
-   * `heteroEffort` is only touched when given.
+   * `heteroEffort` and `heteroSpeed` are only touched when given.
    */
   updateModelPin = async (
     id: string,
@@ -2288,7 +2418,7 @@ export class TopicModel {
       model,
       provider,
     }: {
-      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>;
       model: string;
       provider: string;
     },
@@ -2306,6 +2436,7 @@ export class TopicModel {
       const mergedMetadata: ChatTopicMetadata = {
         ...rest,
         ...(metadata?.heteroEffort !== undefined && { heteroEffort: metadata.heteroEffort }),
+        ...(metadata?.heteroSpeed !== undefined && { heteroSpeed: metadata.heteroSpeed }),
         ...(metadata?.reasoningConfig !== undefined && {
           reasoningConfig: metadata.reasoningConfig,
         }),
@@ -2609,11 +2740,7 @@ export class TopicModel {
       if (!existing) return null;
 
       const reservation = existing.metadata?.taskCallbackReservation;
-      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
-      const hasLiveReservation =
-        reservation &&
-        Number.isFinite(reservedAt) &&
-        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+      const hasLiveReservation = hasLiveTaskCallbackReservation(existing.metadata);
 
       if (
         reservation?.messageId === messageId &&
@@ -2688,11 +2815,7 @@ export class TopicModel {
 
       const current = existing.metadata?.runningOperation;
       const reservation = existing.metadata?.taskCallbackReservation;
-      const reservedAt = reservation ? Date.parse(reservation.reservedAt) : 0;
-      const hasLiveReservation =
-        !!reservation &&
-        Number.isFinite(reservedAt) &&
-        Date.now() - reservedAt < TASK_CALLBACK_RESERVATION_TTL_MS;
+      const hasLiveReservation = hasLiveTaskCallbackReservation(existing.metadata);
       const ownsCurrent =
         !current ||
         current.operationId === params.sourceOperationId ||

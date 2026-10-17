@@ -3,13 +3,14 @@
 import { useMemo } from 'react';
 
 import { type ActionsBarConfig, type MessageActionSlot } from '@/features/Conversation/types';
+import { useCanEditCodexMessage } from '@/hooks/useCanEditCodexMessage';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 /**
  * Hetero-agent (Claude Code / Codex) sessions keep the menu minimal — copy +
  * delete — because the external runtime owns the assistant message lifecycle
- * (edit / branching / translate / share don't apply).
+ * (assistant edit / branching / translate / share don't apply).
  * Regenerate was previously excluded too; Codex now uses the existing
  * heterogeneous rerun path, which preserves the user prompt and attachments.
  * `select` remains available because forwarding / batch deletion is handled by
@@ -23,6 +24,12 @@ import { agentSelectors } from '@/store/agent/selectors';
 const HETERO_USER: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } = {
   bar: ['copy'],
   menu: ['restoreToInput', 'copy', 'divider', 'select', 'divider', 'del'],
+};
+
+/** Codex user edits run a replacement prompt while preserving the original history. */
+const CODEX_USER: typeof HETERO_USER = {
+  bar: ['edit', ...HETERO_USER.bar],
+  menu: ['edit', ...HETERO_USER.menu],
 };
 
 const HETERO_ASSISTANT: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } = {
@@ -49,6 +56,8 @@ const CODEX_ASSISTANT: typeof HETERO_ASSISTANT = {
  * - Runtime-specific overrides, or native message defaults via an empty object.
  */
 export const useActionsBarConfig = (): ActionsBarConfig => {
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const canEditCodex = useCanEditCodexMessage(agentId);
   const isHeteroAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
 
   const providerType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
@@ -58,10 +67,10 @@ export const useActionsBarConfig = (): ActionsBarConfig => {
       return {
         assistant: providerType === 'codex' ? CODEX_ASSISTANT : HETERO_ASSISTANT,
         assistantGroup: providerType === 'codex' ? CODEX_ASSISTANT : HETERO_ASSISTANT,
-        user: HETERO_USER,
+        user: canEditCodex ? CODEX_USER : HETERO_USER,
       };
     }
 
     return {};
-  }, [isHeteroAgent, providerType]);
+  }, [canEditCodex, isHeteroAgent, providerType]);
 };

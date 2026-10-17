@@ -1,19 +1,16 @@
-import { Flexbox } from '@lobehub/ui';
-import { Button, Switch, Tabs } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
-import { CopyIcon } from 'lucide-react';
+import { Button } from '@lobehub/ui';
+import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FORM_STYLE } from '@/const/layoutTokens';
 import { useImgToClipboard } from '@/hooks/useImgToClipboard';
-import { useIsMobile } from '@/hooks/useIsMobile';
 import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreenshot';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
+import ExportLayout, { ToolbarDivider } from '../components/ExportLayout';
+import { SelectChip, ToggleChip } from '../components/OptionChips';
 import { useShareData } from '../ShareDataProvider';
-import { styles } from '../style';
 import Preview from './Preview';
 import { type FieldType } from './type';
 import { WidthMode } from './type';
@@ -27,94 +24,75 @@ const DEFAULT_FIELD_VALUE: FieldType = {
   withSystemRole: false,
 };
 
-const ShareImage = memo<{ mobile?: boolean }>(() => {
+const ShareImage = memo<{ mobile?: boolean }>(({ mobile }) => {
   const currentAgentTitle = useAgentStore(agentSelectors.currentAgentDisplayName);
-  const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
-  const form = useForm({
-    initialValues: DEFAULT_FIELD_VALUE,
-    onValuesChange: (_, v) => setFieldValue(v),
-  });
+  const [fieldValue, setFieldValue] = useState<FieldType>(
+    mobile ? { ...DEFAULT_FIELD_VALUE, widthMode: WidthMode.Narrow } : DEFAULT_FIELD_VALUE,
+  );
   const { t } = useTranslation(['chat', 'common']);
-  const { context, dbMessages } = useShareData();
+  const { context, dbMessages, displayMessages } = useShareData();
   const { loading, onDownload, title } = useScreenshot({
     imageType: fieldValue.imageType,
     title: currentAgentTitle ?? undefined,
   });
   const { loading: copyLoading, onCopy } = useImgToClipboard();
 
-  const widthModeOptions = [
-    { key: WidthMode.Wide, label: t('shareModal.widthMode.wide') },
-    { key: WidthMode.Narrow, label: t('shareModal.widthMode.narrow') },
-  ];
+  const update = <K extends keyof FieldType>(key: K, value: FieldType[K]) =>
+    setFieldValue((prev) => ({ ...prev, [key]: value }));
 
-  const settings: FormFieldProps<FieldType>[] = [
-    {
-      children: <Tabs items={widthModeOptions} />,
-      label: t('shareModal.widthMode.label'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'widthMode',
-      valueProp: 'activeKey',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.withSystemRole'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withSystemRole',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.withFooter'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withFooter',
-    },
-    {
-      children: <Tabs items={imageTypeOptions} />,
-      label: t('shareModal.imageType'),
-      layout: 'vertical',
-      minWidth: undefined,
-      name: 'imageType',
-      valueProp: 'activeKey',
-    },
-  ];
-
-  const isMobile = useIsMobile();
-
-  const button = (
-    <>
-      <Button
-        block
-        icon={CopyIcon}
-        loading={copyLoading}
-        size={isMobile ? undefined : 'large'}
-        type={'primary'}
-        onClick={() => onCopy()}
-      >
-        {t('copy', { ns: 'common' })}
-      </Button>
-      <Button block loading={loading} size={isMobile ? undefined : 'large'} onClick={onDownload}>
-        {t('shareModal.download')}
-      </Button>
-    </>
-  );
+  const imageTypeLabel = imageTypeOptions.find((o) => o.key === fieldValue.imageType)?.label;
 
   return (
-    <>
-      <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-        <Preview context={context} messages={dbMessages} title={title} {...fieldValue} />
-        <Flexbox className={styles.sidebar} gap={12}>
-          <Form form={form} items={settings} itemsType={'flat'} {...FORM_STYLE} />
-          {!isMobile && button}
-        </Flexbox>
-      </Flexbox>
-      {isMobile && (
-        <Flexbox horizontal className={styles.footer} gap={8}>
-          {button}
-        </Flexbox>
+    <ExportLayout
+      actions={
+        <>
+          <Button icon={CopyIcon} loading={copyLoading} onClick={() => onCopy()}>
+            {t('shareModal.actions.copyImage')}
+          </Button>
+          <Button icon={DownloadIcon} loading={loading} type={'primary'} onClick={onDownload}>
+            {t('shareModal.actions.download')}
+          </Button>
+        </>
+      }
+      meta={[t('shareModal.meta.messages', { count: displayMessages.length }), imageTypeLabel].join(
+        ' · ',
       )}
-    </>
+      toolbar={
+        <>
+          <SelectChip
+            label={t('shareModal.options.width')}
+            value={fieldValue.widthMode}
+            options={[
+              { label: t('shareModal.widthMode.wide'), value: WidthMode.Wide },
+              { label: t('shareModal.widthMode.narrow'), value: WidthMode.Narrow },
+            ]}
+            onChange={(value) => update('widthMode', value)}
+          />
+          <SelectChip
+            label={t('shareModal.options.fileType')}
+            value={fieldValue.imageType}
+            options={imageTypeOptions.map((o) => ({
+              label: String(o.label),
+              value: o.key as ImageType,
+            }))}
+            onChange={(value) => update('imageType', value)}
+          />
+          <ToolbarDivider />
+          <ToggleChip
+            checked={fieldValue.withSystemRole}
+            label={t('shareModal.options.agentProfile')}
+            onChange={(checked) => update('withSystemRole', checked)}
+          />
+          <ToggleChip
+            checked={fieldValue.withFooter}
+            label={t('shareModal.options.footer')}
+            onChange={(checked) => update('withFooter', checked)}
+          />
+        </>
+      }
+    >
+      <Preview context={context} messages={dbMessages} title={title} {...fieldValue} />
+    </ExportLayout>
   );
 });
 

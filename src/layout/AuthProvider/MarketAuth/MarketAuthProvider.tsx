@@ -1,6 +1,6 @@
 'use client';
 
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { createContext, lazy, Suspense, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

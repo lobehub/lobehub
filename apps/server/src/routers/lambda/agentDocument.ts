@@ -3,6 +3,7 @@ import {
   DocumentLoadFormat,
   DocumentLoadRule,
 } from '@lobechat/agent-templates';
+import { MOVE_DOCUMENTS_MAX_IDS } from '@lobechat/builtin-tool-agent-documents';
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import matter from 'gray-matter';
@@ -524,29 +525,48 @@ export const agentDocumentRouter = router({
         scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
         sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),
         topicId: z.string().optional(),
+        // Stamp `childCount` on entries with something nested under them (the
+        // agent tool needs it to spot a workflow document holding its runs).
+        withChildCount: z.boolean().optional().default(false),
       }),
     )
     .query(async ({ ctx, input }) => {
       const { excludeWeb, includeArchivedToolResults, parentId } = input;
-      if (input.scope === 'currentTopic') {
-        if (!input.topicId) throw new Error('topicId is required to list current topic documents');
+      const withChildCounts = async <T extends { documentId: string }>(docs: T[]) => {
+        if (!input.withChildCount) return docs;
+        const counts = await ctx.agentDocumentService.countChildren(input.agentId);
+        return docs.map((doc) => ({ ...doc, childCount: counts.get(doc.documentId) ?? 0 }));
+      };
+      try {
+        if (input.scope === 'currentTopic') {
+          if (!input.topicId) {
+            throw new Error('topicId is required to list current topic documents');
+          }
 
-        const docs = await ctx.agentDocumentService.listDocumentsForTopic(
-          input.agentId,
-          input.topicId,
-          input.sourceType,
-          { includeArchivedToolResults },
+          const docs = await ctx.agentDocumentService.listDocumentsForTopic(
+            input.agentId,
+            input.topicId,
+            input.sourceType,
+            { includeArchivedToolResults },
+          );
+          if (!parentId) return await withChildCounts(docs);
+
+          // Topic listing joins through topic associations rather than the agent
+          // folder tree, so the parent filter is applied in-memory here.
+          const parent = await ctx.agentDocumentService.resolveParent(input.agentId, parentId);
+          return await withChildCounts(docs.filter((d) => d.parentId === parent.documentId));
+        }
+
+        return await withChildCounts(
+          await ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType, {
+            excludeWeb,
+            includeArchivedToolResults,
+            parentId,
+          }),
         );
-        // Topic listing joins through topic associations rather than the agent
-        // folder tree, so the folder filter is applied in-memory here.
-        return parentId ? docs.filter((d) => d.parentId === parentId) : docs;
+      } catch (error) {
+        return handleAgentDocumentVfsError(error);
       }
-
-      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType, {
-        excludeWeb,
-        includeArchivedToolResults,
-        parentId,
-      });
     }),
 
   /**
@@ -1233,12 +1253,17 @@ export const agentDocumentRouter = router({
         .object({
           agentId: z.string(),
           id: z.string(),
+          // Also delete documents nested under it; without it a parent with
+          // children is refused instead of stranding them.
+          withChildren: z.boolean().optional(),
         })
         .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
       const doc = await ctx.agentDocumentService.getDocumentById(input.id, input.agentId);
-      const deleted = await ctx.agentDocumentService.removeDocumentById(input.id, input.agentId);
+      const deleted = await ctx.agentDocumentService
+        .removeDocumentById(input.id, input.agentId, { withChildren: input.withChildren })
+        .catch(handleAgentDocumentVfsError);
       if (deleted && input.trigger === 'tool') {
         await ctx.documentWorkRegistrar.deleteDocumentWork({
           agentDocumentId: input.id,
@@ -1299,6 +1324,52 @@ export const agentDocumentRouter = router({
         );
 
         return doc;
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: create a folder by name, under the root or a parent (folder or document) id
+   */
+  createFolder: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        parentId: z.string().nullish(),
+        title: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentService.createFolder(
+          input.agentId,
+          input.title,
+          input.parentId,
+        );
+      } catch (error) {
+        handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Tool-oriented: move documents/folders by id under a parent (folder or document), or to the root with `null`
+   */
+  moveDocuments: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        ids: z.array(z.string()).min(1).max(MOVE_DOCUMENTS_MAX_IDS),
+        parentId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.agentDocumentService.moveDocuments(
+          input.agentId,
+          input.ids,
+          input.parentId,
+        );
       } catch (error) {
         handleAgentDocumentVfsError(error);
       }

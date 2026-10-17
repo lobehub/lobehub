@@ -9,6 +9,7 @@ import {
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
   PAGINATED_COLLECTION_PINNED_OPTIONS,
+  resolveHeaderEmptyHero,
   resolveMyTaskScope,
   resolveTaskCollection,
   resolveTaskCollectionView,
@@ -24,6 +25,38 @@ const taskUpdatedAt = (id: string, updatedAt: string): TaskListItem =>
   ({ id, identifier: id, status: 'backlog', updatedAt: new Date(updatedAt) }) as TaskListItem;
 
 describe('AgentTasksPage', () => {
+  describe('resolveHeaderEmptyHero', () => {
+    it('keeps the view options reachable when only archived tasks remain', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: true,
+          isEmptyHero: true,
+          isOrdinaryCollection: true,
+        }),
+      ).toBe(false);
+    });
+
+    it('treats a truly empty ordinary list as empty', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: false,
+          isEmptyHero: true,
+          isOrdinaryCollection: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('never treats the other collections as empty', () => {
+      expect(
+        resolveHeaderEmptyHero({
+          hasOnlyArchivedTasks: false,
+          isEmptyHero: true,
+          isOrdinaryCollection: false,
+        }),
+      ).toBe(false);
+    });
+  });
+
   describe('clampCollectionPage', () => {
     it('moves a stale last page back into range when the result total shrinks', () => {
       expect(clampCollectionPage(2, 50)).toBe(1);

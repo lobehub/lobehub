@@ -1,7 +1,5 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Input, toast } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Button, createStaticStyles, Flexbox, Icon, Input, toast } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

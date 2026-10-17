@@ -344,6 +344,10 @@ export class TraeAcpSession extends AcpAgentSession<
     await this.emitEvents(await this.pipeline.flush());
   }
 
+  protected async onRunCancelled(): Promise<void> {
+    await this.pushToPipeline({ stopReason: 'cancelled', type: 'trae_prompt_completed' });
+  }
+
   protected onHostClose(): void {
     this.modelDiscovery?.close();
   }

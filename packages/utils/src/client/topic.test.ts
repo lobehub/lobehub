@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   getTopicWorkingDirectoryEffectivePath,
   getTopicWorkingDirectorySourcePath,
+  groupTopicsByAgent,
+  groupTopicsByDevice,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
@@ -572,5 +574,342 @@ describe('groupTopicsByStatus', () => {
     const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['waiting']));
 
     expect(result.map((g) => g.id)).toEqual(['pending']);
+  });
+});
+
+it('keeps project directory bindings and device identities separate', () => {
+  const base = { createdAt: 1, updatedAt: 1, title: 'Work' };
+  const topics: ChatTopic[] = [
+    {
+      ...base,
+      id: 'a',
+      projectWorkingDirectoryId: 'directory-a',
+      metadata: { workingDirectory: '/repo' },
+    },
+    {
+      ...base,
+      id: 'b',
+      projectWorkingDirectoryId: 'directory-b',
+      metadata: { workingDirectory: '/repo' },
+    },
+    { ...base, id: 'c', metadata: { workingDirectory: '/repo', boundDeviceId: 'device-a' } },
+    { ...base, id: 'd', metadata: { workingDirectory: '/repo', boundDeviceId: 'device-b' } },
+  ];
+  expect(groupTopicsByProject(topics, 'updatedAt')).toHaveLength(4);
+});
+
+describe('groupTopicsByProject project merging', () => {
+  const base = { createdAt: 0, title: 'Work', updatedAt: 0 };
+
+  /** @example Two directories of one project must collapse into a single sidebar group. */
+  it('merges directories of the same project into one project-id group', () => {
+    // ROOT CAUSE:
+    //
+    // Directory-bound topics were grouped per `projectWorkingDirectoryId`, so
+    // two directories bound to the same project rendered as two identically
+    // named groups in the sidebar's "by project" mode. Grouping by the
+    // topic's `projectId` first merges them into a single group.
+    const topics: ChatTopic[] = [
+      {
+        ...base,
+        createdAt: 3,
+        updatedAt: 3,
+        id: 'recent',
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'directory-a',
+        metadata: { workingDirectory: '/work/lobehub' },
+      },
+      {
+        ...base,
+        createdAt: 1,
+        updatedAt: 1,
+        id: 'older',
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'directory-b',
+        metadata: { workingDirectory: '/home/lobehub' },
+      },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt')).toEqual([
+      {
+        children: [topics[0], topics[1]],
+        id: 'project-id:project-1',
+        // Same-basename directories collide, so the label expands to the
+        // distinguishing parent of the most recently active directory.
+        title: 'work/lobehub',
+      },
+    ]);
+  });
+
+  /** @example A project conversation without a working directory still belongs to its project group. */
+  it('merges pathless project topics into their project group', () => {
+    const topics: ChatTopic[] = [
+      {
+        ...base,
+        createdAt: 2,
+        updatedAt: 2,
+        id: 'with-directory',
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'directory-a',
+        metadata: { workingDirectory: '/work/lobehub' },
+      },
+      { ...base, createdAt: 1, updatedAt: 1, id: 'conversation-only', projectId: 'project-1' },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt')).toEqual([
+      {
+        children: [topics[0], topics[1]],
+        id: 'project-id:project-1',
+        title: 'lobehub',
+      },
+    ]);
+  });
+
+  /** @example Topics without a project binding keep their per-directory groups. */
+  it('keeps directory grouping when topics have no project binding', () => {
+    const topics: ChatTopic[] = [
+      {
+        ...base,
+        id: 'a',
+        projectWorkingDirectoryId: 'directory-a',
+        metadata: { workingDirectory: '/repo-a' },
+      },
+      {
+        ...base,
+        id: 'b',
+        projectWorkingDirectoryId: 'directory-b',
+        metadata: { workingDirectory: '/repo-b' },
+      },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt')).toEqual([
+      {
+        children: [topics[0]],
+        id: 'project-directory:directory-a',
+        title: 'repo-a',
+      },
+      {
+        children: [topics[1]],
+        id: 'project-directory:directory-b',
+        title: 'repo-b',
+      },
+    ]);
+  });
+
+  /** @example Distinct projects never merge, and project groups stay above unbound topics. */
+  it('keeps distinct projects separate and sorts the no-project bucket last', () => {
+    const topics: ChatTopic[] = [
+      { ...base, createdAt: 1, updatedAt: 1, id: 'unbound' },
+      {
+        ...base,
+        createdAt: 2,
+        updatedAt: 2,
+        id: 'mobile',
+        projectId: 'project-2',
+        metadata: { workingDirectory: '/home/lobehub_mobile' },
+      },
+      {
+        ...base,
+        createdAt: 3,
+        updatedAt: 3,
+        id: 'main',
+        projectId: 'project-1',
+        metadata: { workingDirectory: '/home/lobehub' },
+      },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt').map((group) => group.id)).toEqual([
+      'project-id:project-1',
+      'project-id:project-2',
+      'no-project',
+    ]);
+  });
+
+  /** @example A stale explicit project still leads a freshly active directory group. */
+  it('sorts explicit-project groups ahead of directory groups regardless of activity', () => {
+    // ROOT CAUSE:
+    //
+    // Groups sorted purely by most recent activity, so a project the user
+    // deliberately bound topics to could sink below an inferred directory
+    // group. Explicit bindings are stronger signals and lead the list; only
+    // groups within the same tier compete on activity.
+    const topics: ChatTopic[] = [
+      {
+        ...base,
+        createdAt: 1,
+        updatedAt: 1,
+        id: 'bound-stale',
+        projectId: 'project-1',
+        metadata: { workingDirectory: '/home/lobehub' },
+      },
+      {
+        ...base,
+        createdAt: 3,
+        updatedAt: 3,
+        id: 'unbound-recent',
+        metadata: { workingDirectory: '/tmp/scratch' },
+      },
+      { ...base, createdAt: 2, updatedAt: 2, id: 'unbound' },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt').map((group) => group.id)).toEqual([
+      'project-id:project-1',
+      'project:/tmp/scratch',
+      'no-project',
+    ]);
+  });
+
+  /** @example Within the explicit-project tier the most recently active project still leads. */
+  it('keeps most-recent-activity order inside the explicit-project tier', () => {
+    const topics: ChatTopic[] = [
+      { ...base, createdAt: 1, updatedAt: 1, id: 'older', projectId: 'project-1' },
+      { ...base, createdAt: 2, updatedAt: 2, id: 'newer', projectId: 'project-2' },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt').map((group) => group.id)).toEqual([
+      'project-id:project-2',
+      'project-id:project-1',
+    ]);
+  });
+});
+
+describe('groupTopicsByAgent', () => {
+  type AgentRow = ChatTopic & {
+    agentId?: string | null;
+    agentName?: string | null;
+    agentTitle?: string | null;
+  };
+
+  const createRow = (
+    id: string,
+    updatedAt: number,
+    agent?: { agentId?: string | null; agentName?: string | null; agentTitle?: string | null },
+  ): AgentRow => ({ agentId: null, createdAt: updatedAt, id, title: id, updatedAt, ...agent });
+
+  it('should return empty array for empty input', () => {
+    expect(groupTopicsByAgent([], 'updatedAt')).toEqual([]);
+  });
+
+  it('groups topics by agent with titles from agent metadata', () => {
+    const topics = [
+      createRow('a1', 2, { agentId: 'agent-x', agentTitle: 'LobeHub' }),
+      createRow('a2', 1, { agentId: 'agent-x', agentTitle: 'LobeHub' }),
+      createRow('b1', 3, { agentId: 'agent-y', agentName: 'lobehub_mobile' }),
+    ];
+
+    expect(groupTopicsByAgent(topics, 'updatedAt')).toEqual([
+      { children: [topics[2]], id: 'agent:agent-y', title: 'lobehub_mobile' },
+      { children: [topics[0], topics[1]], id: 'agent:agent-x', title: 'LobeHub' },
+    ]);
+  });
+
+  it('falls back to agentName when agentTitle is absent', () => {
+    const topics = [createRow('a1', 1, { agentId: 'agent-x', agentName: 'lobehub' })];
+
+    expect(groupTopicsByAgent(topics, 'updatedAt')[0]).toEqual({
+      children: topics,
+      id: 'agent:agent-x',
+      title: 'lobehub',
+    });
+  });
+
+  it('buckets rows without agent attribution as a title-less no-agent group', () => {
+    const topics = [createRow('a', 2), createRow('b', 1)];
+
+    expect(groupTopicsByAgent(topics, 'updatedAt')).toEqual([
+      { children: topics, id: 'no-agent', title: undefined },
+    ]);
+  });
+
+  it('sorts children and groups by the chosen field descending', () => {
+    const topics = [
+      createRow('old', 1, { agentId: 'agent-x' }),
+      createRow('new', 5, { agentId: 'agent-x' }),
+      createRow('other-recent', 4, { agentId: 'agent-y' }),
+    ];
+
+    const result = groupTopicsByAgent(topics, 'createdAt');
+
+    expect(result.map((group) => group.id)).toEqual(['agent:agent-x', 'agent:agent-y']);
+    expect(result[0].children.map((topic) => topic.id)).toEqual(['new', 'old']);
+  });
+});
+
+describe('groupTopicsByDevice', () => {
+  const createRow = (id: string, updatedAt: number, extra?: Partial<ChatTopic>): ChatTopic => ({
+    createdAt: updatedAt,
+    id,
+    title: id,
+    updatedAt,
+    ...extra,
+  });
+
+  it('should return empty array for empty input', () => {
+    expect(groupTopicsByDevice([], 'updatedAt')).toEqual([]);
+  });
+
+  it('groups topics by metadata.boundDeviceId', () => {
+    const topics = [
+      createRow('a1', 2, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('a2', 1, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('b1', 3, { metadata: { boundDeviceId: 'device-y' } }),
+    ];
+
+    const result = groupTopicsByDevice(topics, 'updatedAt');
+
+    expect(result.map((group) => group.id)).toEqual(['device:device-y', 'device:device-x']);
+    expect(result[1].children.map((topic) => topic.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('resolves the device from the topic directory when boundDeviceId is absent', () => {
+    const topics = [
+      createRow('a', 2, { projectWorkingDirectoryId: 'dir-1' }),
+      createRow('b', 1, { projectWorkingDirectoryId: 'dir-2' }),
+    ];
+    const directories = [
+      { deviceId: 'device-x', id: 'dir-1' },
+      { deviceId: 'device-y', id: 'dir-2' },
+    ];
+
+    expect(groupTopicsByDevice(topics, 'updatedAt', directories).map((group) => group.id)).toEqual([
+      'device:device-x',
+      'device:device-y',
+    ]);
+  });
+
+  it('prefers metadata.boundDeviceId over the directory device', () => {
+    const topics = [
+      createRow('a', 1, {
+        metadata: { boundDeviceId: 'device-bound' },
+        projectWorkingDirectoryId: 'dir-1',
+      }),
+    ];
+    const directories = [{ deviceId: 'device-x', id: 'dir-1' }];
+
+    expect(groupTopicsByDevice(topics, 'updatedAt', directories)[0].id).toBe('device:device-bound');
+  });
+
+  it('buckets rows without device attribution as a title-less no-device group', () => {
+    const topics = [
+      createRow('a', 2),
+      createRow('b', 1, { projectWorkingDirectoryId: 'dir-missing' }),
+    ];
+
+    expect(groupTopicsByDevice(topics, 'updatedAt', [])).toEqual([
+      { children: topics, id: 'no-device' },
+    ]);
+  });
+
+  it('sorts children and groups by the chosen field descending', () => {
+    const topics = [
+      createRow('old', 1, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('new', 5, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('other-recent', 4, { metadata: { boundDeviceId: 'device-y' } }),
+    ];
+
+    const result = groupTopicsByDevice(topics, 'createdAt');
+
+    expect(result.map((group) => group.id)).toEqual(['device:device-x', 'device:device-y']);
+    expect(result[0].children.map((topic) => topic.id)).toEqual(['new', 'old']);
   });
 });

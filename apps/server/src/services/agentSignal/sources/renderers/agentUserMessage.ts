@@ -27,6 +27,9 @@ export const agentUserMessageRenderer = {
                 intent === 'skill',
             )
           : undefined,
+        // Lets the feedback classifier skip a topic's first message; dropping it here
+        // made the conversation-root pre-filter a no-op on every path.
+        ...(input.payload.isConversationRoot === true ? { isConversationRoot: true } : {}),
         memoryPayload:
           input.payload.memoryPayload && typeof input.payload.memoryPayload === 'object'
             ? (input.payload.memoryPayload as Record<string, unknown>)

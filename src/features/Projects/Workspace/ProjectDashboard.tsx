@@ -1,9 +1,19 @@
 'use client';
 
 import type { TaskStatus, WorkSummaryItem } from '@lobechat/types';
-import { Block, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Progress, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Progress,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import {
   BadgeCheckIcon,
   CheckCircle2Icon,
@@ -141,6 +151,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
   const workspaceId = useActiveWorkspaceId();
   const goalScope = `project:${projectId}`;
   const goals = useGoalStore(goalSelectors.goalList(goalScope));
+  const goalListView = useGoalStore(goalSelectors.goalListView(goalScope));
   const goalSWR = useGoalStore((s) => s.useFetchGoals)(undefined, projectId);
   const coordinatorAgentId = detail.project.coordinatorAgentId;
   const projectReference = detail.project.slug ?? projectId;
@@ -168,13 +179,13 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
       <Flexbox className={styles.main} gap={24}>
         <Flexbox gap={12}>
           <SectionTitle title={t('overview.goalProgress')} />
-          {goalSWR.error ? (
+          {goalSWR.error && goalListView === undefined ? (
             <AsyncError
               error={goalSWR.error}
               variant={'inline'}
               onRetry={() => void goalSWR.mutate()}
             />
-          ) : goalSWR.isLoading && goalSWR.data === undefined ? (
+          ) : goalSWR.isLoading ? (
             <ArticleSkeleton rows={4} />
           ) : goals.length === 0 ? (
             <Block padding={24} variant={'outlined'}>

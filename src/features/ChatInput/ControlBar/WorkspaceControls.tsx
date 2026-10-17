@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
-import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
+import DeviceSwitcher from './DeviceSwitcher';
 import SandboxStorageSection from './SandboxStorageSection';
 import { useWorkspaceSurface, type WorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
@@ -94,7 +94,7 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
 
     return (
       <>
-        <HeteroDeviceSwitcher agentId={agentId} />
+        <DeviceSwitcher agentId={agentId} />
         {surfaces.map((surface) => (
           <Fragment key={surface}>{withAccessGate(surface)}</Fragment>
         ))}

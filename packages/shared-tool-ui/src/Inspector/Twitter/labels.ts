@@ -3,7 +3,7 @@
 // (potentially) the CC adapter when the same wire names are surfaced via
 // MCP.
 //
-// Kept free of React / antd-style imports so collapsed-summary paths can
+// Kept free of React / @lobehub/ui imports so collapsed-summary paths can
 // pull these helpers without dragging the inspector component (and its
 // style modules) into tests transitively.
 

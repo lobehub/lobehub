@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentDisplayName, agentSecondaryDisplayName } from './displayName';
+import { agentDisplayName, agentRenameField, agentSecondaryDisplayName } from './displayName';
 
 describe('agentDisplayName', () => {
   it('prefers the personal name over the role', () => {
@@ -74,5 +74,20 @@ describe('agentSecondaryDisplayName', () => {
     expect(agentSecondaryDisplayName({ name: 'Alice', title: '   ' })).toBeUndefined();
     expect(agentSecondaryDisplayName({ name: 'Alice' })).toBeUndefined();
     expect(agentSecondaryDisplayName(null)).toBeUndefined();
+  });
+});
+
+describe('agentRenameField', () => {
+  it('renames the personal name when the agent has one — that is what the label shows', () => {
+    expect(agentRenameField({ name: 'Alice', title: 'Health Assistant' })).toBe('name');
+  });
+
+  it('renames the title when there is no name to show', () => {
+    expect(agentRenameField({ name: null, title: 'Health Assistant' })).toBe('title');
+    expect(agentRenameField({ title: 'Health Assistant' })).toBe('title');
+  });
+
+  it('treats a blank name as absent, like the label does', () => {
+    expect(agentRenameField({ name: '   ', title: 'Health Assistant' })).toBe('title');
   });
 });

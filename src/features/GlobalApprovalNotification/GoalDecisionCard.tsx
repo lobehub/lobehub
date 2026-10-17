@@ -1,16 +1,21 @@
 'use client';
 
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, toast } from '@lobehub/ui';
 import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openGateReportModal } from '@/features/Acceptance/Viewer/Gate';
 import GoalDecisionCase, {
   GoalDecisionAsker,
   type GoalGateCategory,
   goalGateCategory,
   useGateSummary,
 } from '@/features/AgentGoals/GoalDecision';
+import {
+  coordinatorGateReason,
+  localizedCoordinatorReason,
+} from '@/features/AgentGoals/ProcessControl/coordinatorCopy';
 import ClarificationQuestions, {
   type ClarificationAnswer,
 } from '@/features/ClarificationQuestions';
@@ -26,6 +31,8 @@ import type { IslandGoalItem } from './usePendingGoalDecisions';
 interface GoalDecisionCardProps {
   item: IslandGoalItem;
   onCollapse?: () => void;
+  /** Hide this ask from the island; it keeps waiting in the Home inbox. */
+  onDismiss?: () => void;
 }
 
 const SIGN_OFF = { accept: 'signOff', requestChanges: 'requestChanges' } as const;
@@ -35,7 +42,7 @@ const SIGN_OFF = { accept: 'signOff', requestChanges: 'requestChanges' } as cons
  * page asks, answerable from wherever the user is. The goal's own title leads,
  * the way a run approval leads with its agent — several goals can be waiting.
  */
-const GoalDecisionCard = ({ item, onCollapse }: GoalDecisionCardProps) => {
+const GoalDecisionCard = ({ item, onCollapse, onDismiss }: GoalDecisionCardProps) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const decideGoal = useGoalStore((s) => s.decideGoal);
@@ -54,6 +61,20 @@ const GoalDecisionCard = ({ item, onCollapse }: GoalDecisionCardProps) => {
           options: item.decision.options,
         }) as Exclude<GoalGateCategory, 'clarify'>)
       : undefined;
+
+  // A held batch release is a decision gate: reviewed in its report, never
+  // answered with one click from wherever the user happens to be.
+  const reviewAcceptanceId =
+    item.type === 'decision' ? (item.decision.releaseGateAcceptanceId ?? undefined) : undefined;
+  const openReview = () =>
+    reviewAcceptanceId &&
+    openGateReportModal({
+      acceptanceId: reviewAcceptanceId,
+      onDecided: () => {
+        void mutate(goalKeys.pendingForIsland());
+        void mutate((key) => Array.isArray(key) && key[0] === 'brief:list');
+      },
+    });
 
   const openGoal = () =>
     navigate(goal.agentId ? `/agent/${goal.agentId}/goal/${goal.id}` : `/goal/${goal.id}`);
@@ -118,7 +139,13 @@ const GoalDecisionCard = ({ item, onCollapse }: GoalDecisionCardProps) => {
           <GoalDecisionAsker
             agentId={goal.agentId}
             category={category ?? 'judgment'}
-            subtitle={item.type === 'signOff' ? t('goalProcess.signOff.islandSubtitle') : undefined}
+            subtitle={
+              item.type === 'signOff'
+                ? t('goalProcess.signOff.islandSubtitle')
+                : reviewAcceptanceId
+                  ? t('goalProcess.gate.releaseReports')
+                  : undefined
+            }
           />
         </div>
         <ActionIcon
@@ -142,7 +169,11 @@ const GoalDecisionCard = ({ item, onCollapse }: GoalDecisionCardProps) => {
       </div>
 
       <div className={styles.content}>
-        {item.type === 'decision' ? (
+        {item.type === 'decision' && reviewAcceptanceId ? (
+          <div className={styles.reviewSummary}>
+            {localizedCoordinatorReason(coordinatorGateReason(item.decision.question), t as any)}
+          </div>
+        ) : item.type === 'decision' ? (
           <GoalDecisionCase
             hideAsker
             actionsPortalTarget={actionsPortalTarget}
@@ -177,7 +208,24 @@ const GoalDecisionCard = ({ item, onCollapse }: GoalDecisionCardProps) => {
         )}
       </div>
 
-      <div className={styles.actions} ref={setActionsPortalTarget} />
+      <div className={styles.goalActions}>
+        {onDismiss && (
+          <Button
+            size="small"
+            title={t('globalApproval.dismissHint')}
+            type="text"
+            onClick={onDismiss}
+          >
+            {t('globalApproval.dismiss')}
+          </Button>
+        )}
+        <div className={styles.goalActionsSlot} ref={setActionsPortalTarget} />
+        {reviewAcceptanceId && (
+          <Button size="small" type="primary" onClick={openReview}>
+            {t('goalProcess.gate.openReview')}
+          </Button>
+        )}
+      </div>
     </div>
   );
 };

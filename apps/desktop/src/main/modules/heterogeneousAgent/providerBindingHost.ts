@@ -7,6 +7,7 @@ import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
+import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
 
 import { HETERO_AGENT_BINDINGS_DIR, HETERO_AGENT_RUNS_DIR } from '@/const/heteroAgent';
 
@@ -84,10 +85,28 @@ export interface HostedProviderBinding {
   cleanup: () => Promise<void>;
   cleanupSync: () => void;
   env: Record<string, string>;
+  model?: string;
   operationTokenEnvKey?: string;
   profileDir: string;
   runDir: string;
 }
+
+/** Keep native resume state only when it belongs to the same hosted binding. */
+export const resolveHostedBindingSession = (params: {
+  agentType: string;
+  binding?: HostedProviderBinding;
+  initialModel?: string;
+  resumeBindingKey?: string;
+  resumeSessionId?: string;
+}) => ({
+  model:
+    params.binding?.model ??
+    (params.agentType === 'trae' && params.binding ? undefined : params.initialModel),
+  resumeSessionId:
+    !params.binding || params.resumeBindingKey === params.binding.bindingKey
+      ? params.resumeSessionId
+      : undefined,
+});
 
 export const prepareHostedProviderBinding = async (params: {
   agentType: string;
@@ -175,6 +194,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
   endpoint: string;
   env?: Record<string, string>;
   model: string;
+  modelDescriptor?: ServerDefaultHeterogeneousModelDescriptor;
   sessionId: string;
 }): Promise<HostedProviderBinding> => {
   if (!params.driver.prepareServerDefaultBinding) {
@@ -209,6 +229,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
       endpoint: params.endpoint,
       env: params.env,
       model: params.model,
+      modelDescriptor: params.modelDescriptor,
       profileDir,
     });
     await writeManagedFiles(profileDir, runDir, plan.profileFiles);
@@ -216,6 +237,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
     return {
       args: plan.args,
       bindingKey: `server-default:v2:${digest}`,
+      model: plan.model,
       cleanup: () => cleanupBindingRun(runDir, plan),
       cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,

@@ -39,7 +39,7 @@ export default SearchInspector;
 Zero-runtime CSS-in-JS — styles compile once and read CSS variables at runtime:
 
 ```tsx
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`

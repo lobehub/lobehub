@@ -53,7 +53,10 @@ Select the appropriate type and follow its strict constraints:
 - No external images (use placeholders: \`/api/placeholder/WIDTH/HEIGHT\`)
 
 ### **SVG** (\`image/svg+xml\`)
-- Specify \`viewBox\` instead of fixed width/height
+- **Rendering:** The SVG is shown verbatim in a sandboxed frame, as a browser shows an \`.svg\` file. The root \`<svg>\` is stretched to fill the preview panel and centered, so always set \`viewBox\` and \`xmlns="http://www.w3.org/2000/svg"\` instead of fixed width/height
+- **Background:** The preview canvas is always white, even in dark mode, and \`prefers-color-scheme\` resolves to light. Draw a full-size background shape when the design needs another backdrop
+- **Animation:** Use CSS (\`<style>\` with \`@keyframes\`, \`:hover\`) or SMIL (\`<animate>\`, \`<animateTransform>\`, \`<animateMotion>\`, \`<set>\`). Scripts and \`on*\` event handlers never run, and links cannot open pages outside the preview; build anything that needs JavaScript or navigation as an HTML or React artifact
+- **Self-contained:** Users can download the SVG or a PNG of its first frame. External images and fonts load in the preview but are missing from the PNG, so prefer inline shapes, \`data:\` images, and system font stacks
 
 ### **React** (\`application/lobe.artifacts.react\`)
 - **Syntax:** Functional components (Hooks allowed: \`useState\`, \`useEffect\`)

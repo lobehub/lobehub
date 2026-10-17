@@ -3,11 +3,11 @@
 import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
-import { TooltipGroup } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Select, TooltipGroup } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
+import { useTopicId } from '@/features/ChatInput/hooks/useTopicId';
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import {
   buildServerDefaultModelOptions,
@@ -35,8 +35,12 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((state) => state.updateAgentConfigById);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
-  const activeTopicId = useChatStore((state) => state.activeTopicId);
-  const topicModel = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
+  // This composer's conversation (see `useTopicId`), never the global active topic.
+  const topicId = useTopicId();
+  const topicModel = useChatStore(
+    (state) => (topicId ? topicSelectors.getTopicHeteroPinById(topicId)(state) : undefined),
+    isEqual,
+  );
   const updateTopicModel = useChatStore((state) => state.updateTopicModel);
   const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
@@ -79,8 +83,8 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     effectiveApiConfig?.source !== 'server-default' ? effectiveApiConfig : undefined;
 
   const persist = async (apiConfig: HeterogeneousApiConfig) => {
-    if (activeTopicId && apiConfig.source !== 'server-default' && apiConfig.providerId) {
-      await updateTopicModel(activeTopicId, {
+    if (topicId && apiConfig.source !== 'server-default' && apiConfig.providerId) {
+      await updateTopicModel(topicId, {
         model: apiConfig.model,
         provider: apiConfig.providerId,
       });

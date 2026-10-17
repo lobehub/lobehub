@@ -25,9 +25,14 @@ export default {
   'consent.error.unknown.message': 'An unknown error occurred while loading authorization details.',
   'consent.error.unsupportedInteraction.message': 'Unsupported interaction type: {{promptName}}',
   'consent.error.unsupportedInteraction.title': 'Unsupported Interaction Type',
+  'consent.acceptanceReview.denied':
+    'You do not have access to this acceptance, so it cannot be reviewed from this page.',
+  'consent.acceptanceReview.target': 'Review the acceptance: {{title}}',
   'consent.permissionsTitle': 'Requesting the following permissions:',
   'consent.redirectUri': 'You will be redirected to after successful authorization',
   'consent.redirecting': 'Authorization successful, redirecting...',
+  'consent.scope.acceptance-review':
+    'Comment on this acceptance and accept or send it back from its preview page',
   'consent.scope.email': 'Access your email address',
   'consent.scope.offline_access': 'Allow the client to access your data',
   'consent.scope.openid': 'Authenticate using your LobeHub account',

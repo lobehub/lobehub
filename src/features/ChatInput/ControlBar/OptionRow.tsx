@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { CheckIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
@@ -34,10 +33,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     margin-inline-start: auto;
-
-    /* A disabled row dims itself, but its trailing action is the way OUT of
-       that state — dimming the setup button would read as "also unavailable". */
-    opacity: 1;
   `,
   option: css`
     cursor: pointer;
@@ -59,9 +54,16 @@ const styles = createStaticStyles(({ css }) => ({
   optionActive: css`
     background: ${cssVar.colorFillSecondary};
   `,
+  /* Dims the row's own content rather than the row. Its trailing action is the
+     way OUT of that state — dimming it would read as "also unavailable" — and
+     opacity on the row cannot be undone by a child, so the action is left out
+     of the selector instead. */
   optionDisabled: css`
     cursor: not-allowed;
-    opacity: 0.55;
+
+    & > :not([data-option-extra]) {
+      opacity: 0.55;
+    }
 
     &:hover {
       background: transparent;
@@ -116,6 +118,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface OptionRowProps {
   active?: boolean;
+  className?: string;
   desc?: ReactNode;
   disabled?: boolean;
   /** Trailing action, kept live while the row itself is disabled. */
@@ -130,12 +133,13 @@ export interface OptionRowProps {
 }
 
 const OptionRow = memo<OptionRowProps>(
-  ({ active, desc, disabled, extra, icon, label, onClick, tag, tags }) => (
+  ({ active, className, desc, disabled, extra, icon, label, onClick, tag, tags }) => (
     <div
       className={cx(
         styles.option,
         active && styles.optionActive,
         disabled && styles.optionDisabled,
+        className,
       )}
       onClick={() => {
         if (!disabled) onClick();
@@ -156,6 +160,7 @@ const OptionRow = memo<OptionRowProps>(
       </div>
       {extra ? (
         <div
+          data-option-extra
           className={styles.extra}
           onClick={(event) => {
             event.stopPropagation();

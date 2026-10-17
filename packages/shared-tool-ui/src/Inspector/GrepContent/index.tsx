@@ -2,8 +2,8 @@
 
 import type { GrepContentState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

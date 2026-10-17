@@ -1,5 +1,5 @@
+import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { LucideCheck } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,10 +9,12 @@ import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
 
 import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
+import { useTopicListScope } from './TopicListScope';
 
 export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const { t } = useTranslation('topic');
   const { topicGroupMode, updateTopicGroupMode } = useAgentTopicGroupMode();
+  const scope = useTopicListScope();
 
   const [topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore((s) => [
     preferenceSelectors.topicSortBy(s),
@@ -21,7 +23,12 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   ]);
 
   return useCallback(() => {
-    const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'flat'];
+    // "by agent" and "by device" only exist where topics span multiple agents
+    // and machines — the project-scoped list. A single agent's own sidebar
+    // hides them.
+    const groupModes: TopicGroupMode[] = scope
+      ? ['byStatus', 'byTime', 'byProject', 'byAgent', 'byDevice', 'flat']
+      : ['byStatus', 'byTime', 'byProject', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
     return [
@@ -75,6 +82,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
     topicIncludeCompleted,
     updatePreference,
     updateTopicGroupMode,
+    scope,
     t,
   ]);
 };

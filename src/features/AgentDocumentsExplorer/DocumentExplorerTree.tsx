@@ -1,12 +1,18 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, createStaticStyles, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
-import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
-import type { ChangeEvent, CSSProperties } from 'react';
+import {
+  FilePlusIcon,
+  FileTextIcon,
+  FileUpIcon,
+  FolderPlusIcon,
+  Maximize2Icon,
+  PenLineIcon,
+  Trash2Icon,
+} from 'lucide-react';
+import type { ChangeEvent, CSSProperties, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { KeyedMutator } from 'swr';
 
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import type {
@@ -18,21 +24,27 @@ import {
   DISABLE_ROW_TEXT_SELECTION_CSS,
   DOCUMENT_TREE_ICON_CSS,
   DOCUMENT_TREE_LAYOUT,
+  DOCUMENT_TREE_PARENT_DOCUMENT_GLYPH_CSS,
   DOCUMENT_TREE_ROW_CSS,
   ExplorerTree,
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
+  isItemToggleEventPath,
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
+import type { AgentDocumentSort } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
-import type { AgentDocumentItem } from './types';
+import type { AgentDocumentItem, AgentDocumentListMutator } from './types';
 import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
+import { createDocumentComparator } from './utils/sortDocuments';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
@@ -84,9 +96,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-font-size-override: ${DOCUMENT_TREE_LAYOUT.fontSize}px;
     --trees-level-gap-override: ${DOCUMENT_TREE_LAYOUT.levelGap}px;
     --trees-item-row-gap-override: ${DOCUMENT_TREE_LAYOUT.iconGap}px;
-    --trees-item-padding-x-override: 8px;
-    --trees-item-margin-x-override: 4px;
-    --trees-padding-inline-override: 4px;
+
+    /* No horizontal gutter of its own: a row's hover fill spans the panel's
+       content edges, the same edges as the panel tabs (技能 / 文档) above. Rows
+       pad their start (DOCUMENT_TREE_ROW_CSS) so the first glyph — file icon or
+       chevron — lines up with the 「文档」 title. */
+    --trees-item-padding-x-override: 6px;
+    --trees-item-margin-x-override: 0px;
+    --trees-padding-inline-override: 0px;
     --trees-border-radius-override: 8px;
 
     /* Consumed by DOCUMENT_TREE_ICON_CSS inside the shadow root. */
@@ -97,7 +114,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface Props {
   agentId: string;
   data: AgentDocumentItem[];
-  mutate: KeyedMutator<AgentDocumentItem[]>;
+  mutate: AgentDocumentListMutator;
   onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }
@@ -157,17 +174,38 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [t],
   );
 
+  // A plain document can be a parent too (a workflow with its run records
+  // nested under it). The tree only lets containers hold children, so such a
+  // document becomes a container drawn as a document.
+  const parentDocumentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const doc of documents) if (doc.parentId) ids.add(doc.parentId);
+    return ids;
+  }, [documents]);
+
   const nodes = useMemo<ExplorerTreeNode<AgentDocumentItem>[]>(
     () =>
-      documents.map((doc) => ({
-        data: doc,
-        id: doc.id,
-        isFolder: doc.isFolder,
-        name: resolveNodeName(doc),
-        parentId: resolveParentRowId(doc.parentId),
-      })),
-    [documents, resolveNodeName, resolveParentRowId],
+      documents.map((doc) => {
+        const isParentDocument = !doc.isFolder && parentDocumentIds.has(doc.documentId);
+        return {
+          ...(isParentDocument && { appearance: 'file' as const }),
+          data: doc,
+          id: doc.id,
+          isFolder: doc.isFolder || isParentDocument,
+          name: resolveNodeName(doc),
+          parentId: resolveParentRowId(doc.parentId),
+        };
+      }),
+    [documents, parentDocumentIds, resolveNodeName, resolveParentRowId],
   );
+
+  const sort = useGlobalStore(systemStatusSelectors.agentDocumentSort);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const handleSortChange = useCallback(
+    (agentDocumentSort: AgentDocumentSort) => updateSystemStatus({ agentDocumentSort }),
+    [updateSystemStatus],
+  );
+  const compareNodes = useMemo(() => createDocumentComparator(sort), [sort]);
 
   const treeStyleVars = useMemo(
     () =>
@@ -277,9 +315,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   );
 
   const handleNodeClick = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => {
+    (node: ExplorerTreeNode<AgentDocumentItem>, event: MouseEvent<HTMLElement>) => {
       const doc = node.data;
-      if (!doc || node.isFolder) return;
+      // A parent document is a container in the tree but still opens on click.
+      if (!doc || doc.isFolder) return;
+      // Its chevron only expands or collapses; the title opens the document.
+      if (node.appearance === 'file' && isItemToggleEventPath(event.nativeEvent.composedPath())) {
+        return;
+      }
       if (onOpenDocument) {
         onOpenDocument(doc.documentId, doc.id);
         return;
@@ -335,8 +378,12 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         return [];
       }
 
-      const isFolder = !!node.isFolder;
+      // `node.isFolder` also covers a document holding nested documents; menu
+      // entries that depend on the row being a real folder read the data flag.
+      const isFolder = !!node.data?.isFolder;
       const targetParentId = isFolder ? node.id : (node.parentId ?? null);
+      const isPlainDocument =
+        !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
 
       // Right-click on a row that's part of the current multi-selection acts
       // on the whole selection; otherwise it targets only the right-clicked
@@ -351,24 +398,49 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       if (isFolder && !isSkill && !isMulti) {
         items.push(
           {
+            icon: <FolderPlusIcon size={14} />,
             key: 'new-folder',
             label: t('workingPanel.resources.tree.newFolder'),
             onClick: () => handleCreateFolder(targetParentId),
             sfSymbol: 'folder.badge.plus',
           },
           {
+            icon: <FilePlusIcon size={14} />,
             key: 'new-document',
             label: t('workingPanel.resources.tree.newDocument'),
             onClick: () => handleCreateDocument(targetParentId),
             sfSymbol: 'doc.badge.plus',
           },
           {
+            icon: <FileUpIcon size={14} />,
             key: 'upload-file',
             label: t('workingPanel.resources.tree.uploadFile'),
             onClick: () => openFolderFilePicker(targetParentId),
             sfSymbol: 'square.and.arrow.up',
           },
           { key: 'div-1', type: 'divider' },
+        );
+      }
+
+      // Any document can hold sub-documents and folders, e.g. the run records
+      // of a workflow grouped under it.
+      if (isPlainDocument && !isMulti) {
+        items.push(
+          {
+            icon: <FilePlusIcon size={14} />,
+            key: 'new-sub-document',
+            label: t('workingPanel.resources.tree.newSubDocument'),
+            onClick: () => handleCreateDocument(node.id),
+            sfSymbol: 'doc.badge.plus',
+          },
+          {
+            icon: <FolderPlusIcon size={14} />,
+            key: 'new-sub-folder',
+            label: t('workingPanel.resources.tree.newFolder'),
+            onClick: () => handleCreateFolder(node.id),
+            sfSymbol: 'folder.badge.plus',
+          },
+          { key: 'div-sub', type: 'divider' },
         );
       }
 
@@ -441,8 +513,10 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
 
   const toolbar = (
     <DocumentExplorerToolbar
+      sort={sort}
       onCreateDocument={() => handleCreateDocument(null)}
       onCreateFolder={() => handleCreateFolder(null)}
+      onSortChange={handleSortChange}
       onUploadFiles={(files) => void ops.uploadFiles(null, files)}
     />
   );
@@ -470,12 +544,15 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           canDrag={canDrag}
           canDrop={canDrop}
           canRename={canRename}
+          fileAppearanceCSS={DOCUMENT_TREE_PARENT_DOCUMENT_GLYPH_CSS}
+          flattenEmptyDirectories={false}
           getContextMenuItems={getContextMenuItems}
           header={toolbar}
           iconSet="complete"
           itemHeight={DOCUMENT_TREE_LAYOUT.itemHeight}
           nodes={nodes}
           ref={treeRef}
+          sort={compareNodes}
           style={{ height: '100%' }}
           unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
           onCommitRename={handleCommitRename}

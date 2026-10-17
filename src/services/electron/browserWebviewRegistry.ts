@@ -23,8 +23,10 @@ const PARKED_STYLE = {
   top: '0',
   width: '1200px',
 } as const;
-const RESIZE_HANDLE_SELECTOR =
-  '.ant-draggable-panel-left-handle, .ant-draggable-panel-right-handle';
+// `lobe-` is the published block prefix from @lobehub/ui v6.2; the `base-`
+// names stay as a fallback until that release is what this app resolves.
+const PANEL_SELECTOR = '.lobe-draggable-panel, .base-draggable-panel';
+const RESIZE_HANDLE_SELECTOR = '.lobe-draggable-panel__handle, .base-draggable-panel-handle';
 
 interface BrowserWebviewElement extends HTMLElement {
   getWebContentsId: () => number;
@@ -278,9 +280,48 @@ class BrowserWebviewRegistry {
       zIndex: '1',
     });
 
+    // The guest swallows every pointer event over its bounds, so an edge drag has
+    // to be replayed onto the panel's own resize handle. The handle drags on
+    // pointer events and reads its origin from the first `pointerdown`, so a bare
+    // `mousedown` starts nothing -- the whole gesture is forwarded instead.
+    const PointerEventCtor = (typeof PointerEvent === 'undefined'
+      ? MouseEvent
+      : PointerEvent) as typeof MouseEvent;
+
+    // `replay` dispatches a bubbling event on the handle, which reaches this same
+    // capture listener on the way back up to `window`. Re-entrancy is cut here:
+    // without it the first forwarded move re-dispatches itself from inside its
+    // own dispatch until the stack overflows and the panel never resizes.
+    let replaying = false;
+
+    const replay = (handle: HTMLElement, type: string, source: PointerEvent) => {
+      if (replaying) return;
+
+      replaying = true;
+      try {
+        handle.dispatchEvent(
+          new PointerEventCtor(type, {
+            bubbles: true,
+            button: source.button,
+            buttons: source.buttons,
+            cancelable: true,
+            clientX: source.clientX,
+            clientY: source.clientY,
+            composed: true,
+          }),
+        );
+      } finally {
+        replaying = false;
+      }
+    };
+
+    let stopForwarding: (() => void) | undefined;
+
     const restoreInteraction = () => {
       window.removeEventListener('blur', restoreInteraction);
-      window.removeEventListener('mouseup', restoreInteraction, true);
+      window.removeEventListener('pointerup', restoreInteraction, true);
+      stopForwarding?.();
+      stopForwarding = undefined;
       retained.restoreInteraction = undefined;
       bridge.style.pointerEvents = 'auto';
       if (retained.visible && retained.webview.style.opacity === '1') {
@@ -288,34 +329,38 @@ class BrowserWebviewRegistry {
       }
     };
 
-    bridge.addEventListener('mousedown', (event) => {
+    bridge.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
+      event.preventDefault();
 
       retained.webview.style.pointerEvents = 'none';
       bridge.style.pointerEvents = 'none';
       retained.restoreInteraction = restoreInteraction;
 
       const resizeHandle = retained.host
-        ?.closest('.ant-draggable-panel')
+        ?.closest(PANEL_SELECTOR)
         ?.querySelector<HTMLElement>(RESIZE_HANDLE_SELECTOR);
       if (!resizeHandle) {
         restoreInteraction();
         return;
       }
 
+      // Registered before the restore listeners so the final `pointerup` still
+      // reaches the handle before the bridge lets go of the pointer.
+      const forward = (moveEvent: PointerEvent) => replay(resizeHandle, moveEvent.type, moveEvent);
+      window.addEventListener('pointermove', forward, true);
+      window.addEventListener('pointerup', forward, true);
+      window.addEventListener('pointercancel', forward, true);
+      stopForwarding = () => {
+        window.removeEventListener('pointermove', forward, true);
+        window.removeEventListener('pointerup', forward, true);
+        window.removeEventListener('pointercancel', forward, true);
+      };
+
       window.addEventListener('blur', restoreInteraction, { once: true });
-      window.addEventListener('mouseup', restoreInteraction, { capture: true, once: true });
-      resizeHandle.dispatchEvent(
-        new MouseEvent('mousedown', {
-          bubbles: true,
-          button: event.button,
-          buttons: event.buttons,
-          clientX: event.clientX,
-          clientY: event.clientY,
-          screenX: event.screenX,
-          screenY: event.screenY,
-        }),
-      );
+      window.addEventListener('pointerup', restoreInteraction, { capture: true, once: true });
+
+      replay(resizeHandle, 'pointerdown', event);
     });
 
     overlayHost.append(bridge);

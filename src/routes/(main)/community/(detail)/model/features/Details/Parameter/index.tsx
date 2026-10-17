@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, Tag } from '@lobehub/ui/base-ui';
+import { Accordion, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
 import {
   ChartColumnBig,

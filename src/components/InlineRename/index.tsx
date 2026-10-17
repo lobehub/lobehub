@@ -1,7 +1,7 @@
 'use client';
 
 import { Popover, stopPropagation } from '@lobehub/ui';
-import { Input, type InputProps, type PopoverPlacement } from '@lobehub/ui/base-ui';
+import { Input, type InputProps, type PopoverPlacement } from '@lobehub/ui';
 import { type KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 

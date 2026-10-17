@@ -23,6 +23,12 @@ import {
   uploadReportEvidence,
 } from './acceptanceEvidence';
 import {
+  assertReportLanguage,
+  evidenceCaptionFields,
+  ingestLanguageFields,
+  languageSummary,
+} from './acceptanceLanguage';
+import {
   type Decision,
   DECISIONS,
   deriveReportVerdict,
@@ -213,6 +219,10 @@ interface RunCreateOptions {
 
 async function runCreateAction(options: RunCreateOptions): Promise<void> {
   const client = await getTrpcClient();
+  await assertReportLanguage(client, [
+    { path: '--title', text: options.title },
+    { path: '--goal', text: options.goal },
+  ]);
   const created = await client.verify.createRun.mutate({
     goal: options.goal,
     operationId: options.operation,
@@ -295,6 +305,11 @@ interface ResultIngestOptions {
 
 async function resultIngestAction(options: ResultIngestOptions): Promise<void> {
   const client = await getTrpcClient();
+  await assertReportLanguage(client, [
+    { path: '--title', text: options.title },
+    { path: '--evidence', text: options.evidence },
+    { path: '--suggestion', text: options.suggestion },
+  ]);
   const created = await client.verify.ingestResult.mutate({
     checkItemId: options.check,
     checkItemIndex: options.index ? Number.parseInt(options.index, 10) : undefined,
@@ -368,6 +383,10 @@ async function submitAction(options: SubmitOptions): Promise<void> {
     process.exit(1);
   }
   const client = await getTrpcClient();
+  await assertReportLanguage(client, [
+    { path: '--title', text: options.title },
+    { path: '--desc', text: options.desc },
+  ]);
   let fileId: string | undefined;
   let inlineContent = options.content;
   if (options.file) {
@@ -446,6 +465,10 @@ async function evidenceUploadAction(options: EvidenceUploadOptions): Promise<voi
   }
   const metadata: unknown = options.metadata ? JSON.parse(options.metadata) : undefined;
   const client = await getTrpcClient();
+  await assertReportLanguage(client, [
+    { path: '--desc', text: options.desc },
+    ...evidenceCaptionFields('--metadata', metadata),
+  ]);
   let fileId = options.fileId;
   let inlineContent = options.content;
   if (options.file) {
@@ -525,6 +548,10 @@ interface ReportUpsertOptions {
 async function reportUpsertAction(options: ReportUpsertOptions): Promise<void> {
   const num = (s?: string) => (s === undefined ? undefined : Number.parseInt(s, 10));
   const client = await getTrpcClient();
+  await assertReportLanguage(client, [
+    { path: '--summary', text: options.summary },
+    { path: '--content', text: options.content },
+  ]);
   const created = await client.verify.upsertReport.mutate({
     content: options.content,
     failedChecks: num(options.failed),
@@ -557,6 +584,8 @@ async function reportGetAction(runId: string, options: { json?: boolean | string
 
 interface IngestReportOptions {
   acceptance?: string;
+  /** Run every local check, including the report language, then stop before publishing. */
+  dryRun?: boolean;
   goal?: string;
   json?: boolean | string;
   open?: boolean;
@@ -739,6 +768,45 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         : undefined;
 
   const client = await getTrpcClient();
+  // Before the first remote mutation: a round in the wrong language cannot be
+  // fixed in place, only replaced by another immutable round.
+  const language = await assertReportLanguage(
+    client,
+    ingestLanguageFields({
+      cases,
+      conclusion,
+      goal,
+      plan,
+      proposal,
+      report: content,
+      requirement,
+      title,
+    }),
+  );
+  if (options.dryRun) {
+    const checked =
+      language.status === 'enforced'
+        ? `report language ${language.locale} ✓`
+        : language.status === 'unchecked'
+          ? `report language ${language.locale} (not script-checked)`
+          : 'report language not set';
+    if (options.json !== undefined) {
+      outputJson(
+        {
+          cases: cases.length,
+          dryRun: true,
+          language: languageSummary(language),
+          planItems: plan?.length ?? 0,
+        },
+        typeof options.json === 'string' ? options.json : undefined,
+      );
+      return;
+    }
+    console.log(
+      `${pc.green('✓ Dry run passed')} — ${cases.length} case(s), ${plan?.length ?? 0} plan item(s), ${checked}. Nothing was published.`,
+    );
+    return;
+  }
   let acceptance;
   let bundle;
   if (requestedAcceptanceId) {
@@ -852,6 +920,15 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // The chained round's index — `?r=<roundIndex>` on the acceptance URL
   // deep-links this round's report as the fixed snapshot view.
   const roundIndex = attached?.roundIndex ?? null;
+  // A `supersedes` entry that names no check of this acceptance folds nothing:
+  // the old row would stay on the page as if never replaced. An older server
+  // does not report these, so treat the field as optional.
+  const unresolvedSupersedes: string[] = attached?.unresolvedSupersedes ?? [];
+  if (unresolvedSupersedes.length > 0) {
+    log.warn(
+      `supersedes names no check of this acceptance, so nothing was replaced: ${unresolvedSupersedes.join(', ')}. Name it by a plan item id from an earlier round or a check id from \`lh acceptance view --json\`.`,
+    );
+  }
   const acceptanceUrl = new URL(
     `/acceptance/${encodeURIComponent(acceptanceId)}`,
     resolveServerUrl(),
@@ -1058,6 +1135,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         subject: subject!.ref,
         unexecuted: unexecuted.map((item) => item.id),
         unplanned,
+        unresolvedSupersedes,
         verifyRunId: runId,
       },
       typeof options.json === 'string' ? options.json : undefined,
@@ -1161,7 +1239,7 @@ function withSubmitOptions(cmd: Command): Command {
     .option('--run <verifyRunId>', 'Target verification session (or use --operation)')
     .option('--operation <operationId>', 'Resolve the session from an Agent Run operation id')
     .requiredOption('--item <checkItemId>', 'Plan item id (checkItemId)')
-    .option('--type <type>', 'screenshot|gif|video|text|dom_snapshot|transcript')
+    .option('--type <type>', 'screenshot|gif|video|audio|text|markdown|dom_snapshot|transcript')
     .option('--file <path>', 'Local file to upload as the evidence artifact')
     .option('--content <text>', 'Inline text payload (instead of a file)')
     .option('--verdict <verdict>', 'passed|failed|uncertain')
@@ -1174,7 +1252,10 @@ function withSubmitOptions(cmd: Command): Command {
 function withEvidenceUploadOptions(cmd: Command): Command {
   return cmd
     .requiredOption('--check <checkResultId>', 'Target check result id')
-    .requiredOption('--type <type>', 'screenshot|gif|video|text|dom_snapshot|transcript')
+    .requiredOption(
+      '--type <type>',
+      'screenshot|gif|video|audio|text|markdown|dom_snapshot|transcript',
+    )
     .option('--file <path>', 'Local file to upload as the artifact')
     .option('--file-id <id>', 'Attach an already-uploaded file without uploading it again')
     .option('--content <text>', 'Inline text payload (instead of a file)')
@@ -1213,6 +1294,10 @@ function withIngestReportOptions(cmd: Command): Command {
       'Acceptance requirement recorded when the aggregate is first created',
     )
     .option('--open', 'Print the in-app URL to open the report')
+    .option(
+      '--dry-run',
+      'Validate the report (including its language) without publishing; works on a plan-only result.json',
+    )
     .option('--json [fields]', 'Output JSON');
 }
 

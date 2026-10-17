@@ -53,6 +53,7 @@ import {
 import {
   type CategoryItem,
   type CategoryListQuery,
+  MarketAPIError,
   type MarketSDK,
   type UserInfoResponse,
 } from '@lobehub/market-sdk';
@@ -76,6 +77,9 @@ import { PluginStore } from '@/server/modules/PluginStore';
 import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:discover');
+
+const isMarketNotFound = (error: unknown) =>
+  error instanceof MarketAPIError && (error.status === 404 || error.isErrorCode('NOT_FOUND'));
 
 const loadBuiltinModels = async () => {
   const { loadModels } = await import('@/business/client/model-bank/loadModels');
@@ -563,24 +567,23 @@ export class DiscoverService {
     const normalizedLocale = normalizeLocale(locale);
 
     try {
-      // @ts-ignore
       const data = await this.market.agents.getAgentDetail(identifier, {
         locale: normalizedLocale,
         version,
       });
-
       if (!data) {
         log('getAssistantDetail: assistant not found for identifier=%s', identifier);
         return;
       }
-
       const normalizedAuthor = this.normalizeAuthorField(data.author);
       const assistant = {
         author:
           normalizedAuthor.name || (data.ownerId !== null ? `User${data.ownerId}` : 'Unknown'),
         avatar: data.avatar || normalizedAuthor.name || '',
         category: (data as any).category || 'general',
-        config: data.config || {},
+        // The market SDK types this as a bare record; the detail shape this
+        // builds declares the agent config it actually carries.
+        config: (data.config || {}) as unknown as DiscoverAssistantDetail['config'],
         createdAt: (data as any).createdAt,
         currentVersion: data.version,
         description: (data as any).description || data.summary,
@@ -621,7 +624,6 @@ export class DiscoverService {
             version: item.version,
           })) || [],
       };
-
       // Get related assistants
       const list = await this.getAssistantList({
         category: assistant.category,
@@ -631,17 +633,15 @@ export class DiscoverService {
         pageSize: 7,
         source,
       });
-
       const result = {
         ...assistant,
         related: list.items.filter((item) => item.identifier !== assistant.identifier).slice(0, 6),
       };
-
       log('getAssistantDetail: returning assistant with %d related items', result.related.length);
       return result;
     } catch (error) {
       log('getAssistantDetail: error fetching from market SDK: %O', error);
-      return;
+      if (!isMarketNotFound(error)) throw error;
     }
   };
 
@@ -1142,7 +1142,8 @@ export class DiscoverService {
       const plugin = merge(cloneDeep(DEFAULT_DISCOVER_PLUGIN_ITEM), convertedMcp);
       log('getPluginDetail: returning converted MCP plugin');
       return plugin as DiscoverPluginDetail;
-    } catch {
+    } catch (error) {
+      if (!isMarketNotFound(error)) throw error;
       log(
         'getPluginDetail: MCP plugin not found for identifier=%s, trying builtin tools',
         identifier,
@@ -2066,7 +2067,7 @@ export class DiscoverService {
       return result;
     } catch (error) {
       log('getUserInfo: error fetching user info: %O', error);
-      return undefined;
+      if (!isMarketNotFound(error)) throw error;
     }
   };
 

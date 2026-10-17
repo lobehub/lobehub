@@ -3,13 +3,11 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import type { ModulePreloadOptions, Plugin } from 'vite';
 
 import { viteCompletionSounds } from './completionSounds';
-import { viteEmotionSpeedy } from './emotionSpeedy';
 import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
-import { viteStaticStylesPrecompile } from './staticStylesPrecompile';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
@@ -173,6 +171,22 @@ function sharedManualChunks(id: string): string | undefined {
   const antdMatch = id.match(/antd\/es\/locale\/([^/.]+)\.js/);
   if (antdMatch) {
     const locale = ANTD_LOCALE[antdMatch[1]];
+    if (locale) return `i18n-${locale}-ui-runtime`;
+  }
+
+  // The antd locale above imports per-component locales (calendar, date-picker,
+  // time-picker, rc pagination/picker) and is itself re-exported by the
+  // `antd/locale/*` entry. Lazy groups capture only matched modules, so left
+  // unmatched these land in an entry-set chunk that imports the ui-runtime chunk
+  // while ui-runtime imports it back. That cycle breaks rolldown's lazy init
+  // ("r is not a function") and every non-English locale silently falls back to
+  // English. en_US stays out: antd components import it statically as their
+  // default locale, so it belongs with the antd vendor graph.
+  const antdPartMatch = id.match(
+    /[\\/](?:antd|@rc-component[\\/][^\\/]+)[\\/](?:[^\\/]+[\\/])*locale[\\/]([A-Za-z]{2}_[A-Z]{2})\.js$/,
+  );
+  if (antdPartMatch && antdPartMatch[1] !== 'en_US') {
+    const locale = ANTD_LOCALE[antdPartMatch[1]];
     if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
@@ -475,7 +489,6 @@ interface SharedRendererOptions {
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
     viteCompletionSounds(),
-    viteEmotionSpeedy(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
@@ -509,7 +522,6 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         hotKeys: ['altKey', 'ctrlKey'],
       }),
     react(),
-    viteStaticStylesPrecompile(),
     ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];
 }
@@ -541,12 +553,8 @@ export const sharedOptimizeDeps = {
     'react-dom/client',
     'react-router',
     'react-router/dom',
-    'antd',
-    '@ant-design/icons',
     '@lobehub/ui',
-    '@lobehub/ui/base-ui',
     '@lobehub/ui > @emotion/react',
-    'antd-style',
     'zustand',
     'zustand/middleware',
     'swr',

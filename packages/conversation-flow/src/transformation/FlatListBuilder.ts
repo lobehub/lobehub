@@ -1,5 +1,7 @@
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
+import { toTime } from '../utils/timestamp';
+
 import { isInThreadScope } from '../indexing';
 import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
 import type { BranchResolver } from './BranchResolver';
@@ -124,7 +126,7 @@ export class FlatListBuilder {
     // leaving a stale assistant response at the request tail. A stable final sort
     // restores the persisted chronology without changing group membership or the
     // order of nodes with identical timestamps.
-    flatList.sort((first, second) => first.createdAt - second.createdAt);
+    flatList.sort((first, second) => toTime(first.createdAt) - toTime(second.createdAt));
 
     return flatList;
   }
@@ -729,8 +731,8 @@ export class FlatListBuilder {
           message?.role === 'user' &&
           !message.threadId &&
           !processedIds.has(id) &&
-          message.createdAt >= assistant.createdAt &&
-          message.createdAt <= tail.createdAt
+          toTime(message.createdAt) >= toTime(assistant.createdAt) &&
+          toTime(message.createdAt) <= toTime(tail.createdAt)
         );
       });
       if (interruptions.length === 0) continue;
@@ -878,7 +880,7 @@ export class FlatListBuilder {
           .filter((child): child is Message => !!child && !processedIds.has(child.id))
           .map((child) => ({ child, parentId })),
       )
-      .sort((a, b) => a.child.createdAt - b.child.createdAt)[0];
+      .sort((a, b) => toTime(a.child.createdAt) - toTime(b.child.createdAt))[0];
   }
 
   private shouldDrainParentContinuations(parentId: string, processedIds: Set<string>): boolean {
@@ -991,7 +993,7 @@ export class FlatListBuilder {
     const firstColumnMessages = childIds.map((id) => this.messageMap.get(id)).filter(Boolean);
     const createdAt =
       firstColumnMessages.length > 0
-        ? Math.min(...firstColumnMessages.map((m) => m!.createdAt))
+        ? Math.min(...firstColumnMessages.map((m) => toTime(m!.createdAt)))
         : parentMessage.createdAt;
     const updatedAt =
       firstColumnMessages.length > 0
@@ -1086,7 +1088,7 @@ export class FlatListBuilder {
     const allMemberMessages = memberChildIds.map((id) => this.messageMap.get(id)).filter(Boolean);
     const createdAt =
       allMemberMessages.length > 0
-        ? Math.min(...allMemberMessages.map((m) => m!.createdAt))
+        ? Math.min(...allMemberMessages.map((m) => toTime(m!.createdAt)))
         : parentMessage.createdAt;
     const updatedAt =
       allMemberMessages.length > 0
@@ -1121,7 +1123,7 @@ export class FlatListBuilder {
       activeColumnId,
       columns: columns as any,
       content: '',
-      createdAt: Math.min(...members.map((m) => m.createdAt)),
+      createdAt: Math.min(...members.map((m) => toTime(m.createdAt))),
       extra: {
         groupMode: group.mode,
         parentMessageId: group.parentMessageId,
@@ -1535,7 +1537,7 @@ export class FlatListBuilder {
     }
 
     // Sort by createdAt to maintain order
-    taskMessages.sort((a, b) => a.createdAt - b.createdAt);
+    taskMessages.sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
 
     // Generate ID with parent message id and all task message ids
     const taskIdsStr = taskMessages.map((t) => t.id).join('-');
@@ -1544,7 +1546,7 @@ export class FlatListBuilder {
     // Calculate timestamps from task messages
     const createdAt =
       taskMessages.length > 0
-        ? Math.min(...taskMessages.map((m) => m.createdAt))
+        ? Math.min(...taskMessages.map((m) => toTime(m.createdAt)))
         : parentMessage.createdAt;
     const updatedAt =
       taskMessages.length > 0
@@ -1583,7 +1585,7 @@ export class FlatListBuilder {
     }
 
     // Sort by createdAt to maintain order
-    taskMessages.sort((a, b) => a.createdAt - b.createdAt);
+    taskMessages.sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
 
     // Generate ID with parent message id and all task message ids
     const taskIdsStr = taskMessages.map((t) => t.id).join('-');
@@ -1592,7 +1594,7 @@ export class FlatListBuilder {
     // Calculate timestamps from task messages
     const createdAt =
       taskMessages.length > 0
-        ? Math.min(...taskMessages.map((m) => m.createdAt))
+        ? Math.min(...taskMessages.map((m) => toTime(m.createdAt)))
         : parentMessage.createdAt;
     const updatedAt =
       taskMessages.length > 0

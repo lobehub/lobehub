@@ -623,3 +623,30 @@ describe('exploration terminal phase', () => {
     );
   });
 });
+
+describe('batch rollout gate', () => {
+  const decideWithGate = (rolloutGate: Parameters<typeof decideNextMove>[0]['rolloutGate']) =>
+    decideNextMove({
+      concurrency: 3,
+      frontier: selectFrontier(graph()),
+      graph: graph(),
+      rolloutGate,
+      tasksById: new Map(),
+    });
+
+  it('releases the next wave when the gate passed', () => {
+    const move = decideWithGate({ blockers: [], met: true, provisional: false });
+    expect(move.branch).toBe('rollout_gate');
+    expect(move.outcome).toBe('advanced');
+  });
+
+  it('hands a blocked gate to a person instead of parking the goal', () => {
+    const move = decideWithGate({
+      blockers: ['1 probe(s) did not succeed'],
+      met: false,
+      provisional: false,
+    });
+    expect(move.branch).toBe('pattern_break');
+    expect(move.outcome).toBe('waiting_human');
+  });
+});

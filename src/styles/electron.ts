@@ -1,4 +1,4 @@
-import { css, cx } from 'antd-style';
+import { css, cx } from '@lobehub/ui';
 
 export const draggable = cx(css`
   -webkit-app-region: drag;

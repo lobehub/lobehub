@@ -9,11 +9,13 @@ describe('getChunkingLoaderType', () => {
     expect(getChunkingLoaderType('notes.md')).toBe('markdown');
     expect(getChunkingLoaderType('main.go')).toBe('code');
     expect(getChunkingLoaderType('data.csv')).toBe('csv');
+    expect(getChunkingLoaderType('Report.XLSX')).toBe('excel');
   });
 
   it('returns undefined for formats without a chunking loader', () => {
     expect(getChunkingLoaderType('floor-plan.dwg')).toBeUndefined();
     expect(getChunkingLoaderType('photo.png')).toBeUndefined();
+    expect(getChunkingLoaderType('legacy.xls')).toBeUndefined();
     expect(getChunkingLoaderType('no-extension')).toBeUndefined();
   });
 });
@@ -28,6 +30,7 @@ describe('isChunkingSupported', () => {
   });
 
   it('follows the parser registry rather than the MIME prefix when the name is known', () => {
+    expect(isChunkingSupported({ fileType: '', name: 'data.xlsx' })).toBe(true);
     // browsers report `.ts` as MPEG transport stream video
     expect(isChunkingSupported({ fileType: 'video/mp2t', name: 'index.ts' })).toBe(true);
     expect(isChunkingSupported({ fileType: 'application/pdf', name: 'paper.pdf' })).toBe(true);

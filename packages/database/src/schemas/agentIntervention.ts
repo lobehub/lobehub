@@ -240,8 +240,9 @@ export const agentInterventions = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
-    uniqueIndex('agent_interventions_operation_tool_call_unique').on(
+    uniqueIndex('agent_interventions_operation_batch_tool_call_unique').on(
       table.operationId,
+      table.batchId,
       table.toolCallId,
     ),
     uniqueIndex('agent_interventions_review_token_hash_unique').on(table.reviewTokenHash),

@@ -27,6 +27,8 @@ export interface UpdateInfo {
 }
 
 export interface CoreUpdateStatus {
+  /** Renderer update confirmed healthy in this process, including after hot reload. */
+  appliedVersion?: string | null;
   applyMode: 'reload' | 'relaunch' | null;
   current: string | null;
   disabledReasons: string[];

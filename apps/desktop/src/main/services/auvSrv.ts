@@ -1,4 +1,4 @@
-import { execFile, type ExecFileException } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { access, chmod, mkdtemp, rmdir } from 'node:fs/promises';
 import os from 'node:os';
@@ -14,6 +14,12 @@ import type {
   RunnerClass,
   startAuv,
 } from '@auv-js/sdk/node';
+import {
+  type AuvRunCommandParams,
+  type AuvRunCommandResult,
+  normalizeAuvArgv,
+  runAuvCommand,
+} from '@lobechat/device-control/computer-use';
 
 import type { App } from '@/core/App';
 import { createLogger } from '@/utils/logger';
@@ -45,17 +51,7 @@ export interface AuvRunnerClassInfo {
   supportedLifecycles: RunnerClass['supportedLifecycles'];
 }
 
-export interface AuvRunCommandParams {
-  argv: string[];
-}
-
-export interface AuvRunCommandResult {
-  argv: string[];
-  /** Process exit status, not verification of the requested UI effect. */
-  exitCode: number;
-  output: unknown;
-  stderr?: string;
-}
+export type { AuvRunCommandParams, AuvRunCommandResult };
 
 export interface AuvCliExecutionOptions {
   argv: string[];
@@ -149,63 +145,6 @@ const defaultDependencies: AuvRuntimeDependencies = {
 const normalizeHostname = (hostname: string) => hostname.replace(/\.(?:lan|local)$/i, '');
 
 const serializeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-const MAX_CLI_ARGUMENTS = 128;
-const MAX_CLI_ARGUMENT_LENGTH = 16_384;
-const AUV_COMMAND_ID = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+$/;
-
-const normalizeCliArgv = (params: AuvRunCommandParams): string[] => {
-  if (!Array.isArray(params.argv)) throw new Error('AUV argv must be an array');
-  if (params.argv.length < 2) {
-    throw new Error('AUV argv must include "invoke" and a command or --help');
-  }
-  if (params.argv.length > MAX_CLI_ARGUMENTS) {
-    throw new Error(`AUV argv cannot contain more than ${MAX_CLI_ARGUMENTS} arguments`);
-  }
-
-  const argv = params.argv.map((argument) => {
-    if (typeof argument !== 'string') throw new Error('Every AUV argument must be a string');
-    if (argument.includes('\0')) throw new Error('AUV arguments cannot contain NUL bytes');
-    if (argument.length > MAX_CLI_ARGUMENT_LENGTH) {
-      throw new Error(`AUV arguments cannot exceed ${MAX_CLI_ARGUMENT_LENGTH} characters`);
-    }
-    return argument;
-  });
-
-  if (argv[0] !== 'invoke') {
-    throw new Error('Only "auv invoke" commands are allowed');
-  }
-  if (
-    argv.some((argument) => argument === '--store-root' || argument.startsWith('--store-root='))
-  ) {
-    throw new Error('AUV --store-root is managed by LobeHub');
-  }
-
-  const command = argv[1]!;
-  if (
-    command !== '--help' &&
-    command !== '-h' &&
-    command !== 'help' &&
-    !AUV_COMMAND_ID.test(command)
-  ) {
-    throw new Error(`Invalid AUV invoke command: ${command}`);
-  }
-
-  const isHelp = argv.includes('--help') || argv.includes('-h') || command === 'help';
-  if (!isHelp && !argv.includes('--json')) argv.push('--json');
-  return argv;
-};
-
-const parseCliOutput = (stdout: string): unknown => {
-  const output = stdout.trim();
-  if (!output) return null;
-
-  try {
-    return JSON.parse(output);
-  } catch {
-    return output;
-  }
-};
 
 /**
  * Owns the AUV SDK connection and, when needed, the embedded daemon lifecycle.
@@ -312,37 +251,20 @@ export default class AuvService extends ServiceModule {
    * -> private app-owned CLI invocation; preserve output on nonzero exits.
    */
   async runCommand(params: AuvRunCommandParams): Promise<AuvRunCommandResult> {
-    const argv = normalizeCliArgv(params);
+    const argv = normalizeAuvArgv(params);
     await this.getClient();
-    if (!this.binaryPath || !this.ipcEndpoint) throw new Error('AUV is not connected');
+    const binaryPath = this.binaryPath;
+    const endpoint = this.ipcEndpoint;
+    if (!binaryPath || !endpoint) throw new Error('AUV is not connected');
 
-    let stdout: string;
-    let stderr: string;
-    let exitCode = 0;
-    try {
-      ({ stderr, stdout } = await this.dependencies.runCli({
-        argv,
-        binaryPath: this.binaryPath,
-        endpoint: this.ipcEndpoint,
+    return runAuvCommand(params, argv, (cliArgv) =>
+      this.dependencies.runCli({
+        argv: cliArgv,
+        binaryPath,
+        endpoint,
         storeRoot: path.join(this.app.appStoragePath, 'auv', 'runs'),
-      }));
-    } catch (error) {
-      // execFile rejects nonzero exits even when stdout contains AUV's structured
-      // failure. Return that envelope over IPC; spawn/timeout failures still throw.
-      const failure = error as ExecFileException & { stdout?: string; stderr?: string };
-      if (typeof failure?.code !== 'number' || failure.killed) throw error;
-      exitCode = failure.code;
-      stdout = failure.stdout ?? '';
-      stderr = failure.stderr ?? '';
-    }
-    const stderrOutput = stderr.trim();
-
-    return {
-      argv: [...params.argv],
-      exitCode,
-      output: parseCliOutput(stdout),
-      ...(stderrOutput && { stderr: stderrOutput }),
-    };
+      }),
+    );
   }
 
   destroy() {
@@ -363,7 +285,7 @@ export default class AuvService extends ServiceModule {
       daemon = await sdk.startAuv({
         binaryPath,
         listeners: [privateIpc.listener],
-        noDiscovery: true,
+        noRegister: true,
         storeRoot: path.join(auvRoot, 'store'),
       });
 

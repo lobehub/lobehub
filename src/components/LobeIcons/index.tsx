@@ -4,7 +4,7 @@ import type {
   ProviderCombine as LobeProviderCombine,
   ProviderIcon as LobeProviderIcon,
 } from '@lobehub/icons';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 import type { ComponentProps } from 'react';
 import { lazy, Suspense } from 'react';
 

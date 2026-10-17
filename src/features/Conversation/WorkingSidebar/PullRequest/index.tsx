@@ -1,7 +1,5 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, ScrollArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Empty, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
 import { GlobeIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

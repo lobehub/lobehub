@@ -61,7 +61,7 @@ const personalUserMemoryProcedure = userMemoryProcedure.use(async ({ ctx, next }
   if (ctx.workspaceId) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: 'Persona versions are available only in personal scope',
+      message: 'Persona is available only in personal scope',
     });
   }
   return next();
@@ -117,6 +117,16 @@ export const userMemoryRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.activityModel.delete(input.id);
     }),
+
+  /**
+   * Delete the caller's persona without changing their memory entries.
+   * Triggering workflow: PersonaHeader confirmation -> memoryCRUDService.deletePersona
+   * -> userMemory.deletePersona -> UserPersonaModel.deletePersona.
+   */
+  deletePersona: personalUserMemoryWriteProcedure.mutation(async ({ ctx }) => {
+    await ctx.personaModel.deletePersona();
+    return { success: true };
+  }),
 
   deleteAll: userMemoryWriteProcedure.mutation(async ({ ctx }) => {
     await ctx.userMemoryModel.deleteAll();

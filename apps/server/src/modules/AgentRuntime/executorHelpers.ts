@@ -1,4 +1,8 @@
-import { type AgentState, selectUserInterventionConfig } from '@lobechat/agent-runtime';
+import {
+  type AgentState,
+  selectUserInterventionConfig,
+  type ToolRunResult,
+} from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
@@ -12,8 +16,13 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
+import {
+  controlDeferredToolResult,
+  loadDurableToolResultHooks,
+} from '@/server/services/agentRuntime/hooks/deferredToolResultControl';
 import { FileService } from '@/server/services/file';
 import {
   type ServerAgentMemberRunner,
@@ -446,7 +455,9 @@ export const buildServerAgentMemberRunner = (
             agentId,
             content: '',
             groupId,
-            ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
+            ...(isCouncil && {
+              metadata: { agentCouncil: true },
+            }),
             parentId: parentMessageId,
             plugin: chatToolPayload as any,
             pluginState: { expectedMembers, onComplete, status: 'pending' },
@@ -494,6 +505,8 @@ export const buildServerAgentMemberRunner = (
 
       // 3. Fork members.
       let startedCount = 0;
+      const startErrors: string[] = [];
+      const failedAnchorIds: string[] = [];
       await Promise.all(
         resolvedMembers.map(async (member, i) => {
           const anchorMessageId = anchorIds[i];
@@ -520,7 +533,9 @@ export const buildServerAgentMemberRunner = (
               startedCount += 1;
               return;
             }
+            if (result?.error) startErrors.push(result.error);
           } catch (error) {
+            startErrors.push(String(error));
             log(
               'buildServerAgentMemberRunner: member %s failed to start: %O',
               member.agentId,
@@ -530,10 +545,46 @@ export const buildServerAgentMemberRunner = (
           // Member failed to start — its completion bridge will never fire, so
           // backfill the anchor as errored to keep the K=N barrier reachable.
           try {
-            await ctx.messageModel.updateToolMessage(anchorMessageId, {
+            const result: ToolRunResult = {
               content: `Agent member "${member.agentId}" failed to start.`,
-              pluginState: { status: 'error' },
+              state: { status: 'error' },
+              success: false,
+            };
+            const controlled =
+              ctx.hookDispatcher && ctx.userId
+                ? await controlDeferredToolResult(
+                    {
+                      dispatcher: ctx.hookDispatcher,
+                      loadState: (id) =>
+                        id === ctx.operationId
+                          ? Promise.resolve(state)
+                          : (ctx.loadAgentState?.(id) ?? Promise.resolve(null)),
+                      loadDurableHooks: (id) =>
+                        loadDurableToolResultHooks(
+                          new AgentOperationModel(ctx.serverDB, ctx.userId!, ctx.workspaceId),
+                          id,
+                        ),
+                      messageModel: ctx.messageModel,
+                      userId: ctx.userId,
+                      workspaceId: ctx.workspaceId,
+                    },
+                    {
+                      contextToolMessageId: groupTool.id,
+                      operationId: ctx.operationId,
+                      toolMessageId: anchorMessageId,
+                      result,
+                    },
+                  )
+                : { blocked: false, result };
+            const saved = await ctx.messageModel.updateToolMessage(anchorMessageId, {
+              content: controlled.result.content,
+              pluginError: controlled.result.error ?? null,
+              pluginState: controlled.result.state,
+              onlyIfEmpty: true,
+              ...(controlled.blocked && { replacePluginState: true }),
             });
+            if (!saved.success) throw new Error('Failed to persist member startup failure');
+            failedAnchorIds.push(anchorMessageId);
           } catch (error) {
             log(
               'buildServerAgentMemberRunner: failed to mark anchor %s as errored: %O',
@@ -558,9 +609,19 @@ export const buildServerAgentMemberRunner = (
             log('buildServerAgentMemberRunner: cleanup failed for %s: %O', id, error);
           }
         }
-        return { started: false, startedCount: 0 };
+        return { errors: startErrors, started: false, startedCount: 0 };
       }
 
+      // A sibling may complete while the failed member waits on its result hook.
+      // Recheck after publishing the last startup receipt so local mode cannot
+      // strand the group waiting for a callback that will never arrive.
+      if (failedAnchorIds.length)
+        await ctx.onGroupMemberResult?.({
+          anchorMessageId: failedAnchorIds[0],
+          expectedMembers,
+          groupToolMessageId: groupTool.id,
+          parentOperationId: ctx.operationId,
+        });
       return { started: true, startedCount };
     },
   };

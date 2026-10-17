@@ -1,14 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox, Icon } from '@lobehub/ui';
-import {
-  Input,
-  showContextMenu,
-  Skeleton,
-  toast,
-  Tree,
-  type TreeDataNode,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { cx, Flexbox, Icon } from '@lobehub/ui';
+import { Input, showContextMenu, Skeleton, toast, Tree, type TreeDataNode } from '@lobehub/ui';
 import {
   AppWindowIcon,
   BoxIcon,

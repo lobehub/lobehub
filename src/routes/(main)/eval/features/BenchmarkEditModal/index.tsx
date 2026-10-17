@@ -1,6 +1,6 @@
 'use client';
 
-import { type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { createFormModal } from '@/utils/createFormModal';

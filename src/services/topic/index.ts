@@ -24,6 +24,8 @@ import {
  */
 export interface TopicListItem extends ChatTopic {
   agentId?: string | null;
+  /** Owning chat group, for a group conversation (which has no `agentId`). */
+  groupId?: string | null;
   lastAssistantMessage?: string | null;
   /**
    * Visibility of the owning agent/group. `'private'` conversations stay out of
@@ -62,6 +64,21 @@ export class TopicService {
 
   cloneTopic = (id: string, newTitle?: string): Promise<string> => {
     return lambdaClient.topic.cloneTopic.mutate({ id, newTitle });
+  };
+
+  forkTopic = (params: { id: string; messageId: string; newTitle?: string }): Promise<string> => {
+    return lambdaClient.topic.forkTopic.mutate(params);
+  };
+
+  /** Copies the conversation up to a user message into a new topic with edited content. */
+  branchTopicAtMessage = (params: {
+    content: string;
+    editorData?: Record<string, any> | null;
+    messageId: string;
+    title?: string;
+    topicId: string;
+  }): Promise<{ messageId: string; topicId: string }> => {
+    return lambdaClient.topic.branchTopicAtMessage.mutate(params);
   };
 
   batchMoveTopics = (topicIds: string[], targetAgentId: string) => {
@@ -166,7 +183,7 @@ export class TopicService {
   updateTopicModel = (
     id: string,
     value: {
-      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'heteroSpeed' | 'reasoningConfig'>;
       model: string;
       provider: string;
     },

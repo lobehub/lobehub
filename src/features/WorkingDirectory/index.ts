@@ -1,1 +1,2 @@
-export { openAddWorkingDirModal } from './AddWorkingDirModal';
+export type { PickedWorkingDir } from './AddWorkingDirModal';
+export { openAddWorkingDirModal, openPickWorkingDirModal } from './AddWorkingDirModal';

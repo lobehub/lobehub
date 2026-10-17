@@ -1,8 +1,6 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
@@ -76,6 +74,11 @@ const triggerStyle: CSSProperties = {
   maxWidth: '100%',
   minWidth: 0,
 };
+
+// `display: contents` keeps the disabled wrapper out of layout, so the trigger
+// lays out exactly as when enabled (e.g. a full-width property row stays
+// left-aligned instead of shrinking and being centered).
+const blockedContentStyle: CSSProperties = { display: 'contents', pointerEvents: 'none' };
 
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
   ({ children, currentAgentId, disabled, onChange, taskIdentifier, taskVisibility }) => {
@@ -283,7 +286,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
           style={{ ...triggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
           onClick={(event) => event.stopPropagation()}
         >
-          <span style={{ pointerEvents: 'none' }}>{children}</span>
+          <span style={blockedContentStyle}>{children}</span>
         </div>
       </Tooltip>
     ) : (

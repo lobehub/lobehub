@@ -1,9 +1,7 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { Button, Checkbox } from '@lobehub/ui/base-ui';
+import { Button, Center, Checkbox, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { type UIEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

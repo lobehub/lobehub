@@ -40,7 +40,7 @@
   "features.persistentSandbox.title": "持久化沙箱",
   "features.projects.desc": "将长期目标组织到独立工作空间中，并集中管理相关智能体、资料库与任务。",
   "features.projects.title": "项目工作空间",
-  "features.selfLearning.desc": "从实践中学习：你打回的验收会沉淀成规矩，每个 Agent 也会从自己的运行里学到经验，运行时都会带给 Agent。在「记忆 → 自进化」里统一查看。",
+  "features.selfLearning.desc": "让所有 Agent 在后台从对话中学习：记住信息、完善技能、积累经验，并在每晚复盘。你打回的验收会沉淀成规矩。每晚复盘最多覆盖 50 个话题。在「记忆 → 自进化」里统一查看。",
   "features.selfLearning.title": "自进化",
   "features.taskVerify.desc": "在任务详情里增加「交付验收」模块：一句话描述验收要求，AI 自动生成可编辑的验收项。",
   "features.taskVerify.title": "任务交付验收",

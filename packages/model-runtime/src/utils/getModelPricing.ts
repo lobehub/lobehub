@@ -1,4 +1,9 @@
-import type { LobeDefaultAiModelListItem, Pricing } from 'model-bank';
+import type {
+  LobeDefaultAiModelListItem,
+  ModelParamsSchema,
+  Pricing,
+  VideoModelParamsSchema,
+} from 'model-bank';
 
 import type { ModelPricingContext } from '../types';
 
@@ -9,37 +14,55 @@ interface BusinessModelConfigModule {
 }
 
 /**
- * 1. First try to get pricing from the specified provider
- * 2. If not found, try to get pricing from other providers with the same model name
+ * Find the model card that prices `model`:
+ * 1. First try the specified provider
+ * 2. If not found, try other providers with the same model name
  *
  * TODO: Add a fallback provider priority list. When no provider is specified,
  * first try official providers, then other providers. Same applies to getFallbackModelProperty
  */
+const findModelCard = async (
+  model: string,
+  provider: string | undefined,
+  pricingContext: ModelPricingContext | undefined,
+  hasProperty: (card: LobeDefaultAiModelListItem) => boolean,
+): Promise<LobeDefaultAiModelListItem | undefined> => {
+  const { loadModels } =
+    (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
+  const models = await loadModels(pricingContext ? { pricingContext } : undefined);
+
+  if (provider) {
+    const exactMatch = models.find((m) => m.id === model && m.providerId === provider);
+    if (exactMatch && hasProperty(exactMatch)) return exactMatch;
+  }
+
+  const fallbackMatch = models.find((m) => m.id === model);
+  return fallbackMatch && hasProperty(fallbackMatch) ? fallbackMatch : undefined;
+};
+
 export async function getModelPricing(
   model: string,
   provider?: string,
   pricingContext?: ModelPricingContext,
 ): Promise<Pricing | undefined> {
-  const { loadModels } =
-    (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
-  const models = await loadModels(pricingContext ? { pricingContext } : undefined);
+  const card = await findModelCard(model, provider, pricingContext, (m) => !!m.pricing);
+  return card?.pricing;
+}
 
-  // 1. First try to get pricing from the specified provider
-  if (provider) {
-    const exactMatch = models.find((m) => m.id === model && m.providerId === provider);
-
-    if (exactMatch?.pricing) {
-      return exactMatch.pricing;
-    }
-  }
-
-  // 2. If not found, try to get pricing from other providers with the same model name
-  const fallbackMatch = models.find((m) => m.id === model);
-
-  if (fallbackMatch?.pricing) {
-    return fallbackMatch.pricing;
-  }
-
-  // 3. Return undefined if no pricing information is found
-  return undefined;
+/**
+ * Parameter schema of a generation model card, resolved like {@link getModelPricing} so the
+ * defaults used for a request come from the same card that prices it.
+ */
+export async function getModelParameters(
+  model: string,
+  provider?: string,
+  pricingContext?: ModelPricingContext,
+): Promise<ModelParamsSchema | VideoModelParamsSchema | undefined> {
+  const card = await findModelCard(
+    model,
+    provider,
+    pricingContext,
+    (m) => 'parameters' in m && !!m.parameters,
+  );
+  return card && 'parameters' in card ? card.parameters : undefined;
 }

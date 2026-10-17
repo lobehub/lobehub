@@ -1,23 +1,20 @@
 'use client';
 
-import { Block, Empty, Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { Button, Text, toast } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
-import { ArrowDownIcon, ArrowUpIcon, FlaskConicalIcon, PencilIcon, PlusIcon } from 'lucide-react';
+import { Block, Button, cx, Flexbox, Icon, SortableList, Text, toast } from '@lobehub/ui';
+import { ArrowDownIcon, ArrowUpIcon, FileSearchIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
+import { SelfLearningLabOff, useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { expertiseService, type RuleItem, type UpdateRuleInput } from '@/services/expertise';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 
 import { createComposeRuleModal } from './ComposeModal';
 import DetailPanel from './DetailPanel';
+import { createDistillModal } from './DistillModal';
 import { createGroupModal } from './GroupModal';
 import GroupSection from './GroupSection';
 import { useRules } from './hooks';
@@ -36,24 +33,6 @@ import RulesOnboarding, { type RulesOnboardingAgents } from './RulesOnboarding';
 import { styles } from './styles';
 import { useJudgeDirections } from './useJudgeDirections';
 
-const LabOff = () => {
-  const { t } = useTranslation('memory');
-  const navigate = useWorkspaceAwareNavigate();
-  return (
-    <Flexbox align={'center'} flex={1} justify={'center'}>
-      <Empty
-        description={t('rules.labOff.description')}
-        icon={FlaskConicalIcon}
-        title={t('rules.labOff.title')}
-      >
-        <Button size={'small'} onClick={() => navigate('/settings/labs')}>
-          {t('rules.labOff.open')}
-        </Button>
-      </Empty>
-    </Flexbox>
-  );
-};
-
 /**
  * Self-evolving, as one sheet per part: a switcher above it picks the reviewer's own rules (the
  * default) or what one agent learned by itself. Within the part, groups are full-width section
@@ -69,7 +48,7 @@ const LabOff = () => {
  */
 const MemoryRules = () => {
   const { t } = useTranslation('memory');
-  const enabled = useUserStore(labPreferSelectors.enableSelfLearning);
+  const { enabled, ready } = useSelfLearningSurface();
   const { data, error, isLoading, mutate } = useRules();
   const [selectedId, setSelectedId] = useState<string>();
   const [titleEditing, setTitleEditing] = useState(false);
@@ -255,6 +234,18 @@ const MemoryRules = () => {
     setSelectedId(selectedId === id ? undefined : id);
   };
 
+  // Distilling files into the part on screen, like writing: its groups, and a new group only in
+  // the reviewer's own part (a new group always mounts on the reviewer).
+  const distill = () =>
+    createDistillModal({
+      canOpenGroup: part.key === 'mine',
+      groups: part.groups,
+      onDone: (ids) => {
+        if (ids[0]) setSelectedId(ids[0]);
+        void refresh();
+      },
+    });
+
   // Writing files into the part on screen: the header offers its groups, a group's `+` that group.
   const compose = (defaultGroupId?: string) =>
     createComposeRuleModal({
@@ -341,7 +332,8 @@ const MemoryRules = () => {
     return (
       <Flexbox height={'100%'} width={'100%'}>
         <NavHeader />
-        <LabOff />
+        {/* The Labs preference arrives with the user state; wait for it instead of flashing Labs. */}
+        {ready && <SelfLearningLabOff />}
       </Flexbox>
     );
   }
@@ -377,9 +369,18 @@ const MemoryRules = () => {
               {/* One primary action. Writing a rule also opens the group when the reviewer has
                   none, so a separate "new group" button would be a second way to start. */}
               {!mineOnboarding && (
-                <Button icon={<Icon icon={PlusIcon} />} type={'primary'} onClick={() => compose()}>
-                  {t('rules.actions.write')}
-                </Button>
+                <Flexbox horizontal gap={8}>
+                  <Button icon={<Icon icon={FileSearchIcon} />} onClick={distill}>
+                    {t('rules.actions.distill')}
+                  </Button>
+                  <Button
+                    icon={<Icon icon={PlusIcon} />}
+                    type={'primary'}
+                    onClick={() => compose()}
+                  >
+                    {t('rules.actions.write')}
+                  </Button>
+                </Flexbox>
               )}
             </Flexbox>
 
@@ -406,7 +407,11 @@ const MemoryRules = () => {
               isLoading={isLoading}
               loading={<Loading debugId={'MemoryRules'} />}
               empty={
-                <RulesOnboarding backlogRounds={data?.backlogRounds} onWrite={() => compose()} />
+                <RulesOnboarding
+                  backlogRounds={data?.backlogRounds}
+                  onDistill={distill}
+                  onWrite={() => compose()}
+                />
               }
               onRetry={() => void refresh()}
             >
@@ -451,6 +456,7 @@ const MemoryRules = () => {
                     inline
                     agents={onboardingAgents}
                     backlogRounds={data?.backlogRounds}
+                    onDistill={distill}
                     onWrite={() => compose()}
                   />
                 ) : (

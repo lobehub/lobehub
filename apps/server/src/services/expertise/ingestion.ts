@@ -37,6 +37,7 @@ import { notShareVisitorMessage, notShareVisitorTopic } from '@/database/utils/s
 import { notTrashed } from '@/database/utils/softDelete';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
+import type { ClaimNightlyReviewTopics } from '@/server/services/agentSignal/services/selfIteration/review/topicQuota';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 import { resolveModelReadableFrameUrl } from '@/server/services/verify/modelFrames';
@@ -157,6 +158,17 @@ const matchLesson = <T>(
   return lessons.byTitle.get(normalizeLessonTitle(observation.title));
 };
 
+/** Options for ingestions triggered by Agent Signal's completion path. */
+export interface ExpertiseSelfReviewIngestionOptions {
+  /**
+   * Claims a nightly review's topics against the user's per-night topic quota before they are
+   * ingested; refused topics are skipped. Self-reflection ingestion is not metered.
+   *
+   * @default No quota: tests and evals ingest every topic in the window
+   */
+  claimNightlyTopics?: ClaimNightlyReviewTopics;
+}
+
 interface ExpertiseCompletionInput {
   agentId: string;
   hadHumanInLoop?: boolean;
@@ -178,7 +190,7 @@ interface ExpertiseRunDescriptor {
   operationId?: string;
   reflectionKey: string;
   subjectId: string;
-  subjectType: 'document' | 'standalone' | 'task' | 'topic';
+  subjectType: 'document' | 'goal_gate' | 'standalone' | 'task' | 'topic';
 }
 
 /** An observation ready to persist, after whichever analysis produced it. */
@@ -242,7 +254,10 @@ export class ExpertiseIngestionService {
    * Nightly review batches every active topic in its window; fast self-reflection reuses its
    * single topic scope. Other self-iteration modes are deliberately ignored.
    */
-  ingestSelfReview = async (input: CompletionCallbackParams) => {
+  ingestSelfReview = async (
+    input: CompletionCallbackParams,
+    options: ExpertiseSelfReviewIngestionOptions = {},
+  ) => {
     const marker = input.selfIteration?.marker;
     const agentId = marker?.agentId;
     if (!marker || !agentId) return { ingested: 0, reason: 'missing-review-agent' } as const;
@@ -266,14 +281,36 @@ export class ExpertiseIngestionService {
       windowEnd: new Date(marker.reviewWindowEnd),
       windowStart: new Date(marker.reviewWindowStart),
     });
+    let topicIds = topics.flatMap((topic) => (topic.topicId ? [topic.topicId] : []));
+
+    // Topics the night's review already took are admitted again without counting twice.
+    if (options.claimNightlyTopics && marker.localDate && topicIds.length > 0) {
+      const claim = await options.claimNightlyTopics({
+        localDate: marker.localDate,
+        topicIds,
+        userId: this.userId,
+      });
+      if (claim.reason) {
+        log(
+          'nightly expertise ingestion agent=%s date=%s: %d of %d topics refused (%s)',
+          agentId,
+          marker.localDate,
+          topicIds.length - claim.admitted.length,
+          topicIds.length,
+          claim.reason,
+        );
+      }
+      const admitted = new Set(claim.admitted);
+      topicIds = topicIds.filter((topicId) => admitted.has(topicId));
+    }
+
     const results = [];
-    for (const topic of topics) {
-      if (!topic.topicId) continue;
+    for (const topicId of topicIds) {
       results.push(
         await this.ingestCompletion({
           agentId,
           operationId: input.operationId,
-          topicId: topic.topicId,
+          topicId,
         }),
       );
     }

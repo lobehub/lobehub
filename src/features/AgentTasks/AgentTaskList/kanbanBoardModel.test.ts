@@ -7,7 +7,9 @@ import {
   buildKanbanGroupQuery,
   canDropTaskIntoKanbanColumn,
   getKanbanAssigneeUpdate,
+  getKanbanColumnCreateDefaults,
   getKanbanColumnHeaderVariant,
+  getKanbanCreateTaskModalProps,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
@@ -270,6 +272,80 @@ describe('kanbanBoardModel', () => {
       expect(buildKanbanGroupQuery({ excludeStatuses, groupBy: 'status' })).toMatchObject({
         excludeStatuses,
       });
+    });
+  });
+
+  describe('getKanbanCreateTaskModalProps', () => {
+    it('prefills the column priority in the create task modal', () => {
+      expect(getKanbanCreateTaskModalProps({ priority: 4 }, { projectId: 'project-1' })).toEqual({
+        agentId: undefined,
+        defaultPriority: 4,
+        lockAssignee: false,
+        projectId: 'project-1',
+        showInlineToggle: false,
+      });
+    });
+
+    it('prefills the column assignee over the board agent', () => {
+      expect(
+        getKanbanCreateTaskModalProps({ assigneeAgentId: 'agent-col' }, { agentId: 'agent-board' }),
+      ).toMatchObject({ agentId: 'agent-col', lockAssignee: true });
+    });
+
+    it('falls back to the board agent and locks it on an agent-scoped board', () => {
+      expect(getKanbanCreateTaskModalProps({}, { agentId: 'agent-board' })).toMatchObject({
+        agentId: 'agent-board',
+        defaultPriority: undefined,
+        lockAssignee: true,
+      });
+    });
+  });
+
+  describe('getKanbanColumnCreateDefaults', () => {
+    it('pins the column priority on tasks created from a priority column', () => {
+      const groups = [
+        { ...group('priority:2', []), priority: 2 },
+        { ...group('priority:0', []), priority: 0 },
+      ] as TaskGroupItem[];
+      const columns = buildKanbanColumns(groups, 'priority');
+
+      expect(
+        columns.map((column) => getKanbanColumnCreateDefaults('priority', column)?.priority),
+      ).toEqual([2, 0]);
+    });
+
+    it('offers status creation only from the backlog column, without pinned fields', () => {
+      const columns = buildKanbanColumns([], 'status');
+
+      expect(columns.map((column) => getKanbanColumnCreateDefaults('status', column))).toEqual([
+        {},
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ]);
+    });
+
+    it('pins the column agent on tasks created from an agent column', () => {
+      const [agentColumn] = buildKanbanColumns(
+        [group('assignee:agent-1', [], 'agent-1')],
+        'assignee',
+      );
+
+      expect(getKanbanColumnCreateDefaults('assignee', agentColumn)).toEqual({
+        assigneeAgentId: 'agent-1',
+      });
+    });
+
+    it('offers no create entry on the unassigned and member columns', () => {
+      const [unassignedColumn] = buildKanbanColumns([group('assignee:unassigned', [])], 'assignee');
+      const [memberColumn] = buildKanbanColumns(
+        [group('member:user-1', [], undefined, 'user-1')],
+        'member',
+      );
+
+      expect(getKanbanColumnCreateDefaults('assignee', unassignedColumn)).toBeUndefined();
+      expect(getKanbanColumnCreateDefaults('member', memberColumn)).toBeUndefined();
     });
   });
 });

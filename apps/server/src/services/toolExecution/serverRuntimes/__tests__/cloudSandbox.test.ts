@@ -82,7 +82,11 @@ describe('cloudSandboxRuntime', () => {
     });
 
     const { cloudSandboxRuntime } = await import('../cloudSandbox');
-    const runtime = await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+    const runtime = await cloudSandboxRuntime.factory(
+      // The run's own id travels too, so an `lh agent run` from here can be
+      // attributed to the agent that launched it.
+      buildContext({ operationId: 'op-x', workspaceId: 'ws-42' }),
+    );
 
     await runtime.runCommand({ command: 'lh agent edit agt_1 -t x', description: 'edit self' });
 
@@ -91,6 +95,7 @@ describe('cloudSandboxRuntime', () => {
       'user-1',
       'ws-42',
       false,
+      'op-x',
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -176,7 +181,13 @@ describe('cloudSandboxRuntime', () => {
     const command = "echo 'the lh CLI is unavailable here'";
     await runtime.runCommand({ command, description: 'echo' });
 
-    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(command, 'user-1', undefined, true);
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      command,
+      'user-1',
+      undefined,
+      true,
+      undefined,
+    );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
       expect.objectContaining({ command }),
@@ -196,7 +207,13 @@ describe('cloudSandboxRuntime', () => {
 
     await runtime.runCommand({ command: 'ls -la', description: 'list files' });
 
-    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith('ls -la', 'user-1', undefined, true);
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'ls -la',
+      'user-1',
+      undefined,
+      true,
+      undefined,
+    );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
       expect.objectContaining({ command: 'ls -la' }),

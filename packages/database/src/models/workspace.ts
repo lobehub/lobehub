@@ -6,9 +6,12 @@ import {
   type WorkspaceItem,
   workspaceMembers,
   workspaces,
+  workspaceTeamMembers,
+  workspaceTeams,
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
+import { DEFAULT_TEAM_IDENTIFIER, deriveTeamIdentifier } from './workspaceTeam';
 
 export const getActiveWorkspaceMembershipRole = async (
   db: LobeChatDatabase,
@@ -109,6 +112,23 @@ export class WorkspaceModel {
       // workspace roles — no RBAC rows are seeded per workspace.
       await tx.insert(workspaceMembers).values({
         role: 'owner',
+        userId: this.userId,
+        workspaceId: workspace.id,
+      });
+
+      // Every new workspace starts with a team of the same name holding its
+      // creator. Workspaces created before teams existed are left without one.
+      const [team] = await tx
+        .insert(workspaceTeams)
+        .values({
+          createdBy: this.userId,
+          identifier: deriveTeamIdentifier(params.name) || DEFAULT_TEAM_IDENTIFIER,
+          name: params.name,
+          workspaceId: workspace.id,
+        })
+        .returning({ id: workspaceTeams.id });
+      await tx.insert(workspaceTeamMembers).values({
+        teamId: team.id,
         userId: this.userId,
         workspaceId: workspace.id,
       });

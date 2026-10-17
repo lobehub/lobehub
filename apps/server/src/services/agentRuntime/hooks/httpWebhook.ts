@@ -126,9 +126,9 @@ async function discardNotificationBody(response: Response): Promise<void> {
 }
 
 async function readControlBody(response: Response, signal: AbortSignal): Promise<ArrayBuffer> {
-  if (response.status !== 200) {
+  if (response.status === 204) {
     await response.body?.cancel();
-    throw new HookHttpError('invalid_response');
+    return new ArrayBuffer(0);
   }
   const body = await readBlobWithLimit(response, AGENT_HOOK_RESPONSE_MAX_BYTES).catch(
     (error: unknown) => {

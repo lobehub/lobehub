@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormInstance } from '@lobehub/ui/base-ui/form';
+import { type FormInstance } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 

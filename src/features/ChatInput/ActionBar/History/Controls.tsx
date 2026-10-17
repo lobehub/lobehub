@@ -1,5 +1,5 @@
-import { SliderWithInput, Switch } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
+import { SliderWithInput, Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import { debounce } from 'es-toolkit/compat';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

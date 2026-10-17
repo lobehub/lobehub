@@ -1,14 +1,22 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
-import { useEvalStore } from '@/store/eval';
+import { testCaseSelectors, useEvalStore } from '@/store/eval';
 
 import { createDatasetCreateModal } from '../../../../features/DatasetCreateModal';
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
@@ -59,27 +67,25 @@ const DatasetsTab = memo<DatasetsTabProps>(
     const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
     const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
 
-    // Fetch test cases for expanded dataset - use SWR return value directly
-    const { data: testCaseData, isLoading: loading } = useFetchTestCases(
-      expandedDs
-        ? {
-            datasetId: expandedDs,
-            limit: pagination.pageSize,
-            offset: (pagination.current - 1) * pagination.pageSize,
-          }
-        : { datasetId: '', limit: 0, offset: 0 },
-    );
+    // Fetch the expanded dataset's case page; the rows are read from the replica.
+    // One query for the fetch and the reads: the rows only show for this exact page.
+    const caseQuery = expandedDs
+      ? {
+          datasetId: expandedDs,
+          limit: pagination.pageSize,
+          offset: (pagination.current - 1) * pagination.pageSize,
+        }
+      : null;
+    useFetchTestCases(caseQuery);
 
-    const testCases = testCaseData?.data || [];
-    const total = testCaseData?.total || 0;
+    const testCases = useEvalStore(testCaseSelectors.testCases(caseQuery));
+    const total = useEvalStore(testCaseSelectors.testCaseTotal(caseQuery));
+    const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(caseQuery));
 
-    const handleRefreshTestCases = useCallback(
-      async (datasetId: string) => {
-        await refreshTestCases(datasetId);
-        onRefresh();
-      },
-      [refreshTestCases, onRefresh],
-    );
+    const handleRefreshTestCases = useCallback(async () => {
+      await refreshTestCases();
+      onRefresh();
+    }, [refreshTestCases, onRefresh]);
 
     const filteredCases = testCases.filter((c: any) => {
       if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;
@@ -158,7 +164,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
             try {
               await agentEvalService.deleteTestCase(testCase.id);
               toast.success(t('testCase.delete.success'));
-              if (expandedDs) await refreshTestCases(expandedDs);
+              if (expandedDs) await refreshTestCases();
               onRefresh();
             } catch {
               toast.error(t('testCase.delete.error'));

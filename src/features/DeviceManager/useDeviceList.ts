@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
-import type { SWRResponse } from 'swr';
+import type { SWRConfiguration, SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { deviceService } from '@/services/device';
@@ -24,11 +24,15 @@ import { DEVICE_LIST_SWR_KEY } from './const';
  *
  * Refresh: `refreshDeviceList()` (`./const`) revalidates every workspace
  * context's entry; the returned `mutate` revalidates just the active one.
+ * A live surface that must track presence passes its own `refreshInterval`.
  */
-export const useDeviceList = (): SWRResponse<DeviceListItem[]> => {
+export const useDeviceList = (
+  config?: Pick<SWRConfiguration, 'refreshInterval'>,
+): SWRResponse<DeviceListItem[]> => {
   const isLogin = useUserStore(authSelectors.isLogin);
   return useClientDataSWR<DeviceListItem[]>(
     isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
     () => deviceService.listDevices(),
+    config,
   );
 };

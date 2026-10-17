@@ -1,7 +1,5 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, ActionIcon, Spin, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Accordion, ActionIcon, Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as motion from 'motion/react-m';

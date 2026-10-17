@@ -1,8 +1,7 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { CheckIcon, ChevronDownIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,9 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
-import { topicSelectors } from '@/store/chat/selectors';
+
+import { useTopicRepoSelection } from './useTopicRepoSelection';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -109,8 +107,6 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Incremented to trigger re-renders when the module-singleton pending selection changes.
-  const [, forceUpdate] = useState(0);
 
   // Available repos configured on the agent
   const availableRepos: string[] = useAgentStore((s) => {
@@ -122,60 +118,7 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
     }
   });
 
-  // Repos persisted to the current topic (empty when no topic or none set)
-  const topicRepos: string[] = useChatStore((s) => {
-    const meta = topicSelectors.currentTopicMetadata(s);
-    return meta?.repos ?? [];
-  });
-
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
-
-  const currentWorkingDirectory = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectory,
-  );
-
-  const toggleRepo = useCallback(
-    async (repo: string) => {
-      if (!canCreateContent) return;
-
-      if (!activeTopicId) {
-        // No topic yet — buffer in the module singleton keyed by agentId.
-        // gateway.ts will read and consume this when the first message creates a topic.
-        const prev = getPendingTopicRepos(agentId);
-        const isSelected = prev.includes(repo);
-        const next = isSelected ? prev.filter((r) => r !== repo) : [...prev, repo];
-        setPendingTopicRepos(agentId, next);
-        forceUpdate((v) => v + 1);
-        return;
-      }
-
-      const isSelected = topicRepos.includes(repo);
-      const nextRepos = isSelected ? topicRepos.filter((r) => r !== repo) : [...topicRepos, repo];
-
-      // Only set workingDirectory when it hasn't been assigned yet (first selection).
-      // Once set, it stays fixed so the topic keeps its sidebar grouping.
-      const patch: {
-        repos: string[];
-        workingDirectory?: string;
-        workingDirectoryConfig?: { path: string; repoType: 'github' };
-      } = { repos: nextRepos };
-      if (!currentWorkingDirectory && nextRepos.length > 0) {
-        patch.workingDirectory = nextRepos[0];
-        patch.workingDirectoryConfig = { path: nextRepos[0], repoType: 'github' };
-      }
-
-      await updateTopicMetadata(activeTopicId, patch);
-    },
-    [
-      agentId,
-      activeTopicId,
-      canCreateContent,
-      currentWorkingDirectory,
-      topicRepos,
-      updateTopicMetadata,
-    ],
-  );
+  const { displayRepos, toggleRepo } = useTopicRepoSelection(agentId, canCreateContent);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -187,10 +130,6 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
   );
 
   if (availableRepos.length === 0) return null;
-
-  // When a topic exists, show its persisted repos.
-  // When no topic exists yet, show the pending selection from the module singleton.
-  const displayRepos = activeTopicId ? topicRepos : getPendingTopicRepos(agentId);
 
   // Button label
   const buttonLabel =

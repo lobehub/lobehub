@@ -109,10 +109,12 @@ describe('serverMessagesEngine', () => {
         planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
         provider: 'openai',
       });
-      const userContent = result.find((message) => message.role === 'user')?.content;
+      const userMessages = result.filter((message) => message.role === 'user');
 
-      expect(userContent).toContain('<todo_context>');
-      expect(userContent).toContain('Keep server context in sync');
+      expect(userMessages).toHaveLength(2);
+      expect(userMessages[0].content).toBe('Hello');
+      expect(userMessages[1].content).toContain('<todo_context>');
+      expect(userMessages[1].content).toContain('Keep server context in sync');
     });
 
     it('does not inject an empty TODO state', async () => {
@@ -144,8 +146,12 @@ describe('serverMessagesEngine', () => {
         provider: 'openai',
       });
 
-      expect(serverResult.find((message) => message.role === 'user')?.content).toBe(
-        clientResult.messages.find((message) => message.role === 'user')?.content,
+      expect(
+        serverResult.filter((message) => message.role === 'user').map(({ content }) => content),
+      ).toEqual(
+        clientResult.messages
+          .filter((message) => message.role === 'user')
+          .map(({ content }) => content),
       );
     });
   });
@@ -399,6 +405,40 @@ describe('serverMessagesEngine', () => {
       const content = userMessage?.content as any[];
 
       expect(content[0].text).toContain('url="https://app.example.com/f/file1"');
+    });
+
+    it('sends attachments planned for preview as previews', async () => {
+      const content = 'row,value\n'.repeat(1000);
+      const { messages: result } = await serverMessagesEngine({
+        attachmentPreviewFileIds: ['file1'],
+        messages: [
+          {
+            content: 'Read this',
+            createdAt: Date.now(),
+            fileList: [
+              {
+                content,
+                fileType: 'text/csv',
+                id: 'file1',
+                name: 'data.csv',
+                size: content.length,
+                url: 'https://app.example.com/f/file1',
+              },
+            ],
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+      const text = (userMessage?.content as any[])[0].text as string;
+
+      expect(text).toContain('truncated="true"');
+      expect(text).not.toContain(content);
     });
 
     it('should pass active topic document initial context into MessagesEngine', async () => {

@@ -87,6 +87,22 @@ describe('agent signal sources', () => {
     expect(built.payload.selfIteration).toEqual(selfIteration);
   });
 
+  it('keeps the conversation-root marker on agent user messages through normalization', async () => {
+    const { buildSource } = await import('..');
+
+    const build = (payload: Record<string, unknown>) =>
+      buildSource({
+        payload: { agentId: 'agent_1', message: 'Hi', messageId: 'user_1', ...payload },
+        scopeKey: 'topic:topic_1',
+        sourceId: 'user_1',
+        sourceType: 'agent.user.message',
+        timestamp: 1_710_000_000_000,
+      });
+
+    expect(build({ isConversationRoot: true }).payload.isConversationRoot).toBe(true);
+    expect(build({}).payload).not.toHaveProperty('isConversationRoot');
+  });
+
   it('preserves agent user message display and trigger anchors through normalization', async () => {
     const { buildSource } = await import('..');
 

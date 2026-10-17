@@ -1,8 +1,7 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, Clock3Icon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';

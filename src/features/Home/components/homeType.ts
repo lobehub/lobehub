@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 /**
  * The home surface's type scale. Every text role on the page resolves to exactly

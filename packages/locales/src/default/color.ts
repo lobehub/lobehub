@@ -1,5 +1,6 @@
 export default {
   blue: 'Dawn Blue',
+  custom: 'Custom',
   cyan: 'Bright Cyan',
   default: 'Default',
   geekblue: 'Geek Blue',

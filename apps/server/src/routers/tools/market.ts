@@ -1,4 +1,5 @@
 import { MARKET_AUTH_REQUIRED_MESSAGE } from '@lobechat/desktop-bridge';
+import { MarketAPIError } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -25,6 +26,7 @@ import {
 } from '@/server/services/mcp/contentProcessor';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
+import { SkillConnectionErrorCode } from '@/types/skillConnectionError';
 
 import { scheduleToolCallReport } from './_helpers';
 import {
@@ -508,17 +510,22 @@ export const marketRouter = router({
         const errorMessage = (error as Error).message;
         log('connectCallTool error: %s', errorMessage);
 
-        if (errorMessage.includes('NOT_CONNECTED')) {
+        // The SDK carries the machine code in `error.code`; the message is human text.
+        // Not UNAUTHORIZED: that code opens the LobeHub / Market re-login flows (see
+        // createResponseMeta), and a provider connection is neither. The client tells
+        // these apart by `errorData.code`.
+        const connectionCode =
+          error instanceof MarketAPIError
+            ? Object.values(SkillConnectionErrorCode).find((code) => error.isErrorCode(code))
+            : undefined;
+        if (connectionCode) {
           throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'Provider not connected. Please authorize first.',
-          });
-        }
-
-        if (errorMessage.includes('TOKEN_EXPIRED')) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'Token expired. Please re-authorize.',
+            cause: { data: { code: connectionCode } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              connectionCode === SkillConnectionErrorCode.NotConnected
+                ? 'Provider not connected. Please authorize first.'
+                : 'Token expired. Please re-authorize.',
           });
         }
 

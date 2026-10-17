@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -101,17 +100,13 @@ const InputArea = ({
   return (
     <Flexbox>
       <Flexbox ref={chatInputRef}>
-        {mode === 'chat' ? (
-          <InputDragUpload
-            radius={20}
-            style={{ position: 'relative', zIndex: 1 }}
-            onUploadFiles={handleUploadFiles}
-          >
-            {editorSlot}
-          </InputDragUpload>
-        ) : (
-          editorSlot
-        )}
+        <InputDragUpload
+          radius={20}
+          style={{ position: 'relative', zIndex: 1 }}
+          onUploadFiles={handleUploadFiles}
+        >
+          {editorSlot}
+        </InputDragUpload>
         {showInputBanners && (
           <InputBannerQueue>
             {showNewModelShortcuts && (

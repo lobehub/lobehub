@@ -1,7 +1,6 @@
 import type { GenerateVideosConfig, GoogleGenAI, Image } from '@google/genai';
 import { GenerateVideosOperation } from '@google/genai';
 import type { ModelTokensUsage } from '@lobechat/types';
-import { imageUrlToBase64 } from '@lobechat/utils';
 import debug from 'debug';
 import { GEMINI_OMNI_VIDEO_MODEL_ID } from 'model-bank/standardParameters';
 
@@ -12,6 +11,7 @@ import type {
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 
 const log = debug('lobe-video:google');
@@ -70,7 +70,7 @@ async function imageToGoogleImageFormat(imageUrl: string): Promise<Image> {
     };
   } else if (type === 'url') {
     // Handle both HTTP URLs and file paths (files/...)
-    const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(imageUrl);
+    const { base64: urlBase64, mimeType: urlMimeType } = await referenceImageUrlToBase64(imageUrl);
 
     return {
       imageBytes: urlBase64,

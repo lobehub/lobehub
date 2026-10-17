@@ -32,10 +32,25 @@ describe('withConversationGoalPrompt', () => {
     expect(withConversationGoalPrompt('  ', '/goal ship the report')).toBe(conversationGoalPrompt);
   });
 
-  it('tells the agent to create the goal from this conversation and plan it in the same run', () => {
+  it('tells the agent to create the goal from this conversation and start it in the same run', () => {
     expect(conversationGoalPrompt).toContain('lh goal create');
     expect(conversationGoalPrompt).toContain('--conversation');
+    // A bound goal handed back with a turn token is still planned in this run.
     expect(conversationGoalPrompt).toContain('lh goal plan <goalId> --token <turnToken>');
+  });
+
+  /**
+   * Regression: a conversation goal went live the moment it was created, so
+   * the agent arranged its tasks while they were already dispatching, and a
+   * set of one-recipe tasks could never become a batch.
+   */
+  it('creates the goal as a draft with its tasks, then starts it, as a batch when one recipe', () => {
+    expect(conversationGoalPrompt).toContain('--task-file <tasks.json>');
+    expect(conversationGoalPrompt).toContain('nothing is dispatched until you start it');
+    expect(conversationGoalPrompt).toContain('lh goal start <goalId> --json');
+    expect(conversationGoalPrompt).toContain(
+      'lh goal start <goalId> --rollout canary --recipe-file <recipe.md> --probes',
+    );
   });
 
   it('binds a goal the user names instead of creating a duplicate', () => {

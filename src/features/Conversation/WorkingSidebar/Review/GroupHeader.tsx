@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles } from '@lobehub/ui';
 import { ChevronRightIcon, FoldVerticalIcon, UnfoldVerticalIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

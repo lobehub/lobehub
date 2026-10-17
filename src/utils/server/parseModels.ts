@@ -1,7 +1,11 @@
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import { merge } from '@lobechat/utils';
 import { produce } from 'immer';
-import { type AiFullModelCard, type AiModelType } from 'model-bank';
+import {
+  type AiFullModelCard,
+  type AiModelType,
+  type LobeDefaultAiModelListItem,
+} from 'model-bank';
 
 /**
  * Parse model string to add or remove models.
@@ -10,6 +14,7 @@ export const parseModelString = async (
   providerId: string,
   modelString: string = '',
   withDeploymentName = false,
+  builtinModels?: LobeDefaultAiModelListItem[],
 ) => {
   const models: AiFullModelCard[] = [];
   let removeAll = false;
@@ -54,6 +59,7 @@ export const parseModelString = async (
       id,
       'type',
       providerId,
+      builtinModels,
     );
 
     const model: AiFullModelCard = {
@@ -122,11 +128,13 @@ export const parseModelString = async (
  * Extract a special method to process chatModels
  */
 export const transformToAiModelList = async ({
+  builtinModels,
   modelString = '',
   defaultModels,
   providerId,
   withDeploymentName = false,
 }: {
+  builtinModels?: LobeDefaultAiModelListItem[];
   defaultModels: AiFullModelCard[];
   modelString?: string;
   providerId: string;
@@ -134,17 +142,24 @@ export const transformToAiModelList = async ({
 }): Promise<AiFullModelCard[] | undefined> => {
   if (!modelString) return undefined;
 
-  const modelConfig = await parseModelString(providerId, modelString, withDeploymentName);
+  // Use the same snapshot for type inference and metadata merging.
+  if (!builtinModels) {
+    const { loadModels } = await import('@/business/client/model-bank/loadModels');
+    builtinModels = await loadModels();
+  }
+
+  const modelConfig = await parseModelString(
+    providerId,
+    modelString,
+    withDeploymentName,
+    builtinModels,
+  );
   let chatModels = modelConfig.removeAll ? [] : defaultModels;
 
   // Handle removal logic
   if (!modelConfig.removeAll) {
     chatModels = chatModels.filter((m) => !modelConfig.removed.includes(m.id));
   }
-
-  // Asynchronously load configuration
-  const { loadModels } = await import('@/business/client/model-bank/loadModels');
-  const builtinModels = await loadModels();
 
   return produce(chatModels, (draft) => {
     // Handle add or replace logic
@@ -203,8 +218,14 @@ export const extractEnabledModels = async (
   providerId: string,
   modelString: string = '',
   withDeploymentName = false,
+  builtinModels?: LobeDefaultAiModelListItem[],
 ) => {
-  const modelConfig = await parseModelString(providerId, modelString, withDeploymentName);
+  const modelConfig = await parseModelString(
+    providerId,
+    modelString,
+    withDeploymentName,
+    builtinModels,
+  );
   const list = modelConfig.add.map((m) => m.id);
 
   if (list.length === 0) return;

@@ -1,9 +1,19 @@
 'use client';
 
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Input, Spin, toast } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Center,
+  cx,
+  Flexbox,
+  Icon,
+  Input,
+  Spin,
+  stopPropagation,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronDownIcon, FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -103,7 +113,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
     const handleRenameConfirm = useCallback(async () => {
       if (!renamingValue.trim()) {
-        toast.error('Folder name cannot be empty');
+        toast.error(t('FileManager.actions.folderNameRequired', { ns: 'components' }));
         return;
       }
 
@@ -114,13 +124,13 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
       try {
         await renameItem(item.id, parentKey, renamingValue.trim());
-        toast.success('Renamed successfully');
+        toast.success(t('FileManager.actions.renameSuccess', { ns: 'components' }));
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
-        toast.error('Rename failed');
+        toast.error(t('FileManager.actions.renameError', { ns: 'components' }));
       }
-    }, [item.id, item.name, parentKey, renamingValue, renameItem]);
+    }, [item.id, item.name, parentKey, renamingValue, renameItem, t]);
 
     // A folder freshly created from the tree's per-folder "+" enters inline
     // rename as soon as its row mounts (the parent was expanded/revalidated by

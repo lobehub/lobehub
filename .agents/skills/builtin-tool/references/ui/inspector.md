@@ -36,8 +36,7 @@ interface BuiltinInspectorProps<Arguments = any, State = any> {
 'use client';
 
 import type { BuiltinInspectorProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
+import { cssVar, cx, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

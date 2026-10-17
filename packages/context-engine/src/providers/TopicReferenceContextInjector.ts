@@ -35,7 +35,7 @@ export interface TopicReferenceContextInjectorConfig {
 
 /**
  * Format topic references for injection
- * Topics with summaries are inlined; topics without summaries prompt the agent to use the tool
+ * Topics with summaries are inlined; topics without summaries prompt the agent to read them via `lh topic view`
  */
 function formatRecentMessages(messages: Array<{ content: string; role: string }>): string {
   return messages
@@ -53,7 +53,7 @@ function formatTopicReferences(items: TopicReferenceItem[]): string | null {
   const withoutContext = items.filter((item) => !item.summary && !item.recentMessages?.length);
 
   const lines: string[] = [
-    '<referred_topics hint="The following are brief summaries or excerpts of referenced topics. For complete conversation history, use the getTopicContext tool.">',
+    '<referred_topics hint="The following are brief summaries or excerpts of referenced topics. For the complete conversation history, activate the lobehub skill and run `lh topic view` with the topic id.">',
   ];
 
   for (const item of withContext) {
@@ -70,7 +70,7 @@ function formatTopicReferences(items: TopicReferenceItem[]): string | null {
 
   if (withoutContext.length > 0) {
     lines.push(
-      '<pending_topics hint="No context available for the following topics. Use the getTopicContext tool to retrieve their conversation history.">',
+      '<pending_topics hint="No context available for the following topics. Activate the lobehub skill and run `lh topic view` with the topic id to read their conversation history.">',
     );
     for (const item of withoutContext) {
       const title = item.topicTitle ? ` title="${item.topicTitle}"` : '';
@@ -90,7 +90,7 @@ function formatTopicReferences(items: TopicReferenceItem[]): string | null {
  * When user messages contain <refer_topic> tags referencing other topics,
  * this injector appends the referenced topics' context to the last user message.
  * - Topics with summaries: summary is inlined directly
- * - Topics without summaries: a hint is added prompting the agent to call the getTopicContext tool
+ * - Topics without summaries: a hint is added prompting the agent to read them via `lh topic view`
  */
 export class TopicReferenceContextInjector extends BaseLastUserContentProvider {
   readonly name = 'TopicReferenceContextInjector';

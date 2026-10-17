@@ -1,11 +1,10 @@
-import { type DivProps } from '@lobehub/ui';
-import { Grid } from '@lobehub/ui';
+import { type DivProps, Grid } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { VirtuosoGrid } from 'react-virtuoso';
 
-import Loading from '@/routes/(main)/memory/features/Loading';
-
+import LoadMoreFooter from '../LoadMoreFooter';
+import { autoLoadMoreProps, resolveLoadMoreFooter } from '../loadMoreFooterState';
 import { useScrollParent } from '../TimeLineView/useScrollParent';
 
 interface GridViewProps<T> {
@@ -23,6 +22,10 @@ interface GridViewProps<T> {
    */
   isLoading?: boolean;
   items: T[];
+  /**
+   * Failure of the last "load more" request; rendered with a retry below the rows
+   */
+  loadMoreError?: unknown;
   /**
    * Max item width in pixels
    */
@@ -46,10 +49,12 @@ function GridViewInner<T extends { id: string }>({
   maxItemWidth = 240,
   hasMore,
   isLoading,
+  loadMoreError,
   onLoadMore,
   renderItem,
 }: GridViewProps<T>) {
   const scrollParent = useScrollParent();
+  const footer = resolveLoadMoreFooter({ isLoading, loadMoreError });
 
   if (!items || items.length === 0) {
     return null;
@@ -58,14 +63,21 @@ function GridViewInner<T extends { id: string }>({
   return (
     <VirtuosoGrid
       customScrollParent={scrollParent}
-      data={items}
-      endReached={hasMore && onLoadMore ? onLoadMore : undefined}
+      {...autoLoadMoreProps({ hasMore, items, loadMoreError, onLoadMore })}
       increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
       overscan={48}
       style={{ minHeight: '100%' }}
       components={{
-        Footer: isLoading
-          ? () => <Loading rows={defaultColumnCount} viewMode={'grid'} />
+        Footer: footer
+          ? () => (
+              <LoadMoreFooter
+                loadMoreError={loadMoreError}
+                rows={defaultColumnCount}
+                state={footer}
+                viewMode={'grid'}
+                onRetry={onLoadMore}
+              />
+            )
           : undefined,
         // eslint-disable-next-line @eslint-react/no-nested-component-definitions
         List: (({ ref, ...props }: DivProps & { ref?: React.RefObject<HTMLDivElement | null> }) => (

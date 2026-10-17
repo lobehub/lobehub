@@ -14,7 +14,7 @@ user-invocable: false
 # Run specific test file
 bunx vitest run --silent='passed-only' '[file-path]'
 
-# Database package (client-db, PGlite — default, skips BM25/pg_search)
+# Database package (client-db, PGlite — default, no pg_search; BM25 migrations skip themselves)
 cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 
 # Database package (server-db, Postgres — BM25/pgvector parity, what CI measures coverage in)

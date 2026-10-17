@@ -27,6 +27,7 @@ import {
   currentWorkListFields,
   documentSummaryJoin,
   resourceDeletedField,
+  resourceLiveFilter,
   taskSummaryJoin,
 } from './internal';
 import {
@@ -328,6 +329,9 @@ export const listByWorkspace = async (
     // Row-level gate: un-opted-in requests never see `file` works, even in the
     // combined (no `type`) view (see resolveAllowedWorkTypes).
     inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+    // Orphaned Works (backing resource deleted or trashed) are hidden here
+    // rather than shown as dead cards; see resourceLiveFilter.
+    resourceLiveFilter,
   ];
   if (params.type) filters.push(eq(works.type, params.type));
   if (params.originAgentId) filters.push(eq(works.originAgentId, params.originAgentId));
@@ -372,11 +376,9 @@ export const listByWorkspace = async (
     })
     .from(works)
     .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+    // LEFT JOINs feed resourceLiveFilter, which drops rows whose backing
+    // task / document is gone instead of surfacing them as orphans.
     .leftJoin(tasks, taskSummaryJoin(ctx))
-    // LEFT JOIN, like the tasks one: an orphaned document Work (backing row
-    // hard-deleted outside the tool path) must still surface, so the UI can
-    // render it as "document deleted" and offer removal instead of showing a
-    // live-looking card that 404s on click.
     .leftJoin(documents, documentSummaryJoin)
     .leftJoin(topics, eq(works.originTopicId, topics.id))
     .where(and(...filters))

@@ -1,5 +1,5 @@
-import { Table, type TableProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Table, type TableProps } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   hoverToActive: css`

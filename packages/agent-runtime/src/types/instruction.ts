@@ -122,6 +122,11 @@ export interface Agent {
 export interface CallLLMPayload {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
   isFirstMessage?: boolean;
   messages: any[];
   model: string;

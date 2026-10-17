@@ -1,7 +1,7 @@
 'use client';
 
+import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { Check, FolderClosed, Group, Waypoints } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

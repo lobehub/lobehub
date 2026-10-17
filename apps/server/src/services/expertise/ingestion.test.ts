@@ -14,6 +14,13 @@ const dueForConsolidation = vi.fn();
 const consolidate = vi.fn();
 const listDomainsForAgent = vi.fn();
 const listLessons = vi.fn();
+const listTopicActivity = vi.fn();
+
+vi.mock('@/database/models/agentSignal/reviewContext', () => ({
+  AgentSignalReviewContextModel: class {
+    listTopicActivity = listTopicActivity;
+  },
+}));
 
 vi.mock('@/database/models/expertise', () => ({
   ExpertiseModel: class {
@@ -85,6 +92,70 @@ describe('ExpertiseIngestionService.ingestSelfReview', () => {
 
     expect(result).toEqual({ ingested: 0, reason: 'not-review' });
     expect(ingestCompletion).not.toHaveBeenCalled();
+  });
+});
+
+describe('ExpertiseIngestionService.ingestSelfReview nightly topic quota', () => {
+  const nightlyCompletion = () =>
+    completion({
+      artifacts: [],
+      marker: {
+        agentId: 'agent_1',
+        kind: 'nightly-review',
+        localDate: '2026-10-11',
+        reviewWindowEnd: '2026-10-12T00:00:00.000Z',
+        reviewWindowStart: '2026-10-11T00:00:00.000Z',
+        sourceId: 'nightly_1',
+      },
+      mutations: [],
+      userId: 'user_1',
+    });
+
+  /**
+   * The nightly expertise pass shares the user's 50-topics-per-night quota with the review:
+   * only admitted topics are ingested.
+   */
+  it('ingests only the topics the nightly topic quota admits', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    const ingestCompletion = vi
+      .spyOn(service, 'ingestCompletion')
+      .mockResolvedValue({ ingested: 1, reason: 'matched' } as never);
+    listTopicActivity.mockResolvedValue([
+      { topicId: 'topic_1' },
+      { topicId: 'topic_2' },
+      { topicId: 'topic_3' },
+    ]);
+    const claimNightlyTopics = vi
+      .fn()
+      .mockResolvedValue({ admitted: ['topic_1'], reason: 'exhausted' });
+
+    await service.ingestSelfReview(nightlyCompletion(), { claimNightlyTopics });
+
+    expect(claimNightlyTopics).toHaveBeenCalledWith({
+      localDate: '2026-10-11',
+      topicIds: ['topic_1', 'topic_2', 'topic_3'],
+      userId: 'user_1',
+    });
+    expect(ingestCompletion.mock.calls.map(([input]) => input.topicId)).toEqual(['topic_1']);
+  });
+
+  it('does not meter self-reflection ingestion', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'ingestCompletion').mockResolvedValue({ ingested: 1 } as never);
+    const claimNightlyTopics = vi.fn();
+
+    await service.ingestSelfReview(
+      completion({
+        artifacts: [],
+        marker: { agentId: 'agent_1', kind: 'self-reflection', sourceId: 'r', topicId: 'topic_1' },
+        mutations: [],
+        userId: 'user_1',
+      }),
+      { claimNightlyTopics },
+    );
+
+    expect(claimNightlyTopics).not.toHaveBeenCalled();
+    expect(service.ingestCompletion).toHaveBeenCalledOnce();
   });
 });
 

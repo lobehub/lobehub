@@ -2,33 +2,15 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { LoaderFunctionArgs } from 'react-router';
 
 import { getSidebarTopicListParams } from '@/hooks/chatTopicListQuery';
+import { PRE_PAINT_HYDRATE_TIMEOUT, settleWithin } from '@/libs/replica/prePaint';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useDeviceStore } from '@/store/device';
+import { useVerifyStore } from '@/store/verify';
 
 const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
-
-/**
- * Upper bound for the pre-paint hydrate.
- *
- * The read itself is not the risk: measured on the real storage path, a warm
- * IndexedDB read of the sidebar page (20 rows ≈ 9 KB) is ~0.2–0.5 ms p50, the
- * first read of a cold page with an existing database ~1–10 ms, and creating
- * the database ~7–30 ms. The deadline only ever fires on a pathological storage
- * stall, so a route transition never waits longer than this for it.
- */
-export const PRE_PAINT_HYDRATE_TIMEOUT = 50;
-
-/** Resolve once `promise` settles or `ms` elapses — never rejects, never hangs. */
-const settleWithin = (promise: Promise<unknown>, ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    const finish = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(finish, ms);
-    void Promise.resolve(promise).then(finish, finish);
-  });
 
 /**
  * Builtin slugs (`inbox`, …) resolve from the store; an id passes through. A
@@ -63,9 +45,67 @@ export const preHydrateTopicListForRoute = async (routeAgentId?: string): Promis
   );
 };
 
+/**
+ * Seed the persisted transcript of a route's topic into the chat store.
+ *
+ * The conversation renders the chat store's bucket, so rows landing there
+ * before the route commits reach the Conversation as its first-frame messages:
+ * a topic opened before paints from local data and only revalidates in the
+ * background, instead of painting a skeleton until the network answers.
+ */
+export const preHydrateMessagesForRoute = async (
+  routeAgentId?: string,
+  topicId?: string,
+): Promise<void> => {
+  const agentId = resolveRouteAgentId(routeAgentId);
+  if (!agentId || !topicId) return;
+
+  const context = { agentId, scope: 'main' as const, topicId };
+  const seed = async () => {
+    await useChatStore.getState().preHydrateMessages(context);
+
+    // Verify cards render from their own replica: seed the cards of the seeded
+    // transcript before the route commits, so a settled card paints in the same
+    // frame as its message instead of after its own mount-time storage read.
+    const messages = useChatStore.getState().dbMessagesMap[messageMapKey(context)] ?? [];
+    const verifyOperationIds = messages.flatMap((message) =>
+      message.role === 'verify' && message.metadata?.verifyOperationId
+        ? [message.metadata.verifyOperationId]
+        : [],
+    );
+    await useVerifyStore.getState().preHydrateVerifyRuns(verifyOperationIds);
+  };
+
+  await settleWithin(seed(), PRE_PAINT_HYDRATE_TIMEOUT);
+};
+
+/**
+ * Seed the persisted device list, so the input bar names the bound device and
+ * resolves its cwd on the first frame instead of after the mount-time hydrate.
+ */
+export const preHydrateDeviceListForRoute = (): Promise<void> =>
+  settleWithin(useDeviceStore.getState().preHydrateDeviceList(), PRE_PAINT_HYDRATE_TIMEOUT);
+
 /** Loader for the agent chat routes (`/agent/:aid`, `/agent/:aid/:topicId`). */
 export const agentChatTopicListLoader = async ({ params }: LoaderFunctionArgs): Promise<null> => {
-  await preHydrateTopicListForRoute(params.aid);
+  /**
+   * A builtin slug (`inbox`, …) resolves to its id from `builtinAgentIdMap`, so
+   * the persisted builtin agent must be seeded before `resolveRouteAgentId` runs.
+   * The replica's storage read is the only place it can land pre-paint — the
+   * mount-time sync (and its hydrate) has not run yet.
+   */
+  if (params.aid && builtinAgentSlugs.has(params.aid)) {
+    await settleWithin(
+      useAgentStore.getState().preHydrateBuiltinAgent(params.aid),
+      PRE_PAINT_HYDRATE_TIMEOUT,
+    );
+  }
+
+  await Promise.all([
+    preHydrateTopicListForRoute(params.aid),
+    preHydrateMessagesForRoute(params.aid, params.topicId),
+    preHydrateDeviceListForRoute(),
+  ]);
 
   return null;
 };

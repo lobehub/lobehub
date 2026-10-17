@@ -62,6 +62,8 @@ export interface ClaimedApprovalResume {
    * tool row you happened to pick and on the order they were written in.
    */
   batchApprovalAnchorId?: string;
+  /** Sanitized input for any deferred continuation initialization. */
+  resolvedToolResult?: InternalExecAgentParams['resumeToolResult'];
   /** Plugin row of the op-level anchor message (single-decision 16b context). */
   resumeApprovalPlugin?: MessagePluginItem;
 }
@@ -89,7 +91,10 @@ export interface ClaimedApprovalResume {
  * the plugin row and must be fetched separately.
  */
 export const claimApprovalResume = async (
-  deps: { messageModel: MessageModel },
+  deps: {
+    controlToolResult: AgentRuntimeService['controlCompletedToolResult'];
+    messageModel: MessageModel;
+  },
   input: ClaimApprovalResumeInput,
 ): Promise<ClaimedApprovalResume> => {
   const {
@@ -104,6 +109,7 @@ export const claimApprovalResume = async (
     resumeToolResult,
   } = input;
 
+  let resolvedToolResult = resumeToolResult;
   let resumeApprovalPlugin: MessagePluginItem | undefined;
   const approvedToolEntries: {
     createdAt: Date;
@@ -213,15 +219,16 @@ export const claimApprovalResume = async (
       ...(typeof targetMessage.content === 'string' ? { content: targetMessage.content } : {}),
       id: targetMessage.id,
       intervention: (plugin.intervention ?? { status: 'pending' }) as Record<string, unknown>,
+      pluginError: plugin.error ?? null,
       pluginState: (plugin.state ?? null) as Record<string, unknown> | null,
       replacePluginState: true,
     }));
 
     // Shared exactly-once boundary for Web, Mobile, Stop, and signed system
     // actions. All rows are locked and checked before the first write.
-    if (unclaimedDecisions.length > 0) {
+    if (validatedDecisions.length > 0) {
       const claimState = await deps.messageModel.resolveHumanApproval(
-        unclaimedDecisions.map(({ entry }) => {
+        validatedDecisions.map(({ entry }) => {
           if (entry.decision === 'approved') {
             return {
               id: entry.parentMessageId,
@@ -243,6 +250,7 @@ export const claimApprovalResume = async (
             },
           };
         }),
+        { publishResult: true },
       );
       if (claimState === 'applied') {
         approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
@@ -343,21 +351,39 @@ export const claimApprovalResume = async (
       : [
           {
             claimedResolutionRequestId: approvalResolutionRequestId,
-            ...(typeof resumeParentMessage.content === 'string'
-              ? { content: resumeParentMessage.content }
-              : {}),
+            content:
+              typeof resumeParentMessage.content === 'string' ? resumeParentMessage.content : '',
             id: resumeToolResult.parentMessageId,
             intervention: (resumeToolResultPlugin.intervention ?? {
               status: 'pending',
             }) as Record<string, unknown>,
+            pluginError: resumeToolResultPlugin.error ?? null,
             pluginState: (resumeToolResultPlugin.state ?? null) as Record<string, unknown> | null,
             replacePluginState: true,
           },
         ];
-    if (!alreadyClaimed) {
-      const claimState = await deps.messageModel.resolveHumanApproval([
+    const controlled = await deps.controlToolResult({
+      operationId: approvalSourceOperationId,
+      toolMessageId: resumeToolResult.parentMessageId,
+      result: {
+        content: resumeToolResult.content,
+        state: resumeToolResult.pluginState,
+        success: !skipped,
+      },
+    });
+    const result = controlled.result;
+    const withheld = controlled.blocked;
+    resolvedToolResult = {
+      ...resumeToolResult,
+      content: result.content,
+      pluginState: result.state,
+    };
+    // Source adapters only claim the decision. Publish the final hook result
+    // with the claim in one transaction, or finish an existing same-owner claim.
+    const claimState = await deps.messageModel.resolveHumanApproval(
+      [
         {
-          content: resumeToolResult.content,
+          content: result.content,
           id: resumeToolResult.parentMessageId,
           intervention: skipped
             ? {
@@ -367,12 +393,28 @@ export const claimApprovalResume = async (
                 status: 'rejected',
               }
             : { resolutionRequestId: approvalResolutionRequestId, status: 'approved' },
-          pluginState: resumeToolResult.pluginState,
+          pluginError: result.error ?? null,
+          pluginState: result.state,
+          ...(withheld && { replacePluginState: true }),
         },
+      ],
+      { publishResult: true },
+    );
+    if (claimState === 'applied' && !alreadyClaimed) {
+      approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
+    } else if (claimState === 'idempotent') {
+      // A duplicate continuation must also use the first published result in
+      // memory, including a denial, rather than the replay's incoming answer.
+      const [stored, plugin] = await Promise.all([
+        deps.messageModel.findById(resumeToolResult.parentMessageId),
+        deps.messageModel.findMessagePlugin(resumeToolResult.parentMessageId),
       ]);
-      if (claimState === 'applied') {
-        approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
-      }
+      if (!stored) throw new Error('Resolved tool message is unavailable');
+      resolvedToolResult = {
+        ...resumeToolResult,
+        content: stored.content ?? '',
+        pluginState: plugin?.state ?? undefined,
+      };
     }
     if (providedApprovalResolutionRequestId) {
       approvalClaim.continuationPrepared = true;
@@ -393,6 +435,7 @@ export const claimApprovalResume = async (
     approvedToolEntries,
     batchApprovalAnchorId,
     resumeApprovalPlugin,
+    resolvedToolResult,
   };
 };
 

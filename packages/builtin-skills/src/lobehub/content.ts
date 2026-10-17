@@ -59,6 +59,7 @@ run commands.
 | \`lh provider\` | AI provider management |
 | \`lh plugin\` | Plugin management |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) |
+| \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on |
 | \`lh eval\` | Evaluation workflow management |
 | \`lh whoami\` / \`lh usage\` | User info and usage statistics (top-level commands, not a \`config\` module) |
 

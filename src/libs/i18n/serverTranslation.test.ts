@@ -1,4 +1,11 @@
 // @vitest-environment node
+// Vitest 5 races the first dynamic import inside `translation()` against
+// `vi.mock` registration (vitest#7040). Resolving the mocked default modules
+// here — at module scope, after `vi.mock` hoisting and before any test runs —
+// makes the loader hit the mock instead of the real locale file.
+import '@/locales/default/models';
+import '@/locales/default/providers';
+
 import { cookies } from 'next/headers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

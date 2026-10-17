@@ -18,6 +18,7 @@ const {
   mockGetAgentConfig,
   mockGetUserSettings,
   mockMessageCreate,
+  mockPluginQuery,
   mockResolveByIdentifiers,
   mockScheduleStaleConnectorToolsRefresh,
 } = vi.hoisted(() => ({
@@ -30,6 +31,8 @@ const {
   mockGetAgentConfig: vi.fn(),
   mockGetUserSettings: vi.fn(),
   mockMessageCreate: vi.fn(),
+  // Installed MCP plugin rows; empty unless a test seeds one.
+  mockPluginQuery: vi.fn().mockResolvedValue([]),
   // Returns `[]` so `connectorsMcp` stays empty — we only care about the
   // identifier list the share-gate filter allowed through to this call.
   mockResolveByIdentifiers: vi.fn().mockResolvedValue([]),
@@ -82,7 +85,7 @@ vi.mock('@/server/services/agent', () => ({
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(function () {
     return {
-      query: vi.fn().mockResolvedValue([]),
+      query: mockPluginQuery,
     };
   }),
 }));
@@ -361,5 +364,56 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
       type: 'agentShare',
       visitorUserId: 'visitor-1',
     });
+  });
+
+  it('holds an installed plugin the visitor was not granted out of the tool set', async () => {
+    // An installed-but-unpinned plugin is discoverable by design — the share
+    // gate is what keeps a visitor from reaching it (`applyShareGateToToolSet`
+    // prunes the discovery map before the operation starts).
+    const installedMcp = {
+      identifier: 'installed-mcp',
+      manifest: {
+        api: [{ description: 'Ping', name: 'ping' }],
+        identifier: 'installed-mcp',
+        meta: {},
+        type: 'mcp',
+      },
+      runtimeType: 'mcp',
+    };
+    mockPluginQuery.mockResolvedValue([installedMcp]);
+
+    const visitorTurn = (toolGrants: { identifier: string }[]) =>
+      service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+        shareGate: {
+          agentId: 'agent-1',
+          shareConfig: { toolGrants },
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      });
+
+    await visitorTurn([{ identifier: 'granted-plugin' }]);
+
+    expect(
+      mockCreateOperation.mock.calls[0][0].toolSet.manifestMap['installed-mcp'],
+    ).toBeUndefined();
+
+    // Granted → the visitor's run keeps it, so the prune above is the grant
+    // check and not an accidental blanket drop.
+    vi.clearAllMocks();
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-3',
+      operationId: 'op-789',
+      success: true,
+    });
+    mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
+    mockPluginQuery.mockResolvedValue([installedMcp]);
+
+    await visitorTurn([{ identifier: 'granted-plugin' }, { identifier: 'installed-mcp' }]);
+
+    expect(mockCreateOperation.mock.calls[0][0].toolSet.manifestMap['installed-mcp']).toBeDefined();
   });
 });

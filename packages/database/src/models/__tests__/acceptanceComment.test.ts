@@ -147,9 +147,18 @@ describe('AcceptanceCommentModel', () => {
 
     it('keeps the product page and metadata on a thread root, never on a reply', async () => {
       const source = {
-        kind: 'product-page' as const,
-        selector: '#run-status',
+        intent: 'comment' as const,
+        scroll: { x: 0, y: 0 },
+        targets: [
+          {
+            label: 'Status',
+            rect: { height: 20, width: 80, x: 0, y: 0 },
+            selector: '#run-status',
+          },
+        ],
         url: 'https://product.example.com/experiments',
+        v: 1 as const,
+        viewport: { dpr: 1, height: 800, width: 1280 },
       };
       const { comment: root } = await model.create({
         acceptanceId,

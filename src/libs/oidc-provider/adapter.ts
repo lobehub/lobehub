@@ -344,6 +344,14 @@ class OIDCAdapter {
           log('[Client] Client %s is disabled, treating as not found', id);
           return undefined;
         }
+        // A web app's secret is issued on demand, not at creation. Until the owner
+        // generates one, a secret-authenticated client cannot authenticate, so it
+        // is as unusable as a disabled one — and passing it on would make
+        // oidc-provider reject the metadata as a server error.
+        if (model.tokenEndpointAuthMethod?.startsWith('client_secret') && !model.clientSecret) {
+          log('[Client] Client %s has no secret issued yet, treating as not found', id);
+          return undefined;
+        }
         log('[Client] Converting client record to expected format');
         const clientMetadata: Record<string, any> = {
           application_type: model.applicationType,

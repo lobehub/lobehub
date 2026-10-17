@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from '../index';
 
@@ -185,6 +185,61 @@ describe('MCPClient', () => {
       expect(() => new MCPClient(connection as any)).toThrow(
         'Unsupported MCP connection type: invalid',
       );
+    });
+  });
+
+  // Session expiration handling (remote MCP server restarted → stale session id)
+  describe('Session expiration', () => {
+    const sessionError = new Error(
+      'Error POSTing to endpoint (HTTP 400): Bad Request: No valid session ID provided',
+    );
+
+    const buildClient = (mcp: Record<string, any>) => {
+      const client = new MCPClient({
+        name: 'HTTP Test Connection',
+        type: 'http',
+        url: 'https://example.com/mcp',
+      });
+      // Replace the underlying SDK client with a stub that simulates an expired session
+      (client as any).mcp = mcp;
+      return client;
+    };
+
+    it('callTool should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ callTool: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.callTool('echo', {})).rejects.toThrow('NoValidSessionId');
+    });
+
+    it('callTool should rethrow non-session errors untouched', async () => {
+      const otherError = new Error('boom');
+      const client = buildClient({ callTool: vi.fn().mockRejectedValue(otherError) });
+
+      await expect(client.callTool('echo', {})).rejects.toBe(otherError);
+    });
+
+    it('listTools should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ listTools: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.listTools()).rejects.toThrow('NoValidSessionId');
+    });
+
+    it('listTools should return [] for non-session errors', async () => {
+      const client = buildClient({ listTools: vi.fn().mockRejectedValue(new Error('boom')) });
+
+      await expect(client.listTools()).resolves.toEqual([]);
+    });
+
+    it('listResources should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ listResources: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.listResources()).rejects.toThrow('NoValidSessionId');
+    });
+
+    it('listPrompts should normalize an expired-session error into NoValidSessionId', async () => {
+      const client = buildClient({ listPrompts: vi.fn().mockRejectedValue(sessionError) });
+
+      await expect(client.listPrompts()).rejects.toThrow('NoValidSessionId');
     });
   });
 });

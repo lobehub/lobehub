@@ -1,19 +1,16 @@
-import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
-import { copyToClipboard, Flexbox } from '@lobehub/ui';
-import { Button, Switch, toast } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
-import { CopyIcon } from 'lucide-react';
+import { formatSize } from '@lobechat/utils/format';
+import { Button, copyToClipboard, toast } from '@lobehub/ui';
+import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsMobile } from '@/hooks/useIsMobile';
-
+import ExportLayout from '../components/ExportLayout';
 import { useShareData } from '../ShareDataProvider';
-import { styles } from '../style';
 import { useExportMessages } from '../useExportMessages';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
+import TextOptions from './TextOptions';
 import { type FieldType } from './type';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
@@ -25,42 +22,7 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 
 const ShareText = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
-  const form = useForm({
-    initialValues: DEFAULT_FIELD_VALUE,
-    onValuesChange: (_, v) => setFieldValue(v),
-  });
   const { t } = useTranslation(['chat', 'common']);
-
-  const settings: FormFieldProps<FieldType>[] = [
-    {
-      children: <Switch />,
-      label: t('shareModal.withSystemRole'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withSystemRole',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.withRole'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withRole',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.includeUser'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'includeUser',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.includeTool'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'includeTool',
-    },
-  ];
 
   const { displayMessages, systemRole, title } = useShareData();
   // Markdown serializes each tool's `content` too, so the same omitted rows
@@ -77,52 +39,42 @@ const ShareText = memo(() => {
     title,
   }).replaceAll('\n\n\n', '\n');
 
-  const isMobile = useIsMobile();
-
-  const button = (
-    <>
-      <Button
-        block
-        disabled={isHydrating || isIncomplete}
-        icon={CopyIcon}
-        loading={isHydrating}
-        size={isMobile ? undefined : 'large'}
-        type={'primary'}
-        onClick={async () => {
-          await copyToClipboard(content);
-          toast.success(t('copySuccess', { ns: 'common' }));
-        }}
-      >
-        {t('copy', { ns: 'common' })}
-      </Button>
-      <Button
-        block
-        disabled={isHydrating || isIncomplete}
-        size={isMobile ? undefined : 'large'}
-        onClick={() => {
-          exportFile(content, `${title}.md`);
-        }}
-      >
-        {t('shareModal.downloadFile')}
-      </Button>
-    </>
-  );
+  const disabled = isHydrating || isIncomplete;
 
   return (
-    <>
-      <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-        <Preview content={content} />
-        <Flexbox className={styles.sidebar} gap={12}>
-          <Form form={form} items={settings} itemsType={'flat'} {...FORM_STYLE} />
-          {!isMobile && button}
-        </Flexbox>
-      </Flexbox>
-      {isMobile && (
-        <Flexbox horizontal className={styles.footer} gap={8}>
-          {button}
-        </Flexbox>
-      )}
-    </>
+    <ExportLayout
+      toolbar={<TextOptions value={fieldValue} onChange={setFieldValue} />}
+      actions={
+        <>
+          <Button
+            disabled={disabled}
+            icon={CopyIcon}
+            loading={isHydrating}
+            onClick={async () => {
+              await copyToClipboard(content);
+              toast.success(t('copySuccess', { ns: 'common' }));
+            }}
+          >
+            {t('shareModal.actions.copyText')}
+          </Button>
+          <Button
+            disabled={disabled}
+            icon={DownloadIcon}
+            type={'primary'}
+            onClick={() => exportFile(content, `${title}.md`)}
+          >
+            {t('shareModal.actions.download')}
+          </Button>
+        </>
+      }
+      meta={[
+        t('shareModal.meta.messages', { count: displayMessages.length }),
+        formatSize(new Blob([content]).size),
+        '.md',
+      ].join(' · ')}
+    >
+      <Preview content={content} />
+    </ExportLayout>
   );
 });
 

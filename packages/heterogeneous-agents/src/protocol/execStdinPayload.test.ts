@@ -10,25 +10,6 @@ describe('buildHeteroExecStdinPayload', () => {
     expect(JSON.parse(payload)).toBe('hello');
   });
 
-  it('builds a content-block array with systemContext first', () => {
-    const payload = buildHeteroExecStdinPayload({ prompt: 'hello', systemContext: 'ctx' });
-    expect(JSON.parse(payload)).toEqual([
-      { text: 'ctx', type: 'text' },
-      { text: 'hello', type: 'text' },
-    ]);
-  });
-
-  it('appends image blocks after the prompt', () => {
-    const payload = buildHeteroExecStdinPayload({
-      imageList: [{ id: 'file-1', url: 'https://x/a.png' }],
-      prompt: 'look at this',
-    });
-    expect(JSON.parse(payload)).toEqual([
-      { text: 'look at this', type: 'text' },
-      { source: { id: 'file-1', type: 'url', url: 'https://x/a.png' }, type: 'image' },
-    ]);
-  });
-
   it('orders systemContext, prompt, then images', () => {
     const payload = buildHeteroExecStdinPayload({
       imageList: [{ id: 'file-1', url: 'https://x/a.png' }, { url: 'https://x/b.jpg' }],

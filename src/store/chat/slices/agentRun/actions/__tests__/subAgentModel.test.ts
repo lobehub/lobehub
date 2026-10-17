@@ -1,6 +1,5 @@
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
-  DEFAULT_SUB_AGENT_MODEL,
   getSubAgentChatConfigOverride,
   resolveSubAgentChatConfig,
   resolveSubAgentModel,
@@ -52,11 +51,11 @@ describe('sub-agent model resolution', () => {
   it('runs a spawned sub-agent on the model the spawn site resolved', () => {
     const { agentConfig } = createAgentState({
       isSubAgent: true,
-      modelOverride: { model: DEFAULT_SUB_AGENT_MODEL, provider: 'deepseek' },
+      modelOverride: { model: DEFAULT_MODEL, provider: 'deepseek' },
     });
 
     expect(agentConfig.agentConfig).toMatchObject({
-      model: DEFAULT_SUB_AGENT_MODEL,
+      model: DEFAULT_MODEL,
       provider: 'deepseek',
     });
   });
@@ -94,7 +93,7 @@ describe('resolveSubAgentModel', () => {
 
   it('falls back to the global default when no override and no parent model exist', () => {
     expect(resolveSubAgentModel(undefined)).toEqual({
-      model: DEFAULT_SUB_AGENT_MODEL,
+      model: DEFAULT_MODEL,
       provider: DEFAULT_PROVIDER,
     });
   });

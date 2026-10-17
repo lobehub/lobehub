@@ -37,6 +37,7 @@ const createAcpProcess = ({
   initializeResult,
   loadError,
   permissionRequest = false,
+  promptAutoComplete = true,
 }: {
   configOptions?: Record<string, unknown>[];
   configOptionsByModel?: Record<string, Record<string, unknown>[]>;
@@ -44,6 +45,7 @@ const createAcpProcess = ({
   initializeResult?: Record<string, unknown>;
   loadError?: { code: number; data?: unknown; message: string };
   permissionRequest?: boolean;
+  promptAutoComplete?: boolean;
 } = {}) => {
   const child = new EventEmitter() as ChildProcess;
   const stdout = new PassThrough();
@@ -217,7 +219,7 @@ const createAcpProcess = ({
                     },
                   },
                 });
-              } else {
+              } else if (promptAutoComplete) {
                 send({ id: message.id, result: { stopReason: 'end_turn' } });
               }
               return;
@@ -264,10 +266,6 @@ afterEach(() => {
 
 describe('Devin ACP helpers', () => {
   it('places the ACP subcommand before provider arguments', () => {
-    expect(buildDevinAcpArgs(['--model', 'sonnet'])).toEqual(['acp', '--model', 'sonnet']);
-  });
-
-  it('does not inject a default permission mode', () => {
     expect(buildDevinAcpArgs(['--model', 'sonnet'])).toEqual(['acp', '--model', 'sonnet']);
   });
 
@@ -751,5 +749,31 @@ describe('DevinAcpSession', () => {
     );
 
     expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
+  });
+
+  it('reports a host-interrupted run as interrupted, not a transport error', async () => {
+    const fake = createAcpProcess({ promptAutoComplete: false });
+    spawnMock.mockReturnValue(fake.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const events: AgentStreamEvent[] = [];
+    const options = createSessionOptions({ onEvents: (batch) => events.push(...batch) });
+    const session = new DevinAcpSession(options);
+    const run = session.run();
+    await vi.waitFor(() => {
+      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+    });
+
+    session.interrupt();
+    fake.child.emit('close', null, 'SIGINT');
+    await run;
+
+    expect(fake.requests.some(({ method }) => method === 'session/cancel')).toBe(true);
+    expect(events.some(({ type }) => type === 'error')).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ reason: 'interrupted', stopReason: 'cancelled' }),
+        type: 'agent_runtime_end',
+      }),
+    );
   });
 });

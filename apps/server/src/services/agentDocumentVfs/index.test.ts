@@ -336,7 +336,7 @@ ${'lossless tool result\n'.repeat(100)}
       metadata: null,
       updatedAt: new Date('2024-01-02T00:00:00.000Z'),
     });
-    const createSnapshotSpy = vi.spyOn(headlessEditor, 'createMarkdownEditorSnapshot');
+    const createSnapshotSpy = vi.spyOn(headlessEditor, 'createAgentMarkdownSnapshot');
     const service = new AgentDocumentVfsService(db, userId);
     const node = await service.write(
       './archive.txt',
@@ -372,7 +372,7 @@ ${'lossless tool result\n'.repeat(100)}
     mockAgentDocumentModel.update.mockImplementation(async (_id, params) => {
       Object.assign(existing, params);
     });
-    const createSnapshotSpy = vi.spyOn(headlessEditor, 'createMarkdownEditorSnapshot');
+    const createSnapshotSpy = vi.spyOn(headlessEditor, 'createAgentMarkdownSnapshot');
     const service = new AgentDocumentVfsService(db, userId);
 
     await service.write(

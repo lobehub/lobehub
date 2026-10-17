@@ -5,18 +5,23 @@ import type { DeviceEnroller, DeviceListItem, DeviceScope } from '@lobechat/type
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useCanEditDevice } from './useCanEditDevice';
+import { useCanEditDevice, useCanOperateDevice } from './useCanEditDevice';
 
 // Mocks live inside `hoisted` so the `vi.mock` factories below can reach
 // them — vi.mock is hoisted above imports, and only `vi.hoisted` survives that.
 const mocks = vi.hoisted(() => {
   const userState = { userId: 'current-user-id' as string | undefined };
   const isOwner = { current: false };
-  return { isOwner, userState };
+  const isViewer = { current: false };
+  return { isOwner, isViewer, userState };
 });
 
 vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
   useIsWorkspaceOwner: () => mocks.isOwner.current,
+}));
+
+vi.mock('@/business/client/hooks/useIsWorkspaceViewer', () => ({
+  useIsWorkspaceViewer: () => mocks.isViewer.current,
 }));
 
 vi.mock('@/store/user', () => ({
@@ -38,7 +43,9 @@ const buildEnroller = (userId: string): DeviceEnroller => ({
 
 const buildDevice = (overrides: {
   enroller?: DeviceEnroller | null;
+  registered?: boolean;
   scope: DeviceScope;
+  visibility?: 'private' | 'public';
 }): DeviceListItem => ({
   channels: [],
   defaultCwd: null,
@@ -50,9 +57,9 @@ const buildDevice = (overrides: {
   lastSeen: new Date(0).toISOString(),
   online: false,
   platform: null,
-  registered: true,
+  registered: overrides.registered ?? true,
   scope: overrides.scope,
-  visibility: overrides.scope === 'workspace' ? 'public' : null,
+  visibility: overrides.scope === 'workspace' ? (overrides.visibility ?? 'public') : null,
   workingDirs: [],
 });
 
@@ -130,5 +137,66 @@ describe('useCanEditDevice', () => {
         ),
       ).toBe(false);
     });
+  });
+});
+
+describe('useCanOperateDevice', () => {
+  beforeEach(() => {
+    mocks.userState.userId = 'current-user-id';
+    mocks.isOwner.current = false;
+    mocks.isViewer.current = false;
+  });
+
+  it('keeps a read-only viewer off a public workspace device', () => {
+    mocks.isViewer.current = true;
+    const { result } = renderHook(() => useCanOperateDevice());
+    expect(
+      result.current(
+        buildDevice({ enroller: buildEnroller('other-member-id'), scope: 'workspace' }),
+      ),
+    ).toBe(false);
+  });
+
+  it('lets any member operate a public workspace device', () => {
+    const { result } = renderHook(() => useCanOperateDevice());
+    expect(
+      result.current(
+        buildDevice({ enroller: buildEnroller('other-member-id'), scope: 'workspace' }),
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps another member’s private device off-limits', () => {
+    const { result } = renderHook(() => useCanOperateDevice());
+    expect(
+      result.current(
+        buildDevice({
+          enroller: buildEnroller('other-member-id'),
+          scope: 'workspace',
+          visibility: 'private',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('is fail-closed on an unregistered public row', () => {
+    const { result } = renderHook(() => useCanOperateDevice());
+    expect(
+      result.current(buildDevice({ enroller: null, registered: false, scope: 'workspace' })),
+    ).toBe(false);
+  });
+
+  it('falls back to edit rights for the enroller and personal devices', () => {
+    const { result } = renderHook(() => useCanOperateDevice());
+    expect(result.current(buildDevice({ scope: 'personal' }))).toBe(true);
+    expect(
+      result.current(
+        buildDevice({
+          enroller: buildEnroller('current-user-id'),
+          scope: 'workspace',
+          visibility: 'private',
+        }),
+      ),
+    ).toBe(true);
   });
 });

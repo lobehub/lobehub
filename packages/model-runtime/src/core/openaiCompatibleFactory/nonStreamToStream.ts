@@ -131,10 +131,11 @@ export const transformResponseAPIToStream = (data: OpenAI.Responses.Response) =>
               break;
             }
             /**
-             * A completed function call already carries its full arguments. The stream parser
+             * A completed tool call already carries its full arguments/input. The stream parser
              * reads them from `output_item.added`, so no argument deltas are needed; dropping
              * this item would turn a tool-call-only response into an empty completion.
              */
+            case 'custom_tool_call':
             case 'function_call': {
               controller.enqueue({
                 item: output,

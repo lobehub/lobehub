@@ -1,6 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast } from '@lobehub/ui';
 import { CopyPlus, EyeOffIcon, PanelTop, Pencil, Trash2, UsersIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +13,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -23,10 +22,7 @@ interface ActionProps {
   toggleEditing: (visible?: boolean) => void;
 }
 
-export const useDropdownMenu = ({
-  pageId,
-  toggleEditing,
-}: ActionProps): (() => MenuProps['items']) => {
+export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['common', 'file']);
 
   const navigate = useWorkspaceAwareNavigate();
@@ -35,10 +31,6 @@ export const useDropdownMenu = ({
   const { allowed: canCreatePage } = usePermission('create_content');
   const { allowed: canEditPage } = usePermission('edit_own_content');
   const addTab = useElectronStore((s) => s.addTab);
-  const removePage = usePageStore((s) => s.removePage);
-  const duplicatePage = usePageStore((s) => s.duplicatePage);
-  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
-  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const document = usePageStore((s) => pageSelectors.getDocumentById(pageId)(s));
   const transferMenuItems = useDocumentTransferMenuItem(pageId, {
     transferLabel: t('pageEditor.menu.move', { ns: 'file' }),
@@ -63,7 +55,7 @@ export const useDropdownMenu = ({
       okText: t('delete'),
       onOk: async () => {
         try {
-          await removePage(pageId);
+          await pageActions.removePage(pageId);
           toast.success(t('pageEditor.deleteSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to delete page:', error);
@@ -72,17 +64,17 @@ export const useDropdownMenu = ({
       },
       title: t('pageEditor.deleteConfirm.title', { ns: 'file' }),
     });
-  }, [canEditPage, pageId, removePage, t]);
+  }, [canEditPage, pageId, t]);
 
   const handleDuplicate = useCallback(async () => {
     if (!canCreatePage) return;
 
     try {
-      await duplicatePage(pageId);
+      await pageActions.duplicatePage(pageId);
     } catch (error) {
       console.error('Failed to duplicate page:', error);
     }
-  }, [canCreatePage, pageId, duplicatePage]);
+  }, [canCreatePage, pageId]);
 
   const handlePublish = useCallback(() => {
     if (!canPublish) return;
@@ -97,7 +89,7 @@ export const useDropdownMenu = ({
       okText: t('continue'),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(pageId);
+          await pageActions.publishPageToWorkspace(pageId);
           toast.success(t('pageList.publishSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to publish page:', error);
@@ -106,7 +98,7 @@ export const useDropdownMenu = ({
       },
       title: t('pageList.publishConfirm.title', { ns: 'file' }),
     });
-  }, [canPublish, pageId, publishPageToWorkspace, t]);
+  }, [canPublish, pageId, t]);
 
   const handleMakePrivate = useCallback(() => {
     if (!canMakePrivate) return;
@@ -117,7 +109,7 @@ export const useDropdownMenu = ({
       okText: t('continue'),
       onOk: async () => {
         try {
-          await setPageVisibility(pageId, 'private');
+          await pageActions.setPageVisibility(pageId, 'private');
           toast.success(t('makePrivate.success'));
         } catch (error) {
           console.error('Failed to make page private:', error);
@@ -126,7 +118,7 @@ export const useDropdownMenu = ({
       },
       title: t('makePrivate.confirm.title'),
     });
-  }, [canMakePrivate, pageId, setPageVisibility, t]);
+  }, [canMakePrivate, pageId, t]);
 
   return useCallback(
     () =>
@@ -197,7 +189,7 @@ export const useDropdownMenu = ({
           label: t('delete'),
           onClick: handleDelete,
         },
-      ].filter(Boolean) as MenuProps['items'],
+      ].filter(Boolean) as DropdownItem[],
     [
       t,
       toggleEditing,

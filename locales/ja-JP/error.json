@@ -151,6 +151,7 @@
   "unknownError.sharedTitle": "この回答を生成できませんでした",
   "unknownError.title": "おっと、リクエストが休憩しました",
   "unknownError.traceIdLabel": "トレースID:",
+  "unknownError.troubleshoot": "トラブルシューティング",
   "unlock.addProxyUrl": "OpenAI プロキシアドレスを追加（オプション）",
   "unlock.apiKey.description": "{{name}} API キーを入力すると、会話を開始できます",
   "unlock.apiKey.imageGenerationDescription": "{{name}} API キーを入力すると、生成を開始できます",

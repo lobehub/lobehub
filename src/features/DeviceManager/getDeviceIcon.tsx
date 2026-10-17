@@ -20,3 +20,18 @@ export const getDeviceIcon = (platform: string | null | undefined, size = 18): R
     }
   }
 };
+
+const PLATFORM_LABEL: Record<string, string> = {
+  darwin: 'macOS',
+  linux: 'Linux',
+  win32: 'Windows',
+};
+
+/** "macOS · arm64"-style OS line for a device; undefined when neither part is known. */
+export const getPlatformLabel = (
+  platform: string | null | undefined,
+  architecture?: string | null,
+): string | undefined => {
+  const os = platform ? (PLATFORM_LABEL[platform] ?? platform) : undefined;
+  return [os, architecture].filter(Boolean).join(' · ') || undefined;
+};

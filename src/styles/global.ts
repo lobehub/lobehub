@@ -1,11 +1,15 @@
-import { CLASSNAMES } from '@lobehub/ui';
-import type { Theme } from 'antd-style';
-import { css } from 'antd-style';
+import type { LobeTheme } from '@lobehub/ui';
+import { CLASSNAMES, css } from '@lobehub/ui';
+
+import {
+  MAC_PANEL_BG_VAR,
+  MAC_WINDOW_FULLSCREEN_SELECTOR,
+} from '@/features/Electron/system/macWindowFullscreen';
 
 // fix ios input keyboard
 // overflow: hidden;
 // ref: https://zhuanlan.zhihu.com/p/113855026
-const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
+const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => css`
   html,
   body,
   #__next {
@@ -71,6 +75,14 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: Theme }) => css`
 
   html.desktop[data-theme='light'] body {
     background-color: color-mix(in srgb, ${token.colorBgLayout} 70%, transparent);
+  }
+
+  ${MAC_WINDOW_FULLSCREEN_SELECTOR} {
+    ${MAC_PANEL_BG_VAR}: ${token.colorBgLayout};
+  }
+
+  ${MAC_WINDOW_FULLSCREEN_SELECTOR} body {
+    background-color: ${token.colorBgLayout};
   }
 
   button {

@@ -710,27 +710,55 @@ describe('tabPages actions', () => {
       expect(urls(result.current.tabs)).toEqual(['/b', '/a', '/c']);
     });
 
-    it('refuses a drag that would interleave pinned and unpinned tabs', () => {
+    it('reorders within the unpinned run', () => {
       const result = seed();
 
       act(() => {
         result.current.pinTab('/c');
       });
       act(() => {
-        result.current.reorderTabs(2, 0);
+        result.current.moveTab('/b', 1, false);
       });
 
-      expect(urls(result.current.tabs)).toEqual(['/c', '/a', '/b']);
+      expect(urls(result.current.tabs)).toEqual(['/c', '/b', '/a']);
     });
 
-    it('still reorders within the unpinned run', () => {
+    it('pins a tab dropped into the pinned run at the dropped slot', () => {
       const result = seed();
 
       act(() => {
         result.current.pinTab('/c');
       });
       act(() => {
-        result.current.reorderTabs(2, 1);
+        result.current.moveTab('/b', 0, true);
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/b', '/c', '/a']);
+      expect(result.current.tabs[0].pinned).toBe(true);
+    });
+
+    it('unpins a tab dragged out of the pinned run', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+      act(() => {
+        result.current.moveTab('/c', 2, false);
+      });
+
+      expect(urls(result.current.tabs)).toEqual(['/a', '/b', '/c']);
+      expect(result.current.tabs[2].pinned).toBe(false);
+    });
+
+    it('clamps an index that would interleave pinned and unpinned tabs', () => {
+      const result = seed();
+
+      act(() => {
+        result.current.pinTab('/c');
+      });
+      act(() => {
+        result.current.moveTab('/b', 0, false);
       });
 
       expect(urls(result.current.tabs)).toEqual(['/c', '/b', '/a']);

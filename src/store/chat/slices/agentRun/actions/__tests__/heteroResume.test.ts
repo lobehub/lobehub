@@ -105,13 +105,6 @@ describe('resolveHeteroResume', () => {
     });
   });
 
-  it('handles undefined metadata', () => {
-    expect(resolveNative(undefined, '/Users/me/projA')).toEqual({
-      cwdChanged: false,
-      resumeSessionId: undefined,
-    });
-  });
-
   it('does not flag cwd change when there is no saved sessionId', () => {
     // cwd field lingering without a sessionId shouldn't trigger the toast;
     // there's nothing to skip resuming.

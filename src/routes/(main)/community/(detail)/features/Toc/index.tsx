@@ -1,7 +1,7 @@
 'use client';
 
-import { Anchor, type AnchorProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx, responsive } from 'antd-style';
+import { Anchor, type AnchorProps } from '@lobehub/ui';
+import { createStaticStyles, cx, responsive } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';

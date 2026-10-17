@@ -29,7 +29,18 @@ vi.mock('@/libs/trpc/client', () => ({
           success: false,
         }),
       },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+    },
+    shareChat: {
+      resolveInterventionBySource: {
+        mutate: vi.fn().mockResolvedValue({
+          contractVersion: 2,
+          status: 'unavailable',
+          success: false,
+        }),
+      },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
   },
 }));
@@ -61,6 +72,16 @@ beforeEach(() => {
       status: 'unavailable',
       success: false,
     });
+  vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate)
+    .mockReset()
+    .mockResolvedValue({
+      contractVersion: 2,
+      status: 'unavailable',
+      success: false,
+    });
+  vi.mocked(lambdaClient.shareChat.stopPendingApproval.mutate)
+    .mockReset()
+    .mockResolvedValue({ operationId: 'operation-share', success: true } as any);
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
     questionSubmissions: {},
@@ -501,6 +522,39 @@ describe('ConversationControl actions', () => {
   });
 
   describe('switchMessageBranch', () => {
+    // ROOT CAUSE:
+    // An unclaimed retry grant could outlive its visible branch. Selecting old
+    // history must revoke that grant before a newly mounted error card sees it.
+    /** @example Branch selection revokes only the selected conversation's grants. */
+    it('revokes unclaimed auto retries before displaying another branch', async () => {
+      const context = { agentId: 'retry-agent', topicId: 'retry-topic', threadId: null };
+      const otherContext = { agentId: 'retry-agent', topicId: 'other-topic', threadId: null };
+      const current = useChatStore.getState().startOperation({
+        context,
+        metadata: { heteroAutoRetryAvailable: true },
+        type: 'execServerAgentRuntime',
+      });
+      const unrelated = useChatStore.getState().startOperation({
+        context: otherContext,
+        metadata: { heteroAutoRetryAvailable: true },
+        type: 'execServerAgentRuntime',
+      });
+      vi.spyOn(useChatStore.getState(), 'optimisticUpdateMessageMetadata').mockImplementation(
+        async () => {
+          /** @example Revocation happens before the asynchronous branch replacement. */
+          expect(
+            useChatStore.getState().operations[current.operationId].metadata
+              .heteroAutoRetryAvailable,
+          ).toBe(false);
+        },
+      );
+      await useChatStore.getState().switchMessageBranch('parent-user', 1, { context });
+      /** @example Other topics retain their live recovery intent. */
+      expect(
+        useChatStore.getState().operations[unrelated.operationId].metadata.heteroAutoRetryAvailable,
+      ).toBe(true);
+    });
+
     it('should switch to a different message branch', async () => {
       const { result } = renderHook(() => useChatStore());
       const messageId = TEST_IDS.MESSAGE_ID;
@@ -1108,7 +1162,7 @@ describe('ConversationControl actions', () => {
           batchId: 'batch-durable',
           operationId: 'operation-durable',
           resolutionRequestId: expect.any(String),
-          streamFeatures: ['member_runtime_end'],
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
         });
         expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
@@ -1593,6 +1647,116 @@ describe('ConversationControl actions', () => {
     });
   });
 
+  describe('share visitor', () => {
+    const agentId = 'shared-agent';
+    const topicId = 'visitor-topic';
+    const context: ConversationContext = {
+      agentId,
+      agentShareId: 'share-1',
+      scope: 'main',
+      topicId,
+    };
+    const chatKey = messageMapKey(context);
+
+    const seedShareCard = () => {
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-share',
+        pluginIntervention: {
+          batchId: 'batch-share',
+          operationId: 'operation-share',
+          status: 'pending',
+        },
+        role: 'tool',
+        tool_call_id: 'call-share',
+      } as any);
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messagesMap: { [chatKey]: [toolMessage] },
+        });
+      });
+    };
+
+    it('answers through the share mirror and resumes on the share gateway', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedShareCard();
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+      const updateTopicStatusSpy = vi.mocked(result.current.updateTopicStatus);
+      updateTopicStatusSpy.mockClear();
+
+      await act(async () => {
+        await result.current.approveToolCalling('tool-msg-share', '', context);
+      });
+
+      expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: { scope: 'once', type: 'approve_tool' },
+          shareId: 'share-1',
+          targets: [{ toolCallId: 'call-share', toolMessageId: 'tool-msg-share' }],
+          topicId,
+        }),
+      );
+      expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).not.toHaveBeenCalled();
+      // No durable store: the legacy resume goes out on the share gateway.
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          resumeApproval: expect.objectContaining({ decision: 'approved' }),
+        }),
+      );
+      // The visitor's topic belongs to the creator: no owner-scoped write.
+      expect(updateTopicStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['durable store', { contractVersion: 2, state: 'claimed', success: true }],
+      ['legacy resume', { contractVersion: 2, status: 'unavailable', success: false }],
+    ])(
+      'keeps a visitor\'s "don\'t ask again" in their own allow list (%s)',
+      async (_label, resolution) => {
+        const { result } = renderHook(() => useChatStore());
+        seedShareCard();
+        vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate).mockResolvedValue(
+          resolution as any,
+        );
+        vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+        const addToolToAllowList = vi.fn().mockResolvedValue(undefined);
+        useUserStore.setState({ addToolToAllowList });
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-share', '', context, {
+            rememberToolKey: 'lobe-cloud-sandbox/runCommand',
+          });
+        });
+
+        // A server-side `remember` would write the creator's allow list.
+        expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ action: { scope: 'once', type: 'approve_tool' } }),
+        );
+        expect(addToolToAllowList).toHaveBeenCalledWith('lobe-cloud-sandbox/runCommand');
+      },
+    );
+
+    it('stops a parked share run through the share mirror', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedShareCard();
+
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-share'], context);
+      });
+
+      expect(lambdaClient.shareChat.stopPendingApproval.mutate).toHaveBeenCalledWith({
+        batchId: 'batch-share',
+        operationId: 'operation-share',
+        shareId: 'share-1',
+        toolMessageIds: ['tool-msg-share'],
+        topicId,
+      });
+    });
+  });
+
   describe('durable terminal source lifecycle', () => {
     const agentId = 'server-agent';
     const topicId = 'server-topic';
@@ -1665,6 +1829,7 @@ describe('ConversationControl actions', () => {
     it('retires the paused operation only when Stop wins the durable claim', async () => {
       const { result } = renderHook(() => useChatStore());
       const pausedOperationId = seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
         .spyOn(result.current, 'executeGatewayAgent')
         .mockResolvedValue({} as any);
@@ -3133,7 +3298,7 @@ describe('ConversationControl actions', () => {
           batchId: `batch-${interactionKind}`,
           operationId: `server-operation-${interactionKind}`,
           resolutionRequestId: expect.any(String),
-          streamFeatures: ['member_runtime_end'],
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
         });
         const resolvingIntervention = {
@@ -3413,6 +3578,73 @@ describe('ConversationControl actions', () => {
         toolCallId: 'call-remote-fallback',
       });
     });
+
+    it.each(['submit', 'cancel'] as const)(
+      'publishes a gateway %s to the server operation the producer polls',
+      async (actionType) => {
+        // ROOT CAUSE:
+        // The legacy submit published to the gateway run's client-local op id,
+        // whose stream no producer reads. The device CLI long-polls the server
+        // op id, so the answer never arrived and the request timed out.
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'remote-agent';
+        const topicId = 'remote-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const assistantMessage = createMockMessage({
+          id: 'assistant-msg-gateway',
+          role: 'assistant',
+        });
+        // OSS self-host persists no durable card locator, so the legacy submit runs.
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-gateway',
+          parentId: assistantMessage.id,
+          pluginIntervention: { status: 'pending' },
+          pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+          role: 'tool',
+          tool_call_id: 'call-gateway',
+        } as any);
+        const clientOperationId = 'op_client_local';
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+            messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          });
+          result.current.startOperation({
+            context: { agentId, threadId: null, topicId },
+            metadata: { serverOperationId: 'op_server_run' },
+            operationId: clientOperationId,
+            type: 'execServerAgentRuntime',
+          });
+          useChatStore.setState({
+            messageOperationMap: { [assistantMessage.id]: clientOperationId },
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+          messages: [],
+          success: true,
+        });
+        const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+
+        await act(async () => {
+          await result.current.submitHeteroIntervention(
+            toolMessage.id,
+            actionType,
+            actionType === 'submit' ? { Question: 'Answer' } : undefined,
+          );
+        });
+
+        expect(legacyRemoteSubmit).toHaveBeenCalledTimes(1);
+        expect(legacyRemoteSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ operationId: 'op_server_run', toolCallId: 'call-gateway' }),
+        );
+      },
+    );
 
     it('keeps a cold-start durable card unchanged when the source request fails', async () => {
       const { result } = renderHook(() => useChatStore());

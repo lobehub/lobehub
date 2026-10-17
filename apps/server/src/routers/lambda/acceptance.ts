@@ -31,8 +31,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { FileService } from '@/server/services/file';
-import { GoalBriefService } from '@/server/services/goal/goalBriefs';
 import { parseChangeRequestUrl } from '@/server/services/scm/changeRequestUrl';
 import {
   AcceptanceService,
@@ -56,12 +56,19 @@ import {
 } from '@/server/services/verify/acceptancePullRequests';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { previewUrlSchema, recordPreviewUrl } from './_helpers/acceptancePreviewUrl';
 import {
   type AcceptanceRepairDispatch,
   dispatchAcceptanceRepair,
 } from './_helpers/acceptanceRepairDispatch';
+import {
+  acceptanceStatusOverrideSchema,
+  applyAcceptanceStatus,
+  settleGoalSignOff,
+} from './_helpers/acceptanceStatus';
 import { canManageAcceptance, filterManageableAcceptances } from './_helpers/acceptanceWriteScope';
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import * as goalGate from './_helpers/goalGateAcceptance';
 
 /**
  * A reviewer's circled region. On video evidence it also carries the frame
@@ -243,76 +250,6 @@ const ACCEPTANCE_BATCH_LIMIT = 200;
 const PURGE_BATCH_CONCURRENCY = 4;
 const PURGE_PREVIEW_LIMIT = 20;
 
-const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed', 'rejected']);
-
-/**
- * A decided acceptance has nothing left to sign: whichever control decided it,
- * the inbox and the island stop asking for the goal sign-off it carried.
- */
-const settleGoalSignOff = (
-  db: LobeChatDatabase,
-  acceptance: AcceptanceItem,
-  action: string,
-  comment?: string,
-) =>
-  new GoalBriefService(db, acceptance.userId, acceptance.workspaceId ?? undefined).settleSignOff(
-    acceptance.id,
-    action,
-    comment,
-  );
-
-/**
- * Apply one user-facing lifecycle override to an already-resolved,
- * already-authorized aggregate. Shared by the single-row menu action and the
- * list's multi-select sweep, so both obey exactly the same transition rules.
- *
- * accept / reject go through the SERVICE, never a bare status write: the
- * service applies `requireDecidableAcceptance` (a premature `accepted` is
- * sticky in recomputeStatus and could never be corrected by a later verifier
- * result) and stamps the decision on the current round. Reopen is only
- * meaningful for an already-decided aggregate — a still-running round must
- * not be forced back to a decision-pending state by hand.
- */
-const applyAcceptanceStatus = async (
-  db: LobeChatDatabase,
-  service: AcceptanceService,
-  acceptance: AcceptanceItem,
-  status: z.infer<typeof acceptanceStatusOverrideSchema>,
-) => {
-  if (status === 'accepted') {
-    await service.accept(acceptance.id);
-    await settleGoalSignOff(db, acceptance, 'signOff');
-    return;
-  }
-
-  if (status === 'closed') {
-    await service.acceptanceModel.updateStatus(acceptance.id, 'closed');
-    await settleGoalSignOff(db, acceptance, 'closed');
-    return;
-  }
-
-  if (status === 'rejected') {
-    await service.reject(acceptance.id, 'Rejected from the acceptance list — needs another round.');
-    await settleGoalSignOff(db, acceptance, 'requestChanges');
-    return;
-  }
-
-  // Reopen (→ delivered): only a decided aggregate can be re-opened; a live
-  // round recomputes its own status and must not be clobbered.
-  if (
-    acceptance.status !== 'accepted' &&
-    acceptance.status !== 'closed' &&
-    acceptance.status !== 'rejected'
-  ) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: `Only a decided acceptance can be reopened (status: ${acceptance.status})`,
-    });
-  }
-
-  await service.acceptanceModel.updateStatus(acceptance.id, 'delivered');
-};
-
 export const acceptanceRouter = router({
   regroupChecks: acceptanceWriteProcedure
     .input(
@@ -437,11 +374,18 @@ export const acceptanceRouter = router({
    * means the user knowingly takes it with its exceptions).
    */
   accept: acceptanceWriteProcedure
-    .input(z.object({ comment: z.string().max(2000).optional(), id: z.string() }))
+    .input(goalGate.gateDecisionInput.extend({ comment: z.string().max(2000).optional() }))
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      const accepted = await service.accept(acceptance.id, input.comment);
+      const accepted = await goalGate.withGoalGateAnswer(
+        ctx.serverDB,
+        service,
+        acceptance,
+        'release',
+        { comment: input.comment, roundId: input.roundId },
+        () => service.accept(acceptance.id, input.comment),
+      );
       // Signed where it lives — the inbox stops asking for the same sign-off.
       await settleGoalSignOff(ctx.serverDB, acceptance, 'signOff', input.comment);
       return accepted;
@@ -1032,6 +976,8 @@ export const acceptanceRouter = router({
       // owns the rows that move, so its scope is the one the write runs in.
       const { acceptance: source, service } = await resolveAcceptanceForWrite(ctx, input.sourceId);
       const { acceptance: target } = await resolveAcceptanceForWrite(ctx, input.targetId);
+      await goalGate.assertNotHoldingRelease(ctx.serverDB, source);
+      await goalGate.assertNotHoldingRelease(ctx.serverDB, target);
 
       try {
         return await service.merge(source.id, target.id);
@@ -1336,7 +1282,8 @@ export const acceptanceRouter = router({
           message: `Only a settled acceptance can be sent back (status: ${acceptance.status})`,
         });
       }
-      return service.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+      await service.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+      notifyAcceptance(acceptance.id, 'session', ctx.userId);
     }),
 
   /**
@@ -1350,7 +1297,7 @@ export const acceptanceRouter = router({
    */
   reject: acceptanceWriteProcedure
     .input(
-      z.object({
+      goalGate.gateDecisionInput.extend({
         comment: z.string().trim().max(2000).optional(),
         /**
          * Send the delivery back to the agent that authored it (default). Pass
@@ -1358,7 +1305,6 @@ export const acceptanceRouter = router({
          * prompt over itself.
          */
         dispatch: z.boolean().optional(),
-        id: z.string(),
       }),
     )
     .mutation(
@@ -1368,14 +1314,23 @@ export const acceptanceRouter = router({
       }): Promise<AcceptanceItem & { repairDispatch: AcceptanceRepairDispatch }> => {
         const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-        const rejected = await service.reject(acceptance.id, input.comment || undefined);
+        const comment = input.comment || undefined;
+        const rejected = await goalGate.withGoalGateAnswer(
+          ctx.serverDB,
+          service,
+          acceptance,
+          'revise',
+          { comment, roundId: input.roundId },
+          () => service.reject(acceptance.id, comment),
+        );
         await settleGoalSignOff(
           ctx.serverDB,
           acceptance,
           'requestChanges',
           input.comment || undefined,
         );
-        if (input.dispatch === false) {
+        // A gate's revision is carried out by the goal: its main Agent rewrites the plan.
+        if (input.dispatch === false || acceptance.subjectType === 'goal_gate') {
           return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
         }
 
@@ -1415,6 +1370,20 @@ export const acceptanceRouter = router({
    * project the caller can see — the same set the list already groups by — so
    * a workspace member is not blocked from filing under a teammate's project.
    */
+  setPreviewUrl: acceptanceWriteProcedure
+    .input(z.object({ id: z.string(), url: previewUrlSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      const run = await recordPreviewUrl(ctx.serverDB, acceptance.id, input.url);
+      if (run) notifyAcceptance(acceptance.id, 'session', ctx.userId);
+      if (!run)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'The acceptance has no round to attach a preview to yet',
+        });
+      return { previewUrl: input.url, roundIndex: run.roundIndex };
+    }),
+
   setProject: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
     .mutation(async ({ ctx, input }) => {
@@ -1601,6 +1570,7 @@ export const acceptanceRouter = router({
     .input(z.object({ id: z.string(), purge: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      await goalGate.assertNotHoldingRelease(ctx.serverDB, acceptance);
 
       if (input.purge) {
         await purgeAcceptance(
@@ -1636,6 +1606,7 @@ export const acceptanceRouter = router({
       await mapWithConcurrency([...new Set(input.ids)], PURGE_BATCH_CONCURRENCY, async (id) => {
         try {
           const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
+          await goalGate.assertNotHoldingRelease(ctx.serverDB, acceptance);
           if (input.purge) {
             await purgeAcceptance(
               ctx.serverDB,

@@ -232,6 +232,12 @@ export default {
   'channel.save': 'Save Configuration',
   'channel.setupGuide': 'Setup Guide',
   'channel.saveFailed': 'Failed to save configuration',
+  'channel.saveFailedHint': 'Check the fields above and try again.',
+  'channel.connectFailedHint':
+    'Check the credentials and platform settings, then save again to reconnect.',
+  'channel.testFailedHint': 'Check the credentials and try again.',
+  'channel.resultDetail.show': 'Show details',
+  'channel.resultDetail.hide': 'Hide details',
   'channel.saveFirstWarning': 'Please save configuration first',
   'channel.saved': 'Configuration saved successfully',
   'channel.secretToken': 'Webhook Secret Token',
@@ -514,8 +520,6 @@ export default {
     'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
-  'share.settings.tools.apiNeedsApproval':
-    'This action needs your approval before it runs, and nobody can approve it during a shared run, so it stays off.',
   'share.settings.tools.apiWritesOwnerDocuments':
     'Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.',
   'share.settings.tools.desc':
@@ -538,6 +542,9 @@ export default {
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
+  'share.settings.tools.onDemandDesc':
+    'Not enabled on this Agent. Once granted, the model turns it on in a visitor run only when needed.',
+  'share.settings.tools.showOnDemand': 'Show on-demand tools',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',
   'share.visitor.access.backHome': 'Back to home',
