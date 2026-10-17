@@ -10,6 +10,7 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import { sharedRendererDefine } from '../../plugins/vite/sharedRendererConfig';
+import { stylexPlugin, stylexTokenModules } from '../../plugins/vite/stylex';
 import { shikiCdnUrl } from './app/stubs/shikiCdn';
 import { isShikiSource } from './app/stubs/shikiSource';
 import { reportStubSurfaceGaps } from './app/stubs/surface';
@@ -273,7 +274,7 @@ export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
   environments: {
     client: { define },
-    ssr: { define: ssrDefine },
+    ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
   },
   plugins: [
     process.env.WORKBENCH_CHUNK_REPORT ? ssrChunkReport() : undefined,
@@ -291,11 +292,19 @@ export default defineConfig({
     viteNodeModuleStub(),
     vitePlatformResolve('mobile'),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    // Both environments render StyleX components; the client build emits the CSS.
+    stylexPlugin(),
     reactRouter(),
     ...lobeIconImports(),
   ],
   optimizeDeps: {
-    exclude: ['shiki', '@shikijs/core', '@shikijs/stream', '@shikijs/transformers'],
+    exclude: [
+      'shiki',
+      '@shikijs/core',
+      '@shikijs/stream',
+      '@shikijs/transformers',
+      ...stylexTokenModules,
+    ],
   },
   resolve: {
     tsconfigPaths: true,

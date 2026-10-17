@@ -17,6 +17,19 @@ const getPluginNames = (platform: 'desktop' | 'web') =>
     .map((plugin) => plugin.name);
 
 describe('sharedRendererPlugins', () => {
+  it('compiles app StyleX without taking @lobehub/ui out of pre-bundling', () => {
+    const plugin = sharedRendererPlugins({ platform: 'web' })
+      .flat(Number.POSITIVE_INFINITY)
+      .find(
+        (item): item is { config?: unknown; name: string } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          (item as { name?: string }).name === '@stylexjs/unplugin',
+      );
+
+    expect(plugin?.config).toBeUndefined();
+  });
+
   it('keeps the icon barrel transform out of the Electron renderer', () => {
     expect(getPluginNames('desktop')).not.toContain('lobe-icon-named-export-proxy');
     expect(getPluginNames('web')).toContain('lobe-icon-named-export-proxy');
@@ -53,6 +66,10 @@ describe('lobe-dev-editor-provider', () => {
 describe('sharedOptimizeDeps', () => {
   it('pre-bundles the @lobehub/ui root entrypoint', () => {
     expect(sharedOptimizeDeps.include).toContain('@lobehub/ui');
+    expect(sharedOptimizeDeps.exclude).toEqual([
+      '@lobehub/ui/stylex/cssVar.stylex',
+      '@lobehub/ui/stylex/media.stylex',
+    ]);
   });
 });
 

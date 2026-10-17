@@ -3,6 +3,8 @@ import { dirname, join, resolve } from 'node:path';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
+import { stylexPlugin, stylexTokenModules } from './plugins/vite/stylex';
+
 if (process.env.NODE_ENV === 'production') {
   Reflect.set(process.env, 'NODE_ENV', 'test');
 }
@@ -78,6 +80,7 @@ export default defineConfig({
     include: ['@lobehub/tts'],
   },
   plugins: [
+    stylexPlugin(),
     tsconfigPaths({ projects: ['.', './apps/workbench'] }),
     // Let `.md` imports resolve to their raw text content so Rollup/Vitest
     // doesn't try to parse Markdown as JavaScript.
@@ -230,7 +233,14 @@ export default defineConfig({
           // Vitest itself excludes `react`, which externalizes every `react/*`
           // subpath, but vite only builds a `require()` facade for exact entries,
           // so CJS deps in the chunk (re-resizable) need the jsx runtimes listed.
-          exclude: ['crypto', 'util', 'tty', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+          exclude: [
+            'crypto',
+            'util',
+            'tty',
+            'react/jsx-runtime',
+            'react/jsx-dev-runtime',
+            ...stylexTokenModules,
+          ],
           // Every imported subpath must be prebundled together: a subpath left to
           // vite-node loads a second copy of the library whose MotionProvider /
           // modal-stack contexts don't match the chunk's
