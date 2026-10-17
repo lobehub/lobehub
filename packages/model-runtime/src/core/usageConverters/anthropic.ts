@@ -66,7 +66,13 @@ export const convertAnthropicUsage = (
     }
     case 'message_delta': {
       const usage = mergeDeltaUsage(streamContextUsage, messageEvent.usage);
-      return usage && withUsageCost(usage, payload?.pricing, payload?.pricingOptions);
+      return (
+        usage &&
+        withUsageCost(usage, payload?.pricing, payload?.pricingOptions, {
+          model: payload?.model,
+          provider: payload?.provider,
+        })
+      );
     }
     default: {
       return streamContextUsage;
