@@ -30,11 +30,10 @@ export interface PreprocessResult {
  * got no credentials, fell through to the sandbox's own unauthenticated `lh`
  * install, and failed with "No authentication found" mid-session.
  *
- * This decides whether to inject the shim, never whether to refuse a command:
- * a false positive costs one unused shim while a false negative costs a broken
- * `lh` invocation, so erring permissive is the right trade — e.g.
- * `echo 'use lh'` matches even though the `lh` is quoted text. Refusals use
- * the stricter {@link isDirectLhInvocation}.
+ * No longer decides whether the shim is injected — every command gets it (see
+ * {@link preprocessLhCommand}), because no text match can see an `lh` that a
+ * script FILE calls. It only scopes the workspace lookup callers can skip and
+ * reports `isLhCommand`. Refusals use the stricter {@link isDirectLhInvocation}.
  */
 const LH_COMMAND_PATTERN = /(?<![\w./~-])lh(?![\w./-])/;
 
@@ -129,7 +128,16 @@ const recordJobPids = (dir: string) =>
 const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", String.raw`'\''`)}'`;
 
 /**
- * Detect and prepare `lh` CLI commands for execution in the cloud sandbox.
+ * Prepare a command for execution in the cloud sandbox so any `lh` it reaches
+ * runs as this user.
+ *
+ * Every command gets the shim, not only one whose text mentions `lh`. A script
+ * the model wrote to disk earlier — `python3 sync.py`, `bash run.sh`, `nohup
+ * node job.js &` — calls `lh` from inside the file, where no pattern over the
+ * command line can see it; those ran the sandbox's own unauthenticated `lh` and
+ * failed with "No authentication found", while the very same script fed in as a
+ * heredoc worked. The shim costs one signature and a temp directory, and a
+ * command that never calls `lh` never reads the wrapper.
  *
  * Instead of rewriting every `lh` occurrence (which can only ever cover the
  * shell forms the regex happens to know), the command is left **byte-identical**
@@ -193,10 +201,6 @@ export const preprocessLhCommand = async (
    */
   shareVisitorBlocked = false,
 ): Promise<PreprocessResult> => {
-  if (!isLhCommand(command)) {
-    return { command, isLhCommand: false, skipSkillLookup: false };
-  }
-
   if (shareVisitorBlocked) {
     // Never mint for a visitor. Only refuse an actual `lh` invocation: a
     // command that merely mentions `lh` runs unchanged, and any `lh` it reaches
@@ -272,9 +276,12 @@ export const preprocessLhCommand = async (
       workspaceId ?? 'personal',
     );
 
-    return { command: finalCommand, isLhCommand: true, skipSkillLookup: true };
+    return { command: finalCommand, isLhCommand: isLhCommand(command), skipSkillLookup: true };
   } catch (error) {
     log('Failed to sign user JWT for lh command: %O', error);
+    // A command that does not mention `lh` most likely never calls it: run it
+    // as is rather than failing it over a credential it may not need.
+    if (!isLhCommand(command)) return { command, isLhCommand: false, skipSkillLookup: false };
     return {
       command,
       error: 'Failed to authenticate for CLI execution',

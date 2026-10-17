@@ -8,7 +8,6 @@ import { MarketService } from '@/server/services/market';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import {
   isDirectLhInvocation,
-  isLhCommand,
   preprocessLhCommand,
   SHARE_VISITOR_LH_BLOCKED_MESSAGE,
 } from '@/server/services/toolExecution/preprocessLhCommand';
@@ -80,7 +79,9 @@ const withLhPreprocessing = (
       };
     }
 
-    const workspaceId = isLhCommand(command) ? await resolve.workspaceId() : undefined;
+    // Resolved for every command: an `lh` called from a script file is
+    // invisible to `isLhCommand`, and must still land in the run's workspace.
+    const workspaceId = await resolve.workspaceId();
     const result = await preprocessLhCommand(
       command,
       resolve.userId,

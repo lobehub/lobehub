@@ -45,12 +45,27 @@ const wrap = (command: string, extraEnv = '') =>
   ].join('\n');
 
 describe('preprocessLhCommand', () => {
-  it('should return unchanged command for non-lh commands', async () => {
-    const result = await preprocessLhCommand('echo hello', 'user-1');
+  // Regression: only commands whose TEXT mentioned `lh` got the shim, so a
+  // script file that calls `lh` (`python3 sync.py`) ran unauthenticated.
+  it('should shim a command whose text never mentions lh', async () => {
+    const result = await preprocessLhCommand('python3 /root/sync.py --limit 10', 'user-1');
 
     expect(result.isLhCommand).toBe(false);
-    expect(result.skipSkillLookup).toBe(false);
-    expect(result.command).toBe('echo hello');
+    expect(result.skipSkillLookup).toBe(true);
+    expect(result.command).toBe(wrap('python3 /root/sync.py --limit 10'));
+  });
+
+  it('should run a command that does not mention lh unchanged when JWT signing fails', async () => {
+    mockSignUserJWT.mockImplementation(() => Promise.reject(new Error('JWKS_KEY is not set')));
+
+    try {
+      const result = await preprocessLhCommand('echo hello', 'user-1');
+
+      expect(result.error).toBeUndefined();
+      expect(result.command).toBe('echo hello');
+    } finally {
+      mockSignUserJWT.mockImplementation(() => Promise.resolve('mock-jwt-token'));
+    }
   });
 
   it('should prepend the auth shim and keep the command verbatim', async () => {
@@ -205,6 +220,48 @@ describe('preprocessLhCommand in a real shell', () => {
     ],
   ])('authenticates an lh reached through %s', async (_label, command) => {
     expect(await run(command)).toBe('cli jwt=mock-jwt-token\n');
+  });
+
+  // Regression: the shim was only injected when the command line mentioned
+  // `lh`, so a script that calls it from inside a FILE ran the unauthenticated
+  // global `lh` — while the same script fed in as a heredoc worked.
+  describe('an lh called from a script file', () => {
+    let scriptDir: string;
+
+    beforeAll(() => {
+      scriptDir = mkdtempSync(path.join(tmpdir(), 'lh-script-test-'));
+      writeFileSync(path.join(scriptDir, 'sync.sh'), 'lh whoami\n');
+      writeFileSync(
+        path.join(scriptDir, 'sync.js'),
+        "process.stdout.write(require('child_process').execFileSync('lh', ['whoami']))\n",
+      );
+      writeFileSync(
+        path.join(scriptDir, 'sync.py'),
+        "import subprocess, sys\nsys.stdout.write(subprocess.run(['lh', 'whoami'], capture_output=True, text=True).stdout)\n",
+      );
+    });
+
+    afterAll(() => {
+      rmSync(scriptDir, { force: true, recursive: true });
+    });
+
+    it.each([
+      ['a shell script', 'sh', 'sync.sh'],
+      ['a node script', 'node', 'sync.js'],
+      ...(existsSync('/usr/bin/python3') ? [['a python script', 'python3', 'sync.py']] : []),
+    ])('authenticates %s', async (_label, interpreter, file) => {
+      expect(await run(`${interpreter} ${path.join(scriptDir, file)}`)).toBe(
+        'cli jwt=mock-jwt-token\n',
+      );
+    });
+
+    it('authenticates a background job started from a script file', async () => {
+      const out = path.join(scriptDir, 'bg.out');
+      await run(`nohup sh ${path.join(scriptDir, 'sync.sh')} > ${out} 2>&1 &`);
+      await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('cli jwt=mock-jwt-token\n'), {
+        timeout: 5000,
+      });
+    });
   });
 
   // Regression: an inline `PATH=` assignment replaces the lookup path for that
