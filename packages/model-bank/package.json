@@ -83,6 +83,7 @@
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
+    "./tokenmarket": "./src/aiModels/tokenmarket.ts",
     "./unsloth": "./src/aiModels/unsloth.ts",
     "./upstage": "./src/aiModels/upstage.ts",
     "./v0": "./src/aiModels/v0.ts",
