@@ -1,3 +1,5 @@
+import { sha256 } from 'js-sha256';
+
 import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
@@ -47,14 +49,26 @@ export class MarketOIDC {
   }
 
   /**
-   * Generate PKCE code challenge
+   * Generate PKCE code challenge.
+   * Falls back to js-sha256 when crypto.subtle is unavailable
+   * (non-secure contexts, e.g. plain HTTP over LAN IP in development).
    */
   private async generateCodeChallenge(codeVerifier: string): Promise<string> {
     console.info('[MarketOIDC] Generating PKCE code challenge');
-    const encoder = new TextEncoder();
-    const data = encoder.encode(codeVerifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(digest))))
+
+    let hashBytes: Uint8Array;
+
+    if (crypto.subtle) {
+      const encoder = new TextEncoder();
+      const digest = await crypto.subtle.digest('SHA-256', encoder.encode(codeVerifier));
+      hashBytes = new Uint8Array(digest);
+    } else {
+      // crypto.subtle is only available in secure contexts (HTTPS / localhost).
+      // Fall back to js-sha256 for plain-HTTP dev environments (e.g. LAN IP access).
+      hashBytes = new Uint8Array(sha256.arrayBuffer(codeVerifier));
+    }
+
+    return btoa(String.fromCharCode.apply(null, Array.from(hashBytes)))
       .replaceAll('+', '-')
       .replaceAll('/', '_')
       .replaceAll('=', '');
