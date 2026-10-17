@@ -37,17 +37,38 @@ const styles = createStaticStyles(({ css }) => ({
  * account that has none has no meter to read; the page's own upgrade prompt is
  * what speaks to that.
  */
-const WorkspaceUsageMeter = memo(() => {
+interface WorkspaceUsageMeterProps {
+  refreshError?: boolean;
+}
+
+const WorkspaceUsageMeter = memo<WorkspaceUsageMeterProps>(({ refreshError }) => {
   const { t } = useTranslation('setting');
   const { data, error } = useWorkspaceUsage();
 
-  if (error || !data) return null;
+  const failed = Boolean(refreshError || error);
+
+  if (failed && !data) {
+    return (
+      <Text fontSize={12} role={'alert'} type={'danger'}>
+        {t('environments.storage.refreshFailed')}
+      </Text>
+    );
+  }
+
+  if (!data) return null;
 
   const { quotaBytes, usageBytes, usageCheckedAt } = data;
 
   // Never measured. Saying "0 bytes" would be a claim we have not earned, and
   // on a workspace that has actually been written to it is the wrong one.
   if (usageBytes === null || usageBytes === undefined) {
+    if (failed) {
+      return (
+        <Text fontSize={12} role={'alert'} type={'danger'}>
+          {t('environments.storage.refreshFailed')}
+        </Text>
+      );
+    }
     return (
       <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
         {t('environments.storage.unmeasured', { total: formatSize(quotaBytes) })}
@@ -86,19 +107,26 @@ const WorkspaceUsageMeter = memo(() => {
   );
 
   return (
-    <Tooltip
-      title={
-        over
-          ? t('environments.storage.over')
-          : usageCheckedAt
-            ? t('environments.storage.measuredAt', {
-                time: new Date(usageCheckedAt).toLocaleString(),
-              })
-            : undefined
-      }
-    >
-      {label}
-    </Tooltip>
+    <Flexbox align={'flex-end'} gap={4}>
+      {failed && (
+        <Text fontSize={12} role={'alert'} type={'danger'}>
+          {t('environments.storage.refreshFailedCached')}
+        </Text>
+      )}
+      <Tooltip
+        title={
+          over
+            ? t('environments.storage.over')
+            : usageCheckedAt
+              ? t('environments.storage.measuredAt', {
+                  time: new Date(usageCheckedAt).toLocaleString(),
+                })
+              : undefined
+        }
+      >
+        {label}
+      </Tooltip>
+    </Flexbox>
   );
 });
 

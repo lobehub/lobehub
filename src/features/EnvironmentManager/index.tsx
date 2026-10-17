@@ -15,6 +15,7 @@ import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ListSkeleton from '@/components/ListSkeleton';
 
@@ -30,6 +31,7 @@ import {
   useInstances,
   useWorkspaceUsage,
 } from './useEnvironmentData';
+import { useEnvironmentRefresh } from './useEnvironmentRefresh';
 import WorkspaceUsageMeter from './WorkspaceUsageMeter';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -98,14 +100,17 @@ interface EnvironmentManagerProps {
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
+  const workspaceId = useActiveWorkspaceId();
   const { data, error, isValidating, mutate } = useEnvironments(visibility);
   const { data: instanceData, mutate: refreshInstances } = useInstances();
   const { refresh: refreshUsage } = useWorkspaceUsage();
   const { buildInstance } = useEnvironmentActions();
 
   const [selectedId, setSelectedId] = useState<string>();
-  // Whether a refresh the user asked for is still running.
-  const [refreshing, setRefreshing] = useState(false);
+  const { refresh, refreshing, usageError } = useEnvironmentRefresh(
+    { environments: mutate, instances: refreshInstances, usage: refreshUsage },
+    workspaceId,
+  );
   /**
    * Whether the first fetch of THIS mount has come back.
    *
@@ -145,28 +150,6 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     openCreatedEnvironment(created, { buildInstance, select: setSelectedId });
 
   /**
-   * Both lists, because the two halves of what this page shows are fetched
-   * separately and the slow one — instance state, which needs the execution
-   * plane — is the one worth a manual refresh.
-   *
-   * The spinner is driven by this call rather than by SWR's `isValidating`,
-   * which is true of every fetch the page makes. Read off that flag the button
-   * span on a tab switch and on any background revalidation, reporting work
-   * nobody asked it to do and, worse, implying the click had already happened.
-   */
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      // The storage figure rides along, because this is the one moment the
-      // user has asked for a fresh answer — and re-measuring also stamps the
-      // workspace as active, which no page load should do on its own.
-      await Promise.all([mutate(), refreshInstances(), refreshUsage()]);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  /**
    * The storage meter, the way to add one, and the way to refetch. Shared by
    * both layouts because they are the same things wherever they sit; only the
    * frame around them differs.
@@ -181,7 +164,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     // names the list. Left shrinkable, the group gets compressed by a wide
     // neighbour.
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-      <WorkspaceUsageMeter />
+      <WorkspaceUsageMeter refreshError={usageError} />
       <Button
         icon={<Icon icon={RefreshCwIcon} />}
         loading={refreshing}
