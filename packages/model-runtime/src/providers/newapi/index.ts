@@ -215,8 +215,10 @@ export const params = {
       },
       {
         apiType: 'xai',
-        models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-          (id) => detectModelProvider(id) === 'xai',
+        models: resolveProviderRouteModels(
+          'xai',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
         ),
         options: {
           ...options,
