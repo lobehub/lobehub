@@ -31,11 +31,6 @@ const DEFAULT_TIMEOUT_MINUTES = 30;
 const MAX_TIMEOUT_MINUTES = 240;
 
 const styles = createStaticStyles(({ css }) => ({
-  agentSelect: css`
-    .ant-select-content-value {
-      height: 22px !important;
-    }
-  `,
   hint: css`
     display: inline-block;
     margin-block-start: 4px;
@@ -269,7 +264,6 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
         <Select
           allowClear
           showSearch
-          className={styles.agentSelect}
           loading={loadingAgents}
           options={agentOptions}
           placeholder={t('run.create.agent.placeholder')}

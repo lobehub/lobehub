@@ -1,4 +1,4 @@
-import { createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Popover } from '@lobehub/ui';
 import { ActionIcon, type PopoverPlacement } from '@lobehub/ui';
 import { XIcon } from 'lucide-react';
 import { type CSSProperties, type FC, type ReactNode } from 'react';
@@ -15,11 +15,6 @@ const styles = createStaticStyles(({ css }) => {
       display: flex;
       justify-content: end;
       width: 100%;
-    `,
-    overlay: css`
-      .ant-popover-inner {
-        border: none;
-      }
     `,
     tip: css`
       position: absolute;
@@ -99,12 +94,10 @@ const TipGuide: FC<TipGuideProps> = ({
       >
         <Popover
           arrow={true}
+          classNames={{ root: className }}
           open={open}
           placement={placement}
           trigger="hover"
-          classNames={{
-            root: cx(className, styles.overlay),
-          }}
           content={
             <Flexbox horizontal gap={24} style={{ userSelect: 'none' }}>
               <div>{title}</div>

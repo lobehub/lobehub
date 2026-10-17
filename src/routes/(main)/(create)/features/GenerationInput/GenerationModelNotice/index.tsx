@@ -21,26 +21,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 8px 10px !important;
     border-radius: ${cssVar.borderRadius};
 
-    .ant-alert-content {
-      min-width: 0;
-    }
-
-    .ant-alert-message,
-    .ant-alert-title {
-      overflow: hidden;
-
-      font-size: 12px;
-      line-height: 18px !important;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .ant-alert-icon {
-      flex: none;
-      height: 18px !important;
-      margin-inline-end: 6px !important;
-    }
-
     @media (width <= 768px) {
       max-width: 100%;
     }

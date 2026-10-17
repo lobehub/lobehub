@@ -48,10 +48,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: calc(${cssVar.borderRadiusLG} + 4px);
 
     background: ${cssVar.colorBgContainer};
-
-    .ant-avatar:focus {
-      outline: none;
-    }
   `,
   avatarGenerating: css`
     pointer-events: none;
@@ -95,11 +91,6 @@ const styles = createStaticStyles(({ css }) => ({
     .agent-background:hover &,
     .agent-background:focus-within & {
       opacity: 1;
-    }
-  `,
-  avatarPicker: css`
-    .ant-tabs-tab:has([id$='-tab-generate']) {
-      order: -1;
     }
   `,
   compactBackground: css`
@@ -495,7 +486,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             key={avatarRemountKey(avatar)}
             locale={locale}
             open={canEdit ? undefined : false}
-            popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
+            popupClassName="agent-avatar-artwork-picker"
             popupProps={{ placement: 'bottomLeft' }}
             shape={'square'}
             size={72}

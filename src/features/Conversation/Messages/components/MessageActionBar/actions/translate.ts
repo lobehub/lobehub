@@ -1,4 +1,3 @@
-import { css, cx } from '@lobehub/ui';
 import { LanguagesIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,13 +6,6 @@ import { localeOptions } from '@/locales/resources';
 
 import { useConversationStore } from '../../../../store';
 import { defineAction } from '../defineAction';
-
-const translateStyle = css`
-  .ant-dropdown-menu-sub {
-    overflow-y: scroll;
-    max-height: 400px;
-  }
-`;
 
 export const translateAction = defineAction({
   key: 'translate',
@@ -31,7 +23,6 @@ export const translateAction = defineAction({
         icon: LanguagesIcon,
         key: 'translate',
         label: t('translate.action', { ns: 'chat' }),
-        popupClassName: cx(translateStyle),
       }),
       [t, ctx.id, translateMessage],
     );

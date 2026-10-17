@@ -48,19 +48,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
   `,
-  descriptionSkeleton: css`
-    .ant-skeleton-paragraph {
-      margin-block-start: 4px !important;
-    }
-
-    .ant-skeleton-paragraph > li {
-      height: 12px !important;
-    }
-
-    .ant-skeleton-paragraph > li + li {
-      margin-block-start: 6px !important;
-    }
-  `,
   header: css`
     position: relative;
     margin-block-start: -24px;
@@ -139,11 +126,7 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
                 </Text>
               </Tooltip>
             ) : loading ? (
-              <Skeleton.Text
-                className={styles.descriptionSkeleton}
-                rows={2}
-                width={['100%', '60%']}
-              />
+              <Skeleton.Text rows={2} width={['100%', '60%']} />
             ) : null}
           </Flexbox>
         </Flexbox>
