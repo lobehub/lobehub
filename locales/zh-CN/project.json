@@ -73,6 +73,7 @@
   "directories.repository": "GitHub 仓库地址（可选）",
   "directories.repositoryHint": "此处记录来源仓库，不会克隆或同步文件。请勿填写凭据。",
   "directories.sourceSummary": "已有目录",
+  "directories.stagedNewTopic": "将在 <project>{{name}}</project> 项目中开始新话题",
   "directories.start": "在此开始工作",
   "directories.startInProject": "在 {{name}} 中开始工作",
   "directories.title": "工作目录",

@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Popover,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { ChevronDownIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,12 +10,14 @@ import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { type ProjectDirectory } from '@/store/projectWorkingDirectory';
 
 import OptionRow from './OptionRow';
-import { listProjectDeviceTargets, projectDirectoryDeviceName } from './projectDeviceTargets';
-import { useProjectTopicDirectory } from './useProjectTopicDirectory';
+import {
+  listProjectDeviceTargets,
+  type ProjectDeviceTarget,
+  projectDirectoryDeviceName,
+} from './projectDeviceTargets';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -55,8 +48,13 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ProjectDeviceSwitcherProps {
+  /** Tag on the current directory's row, naming what runs there. */
+  activeTag?: string;
   agentId: string;
-  topicId: string;
+  directories: ProjectDirectory[];
+  directoryId?: string;
+  /** Picked another device's project directory. */
+  onSelect: (target: ProjectDeviceTarget) => void;
 }
 
 /**
@@ -69,14 +67,18 @@ interface ProjectDeviceSwitcherProps {
  * directory itself has no chip of its own; its path rides on this trigger's
  * tooltip.
  */
-const ProjectDeviceSwitcher = ({ agentId, topicId }: ProjectDeviceSwitcherProps) => {
+const ProjectDeviceSwitcher = ({
+  activeTag,
+  agentId,
+  directories,
+  directoryId,
+  onSelect,
+}: ProjectDeviceSwitcherProps) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const { canUseResource } = useChatInputResourceAccess();
-  const { directories, directory, directoryId } = useProjectTopicDirectory(topicId);
+  const directory = directories.find((d) => d.id === directoryId);
   const { data: devices } = useDeviceList();
-  const moveTopic = useProjectDirectoryStore((s) => s.moveTopic);
-  const refreshTopic = useChatStore((s) => s.refreshTopic);
   // The shared row, not the topic-pinned effective config: a fixed target is
   // the author's setting, and it is what the server checks the move against.
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
@@ -89,26 +91,9 @@ const ProjectDeviceSwitcher = ({ agentId, topicId }: ProjectDeviceSwitcherProps)
 
   const targets = listProjectDeviceTargets(directories, devices, directoryId, fixedDeviceId);
 
-  const handleSelect = ({ active, directory: target, label }: (typeof targets)[number]) => {
+  const handleSelect = (target: ProjectDeviceTarget) => {
     setOpen(false);
-    if (active) return;
-    confirmModal({
-      cancelText: t('cancel', { ns: 'common' }),
-      content: t('heteroAgent.executionTarget.switchProjectTopic.content', {
-        device: label,
-        directory: target.name,
-      }),
-      okText: t('heteroAgent.executionTarget.switchTopic.ok'),
-      onOk: async () => {
-        try {
-          await moveTopic({ directoryId: target.id, topicId });
-          await refreshTopic();
-        } catch (error) {
-          toast.error((error as Error).message);
-        }
-      },
-      title: t('heteroAgent.executionTarget.switchTopic.title'),
-    });
+    if (!target.active) onSelect(target);
   };
 
   const content = (
@@ -122,7 +107,7 @@ const ProjectDeviceSwitcher = ({ agentId, topicId }: ProjectDeviceSwitcherProps)
             disabled={!selectable}
             key={target.directory.id}
             label={target.label}
-            tags={target.active ? [t('heteroAgent.executionTarget.topicTag')] : []}
+            tags={target.active && activeTag ? [activeTag] : []}
             desc={
               target.allowed ? (
                 <>

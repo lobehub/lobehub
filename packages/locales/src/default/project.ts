@@ -92,6 +92,7 @@ export default {
   'directories.boundRoot':
     'This conversation is bound to a project directory. Start a new conversation to use a different directory.',
   'directories.detectRepository': 'Detect GitHub repository',
+  'directories.stagedNewTopic': 'A new topic will start in <project>{{name}}</project>',
   'directories.unavailable':
     'Device is offline or the directory is unavailable. Reconnect and retry.',
 
