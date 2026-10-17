@@ -28,6 +28,11 @@ import {
   ingestLanguageFields,
   languageSummary,
 } from './acceptanceLanguage';
+import type { IngestReportOptions } from './acceptanceReportCommands';
+import {
+  attachAcceptanceReportCommands,
+  withIngestReportOptions,
+} from './acceptanceReportCommands';
 import {
   type Decision,
   DECISIONS,
@@ -581,20 +586,6 @@ async function reportGetAction(runId: string, options: { json?: boolean | string
 }
 
 // ── ingest-report (aggregate convenience over the atomic commands) ──
-
-interface IngestReportOptions {
-  acceptance?: string;
-  /** Run every local check, including the report language, then stop before publishing. */
-  dryRun?: boolean;
-  goal?: string;
-  json?: boolean | string;
-  open?: boolean;
-  operation?: string;
-  requirement?: string;
-  source?: string;
-  subject?: string;
-  title?: string;
-}
 
 async function ingestReportAction(reportDir: string, options: IngestReportOptions): Promise<void> {
   const dir = path.resolve(reportDir);
@@ -1278,29 +1269,6 @@ function withReportUpsertOptions(cmd: Command): Command {
     .option('--json [fields]', 'Output JSON');
 }
 
-function withIngestReportOptions(cmd: Command): Command {
-  return cmd
-    .option('--source <source>', 'agent | agent-testing', 'agent-testing')
-    .option('--operation <id>', 'Link the session to an existing Agent Run')
-    .option('--acceptance <id>', 'Append this round to an existing acceptance')
-    .option('--title <title>', 'Override the session title')
-    .option('--goal <goal>', 'The goal/task being verified')
-    .option(
-      '--subject <type:id>',
-      'Attach to a task/topic/document (defaults to the current topic; otherwise standalone)',
-    )
-    .option(
-      '--requirement <text>',
-      'Acceptance requirement recorded when the aggregate is first created',
-    )
-    .option('--open', 'Print the in-app URL to open the report')
-    .option(
-      '--dry-run',
-      'Validate the report (including its language) without publishing; works on a plan-only result.json',
-    )
-    .option('--json [fields]', 'Output JSON');
-}
-
 // ── Canonical tree: `lh acceptance install` + `lh acceptance run …` ──
 
 /**
@@ -1327,13 +1295,7 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     .command('run')
     .description('Acceptance rounds (immutable verification snapshots)');
 
-  withIngestReportOptions(
-    run
-      .command('ingest <reportDir>')
-      .description(
-        'Ingest a local agent-testing report (result.json + report.md + proposal.md + assets) as a new round',
-      ),
-  ).action(ingestReportAction);
+  attachAcceptanceReportCommands(run, ingestReportAction);
 
   withRunCreateOptions(
     run.command('create').description('Create a standalone round (verification session)'),

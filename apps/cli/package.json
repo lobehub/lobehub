@@ -64,7 +64,8 @@
     "tsdown": "^0.21.10",
     "typescript": "^6.0.3",
     "url-join": "^5.0.0",
-    "vitest": "5.0.0"
+    "vitest": "5.0.0",
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=22.15"
