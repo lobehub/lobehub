@@ -15,6 +15,10 @@ import type { LobeChatDatabase } from '@/database/type';
 // Direct file import (not the barrel) to avoid pulling in RuntimeExecutors and
 // its workspace-package transitive deps in the unit-test environment.
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
+import {
+  isShareVisitorActor,
+  resolveRunActorFromState,
+} from '@/server/modules/AgentRuntime/runIdentity';
 
 import { CompletionLifecycle } from './CompletionLifecycle';
 import { getServerHooks } from './hooks/serverHooks';
@@ -58,10 +62,9 @@ export interface AbandonedSubAgentResume {
   errorMessage: string;
   parentOperationId: string;
   /**
-   * When true, the parent op is a shared-agent visitor run (its metadata
-   * carries `streamOwnerUserId`). The inline resume path must construct
-   * services with `includeShareVisitor: true` so the visitor-owned rows
-   * remain visible.
+   * The share visitor operating the abandoned run, when it is a share-visitor
+   * run. The inline resume path must then construct services with
+   * `includeShareVisitor: true` so the visitor-owned rows remain visible.
    */
   streamOwnerUserId?: string;
   threadId: string;
@@ -149,11 +152,7 @@ export class AbandonOperationService {
     }
     result.found = true;
 
-    const metadata = (state.metadata ?? {}) as {
-      assistantMessageId?: string;
-      /** Present only for shared-agent visitor runs (visitor owns the stream). */
-      streamOwnerUserId?: string;
-    };
+    const metadata = (state.metadata ?? {}) as { assistantMessageId?: string };
     const origin = state.origin ?? {};
     const shouldDispatchAbandonedLifecycle =
       state.status === 'running' ||
@@ -193,12 +192,23 @@ export class AbandonOperationService {
       result.finalized = partial !== null;
     }
 
-    // Shared-agent visitor runs mark themselves with `streamOwnerUserId` on
-    // the operation metadata (the op executes as the creator `userId`, but the
-    // visitor owns the stream). The visitor-owned rows are excluded from
-    // MessageModel/TopicModel/CompletionLifecycle by default, so the cleanup
-    // path must opt in when this flag is present.
-    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
+    // A share-visitor run executes as the creator `userId`, and its
+    // visitor-owned rows are excluded from MessageModel / TopicModel /
+    // CompletionLifecycle by default, so the cleanup must opt in for it. An
+    // unreadable identity opts in too: these models only touch this run's own
+    // rows by id, so seeing visitor rows as well is harmless, while missing
+    // them leaves a visitor's conversation stuck running.
+    const runActor = resolveRunActorFromState(state);
+    if (!runActor.ok && runActor.reason !== 'missing') {
+      log(
+        '[%s] unresolved run identity (%s), cleaning up as a visitor run',
+        operationId,
+        runActor.reason,
+      );
+    }
+    const includeShareVisitor = runActor.ok ? isShareVisitorActor(runActor.actor) : true;
+    const shareVisitorUserId =
+      runActor.ok && isShareVisitorActor(runActor.actor) ? runActor.actor.userId : undefined;
 
     if (origin.userId) {
       const messageModel = new MessageModel(this.db, origin.userId, origin.workspaceId, undefined, {
@@ -359,8 +369,8 @@ export class AbandonOperationService {
               // Forward the visitor-run marker so an inline resume (local mode)
               // constructs its services with `includeShareVisitor: true`; the
               // queue-mode `subagent-callback` re-derives the same flag from
-              // the parent op's coordinator metadata.
-              streamOwnerUserId: metadata.streamOwnerUserId,
+              // this op's run identity.
+              streamOwnerUserId: shareVisitorUserId,
               threadId,
               toolMessageId,
               userId: origin.userId,

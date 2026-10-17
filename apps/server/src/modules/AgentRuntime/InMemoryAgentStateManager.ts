@@ -1,4 +1,8 @@
-import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
+import {
+  type AgentRunIdentity,
+  type AgentState,
+  normalizeAgentState,
+} from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -110,6 +114,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
+      identity?: AgentRunIdentity;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
@@ -123,6 +128,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       agentConfig: data.agentConfig,
       visitorRedaction: data.visitorRedaction,
       createdAt: new Date().toISOString(),
+      identity: data.identity,
       lastActiveAt: new Date().toISOString(),
       mirrorToOperationId: data.mirrorToOperationId,
       modelRuntimeConfig: data.modelRuntimeConfig,

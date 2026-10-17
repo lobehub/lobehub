@@ -7,6 +7,7 @@ import {
   type VisitorRedactionOptions,
 } from '@/database/models/message';
 
+import { isShareVisitorActor, resolveRunActor, resolveRunActorFromState } from './runIdentity';
 import { stripFinalStateInEventData } from './StreamEventManager';
 
 /**
@@ -29,41 +30,76 @@ export type GatewayVisitorRedaction = VisitorRedactionOptions | null;
 export const FULL_STRIP_REDACTION: GatewayVisitorRedaction = {};
 
 /**
- * Whether `publishAgentRuntimeInit` is initializing a shared-agent visitor run.
- * The op EXECUTES as the creator, but `streamOwnerUserId` (set only for
- * share-visitor runs — see `AgentRuntimeService.createOperation`) registers
- * the Gateway WS channel under the *visitor's* id, so the visitor is the one
- * receiving this push over the wire.
+ * The run actor of what `publishAgentRuntimeInit` was handed: the coordinator's
+ * operation metadata, whose `streamOwnerUserId` mirror is set for every
+ * share-visitor run it records.
  */
-export const isShareVisitorInit = (initialState: any): boolean =>
-  typeof initialState?.streamOwnerUserId === 'string' && initialState.streamOwnerUserId.length > 0;
+const resolveInitActor = (initialState: any) =>
+  resolveRunActor(initialState?.identity, {
+    shareVisitorUserId:
+      typeof initialState?.streamOwnerUserId === 'string' && initialState.streamOwnerUserId
+        ? initialState.streamOwnerUserId
+        : null,
+    userId: initialState?.userId,
+  });
+
+/**
+ * Whether `publishAgentRuntimeInit` is initializing a shared-agent visitor run.
+ * The op EXECUTES as the creator, but the Gateway WS channel is registered
+ * under the *visitor's* id (see {@link resolveInitStreamOwner}), so the visitor
+ * is the one receiving this push over the wire. Decided by the actor's kind,
+ * not by the visitor differing from the creator: a creator chatting through
+ * their own share link is still redacted as a visitor.
+ *
+ * Fails closed: an identity that cannot be trusted counts as a visitor run.
+ */
+export const isShareVisitorInit = (initialState: any): boolean => {
+  const resolved = resolveInitActor(initialState);
+  if (!resolved.ok) return resolved.reason !== 'missing';
+  return isShareVisitorActor(resolved.actor);
+};
+
+/**
+ * Who the Gateway registers the operation's channel under — the only user whose
+ * subscriber JWT it accepts: the run's actor, so a share-visitor run streams to
+ * the visitor rather than the creator it executes as. `'unknown'`, which no
+ * subscriber matches, when the actor cannot be resolved or trusted.
+ */
+export const resolveInitStreamOwner = (initialState: any): string => {
+  const resolved = resolveInitActor(initialState);
+  return resolved.ok ? resolved.actor.userId : 'unknown';
+};
 
 /**
  * Read the redaction policy off whatever the notifier was handed.
  *
  * Two shapes reach here, deliberately handled by one function so the fast path
  * never disagrees with itself:
- *  - a runtime `AgentState`, whose `metadata.agentShareVisitor` is stamped once at
+ *  - a runtime `AgentState`, whose `principal.actor.shareVisitor` is stamped once at
  *    operation creation (`AgentRuntimeService.createOperation`) and rides the
  *    state through to the terminal event (`publishAgentRuntimeEnd`);
  *  - an `AgentOperationMetadata` record, which is what
  *    `AgentRuntimeCoordinator.createAgentOperation` passes to
- *    `publishAgentRuntimeInit` — it carries the flattened
- *    `streamOwnerUserId` + `visitorRedaction` pair instead.
+ *    `publishAgentRuntimeInit` — it carries the run `identity`, its flattened
+ *    `streamOwnerUserId` mirror and `visitorRedaction` instead.
  *
  * Returns `null` for a normal (non-share) run. Fails closed to
  * {@link FULL_STRIP_REDACTION} when a run is identifiable as a share run but
- * its policy is unreadable.
+ * its policy is unreadable, or when its identity cannot be trusted.
  */
 export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction => {
-  const share = state?.principal?.actor?.shareVisitor as
-    { showErrorDetails?: boolean; showModelInfo?: boolean; visitorUserId?: string } | undefined;
+  // A runtime `AgentState` carries the run identity on `principal`; the
+  // operation metadata carries it at the top level.
+  const resolved =
+    state?.principal || state?.origin ? resolveRunActorFromState(state) : resolveInitActor(state);
+  if (!resolved.ok) return resolved.reason === 'missing' ? null : FULL_STRIP_REDACTION;
+  if (!isShareVisitorActor(resolved.actor)) return null;
 
-  if (share?.visitorUserId) {
+  const share = state?.principal?.actor?.shareVisitor as
+    { showErrorDetails?: boolean; showModelInfo?: boolean } | undefined;
+  if (share) {
     return { showErrorDetails: share.showErrorDetails, showModelInfo: share.showModelInfo };
   }
-
-  if (!isShareVisitorInit(state)) return null;
 
   return (state.visitorRedaction as GatewayVisitorRedaction) ?? FULL_STRIP_REDACTION;
 };

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentStateManager } from '../AgentStateManager';
+import { buildRunIdentity, resolveRunActorFromMetadata } from '../runIdentity';
 
 // Mock Redis client. Hoisted so individual tests can assert on the exact
 // payloads handed to `setex` / `lpush`.
@@ -70,6 +71,46 @@ describe('AgentStateManager', () => {
       expect((await stateManager.getOperationMetadata('op-old'))?.acceptsMemberRuntimeEnd).toBe(
         undefined,
       );
+    });
+
+    it('round-trips the run identity next to its streamOwnerUserId mirror', async () => {
+      const identity = buildRunIdentity({
+        shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' },
+        userId: 'creator-1',
+      });
+      await stateManager.createOperationMetadata('op-share', {
+        identity,
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+      const stored = redisMock.hmset.mock.calls.at(-1)?.[1] as Record<string, string>;
+      // A worker on the previous build reads only the mirror.
+      expect(stored.streamOwnerUserId).toBe('visitor-1');
+
+      redisMock.hgetall.mockResolvedValueOnce(stored);
+      const meta = await stateManager.getOperationMetadata('op-share');
+      expect(meta?.identity).toEqual(identity);
+      expect(resolveRunActorFromMetadata(meta)).toMatchObject({
+        actor: { kind: 'shareVisitor', shareId: 'share-1', userId: 'visitor-1' },
+        source: 'snapshot',
+      });
+    });
+
+    it('keeps the rest of the record readable when the stored identity is corrupt', async () => {
+      redisMock.hgetall.mockResolvedValueOnce({
+        createdAt: '2026-10-12T00:00:00.000Z',
+        identity: '{"actor":',
+        lastActiveAt: '2026-10-12T00:00:00.000Z',
+        status: 'running',
+        userId: 'creator-1',
+      });
+
+      const meta = await stateManager.getOperationMetadata('op-corrupt');
+
+      // Not `null`: runStep settles an operation with no metadata as orphaned,
+      // while an untrusted identity is only refused.
+      expect(meta?.userId).toBe('creator-1');
+      expect(resolveRunActorFromMetadata(meta)).toEqual({ ok: false, reason: 'invalid' });
     });
   });
 

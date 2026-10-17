@@ -17,6 +17,7 @@ import {
   FULL_STRIP_REDACTION,
   type GatewayVisitorRedaction,
   isShareVisitorInit,
+  resolveInitStreamOwner,
   resolveRedactionFromState,
   sanitizeGatewayEventData,
 } from './gatewayVisitorRedaction';
@@ -247,7 +248,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    * only signal `pushEvent` has for scrubbing `uiMessages` on those events.
    * Mirrors `mirrorTargets`'s two population paths:
    *  - fast path: set at `publishAgentRuntimeInit` / `publishAgentRuntimeEnd`
-   *    from the state's `metadata.agentShareVisitor`, so the share's real
+   *    from the state's `principal.actor.shareVisitor`, so the share's real
    *    `showModelInfo` / `showErrorDetails` config is honored.
    *  - queue path: lazily resolved from persisted op metadata via
    *    `resolvePersistedShareVisitor`, which can only tell share-or-not — it
@@ -353,23 +354,23 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const initRedaction = resolveRedactionFromState(initialState);
     const isShareInit = isShareVisitorInit(initialState);
     if (initRedaction || isShareInit) {
-      // Fail closed: `streamOwnerUserId` alone (without a readable
-      // `metadata.agentShareVisitor`) still means a visitor is on the other end.
+      // Fail closed: a share identity or `streamOwnerUserId` alone (without
+      // readable `principal.actor.shareVisitor` grants) still means a visitor is
+      // on the other end.
       this.shareVisitorOps.set(operationId, initRedaction ?? FULL_STRIP_REDACTION);
     }
     this.shareVisitorResolved.add(operationId);
 
     try {
       // The gateway DO requires the subscriber JWT's `sub` to equal the userId
-      // registered here. `streamOwnerUserId` (shared-agent visitor runs) takes
-      // precedence: the op executes as the creator, but only the visitor may
-      // subscribe to its stream.
+      // registered here: the run's actor, so for a shared-agent visitor run
+      // the visitor rather than the creator the op executes as.
       // `meta` (protocol v2) lets the per-user hub describe the op in its
       // lifecycle feed; v1 gateways ignore the extra key.
       const meta = pickGatewayInitMeta(initialState);
       await this.httpPostAwait('/api/operations/init', {
         operationId,
-        userId: initialState?.streamOwnerUserId || initialState?.userId || 'unknown',
+        userId: resolveInitStreamOwner(initialState),
         ...(meta ? { meta } : {}),
       });
     } catch (error) {

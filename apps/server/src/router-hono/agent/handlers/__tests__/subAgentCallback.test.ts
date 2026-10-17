@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildRunIdentity } from '@/server/modules/AgentRuntime/runIdentity';
+
 import { subAgentCallback } from '../subAgentCallback';
 
 const mockCompleteSubAgentBridge = vi.fn();
@@ -107,6 +109,64 @@ describe('subAgentCallback handler', () => {
       workspaceId: 'ws-row',
     });
     expect(mockCompleteSubAgentBridge).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the run identity off the durable row once the child metadata is gone', async () => {
+    // A queue-mode resume forwards no `streamOwnerUserId`; the row still
+    // knows the child was a share-visitor run.
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockOperationRows.rows = [
+      {
+        metadata: {
+          runIdentity: buildRunIdentity({
+            shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' },
+            userId: 'user-row',
+          }),
+        },
+        userId: 'user-row',
+        workspaceId: null,
+      },
+    ];
+    mockCompleteSubAgentBridge.mockResolvedValue(true);
+    const { ctx } = buildContext({ body: validBody });
+
+    const res = await subAgentCallback(ctx);
+
+    expect(res.status).toBe(200);
+    expect(mockAiAgentService).toHaveBeenCalledWith(mockServerDB, 'user-row', {
+      includeShareVisitor: true,
+      workspaceId: undefined,
+    });
+  });
+
+  it('refuses a durable run identity that contradicts the forwarded visitor', async () => {
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockOperationRows.rows = [
+      {
+        metadata: { runIdentity: buildRunIdentity({ userId: 'user-row' }) },
+        userId: 'user-row',
+        workspaceId: null,
+      },
+    ];
+    const { ctx } = buildContext({ body: { ...validBody, streamOwnerUserId: 'visitor-1' } });
+
+    const res = await subAgentCallback(ctx);
+
+    expect(res.status).toBe(401);
+    expect(mockCompleteSubAgentBridge).not.toHaveBeenCalled();
+  });
+
+  it('refuses child metadata whose run identity comes from a newer build', async () => {
+    mockGetOperationMetadata.mockResolvedValue({
+      identity: { ...buildRunIdentity({ userId: 'user-1' }), version: 2 },
+      userId: 'user-1',
+    });
+    const { ctx } = buildContext({ body: validBody });
+
+    const res = await subAgentCallback(ctx);
+
+    expect(res.status).toBe(401);
+    expect(mockCompleteSubAgentBridge).not.toHaveBeenCalled();
   });
 
   it('returns 401 when the child operation has no userId', async () => {

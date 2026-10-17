@@ -3,7 +3,7 @@ import type {
   LlmExecuteData,
   ToolExecuteData,
 } from '@lobechat/agent-gateway-client';
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentRunIdentity, type AgentState } from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -49,14 +49,16 @@ export interface IAgentStateManager {
       /** See {@link AgentOperationMetadata.acceptsMemberRuntimeEnd}. */
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
+      /** The run identity snapshot, stamped once by `AgentRuntimeService.createOperation`. */
+      identity?: AgentRunIdentity;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       /**
        * Agent Share visitor runs only: the visitor's id, under which the
        * gateway WS channel is registered (the op itself executes as the
-       * creator, `userId`). Its presence also marks the op as a share run for
-       * a queue worker that never saw `publishAgentRuntimeInit`.
+       * creator, `userId`). Kept as a mirror of {@link identity} for workers
+       * on the previous build, which read only this to tell a share run.
        */
       streamOwnerUserId?: string;
       userId?: string;

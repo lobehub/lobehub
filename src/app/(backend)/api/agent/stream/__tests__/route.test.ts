@@ -2,6 +2,8 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildRunIdentity } from '@/server/modules/AgentRuntime/runIdentity';
+
 import { GET } from '../route';
 
 // Mock dependencies first
@@ -163,6 +165,82 @@ describe('/api/agent/stream route', () => {
 
       expect(response.status).toBe(200);
       expect(mockAgentStateManager.getOperationMetadata).toHaveBeenCalledWith('test-operation');
+    });
+
+    it("should return 404 for the creator's own run through their share link", async () => {
+      // Actor and owner are the same user here; the run is still a share run.
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        identity: buildRunIdentity({
+          shareVisitor: { shareId: 'share-1', visitorUserId: OWNER_USER_ID },
+          userId: OWNER_USER_ID,
+        }),
+        streamOwnerUserId: OWNER_USER_ID,
+        userId: OWNER_USER_ID,
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=share-visitor-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(404);
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'a share identity whose visitor marker is missing',
+        buildRunIdentity({
+          shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-user' },
+          userId: OWNER_USER_ID,
+        }),
+      ],
+      ['an identity version this build does not know', { version: 2 }],
+    ])('should return 404 for an operation recorded with %s', async (_, identity) => {
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        identity,
+        userId: OWNER_USER_ID,
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(404);
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when an ordinary run identity names someone other than the executing user', async () => {
+      // The caller matches the snapshot's actor, but the operation executes as
+      // another user, so the snapshot cannot be trusted.
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        identity: buildRunIdentity({ userId: OWNER_USER_ID }),
+        userId: 'executor-user',
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(404);
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+    });
+
+    it('should allow the actor of an ordinary run identity to read it', async () => {
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        identity: buildRunIdentity({ userId: OWNER_USER_ID, workspaceId: 'ws-1' }),
+        userId: OWNER_USER_ID,
+        workspaceId: 'ws-1',
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
     });
   });
 

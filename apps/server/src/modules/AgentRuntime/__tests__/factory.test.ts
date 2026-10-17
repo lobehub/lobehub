@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentStateManager, createStreamEventManager, isRedisAvailable } from '../factory';
+import { FULL_STRIP_REDACTION } from '../gatewayVisitorRedaction';
+import { buildRunIdentity } from '../runIdentity';
 
 const {
   MockAgentStateManager,
@@ -176,6 +178,44 @@ describe('AgentRuntime factory', () => {
 
       expect(result.kind).toBe('gateway-stream-notifier');
       expect(result.inner).toBe(mockInMemoryStreamEventManager);
+    });
+
+    it("resolves a queue worker's share redaction from the run identity", async () => {
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      const getOperationMetadata = vi.fn();
+      Object.assign(mockInMemoryAgentStateManager, { getOperationMetadata });
+
+      createStreamEventManager();
+      const resolveShareVisitor = MockGatewayStreamNotifier.mock.calls[0][4] as unknown as (
+        operationId: string,
+      ) => Promise<unknown>;
+
+      getOperationMetadata.mockResolvedValueOnce(null);
+      await expect(resolveShareVisitor('op-gone')).resolves.toBeNull();
+
+      getOperationMetadata.mockResolvedValueOnce({
+        identity: buildRunIdentity({ userId: 'user-1' }),
+        userId: 'user-1',
+      });
+      await expect(resolveShareVisitor('op-own')).resolves.toBeNull();
+
+      getOperationMetadata.mockResolvedValueOnce({
+        identity: buildRunIdentity({
+          shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' },
+          userId: 'creator-1',
+        }),
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+        visitorRedaction: { showModelInfo: true },
+      });
+      await expect(resolveShareVisitor('op-share')).resolves.toEqual({ showModelInfo: true });
+
+      // Written by a newer build: stripped like a visitor run, not guessed at.
+      getOperationMetadata.mockResolvedValueOnce({
+        identity: { ...buildRunIdentity({ userId: 'creator-1' }), version: 2 },
+        userId: 'creator-1',
+      });
+      await expect(resolveShareVisitor('op-newer')).resolves.toBe(FULL_STRIP_REDACTION);
     });
 
     it('does not wrap when AGENT_GATEWAY_SERVICE_TOKEN is not set', () => {

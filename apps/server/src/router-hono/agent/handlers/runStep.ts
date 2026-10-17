@@ -7,6 +7,10 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import {
+  isShareVisitorActor,
+  resolveRunActorFromMetadata,
+} from '@/server/modules/AgentRuntime/runIdentity';
+import {
   AbandonOperationService,
   type AgentExecutionResult,
   type AgentStepContinuation,
@@ -258,6 +262,23 @@ export async function runStep(c: Context): Promise<Response> {
       return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
 
+    // A run identity that contradicts its mirror, or was written by a newer
+    // build, is refused rather than guessed at. Unlike missing metadata this
+    // does not settle the operation: the run itself is intact, and a
+    // redelivery that reaches a worker able to read it can still continue.
+    const runActor = resolveRunActorFromMetadata(metadata);
+    if (!runActor.ok) {
+      console.warn(
+        JSON.stringify({
+          event: 'agent.run_step.unresolved_run_identity',
+          operationId,
+          reason: runActor.reason,
+          stepIndex,
+        }),
+      );
+      return c.json({ error: 'Invalid operation or unauthorized' }, 401);
+    }
+
     const serverDB = await getServerDB();
     // Step through AiAgentService so the runtime keeps its `execSubAgent`
     // fork callback (needed by `lobe-agent.callSubAgent`). In QStash mode every
@@ -267,11 +288,10 @@ export async function runStep(c: Context): Promise<Response> {
     // Thread the operation's workspace through so the runtime's models stay
     // workspace-scoped. Without it the worker is personal-scoped and the
     // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
-    // Opt into agent-share visitor rows only when this op is a shared-agent
-    // visitor run — signalled by `streamOwnerUserId` (set on the operation
-    // metadata when the visitor owns the stream but the run executes as the
-    // creator `userId`). Ordinary creator runs keep the default exclusion.
-    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
+    // Opt into agent-share visitor rows only when a share visitor operates
+    // this op (it executes as the creator `userId`). Ordinary creator runs
+    // keep the default exclusion.
+    const includeShareVisitor = isShareVisitorActor(runActor.actor);
     const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
       includeShareVisitor,
       workspaceId: metadata.workspaceId,

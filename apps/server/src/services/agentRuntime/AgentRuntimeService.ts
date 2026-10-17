@@ -82,6 +82,10 @@ import {
 import { CLIENT_LLM_WAIT_CAPABILITY } from '@/server/modules/AgentRuntime/llmRelay/protocol';
 import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
+  buildRunIdentity,
+  RUN_IDENTITY_METADATA_KEY,
+} from '@/server/modules/AgentRuntime/runIdentity';
+import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
 } from '@/server/modules/AgentRuntime/RuntimeExecutors';
@@ -1287,6 +1291,14 @@ export class AgentRuntimeService {
     const requiresDurableResultControl = durableHooks.some(
       (hook) => hook.type === 'afterToolCall' && hook.webhook?.responseHandling === 'toolCall',
     );
+    // Who owns and who operates the run, stamped once and read back through
+    // `runIdentity.ts`. The owner follows the tenant the services are scoped to
+    // (`this.workspaceId`, like the operation row), not the caller-supplied one.
+    // The durable copy outlives the 2h runtime metadata, so a late callback
+    // still reads the same facts.
+    const runIdentity = userId
+      ? buildRunIdentity({ shareVisitor: agentShareVisitor, userId, workspaceId: this.workspaceId })
+      : undefined;
     const operationStartPersisted = await traceStartStage('record_start', () =>
       this.completionLifecycle.recordStart({
         agentId: appContext?.agentId ?? null,
@@ -1308,6 +1320,7 @@ export class AgentRuntimeService {
             ? { agentInterventionContinuation: interventionResolution }
             : {}),
           ...(groupMemberBridge ? { groupMemberBridge } : {}),
+          ...(runIdentity ? { [RUN_IDENTITY_METADATA_KEY]: runIdentity } : {}),
         },
         model: modelRuntimeConfig?.model,
         modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
@@ -1481,6 +1494,7 @@ export class AgentRuntimeService {
             shareVisitor: agentShareVisitor,
           },
           audit: { clientIp: appContext?.clientIp, userAgent: appContext?.userAgent },
+          identity: runIdentity,
           // What the run may do, decided once here: device access and the
           // approval mode its tool calls answer to.
           policy: { deviceAccess: deviceAccessPolicy, userIntervention: userInterventionConfig },
@@ -1525,6 +1539,7 @@ export class AgentRuntimeService {
         this.coordinator.createAgentOperation(operationId, {
           acceptsMemberRuntimeEnd,
           agentConfig,
+          identity: runIdentity,
           // Persisted so a queue worker that never ran this op's init still
           // applies the owner-configured visitor redaction policy instead of the
           // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
@@ -1538,6 +1553,7 @@ export class AgentRuntimeService {
           modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
           // Share-visitor runs execute as the creator (`userId`) but stream only
           // to the visitor — the gateway registers the WS channel under this id.
+          // Mirrors `identity` for workers on the previous build.
           streamOwnerUserId: agentShareVisitor?.visitorUserId,
           userId,
           workspaceId: this.workspaceId,

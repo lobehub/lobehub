@@ -5,6 +5,13 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
+import {
+  isShareVisitorActor,
+  resolveRunActor,
+  resolveRunActorFromMetadata,
+  RUN_IDENTITY_METADATA_KEY,
+  type RunActorResolution,
+} from '@/server/modules/AgentRuntime/runIdentity';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:subagent-callback');
@@ -71,22 +78,35 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     const metadata = await coordinator.getOperationMetadata(operationId);
     const serverDB = await getServerDB();
 
-    let owner: { streamOwnerUserId?: string; userId: string; workspaceId?: string } | undefined;
+    let owner: { runActor: RunActorResolution; userId: string; workspaceId?: string } | undefined;
     if (metadata?.userId) {
       owner = {
-        streamOwnerUserId: metadata.streamOwnerUserId,
+        runActor: resolveRunActorFromMetadata(metadata),
         userId: metadata.userId,
         workspaceId: metadata.workspaceId,
       };
     } else {
       const [row] = await serverDB
-        .select({ userId: agentOperations.userId, workspaceId: agentOperations.workspaceId })
+        .select({
+          metadata: agentOperations.metadata,
+          userId: agentOperations.userId,
+          workspaceId: agentOperations.workspaceId,
+        })
         .from(agentOperations)
         .where(eq(agentOperations.id, operationId))
         .limit(1);
       if (row) {
         owner = {
-          streamOwnerUserId: typeof streamOwnerUserId === 'string' ? streamOwnerUserId : undefined,
+          // The row keeps the run identity past the runtime metadata's TTL. Only
+          // the abandon paths forward `streamOwnerUserId`, so its absence from
+          // the body says nothing.
+          runActor: resolveRunActor(row.metadata?.[RUN_IDENTITY_METADATA_KEY], {
+            shareVisitorUserId:
+              typeof streamOwnerUserId === 'string' && streamOwnerUserId
+                ? streamOwnerUserId
+                : undefined,
+            userId: row.userId,
+          }),
           userId: row.userId,
           workspaceId: row.workspaceId ?? undefined,
         };
@@ -97,17 +117,26 @@ export async function subAgentCallback(c: Context): Promise<Response> {
       log('subagent-callback: invalid operation or no userId found for %s', operationId);
       return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
+    // A run identity that contradicts its mirror, or comes from a newer build,
+    // is refused rather than guessed at; QStash redelivers.
+    if (!owner.runActor.ok) {
+      log(
+        'subagent-callback: unresolved run identity for %s (%s)',
+        operationId,
+        owner.runActor.reason,
+      );
+      return c.json({ error: 'Invalid operation or unauthorized' }, 401);
+    }
 
     // Bridge through AiAgentService (like the /run step worker) so the
     // runtime's models stay workspace-scoped — a bare AgentRuntimeService
     // would be personal-scoped and the tool-message backfill / resume
     // barrier could miss workspace-scoped rows.
-    // Opt into visitor rows only for shared-agent visitor runs: metadata
-    // carries `streamOwnerUserId` when the operation executes as the creator
-    // but the visitor owns the stream. Ordinary creator ops keep the default
+    // Opt into visitor rows only when a share visitor operates the run (it
+    // executes as the creator). Ordinary creator ops keep the default
     // exclusion.
     const aiAgentService = new AiAgentService(serverDB, owner.userId, {
-      includeShareVisitor: Boolean(owner.streamOwnerUserId),
+      includeShareVisitor: isShareVisitorActor(owner.runActor.actor),
       workspaceId: owner.workspaceId,
     });
 

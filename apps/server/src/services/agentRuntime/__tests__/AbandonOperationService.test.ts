@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { buildRunIdentity } from '@/server/modules/AgentRuntime/runIdentity';
 
 import { AbandonOperationService } from '../AbandonOperationService';
 import { CompletionLifecycle } from '../CompletionLifecycle';
@@ -827,29 +828,89 @@ describe('AbandonOperationService', () => {
     expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_member');
   });
 
-  it('opts message/topic/lifecycle models into visitor rows for a visitor run (streamOwnerUserId present)', async () => {
-    // Shared-agent visitor run: op executes as the creator (`user_owner`)
-    // but the visitor (`visitor_1`) owns the stream. The abandon cleanup
-    // touches rows on `topics.senderId <> NULL`, so MessageModel /
-    // TopicModel / CompletionLifecycle must be constructed with
-    // `includeShareVisitor: true` — otherwise the cleanup silently no-ops.
+  // The state shape `AgentRuntimeService.createOperation` writes for a share
+  // run: the share grants on `principal.actor.shareVisitor` and, since the run
+  // identity snapshot, `principal.identity`. `state.metadata` stays empty — the
+  // op-metadata `streamOwnerUserId` marker never reaches the state.
+  const visitorShareGrants = { agentId: 'agt_x', shareId: 'share_1', visitorUserId: 'visitor_1' };
+  const visitorRunState = (principal: Record<string, unknown>) =>
+    stateWith({
+      metadata: { assistantMessageId: 'msg_assist_1' },
+      origin: { agentId: 'agt_x', topicId: 'tpc_x', userId: 'user_owner', workspaceId: 'ws_1' },
+      principal,
+    });
+
+  const expectVisitorRowsIncluded = (includeShareVisitor: boolean) => {
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
+      includeShareVisitor,
+    });
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
+      includeShareVisitor,
+    });
+    expect(CompletionLifecycle).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', {
+      includeShareVisitor,
+    });
+  };
+
+  it.each([
+    [
+      'its run identity',
+      {
+        actor: { shareVisitor: visitorShareGrants },
+        identity: buildRunIdentity({
+          shareVisitor: visitorShareGrants,
+          userId: 'user_owner',
+          workspaceId: 'ws_1',
+        }),
+      },
+    ],
+    [
+      'its share grants, recorded before the run identity existed',
+      { actor: { shareVisitor: visitorShareGrants } },
+    ],
+  ])(
+    'opts message/topic/lifecycle models into visitor rows for a visitor run read from %s',
+    async (_, principal) => {
+      // Shared-agent visitor run: op executes as the creator (`user_owner`)
+      // but the visitor (`visitor_1`) owns the stream. The abandon cleanup
+      // touches rows on `topics.senderId <> NULL`, so MessageModel /
+      // TopicModel / CompletionLifecycle must be constructed with
+      // `includeShareVisitor: true` — otherwise the cleanup silently no-ops,
+      // leaving the visitor's topic running with no failed reply.
+      (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+      (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+      (CompletionLifecycle as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(visitorRunState(principal)),
+      });
+      const store = buildStore();
+      store.loadPartial.mockResolvedValue(null);
+
+      await new AbandonOperationService({} as any, {
+        coordinator: coord as any,
+        snapshotStore: store as any,
+      }).finalizeAbandoned('op_visitor', 'inactivity_5m');
+
+      expectVisitorRowsIncluded(true);
+    },
+  );
+
+  it('still reaches visitor rows when the run identity contradicts the share grants', async () => {
+    // Cleanup only touches this run's own rows by id: seeing visitor rows too
+    // is harmless, missing them leaves a visitor's topic stuck running.
     (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
     (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
     (CompletionLifecycle as unknown as ReturnType<typeof vi.fn>).mockClear();
 
     const coord = buildCoordinator({
       loadAgentState: vi.fn().mockResolvedValue(
-        stateWith({
-          metadata: {
-            assistantMessageId: 'msg_assist_1',
-            streamOwnerUserId: 'visitor_1',
-          },
-          origin: {
-            agentId: 'agt_x',
-            topicId: 'tpc_x',
+        visitorRunState({
+          identity: buildRunIdentity({
+            shareVisitor: visitorShareGrants,
             userId: 'user_owner',
             workspaceId: 'ws_1',
-          },
+          }),
         }),
       ),
     });
@@ -861,15 +922,42 @@ describe('AbandonOperationService', () => {
       snapshotStore: store as any,
     }).finalizeAbandoned('op_visitor', 'inactivity_5m');
 
-    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
-      includeShareVisitor: true,
+    expectVisitorRowsIncluded(true);
+  });
+
+  it('forwards the visitor to the parent resume of an abandoned visitor sub-agent', async () => {
+    findOperationMock.mockResolvedValue({ parentOperationId: 'op_parent', threadId: 'thread_1' });
+    findThreadMock.mockResolvedValue({ sourceMessageId: 'msg_tool_placeholder' });
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          origin: {
+            lineage: { isSubAgent: true },
+            threadId: 'thread_1',
+            userId: 'user_owner',
+            workspaceId: 'ws_1',
+          },
+          principal: {
+            actor: { shareVisitor: visitorShareGrants },
+            identity: buildRunIdentity({
+              shareVisitor: visitorShareGrants,
+              userId: 'user_owner',
+              workspaceId: 'ws_1',
+            }),
+          },
+        }),
+      ),
     });
-    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
-      includeShareVisitor: true,
-    });
-    expect(CompletionLifecycle).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', {
-      includeShareVisitor: true,
-    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    const result = await new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+    expect(result.subAgentResume?.streamOwnerUserId).toBe('visitor_1');
   });
 
   it('keeps the visitor exclusion for an ordinary creator run (no streamOwnerUserId)', async () => {

@@ -1,5 +1,6 @@
 import {
   type AgentEvent,
+  type AgentRunIdentity,
   type AgentRuntimeContext,
   type AgentState,
   normalizeAgentState,
@@ -11,6 +12,20 @@ import { hasNonPersistedMessage } from './messagePersistence';
 import { getAgentRuntimeRedisClient } from './redis';
 
 const log = debug('lobe-server:agent-runtime:agent-state-manager');
+
+/**
+ * Unreadable JSON is kept as the raw string, which `runIdentity.ts` rejects as
+ * invalid. Throwing would void the whole record, and a reader then treats the
+ * run as unknown and settles it.
+ */
+const parseStoredIdentity = (raw: string | undefined): unknown => {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+};
 
 const REFRESH_OWNED_LOCK_SCRIPT =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end";
@@ -63,6 +78,12 @@ export interface AgentOperationMetadata {
   acceptsMemberRuntimeEnd?: boolean;
   agentConfig?: any;
   createdAt: string;
+  /**
+   * The run identity snapshot as stored, unvalidated: a newer build may have
+   * written a version this one does not know. Read it through
+   * `runIdentity.ts`. Absent on operations created before it existed.
+   */
+  identity?: unknown;
   lastActiveAt: string;
   /**
    * When set, the Gateway stream notifier mirrors this operation's stream events
@@ -79,6 +100,10 @@ export interface AgentOperationMetadata {
    * shared-agent visitor runs the operation EXECUTES as the creator
    * (`userId`), but only the visitor may subscribe to its stream — the
    * gateway registers the channel under this id and rejects other subs.
+   *
+   * A compat mirror of {@link identity}'s share-visitor actor for workers on
+   * the previous build; drop it once none can pick up a step, callback or
+   * approval of an operation recorded by this one.
    */
   streamOwnerUserId?: string;
   totalCost: number;
@@ -326,6 +351,7 @@ export class AgentStateManager {
           ? JSON.parse(metadata.visitorRedaction)
           : undefined,
         createdAt: metadata.createdAt,
+        identity: parseStoredIdentity(metadata.identity),
         lastActiveAt: metadata.lastActiveAt,
         modelRuntimeConfig: metadata.modelRuntimeConfig
           ? JSON.parse(metadata.modelRuntimeConfig)
@@ -352,6 +378,7 @@ export class AgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
+      identity?: AgentRunIdentity;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
@@ -368,6 +395,7 @@ export class AgentStateManager {
         agentConfig: data.agentConfig,
         visitorRedaction: data.visitorRedaction,
         createdAt: new Date().toISOString(),
+        identity: data.identity,
         lastActiveAt: new Date().toISOString(),
         mirrorToOperationId: data.mirrorToOperationId,
         modelRuntimeConfig: data.modelRuntimeConfig,
@@ -389,6 +417,7 @@ export class AgentStateManager {
       };
 
       if (metadata.userId) redisData.userId = metadata.userId;
+      if (metadata.identity) redisData.identity = JSON.stringify(metadata.identity);
       if (metadata.streamOwnerUserId) redisData.streamOwnerUserId = metadata.streamOwnerUserId;
       if (metadata.workspaceId) redisData.workspaceId = metadata.workspaceId;
       if (metadata.mirrorToOperationId)

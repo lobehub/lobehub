@@ -5,6 +5,10 @@ import { NextResponse } from 'next/server';
 
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { createAgentStateManager, createStreamEventManager } from '@/server/modules/AgentRuntime';
+import {
+  isShareVisitorActor,
+  resolveRunActorFromMetadata,
+} from '@/server/modules/AgentRuntime/runIdentity';
 
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -47,21 +51,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
   }
 
-  // A share-visitor run (`AgentOperationMetadata.streamOwnerUserId` set — see its
-  // JSDoc in `AgentStateManager.ts`) executes as the creator but must only ever
-  // be read back through the Gateway WS channel, which applies the owner-configured
-  // visitor redaction (`gatewayVisitorRedaction.ts`). This raw endpoint replays
+  // A share-visitor run executes as the creator but must only ever be read back
+  // through the Gateway WS channel, which applies the owner-configured visitor
+  // redaction (`gatewayVisitorRedaction.ts`). This raw endpoint replays
   // unredacted history with no projection, and the creator must never read a
   // visitor's transcript (visitor-isolation invariant) — so reject with 404 for
-  // EVERY caller, including both the visitor and the creator.
-  if (metadata.streamOwnerUserId) {
+  // EVERY caller, including both the visitor and the creator. So is a run whose
+  // identity cannot be trusted.
+  const runActor = resolveRunActorFromMetadata(metadata);
+  if (!runActor.ok || isShareVisitorActor(runActor.actor)) {
     return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
   }
 
-  // Otherwise this is a normal (non-share) operation: only its owner may read it.
+  // Otherwise this is a normal (non-share) operation: only its actor may read it.
   // 404 rather than 403 so an unauthorized caller cannot distinguish "not mine"
   // from "does not exist".
-  if (metadata.userId !== callerUserId) {
+  if (runActor.actor.userId !== callerUserId) {
     return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
   }
 

@@ -3,6 +3,10 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
+import {
+  isShareVisitorActor,
+  resolveRunActorFromMetadata,
+} from '@/server/modules/AgentRuntime/runIdentity';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:group-member-callback');
@@ -74,14 +78,24 @@ export async function groupMemberCallback(c: Context): Promise<Response> {
       return c.json({ error: 'Invalid operation or unauthorized' }, 401);
     }
 
+    // Refuse a run identity that contradicts its mirror or comes from a newer
+    // build; QStash redelivers, so a worker able to read it can still finish.
+    const runActor = resolveRunActorFromMetadata(metadata);
+    if (!runActor.ok) {
+      log(
+        'group-member-callback: unresolved run identity for %s (%s)',
+        operationId,
+        runActor.reason,
+      );
+      return c.json({ error: 'Invalid operation or unauthorized' }, 401);
+    }
+
     const serverDB = await getServerDB();
-    // Opt into visitor rows only for shared-agent visitor runs: metadata
-    // carries `streamOwnerUserId` when the operation executes as the creator
-    // but the visitor owns the stream. Ordinary creator ops keep the default
+    // Opt into visitor rows only when a share visitor operates the run (it
+    // executes as the creator). Ordinary creator ops keep the default
     // exclusion.
-    const includeShareVisitor = Boolean(metadata.streamOwnerUserId);
     const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
-      includeShareVisitor,
+      includeShareVisitor: isShareVisitorActor(runActor.actor),
       workspaceId: metadata.workspaceId,
     });
 

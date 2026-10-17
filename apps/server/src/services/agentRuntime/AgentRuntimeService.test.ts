@@ -724,6 +724,11 @@ describe('AgentRuntimeService', () => {
 
       expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith('test-operation-1', {
         agentConfig: mockParams.agentConfig,
+        identity: {
+          actor: { kind: 'user', userId: mockParams.userId },
+          owner: { type: 'user', userId: mockParams.userId },
+          version: 1,
+        },
         modelRuntimeConfig: mockParams.modelRuntimeConfig,
         userId: mockParams.userId,
       });
@@ -735,6 +740,65 @@ describe('AgentRuntimeService', () => {
         endpoint: 'http://localhost:3010/api/agent/run',
         priority: 'high',
         delay: 50,
+      });
+    });
+
+    describe('run identity', () => {
+      it('stamps a share run as operated by the visitor on every copy, beside the legacy marker', async () => {
+        const recordStart = vi
+          .spyOn(AgentOperationModel.prototype, 'recordStart')
+          .mockResolvedValue(undefined);
+        const identity = {
+          actor: { kind: 'shareVisitor', shareId: 'share-1', userId: 'visitor-1' },
+          owner: { type: 'user', userId: mockParams.userId },
+          version: 1,
+        };
+
+        await service.createOperation({
+          ...mockParams,
+          agentShareVisitor: {
+            agentId: 'agt-shared',
+            shareId: 'share-1',
+            visitorUserId: 'visitor-1',
+          },
+          autoStart: false,
+        });
+
+        // The durable row outlives the 2h runtime metadata for late callbacks.
+        expect(recordStart.mock.calls[0][0].metadata).toMatchObject({ runIdentity: identity });
+        // Workers on the previous build still read only `streamOwnerUserId`.
+        expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ identity, streamOwnerUserId: 'visitor-1' }),
+        );
+        const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+        expect(state.principal.identity).toEqual(identity);
+      });
+
+      it('owns a workspace run by the workspace the service is scoped to', async () => {
+        const recordStart = vi
+          .spyOn(AgentOperationModel.prototype, 'recordStart')
+          .mockResolvedValue(undefined);
+        const workspaceService = new AgentRuntimeService(mockDb, mockUserId, {
+          workspaceId: 'ws-1',
+        });
+        const createAgentOperation = vi.spyOn(
+          (workspaceService as any).coordinator,
+          'createAgentOperation',
+        );
+        const identity = {
+          actor: { kind: 'user', userId: mockParams.userId },
+          owner: { type: 'workspace', workspaceId: 'ws-1' },
+          version: 1,
+        };
+
+        await workspaceService.createOperation({ ...mockParams, autoStart: false });
+
+        expect(recordStart.mock.calls[0][0].metadata).toMatchObject({ runIdentity: identity });
+        expect(createAgentOperation).toHaveBeenCalledWith(
+          'test-operation-1',
+          expect.objectContaining({ identity, workspaceId: 'ws-1' }),
+        );
       });
     });
 

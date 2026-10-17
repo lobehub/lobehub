@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
+import { buildRunIdentity } from '../runIdentity';
 import type { StreamChunkData } from '../StreamEventManager';
 import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
 
@@ -505,6 +506,81 @@ describe('GatewayStreamNotifier', () => {
       });
     });
 
+    // An opted-in state snapshot reaches an ordinary run's client but never a
+    // visitor's, so whether it survives tells the two apart.
+    const pushedStepComplete = async (operationId: string) => {
+      await notifier.publishStreamEvent(operationId, {
+        data: {
+          finalState: { host: { includeFinalState: true }, status: 'done' },
+          phase: 'execution_complete',
+          reason: 'done',
+        },
+        stepIndex: 1,
+        type: 'step_complete',
+      });
+      const findPush = () =>
+        mockFetch.mock.calls
+          .filter((call: any[]) => call[0] === `${gatewayUrl}/api/operations/push-event`)
+          .map((call: any[]) => JSON.parse(call[1].body).event)
+          .find((event: any) => event.type === 'step_complete');
+      await vi.waitFor(() => expect(findPush()).toBeDefined());
+      return findPush().data;
+    };
+
+    it('registers an ordinary run under its actor and leaves its events unredacted', async () => {
+      await notifier.publishAgentRuntimeInit('op-own', {
+        identity: buildRunIdentity({ userId: 'user-1', workspaceId: 'ws-1' }),
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body).userId).toBe('user-1');
+      expect((await pushedStepComplete('op-own')).finalState).toEqual({
+        host: { includeFinalState: true },
+        status: 'done',
+      });
+    });
+
+    it('redacts a creator chatting through their own share link as a visitor', async () => {
+      await notifier.publishAgentRuntimeInit('op-own-share', {
+        identity: buildRunIdentity({
+          shareVisitor: { shareId: 'share-1', visitorUserId: 'creator-1' },
+          userId: 'creator-1',
+        }),
+        streamOwnerUserId: 'creator-1',
+        userId: 'creator-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body).userId).toBe('creator-1');
+      expect(await pushedStepComplete('op-own-share')).toEqual({
+        phase: 'execution_complete',
+        reason: 'done',
+      });
+    });
+
+    it('registers nobody and strips events when the identity contradicts its mirror', async () => {
+      await notifier.publishAgentRuntimeInit('op-conflict', {
+        identity: buildRunIdentity({ userId: 'creator-1' }),
+        streamOwnerUserId: 'visitor-1',
+        userId: 'creator-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body).userId).toBe('unknown');
+      expect(await pushedStepComplete('op-conflict')).toEqual({
+        phase: 'execution_complete',
+        reason: 'done',
+      });
+    });
+
     it('waits for gateway init before exposing the operation to subscribers', async () => {
       let resolveInit!: () => void;
       mockFetch.mockImplementation((url: string) => {
@@ -825,6 +901,64 @@ describe('GatewayStreamNotifier', () => {
       });
       expect(body.event.data).not.toHaveProperty('finalState');
       expect(body.event.data).not.toHaveProperty('uiMessages');
+    });
+
+    describe('run identity on the final state', () => {
+      const shareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+      const pushedEnd = async (principal: Record<string, unknown>) => {
+        await notifier.publishAgentRuntimeEnd({
+          finalState: {
+            error: { message: 'upstream diagnostic', type: 'ProviderBizError' },
+            origin: { userId: 'creator-1' },
+            principal,
+            world: { agent: { systemRole: 'secret prompt' } },
+          },
+          operationId: 'op-end',
+          reason: 'error',
+          stepIndex: 3,
+        });
+        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+        return JSON.parse(pushCall![1].body).event.data;
+      };
+
+      it('keeps the final state of an ordinary run', async () => {
+        const data = await pushedEnd({ identity: buildRunIdentity({ userId: 'creator-1' }) });
+
+        expect(data.finalState.world.agent.systemRole).toBe('secret prompt');
+        expect(data.reasonDetail).toBe('upstream diagnostic');
+      });
+
+      it("applies the share's own policy to a visitor run", async () => {
+        const data = await pushedEnd({
+          actor: { shareVisitor: { ...shareVisitor, agentId: 'agt-1', showErrorDetails: true } },
+          identity: buildRunIdentity({ shareVisitor, userId: 'creator-1' }),
+        });
+
+        expect(data).not.toHaveProperty('finalState');
+        expect(data.reasonDetail).toBe('upstream diagnostic');
+      });
+
+      it.each([
+        [
+          'a share identity whose share grants are missing',
+          { identity: buildRunIdentity({ shareVisitor, userId: 'creator-1' }) },
+        ],
+        [
+          'an ordinary identity on a run carrying share grants',
+          {
+            actor: { shareVisitor: { ...shareVisitor, agentId: 'agt-1', showErrorDetails: true } },
+            identity: buildRunIdentity({ userId: 'creator-1' }),
+          },
+        ],
+        ['an unreadable identity', { identity: '{"actor":' }],
+        ['an identity version this build does not know', { identity: { version: 2 } }],
+      ])('fully redacts the terminal event of a run with %s', async (_, principal) => {
+        const data = await pushedEnd(principal);
+
+        expect(data).not.toHaveProperty('finalState');
+        expect(data.reasonDetail).not.toBe('upstream diagnostic');
+        expect(data.errorType).not.toBe('ProviderBizError');
+      });
     });
   });
 

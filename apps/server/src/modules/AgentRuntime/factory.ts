@@ -8,6 +8,7 @@ import { FULL_STRIP_REDACTION } from './gatewayVisitorRedaction';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
+import { isShareVisitorActor, resolveRunActorFromMetadata } from './runIdentity';
 import { StreamEventManager } from './StreamEventManager';
 import { type IAgentStateManager, type IStreamEventManager } from './types';
 
@@ -117,8 +118,11 @@ export const createStreamEventManager = (
       // creator's identity, and under which owner-configured policy.
       async (operationId) => {
         const meta = await stateManager.getOperationMetadata(operationId);
-        if (!meta?.streamOwnerUserId) return null;
-        return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
+        const runActor = resolveRunActorFromMetadata(meta);
+        // An identity that cannot be trusted is stripped like a visitor run.
+        if (!runActor.ok) return runActor.reason === 'missing' ? null : FULL_STRIP_REDACTION;
+        if (!isShareVisitorActor(runActor.actor)) return null;
+        return meta?.visitorRedaction ?? FULL_STRIP_REDACTION;
       },
       {
         ...notifierOptions,

@@ -110,6 +110,53 @@ export interface AgentRunOrigin {
 }
 
 /**
+ * Whose run this is and who operates it, stamped once when the operation is
+ * created and only read afterwards.
+ *
+ * Identity facts, not an authorization: share pause or revocation, balance and
+ * freeze checks still run at every step. Written to `principal.identity`, the
+ * coordinator's operation metadata and the durable
+ * `agent_operations.metadata.runIdentity`, so a worker that never saw the run
+ * start — or outlived the 2h runtime snapshot — reads the same facts instead of
+ * inferring them.
+ *
+ * The run's services are still built with `origin.userId`, which is NOT the
+ * owner: a workspace run's owner is the workspace, and a share-visitor run
+ * executes as the creator.
+ */
+export interface AgentRunIdentity {
+  /** Who operates the run: its stream goes to them and they answer its interventions. */
+  actor: AgentRunActor;
+  /** The tenant whose resources the run uses by default. */
+  owner: AgentRunOwner;
+  /** Bumped on an incompatible change; readers refuse a version they do not know. */
+  version: 1;
+}
+
+/**
+ * See {@link AgentRunIdentity.actor}. Not the owner of the conversation rows:
+ * a share visitor's topics are stored under the creator.
+ *
+ * A share-visitor run is marked by `kind` and never inferred from the actor
+ * differing from the owner — a creator previewing their own share link is
+ * both, and still runs under the share's grants. Bot-originated runs keep the
+ * platform sender on `principal.actor.bot`; their actor is the LobeHub user the
+ * run streams to.
+ */
+export type AgentRunActor =
+  | { kind: 'user'; userId: string }
+  | {
+      kind: 'shareVisitor';
+      /** Absent when recovered from an operation created before the snapshot existed. */
+      shareId?: string;
+      userId: string;
+    };
+
+/** See {@link AgentRunIdentity.owner}. A workspace run belongs to the workspace, not its creator. */
+export type AgentRunOwner =
+  { type: 'user'; userId: string } | { type: 'workspace'; workspaceId: string };
+
+/**
  * Under whose authority the run acts and what it is allowed to do.
  *
  * Decided by the host when the operation is created and frozen from then on;
@@ -134,6 +181,8 @@ export interface AgentRunPrincipal {
     clientIp?: string;
     userAgent?: string;
   };
+  /** Owner and actor of the run. Servers read it through `modules/AgentRuntime/runIdentity.ts`. */
+  identity?: AgentRunIdentity;
   /** Decisions about what the run may do, made once per turn. */
   policy?: {
     /** Device-access decision; `reason` names the branch that granted or denied it. */

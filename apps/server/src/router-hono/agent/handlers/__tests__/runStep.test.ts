@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildRunIdentity } from '@/server/modules/AgentRuntime/runIdentity';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { getInvocationDeadline } from '@/server/utils/invocationDeadline';
 import type * as ScheduleAfterResponseModule from '@/server/utils/scheduleAfterResponse';
@@ -371,12 +372,13 @@ describe('runStep handler', () => {
     expect(mockScheduleOpportunisticStaleSweep).toHaveBeenCalledTimes(1);
   });
 
-  it('opts the AiAgentService into visitor rows when metadata carries streamOwnerUserId', async () => {
+  it('opts the AiAgentService into visitor rows for a visitor run without an identity snapshot', async () => {
     // A shared-agent visitor run: the op executes as the creator `userId`
     // (`user-owner`) but the visitor (`visitor-1`) owns the stream. The step
     // worker must set `includeShareVisitor: true` so the runtime's
     // MessageModel / TopicModel can still read the visitor-scoped rows that
-    // `MessageModel` / `TopicModel` gate out by default.
+    // `MessageModel` / `TopicModel` gate out by default. Recorded by the
+    // previous build, it only carries the `streamOwnerUserId` marker.
     mockGetOperationMetadata.mockResolvedValue({
       streamOwnerUserId: 'visitor-1',
       userId: 'user-owner',
@@ -396,6 +398,53 @@ describe('runStep handler', () => {
       'user-owner',
       expect.objectContaining({ includeShareVisitor: true, workspaceId: 'ws-1' }),
     );
+  });
+
+  it('opts the AiAgentService into visitor rows from the run identity', async () => {
+    mockGetOperationMetadata.mockResolvedValue({
+      identity: buildRunIdentity({
+        shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' },
+        userId: 'user-owner',
+        workspaceId: 'ws-1',
+      }),
+      streamOwnerUserId: 'visitor-1',
+      userId: 'user-owner',
+      workspaceId: 'ws-1',
+    });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(AiAgentService).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-owner',
+      expect.objectContaining({ includeShareVisitor: true, workspaceId: 'ws-1' }),
+    );
+  });
+
+  it('refuses a run identity that contradicts its mirror without settling the run', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockGetOperationMetadata.mockResolvedValue({
+      identity: buildRunIdentity({ userId: 'user-owner' }),
+      streamOwnerUserId: 'visitor-1',
+      userId: 'user-owner',
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(401);
+    expect(AiAgentService).not.toHaveBeenCalled();
+    // The run itself is intact, so it is not retired as orphaned.
+    expect(mockSettleStaleRunning).not.toHaveBeenCalled();
+    expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"reason":"conflict"'));
+    warn.mockRestore();
   });
 
   it('acks without retry when the runtime already re-queued the locked step', async () => {

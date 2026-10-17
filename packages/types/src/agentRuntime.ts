@@ -86,7 +86,7 @@ export enum RequestTrigger {
  * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
  *
  * Single source of truth for the runtime-side share marker: it is stamped once
- * at operation creation onto `state.metadata.agentShareVisitor` and read back
+ * at operation creation onto `state.principal.actor.shareVisitor` and read back
  * by every later step, so no step has to re-read the share row.
  *
  * SECURITY: never derived from request headers or any other client input — its

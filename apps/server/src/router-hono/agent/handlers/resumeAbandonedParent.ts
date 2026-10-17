@@ -65,8 +65,8 @@ export async function resumeAbandonedParent(
   // No durable queue configured: run the CAS-guarded, idempotent bridge inline
   // through AiAgentService so the runtime's models stay workspace-scoped.
   // Mirror the queue-mode `subagent-callback`: opt into visitor rows only when
-  // the parent op is a shared-agent visitor run (surfaced via
-  // `streamOwnerUserId`). Ordinary creator runs keep the default exclusion.
+  // the abandoned run is a share-visitor run (`streamOwnerUserId`, resolved
+  // from its run identity). Ordinary creator runs keep the default exclusion.
   const aiAgentService = new AiAgentService(serverDB, userId, {
     includeShareVisitor: Boolean(streamOwnerUserId),
     workspaceId,

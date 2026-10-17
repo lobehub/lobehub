@@ -1,4 +1,4 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentRunIdentity, type AgentState } from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
@@ -97,6 +97,7 @@ export class AgentRuntimeCoordinator {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
+      identity?: AgentRunIdentity;
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
