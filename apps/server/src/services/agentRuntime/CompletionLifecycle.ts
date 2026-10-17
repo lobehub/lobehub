@@ -107,6 +107,22 @@ export class CriticalAgentInterventionPersistenceError extends Error {
 type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
+ * Runs after a topic's own run settles — not a child run (sub-agent, group
+ * member, `callAgent` target), not a park for approval, not a user stop. The
+ * topic is free for the next turn at that point, which is when work that was
+ * waiting on it (background sub-agent results) can be handed over. Scheduled
+ * after the response; the handler owns its errors.
+ */
+export type TopicRunSettledHandler = (params: {
+  operationId: string;
+  topicId: string;
+}) => Promise<void>;
+
+/** Terminal reasons after which the topic's agent may be woken again. */
+const isTopicRunSettledReason = (reason: string) =>
+  reason !== 'interrupted' && reason !== 'waiting_for_human' && reason !== 'waiting_for_async_tool';
+
+/**
  * Whether a lifecycle event's `metadata` belongs to an Agent Share visitor
  * run. `principal.actor.shareVisitor.visitorUserId` is stamped once at operation
  * creation (`AgentRuntimeService.createOperation`'s `initialState.metadata`)
@@ -225,6 +241,7 @@ export class CompletionLifecycle {
    * (instantiation is fire-and-forget at start and may not have settled yet).
    */
   private readonly verifyPlanInstantiations = new Map<string, Promise<void>>();
+  private readonly onTopicRunSettled?: TopicRunSettledHandler;
 
   constructor(
     private readonly serverDB: LobeChatDatabase,
@@ -237,10 +254,13 @@ export class CompletionLifecycle {
        * creator's identity.
        */
       includeShareVisitor?: boolean;
+      /** See {@link TopicRunSettledHandler}. */
+      onTopicRunSettled?: TopicRunSettledHandler;
     },
   ) {
     this.workspaceId = workspaceId;
     this.includeShareVisitor = options?.includeShareVisitor ?? false;
+    this.onTopicRunSettled = options?.onTopicRunSettled;
     this.messageModel = new MessageModel(serverDB, userId, workspaceId, undefined, {
       includeShareVisitor: this.includeShareVisitor,
     });
@@ -1188,6 +1208,21 @@ export class CompletionLifecycle {
         void this.recallUserOnCompletion(operationId, event, runOrigin).catch((error) =>
           log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
         );
+      }
+
+      const settledTopicId = typeof runOrigin.topicId === 'string' ? runOrigin.topicId : undefined;
+      if (
+        this.onTopicRunSettled &&
+        settledTopicId &&
+        isTopicRunSettledReason(reason) &&
+        !runOrigin.lineage?.parentOperationId &&
+        runOrigin.lineage?.isSubAgent !== true &&
+        runOrigin.lineage?.orchestrationRole !== 'member' &&
+        !runOrigin.signal &&
+        !isAgentShareRun(state)
+      ) {
+        const onTopicRunSettled = this.onTopicRunSettled;
+        after(() => onTopicRunSettled({ operationId, topicId: settledTopicId }));
       }
 
       // Delivery checker: on a successful completion, run the confirmed verify

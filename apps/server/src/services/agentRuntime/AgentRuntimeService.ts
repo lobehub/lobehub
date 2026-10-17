@@ -20,6 +20,7 @@ import {
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
+import type { CallSubAgentState } from '@lobechat/builtin-tool-lobe-agent';
 import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
@@ -449,6 +450,17 @@ const toAgentSignalSnapshotEvents = (
  */
 export interface AgentRuntimeDelegate {
   /**
+   * Hand the topic's finished background sub-agent results to their parent
+   * agent as a new turn, unless a run of that topic is still going (its own
+   * completion delivers them then). Called when a background sub-agent finishes
+   * and when a topic run settles. Never throws.
+   */
+  deliverBackgroundSubAgentResults?: (params: {
+    /** The run that is settling right now, which no longer counts as busy. */
+    settledOperationId?: string;
+    topicId: string;
+  }) => Promise<void>;
+  /**
    * Fork a group member ("call agent member") under a `lobe-group-management`
    * tool call. Handles both in-group (non-isolated, shared group session) and
    * isolated members, installing the group-action member completion bridge that
@@ -627,6 +639,11 @@ export class AgentRuntimeService {
     });
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId, {
       includeShareVisitor,
+      onTopicRunSettled: ({ operationId, topicId }) =>
+        this.delegate.deliverBackgroundSubAgentResults?.({
+          settledOperationId: operationId,
+          topicId,
+        }) ?? Promise.resolve(),
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
@@ -1536,6 +1553,17 @@ export class AgentRuntimeService {
             : undefined,
           mirrorToOperationId,
           modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+          // Lets the gateway's per-user feed say which topic this run belongs to,
+          // so a tab that did not start it (a background sub-agent waking its
+          // parent) can follow it live.
+          routing: {
+            agentId: appContext?.agentId,
+            groupId: appContext?.groupId ?? undefined,
+            parentOperationId: parentOperationId ?? undefined,
+            scope: appContext?.scope ?? undefined,
+            threadId: appContext?.threadId ?? undefined,
+            topicId: appContext?.topicId ?? undefined,
+          },
           // Share-visitor runs execute as the creator (`userId`) but stream only
           // to the visitor — the gateway registers the WS channel under this id.
           streamOwnerUserId: agentShareVisitor?.visitorUserId,
@@ -4406,6 +4434,24 @@ export class AgentRuntimeService {
         ? `Sub-agent did not complete (${reason}): ${errorReason}`
         : `Sub-agent did not complete (${reason}).`
       : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+
+    // A background sub-agent's parent never parked on it: the placeholder holds
+    // the start receipt the parent already read, so the answer is kept for a
+    // delivery of its own instead of a backfill + resume.
+    if (await this.isBackgroundSubAgentPlaceholder(toolMessageId)) {
+      await this.recordBackgroundSubAgentResult({
+        error: failed
+          ? formatErrorForMetadata(finalState?.error ?? params.errorMessage)
+          : undefined,
+        finalState,
+        result: resultContent,
+        status: failed ? 'error' : 'completed',
+        threadId,
+        toolMessageId,
+      });
+      return false;
+    }
+
     // callSubAgent results carry the sub-agent id so the parent can later send
     // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
     // to hand over what it gathered before failing — instead of redoing it.
@@ -4460,6 +4506,61 @@ export class AgentRuntimeService {
       { parentOperationId },
       { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
     );
+  }
+
+  /**
+   * Whether the bridged placeholder was started with `runInBackground`
+   * (`callSubAgent` or `callAgent` — only their runner writes the flag).
+   */
+  private async isBackgroundSubAgentPlaceholder(toolMessageId: string): Promise<boolean> {
+    const plugin = await this.messageModel.findMessagePlugin(toolMessageId);
+    return (plugin?.state as CallSubAgentState | undefined)?.background === true;
+  }
+
+  /**
+   * Store a finished background sub-agent's answer on its placeholder, then try
+   * to deliver it. The tool result (the start receipt) is left as the parent
+   * read it; the answer goes into `state.result` for the delivery to carry.
+   *
+   * Throws when the answer cannot be stored, so the queue-mode callback is
+   * redelivered. A failed delivery does not throw: the answer is stored, and
+   * the next settle of the topic picks it up.
+   */
+  private async recordBackgroundSubAgentResult(params: {
+    error?: unknown;
+    finalState?: AgentState;
+    result: string;
+    status: 'completed' | 'error';
+    threadId: string;
+    toolMessageId: string;
+  }): Promise<void> {
+    const { error, finalState, result, status, threadId, toolMessageId } = params;
+    const state: Partial<CallSubAgentState> = {
+      model: finalState?.modelRuntimeConfig?.model,
+      result,
+      status,
+      threadId,
+      totalCost: finalState?.cost?.total,
+      totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+      totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
+      totalToolCalls: finalState?.usage?.tools?.totalCalls,
+      totalTokens: finalState?.usage?.llm?.tokens?.total,
+    };
+
+    const recorded = await this.messageModel.updateToolMessage(toolMessageId, {
+      pluginError: error,
+      pluginState: state,
+    });
+    if (!recorded.success) {
+      throw new Error(
+        `Background sub-agent: failed to record the result on tool message ${toolMessageId}`,
+      );
+    }
+
+    const placeholder = await this.messageModel.findById(toolMessageId);
+    if (!placeholder?.topicId || !this.delegate.deliverBackgroundSubAgentResults) return;
+
+    await this.delegate.deliverBackgroundSubAgentResults({ topicId: placeholder.topicId });
   }
 
   /**

@@ -88,6 +88,9 @@ export default {
   'builtins.lobe-agent.apiName.analyzeMedia.result':
     'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
+  'builtins.lobe-agent.subAgent.backgroundHint':
+    'The result will be sent to this conversation when it finishes.',
+  'builtins.lobe-agent.subAgent.backgroundRunning': 'Running in background',
   'builtins.lobe-agent.subAgent.stats.tokens': '{{count}} tokens',
   'builtins.lobe-agent.subAgent.stats.tools': '{{count}} tools',
   'builtins.lobe-agent.subAgent.stopped': 'Stopped before finishing',

@@ -100,6 +100,20 @@ export class AgentRuntimeCoordinator {
       visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      /**
+       * Where the op runs, for the gateway's per-user lifecycle feed only (see
+       * `pickGatewayInitMeta`): a tab that did not start the op — a background
+       * sub-agent waking its parent, another tab — learns from it which topic
+       * to follow. Sent with the init event, not persisted in the metadata.
+       */
+      routing?: {
+        agentId?: string;
+        groupId?: string;
+        parentOperationId?: string;
+        scope?: string;
+        threadId?: string;
+        topicId?: string;
+      };
       streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
@@ -107,14 +121,18 @@ export class AgentRuntimeCoordinator {
   ): Promise<void> {
     try {
       // Create operation metadata
-      await this.stateManager.createOperationMetadata(operationId, data);
+      const { routing, ...persisted } = data;
+      await this.stateManager.createOperationMetadata(operationId, persisted);
 
       // Get the created metadata
       const metadata = await this.stateManager.getOperationMetadata(operationId);
 
       if (metadata) {
         // Send agent runtime init event
-        await this.streamEventManager.publishAgentRuntimeInit(operationId, metadata);
+        await this.streamEventManager.publishAgentRuntimeInit(operationId, {
+          ...metadata,
+          ...routing,
+        });
         log('[%s] Agent operation created and initialized', operationId);
       }
     } catch (error) {

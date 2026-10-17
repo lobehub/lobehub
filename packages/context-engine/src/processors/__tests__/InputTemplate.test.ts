@@ -240,4 +240,28 @@ describe('InputTemplateProcessor', () => {
     expect(result.messages[2].content).toBe('System message'); // Unchanged
     expect(result.metadata.inputTemplateProcessed).toBe(1);
   });
+
+  // A background sub-agent's report arrives as a user message from that
+  // sub-agent; the template is for what the human typed.
+  it('leaves a sub-agent result message untouched', async () => {
+    const processor = new InputTemplateProcessor({ inputTemplate: 'Template: {{text}} - End' });
+
+    const result = await processor.process({
+      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
+      isAborted: false,
+      messages: [
+        {
+          content: 'The poem',
+          createdAt: Date.now(),
+          id: '1',
+          metadata: { subAgentCallback: { name: 'Poet', status: 'completed', threadId: 'thd' } },
+          role: 'user',
+          updatedAt: Date.now(),
+        },
+      ],
+      metadata: { maxTokens: 4096, model: 'gpt-4' },
+    } as any);
+
+    expect(result.messages[0].content).toBe('The poem');
+  });
 });

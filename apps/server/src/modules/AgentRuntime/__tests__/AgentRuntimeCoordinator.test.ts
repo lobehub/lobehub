@@ -76,6 +76,26 @@ describe('AgentRuntimeCoordinator', () => {
       expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, metadata);
     });
 
+    // The gateway's per-user feed needs to know which topic an op belongs to so
+    // a tab that did not start it (a background sub-agent waking its parent)
+    // can follow it; the routing goes out with init but is not stored.
+    it('sends routing with the init event without persisting it', async () => {
+      const operationId = 'test-operation-id';
+      const routing = { agentId: 'agt-1', parentOperationId: 'op-parent', topicId: 'tpc-1' };
+      const metadata = { createdAt: '2024-01-01T00:00:00.000Z', status: 'idle', userId: 'u' };
+      mockStateManager.getOperationMetadata.mockResolvedValue(metadata);
+
+      await coordinator.createAgentOperation(operationId, { routing, userId: 'u' });
+
+      expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, {
+        userId: 'u',
+      });
+      expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, {
+        ...metadata,
+        ...routing,
+      });
+    });
+
     it('should not publish init event if metadata creation fails', async () => {
       const operationId = 'test-operation-id';
       const data = { userId: 'user-123' };

@@ -29,6 +29,11 @@ import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender
 import { UserMessageExtra } from './Extra';
 import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
+import {
+  SubAgentSenderTags,
+  SubAgentThreadLink,
+  useSubAgentSenderIdentity,
+} from './SubAgentSender';
 
 interface UserMessageProps {
   disableEditing?: boolean;
@@ -47,6 +52,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // A wake-up message from the SCM integration is authored by the pull
   // request, so GitHub takes the sender slot instead of the card's header.
   const scmSource = useMemo(() => getScmEventSource(content), [content]);
+  // A background sub-agent reporting back speaks in a user turn of its own.
+  const subAgentCallback = metadata?.subAgentCallback;
+  const subAgentSender = useSubAgentSenderIdentity(subAgentCallback);
+  const editingDisabled = disableEditing || !!subAgentCallback;
 
   const { t } = useTranslation('chat');
   const selfAvatar = useUserAvatar();
@@ -59,8 +68,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // hidden-avatar behavior. Self identity applies only to the viewer's own
   // rows — see resolveSenderIdentity.
   // A bot-channel row is authored by someone else even in personal mode, so
-  // its sender is always shown. Same for an agent → agent turn.
-  const showSender = Boolean(activeWorkspaceId) || !!botSender || !!scmSource || !!agentSender;
+  // its sender is always shown. Same for an agent → agent turn and a
+  // background sub-agent's report.
+  const showSender =
+    Boolean(activeWorkspaceId) || !!botSender || !!scmSource || !!agentSender || !!subAgentSender;
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { avatar, title } = resolveSenderIdentity({
     currentUserId,
@@ -68,6 +79,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     selfAvatar,
     selfTitle,
     sender,
+    subAgentSender,
     unknownLabel: t('sender.unknownMember'),
   });
 
@@ -92,19 +104,19 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     return <Tag>{t('dm.visibleTo', { target: targetName })}</Tag>;
   }, [targetId, userName, agents, t]);
 
-  const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
+  const onDoubleClick = useDoubleClickEdit({ disableEditing: editingDisabled, error, id, role });
 
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
   const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
 
   const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
     (e) => {
-      if (disableEditing) return;
+      if (editingDisabled) return;
       setMessageItemActionElementPortialContext(e.currentTarget);
       setMessageItemActionTypeContext({ id, index, type: 'user' });
     },
     [
-      disableEditing,
+      editingDisabled,
       id,
       index,
       setMessageItemActionElementPortialContext,
@@ -114,9 +126,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
 
   return (
     <ChatItem
-      actions={<Actions data={item} disableEditing={disableEditing} id={id} />}
+      actions={<Actions data={item} disableEditing={editingDisabled} id={id} />}
       avatar={{ avatar, title }}
-      belowMessage={<ScheduledRunFooter id={id} />}
       customAvatarRender={scmSource ? () => <ScmEventAvatar /> : undefined}
       editing={editing}
       id={id}
@@ -131,6 +142,12 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
         ) : undefined
       }
+      belowMessage={
+        <>
+          {subAgentCallback && <SubAgentThreadLink callback={subAgentCallback} />}
+          <ScheduledRunFooter id={id} />
+        </>
+      }
       headerAddon={
         scmSource || metadata?.steer ? (
           <>
@@ -140,12 +157,9 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
         ) : undefined
       }
       titleAddon={
-        // The row is `row-reverse` (right-aligned), so `headerAddon` renders on
-        // the far side of the author name. The source link belongs on the near
-        // side instead: the author name stays next to its own avatar, and the
-        // topic it came from reads as a leading qualifier rather than splitting
-        // the name from its avatar.
-        dmIndicator || agentSender?.topicId ? (
+        subAgentCallback ? (
+          <SubAgentSenderTags callback={subAgentCallback} />
+        ) : dmIndicator || agentSender?.topicId ? (
           <>
             {dmIndicator}
             {agentSender?.topicId && (

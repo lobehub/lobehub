@@ -20,6 +20,7 @@ import {
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   StaleToolResultTrimProcessor,
+  SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
@@ -519,6 +520,9 @@ export class MessagesEngine {
       // Flattens group/task messages, applies templates and variables
       // =============================================
 
+      // Background sub-agent results arrive as user messages from the
+      // sub-agent; mark them as its report before any user-text template
+      new SubAgentResultMessageProcessor(),
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
       // AgentCouncil message flatten

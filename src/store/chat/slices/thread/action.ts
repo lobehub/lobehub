@@ -176,8 +176,8 @@ export class ChatThreadActionImpl {
     );
   };
 
-  refreshThreads = async (): Promise<void> => {
-    const topicId = this.#get().activeTopicId;
+  /** Revalidate a topic's thread list; the active topic's when none is given. */
+  refreshThreads = async (topicId = this.#get().activeTopicId): Promise<void> => {
     if (!topicId) return;
 
     return mutate(threadKeys.list(topicId));

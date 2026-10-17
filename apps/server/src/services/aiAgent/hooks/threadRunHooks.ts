@@ -24,16 +24,19 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
 }
 
 /**
- * Usage a continued sub-agent thread accumulated in its earlier runs. Every
- * run starts fresh counters and each thread write replaces `metadata`, so a
- * follow-up run carries these forward and adds its own usage on top.
+ * What a thread's metadata carries from one write and one run to the next.
+ * Every thread write replaces `metadata`, so each writer spreads these back
+ * in: the tool call that spawned the thread (how the UI tells a sub-agent
+ * from an ordinary thread), and the usage of earlier runs, which a follow-up
+ * run adds its own usage on top of.
  */
-export type ThreadUsageBaseline = Pick<
+export type ThreadCarryOver = Pick<
   ThreadMetadata,
-  'totalCost' | 'totalMessages' | 'totalTokens' | 'totalToolCalls'
+  'sourceToolCallId' | 'totalCost' | 'totalMessages' | 'totalTokens' | 'totalToolCalls'
 >;
 
-export const pickThreadUsageBaseline = (metadata?: ThreadMetadata | null): ThreadUsageBaseline => ({
+export const pickThreadCarryOver = (metadata?: ThreadMetadata | null): ThreadCarryOver => ({
+  sourceToolCallId: metadata?.sourceToolCallId,
   totalCost: metadata?.totalCost,
   totalMessages: metadata?.totalMessages,
   totalTokens: metadata?.totalTokens,
@@ -184,8 +187,17 @@ export function createThreadHooks(
   startedAt: string,
   sourceMessageId: string | undefined,
   logScope: 'execSubAgent' | 'execVirtualSubAgent',
-  usageBaseline: ThreadUsageBaseline = {},
+  carryOver: ThreadCarryOver = {},
+  options: {
+    /**
+     * Copy the run's final answer into the source message. Off for background
+     * sub-agents, whose source message is the start receipt the parent already
+     * read — their answer is delivered as a separate message instead.
+     */
+    updateSourceMessage?: boolean;
+  } = {},
 ): AgentHook[] {
+  const { updateSourceMessage = true } = options;
   return [
     {
       handler: async (event: AgentHookEvent) => {
@@ -196,14 +208,12 @@ export function createThreadHooks(
           await threadModel.update(threadId, {
             metadata: {
               operationId: event.operationId,
+              sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,
-              totalCost: usageBaseline.totalCost,
+              totalCost: carryOver.totalCost,
               totalMessages: state.messages?.length ?? 0,
-              totalTokens: addUsage(usageBaseline.totalTokens, calculateTotalTokens(state.usage)),
-              totalToolCalls: addUsage(
-                usageBaseline.totalToolCalls,
-                state.usage?.tools?.totalCalls,
-              ),
+              totalTokens: addUsage(carryOver.totalTokens, calculateTotalTokens(state.usage)),
+              totalToolCalls: addUsage(carryOver.totalToolCalls, state.usage?.tools?.totalCalls),
             },
           });
         } catch (error) {
@@ -262,7 +272,7 @@ export function createThreadHooks(
             .reverse()
             .find((m: { role: string }) => m.role === 'assistant');
 
-          if (sourceMessageId && lastAssistantMessage?.content) {
+          if (updateSourceMessage && sourceMessageId && lastAssistantMessage?.content) {
             await messageModel.update(sourceMessageId, {
               content: lastAssistantMessage.content,
             });
@@ -276,15 +286,13 @@ export function createThreadHooks(
               duration,
               error: formattedError,
               operationId: finalState.operationId,
+              sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,
-              totalCost: addUsage(usageBaseline.totalCost, finalState.cost?.total),
+              totalCost: addUsage(carryOver.totalCost, finalState.cost?.total),
               totalMessages: finalState.messages?.length ?? 0,
-              totalTokens: addUsage(
-                usageBaseline.totalTokens,
-                calculateTotalTokens(finalState.usage),
-              ),
+              totalTokens: addUsage(carryOver.totalTokens, calculateTotalTokens(finalState.usage)),
               totalToolCalls: addUsage(
-                usageBaseline.totalToolCalls,
+                carryOver.totalToolCalls,
                 finalState.usage?.tools?.totalCalls,
               ),
             },
