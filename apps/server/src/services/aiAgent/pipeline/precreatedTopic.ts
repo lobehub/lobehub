@@ -1,8 +1,11 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ExecGroupAgentParams } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import type { TopicModel } from '@/database/models/topic';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { AgentService } from '@/server/services/agent';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveRunAgentConfig } from './resolveRunAgentConfig';
 import { resolveNewTopicSnapshot } from './turnSetup';
@@ -54,6 +57,44 @@ export const resolvePrecreatedTopicSnapshot = async (
     agentConfig,
     snapshot: await resolveNewTopicSnapshot(deps, agentConfig, overrides),
   };
+};
+
+export interface GroupAgentTopicDeps extends PrecreatedTopicDeps {
+  topicModel: TopicModel;
+}
+
+/**
+ * Create the topic a group supervisor run starts in, snapshotting the agent's
+ * model like every other pre-created topic. Returns the new topic id.
+ */
+export const createGroupAgentTopic = async (
+  deps: GroupAgentTopicDeps,
+  {
+    agentId,
+    groupId,
+    message,
+    newTopic,
+  }: Pick<ExecGroupAgentParams, 'agentId' | 'groupId' | 'message' | 'newTopic'>,
+): Promise<string> => {
+  const fallbackTitleSource = markdownToTxt(message);
+  const topicTitle =
+    newTopic?.title ||
+    fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');
+  const agentConfig = await resolvePrecreatedTopicConfig(deps, agentId);
+  const snapshot = await resolveNewTopicSnapshot(
+    { db: deps.db, userId: deps.userId, workspaceId: deps.workspaceId },
+    agentConfig,
+  );
+  const topicItem = await deps.topicModel.create({
+    ...snapshot,
+    agentId,
+    groupId,
+    messages: newTopic?.topicMessageIds,
+    title: topicTitle,
+    // Note: execGroupAgent doesn't have trigger param yet, defaults to null
+  });
+
+  return topicItem.id;
 };
 
 /**
