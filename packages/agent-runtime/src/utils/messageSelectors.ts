@@ -173,9 +173,7 @@ export const normalizeTodosState = (
   if (!items || !items.every(isTodoItem)) return undefined;
 
   const updatedAt =
-    isPlainRecord(value) && isNonEmptyString(value.updatedAt)
-      ? value.updatedAt
-      : fallbackUpdatedAt;
+    isPlainRecord(value) && isNonEmptyString(value.updatedAt) ? value.updatedAt : fallbackUpdatedAt;
 
   return { items, updatedAt };
 };
