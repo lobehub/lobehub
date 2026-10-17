@@ -1,5 +1,6 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 
+import { READABLE_URL_BATCH_SIZE } from '@/const/readableFileUrls';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type CheckFileHashResult,
@@ -59,6 +60,26 @@ export class FileService {
   getReadableUrl = async (id: string): Promise<string> => {
     const { url } = await lambdaClient.file.getReadableUrl.query({ id });
     return url;
+  };
+
+  getReadableUrls = async (
+    ids: string[],
+    signal?: AbortSignal,
+  ): Promise<Record<string, string>> => {
+    signal?.throwIfAborted();
+    const uniqueIds = [...new Set(ids)];
+    const urls: Record<string, string> = {};
+    // Sequential batches bound server work even for long image histories.
+    for (let offset = 0; offset < uniqueIds.length; offset += READABLE_URL_BATCH_SIZE) {
+      signal?.throwIfAborted();
+      const batch = await lambdaClient.file.getReadableUrls.query(
+        { ids: uniqueIds.slice(offset, offset + READABLE_URL_BATCH_SIZE) },
+        { signal },
+      );
+      signal?.throwIfAborted();
+      Object.assign(urls, batch);
+    }
+    return urls;
   };
 
   removeFile = async (id: string): Promise<void> => {

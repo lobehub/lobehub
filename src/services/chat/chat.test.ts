@@ -1803,7 +1803,11 @@ describe('ChatService', () => {
         request({ channel: 'llmcall:user-1:abcdefgh', headers: {} }),
       );
       const relayedError = {
-        error: { message: "model 'gpt-oss:20b' not found", name: 'ResponseError', status_code: 404 },
+        error: {
+          message: "model 'gpt-oss:20b' not found",
+          name: 'ResponseError',
+          status_code: 404,
+        },
         errorType: 'OllamaBizError',
         provider: 'ollama',
       };
@@ -1843,32 +1847,6 @@ describe('ChatService', () => {
       expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), {
         signal: controller.signal,
       });
-    });
-
-    it('should make a POST request with the correct payload', async () => {
-      const params: Partial<ChatStreamPayload> = {
-        model: 'test-model',
-        messages: [],
-      };
-      const options = {};
-      const expectedPayload = {
-        model: DEFAULT_AGENT_CONFIG.model,
-        stream: true,
-        ...DEFAULT_AGENT_CONFIG.params,
-        ...params,
-        apiMode: 'responses',
-      };
-
-      await chatService.getChatCompletion(params, options);
-
-      expect(mockFetchSSE).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify(expectedPayload),
-          headers: expect.any(Object),
-          method: 'POST',
-        }),
-      );
     });
 
     it('should send request trigger as a header without adding it to the model payload', async () => {

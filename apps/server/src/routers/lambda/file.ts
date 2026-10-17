@@ -59,6 +59,7 @@ import {
   assertKnowledgeBaseBrowsable,
   getRestrictedKnowledgeBaseIds,
 } from './_helpers/knowledgeBaseAccess';
+import { getReadableUrl, getReadableUrls, readableUrlsInput } from './file/readableUrls';
 
 const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 const deleteKnowledgeItemsByQuerySchema = QueryFileListSchema.extend({
@@ -478,26 +479,13 @@ export const fileRouter = router({
       };
     }),
 
-  /**
-   * Direct storage URL for reading a file's bytes in the browser (canvas
-   * export). The `/f/:id` proxy answers with a cross-origin redirect, which
-   * drops the request's Origin so bucket CORS can never allow it; fetching the
-   * storage URL directly keeps the Origin the bucket already allows for uploads.
-   */
   getReadableUrl: fileProcedure
-    .input(
-      z.object({
-        id: z.string(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const item = await ctx.fileModel.findById(input.id);
-      if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+    .input(z.object({ id: z.string() }))
+    .query(({ ctx, input }) => getReadableUrl(ctx, input.id)),
 
-      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
-
-      return { url: await ctx.fileService.getFullFileUrl(item.url) };
-    }),
+  getReadableUrls: fileProcedure
+    .input(readableUrlsInput)
+    .query(({ ctx, input }) => getReadableUrls(ctx, input.ids)),
 
   getFileItemById: fileProcedure
     .input(

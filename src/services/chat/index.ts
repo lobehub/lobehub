@@ -42,6 +42,7 @@ import { createTraceHeader } from '@/utils/trace';
 
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
+import { fileService } from '../file';
 import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
 import { type ResolvedAgentConfig } from './mecha';
 import {
@@ -50,6 +51,7 @@ import {
   initializeWithClientStore,
   resolveBrowserModelParams,
 } from './mecha';
+import { resolveChatImageUrls } from './resolveImageUrls';
 import { type FetchOptions } from './types';
 
 const providersWithDeploymentName = new Set<string>([
@@ -443,6 +445,15 @@ class ChatService {
       userPreferTransitionMode,
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
+
+    if (payload.messages) {
+      payload.messages = await resolveChatImageUrls(
+        payload.messages,
+        window.location.origin,
+        fileService.getReadableUrls,
+        signal,
+      );
+    }
 
     return oneShotRelay.run(
       relayToThisTab ? provider : undefined,
