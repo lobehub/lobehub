@@ -85,10 +85,6 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => c
     background-color: ${token.colorBgLayout};
   }
 
-  button {
-    -webkit-app-region: no-drag;
-  }
-
   .${CLASSNAMES.ContextTrigger}[data-popup-open]:not([data-no-highlight]),
   .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight]) {
     background: ${token.colorFillTertiary};
