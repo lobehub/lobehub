@@ -251,10 +251,21 @@ export class EditorActionImpl {
     if (!doc) return;
 
     // Check if editorData is valid and non-empty
+    const editorDataRoot = (doc.editorData as { root?: { children?: unknown[] } } | null)?.root;
+    // A childless root (empty-parse shell) throws Lexical error #38 on hydration;
+    // treat it as no editor data so the markdown/empty fallbacks below take over.
+    // Only the targeted Lexical shell shape (root node present with an empty
+    // children array) is rejected — legacy non-Lexical payloads without a root
+    // node (e.g. { type: 'doc', content: [] }) keep loading via setDocument('json').
+    const isEmptyParseShell =
+      !!editorDataRoot &&
+      Array.isArray(editorDataRoot.children) &&
+      editorDataRoot.children.length === 0;
     const hasValidEditorData =
       doc.editorData &&
       typeof doc.editorData === 'object' &&
-      Object.keys(doc.editorData).length > 0;
+      Object.keys(doc.editorData).length > 0 &&
+      !isEmptyParseShell;
 
     // SKILL.md frontmatter is metadata, not editable document body. Keep it out of the rich
     // Markdown editor because `---` fences are otherwise parsed as Markdown dividers/headings,
