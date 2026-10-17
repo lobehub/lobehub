@@ -19,6 +19,9 @@ export const getTitleTextAreaInteractionProps = (canEdit: boolean) => ({
   readOnly: !canEdit,
 });
 
+export const shouldSubmitPageTitle = (key: string, isComposing: boolean) =>
+  key === 'Enter' && !isComposing;
+
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
@@ -137,7 +140,7 @@ const TitleSection = memo(() => {
           onKeyDown={(e) => {
             if (!canEdit) return;
 
-            if (e.key === 'Enter') {
+            if (shouldSubmitPageTitle(e.key, e.nativeEvent.isComposing)) {
               e.preventDefault();
               handleTitleSubmit();
             }
