@@ -18,13 +18,12 @@ vi.mock('@lobehub/ui', () => ({
   toast: { error: vi.fn(), success: mocks.toastSuccess },
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({ data: mocks.documentMeta }),
-}));
-
 vi.mock('@/store/document', () => ({
   useDocumentStore: (selector: (s: unknown) => unknown) =>
-    selector({ documents: { doc_1: { content: mocks.storeContent } } }),
+    selector({
+      documents: { doc_1: { content: mocks.storeContent } },
+      useFetchDocumentDetail: () => ({ data: mocks.documentMeta }),
+    }),
 }));
 
 describe('useMarkdownExport', () => {

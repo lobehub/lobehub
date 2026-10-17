@@ -9,19 +9,22 @@
 import { randomUUID } from 'node:crypto';
 
 import { act, render, renderHook, waitFor } from '@testing-library/react';
-import type { PropsWithChildren } from 'react';
-import { createElement, useEffect } from 'react';
-import { SWRConfig, useSWRConfig } from 'swr';
+import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, replicaSWRDriver } from '@/libs/replica';
-import { setScopedMutate } from '@/libs/swr/mutate';
 import { documentService } from '@/services/document';
-import { initialEditorState } from '@/store/document/slices/editor';
 
 import { useDocumentStore } from '../../store';
-import { initialDocumentDetailSliceState } from './initialState';
-import { documentDetailResource } from './projection';
+import { documentDetailResource, MAX_PERSISTED_DOCUMENT_DETAILS } from './projection';
+import {
+  baseEditorData,
+  detailSliceState,
+  documentRow,
+  pending,
+  storedRow,
+  wrapper,
+} from './testUtils';
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
@@ -44,37 +47,6 @@ vi.mock('@/store/page', () => ({
   pageActions: { upsertDocument: mocks.upsertDocument },
 }));
 
-const MutateBridge = () => {
-  const { mutate } = useSWRConfig();
-  useEffect(() => setScopedMutate(mutate), [mutate]);
-  return null;
-};
-
-const wrapper = ({ children }: PropsWithChildren) =>
-  createElement(
-    SWRConfig,
-    { value: { dedupingInterval: 0, provider: () => new Map() } },
-    createElement(MutateBridge),
-    children,
-  );
-
-const baseEditorData = {
-  root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
-};
-
-/** A document row as the server returns it. */
-const documentRow = (overrides: Record<string, unknown> = {}) =>
-  ({
-    content: '# Server',
-    editorData: baseEditorData,
-    id: 'doc-1',
-    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-    ...overrides,
-  }) as any;
-
-/** Never-resolving fetch: the first frame can only come from storage. */
-const pending = () => new Promise<never>(() => {});
-
 const createEditor = () => ({
   getDocument: vi.fn((type: string) => {
     if (type === 'markdown') return '# Draft';
@@ -94,11 +66,6 @@ const renderDocument = (
     () => useDocumentStore.getState().useFetchDocument(documentId, { editor, ...options }),
     { wrapper },
   );
-
-const storedRow = (documentId: string, scope: string) =>
-  documentDetailResource.storage!.get({ queryKey: documentId, scope });
-
-const detailSliceState = () => ({ ...initialEditorState, ...initialDocumentDetailSliceState });
 
 describe('document detail replica', () => {
   const scopes = new Set<string>();
@@ -355,6 +322,61 @@ describe('document detail replica', () => {
     // derived from the reset scope: revisiting it must not paint the old body.
     expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
     expect(useDocumentStore.getState().documents['doc-2']).toBeUndefined();
+  });
+
+  it('drops an editor entry whose detail entry was evicted before the scope reset', async () => {
+    vi.mocked(documentService.getDocumentById).mockImplementation(
+      async (id: string) => documentRow({ id }) as any,
+    );
+    const first = renderDocument('doc-1', createEditor());
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    first.unmount();
+    act(() => useDocumentStore.setState({ activeDocumentId: undefined }));
+
+    // Opening more documents than the persisted cap evicts the unmounted doc-1
+    // detail entry, while its editor row stays behind.
+    for (let index = 0; index <= MAX_PERSISTED_DOCUMENT_DETAILS; index += 1) {
+      await act(async () => {
+        await useDocumentStore.getState().prefetchDocument(`doc-extra-${index}`);
+      });
+    }
+    await waitFor(() =>
+      expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeUndefined(),
+    );
+    expect(useDocumentStore.getState().documents['doc-1']).toBeDefined();
+
+    vi.mocked(documentService.getDocumentById).mockImplementation(pending as any);
+    useScope(`document-user-${randomUUID()}:personal`);
+    const next = renderDocument('doc-2', createEditor());
+    next.rerender();
+
+    await waitFor(() => expect(useDocumentStore.getState().documentDetailMap).toEqual({}));
+    // Reopening doc-1 in the new identity must not find the old body loaded.
+    expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
+  });
+
+  it('drops editor rows created outside the replica (highlight editor) on a scope reset', async () => {
+    vi.mocked(documentService.getDocumentById).mockImplementation(
+      async (id: string) => documentRow({ id }) as any,
+    );
+    // The highlight editor mirrors its buffer with `addDocument`, never through
+    // `useFetchDocument`, so no detail entry is tied to this row.
+    act(() =>
+      useDocumentStore.getState().internal_dispatchDocument({
+        id: 'doc-highlight',
+        type: 'addDocument',
+        value: { content: 'previous identity', lastSavedContent: 'previous identity' } as any,
+      }),
+    );
+    const mounted = renderDocument('doc-2', createEditor());
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-2']).toBeDefined());
+
+    vi.mocked(documentService.getDocumentById).mockImplementation(pending as any);
+    useScope(`document-user-${randomUUID()}:personal`);
+    mounted.rerender();
+
+    await waitFor(() => expect(useDocumentStore.getState().documentDetailMap).toEqual({}));
+    expect(useDocumentStore.getState().documents['doc-highlight']).toBeUndefined();
   });
 
   it('keeps no previous-identity editor state when the new scope’s fetch fails', async () => {

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
+
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
   /** Stable machine-readable availability code. */
@@ -849,8 +851,7 @@ export type DeviceLocalFilePreview =
  * file preview result but carries binary image content as base64 so it can cross
  * the Gateway/RPC boundary.
  */
-export interface DeviceLocalFilePreviewResult {
-  error?: string;
+export interface DeviceLocalFilePreviewResult extends DeviceLocalFilePreviewFailure {
   preview?: DeviceLocalFilePreview;
   success: boolean;
 }

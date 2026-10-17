@@ -11,6 +11,7 @@ import type {
   ExternalAssetForPublishParams,
   ExternalAssetForPublishResult,
   LocalFilePreview,
+  LocalFilePreviewFailureCode,
   LocalFilePreviewResult,
   LocalFilePreviewUrlParams,
 } from './types';
@@ -92,6 +93,33 @@ const expandHomePath = (target: string): string => {
   return target;
 };
 
+/**
+ * Terminal reason of a filesystem failure while previewing a file, or
+ * `undefined` for one worth retrying (I/O error, busy, …). Shared with the
+ * desktop preview protocol so both transports classify the same way.
+ */
+export const localFilePreviewFailureCode = (
+  error: unknown,
+): LocalFilePreviewFailureCode | undefined => {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (code === 'ENOENT' || code === 'ENOTDIR') return 'not_found';
+  if (code === 'EACCES' || code === 'EPERM') return 'forbidden';
+  return undefined;
+};
+
+/** A preview read refused because the file resolves outside the approved roots. */
+export const outsideWorkspacePreviewFailure = (): LocalFilePreviewResult => ({
+  code: 'forbidden',
+  error: 'File is outside the approved workspace',
+  success: false,
+});
+
+/** The failed result for a thrown preview error, with its terminal code if any. */
+export const toLocalFilePreviewFailure = (error: unknown): LocalFilePreviewResult => {
+  const code = localFilePreviewFailureCode(error);
+  return { ...(code && { code }), error: (error as Error).message, success: false };
+};
+
 /** Resolve the real path, tolerating non-existent targets. */
 const safeRealpath = async (target: string): Promise<string> => {
   try {
@@ -119,16 +147,30 @@ export const defaultGetLocalFilePreview = async (
       return { error: 'Missing working directory', success: false };
     }
 
-    const realRoot = await safeRealpath(expandHomePath(workingDirectory));
-    const realFile = await safeRealpath(expandHomePath(filePath));
-    const withinRoot = realFile === realRoot || realFile.startsWith(`${realRoot}${path.sep}`);
-    if (!withinRoot) {
-      return { error: 'File is outside the approved workspace', success: false };
+    const isWithin = (target: string, base: string) =>
+      target === base || target.startsWith(`${base}${path.sep}`);
+    const lexicalRoot = path.resolve(expandHomePath(workingDirectory));
+    const realRoot = await safeRealpath(lexicalRoot);
+    const lexicalFile = path.resolve(expandHomePath(filePath));
+    let realFile: string;
+    try {
+      realFile = await realpath(lexicalFile);
+    } catch (error) {
+      const failure = localFilePreviewFailureCode(error);
+      // A deleted file has no real path to contain; judge it by where it was.
+      if (
+        failure === 'not_found' &&
+        (isWithin(lexicalFile, lexicalRoot) || isWithin(lexicalFile, realRoot))
+      )
+        return { code: 'not_found', error: (error as Error).message, success: false };
+      realFile = lexicalFile;
     }
+    const withinRoot = isWithin(realFile, realRoot);
+    if (!withinRoot) return outsideWorkspacePreviewFailure();
 
     const stats = await stat(realFile);
     if (!stats.isFile()) {
-      return { error: 'Path is not a file', success: false };
+      return { code: 'not_found', error: 'Path is not a file', success: false };
     }
 
     // Oversized documents can only ever produce the content-less fallback —
@@ -158,7 +200,7 @@ export const defaultGetLocalFilePreview = async (
 
     return { preview: serializePreviewFile(buffer, contentType), success: true };
   } catch (error) {
-    return { error: (error as Error).message, success: false };
+    return toLocalFilePreviewFailure(error);
   }
 };
 

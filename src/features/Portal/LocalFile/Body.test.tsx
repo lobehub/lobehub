@@ -2,7 +2,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { localFileKeys } from '@/libs/swr/keys';
 import { createLocalFileScopeKey, createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
@@ -94,6 +93,28 @@ vi.mock('@/libs/swr', () => ({
 vi.mock('@/services/projectFile', () => ({
   projectFileService: mockProjectFileService,
 }));
+
+const mockUseFetchPreview = vi.hoisted(() => vi.fn());
+const mockPreview = vi.hoisted(() => ({ current: undefined as unknown }));
+
+vi.mock('@/store/localFilePreview', () => ({
+  useLocalFilePreview: (target: unknown) => (target ? mockPreview.current : undefined),
+  useLocalFilePreviewStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      beginSave: vi.fn(() => vi.fn()),
+      refreshPreview: vi.fn(),
+      useFetchPreview: mockUseFetchPreview,
+    }),
+}));
+
+const syncResult = (overrides: Record<string, unknown> = {}) => ({
+  error: undefined,
+  isHydrated: true,
+  isLoading: false,
+  isValidating: false,
+  revalidate: vi.fn(),
+  ...overrides,
+});
 
 vi.mock('@/utils/skillMarkdown', () => ({
   parseSkillMarkdownFrontmatter: (content: string) => ({ body: content }),
@@ -227,10 +248,10 @@ describe('LocalFile Body', () => {
     mockIsHtmlFile.mockReset();
     mockIsHtmlFile.mockReturnValue(false);
     mockUseClientDataSWR.mockClear();
-    mockUseClientDataSWR.mockReturnValue({
-      isLoading: true,
-      mutate: vi.fn(),
-    });
+    mockUseClientDataSWR.mockReturnValue({ isLoading: true, mutate: vi.fn() });
+    mockPreview.current = undefined;
+    mockUseFetchPreview.mockReset();
+    mockUseFetchPreview.mockReturnValue(syncResult({ isLoading: true }));
   });
 
   it('closes the LocalFile portal when the current project has no visible local-file tabs', async () => {
@@ -275,31 +296,61 @@ describe('LocalFile Body', () => {
 
     expect(screen.getByTestId('loading')).toBeInTheDocument();
     expect(mockClearPortalStack).not.toHaveBeenCalled();
-    expect(mockUseClientDataSWR).toHaveBeenCalledWith(
-      localFileKeys.preview({
+    expect(mockUseFetchPreview).toHaveBeenCalledWith(
+      {
         allowExternalFile: true,
+        deviceId: undefined,
         filePath: '/tmp/worktree-switcher-demo.html',
+        sandboxTopicId: undefined,
         workingDirectory: '/tmp',
-      }),
-      expect.any(Function),
-      { revalidateOnFocus: false },
+      },
+      true,
     );
-
-    // The toolbar breadcrumb registers its own SWR call, so pick the preview
-    // fetcher by its key rather than by position.
-    const previewCall = mockUseClientDataSWR.mock.calls.findLast((call) =>
-      String(call[0]).includes('/tmp/worktree-switcher-demo.html'),
-    );
-    void (previewCall?.[1] as () => Promise<unknown>)();
-    expect(mockProjectFileService.getLocalFilePreview).toHaveBeenCalledWith({
-      allowExternalFile: true,
-      deviceId: undefined,
-      path: '/tmp/worktree-switcher-demo.html',
-      workingDirectory: '/tmp',
-    });
   });
 
-  it('requests workspace resources for a desktop HTML file and passes its base URL to preview', () => {
+  it('paints nothing — not a spinner — while the persisted preview is still being read', () => {
+    mockChatState.current = createChatState('topic-a');
+    mockUseFetchPreview.mockReturnValue(syncResult({ isHydrated: false, isLoading: true }));
+
+    render(<Body />);
+
+    expect(screen.queryByTestId('loading')).toBeNull();
+    expect(screen.queryByText('workingPanel.localFile.error')).toBeNull();
+  });
+
+  it('paints the persisted text preview before the refresh answers', () => {
+    mockChatState.current = createChatState('topic-a');
+    mockPreview.current = { content: 'cached', contentType: 'text/plain', type: 'text' };
+    mockUseFetchPreview.mockReturnValue(syncResult({ isValidating: true }));
+
+    render(<Body />);
+
+    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('loading')).toBeNull();
+  });
+
+  it('keeps a cached text preview on screen when the background refresh fails', () => {
+    mockChatState.current = createChatState('topic-a');
+    mockPreview.current = { content: 'cached', contentType: 'text/plain', type: 'text' };
+    mockUseFetchPreview.mockReturnValue(syncResult({ error: new Error('Failed to fetch') }));
+
+    render(<Body />);
+
+    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    expect(screen.queryByText('workingPanel.localFile.error')).toBeNull();
+  });
+
+  it('surfaces a refresh failure over a cached non-text preview', () => {
+    mockChatState.current = createChatState('topic-a');
+    mockPreview.current = { blob: new Blob(['png']), contentType: 'image/png', type: 'image' };
+    mockUseFetchPreview.mockReturnValue(syncResult({ error: new Error('File not found') }));
+
+    render(<Body />);
+
+    expect(screen.getByText('workingPanel.localFile.error')).toBeInTheDocument();
+  });
+
+  it('passes the HTML preview its resource base URL', () => {
     const htmlFileId = createLocalFileTabId({
       filePath: '/project-a/pages/index.html',
       workingDirectory: '/project-a',
@@ -317,33 +368,16 @@ describe('LocalFile Body', () => {
         },
       ],
     };
-    mockUseClientDataSWR.mockReturnValue({
-      data: {
-        content: '<link rel="stylesheet" href="../assets/app.css">',
-        contentType: 'text/html',
-        resourceBaseUrl: 'localfile://preview-session/pages/',
-        type: 'text',
-      },
-      isLoading: false,
-      isValidating: false,
-      mutate: vi.fn(),
-    });
+    mockPreview.current = {
+      content: '<link rel="stylesheet" href="../assets/app.css">',
+      contentType: 'text/html',
+      resourceBaseUrl: 'localfile://preview-session/pages/',
+      type: 'text',
+    };
+    mockUseFetchPreview.mockReturnValue(syncResult());
 
     render(<Body />);
 
-    // The toolbar breadcrumb registers its own SWR call, so pick the preview
-    // fetcher by its key rather than by position.
-    const previewCall = mockUseClientDataSWR.mock.calls.findLast((call) =>
-      String(call[0]).includes('/project-a/pages/index.html'),
-    );
-    void (previewCall?.[1] as () => Promise<unknown>)();
-    expect(mockProjectFileService.getLocalFilePreview).toHaveBeenCalledWith({
-      allowExternalFile: undefined,
-      deviceId: undefined,
-      path: '/project-a/pages/index.html',
-      resourceScope: 'workspace',
-      workingDirectory: '/project-a',
-    });
     expect(screen.getByTitle('html-preview')).toHaveAttribute(
       'data-base-url',
       'localfile://preview-session/pages/',

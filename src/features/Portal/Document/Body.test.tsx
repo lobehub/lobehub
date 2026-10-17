@@ -61,9 +61,9 @@ const mockDocumentMeta = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({ data: mockDocumentMeta.current }),
-}));
+const mockDocumentError = vi.hoisted(() => ({ current: undefined as Error | undefined }));
+/** The persisted row has been read; `false` = the replica is still hydrating. */
+const mockDocumentHydrated = vi.hoisted(() => ({ current: true }));
 
 const mockUpdateDocument = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
@@ -119,8 +119,18 @@ const mockDocumentState = vi.hoisted(() => ({
       'document-1': {},
     },
     internal_dispatchDocument: vi.fn(),
+    beginDocumentDetailPatch: vi.fn(() => vi.fn()),
     performSave: vi.fn(),
     updateSkillFrontmatter: vi.fn(),
+    // The document's replica entry, as the store's read hook reports it.
+    useFetchDocumentDetail: vi.fn(() => ({
+      data: mockDocumentMeta.current,
+      error: mockDocumentError.current,
+      isHydrated: mockDocumentHydrated.current,
+      isLoading: mockDocumentMeta.current === undefined && !mockDocumentError.current,
+      isValidating: false,
+      mutate: vi.fn(),
+    })),
   },
 }));
 
@@ -129,6 +139,20 @@ vi.mock('@/store/document', () => ({
 }));
 
 describe('DocumentBody', () => {
+  afterEach(() => {
+    mockDocumentError.current = undefined;
+    mockDocumentHydrated.current = true;
+  });
+
+  it('paints nothing while the persisted document is still being read', () => {
+    mockDocumentMeta.current = undefined as never;
+    mockDocumentHydrated.current = false;
+
+    const { container } = render(<DocumentBody />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   /** @example A file-backed document previews its upload and keeps the portal actions. */
   it('shows the original upload without mounting either editor', () => {
     // ROOT CAUSE:
@@ -154,6 +178,15 @@ describe('DocumentBody', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('keeps the cached document on screen when the background refresh fails', () => {
+    mockDocumentMeta.current = { content: 'cached log', filename: 'topic_call.txt' };
+    mockDocumentError.current = new Error('Failed to fetch');
+
+    render(<DocumentBody />);
+
+    expect(screen.getByTestId('highlight-editor')).toHaveValue('cached log');
   });
 
   it('renders highlight editor for non-markdown files', () => {

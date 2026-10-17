@@ -15,15 +15,24 @@ export interface DocumentDetail {
   document: DocumentItem | null;
 }
 
+/** How many document rows survive a reload (`persist.maxEntries`). */
+export const MAX_PERSISTED_DOCUMENT_DETAILS = 50;
+
 /**
  * One document detail per entry, keyed by the document id it was opened with.
  * Persisted to IndexedDB: on a reload the editor's first frame comes from the
  * projection and the network only confirms it. The "not found" marker is never
  * persisted — it is a page state, not a document.
+ *
+ * Read-only views (portal, goal deliverables, resource preview) share these
+ * rows, so the persisted set is bounded: the least recently used documents
+ * beyond {@link MAX_PERSISTED_DOCUMENT_DETAILS} are evicted (open ones are
+ * pinned by their mounted sync) and simply refetch on the next visit.
  */
 export const documentDetailResource = defineReplica<string, DocumentDetail>({
   key: (id) => id,
   name: 'documentDetail',
+  persist: { maxEntries: MAX_PERSISTED_DOCUMENT_DETAILS },
   storage: 'indexedDB',
   version: 1,
 });

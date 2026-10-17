@@ -5,9 +5,7 @@ import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEntityMarkdown } from '@/features/EntityLink';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
+import { useDocumentStore } from '@/store/document';
 
 import GoalAcceptanceHierarchy from './GoalAcceptanceHierarchy';
 import { pickFinalDeliverable } from './goalAcceptanceReport';
@@ -41,11 +39,10 @@ import { useGoalResultData } from './useGoalResultData';
 const FinalDocument = ({ documentId }: { documentId: string }) => {
   // The graph carries only the document id; its content is read for the page.
   const markdownProps = useEntityMarkdown();
-  const { data: document, isLoading } = useClientDataSWR(
-    portalKeys.documentHeader(documentId),
-    () => documentService.getDocumentById(documentId),
-  );
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const { data: document, isHydrated, isLoading } = useFetchDocumentDetail(documentId);
 
+  if (isLoading && !isHydrated) return null;
   if (isLoading)
     return (
       <Flexbox gap={10}>
