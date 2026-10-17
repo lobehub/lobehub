@@ -96,7 +96,12 @@ export const QueryFileListSchema = z.object({
   q: z.string().nullish(),
   showFilesInKnowledgeBase: z.boolean().default(false),
   sortType: z.enum(['desc', 'asc']).optional(),
-  sorter: z.enum(['createdAt', 'size']).optional(),
+  /**
+   * Mirrors the knowledge repo's `SORTABLE_COLUMNS`: the explorer offers a
+   * `name` sort and persisted links can carry `updatedAt`. Rejecting either
+   * fails the whole list query, which renders the view empty.
+   */
+  sorter: z.enum(['createdAt', 'name', 'size', 'updatedAt']).optional(),
   /**
    * Origin narrowing driven by the explorer's source filter. Absent / `all`
    * keeps the historical pool (everything except hidden sources).
