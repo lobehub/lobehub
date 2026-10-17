@@ -155,8 +155,10 @@ describe('aiProviderRouter', () => {
       const caller = aiProviderRouter.createCaller(createMockContext());
       const result = await caller.checkProviderConnectivity({ id: 'ollama' });
 
+      // The type alone does not tell a CLI user what to do; the reason does.
       expect(result).toEqual({
-        error: 'ClientLlmExecutorUnavailable',
+        error:
+          "ClientLlmExecutorUnavailable: ollama runs on the user's device, and no open LobeHub tab is attached to this request to run it.",
         model: 'qwen3:1.7b',
         ok: false,
       });

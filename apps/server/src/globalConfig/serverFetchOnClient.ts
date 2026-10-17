@@ -7,13 +7,15 @@ import { isDesktop } from '@/const/version';
  *
  * - Desktop builds request local providers from the main process, never the
  *   renderer.
+ * - On the web, local providers run on this device (the relay sends them to the
+ *   tab), so the settings switch must show them on rather than unset.
  * - A deployment with `OLLAMA_PROXY_URL` proxies Ollama through the server.
  */
 export const getServerFetchOnClientOverride = (provider: string): boolean | undefined => {
   switch (provider) {
     case 'lmstudio':
     case 'unsloth': {
-      return isDesktop ? false : undefined;
+      return !isDesktop;
     }
     case 'ollama': {
       return isDesktop ? false : !process.env.OLLAMA_PROXY_URL;

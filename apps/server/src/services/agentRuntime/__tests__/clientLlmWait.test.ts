@@ -196,7 +196,7 @@ describe('waiting_for_client (U4c)', () => {
         expect(parked.clientLlmWait).toEqual({
           assistantMessageId: 'msg-assistant',
           context: { phase: 'user_input' },
-          expiresAt: new Date(NOW + 600_000).toISOString(),
+          expiresAt: new Date(NOW + 60_000).toISOString(),
           parentMessageId: 'msg-user',
           parkedAt: new Date(NOW).toISOString(),
           provider: 'lmstudio',
@@ -229,7 +229,7 @@ describe('waiting_for_client (U4c)', () => {
         expect(t.scheduleMessage).toHaveBeenCalledTimes(1);
         expect(t.scheduleMessage).toHaveBeenCalledWith(
           expect.objectContaining({
-            delay: 600_000,
+            delay: 60_000,
             operationId: OPERATION_ID,
             payload: { clientLlmWaitExpired: new Date(NOW).toISOString() },
             stepIndex: 1,
@@ -410,7 +410,7 @@ describe('waiting_for_client (U4c)', () => {
     });
 
     it('honours AGENT_LLM_RELAY_CLIENT_WAIT_MS for the wait window', async () => {
-      vi.stubEnv('AGENT_LLM_RELAY_CLIENT_WAIT_MS', '60000');
+      vi.stubEnv('AGENT_LLM_RELAY_CLIENT_WAIT_MS', '120000');
       try {
         const t = createService();
         t.setStored(runningState());
@@ -427,8 +427,8 @@ describe('waiting_for_client (U4c)', () => {
           stepIndex: 1,
         });
 
-        expect(t.getStored().clientLlmWait.expiresAt).toBe(new Date(NOW + 60_000).toISOString());
-        expect(t.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ delay: 60_000 }));
+        expect(t.getStored().clientLlmWait.expiresAt).toBe(new Date(NOW + 120_000).toISOString());
+        expect(t.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ delay: 120_000 }));
       } finally {
         vi.unstubAllEnvs();
       }
@@ -605,14 +605,14 @@ describe('waiting_for_client (U4c)', () => {
 
     it('keeps the original deadline when a resumed call finds no client again', async () => {
       const t = createService();
-      const deadline = new Date(NOW + 120_000).toISOString();
+      const deadline = new Date(NOW + 30_000).toISOString();
       t.setStored(
         waitingState({
           clientLlmWait: {
             assistantMessageId: 'msg-assistant',
             context: { phase: 'user_input' },
             expiresAt: deadline,
-            parkedAt: new Date(NOW - 480_000).toISOString(),
+            parkedAt: new Date(NOW - 30_000).toISOString(),
             provider: 'lmstudio',
             reason: 'no_executor',
           },
@@ -633,7 +633,7 @@ describe('waiting_for_client (U4c)', () => {
 
       expect(t.getStored().status).toBe('waiting_for_client');
       expect(t.getStored().clientLlmWait.expiresAt).toBe(deadline);
-      expect(t.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ delay: 120_000 }));
+      expect(t.scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ delay: 30_000 }));
     });
 
     it('leaves a wait past its deadline to the (late) expiry instead of resuming it', async () => {

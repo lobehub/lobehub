@@ -1,3 +1,4 @@
+import { isProviderFetchOnClient } from 'model-bank/modelProviders';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerFetchOnClientOverride } from './serverFetchOnClient';
@@ -14,8 +15,23 @@ describe('getServerFetchOnClientOverride', () => {
     expect(getServerFetchOnClientOverride('ollama')).toBe(false);
   });
 
+  it('turns client fetch on for the other local providers', () => {
+    expect(getServerFetchOnClientOverride('lmstudio')).toBe(true);
+    expect(getServerFetchOnClientOverride('unsloth')).toBe(true);
+  });
+
+  // The settings switch shows this default; it must match what the relay does.
+  it.each(['ollama', 'lmstudio', 'unsloth'])(
+    'shows the same default for %s as the relay applies',
+    (provider) => {
+      const fetchOnClient = getServerFetchOnClientOverride(provider);
+
+      expect(fetchOnClient).toBe(isProviderFetchOnClient(provider, { fetchOnClient }));
+      expect(fetchOnClient).toBe(isProviderFetchOnClient(provider, undefined));
+    },
+  );
+
   it('leaves other providers on their own default', () => {
-    expect(getServerFetchOnClientOverride('lmstudio')).toBeUndefined();
     expect(getServerFetchOnClientOverride('openai')).toBeUndefined();
   });
 });

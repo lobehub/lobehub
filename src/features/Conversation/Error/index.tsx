@@ -532,7 +532,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         }
 
         case AgentRuntimeErrorType.OllamaBizError: {
-          return <OllamaBizError {...data} />;
+          return (
+            <OllamaBizError {...data} alertError={{ ...alertError, message: displayMessage }} />
+          );
         }
 
         case AgentRuntimeErrorType.ExceededContextWindow: {

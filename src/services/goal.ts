@@ -7,7 +7,13 @@ import type {
   GoalTickResult,
 } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { oneShotRelay } from '@/services/llmRelay';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors } from '@/store/user/selectors';
+
+/** The `goal` system agent's provider: advancing a goal decomposes and explores on it. */
+const goalModelProvider = () => systemAgentSelectors.goal(useUserStore.getState()).provider;
 
 export interface GoalListParams {
   agentId?: string;
@@ -80,16 +86,22 @@ class GoalService {
   /**
    * Run the coordinator now and report where it stopped. The goal also advances
    * on its own as its Work Tasks settle — this is the explicit nudge, not the
-   * engine, so the surface never has to hold a tick loop open.
+   * engine, so the surface never has to hold a tick loop open. Planning runs
+   * on the `goal` model inside this request; a model only this device reaches
+   * is relayed back to this tab (one-shot relay).
    */
   advance = async (id: string): Promise<GoalTickResult & { ticks: number }> => {
-    const { data } = await lambdaClient.goal.advance.mutate({ id });
+    const { data } = await oneShotRelay.run(goalModelProvider(), (relay) =>
+      lambdaClient.goal.advance.mutate({ id }, withLlmRelay(relay)),
+    );
     return data;
   };
 
-  /** Advance the graph by exactly one coordinator step. */
+  /** Advance the graph by exactly one coordinator step. Relayed like `advance`. */
   tick = async (id: string): Promise<GoalTickResult> => {
-    const { data } = await lambdaClient.goal.tick.mutate({ id });
+    const { data } = await oneShotRelay.run(goalModelProvider(), (relay) =>
+      lambdaClient.goal.tick.mutate({ id }, withLlmRelay(relay)),
+    );
     return data;
   };
 
