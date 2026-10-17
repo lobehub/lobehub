@@ -4207,6 +4207,13 @@ When I am ___, I need ___
   'environments.form.rawEditor': 'Raw editor',
   'environments.form.rawEditorHint':
     'One KEY=value per line, the way a .env file reads. Blank lines and # comments are ignored; saving replaces every variable.',
+  'environments.form.rawFormat': 'Detected format: {{format}}',
+  'environments.form.rawFormatsHint':
+    'Edit a JSON object with string values, or replace it with .env text (KEY=value per line). JSON decodes escapes; .env keeps backslashes literally. Saving replaces all variables.',
+  'environments.form.jsonSyntax':
+    'Invalid JSON. Check double quotes, commas and braces, then save again.',
+  'environments.form.jsonValues':
+    'Use a JSON object with a string value for every variable, such as {"NODE_ENV":"production"}.',
   'environments.form.rawInvalid': 'Line {{line}} is not KEY=value',
   'environments.form.removeEnv': 'Remove variable',
   'environments.form.internetAccess': 'Agent internet access',

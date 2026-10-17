@@ -1,5 +1,6 @@
 'use client';
 
+import { isRecord } from '@lobechat/utils/object';
 import {
   ActionIcon,
   Button,
@@ -62,8 +63,9 @@ type Entry = [string, string];
 /**
  * Parse `.env`-style text: one `KEY=value` per line, blank lines and `#`
  * comments skipped, an optional `export ` prefix and a matching pair of quotes
- * around the value dropped. Later lines win over earlier ones with the same
- * key, as they would when a shell sources the file.
+ * around the value dropped. Quoted values keep literal backslashes; JSON
+ * escaping belongs to the separate JSON editor format. Later duplicate keys win,
+ * as they would when a shell sources the file.
  *
  * @returns the entries, or the 1-based number of the first line that is not a
  *   `KEY=value` pair
@@ -85,11 +87,33 @@ export const parseDotenv = (text: string): { entries: Entry[] } | { line: number
   return { entries: [...entries.entries()] };
 };
 
-/** The inverse, for the raw editor's starting text. */
-export const formatDotenv = (entries: Entry[]) =>
-  entries
-    .map(([key, value]) => `${key}=${/[\s#"']/.test(value) ? JSON.stringify(value) : value}`)
-    .join('\n');
+/** JSON is unambiguous for editing escapes; .env imports retain literal semantics. */
+export const formatRawVariables = (entries: Entry[]) =>
+  JSON.stringify(Object.fromEntries(entries), null, 2);
+
+export const getRawVariableFormat = (text: string) =>
+  /^[{[]/.test(text.trimStart()) ? 'json' : 'dotenv';
+
+export const parseJsonVariables = (
+  text: string,
+): { entries: Entry[] } | { error: 'jsonSyntax' | 'jsonValues' } => {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { error: 'jsonSyntax' };
+  }
+  if (!isRecord(value)) return { error: 'jsonValues' };
+  const entries: Entry[] = [];
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== 'string') return { error: 'jsonValues' };
+    entries.push([key, entry]);
+  }
+  return { entries };
+};
+
+export const parseRawVariables = (text: string) =>
+  getRawVariableFormat(text) === 'json' ? parseJsonVariables(text) : parseDotenv(text);
 
 /**
  * One variable, either as a row or open for editing. Key and value edit
@@ -227,12 +251,16 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
 
   const openRaw = () => {
     setAdding(null);
-    setRaw(formatDotenv(entries));
+    setRaw(formatRawVariables(entries));
   };
 
   const saveRaw = () => {
     if (raw === null) return;
-    const parsed = parseDotenv(raw);
+    const parsed = parseRawVariables(raw);
+    if ('error' in parsed) {
+      toast.error(t(`environments.form.${parsed.error}`));
+      return;
+    }
     if ('line' in parsed) {
       toast.error(t('environments.form.rawInvalid', { line: parsed.line }));
       return;
@@ -295,16 +323,22 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
 
       {raw !== null ? (
         <Flexbox gap={6}>
+          <Text fontSize={12} weight={500}>
+            {t('environments.form.rawFormat', {
+              format: getRawVariableFormat(raw) === 'json' ? 'JSON' : '.env',
+            })}
+          </Text>
           <TextArea
             autoFocus
+            aria-label={t('environments.form.rawEditor')}
             classNames={{ input: styles.editor }}
-            placeholder={'NODE_ENV=production\nAPI_URL=https://example.com'}
+            placeholder={'{\n  "NODE_ENV": "production"\n}'}
             rows={Math.min(16, Math.max(6, raw.split('\n').length + 1))}
             value={raw}
             onChange={(event) => setRaw(event.target.value)}
           />
           <Text fontSize={12} type={'secondary'}>
-            {t('environments.form.rawEditorHint')}
+            {t('environments.form.rawFormatsHint')}
           </Text>
         </Flexbox>
       ) : entries.length === 0 && !adding ? (
