@@ -5,5 +5,7 @@ export * from './model';
 export * from './ollama';
 export * from './openai';
 export * from './protocol';
+export * from './providerReportedCost';
 export * from './qwen';
 export * from './spark';
+export * from './usageMissingDiagnostics';

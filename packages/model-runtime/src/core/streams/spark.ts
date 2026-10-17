@@ -14,8 +14,8 @@ import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   generateToolCallId,
-  setOpenAIChatCompletionUsageMissingDiagnostics,
 } from './protocol';
+import { setOpenAIChatCompletionUsageMissingDiagnostics } from './usageMissingDiagnostics';
 
 export function transformSparkResponseToStream(data: OpenAI.ChatCompletion) {
   return new ReadableStream({

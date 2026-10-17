@@ -24,6 +24,7 @@ import {
   FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
 } from '../protocol';
+import { recordProviderReportedCost } from '../providerReportedCost';
 
 /**
  * Extended type for OpenAI tool calls that includes provider-specific extensions
@@ -730,8 +731,13 @@ export const OpenAIStream = (
     id: '',
   };
 
-  const transformWithProvider = (chunk: OpenAI.ChatCompletionChunk, streamContext: StreamContext) =>
-    transformOpenAIStream(chunk, streamContext, payload);
+  const transformWithProvider = (
+    chunk: OpenAI.ChatCompletionChunk,
+    streamContext: StreamContext,
+  ) => {
+    recordProviderReportedCost(streamStack, chunk);
+    return transformOpenAIStream(chunk, streamContext, payload);
+  };
 
   const readableStream =
     stream instanceof ReadableStream
