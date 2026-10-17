@@ -257,6 +257,24 @@ describe('AiModelModel', () => {
         deploymentName: 'my-deploy',
       });
     });
+
+    it('should treat a null config as "unchanged" instead of clearing the column', async () => {
+      const { id } = await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'azure' });
+      await aiProviderModel.updateModelReasoningConfig(id, 'azure', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+      await aiProviderModel.update(id, 'azure', { config: { deploymentName: 'my-deploy' } });
+
+      // The model-config modal echoes the whole model card back, so a model whose
+      // `config` column is NULL submits `config: null` on every save.
+      await aiProviderModel.update(id, 'azure', { config: null });
+
+      const row = await aiProviderModel.findByIdAndProvider(id, 'azure');
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'high' },
+        deploymentName: 'my-deploy',
+      });
+    });
   });
 
   describe('model reasoning config (personal scope)', () => {
