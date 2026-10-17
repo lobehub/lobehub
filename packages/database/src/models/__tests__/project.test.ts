@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +51,67 @@ describe('ProjectModel', () => {
     await serverDB.delete(projectEnvironments);
     await serverDB.delete(environments);
     await serverDB.delete(users);
+  });
+
+  it('lets several projects share one main agent', async () => {
+    const shared = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    const first = await createProject(model, { name: 'First' });
+    const second = await createProject(model, { name: 'Second' });
+
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: shared.id })
+      .where(eq(projects.userId, userId));
+
+    expect((await model.findById(first.id))?.coordinatorAgentId).toBe(shared.id);
+    expect((await model.findById(second.id))?.coordinatorAgentId).toBe(shared.id);
+  });
+
+  it('keeps a shared main agent when one of its projects is deleted', async () => {
+    const shared = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    const first = await createProject(model, { name: 'First' });
+    const second = await createProject(model, { name: 'Second' });
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: shared.id })
+      .where(eq(projects.userId, userId));
+
+    await model.delete(first.id);
+
+    expect(await serverDB.select().from(agents).where(eq(agents.id, shared.id))).toHaveLength(1);
+    expect((await model.findById(second.id))?.coordinatorAgentId).toBe(shared.id);
+  });
+
+  it('keeps LobeAI when a project led by it is deleted', async () => {
+    const inbox = (await new AgentModel(serverDB, userId).getBuiltinAgent(INBOX_SESSION_ID))!;
+    const project = await createProject(model, { name: 'Inbox-led' });
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: inbox.id })
+      .where(eq(projects.id, project.id));
+
+    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await serverDB.select().from(agents).where(eq(agents.id, inbox.id))).toHaveLength(1);
+  });
+
+  it('clears the main agent when it is deleted and resolves to LobeAI', async () => {
+    const agentModel = new AgentModel(serverDB, userId);
+    const agent = await agentModel.create({ title: 'Short-lived' });
+    const project = await createProject(model, { name: 'Orphan' });
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: agent.id })
+      .where(eq(projects.id, project.id));
+
+    await agentModel.delete(agent.id);
+
+    const cleared = (await model.findById(project.id))!;
+    expect(cleared.coordinatorAgentId).toBeNull();
+    const inbox = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+    expect(await model.resolveCoordinatorAgents([cleared])).toEqual([
+      expect.objectContaining({ coordinatorAgentId: inbox?.id, id: project.id }),
+    ]);
+    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
   });
 
   it('creates, lists, updates, and deletes a project in the owner scope', async () => {

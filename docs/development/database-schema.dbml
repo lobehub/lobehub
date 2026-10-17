@@ -519,6 +519,38 @@ table agent_history_jobs {
   }
 }
 
+table agent_inbox_messages {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  account_id uuid
+  source_type text [not null]
+  source_id uuid [not null]
+  sender text [not null]
+  title text
+  preview text
+  thread_key text
+  received_at "timestamp with time zone" [not null]
+  read_at "timestamp with time zone"
+  topic_id text
+  wake_claimed_at "timestamp with time zone"
+  wait_consumed_by jsonb [not null, default: `[]`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (source_type, source_id) [name: 'agent_inbox_messages_source_unique', unique]
+    (agent_id, received_at) [name: 'agent_inbox_messages_agent_received_at_idx']
+    (agent_id, created_at) [name: 'agent_inbox_messages_agent_created_at_idx']
+    (account_id, created_at) [name: 'agent_inbox_messages_account_created_at_idx']
+    (account_id, sender, created_at) [name: 'agent_inbox_messages_account_sender_created_at_idx']
+    (account_id, thread_key) [name: 'agent_inbox_messages_account_thread_idx']
+    user_id [name: 'agent_inbox_messages_user_id_idx']
+  }
+}
+
 table agent_intervention_resolutions {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   resolution_request_id uuid [not null]
@@ -659,6 +691,43 @@ table agent_labels {
     workspace_id [name: 'agent_labels_workspace_id_idx']
     (user_id, name) [name: 'agent_labels_user_id_name_unique', unique]
     (workspace_id, name) [name: 'agent_labels_workspace_id_name_unique', unique]
+  }
+}
+
+table agent_mails {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  account_id uuid [not null]
+  signal_id uuid
+  direction text [not null]
+  provider text [not null]
+  provider_message_id text [not null]
+  message_id text
+  in_reply_to text
+  references jsonb [not null, default: `[]`]
+  thread_key text
+  from_address text [not null]
+  from_name text
+  to jsonb [not null, default: `[]`]
+  cc jsonb [not null, default: `[]`]
+  reply_to jsonb [not null, default: `[]`]
+  subject text
+  text text [not null, default: '']
+  attachments jsonb [not null, default: `[]`]
+  codes jsonb [not null, default: `[]`]
+  delivered_at "timestamp with time zone" [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, provider_message_id) [name: 'agent_mails_account_provider_message_unique', unique]
+    (account_id, thread_key) [name: 'agent_mails_account_thread_idx']
+    (agent_id, delivered_at) [name: 'agent_mails_agent_delivered_at_idx']
+    signal_id [name: 'agent_mails_signal_id_idx']
+    user_id [name: 'agent_mails_user_id_idx']
   }
 }
 
@@ -2940,7 +3009,7 @@ table projects {
   name varchar(255) [not null]
   description text
   avatar text
-  coordinator_agent_id text [not null]
+  coordinator_agent_id text
   status text [not null, default: 'backlog']
   user_id text [not null]
   workspace_id text
@@ -2964,7 +3033,7 @@ table projects {
     workspace_id [name: 'projects_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
-    coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
+    coordinator_agent_id [name: 'projects_coordinator_agent_id_idx']
     
   }
 }
@@ -3541,6 +3610,33 @@ table sessions {
     group_id [name: 'sessions_group_id_idx']
     workspace_id [name: 'sessions_workspace_id_idx']
     (workspace_id, slug) [name: 'sessions_slug_workspace_id_unique', unique]
+  }
+}
+
+table signals {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  source text [not null]
+  type text [not null]
+  external_id text [not null]
+  account_id uuid
+  agent_id text
+  payload jsonb [not null, default: `{}`]
+  status text [not null, default: 'pending']
+  attempts integer [not null, default: 0]
+  error text
+  occurred_at "timestamp with time zone"
+  processed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (source, external_id) [name: 'signals_source_external_id_unique', unique]
+    (status, created_at) [name: 'signals_status_created_at_idx']
+    (account_id, created_at) [name: 'signals_account_created_at_idx']
+    user_id [name: 'signals_user_id_idx']
   }
 }
 
