@@ -38,3 +38,33 @@ export interface MachinePaymentRecordParams {
   reference: string;
   route: string;
 }
+
+/** Outcome of a composed mppx handler for one HTTP request. */
+export type ComposedPaymentResult =
+  | { challenge: Response; status: 402 }
+  | { status: 200; withReceipt: (response: Response) => Response };
+
+/**
+ * Structural view of the mppx instance the payment middleware needs.
+ *
+ * Kept structural on purpose: which payment methods the instance carries
+ * (Stripe SPT, Tempo stablecoin, …) is a deployment decision that belongs to
+ * the layer that constructs it, not to the protocol plumbing.
+ */
+export interface MachinePaymentMppx {
+  compose: (
+    ...entries: [string, Record<string, unknown>][]
+  ) => (input: Request) => Promise<ComposedPaymentResult>;
+}
+
+/** The payment rail a deployment collects through. */
+export interface MachinePaymentRail {
+  /** Canonical `name/intent` key of the configured method, e.g. `stripe/charge`. */
+  methodKey: string;
+  /**
+   * Must carry replay protection, and each method must be wrapped with
+   * `withPaymentRejections` so a declined payment answers 402 rather than 500.
+   * See `MachinePaymentConfig.mppx` in `@lobechat/openapi` for why.
+   */
+  mppx: MachinePaymentMppx;
+}
