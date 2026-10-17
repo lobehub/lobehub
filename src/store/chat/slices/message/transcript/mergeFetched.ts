@@ -14,12 +14,20 @@ import {
  * agent runtime, so the optimistic user and assistant rows must be kept
  * explicitly until the server returns them; otherwise the just-sent message
  * vanishes until the run settles and refetches.
+ *
+ * The send operation ends as soon as the runtime takes over, while a read that
+ * was already in flight can still resolve afterwards with the pre-send
+ * snapshot. `idsAtRequestStart` covers that window: a local row that did not
+ * exist when the read was issued cannot be absent from it on the server's
+ * behalf, so keep it until a read that started after it was added says
+ * otherwise.
  */
 export const mergeFetchedMessagesWithLocalState = (
   fetchedMessages: UIChatMessage[],
   localMessages: UIChatMessage[],
   activeVoiceMessageIds: ReadonlySet<string>,
   creatingMessageIds: ReadonlySet<string>,
+  idsAtRequestStart?: ReadonlySet<string>,
 ): UIChatMessage[] => {
   if (localMessages.length === 0) return fetchedMessages;
 
@@ -45,7 +53,9 @@ export const mergeFetchedMessagesWithLocalState = (
     (message) =>
       !fetchedIds.has(message.id) &&
       ((isLocalOnlyMessage(message) && activeVoiceMessageIds.has(message.id)) ||
-        creatingMessageIds.has(message.id)),
+        creatingMessageIds.has(message.id) ||
+        // Added while this read was in flight: the snapshot predates it.
+        (!!idsAtRequestStart && !idsAtRequestStart.has(message.id))),
   );
 
   if (missingLocalMessages.length === 0) return changed ? mergedMessages : fetchedMessages;

@@ -536,5 +536,63 @@ describe('useFetchMessages', () => {
         useChatStore.getState().completeOperation(operationId);
       }
     });
+
+    it('keeps a send whose stale fetch resolves after the send operation handed off', async () => {
+      const previousReply: UIChatMessage = {
+        id: 'previous-reply',
+        content: 'Previous reply',
+        role: 'assistant',
+        createdAt: 1000,
+        updatedAt: 1000,
+      };
+      const sentUser: UIChatMessage = {
+        id: 'msg_user',
+        content: 'Follow-up question',
+        role: 'user',
+        createdAt: 2000,
+        updatedAt: 2000,
+      };
+      const sentAssistant: UIChatMessage = {
+        id: 'msg_assistant',
+        content: '...',
+        role: 'assistant',
+        createdAt: 2001,
+        updatedAt: 2001,
+      };
+
+      // The topic's read is still in flight from before the send.
+      let resolveFetch!: (messages: UIChatMessage[]) => void;
+      vi.mocked(messageService.getMessages).mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }) as Promise<UIChatMessage[]>,
+      );
+
+      // The conversation was opened with the previous turn already on screen.
+      seedRows(context, [previousReply]);
+      syncMessages(context);
+
+      // The send persists its pair and hands off to the runtime operation, so
+      // no `sendMessage` operation is running when the stale read resolves.
+      const { operationId } = useChatStore.getState().startOperation({
+        context: { ...context, messageId: sentUser.id },
+        type: 'sendMessage',
+      });
+      useChatStore.getState().associateMessageWithOperation(sentUser.id, operationId);
+      useChatStore.getState().associateMessageWithOperation(sentAssistant.id, operationId);
+      useChatStore
+        .getState()
+        .replaceMessages([previousReply, sentUser, sentAssistant], { context });
+      useChatStore.getState().completeOperation(operationId);
+
+      resolveFetch([{ ...previousReply, content: 'Previous reply (fetched)', updatedAt: 1500 }]);
+
+      await waitFor(() => expect(rowsOf(context)?.[0].content).toBe('Previous reply (fetched)'));
+      expect(rowsOf(context)?.map((message) => message.id)).toEqual([
+        previousReply.id,
+        sentUser.id,
+        sentAssistant.id,
+      ]);
+    });
   });
 });

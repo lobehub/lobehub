@@ -65,6 +65,16 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
   const snapshots = new WeakMap<UIChatMessage[], InterventionSnapshot>();
   /** Head responses resolved by `prepareHead`, read back by the sync's `onSuccess`. */
   const headResolutions = new WeakMap<UIChatMessage[], HeadResolution>();
+  /**
+   * Row ids that existed when each head read was issued. A read that is still
+   * in flight when a send lands resolves with the pre-send snapshot; any row
+   * absent from this set was added after the read started and must survive it
+   * even once the send operation has handed off to the runtime.
+   *
+   * The first read of a shared request wins: it started earliest, so it is the
+   * most conservative boundary for what the response can be missing.
+   */
+  const headRequestIds = new WeakMap<UIChatMessage[], Set<string>>();
   /** The entry key each bucket was last written under. */
   const bucketKeys = new Map<string, string>();
 
@@ -86,11 +96,15 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
   const fetchHead = async (context: ConversationMessageParams): Promise<UIChatMessage[]> => {
     const syncKey = getMessageListCacheIdentity(context);
     const dbMessages = bucketRows(conversationMessagesKey(context)) ?? [];
+    // Captured before the request: rows added after this point are newer than
+    // whatever the server read can know about.
+    const idsAtRequestStart = new Set(dbMessages.map((message) => message.id));
     const topicAtRequest = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(get())
       : undefined;
     const wasPending = hasPendingInterventions(dbMessages);
     let messages = await runMessageListQuery(context, readConversationMessageListPage);
+    if (!headRequestIds.has(messages)) headRequestIds.set(messages, idsAtRequestStart);
     if (!context.syncInterventions || !context.topicId) return messages;
     if (wasPending || hasPendingInterventions(messages)) pendingInterventions.add(syncKey);
     if (!pendingInterventions.has(syncKey) || hasPendingInterventions(messages)) return messages;
@@ -103,8 +117,11 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
       messages = await runMessageListQuery(context, readConversationMessageListPage, {
         force: true,
       });
+      if (!headRequestIds.has(messages)) headRequestIds.set(messages, idsAtRequestStart);
     }
     const result = [...messages];
+    // The copy is what `prepareHead` receives; the earliest start still applies.
+    if (!headRequestIds.has(result)) headRequestIds.set(result, idsAtRequestStart);
     snapshots.set(result, { dbMessages, topic, topicAtRequest });
     return result;
   };
@@ -141,6 +158,8 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     context: ConversationMessageParams,
   ): ConversationMessageFetch | undefined => {
     if (!Array.isArray(incoming)) return incoming;
+    const idsAtRequestStart = headRequestIds.get(incoming);
+    headRequestIds.delete(incoming);
     if (!context.topicId) return undefined;
 
     // DB chunk writes can lag behind pushed content, even at an equal
@@ -170,6 +189,7 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
           prevDbMessages,
           activeVoiceMessageIds,
           creatingMessageIds,
+          idsAtRequestStart,
         );
     const dropped = isStreaming && mergedMessages === prevDbMessages;
 
