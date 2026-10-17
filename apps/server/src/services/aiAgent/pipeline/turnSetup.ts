@@ -577,6 +577,13 @@ export const setupTurn = async (
           deps.workspaceId,
         ).resolve(appContext.projectWorkingDirectoryId);
         await routeToProjectDirectory(projectDirectory);
+      } else if (
+        requestedDeviceId &&
+        (appContext?.initialTopicMetadata?.workingDirectory ||
+          appContext?.initialTopicMetadata?.workingDirectoryConfig?.path)
+      ) {
+        assertProjectDirectoryAccess();
+        await routeToProjectDirectory({ deviceId: requestedDeviceId });
       }
 
       // Prepare metadata with cronJobId, taskId, botContext, bound device, and any

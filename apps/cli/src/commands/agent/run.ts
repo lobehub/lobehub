@@ -152,6 +152,16 @@ Exit codes:
         if (deviceId) input.deviceId = deviceId;
         if (options.slug) input.slug = options.slug;
         if (options.topicId) input.appContext = { topicId: options.topicId };
+        else if (options.device === 'local') {
+          // Pin new local conversations to the caller's project, not the daemon's default.
+          const cwd = process.cwd();
+          input.appContext = {
+            initialTopicMetadata: {
+              workingDirectory: cwd,
+              workingDirectoryConfig: { path: cwd },
+            },
+          };
+        }
         if (options.autoStart === false) input.autoStart = false;
         if (options.tool?.length) input.selectedToolIds = options.tool;
         if (options.skill?.length) input.selectedSkillIds = options.skill;

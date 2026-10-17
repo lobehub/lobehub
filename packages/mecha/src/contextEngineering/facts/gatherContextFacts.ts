@@ -406,11 +406,15 @@ const gatherAgentManagementContext = async (
       // the system role, and it must never see its own id (it cannot call itself).
       const others = request.agentId ? recent.filter((a) => a.id !== request.agentId) : recent;
       context = {
-        availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
-          description: a.description ?? undefined,
-          id: a.id,
-          title: a.title ?? 'Untitled',
-        })),
+        // Select by recency, then stabilize prompt order to preserve the cache prefix.
+        availableAgents: others
+          .slice(0, AVAILABLE_AGENTS_LIMIT)
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map((a) => ({
+            description: a.description ?? undefined,
+            id: a.id,
+            title: a.title ?? 'Untitled',
+          })),
         availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
         ...(currentAgent && { currentAgent }),
       };
