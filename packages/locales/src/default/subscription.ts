@@ -808,5 +808,6 @@ export default {
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
   'usage.storage.sandboxStorage.used': 'Sandbox Storage',
+  'usage.storage.sandboxStorage.pool': 'Sandbox drives (workspace pool)',
   'usage.remaining': 'Remaining',
 };

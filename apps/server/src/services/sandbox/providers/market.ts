@@ -1,4 +1,4 @@
-import type { SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox';
+import type { SandboxCallToolResult, SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
 
@@ -89,7 +89,11 @@ export class MarketSandboxProvider implements SandboxProvider {
           // the request body itself, so naming them costs nothing on the wire.
           sandboxCwd,
           sandboxInstanceId,
-          sandboxMode,
+          // Widened for `drive` alone, which the market accepts from the
+          // release that added it while the published SDK still types the
+          // pair it shipped with. Remove the cast with the SDK bump; the field
+          // itself stays named, so it is still checked.
+          sandboxMode: sandboxMode as Exclude<SandboxMode, 'drive'> | undefined,
           // The SDK types this one loosely (`Record<string, unknown>`) while
           // ours is a named shape, so only this field is widened — the rest
           // stay checked, which is the point of dropping the blanket cast.

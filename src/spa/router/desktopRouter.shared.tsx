@@ -1636,6 +1636,14 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               },
               {
                 element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/drive'),
+                  'Desktop > Workspace > Settings > Drive',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'drive',
+              },
+              {
+                element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/environments'),
                   'Desktop > Workspace > Settings > Environments',
                 ),

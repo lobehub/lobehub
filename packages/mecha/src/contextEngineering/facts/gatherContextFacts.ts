@@ -5,6 +5,7 @@ import {
   CloudSandboxIdentifier,
   formatSandboxStoragePromptVariables,
   formatUploadedFilesPrompt,
+  isPersistentSandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   type ComposioServiceSummary,
@@ -537,7 +538,7 @@ export const gatherContextFacts = async (
       // Left out entirely for an ephemeral run so the variable generators'
       // fallback renders the original wording; spelling it out here would mean
       // two copies of the same ephemeral text to keep in step.
-      ...(sandboxPersistence?.mode === 'persistent'
+      ...(isPersistentSandboxMode(sandboxPersistence?.mode)
         ? formatSandboxStoragePromptVariables(sandboxPersistence)
         : {}),
       topic_id: request.topicId ?? '',

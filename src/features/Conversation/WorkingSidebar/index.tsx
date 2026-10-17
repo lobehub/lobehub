@@ -45,7 +45,6 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -56,7 +55,6 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
-import { useSandboxMode } from '@/features/ChatInput/ControlBar/useSandboxMode';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
@@ -70,7 +68,6 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { sandboxStorageService } from '@/services/sandboxStorage';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -97,6 +94,7 @@ import OverviewSlot from './OverviewSlot';
 import PullRequest from './PullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
+import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
 import WorkspaceTab from './WorkspaceTab';
 import WorksSection from './WorksSection';
 
@@ -380,34 +378,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // Files/Review route a deviceId only for remote RPC; "This device" keeps Electron IPC.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
   const isLocalExecution = effectiveTarget === 'local';
-  // A cloud-sandbox run keeps its files in the persistent workspace, so it has a
-  // tree to show too — read through the topic's warm session rather than a
-  // device. Only when the run actually persists: a throwaway box keeps nothing,
-  // and pointing the panel at the workspace would let another conversation's
-  // files read as this one's.
-  // Through the same hook the composer writes with, so the panel sees a choice
-  // the moment it is made. Before a conversation exists the choice is buffered
-  // on the agent rather than stored on a topic, and reading the topic's
-  // metadata directly meant the panel could not see it: the composer said
-  // "cloud sandbox, Lobehub Dev" while the panel showed nothing and explained
-  // nothing. A device's tree needs no conversation either.
-  const { selection: sandboxSelection } = useSandboxMode(activeAgentId ?? '');
-  const sandboxInstanceId = sandboxSelection.instanceId;
-  const isSandboxExecution =
-    effectiveTarget === 'sandbox' && sandboxSelection.mode === 'persistent';
-  const sandboxTopicId = isSandboxExecution ? (topicId ?? undefined) : undefined;
-  // Scoped to the bound instance's directory, or the workspace root when the
-  // run keeps files without one. The empty string IS the root here, which is
-  // why the tab's gate is the topic rather than a truthy path.
-  const { data: sandboxInstances } = useSWR(
-    isSandboxExecution && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
-    () => sandboxStorageService.getInstance({ id: sandboxInstanceId! }),
-  );
-  const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
-  // The empty string IS the workspace root, so an unresolved instance does not
-  // read as "no directory yet" — it reads as "the whole workspace", and the
-  // tree would list every instance's folder for as long as the lookup took.
-  const sandboxDirectoryKnown = !sandboxInstanceId || sandboxInstances !== undefined;
+  // A cloud-sandbox run that keeps files has a tree on the drive to show too.
+  const {
+    active: isSandboxExecution,
+    directory: sandboxDirectory,
+    directoryKnown: sandboxDirectoryKnown,
+    instanceId: sandboxInstanceId,
+    topicId: sandboxTopicId,
+  } = useSandboxFilesDirectory(activeAgentId ?? '', {
+    isSandboxTarget: effectiveTarget === 'sandbox',
+    topicId,
+  });
 
   const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
   const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
@@ -1188,7 +1169,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     <Flexbox className={styles.pane}>
                       <Files
                         deviceId={remoteDeviceId}
-                        sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
+                        sandboxInstanceId={sandboxInstanceId}
                         sandboxTopicId={sandboxTopicId}
                         workingDirectory={filesDirectory}
                       />

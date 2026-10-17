@@ -69,6 +69,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.Drive]: ['storage', 'drive', 'network drive', 'files', 'quota'],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',

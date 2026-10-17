@@ -375,14 +375,18 @@ const InstanceRow = memo<InstanceRowProps>(
             <Text ellipsis fontSize={13} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
               {instance.name}
             </Text>
-            <Text
-              ellipsis
-              fontSize={12}
-              style={{ flex: '0 1000 auto', minWidth: 0 }}
-              type={'secondary'}
-            >
-              {instance.workingDirectory}
-            </Text>
+            {/* The folder only when it says something the label does not: a
+                copy is named after its folder until someone renames it. */}
+            {instance.workingDirectory !== instance.name && (
+              <Text
+                ellipsis
+                fontSize={12}
+                style={{ flex: '0 1000 auto', minWidth: 0 }}
+                type={'secondary'}
+              >
+                {instance.workingDirectory}
+              </Text>
+            )}
           </Flexbox>
           {/* Whether a conversation is in this instance right now — the one
         thing about a row that changes while someone is looking at it, and what
@@ -401,6 +405,13 @@ const InstanceRow = memo<InstanceRowProps>(
         that nothing is happening. A lease store that did not answer says
         nothing here either: the line under the list reports that, rather than
         each row quietly implying it is free. */}
+          {instance.rebuildRequired && (
+            <Tooltip title={t('environments.instances.rebuildPersonalTagHint')}>
+              <Tag color={'warning'} size={'small'}>
+                {t('environments.instances.rebuildPersonalTag')}
+              </Tag>
+            </Tooltip>
+          )}
           {instance.inUse && (
             // The badge says what is true; the hint says what it means for the
             // person looking at it: how long the hold lasts, that the owner
@@ -434,8 +445,10 @@ const InstanceRow = memo<InstanceRowProps>(
         available in an environment someone else published — that is
         most of what having access to one is for. */}
           {/* Named outright on the only copy: there it is how the environment's
-            files are reached, not one row's action among several. */}
-          {single ? (
+            files are reached, not one row's action among several. A private
+            directory left on the public drive stays hidden until it is rebuilt,
+            so there is nothing to open. */}
+          {instance.rebuildRequired ? null : single ? (
             <Button
               icon={<Icon icon={FolderOpenIcon} />}
               size={'small'}
@@ -457,33 +470,47 @@ const InstanceRow = memo<InstanceRowProps>(
             said so here first rather than after a confirmation. Absent when
             the definition clones and installs nothing: there is nothing a
             rebuild would redo. */}
-          {showBuild && editable && instance.status === 'ready' && instance.buildable && (
-            <ActionIcon
-              // `starting` too: the row still reads ready until the refreshed
-              // one lands, and a second click in that window starts a second
-              // build of the same instance.
-              disabled={instance.inUse || starting}
-              icon={RotateCcwIcon}
-              size={'small'}
-              title={t(
-                instance.inUse ? 'environments.instances.inUse' : 'environments.instances.rebuild',
-              )}
-              onClick={confirmBuild}
-            />
-          )}
+          {showBuild &&
+            editable &&
+            !instance.rebuildRequired &&
+            instance.status === 'ready' &&
+            instance.buildable && (
+              <ActionIcon
+                // `starting` too: the row still reads ready until the refreshed
+                // one lands, and a second click in that window starts a second
+                // build of the same instance.
+                disabled={instance.inUse || starting}
+                icon={RotateCcwIcon}
+                size={'small'}
+                title={t(
+                  instance.inUse
+                    ? 'environments.instances.inUse'
+                    : 'environments.instances.rebuild',
+                )}
+                onClick={confirmBuild}
+              />
+            )}
           {/* Copying is the owner's, like adding a copy is: a colleague who can
             run in a published environment cannot take its state with them.
             Greyed out rather than hidden while the source is held, with the
             reason as its tooltip, so the entry does not vanish and come back
-            as runs start and end. */}
+            as runs start and end. A private directory left on the public drive
+            is neither built in nor copied: it is rebuilt on the owner's
+            personal drive instead. */}
           {canCopyInstance(editable) &&
+            !instance.rebuildRequired &&
             (copyBlocked ? (
               // The reason rides on a wrapper: a disabled button takes no
               // pointer events, so its own tooltip would never open and the
               // entry would be grey with nothing saying why.
               <Tooltip title={t(copyEntryTitle(copyBlocked))}>
                 <span style={{ cursor: 'not-allowed', display: 'inline-flex' }}>
-                  <ActionIcon disabled icon={CopyIcon} size={'small'} />
+                  <ActionIcon
+                    disabled
+                    aria-label={t(copyEntryTitle(copyBlocked))}
+                    icon={CopyIcon}
+                    size={'small'}
+                  />
                 </span>
               </Tooltip>
             ) : (

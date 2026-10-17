@@ -1,6 +1,5 @@
 'use client';
 
-import type { EnvironmentKind } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -13,7 +12,6 @@ interface InstanceSectionProps {
   /** Whether the caller owns the environment; a published one is read-only to everyone else. */
   editable: boolean;
   environmentId: string;
-  kind: EnvironmentKind;
   /**
    * Shown as the environment itself rather than as a list: the panel's
    * Overview, when the environment has one copy.
@@ -29,7 +27,7 @@ interface InstanceSectionProps {
  * specification are the whole context, and both stay on screen while a copy is
  * made or discarded.
  */
-const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, kind, single }) => {
+const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, single }) => {
   const { data } = useInstances();
   const { data: environmentData } = useEnvironments();
   const actions = useEnvironmentActions();
@@ -50,14 +48,12 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, k
   return (
     <Flexbox>
       <InstanceList
+        showBuild
         editable={editable}
         environmentId={environmentId}
         instances={instances}
         occupancyUnavailable={data?.occupancyUnavailable ?? false}
         repository={repository}
-        // A files environment has nothing to build, so its rows carry no
-        // build line and no rebuild — only the folder and what is in it.
-        showBuild={kind === 'code'}
         single={single}
         onBuild={actions.rebuildInstance}
         onRemove={actions.removeInstance}

@@ -23,14 +23,17 @@ export * from './modelFacts';
 export const initialTopicMetadataSchema = z.object({
   repos: z.array(z.string()).optional(),
   /**
-   * Cloud-sandbox instance the composer chose before any topic existed. The
-   * choice is made on a conversation that has nothing to write to yet, so it
-   * travels with the first send instead — the server cannot read the client's
-   * pending selection, and without this the new topic would be born unbound and
-   * silently run at the workspace root.
+   * Cloud-sandbox placement the composer chose before any topic existed — an
+   * instance, or a folder on the drive. The choice is made on a conversation
+   * that has nothing to write to yet, so it travels with the first send
+   * instead — the server cannot read the client's pending selection, and
+   * without this the new topic would be born unbound and silently run in a
+   * temporary sandbox.
    */
+  /** Which workspace drive the placement is on; see `ChatTopicMetadata.sandboxDrive`. */
+  sandboxDrive: z.enum(['personal', 'public']).optional(),
   sandboxInstanceId: z.string().optional(),
-  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
+  sandboxWorkingDirectory: z.string().max(1024).optional(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
 });

@@ -20,17 +20,9 @@ import ListSkeleton from '@/components/ListSkeleton';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import { openCreateInstanceModal } from './CreateInstanceModal';
-import { openCreatedEnvironment } from './environmentCreated';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
-import {
-  type CreatedEnvironment,
-  useEnvironmentActions,
-  useEnvironments,
-  useInstances,
-  useWorkspaceUsage,
-} from './useEnvironmentData';
-import WorkspaceUsageMeter from './WorkspaceUsageMeter';
+import { type CreatedEnvironment, useEnvironments, useInstances } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
   detailCol: css`
@@ -70,11 +62,14 @@ const styles = createStaticStyles(({ css }) => ({
 const LIST_MIN_HEIGHT = 4 * 72;
 
 /**
- * Environments and the copies built from them.
+ * Code environments and the folders initialized from them.
  *
  * An environment is a SPECIFICATION — the sources to check out, what makes them
- * usable, what they run with. What a sandbox builds from it is a cache, which is
- * why a copy can be thrown away and made again rather than repaired by hand.
+ * usable, what they run with. Writing one down needs no drive, so this page is
+ * there for everyone; what a sandbox builds from it on the drive is a cache,
+ * which is why a folder can be thrown away and made again rather than repaired
+ * by hand. Folders are initialized from the directory picker's "new folder";
+ * this page lists them, rebuilds, stops and deletes them.
  *
  * List beside detail, the shape the device manager uses: the rows carry only
  * what tells one environment from another, and picking one opens everything
@@ -99,9 +94,7 @@ interface EnvironmentManagerProps {
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
   const { data, error, isValidating, mutate } = useEnvironments(visibility);
-  const { data: instanceData, mutate: refreshInstances } = useInstances();
-  const { refresh: refreshUsage } = useWorkspaceUsage();
-  const { buildInstance } = useEnvironmentActions();
+  const { data: instanceData, entitled, mutate: refreshInstances } = useInstances();
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
@@ -140,9 +133,9 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     openCreateInstanceModal({ environmentId: id });
   };
 
-  // No instance dialog after creating one: see `openCreatedEnvironment`.
-  const onEnvironmentCreated = (created: CreatedEnvironment) =>
-    openCreatedEnvironment(created, { buildInstance, select: setSelectedId });
+  // Open what was just made. Nothing is built: an environment brings no
+  // folder with it until one is initialized from it in the directory picker.
+  const onEnvironmentCreated = (created: CreatedEnvironment) => setSelectedId(created.id);
 
   /**
    * Both lists, because the two halves of what this page shows are fetched
@@ -157,31 +150,23 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const refresh = async () => {
     setRefreshing(true);
     try {
-      // The storage figure rides along, because this is the one moment the
-      // user has asked for a fresh answer — and re-measuring also stamps the
-      // workspace as active, which no page load should do on its own.
-      await Promise.all([mutate(), refreshInstances(), refreshUsage()]);
+      await Promise.all([mutate(), refreshInstances()]);
     } finally {
       setRefreshing(false);
     }
   };
 
   /**
-   * The storage meter, the way to add one, and the way to refetch. Shared by
-   * both layouts because they are the same things wherever they sit; only the
-   * frame around them differs.
-   *
-   * No count of environments: the list is right below it and short enough to
-   * take in at a glance, so the number restated what the reader could already
-   * see. The meter stays because it is the one number the page cannot show —
-   * and the one that stops it working when it runs out.
+   * The way to add one, and the way to refetch. Shared by both layouts because
+   * they are the same things wherever they sit; only the frame around them
+   * differs. How much of the drive is used is the plan's business, and is
+   * shown with the plan's other usage rather than here.
    */
   const actions = (
     // `flex: none`, because this shares a `space-between` row with whatever
     // names the list. Left shrinkable, the group gets compressed by a wide
     // neighbour.
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-      <WorkspaceUsageMeter />
       <Button
         icon={<Icon icon={RefreshCwIcon} />}
         loading={refreshing}
@@ -265,7 +250,9 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
                         .filter((instance) => instance.environmentId === environment.id)
                         .reduce((sum, instance) => sum + (instance.snapshot?.bytes ?? 0), 0)
                 }
-                onCreateInstance={() => createInstance(environment.id)}
+                // A folder lives on the drive; without one there is nowhere to
+                // initialize it, and the panel says how to get one.
+                onCreateInstance={entitled ? () => createInstance(environment.id) : undefined}
                 onSelect={() => select(environment.id)}
               />
             ))}

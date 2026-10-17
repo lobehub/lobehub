@@ -45,6 +45,7 @@ import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
+import { pickSandboxPlacement } from './sandboxPlacement';
 import { createStageTracer, openStageMark } from './sendTracing';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
@@ -620,10 +621,7 @@ export const setupTurn = async (
               ...(editingGroupId && { editingGroupId }),
               taskId: operationTaskId,
               ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
-              ...(initialTopicMeta?.sandboxInstanceId && {
-                sandboxInstanceId: initialTopicMeta.sandboxInstanceId,
-              }),
-              ...(initialTopicMeta?.sandboxMode && { sandboxMode: initialTopicMeta.sandboxMode }),
+              ...pickSandboxPlacement(initialTopicMeta),
               ...(initialTopicMeta?.workingDirectory && {
                 workingDirectory: initialTopicMeta.workingDirectory,
               }),

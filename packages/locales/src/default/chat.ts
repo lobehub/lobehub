@@ -3900,4 +3900,31 @@ export default {
   'userFeedbackCard.count_other': '{{count}} comments',
   'userFeedbackCard.title': 'User feedback',
   'you': 'You',
+  'sandboxDrive.pickerTitle': 'Working directory',
+  'sandboxDrive.pickerInfoTooltip':
+    'Pick a folder on your drive and its files are kept across conversations. Without one, the sandbox is temporary.',
+  'sandboxDrive.manageEnvironments': 'Environments',
+  'sandboxDrive.root': 'Drive root',
+  'sandboxDrive.building': '{{name}} · building',
+  'sandboxDrive.browse': 'Choose a folder on your drive…',
+  'sandboxDrive.browseOther': 'Choose another folder…',
+  'sandboxDrive.browseDesc': 'Files in it are kept across conversations',
+  'sandboxDrive.folderDesc': 'Folder on your drive · {{path}}',
+  'sandboxDrive.environmentDesc': 'Environment directory · installed packages are kept too',
+  'sandboxDrive.environmentBuildingDesc':
+    'Environment directory · building, usable once it finishes',
+  'sandboxDrive.upsell': 'Keep files on a drive',
+  'sandboxDrive.fallback.directoryMissing':
+    'This folder no longer exists on the drive. Runs use a temporary sandbox until you pick another folder.',
+  'sandboxDrive.fallback.instanceUnavailable':
+    'This environment directory can’t be used here any more. Runs use a temporary sandbox until you pick another one.',
+  'sandboxDrive.fallback.rootNotAllowed':
+    'The public drive’s root cannot be a working folder. This run will use a temporary sandbox; pick a folder.',
+  'sandboxDrive.fallbackChip.directoryMissing': 'Folder no longer exists',
+  'sandboxDrive.fallbackChip.instanceUnavailable': 'Environment unavailable',
+  'sandboxDrive.fallbackChip.rootNotAllowed': 'Pick a folder',
+  'sandboxDrive.fallback.instanceRebuildRequired':
+    'This private environment directory is still on the public drive and needs to be rebuilt on your personal drive. This run will use a temporary sandbox.',
+  'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
+  'sandboxDrive.folderOnDriveDesc': '{{drive}} · {{path}}',
 };

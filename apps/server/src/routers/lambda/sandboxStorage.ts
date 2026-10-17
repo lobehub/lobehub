@@ -1,18 +1,21 @@
-import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
-import { ConnectorDataError } from '@lobechat/connector-data';
-import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
-import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  DEFAULT_SANDBOX_DRIVE,
+  SANDBOX_DRIVES,
+  type SandboxDrive,
+} from '@lobechat/builtin-tool-cloud-sandbox';
 import { toExecutionConfiguration } from '@lobechat/types';
 import {
   derivedInstanceDirectory,
-  isDefaultInstance,
   MAX_DERIVED_DIRECTORY_ATTEMPTS,
 } from '@lobechat/utils/environmentInstance';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  type WorkspaceRole,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { EnvironmentModel } from '@/database/models/environment';
 import {
   EnvironmentInstanceModel,
@@ -21,24 +24,49 @@ import {
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { ConnectorDataService } from '@/server/services/connectorData';
 import { MarketService } from '@/server/services/market';
-import { resolveSandboxSessionConfig, resolveSandboxStorageClaim } from '@/server/services/sandbox';
+import {
+  createDriveAccess,
+  type DriveAccess,
+  forgetDriveFolders,
+  isPathWithin,
+  readDriveUsage,
+  resolveSandboxSessionConfig,
+  resolveSandboxStorageClaim,
+  sandboxStorageBinding,
+} from '@/server/services/sandbox';
 import { SandboxStorageFilesError } from '@/server/services/sandbox/storageFiles';
 import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
 
+import { getPostgresErrorField } from './_helpers/environmentErrors';
+import { idSchema, nameSchema, relativePathSchema } from './_schema/environment';
+
 /**
- * Browsing and managing the persistent sandbox workspace.
+ * Browsing and managing the user's network drives, and the environment
+ * directories (instances) initialized on them.
  *
- * The workspace lives on a volume mounted into the sandbox runtime, so every
- * call here runs inside a sandbox session on the caller's behalf. Paths are
- * always relative to the workspace root; the absolute mount path never reaches
- * a client, which leaves nothing for one to smuggle back.
+ * A personal account has one drive. A workspace has two kinds: the public
+ * drive every member shares, and one personal drive per member that only they
+ * can reach. Every call names the drive it means (`drive`, defaulting to the
+ * public one in a workspace); the claim it is signed with is issued for that
+ * drive alone, so a path can only ever mean a folder on the drive named. A
+ * call about one environment directory goes to the drive that directory is on,
+ * whatever it names.
+ *
+ * The drive lives on a volume mounted into the sandbox runtime. Paths are
+ * always relative to the drive's root; the absolute mount path never reaches a
+ * client, which leaves nothing for one to smuggle back. Everything here needs
+ * the drive, so everything here needs the entitlement — the definitions the
+ * instances are built from do not, and live in the `environment` router.
  */
 
-/** Relative workspace path, validated with the same rule the runtime applies. */
-const relativePathSchema = z.string().refine(isSafeSandboxCwd, {
-  message: 'Path must be a relative path inside the workspace',
+/**
+ * An environment directory's path: one folder at the drive's root, never
+ * nested. Every member's environment directories sit side by side there, which
+ * is what lets a listing tell them apart from ordinary folders at a glance.
+ */
+const instanceDirectorySchema = relativePathSchema.refine((value) => !value.includes('/'), {
+  message: 'An environment directory sits at the root of the drive',
 });
 
 /**
@@ -47,6 +75,9 @@ const relativePathSchema = z.string().refine(isSafeSandboxCwd, {
  * already talking to.
  */
 const topicIdSchema = z.string().min(1).max(255).optional();
+
+/** Which workspace drive a call addresses; see the router's own note. */
+const driveSchema = z.enum(SANDBOX_DRIVES).optional();
 
 /**
  * Ceiling on a single write. Generous for anything a person edits by hand and
@@ -65,14 +96,6 @@ const fileContentSchema = z
   .refine((value) => Buffer.byteLength(value, 'utf8') <= MAX_FILE_CONTENT_BYTES, {
     message: `File content exceeds ${MAX_FILE_CONTENT_BYTES} bytes`,
   });
-
-/**
- * "You have not connected GitHub" travels as an error from the connector layer,
- * but for the picker it is an answer, not a failure — the one it is there to
- * help the user fix.
- */
-const isGithubUnavailable = (error: unknown): boolean =>
-  error instanceof ConnectorDataError && error.provider === 'github' && !error.retryable;
 
 /**
  * Whether building from this definition does anything: an environment that
@@ -119,14 +142,18 @@ const mapStorageError = (error: unknown): never => {
 };
 
 /**
- * Resolves the caller's sandbox-storage claim: which directory on the volume
- * they are entitled to and how large it may be.
+ * Resolves the caller's sandbox-storage claim for the drive the call names:
+ * which directory on the volume they are entitled to and how large it may be.
  *
  * It reads `ctx.workspaceId`, but that is the TEAM workspace, and it is read
- * only to decide whose storage this is — a member inside a team gets the
- * team's shared directory, otherwise their personal one. The claim itself has
- * nothing to do with the team workspace, which is why neither this nor
- * anything built on it is named after one.
+ * only to decide whose storage this is — inside a team the public drive or
+ * the member's personal one, otherwise their personal account's. The claim
+ * itself has nothing to do with the team workspace, which is why neither this
+ * nor anything built on it is named after one.
+ *
+ * A call that names no drive but names a topic addresses the topic's: the
+ * working panel lists the conversation's own folder, and that folder is on
+ * the drive the conversation picked.
  *
  * The caller is always acting as themselves here — a signed-in user browsing
  * their own storage, not an agent run executing under someone else's identity
@@ -135,17 +162,38 @@ const mapStorageError = (error: unknown): never => {
 const storageClaimProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
+  const raw = (await opts.getRawInput()) as { drive?: unknown; topicId?: unknown } | undefined;
 
-  const claim = await resolveSandboxStorageClaim({
-    isShareVisitorRun: false,
+  let drive: SandboxDrive = workspaceId ? DEFAULT_SANDBOX_DRIVE : 'personal';
+  const named = driveSchema.safeParse(raw?.drive);
+  if (workspaceId && named.success && named.data) {
+    drive = named.data;
+  } else if (workspaceId && typeof raw?.topicId === 'string' && raw.topicId) {
+    // A lookup that fails leaves the call on the public drive, the default a
+    // topic without a drive of its own means anyway.
+    try {
+      const topic = await new TopicModel(ctx.serverDB, ctx.userId, workspaceId).findById(
+        raw.topicId,
+      );
+      if (topic?.metadata?.sandboxDrive === 'personal') drive = 'personal';
+    } catch {
+      /* keep the default */
+    }
+  }
+
+  const drives = createDriveAccess({
+    resolveClaim: resolveSandboxStorageClaim,
     serverDB: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
   });
+  const claim = await drives.claim(drive);
 
   return opts.next({
     ctx: {
       claim,
+      drive,
+      drives,
       marketService: new MarketService({
         userInfo: { sandboxStorage: claim, userId: ctx.userId, workspaceId },
       }),
@@ -172,151 +220,14 @@ const entitledProcedure = storageClaimProcedure.use(async (opts) => {
 });
 
 /**
- * A user-facing environment name. Distinct from the row's id, which is what the
- * execution plane stores the snapshot under and never changes — this is the
- * part a rename is allowed to move.
- */
-const nameSchema = z.string().trim().min(1).max(255);
-
-/**
  * The topic the execution plane keys its file-browser console sessions to.
  * The same literal market uses (`MANAGEMENT_TOPIC_ID`); it is not a topic of
  * ours, so it is never looked up and the run is shown as a console session.
  */
 const MANAGEMENT_TOPIC_ID = 'sandbox-workspace-console';
 
-/**
- * An environment or instance id. Checked for shape rather than left to the
- * lookup, because the lookup cannot answer: a non-UUID compared against a
- * `uuid` column is a Postgres type error, so the caller would get a server
- * fault where "no such environment" was the answer.
- *
- * An instance's id doubles as the name its snapshot is stored under, which is
- * why it never changes.
- */
-const idSchema = z.string().uuid();
-
-/**
- * Who an environment resolves for inside a workspace. Personal environments
- * have no pool to join, so the server stores `private` for them whatever a
- * client sends.
- */
-const visibilitySchema = z.enum(['private', 'public']);
-
-/** The indexes that make a name identify one environment for one member. */
-const ENVIRONMENT_NAME_CONSTRAINTS = new Set([
-  'environments_user_name_unique',
-  'environments_workspace_user_name_unique',
-]);
-
 /** The index that keeps two instances out of the same directory. */
 const INSTANCE_DIRECTORY_CONSTRAINT = 'environment_instances_provider_path_unique';
-
-/**
- * The hosts a checkout may name.
- *
- * An allowlist rather than an SSRF check on the resolved address, because the
- * clone does not happen here: the stored specification is handed to the
- * execution plane, which resolves and fetches it from its own network, so no
- * validation at this layer can speak for what that resolution will return.
- * Naming the hosts is the part this layer can be sure of — and every producer
- * already names exactly one, since a source is chosen through the GitHub
- * repository picker and the UI parses the URL back assuming that host.
- */
-const ALLOWED_SOURCE_HOSTS = new Set(['github.com', 'www.github.com']);
-
-/**
- * Where source material comes from. Only `git` for now, and only over HTTPS:
- * the other transports authenticate with a key, and a specification that
- * carries no credentials cannot present one. Private repositories are a
- * separate problem, not a URL scheme.
- *
- * The host is checked because this schema guards an RPC, not the picker: an
- * entitled caller reaching it directly could otherwise store any URL, and the
- * build would then make the execution plane fetch it — an internal address
- * included.
- */
-const environmentSourceSchema = z.object({
-  kind: z.literal('git'),
-  /** Where the checkout lands, relative to the instance's own directory. */
-  path: relativePathSchema.optional(),
-  ref: z.string().trim().min(1).max(255).optional(),
-  url: z
-    .string()
-    .url()
-    .refine(
-      (value) => {
-        let parsed;
-        try {
-          parsed = new URL(value);
-        } catch {
-          return false;
-        }
-
-        return parsed.protocol === 'https:' && ALLOWED_SOURCE_HOSTS.has(parsed.hostname);
-      },
-      { message: 'Only https:// github.com git URLs are supported' },
-    ),
-});
-
-/**
- * Non-secret values only. Enforced by shape as far as a shape can: the name has
- * to look like an environment variable, and the rest is said plainly in the UI
- * and in the type. A field that stores what the user types cannot tell a region
- * from a token, which is why secrets are resolved at use time instead.
- */
-const environmentEnvSchema = z.record(
-  z
-    .string()
-    .max(128)
-    .regex(/^[A-Z_]\w*$/i, 'Must be a valid environment variable name'),
-  z.string().max(4096),
-);
-
-const configurationSchema = z.object({
-  bootstrapCommand: z.string().max(8000).optional(),
-  env: environmentEnvSchema.optional(),
-  excludePaths: z.array(relativePathSchema).max(64).optional(),
-  internetAccess: z.boolean().optional(),
-  // Which form the product shows. Accepted here so it is stored rather than
-  // stripped by the parse; it never travels on to the execution plane.
-  kind: z.enum(['files', 'code']).optional(),
-  maintenanceCommand: z.string().max(8000).optional(),
-  // One repository per environment. The wire format stays a list because the
-  // execution plane checks out an array of sources, but an environment that
-  // builds from two repositories has no single working directory to hand a
-  // conversation — and the picker that fills this offers exactly one.
-  sources: z.array(environmentSourceSchema).max(1).optional(),
-});
-
-/** Postgres surfaces the driver error somewhere down the `cause` chain. */
-const getPostgresErrorField = (error: unknown, field: string): string | undefined => {
-  let current: unknown = error;
-
-  while (current && typeof current === 'object') {
-    const value = (current as Record<string, unknown>)[field];
-    if (typeof value === 'string') return value;
-
-    current = (current as { cause?: unknown }).cause;
-  }
-};
-
-/**
- * The name is the one thing the person chose, and a collision is fixed by
- * typing a different one — so it has to arrive as CONFLICT next to the field,
- * not as the generic failure a raw driver error would produce. A code rather
- * than prose because this one is shown inline and has to be translated.
- */
-const rethrowDuplicateEnvironmentName = (error: unknown): never => {
-  if (
-    getPostgresErrorField(error, 'code') === '23505' &&
-    ENVIRONMENT_NAME_CONSTRAINTS.has(getPostgresErrorField(error, 'constraint') ?? '')
-  ) {
-    throw new TRPCError({ cause: error, code: 'CONFLICT', message: 'DUPLICATE_ENVIRONMENT_NAME' });
-  }
-
-  throw error;
-};
 
 /**
  * Two instances in one directory would restore two package sets over each
@@ -350,19 +261,6 @@ const rethrowDuplicateInstanceDirectory = (error: unknown): never => {
 };
 
 /**
- * An environment with instances still on it. The reference is `restrict`
- * on purpose — deleting the specification out from under them would leave
- * directories and captured state nothing describes.
- */
-const rethrowEnvironmentInUse = (error: unknown): never => {
-  if (getPostgresErrorField(error, 'code') === '23503') {
-    throw new TRPCError({ cause: error, code: 'CONFLICT', message: 'ENVIRONMENT_HAS_INSTANCES' });
-  }
-
-  throw error;
-};
-
-/**
  * An environment is a specification plus whatever has been built from it. This
  * layer owns the specification; the snapshot belongs to the execution plane and
  * is addressed by the row's id.
@@ -385,24 +283,6 @@ const environmentProcedure = entitledProcedure.use(async (opts) => {
   });
 });
 
-/**
- * Where an instance lives, in the vocabulary `environment_instances` uses
- * for every execution target it supports.
- *
- * The scope is the caller's workspace key and the resource is the one
- * persistent workspace inside it — there is exactly one, which is why the
- * resource is named rather than identified. What distinguishes two instances is
- * the directory, and `environment_instances_provider_path_unique` covers that
- * tuple, so the database is what stops two copies landing in one folder.
- */
-const sandboxBinding = (workspaceKey: string) => ({
-  deviceId: null,
-  kind: 'sandbox' as const,
-  provider: 'market',
-  providerResourceId: 'workspace',
-  providerScope: workspaceKey,
-});
-
 const instanceProcedure = environmentProcedure.use(async (opts) => {
   const { ctx } = opts;
 
@@ -420,25 +300,25 @@ const instanceProcedure = environmentProcedure.use(async (opts) => {
 type SandboxStorageClient = ReturnType<MarketService['getSandboxStorageClient']>;
 
 /**
- * Run `fn` with the environment and instance models bound to one transaction,
- * for the calls that must change both tables or neither.
+ * Whether a folder on the drive already holds something. `false` for one that
+ * is not there or is empty; an unreachable drive is not read as either and
+ * fails the call, since guessing "empty" could build over someone's work.
  */
-const inEnvironmentTransaction = <T>(
-  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
-  fn: (models: {
-    environmentModel: EnvironmentModel;
-    instanceModel: EnvironmentInstanceModel;
-  }) => Promise<T>,
-): Promise<T> =>
-  ctx.serverDB.transaction(async (tx) => {
-    const db = tx as unknown as LobeChatDatabase;
-    const workspaceId = ctx.workspaceId ?? undefined;
+const isFolderOccupied = async (client: SandboxStorageClient, path: string) => {
+  try {
+    const listing = await client.listFiles({ path });
+    return listing.entries.length > 0;
+  } catch (error) {
+    if (error instanceof SandboxStorageFilesError && error.status === 404) return false;
+    return mapStorageError(error);
+  }
+};
 
-    return fn({
-      environmentModel: new EnvironmentModel(db, ctx.userId, workspaceId),
-      instanceModel: new EnvironmentInstanceModel(db, ctx.userId, workspaceId),
-    });
-  });
+const assertFolderFree = async (client: SandboxStorageClient, path: string) => {
+  if (await isFolderOccupied(client, path)) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'FOLDER_NOT_EMPTY' });
+  }
+};
 
 /**
  * A new sandbox instance of an environment the caller owns, with its directory
@@ -452,17 +332,20 @@ const inEnvironmentTransaction = <T>(
  */
 const createDerivedInstance = async (
   instanceModel: EnvironmentInstanceModel,
+  client: SandboxStorageClient,
   workspaceKey: string,
   environment: { id: string; name: string },
 ) => {
   for (let attempt = 1; attempt <= MAX_DERIVED_DIRECTORY_ATTEMPTS; attempt += 1) {
     const workingDirectory = derivedInstanceDirectory(environment.name, attempt);
 
-    if (await instanceModel.findByWorkingDirectory(workingDirectory)) continue;
+    if (await instanceModel.findByWorkingDirectory(workingDirectory, workspaceKey)) continue;
+    // An ordinary folder of the same name is somebody's work, not a free name.
+    if (await isFolderOccupied(client, workingDirectory)) continue;
 
     const created = await instanceModel
       .create({
-        ...sandboxBinding(workspaceKey),
+        ...sandboxStorageBinding(workspaceKey),
         environmentId: environment.id,
         // The directory is the only thing that distinguishes this instance
         // from its siblings right now, so it is also the only honest label
@@ -512,85 +395,194 @@ const deleteInstanceSnapshot = (client: SandboxStorageClient, id: string, topicI
   });
 
 /**
- * The directory a file route may touch, as a path relative to the workspace
- * root; `''` is the whole root.
+ * What a file route may touch on the drive, as paths relative to its root.
  *
- * A workspace's root is shared by every member and holds every instance's
- * directory, so a path alone authorizes nothing: it is confined to one
- * instance, reached through the same rules as everywhere else. Reads follow
- * visibility — a published instance is readable by the members who run in it.
- * Writes stay with the instance's owner, as every other write to an instance
- * does. A conversation's own files are read through the instance its runs
- * resolve to, so a public agent's conversation is held to published ones.
+ * Without an instance the whole drive is in reach: a personal drive is its
+ * owner's, and the public drive's root and ordinary folders belong to every
+ * member, who may list them and create, rename or delete folders in them. Two
+ * kinds of folder are carved out of that, and both are environment
+ * directories:
  *
- * A personal account's root belongs to its owner alone, which is the one case
- * where no instance is needed.
+ * - **Read-only** — every environment directory. It is the saved copy of a
+ *   sandbox's work tree, written by its own sessions alone: a write from
+ *   outside would be overwritten by the next save, or leave the folder
+ *   disagreeing with the record the next restore reads it by. Moving or
+ *   deleting a folder that holds one is the same write.
+ * - **Hidden** — a private environment's directory on the public drive. New
+ *   ones are made on their owner's personal drive; these are left over from
+ *   before members had one, and their home directory can hold the owner's
+ *   credentials. Until they are rebuilt they are left out of every listing
+ *   and refused when named, for everyone, exactly as if they were not there.
  *
- * An instance's directory is never written through here: it is
- * the saved copy of the sandbox's work tree, written by the sandbox alone. A
- * write from outside would be overwritten by the next save, or leave the
- * directory disagreeing with the record the next restore reads it by.
+ * With an instance the route is confined to that instance's directory, read
+ * only, and goes to the drive the instance is on.
  */
-const resolveFileRoot = async (
-  ctx: {
-    instanceModel: EnvironmentInstanceModel;
-    serverDB: Parameters<typeof resolveSandboxSessionConfig>[0]['serverDB'];
-    userId: string;
-    workspaceId?: string | null;
-  },
-  { instanceId, topicId }: { instanceId?: string; topicId?: string },
-  access: 'read' | 'write',
-): Promise<string> => {
+interface DriveScope {
+  /** The client of the drive this scope is on. */
+  client: SandboxStorageClient;
+  /** Legacy private environment directories nobody may see; see above. */
+  hidden: string[];
+  /** Every environment directory on the drive. */
+  instanceDirectories: string[];
+  /** Where a route is confined; `''` is the whole drive. */
+  root: string;
+}
+
+interface DriveContext {
+  claim: { key: string };
+  client: SandboxStorageClient;
+  drive: SandboxDrive;
+  drives: DriveAccess;
+  instanceModel: EnvironmentInstanceModel;
+  workspaceId?: string | null;
+}
+
+/**
+ * The drive an instance is on, from the caller's side. Another member's
+ * personal drive is not one of the caller's, so an instance there is answered
+ * the way a missing one is.
+ */
+const resolveInstanceDrive = async (
+  ctx: Pick<DriveContext, 'drives'>,
+  instance: { providerScope?: string | null },
+) => {
+  const drive = ctx.drives.driveOf(instance.providerScope);
+  const access = drive ? await ctx.drives.client(drive) : undefined;
+  if (!drive || !access) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+  return { ...access, drive };
+};
+
+/**
+ * Refuses to build in or copy a private environment's directory left on the
+ * public drive: it is hidden there and run by nobody, and the way forward is a
+ * new copy on the owner's personal drive.
+ */
+const assertNotLeftOnPublicDrive = async (
+  ctx: Pick<DriveContext, 'instanceModel' | 'workspaceId'>,
+  instance: { id: string },
+  access: { claim: { key: string }; drive: SandboxDrive },
+) => {
+  if (!ctx.workspaceId || access.drive !== 'public') return;
+
+  const directories = await ctx.instanceModel.listStorageDirectories(
+    sandboxStorageBinding(access.claim.key),
+  );
+  if (directories.some((entry) => entry.id === instance.id && entry.isPrivate)) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'INSTANCE_REBUILD_REQUIRED' });
+  }
+};
+
+/** Whether the scope's drive is a workspace's public one, shared by every member. */
+const isPublicDrive = (ctx: Pick<DriveContext, 'drive' | 'workspaceId'>) =>
+  !!ctx.workspaceId && ctx.drive === 'public';
+
+const resolveDriveScope = async (ctx: DriveContext, instanceId?: string): Promise<DriveScope> => {
   if (instanceId) {
-    // Refused before the lookup: the answer is the same whether or not the
-    // instance exists, so there is nothing to find out by asking.
-    if (access === 'write') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
-    }
     const instance = await ctx.instanceModel.findById(instanceId);
     if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+    const { client } = await resolveInstanceDrive(ctx, instance);
 
-    return instance.workingDirectory;
+    return {
+      client,
+      hidden: [],
+      instanceDirectories: [instance.workingDirectory],
+      root: instance.workingDirectory,
+    };
   }
 
-  if (!ctx.workspaceId) return '';
+  const directories = await ctx.instanceModel.listStorageDirectories(
+    sandboxStorageBinding(ctx.claim.key),
+  );
 
-  if (access === 'read' && topicId) {
-    const { cwd } = await resolveSandboxSessionConfig({
-      isShareVisitorRun: false,
-      serverDB: ctx.serverDB,
-      topicId,
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    if (cwd) return cwd;
-  }
-
-  throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_REQUIRED' });
+  return {
+    client: ctx.client,
+    hidden: isPublicDrive(ctx)
+      ? directories.filter((entry) => entry.isPrivate).map((entry) => entry.workingDirectory)
+      : [],
+    instanceDirectories: directories.map((entry) => entry.workingDirectory),
+    root: '',
+  };
 };
 
 /** Whether `path` is `root` itself or somewhere beneath it. */
-const isWithinRoot = (path: string, root: string) =>
-  !root || path === root || path.startsWith(`${root}/`);
+const isWithinRoot = (path: string, root: string) => !root || isPathWithin(path, root);
 
-const assertWithinRoot = (path: string, root: string) => {
-  if (!isWithinRoot(path, root)) {
+const isHidden = (path: string, scope: DriveScope) =>
+  scope.hidden.some((directory) => isPathWithin(path, directory));
+
+const assertReadable = (path: string, scope: DriveScope) => {
+  if (!isWithinRoot(path, scope.root)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
   }
+  // The same answer a path that does not exist gets: a folder this member may
+  // not see is not one they get to learn about by guessing its name.
+  if (isHidden(path, scope)) throw new TRPCError({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
 };
 
-/** Names the instance a file route works in; see {@link resolveFileRoot}. */
+/**
+ * Refuses a write into an environment directory, and a move or delete of a
+ * folder holding one. Refused before anything is looked up when an instance
+ * is named: the answer is the same whether or not the instance exists.
+ */
+const resolveWritableScope = async (
+  ctx: DriveContext,
+  { instanceId, path }: { instanceId?: string; path: string },
+) => {
+  if (instanceId) throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
+
+  const scope = await resolveDriveScope(ctx);
+  assertReadable(path, scope);
+  if (
+    scope.instanceDirectories.some(
+      (directory) => isPathWithin(path, directory) || isPathWithin(directory, path),
+    )
+  ) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
+  }
+
+  return scope;
+};
+
+/** Names the instance a file route works in; see {@link resolveDriveScope}. */
 const instanceIdSchema = idSchema.optional();
 
+/**
+ * The drive an environment's directories are made on: a private environment's
+ * on its owner's personal drive, a published one's on the public drive every
+ * member can run it from. A personal account has the one drive.
+ */
+const driveForEnvironment = (
+  environment: { visibility?: string | null; workspaceId?: string | null },
+  workspaceId?: string | null,
+): SandboxDrive => {
+  if (!workspaceId) return 'personal';
+
+  return environment.workspaceId && environment.visibility === 'private' ? 'personal' : 'public';
+};
+
 export const sandboxStorageRouter = router({
+  /**
+   * Create a folder, parents included. Idempotent — an existing folder is a
+   * success, so a picker can offer "new folder" without first proving the
+   * name is free.
+   */
   createDirectory: instanceProcedure
     .input(
-      z.object({ instanceId: instanceIdSchema, path: relativePathSchema, topicId: topicIdSchema }),
+      z.object({
+        drive: driveSchema,
+        instanceId: instanceIdSchema,
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
     )
-    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
-      assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
+    .mutation(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { instanceId, path: input.path });
 
-      return ctx.client.createDirectory(input).catch(mapStorageError);
+      const created = await scope.client.createDirectory(input).catch(mapStorageError);
+      forgetDriveFolders(ctx.claim.key);
+
+      return created;
     }),
 
   /**
@@ -600,6 +592,12 @@ export const sandboxStorageRouter = router({
    * workspace.
    */
   getEntitlement: storageClaimProcedure.query(async ({ ctx }) => ({
+    /**
+     * The drives this caller has: `public` and `personal` in a workspace,
+     * `personal` alone in a personal account. Both of a workspace's drive
+     * share one plan, so one is entitled exactly when the other is.
+     */
+    drives: ctx.drives.available,
     entitled: Boolean(ctx.claim),
     quotaBytes: ctx.claim?.quotaBytes ?? null,
   })),
@@ -621,7 +619,7 @@ export const sandboxStorageRouter = router({
   resolveSessionPlacement: storageClaimProcedure
     .input(z.object({ topicId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const { claim, cwd, mode, workingDir } = await resolveSandboxSessionConfig({
+      const { claim, cwd, drive, fallback, mode, workingDir } = await resolveSandboxSessionConfig({
         isShareVisitorRun: false,
         serverDB: ctx.serverDB,
         topicId: input.topicId,
@@ -629,7 +627,10 @@ export const sandboxStorageRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
 
-      return claim ? { cwd, mode, workingDir } : null;
+      // `fallback` says why a folder or environment directory the topic picked
+      // is not where this run goes, so the composer can tell the person
+      // before they send rather than after the work went somewhere temporary.
+      return claim ? { cwd, drive, fallback, mode, workingDir } : null;
     }),
 
   /**
@@ -643,12 +644,18 @@ export const sandboxStorageRouter = router({
       z.object({
         id: idSchema,
         name: nameSchema,
-        workingDirectory: relativePathSchema,
+        workingDirectory: instanceDirectorySchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const source = await ctx.instanceModel.findOwnedById(input.id);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+      // Beside the source, on the same drive: the copy starts from the
+      // source's snapshot, which lives on that drive's volume.
+      const sourceDrive = await resolveInstanceDrive(ctx, source);
+      const { claim, client } = sourceDrive;
+      await assertNotLeftOnPublicDrive(ctx, source, sourceDrive);
+      await assertFolderFree(client, input.workingDirectory);
 
       // A held instance is mid-write, so a copy would capture a tree halfway
       // through a change. The execution plane refuses it too; asking first
@@ -657,7 +664,7 @@ export const sandboxStorageRouter = router({
       // that did not answer is not read as "free" — here that means refusing,
       // because unlike a rebuild there is no runtime lease standing behind a
       // copy to catch the second writer.
-      const occupancy = await ctx.client
+      const occupancy = await client
         .readOccupancy({ names: [source.id] })
         .catch(() => ({ held: [], unavailable: true }));
       if (occupancy.unavailable || occupancy.held.some((entry) => entry.id === source.id)) {
@@ -670,7 +677,7 @@ export const sandboxStorageRouter = router({
       // state as a brand-new instance, which the UI already handles.
       const created = await ctx.instanceModel
         .create({
-          ...sandboxBinding(ctx.claim.key),
+          ...sandboxStorageBinding(claim.key),
           // The copy's files are the source's, so its definition is too. Left
           // to default, it would snapshot whatever the environment says now
           // and describe a checkout the copied tree does not contain.
@@ -683,7 +690,7 @@ export const sandboxStorageRouter = router({
 
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      await ctx.client
+      await client
         .copyInstance({
           from: source.id,
           // The copy's own folder. Sharing the source's would let either
@@ -725,25 +732,55 @@ export const sandboxStorageRouter = router({
       if (!environment)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      return createDerivedInstance(ctx.instanceModel, ctx.claim.key, environment);
+      const access = await ctx.drives.client(driveForEnvironment(environment, ctx.workspaceId));
+      if (!access) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'This account has no persistent sandbox workspace',
+        });
+      }
+
+      return createDerivedInstance(ctx.instanceModel, access.client, access.claim.key, environment);
     }),
 
   /**
-   * An instance of an environment: its own directory, its own captured
-   * state. Created empty — nothing is built until a conversation runs in it.
+   * Initialize a folder from an environment: an environment directory at the
+   * drive's root, with its own captured state. Created unbuilt — the caller
+   * starts the build next, the same split as for any other new instance.
+   *
+   * Only a new folder, or an empty one. Building into a folder that already
+   * holds work would mix a checkout into it, and a later rebuild would throw
+   * that work away with the old checkout.
    */
   createInstance: instanceProcedure
     .input(
       z.object({
         environmentId: idSchema,
         name: nameSchema,
-        workingDirectory: relativePathSchema,
+        workingDirectory: instanceDirectorySchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // The environment decides the drive, not the drive being browsed: a
+      // private environment's directory goes on its owner's personal drive,
+      // where no other member can reach the home directory it captures.
+      const environment = await ctx.environmentModel.findOwnedById(input.environmentId);
+      if (!environment)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      const drive = driveForEnvironment(environment, ctx.workspaceId);
+      const access = await ctx.drives.client(drive);
+      if (!access) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'This account has no persistent sandbox workspace',
+        });
+      }
+
+      await assertFolderFree(access.client, input.workingDirectory);
+
       const created = await ctx.instanceModel
         .create({
-          ...sandboxBinding(ctx.claim.key),
+          ...sandboxStorageBinding(access.claim.key),
           environmentId: input.environmentId,
           name: input.name,
           workingDirectory: input.workingDirectory,
@@ -751,8 +788,9 @@ export const sandboxStorageRouter = router({
         .catch(rethrowDuplicateInstanceDirectory);
 
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      forgetDriveFolders(access.claim.key);
 
-      return created;
+      return { ...created, drive };
     }),
 
   /**
@@ -772,6 +810,9 @@ export const sandboxStorageRouter = router({
     .mutation(async ({ ctx, input }) => {
       const instance = await ctx.instanceModel.findOwnedById(input.id);
       if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+      const instanceDrive = await resolveInstanceDrive(ctx, instance);
+      const { client } = instanceDrive;
+      await assertNotLeftOnPublicDrive(ctx, instance, instanceDrive);
 
       // The definition this instance was created from, not the environment's
       // current one: a build has to produce what the instance says it is, and
@@ -792,7 +833,7 @@ export const sandboxStorageRouter = router({
       // now, so a held instance is refused before the row changes at all. A
       // lease store that did not answer is not read as "free" — the runtime's
       // own lease still stands behind this and refuses a second writer.
-      const occupancy = await ctx.client
+      const occupancy = await client
         .readOccupancy({ names: [input.id], topicId: input.topicId })
         .catch(() => ({ held: [], unavailable: true }));
       if (occupancy.held.some((entry) => entry.id === input.id)) {
@@ -822,7 +863,7 @@ export const sandboxStorageRouter = router({
       });
 
       try {
-        const { buildId } = await ctx.client.buildInstance({
+        const { buildId } = await client.buildInstance({
           credentials: credential ? [credential] : undefined,
           // Where the checkout lands on the volume: the instance's own folder,
           // which is what its file browser opens.
@@ -883,7 +924,8 @@ export const sandboxStorageRouter = router({
         };
       }
 
-      const status = await ctx.client
+      const { client } = await resolveInstanceDrive(ctx, instance);
+      const status = await client
         .buildStatus({
           buildId: instance.buildId,
           logOffset: input.logOffset,
@@ -909,86 +951,50 @@ export const sandboxStorageRouter = router({
     }),
 
   /**
-   * An environment, together with its default instance.
-   *
-   * The person creating an environment has not started any work yet, so there
-   * is nothing to ask them about where it should happen: the instance is
-   * created here, with the same derived directory a new copy gets, and every
-   * creation path ends with one. It is returned unbuilt — building it
-   * cold-starts a sandbox, so the client fires `startInstanceBuild` next, the
-   * same split as for any other new instance.
-   *
-   * Both rows are written in one transaction, so a failure to create the
-   * instance leaves no environment behind either: the caller sees the failure
-   * and retries, instead of holding an environment that silently skipped the
-   * step.
-   *
-   * Asked for, not assumed. A client from before this follows the call with
-   * its own create-instance dialog, and an instance made here as well would
-   * leave it with two — the unasked one being the default, which cannot be
-   * removed on its own. Such a client gets the environment alone, as it always
-   * did, and its first instance becomes the default.
-   */
-  createEnvironment: instanceProcedure
-    .input(
-      z.object({
-        configuration: configurationSchema.optional(),
-        description: z.string().max(2000).optional(),
-        name: nameSchema,
-        visibility: visibilitySchema.optional(),
-        withDefaultInstance: z.boolean().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input: { withDefaultInstance, ...input } }) =>
-      inEnvironmentTransaction(ctx, async ({ environmentModel, instanceModel }) => {
-        const environment = await environmentModel
-          .create(input)
-          .catch(rethrowDuplicateEnvironmentName);
-        if (!withDefaultInstance) return { ...environment, defaultInstance: undefined };
-
-        const defaultInstance = await createDerivedInstance(
-          instanceModel,
-          ctx.claim.key,
-          environment,
-        );
-
-        return { ...environment, defaultInstance };
-      }),
-    ),
-
-  /**
    * One instance, from the database alone. Separate from `listInstances`
    * because the composer only needs to know where the conversation is pointed,
    * and `listInstances` pays a sandbox cold start to answer how big everything
    * is — seconds, for a label.
    */
-  getInstance: instanceProcedure
-    .input(z.object({ id: idSchema }))
-    .query(async ({ ctx, input }) => (await ctx.instanceModel.findById(input.id)) ?? null),
+  getInstance: instanceProcedure.input(z.object({ id: idSchema })).query(async ({ ctx, input }) => {
+    const instance = await ctx.instanceModel.findById(input.id);
+    if (!instance) return null;
 
-  getStorage: entitledProcedure.query(async ({ ctx }) =>
-    ctx.client.getStorage().catch(mapStorageError),
-  ),
+    // Which of the caller's drives it is on, for the composer's label —
+    // `null` on a drive that is not theirs, which the run refuses.
+    return { ...instance, drive: ctx.drives.driveOf(instance.providerScope) ?? null };
+  }),
+
+  // A topic stands for the drive it picked, so the working panel's tree is
+  // rooted on the drive its files are actually on.
+  getStorage: entitledProcedure
+    .input(z.object({ drive: driveSchema, topicId: topicIdSchema }).optional())
+    .query(async ({ ctx }) => ctx.client.getStorage().catch(mapStorageError)),
 
   /**
-   * Re-measure the workspace and answer with the fresh figure.
+   * How much each of the caller's drives holds against the plan's quota.
    *
-   * A mutation rather than a query because it writes: it walks the volume and
-   * stamps the workspace as active. Kept off page load for that reason — the
-   * settings page reads the stored number and offers this on its refresh
-   * button, so a page nobody asked to refresh cannot keep an idle workspace
-   * looking busy.
+   * A workspace's public drive and every member's personal drive draw on one
+   * pool, so the figure that decides whether a write is refused is their sum
+   * — the execution plane reports it beside each drive's own. An owner or
+   * admin is also shown how much each other member's personal drive holds:
+   * the amount, which is the workspace's to pay for, and never the contents,
+   * which stay out of reach of every claim this router issues.
    */
-  refreshStorageUsage: entitledProcedure.mutation(async ({ ctx }) =>
-    ctx.client.refreshUsage().catch(mapStorageError),
+  getDriveUsage: entitledProcedure.query(async ({ ctx }) =>
+    readDriveUsage({
+      claim: ctx.claim,
+      drives: ctx.drives,
+      role: (ctx as { workspaceRole?: WorkspaceRole }).workspaceRole,
+      serverDB: ctx.serverDB,
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    }),
   ),
 
-  /** Specifications only. Nothing here needs a sandbox session to answer. */
-  listEnvironments: environmentProcedure
-    .input(z.object({ visibility: visibilitySchema.optional() }).optional())
-    .query(async ({ ctx, input }) => ({
-      environments: await ctx.environmentModel.query(input?.visibility),
-    })),
+  refreshStorageUsage: entitledProcedure
+    .input(z.object({ drive: driveSchema }).optional())
+    .mutation(async ({ ctx }) => ctx.client.refreshUsage().catch(mapStorageError)),
 
   /**
    * Instances, each joined with the state the execution plane actually
@@ -998,6 +1004,12 @@ export const sandboxStorageRouter = router({
   listInstances: instanceProcedure
     .input(
       z.object({
+        /**
+         * Only the instances on this drive — what a picker browsing one drive
+         * asks for. Without it, every instance on any of the caller's drives,
+         * which is what the environments page lists.
+         */
+        drive: driveSchema,
         environmentId: idSchema.optional(),
         topicId: topicIdSchema,
         /**
@@ -1010,35 +1022,82 @@ export const sandboxStorageRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
+      // An instance on a drive that is not the caller's — a colleague's
+      // personal drive, under an environment they have since published — is
+      // not one the caller can run in, list the files of, or size.
+      const located = (await ctx.instanceModel.query({ environmentId: input.environmentId }))
+        .map((instance) => ({ drive: ctx.drives.driveOf(instance.providerScope), instance }))
+        .filter(
+          (entry): entry is { drive: SandboxDrive; instance: typeof entry.instance } =>
+            !!entry.drive && (!input.drive || entry.drive === ctx.drive),
+        );
+      const instances = located.map((entry) => entry.instance);
+      const driveById = new Map(located.map((entry) => [entry.instance.id, entry.drive]));
 
-      const [snapshots, occupancy] = await Promise.all([
-        input.withSizes
-          ? ctx.client
-              .listInstances({ topicId: input.topicId })
-              .then((result) => result.instances)
-              // If the store fails, the instances still exist and can still be
-              // renamed or selected — only their sizes are unknown, so say so
-              // rather than failing a settings page.
-              .catch(() => null)
+      // Private environments' directories left on the public drive: listed
+      // for their owner — the only member who sees a private environment —
+      // with the instruction to rebuild them, and run by nobody.
+      const publicAccess =
+        ctx.workspaceId && located.some((entry) => entry.drive === 'public')
+          ? await ctx.drives.client('public')
+          : undefined;
+      const rebuildRequired = new Set(
+        publicAccess
+          ? (
+              await ctx.instanceModel.listStorageDirectories(
+                sandboxStorageBinding(publicAccess.claim.key),
+              )
+            )
+              .filter((entry) => entry.isPrivate)
+              .map((entry) => entry.id)
           : [],
-        // Always, and separately from the sizes: this is a Redis read on the
-        // control plane, so it costs the same on every deployment, whereas the
-        // listing above opens the volume. An instance held by another
-        // conversation cannot be run in — the lease answers the second writer
-        // with a 409 — so a picker that does not know is a picker that offers
-        // a choice the first message will refuse.
-        instances.length > 0
-          ? ctx.client
-              .readOccupancy({
-                names: instances.map((instance) => instance.id),
-                topicId: input.topicId,
-              })
-              // Same rule the lease store itself follows: a failure is "not
-              // known", never "free".
-              .catch(() => ({ held: [], unavailable: true }))
-          : { held: [], unavailable: false },
-      ]);
+      );
+
+      // One client per drive, since each drive's snapshots and leases are
+      // read through a claim for that drive.
+      const drives = [...new Set(located.map((entry) => entry.drive))];
+      const perDrive = await pMap(
+        drives,
+        async (drive) => {
+          const access = await ctx.drives.client(drive);
+          const names = located
+            .filter((entry) => entry.drive === drive)
+            .map((entry) => entry.instance.id);
+
+          const [snapshots, occupancy] = await Promise.all([
+            input.withSizes && access
+              ? access.client
+                  .listInstances({ topicId: input.topicId })
+                  .then((result) => result.instances)
+                  // If the store fails, the instances still exist and can
+                  // still be renamed or selected — only their sizes are
+                  // unknown, so say so rather than failing a settings page.
+                  .catch(() => null)
+              : input.withSizes
+                ? null
+                : [],
+            // Always, and separately from the sizes: this is a Redis read on
+            // the control plane, so it costs the same on every deployment,
+            // whereas the listing above opens the volume. An instance held by
+            // another conversation cannot be run in — the lease answers the
+            // second writer with a 409 — so a picker that does not know is a
+            // picker that offers a choice the first message will refuse.
+            access && names.length > 0
+              ? access.client
+                  .readOccupancy({ names, topicId: input.topicId })
+                  // Same rule the lease store itself follows: a failure is
+                  // "not known", never "free".
+                  .catch(() => ({ held: [], unavailable: true }))
+              : { held: [], unavailable: !access && names.length > 0 },
+          ]);
+
+          return { access, drive, occupancy, snapshots };
+        },
+        { concurrency: 5 },
+      );
+      const clientByDrive = new Map(
+        perDrive.flatMap((entry) => (entry.access ? [[entry.drive, entry.access.client]] : [])),
+      );
 
       // A build is polled by whoever has the Instances tab open, and nobody
       // has it open most of the time — switch tabs mid-build and the verdict
@@ -1050,7 +1109,9 @@ export const sandboxStorageRouter = router({
       const settled = await pMap(
         instances.filter((instance) => instance.buildId),
         async (instance) => {
-          const status = await ctx.client
+          const client = clientByDrive.get(driveById.get(instance.id)!);
+          if (!client) return null;
+          const status = await client
             .buildStatus({ buildId: instance.buildId!, name: instance.id, topicId: input.topicId })
             .catch(() => null);
           if (!status || status.state === 'running') return null;
@@ -1070,8 +1131,14 @@ export const sandboxStorageRouter = router({
       );
       const settledById = new Map(settled.filter((entry) => !!entry));
 
-      const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.id, snapshot]));
-      const heldBy = new Map(occupancy.held.map((entry) => [entry.id, entry.own]));
+      const byId = new Map(
+        perDrive.flatMap((entry) =>
+          (entry.snapshots ?? []).map((snapshot) => [snapshot.id, snapshot] as const),
+        ),
+      );
+      const heldBy = new Map(
+        perDrive.flatMap((entry) => entry.occupancy.held.map((held) => [held.id, held.own])),
+      );
 
       return {
         instances: instances.map((instance) => ({
@@ -1082,6 +1149,8 @@ export const sandboxStorageRouter = router({
           buildable: isBuildable(instance.configurationSnapshot),
           buildError: settledById.get(instance.id)?.buildError ?? instance.buildError,
           createdAt: instance.createdAt,
+          /** Which of the caller's drives the directory is on. */
+          drive: driveById.get(instance.id)!,
           environmentId: instance.environmentId,
           id: instance.id,
           // Held by a running sandbox, and by whom. `own` is this topic's own
@@ -1090,12 +1159,18 @@ export const sandboxStorageRouter = router({
           inUse: heldBy.has(instance.id),
           inUseByThisTopic: heldBy.get(instance.id) === true,
           name: instance.name,
+          /**
+           * A private environment's directory on the public drive, from
+           * before members had drives of their own: hidden there, never run
+           * in, and to be initialized again on the owner's personal drive.
+           */
+          rebuildRequired: rebuildRequired.has(instance.id),
           snapshot: byId.get(instance.id) ?? null,
           status: settledById.get(instance.id)?.status ?? instance.status,
           workingDirectory: instance.workingDirectory,
         })),
-        occupancyUnavailable: occupancy.unavailable,
-        snapshotsUnavailable: snapshots === null,
+        occupancyUnavailable: perDrive.some((entry) => entry.occupancy.unavailable),
+        snapshotsUnavailable: perDrive.some((entry) => entry.snapshots === null),
       };
     }),
 
@@ -1120,7 +1195,9 @@ export const sandboxStorageRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
+      const instances = (
+        await ctx.instanceModel.query({ environmentId: input.environmentId })
+      ).filter((instance) => ctx.drives.driveOf(instance.providerScope));
       if (instances.length === 0) return { sessions: [], unavailable: false };
 
       // Bounded: an environment's instance count is whatever the member made,
@@ -1129,8 +1206,10 @@ export const sandboxStorageRouter = router({
       const pages = await pMap(
         instances,
         (instance) =>
-          ctx.client
-            .listEnvironmentSessions({ limit: input.limit, name: instance.id })
+          resolveInstanceDrive(ctx, instance)
+            .then(({ client }) =>
+              client.listEnvironmentSessions({ limit: input.limit, name: instance.id }),
+            )
             // One instance's history failing must not blank the others; the
             // caller is told the list is incomplete rather than shown "no runs".
             .catch(() => null),
@@ -1193,36 +1272,104 @@ export const sandboxStorageRouter = router({
       };
     }),
 
+  /**
+   * One folder's entries — or, with `recursive`, everything under it — with
+   * the private environment directories left on the public drive left out.
+   *
+   * No path means "where this conversation works" when a topic is named and
+   * it has a folder or an environment directory, and the drive's root
+   * otherwise: the file panel asks the first question, the directory picker
+   * the second.
+   */
   listFiles: instanceProcedure
     .input(
       z.object({
+        drive: driveSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema.optional(),
         recursive: z.boolean().optional(),
         topicId: topicIdSchema,
       }),
     )
-    .query(async ({ ctx, input: { instanceId, ...input } }) => {
-      const root = await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read');
-      // No path means "the top of what may be listed", which inside a
-      // workspace is the instance's directory, not the shared root.
-      const path = input.path ?? (root || undefined);
-      if (path !== undefined) assertWithinRoot(path, root);
+    .query(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      let scope = await resolveDriveScope(ctx, instanceId);
 
-      return ctx.client.listFiles({ ...input, path }).catch(mapStorageError);
+      let path = input.path ?? (scope.root || undefined);
+      if (path === undefined && input.topicId && !instanceId) {
+        const placement = await resolveSandboxSessionConfig({
+          isShareVisitorRun: false,
+          serverDB: ctx.serverDB,
+          topicId: input.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (placement.mode !== 'ephemeral') {
+          path = placement.cwd;
+          // The conversation's folder is on the drive it resolved to — an
+          // environment directory's own drive, say — which is not
+          // necessarily the one this call was routed by.
+          if (placement.drive !== ctx.drive) {
+            const access = await ctx.drives.client(placement.drive);
+            if (access) {
+              scope = await resolveDriveScope({
+                ...ctx,
+                claim: access.claim,
+                client: access.client,
+                drive: placement.drive,
+              });
+            }
+          }
+        }
+      }
+      if (path !== undefined) assertReadable(path, scope);
+
+      const listing = await scope.client.listFiles({ ...input, path }).catch(mapStorageError);
+      if (scope.hidden.length === 0) return listing;
+
+      return {
+        ...listing,
+        entries: listing.entries.filter((entry) => !isHidden(entry.path, scope)),
+      };
     }),
 
   readFile: instanceProcedure
     .input(
-      z.object({ instanceId: instanceIdSchema, path: relativePathSchema, topicId: topicIdSchema }),
+      z.object({
+        drive: driveSchema,
+        instanceId: instanceIdSchema,
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
     )
-    .query(async ({ ctx, input: { instanceId, ...input } }) => {
-      assertWithinRoot(
-        input.path,
-        await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read'),
-      );
+    .query(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveDriveScope(ctx, instanceId);
+      assertReadable(input.path, scope);
 
-      return ctx.client.readFile(input).catch(mapStorageError);
+      return scope.client.readFile(input).catch(mapStorageError);
+    }),
+
+  /**
+   * Rename or move a file or folder. Never overwrites: a destination that is
+   * already there is refused, and so is anything touching an environment
+   * directory — at either end.
+   */
+  renameFile: instanceProcedure
+    .input(
+      z.object({
+        drive: driveSchema,
+        newPath: relativePathSchema,
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input: { drive: _drive, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { path: input.path });
+      await resolveWritableScope(ctx, { path: input.newPath });
+
+      const renamed = await scope.client.renameFile(input).catch(mapStorageError);
+      forgetDriveFolders(ctx.claim.key);
+
+      return renamed;
     }),
 
   /**
@@ -1237,73 +1384,22 @@ export const sandboxStorageRouter = router({
     .input(
       z.object({
         content: fileContentSchema,
+        drive: driveSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema,
         topicId: topicIdSchema,
       }),
     )
-    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
-      assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
+    .mutation(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { instanceId, path: input.path });
 
-      return ctx.client.writeFile(input).catch(mapStorageError);
+      return scope.client.writeFile(input).catch(mapStorageError);
     }),
 
   /**
-   * Refused while copies other than the default still reference it — those go
-   * first.
-   *
-   * The default instance goes with the environment: it cannot be removed on
-   * its own, so for an environment with only that one left, deleting the
-   * environment is how it is deleted.
-   *
-   * Both rows go in one transaction, and the snapshot is dropped last, inside
-   * it. Anything that refuses — a project still bound to the environment, an
-   * instance created meanwhile, a run still holding the snapshot — rolls the
-   * rows back with the snapshot untouched, so a refused delete costs nothing.
-   * The one gap left is a commit that fails after the snapshot is gone, which
-   * leaves rows with nothing built behind them. What was lost is what this
-   * call was asked to delete, and the call reports its failure, so deleting
-   * again finishes the job. The other order is the one with no way back: rows
-   * gone and a snapshot nobody can see, name, or reclaim.
-   */
-  removeEnvironment: instanceProcedure
-    .input(z.object({ id: idSchema }))
-    .mutation(async ({ ctx, input }) => {
-      // Ownership before anything reaches the execution plane: a member who
-      // can see a published environment must not get its snapshot deleted on
-      // the way to being refused the row.
-      const environment = await ctx.environmentModel.findOwnedById(input.id);
-      if (!environment)
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
-
-      const instances = await ctx.instanceModel.query({ environmentId: environment.id });
-      if (instances.length > 1) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'ENVIRONMENT_HAS_INSTANCES' });
-      }
-
-      const [onlyInstance] = instances;
-      // Only a sandbox instance has a snapshot this router can drop; any other
-      // kind keeps referencing the environment and the delete below says so.
-      const defaultInstance = onlyInstance?.kind === 'sandbox' ? onlyInstance : undefined;
-
-      return inEnvironmentTransaction(ctx, async ({ environmentModel, instanceModel }) => {
-        if (defaultInstance) {
-          await instanceModel.delete(defaultInstance.id).catch(rethrowEnvironmentInUse);
-        }
-
-        const removed = await environmentModel.delete(input.id).catch(rethrowEnvironmentInUse);
-        if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
-
-        if (defaultInstance) await deleteInstanceSnapshot(ctx.client, defaultInstance.id);
-
-        return removed;
-      });
-    }),
-
-  /**
-   * Remove one copy of an environment. The default instance is refused: it is
-   * what the environment is, so it goes when the environment does, and a
-   * broken one is rebuilt rather than deleted.
+   * Remove an environment directory: what its builds left on the drive, and
+   * the row. Any of them, the first included — an environment owns no folder
+   * of its own any more, so none is left to stand for it.
    */
   removeInstance: instanceProcedure
     .input(z.object({ id: idSchema, topicId: topicIdSchema }))
@@ -1311,16 +1407,13 @@ export const sandboxStorageRouter = router({
       const instance = await ctx.instanceModel.findOwnedById(input.id);
       if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
-      const siblings = await ctx.instanceModel.query({ environmentId: instance.environmentId });
-      if (isDefaultInstance(instance, siblings)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'DEFAULT_INSTANCE' });
-      }
-
       // Snapshot first, and only drop the row once it is gone: a row removed
       // while the snapshot survives leaves storage nobody can see, name, or
       // reclaim. The execution plane refuses while a session is using it, and
       // that refusal is the one the user needs to see.
-      await deleteInstanceSnapshot(ctx.client, instance.id, input.topicId);
+      const { claim, client } = await resolveInstanceDrive(ctx, instance);
+      await deleteInstanceSnapshot(client, instance.id, input.topicId);
+      forgetDriveFolders(claim.key);
 
       return ctx.instanceModel.delete(input.id);
     }),
@@ -1342,132 +1435,28 @@ export const sandboxStorageRouter = router({
       const instance = await ctx.instanceModel.findOwnedById(input.id);
       if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
-      return ctx.client.stopInstance({ name: instance.id }).catch(mapStorageError);
+      const { client } = await resolveInstanceDrive(ctx, instance);
+
+      return client.stopInstance({ name: instance.id }).catch(mapStorageError);
     }),
-
-  /**
-   * Every repository this account can build an environment from, newest
-   * activity first, each carrying the owner it belongs to so the caller can
-   * group them without a second request per organization.
-   *
-   * A missing GitHub connection is NOT an error here: it is the state the
-   * picker exists to resolve, so it answers `connected: false` and lets the
-   * UI offer the connection instead of a failure.
-   */
-  /**
-   * The branches of one repository, so the environment's checkout target is
-   * picked from what exists rather than typed. Same shape as the repository
-   * listing: no connection is not an error, it is `connected: false`.
-   */
-  listGithubBranches: entitledProcedure
-    .input(z.object({ owner: z.string().min(1).max(255), repository: z.string().min(1).max(255) }))
-    .query(async ({ ctx, input }) => {
-      const service = new ConnectorDataService(
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      );
-
-      try {
-        const client = await service.getGitHubClient();
-        const branches = await client.listRepositoryBranches(input.owner, input.repository);
-
-        return {
-          branches,
-          connected: true,
-          // At the ceiling the list may be missing branches, and a picker
-          // that only offers what it was given would make those unselectable.
-          truncated: branches.length >= MAX_REPOSITORY_BRANCHES,
-        };
-      } catch (error) {
-        if (isGithubUnavailable(error)) return { branches: [], connected: false, truncated: false };
-
-        throw error;
-      }
-    }),
-
-  listGithubRepositories: entitledProcedure.query(async ({ ctx }) => {
-    const service = new ConnectorDataService(
-      ctx.serverDB,
-      ctx.userId,
-      ctx.workspaceId ?? undefined,
-    );
-
-    try {
-      const client = await service.getGitHubClient();
-
-      return { connected: true, repositories: await client.listAccessibleRepositories() };
-    } catch (error) {
-      if (isGithubUnavailable(error)) return { connected: false, repositories: [] };
-
-      throw error;
-    }
-  }),
 
   removeFile: instanceProcedure
     .input(
       z.object({
+        drive: driveSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema,
         recursive: z.boolean().optional(),
         topicId: topicIdSchema,
       }),
     )
-    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
-      const root = await resolveFileRoot(ctx, { instanceId }, 'write');
-      assertWithinRoot(input.path, root);
-      // The instance's own directory is its identity, not a file in it:
-      // removing it would orphan the row and the snapshot that name it.
-      if (root && input.path === root) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
-      }
+    .mutation(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { instanceId, path: input.path });
 
-      return ctx.client.deleteFile(input).catch(mapStorageError);
-    }),
+      const removed = await scope.client.deleteFile(input).catch(mapStorageError);
+      forgetDriveFolders(ctx.claim.key);
 
-  /**
-   * Edits the specification. Existing instances keep the one they were created
-   * with — a change here shapes what the NEXT instance is built from and
-   * touches nothing a conversation has already installed or produced.
-   */
-  updateEnvironment: environmentProcedure
-    .input(
-      z.object({
-        configuration: configurationSchema.optional(),
-        description: z.string().max(2000).optional(),
-        id: idSchema,
-        name: nameSchema.optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { id, ...changes } = input;
-      const updated = await ctx.environmentModel
-        .update(id, changes)
-        .catch(rethrowDuplicateEnvironmentName);
-      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
-
-      return updated;
-    }),
-
-  /**
-   * Only the label. The directory does not move: the built state sits in it,
-   * and the execution plane has no rename that carries one to the other.
-   */
-  /**
-   * Publishing an environment to the workspace, or taking it back.
-   *
-   * Its own mutation rather than a field on `updateEnvironment`, because the
-   * two are not the same kind of edit: renaming is between you and your own
-   * row, while this one decides who else can run in what this environment
-   * built — and the client asks for confirmation before sending it.
-   */
-  setEnvironmentVisibility: environmentProcedure
-    .input(z.object({ id: idSchema, visibility: visibilitySchema }))
-    .mutation(async ({ ctx, input }) => {
-      const updated = await ctx.environmentModel.setVisibility(input.id, input.visibility);
-      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
-
-      return updated;
+      return removed;
     }),
 
   renameInstance: instanceProcedure

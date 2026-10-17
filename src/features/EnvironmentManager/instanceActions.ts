@@ -75,21 +75,14 @@ export const recheckCopySource = async (
 /**
  * What the row's delete entry deletes, or `undefined` when it has none.
  *
- * Never the default copy on its own: it is what the environment is, and the
- * server refuses to delete it. A broken one is rebuilt. When it is the only
- * copy, the entry is there and deletes the environment, which is how that copy
- * goes. Only for the environment's creator, like every other change to its
- * copies.
+ * Any initialized folder, the first included: an environment no longer owns a
+ * folder of its own, so none has to stay behind to stand for it. Only for the
+ * environment's creator, like every other change to its folders.
  */
 export const deleteEntry = (
-  instance: { isDefault: boolean },
-  { editable, single }: { editable: boolean; single: boolean },
-): 'environment' | 'instance' | undefined => {
-  if (!editable) return undefined;
-  if (single) return 'environment';
-
-  return instance.isDefault ? undefined : 'instance';
-};
+  _instance: { isDefault: boolean },
+  { editable }: { editable: boolean; single: boolean },
+): 'environment' | 'instance' | undefined => (editable ? 'instance' : undefined);
 
 /**
  * Whether the row offers to copy this copy at all — enabled or greyed out is

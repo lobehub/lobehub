@@ -4125,7 +4125,7 @@ When I am ___, I need ___
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
   'environments.desc':
-    'What a sandbox run needs around it: a repository, its setup, its variables. Each copy built from one keeps its own files between sessions.',
+    'How to set up a project: the repository to check out, the setup command, the variables. Initialize a folder on your drive from it when you create the folder in the directory picker.',
   'environments.create': 'New environment',
   'environments.cancel': 'Cancel',
   'environments.createFailed': 'Could not create the environment',
@@ -4153,22 +4153,22 @@ When I am ___, I need ___
   'environments.loadFailed.desc':
     'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your environments.',
   'environments.loadFailed.retry': 'Try again',
-  'environments.unavailable.title': 'Persistent sandbox is not available here',
+  'environments.unavailable.title': 'Drive storage is not available here',
   'environments.unavailable.desc':
-    'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
-  'environments.upgrade.title': 'Upgrade to Pro to unlock sandbox environments',
+    'Drives are persistent cloud storage for sandbox runs, and this deployment does not provide them.',
+  'environments.upgrade.title': 'Upgrade to Pro to unlock drive storage',
   'environments.upgrade.desc':
-    'Give cloud-sandbox runs a persistent working directory. An environment describes what the sandbox needs — repositories, setup, variables — and its copies keep everything between sessions.',
+    'Give cloud-sandbox runs a drive that outlives them: conversations working in a drive folder keep their files after the sandbox is recycled.',
   'environments.upgrade.cta': 'Upgrade to Pro',
-  'environments.upgrade.benefits.environments.title': 'Sandbox setup written once',
+  'environments.upgrade.benefits.environments.title': 'A public drive and your own',
   'environments.upgrade.benefits.environments.desc':
-    'Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.',
+    'In a workspace every member shares the public drive, and each member also has a personal drive only they can reach.',
   'environments.upgrade.benefits.persist.title': 'Files survive the sandbox',
   'environments.upgrade.benefits.persist.desc':
-    'The working directory is kept when the sandbox is recycled; the next run continues where the last stopped.',
-  'environments.upgrade.benefits.instances.title': 'One copy per task',
+    'The folder is kept when the sandbox is recycled; the next run continues where the last one stopped.',
+  'environments.upgrade.benefits.instances.title': 'Folders initialized from code environments',
   'environments.upgrade.benefits.instances.desc':
-    'Parallel conversations each run in their own copy of the environment, so nothing overwrites anything else.',
+    'When creating a folder, pick a code environment to clone its repository and install what it needs.',
   'environments.github.label': 'Repository',
   'environments.github.notConnected':
     'No GitHub connection yet — connect one to build an environment from a repository',
@@ -4228,7 +4228,7 @@ When I am ___, I need ___
     'This copy is being built, so it cannot be duplicated until the build finishes',
   'environments.instances.title': 'Copies',
   'environments.instances.desc':
-    'A copy is a working copy of this environment, with its own folder and its own installed packages. Conversations run inside a copy, and several can run side by side without touching each other.',
+    'Folders on your drive initialized from this environment. Each keeps its own files and installed packages, so conversations in different folders never overwrite each other.',
   'environments.instances.empty': 'No copies yet',
   'environments.instances.emptyHint':
     'Create one, then pick it under "Working Directory" in the chat input.',
@@ -4388,4 +4388,72 @@ When I am ___, I need ___
   'environments.files.openHint': 'Double-click a folder to open it, or a file to view it',
   'environments.files.unusedInstance':
     'Nothing here yet. The code appears once the copy is built or a conversation runs in it.',
+  'environments.files.folderNotEmpty':
+    'This folder already has files in it. Only a new or empty folder can be initialized from an environment.',
+  'environments.files.folderTaken': 'An environment directory with this name already exists.',
+  'environments.files.readOnly':
+    'Environment directories are read-only: only their own sessions write to them.',
+  'environments.files.notFound': 'That folder doesn’t exist.',
+  'tab.drive': 'Storage',
+  'drive.tabs.public': 'Public drive',
+  'drive.tabs.personal': 'Personal drive',
+  'drive.scope.public': 'Visible to all members',
+  'drive.scope.personal': 'Only you',
+  'drive.usage.title': 'Storage usage',
+  'drive.usage.poolTitle': 'Workspace storage pool',
+  'drive.usage.used': '{{used}} of {{total}} used',
+  'drive.usage.unmeasured': 'Not measured yet · {{total}} in total',
+  'drive.usage.refresh': 'Measure again',
+  'drive.usage.membersTitle': "Members' personal drives",
+  'drive.usage.membersHint':
+    "Usage only. What is on a member's personal drive stays visible to them alone.",
+  'drive.usage.memberUnmeasured': 'Not measured',
+  'drive.usage.over':
+    'Storage is over quota. Free up space or upgrade before more files can be saved.',
+  'drive.retained.title': "Departed members' personal drives",
+  'drive.retained.hint':
+    'Kept for 30 days after a member leaves, then deleted automatically. They count toward the workspace pool until then. Only the amount is shown, never the files.',
+  'drive.retained.expiresIn': 'Deleted in {{count}} days',
+  'drive.retained.expiresToday': 'Deleted today',
+  'drive.retained.lastError': 'Last attempt failed: {{error}}',
+  'drive.retained.move': 'Move to public drive',
+  'drive.retained.moveConfirm.title': "Move {{name}}'s drive to the public drive?",
+  'drive.retained.moveConfirm.desc':
+    'Its files are moved into departed-members on the public drive, where every member can open them, and the personal drive is emptied. Only text files up to 1 MB can be moved; a drive holding anything else is left untouched.',
+  'drive.retained.moved': 'Moved to {{path}} on the public drive',
+  'drive.retained.delete': 'Delete',
+  'drive.retained.deleteConfirm.title': "Delete {{name}}'s personal drive?",
+  'drive.retained.deleteConfirm.desc': 'Everything on it is deleted and cannot be recovered.',
+  'drive.retained.deleted': 'Drive deleted',
+  'drive.usage.manage': 'Manage in Storage',
+  'drive.explorer.newFolder': 'New folder',
+  'drive.explorer.rename': 'Rename',
+  'drive.explorer.delete': 'Delete',
+  'drive.explorer.moreActions': 'More actions',
+  'drive.explorer.deleteTitle': 'Delete “{{name}}”?',
+  'drive.explorer.deleteFolderContent':
+    'The folder and everything in it are removed from the drive. Conversations working in it switch to a temporary sandbox.',
+  'drive.explorer.deleteFileContent': 'The file is removed from the drive.',
+  'drive.explorer.readOnly': 'Environment directories are read-only',
+  'drive.explorer.readOnlyHint':
+    'Only its own sandbox sessions write to an environment directory, so you can browse it here but not change it.',
+  'drive.explorer.empty': 'This folder is empty',
+  'drive.explorer.emptyRoot.public':
+    'No folders on the public drive yet. Create one to work in it with your team.',
+  'drive.explorer.emptyRoot.personal':
+    'Your drive is empty. Create a folder, then pick it as a conversation’s working folder.',
+  'drive.explorer.loadFailed': 'Could not load this folder.',
+  'environments.instances.needsDrive':
+    'Copies are folders on a drive, and this account has no drive yet.',
+  'environments.instances.openDriveSettings': 'Go to Storage settings',
+  'environments.instances.rebuildPersonalDesc':
+    '{{names}} is still on the public drive and is hidden. Private environments now keep their folders on your personal drive.',
+  'environments.instances.rebuildPersonal': 'Rebuild on personal drive',
+  'environments.instances.rebuildPersonalStarted': 'Building a new copy on your personal drive',
+  'environments.instances.rebuildPersonalFailed':
+    'Could not create the copy on your personal drive',
+  'environments.instances.rebuildPersonalRequired':
+    'This directory is on the public drive. Rebuild it on your personal drive first.',
+  'environments.instances.rebuildPersonalTag': 'Needs rebuild on personal drive',
+  'environments.instances.rebuildPersonalTagHint': 'Hidden on the public drive and no longer used.',
 };

@@ -1,6 +1,5 @@
 'use client';
 
-import type { EnvironmentKind } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
@@ -17,10 +16,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import {
-  type SandboxEnvironmentSpecification,
-  sandboxStorageService,
-} from '@/services/sandboxStorage';
+import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
 
 import EnvironmentVariables from './EnvironmentVariables';
 import { describeError } from './errorMessage';
@@ -56,12 +52,6 @@ export type EnvironmentFormSection = 'settings' | 'variables';
 
 interface EnvironmentFormProps {
   environment: SandboxEnvironment;
-  /**
-   * A files environment shows its name and description only: it has no
-   * repository, setup, variables or runtime switches, and fields for them
-   * would invite configuring a build that never runs.
-   */
-  kind: EnvironmentKind;
   onSave: (params: {
     configuration?: SandboxEnvironmentSpecification;
     description?: string;
@@ -112,7 +102,7 @@ const BranchField = memo<{
   const [editing, setEditing] = useState(false);
   const { data, error, isLoading } = useSWR(
     editing ? ['sandbox-github-branches', owner, repository] : null,
-    () => sandboxStorageService.listGithubBranches({ owner, repository }),
+    () => environmentService.listGithubBranches({ owner, repository }),
   );
 
   const canPick = !error && data?.connected !== false && !data?.truncated;
@@ -142,7 +132,7 @@ BranchField.displayName = 'EnvironmentBranchField';
  * at the bottom of four sections, and changes typed above it were lost to a
  * tab switch before anyone scrolled down to it.
  */
-const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, kind, onSave, section }) => {
+const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, section }) => {
   const { t } = useTranslation('setting');
   const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
   const [pickingRepository, setPickingRepository] = useState(false);
@@ -237,9 +227,8 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, kind, onSave,
 
   const basics = (
     <PanelSection
-      desc={t(kind === 'files' ? 'environments.form.filesDesc' : 'environments.form.desc')}
+      desc={t('environments.form.desc')}
       icon={InfoIcon}
-      last={kind === 'files'}
       title={t('environments.form.basics')}
     >
       <InlineField
@@ -257,8 +246,6 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, kind, onSave,
       />
     </PanelSection>
   );
-
-  if (kind === 'files') return <Flexbox>{basics}</Flexbox>;
 
   return (
     <Flexbox>

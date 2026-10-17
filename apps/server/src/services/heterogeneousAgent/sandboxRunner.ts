@@ -2,6 +2,7 @@
 // fs-heavy machinery into the Next.js server bundle, and its dynamic
 // `process.cwd()`-rooted fs calls make Vercel's file tracing pull the whole
 // repo source tree into every serverless function (250 MB limit blowout).
+import { isPersistentSandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
@@ -168,13 +169,13 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   // consistent --cwd the session id stored in topic.metadata.heteroSessionId
   // can't be resolved on --resume after a page reload.
   //
-  // A persistent run gets NO --cwd: the execution plane starts every command
-  // inside the instance's directory, and where it mounts the workspace is its
+  // A persistent run (a drive folder or an environment directory) gets NO
+  // --cwd: the execution plane starts every command inside that directory, and where it mounts the workspace is its
   // business — a path spelled out here would be a second source of truth that
   // can only drift. `lh` falls back to its process cwd, which is that
   // directory, and it is the same one on every run of this topic, so session
   // files stay findable exactly as they do under /workspace.
-  const persistent = sandbox?.mode === 'persistent';
+  const persistent = isPersistentSandboxMode(sandbox?.mode);
   const cwd = params.cwd ?? (persistent ? undefined : '/workspace');
 
   // Build the `lh hetero exec` command string.

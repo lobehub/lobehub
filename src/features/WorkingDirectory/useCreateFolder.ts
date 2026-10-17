@@ -3,8 +3,6 @@ import { toast } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { deviceService } from '@/services/device';
-
 export { isValidDirectoryName as isValidFolderName } from '@lobechat/utils/directoryName';
 
 const ERROR_MESSAGE_KEYS = {
@@ -22,13 +20,25 @@ const getErrorMessageKey = (error: unknown) => {
 };
 
 interface UseCreateFolderOptions {
-  deviceId: string;
+  /** Makes the folder wherever the picker is browsing — a device, or the drive. */
+  create: (
+    parentPath: string,
+    name: string,
+    options?: Record<string, unknown>,
+  ) => Promise<{ path: string }>;
+  /** A source's own reading of an error it threw; the generic one otherwise. */
+  errorMessageKey?: (error: unknown) => string | undefined;
   onCreated: (path: string) => void;
   parentPath: string;
 }
 
 /** Name + create one folder inside the folder a remote picker is browsing. */
-export const useCreateFolder = ({ deviceId, onCreated, parentPath }: UseCreateFolderOptions) => {
+export const useCreateFolder = ({
+  create,
+  errorMessageKey,
+  onCreated,
+  parentPath,
+}: UseCreateFolderOptions) => {
   const { t } = useTranslation('device');
   const mounted = useRef(false);
   useEffect(() => {
@@ -40,6 +50,7 @@ export const useCreateFolder = ({ deviceId, onCreated, parentPath }: UseCreateFo
   const [name, setNameState] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const [options, setOptions] = useState<Record<string, unknown>>({});
 
   const setName = (value: string) => {
     setNameState(value);
@@ -64,12 +75,12 @@ export const useCreateFolder = ({ deviceId, onCreated, parentPath }: UseCreateFo
     setError(undefined);
     setPending(true);
     try {
-      const result = await deviceService.createDirectory({ deviceId, name: next, parentPath });
+      const result = await create(parentPath, next, options);
       if (mounted.current) onCreated(result.path);
       else toast.success(t('workingDirectory.newFolderCreated', { path: result.path }));
     } catch (cause) {
       console.error('Failed to create folder', cause);
-      const message = t(getErrorMessageKey(cause));
+      const message = t((errorMessageKey?.(cause) ?? getErrorMessageKey(cause)) as any);
       if (mounted.current) setError(message);
       else toast.error(message);
     } finally {
@@ -77,5 +88,5 @@ export const useCreateFolder = ({ deviceId, onCreated, parentPath }: UseCreateFo
     }
   };
 
-  return { error, name, pending, setName, submit };
+  return { error, name, options, pending, setName, setOptions, submit };
 };
