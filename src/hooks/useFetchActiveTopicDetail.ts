@@ -1,17 +1,13 @@
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { hasLocalTopicRun } from '@/store/chat/slices/topic/topicDetail';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 /**
- * Fetch the active topic's detail when it is missing from the loaded list
- * bucket — e.g. an archived (`completed`) topic that the sidebar fetch
- * excludes via `excludeStatuses`, or a topic opened by URL whose page hasn't
- * been fetched. The result lands in `topicDetailMap`, which
- * `currentActiveTopic` reads as a fallback, so the header keeps the real
- * title instead of degrading to the "new topic" placeholder.
- *
- * Waits for the list bucket to load before deciding the topic is missing, so
- * the common case (topic present in the first page) never fires an extra
- * request.
+ * Keep missing details available and discover runs started outside this client.
+ * SCM can wake an idle, already-open topic without a frontend send. Poll its
+ * detail until the normal gateway reconnect owns a local operation; that path
+ * supplies streaming, the composer's Stop control, and terminal cleanup.
  */
 export const useFetchActiveTopicDetail = () => {
   const [activeTopicId, isMissingFromList, useFetchTopicDetail] = useChatStore((s) => [
@@ -21,6 +17,14 @@ export const useFetchActiveTopicDetail = () => {
       !topicSelectors.currentTopics(s)?.some((topic) => topic.id === s.activeTopicId),
     s.useFetchTopicDetail,
   ]);
+  const gatewayEnabled = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
+  const watchRuns = useChatStore(
+    (s) =>
+      !!s.activeTopicId &&
+      gatewayEnabled &&
+      !s.creatingTopicIds.includes(s.activeTopicId) &&
+      !hasLocalTopicRun(s, s.activeTopicId),
+  );
 
-  useFetchTopicDetail(isMissingFromList ? activeTopicId : undefined);
+  useFetchTopicDetail(isMissingFromList || watchRuns ? activeTopicId : undefined, watchRuns);
 };
