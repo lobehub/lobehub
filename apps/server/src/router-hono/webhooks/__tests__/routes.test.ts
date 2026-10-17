@@ -15,6 +15,8 @@ vi.mock('../handlers/casdoor', () => ({ casdoorWebhook: vi.fn() }));
 vi.mock('../handlers/github', () => ({ githubWebhook: vi.fn() }));
 vi.mock('../handlers/githubInstall', () => ({ githubInstall: vi.fn() }));
 vi.mock('../handlers/githubSetup', () => ({ githubSetup: vi.fn() }));
+vi.mock('../handlers/linearCallback', () => ({ linearCallback: vi.fn() }));
+vi.mock('../handlers/linearInstall', () => ({ linearInstall: vi.fn() }));
 vi.mock('../handlers/logto', () => ({ logtoWebhook: vi.fn() }));
 vi.mock('../handlers/memoryExtraction', () => ({ memoryExtractionWebhook: vi.fn() }));
 vi.mock('../handlers/memoryExtractionBenchmarkLocomo', () => ({
@@ -44,13 +46,15 @@ describe('webhooks hono routes', () => {
     ]);
   });
 
-  it('serves the GitHub App install and setup redirects as GET', () => {
+  it('serves the GitHub App and Linear install and OAuth redirects as GET', () => {
     const paths = app.routes.filter((route) => route.method === 'GET').map((route) => route.path);
 
     expect([...new Set(paths)].sort()).toEqual([
       '/api/webhooks/github/install',
       '/api/webhooks/github/oauth/callback',
       '/api/webhooks/github/setup',
+      '/api/webhooks/linear/install',
+      '/api/webhooks/linear/oauth/callback',
     ]);
   });
 });

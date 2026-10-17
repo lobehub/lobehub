@@ -239,6 +239,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   klavis: 'blocked',
   knowledge: rw('knowledge:read', 'knowledge:write'),
   knowledgeBase: rw('knowledge:read', 'knowledge:write'),
+  // Linear OAuth connections hold workspace tokens and are managed from Settings
+  linear: 'blocked',
   llmGenerationTracing: 'blocked',
   market: rw('agent:read', 'agent:write'),
   // tool execution inside a chat run

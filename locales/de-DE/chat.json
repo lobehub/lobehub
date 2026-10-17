@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Keine Änderungen",
   "workingPanel.overview.ci.failure": "Prüfungen fehlgeschlagen",
   "workingPanel.overview.ci.pending": "Prüfungen laufen",
+  "workingPanel.overview.deviceError": "Gerätestatus konnte nicht geladen werden",
   "workingPanel.overview.empty": "Arbeitsbereichsaktivitäten und Ausgaben werden hier angezeigt, während der Agent arbeitet.",
   "workingPanel.overview.emptyTitle": "Bereit zum Arbeiten",
   "workingPanel.overview.environmentError": "Repository-Status konnte nicht geladen werden",

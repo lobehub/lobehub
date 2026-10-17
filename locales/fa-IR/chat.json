@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "بدون تغییر",
   "workingPanel.overview.ci.failure": "بررسی‌ها ناموفق بودند",
   "workingPanel.overview.ci.pending": "بررسی‌ها در حال اجرا هستند",
+  "workingPanel.overview.deviceError": "وضعیت دستگاه بارگذاری نشد",
   "workingPanel.overview.empty": "فعالیت‌ها و خروجی‌های فضای کاری در اینجا نمایش داده می‌شوند هنگامی که عامل کار می‌کند.",
   "workingPanel.overview.emptyTitle": "آماده به کار",
   "workingPanel.overview.environmentError": "وضعیت مخزن بارگذاری نشد",

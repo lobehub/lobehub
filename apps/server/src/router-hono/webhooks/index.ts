@@ -4,6 +4,8 @@ import { casdoorWebhook } from './handlers/casdoor';
 import { githubWebhook } from './handlers/github';
 import { githubInstall } from './handlers/githubInstall';
 import { githubSetup } from './handlers/githubSetup';
+import { linearCallback } from './handlers/linearCallback';
+import { linearInstall } from './handlers/linearInstall';
 import { logtoWebhook } from './handlers/logto';
 import { memoryExtractionWebhook } from './handlers/memoryExtraction';
 import { memoryExtractionBenchmarkLocomo } from './handlers/memoryExtractionBenchmarkLocomo';
@@ -46,5 +48,9 @@ app.post('/github', githubWebhook);
 app.get('/github/install', githubInstall);
 app.get('/github/setup', githubSetup);
 app.get('/github/oauth/callback', githubSetup);
+
+// Linear OAuth application: the connect redirect and its OAuth callback.
+app.get('/linear/install', linearInstall);
+app.get('/linear/oauth/callback', linearCallback);
 
 export default app;

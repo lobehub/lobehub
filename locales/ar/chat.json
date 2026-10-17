@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "لا تغييرات",
   "workingPanel.overview.ci.failure": "فشل الفحوصات",
   "workingPanel.overview.ci.pending": "الفحوصات قيد التشغيل",
+  "workingPanel.overview.deviceError": "تعذر تحميل حالة الجهاز",
   "workingPanel.overview.empty": "ستظهر أنشطة ومسارات مساحة العمل هنا أثناء عمل الوكيل.",
   "workingPanel.overview.emptyTitle": "جاهز للعمل",
   "workingPanel.overview.environmentError": "تعذر تحميل حالة المستودع",

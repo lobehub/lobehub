@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "変更なし",
   "workingPanel.overview.ci.failure": "チェックに失敗しました",
   "workingPanel.overview.ci.pending": "チェック実行中",
+  "workingPanel.overview.deviceError": "デバイスのステータスを読み込めませんでした",
   "workingPanel.overview.empty": "エージェントが作業を進めると、ワークスペースの活動と出力がここに表示されます。",
   "workingPanel.overview.emptyTitle": "作業の準備が整いました",
   "workingPanel.overview.environmentError": "リポジトリのステータスを読み込めませんでした",

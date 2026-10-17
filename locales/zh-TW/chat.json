@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "無變更",
   "workingPanel.overview.ci.failure": "檢查失敗",
   "workingPanel.overview.ci.pending": "檢查進行中",
+  "workingPanel.overview.deviceError": "無法載入裝置狀態",
   "workingPanel.overview.empty": "當代理執行時，工作區活動和輸出將顯示在此處。",
   "workingPanel.overview.emptyTitle": "準備開始工作",
   "workingPanel.overview.environmentError": "無法載入存儲庫狀態",

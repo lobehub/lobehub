@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Không có thay đổi",
   "workingPanel.overview.ci.failure": "Kiểm tra thất bại",
   "workingPanel.overview.ci.pending": "Đang chạy kiểm tra",
+  "workingPanel.overview.deviceError": "Không thể tải trạng thái thiết bị",
   "workingPanel.overview.empty": "Hoạt động và kết quả của không gian làm việc sẽ xuất hiện ở đây khi tác nhân làm việc.",
   "workingPanel.overview.emptyTitle": "Sẵn sàng làm việc",
   "workingPanel.overview.environmentError": "Không thể tải trạng thái kho lưu trữ",

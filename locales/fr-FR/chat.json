@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Aucun changement",
   "workingPanel.overview.ci.failure": "Les vérifications ont échoué",
   "workingPanel.overview.ci.pending": "Vérifications en cours",
+  "workingPanel.overview.deviceError": "Impossible de charger l'état de l'appareil",
   "workingPanel.overview.empty": "L'activité et les résultats de l'espace de travail apparaîtront ici au fur et à mesure que l'agent travaille.",
   "workingPanel.overview.emptyTitle": "Prêt à travailler",
   "workingPanel.overview.environmentError": "Impossible de charger l'état du dépôt",

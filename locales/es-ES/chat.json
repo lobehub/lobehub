@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Sin cambios",
   "workingPanel.overview.ci.failure": "Las verificaciones fallaron",
   "workingPanel.overview.ci.pending": "Verificaciones en curso",
+  "workingPanel.overview.deviceError": "No se pudo cargar el estado del dispositivo",
   "workingPanel.overview.empty": "La actividad y los resultados del espacio de trabajo aparecerán aquí mientras el agente trabaja.",
   "workingPanel.overview.emptyTitle": "Listo para trabajar",
   "workingPanel.overview.environmentError": "No se pudo cargar el estado del repositorio",

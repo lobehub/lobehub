@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Değişiklik yok",
   "workingPanel.overview.ci.failure": "Kontroller başarısız oldu",
   "workingPanel.overview.ci.pending": "Kontroller çalışıyor",
+  "workingPanel.overview.deviceError": "Cihaz durumu yüklenemedi",
   "workingPanel.overview.empty": "Ajanın çalışması sırasında çalışma alanı etkinlikleri ve çıktıları burada görünecek.",
   "workingPanel.overview.emptyTitle": "Çalışmaya hazır",
   "workingPanel.overview.environmentError": "Depo durumu yüklenemedi",

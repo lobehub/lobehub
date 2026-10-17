@@ -1,4 +1,5 @@
 import './Github/definition';
+import './Linear/definition';
 
 import { describe, expect, it } from 'vitest';
 
@@ -15,6 +16,8 @@ describe('integrations registry', () => {
     expect(isIntegrationId('slack')).toBe(false);
     expect(isIntegrationId(undefined)).toBe(false);
     expect(findIntegration('github')?.name).toBe('GitHub');
+    expect(isIntegrationId('linear')).toBe(true);
+    expect(findIntegration('linear')?.name).toBe('Linear');
   });
 
   it('keeps upcoming integrations out of the routable set', () => {

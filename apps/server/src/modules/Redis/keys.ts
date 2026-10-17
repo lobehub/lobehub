@@ -25,6 +25,10 @@ export const RedisKeyNamespace = {
    */
   AI_GENERATION: 'aiGeneration',
   /**
+   * Third-party integrations (Linear, …): OAuth hand-off state.
+   */
+  INTEGRATIONS: 'integrations',
+  /**
    * Core LOBEHUB application keys (sessions, cache, etc.)
    */
   LOBEHUB: 'lobechat',
@@ -95,6 +99,16 @@ export const RedisKeys = {
     homeBrief: (userId: string): string => `home_brief:${userId}`,
   },
   /**
+   * Integrations scope — see {@link RedisKeyNamespace.INTEGRATIONS}.
+   */
+  integrations: {
+    /**
+     * Single-use state of one "Connect Linear" OAuth hand-off.
+     * Full key: integrations:linear_oauth_state:v1:{state}
+     */
+    linearOAuthState: (state: string): string => `linear_oauth_state:v1:${state}`,
+  },
+  /**
    * Lobechat core scope - for application-level caching
    */
   lobechat: {
@@ -135,6 +149,7 @@ export const RedisKeys = {
 export const RedisKeyScopeNamespace = {
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,
 } as const satisfies Record<

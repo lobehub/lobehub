@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Nessuna modifica",
   "workingPanel.overview.ci.failure": "Controlli falliti",
   "workingPanel.overview.ci.pending": "Controlli in corso",
+  "workingPanel.overview.deviceError": "Impossibile caricare lo stato del dispositivo",
   "workingPanel.overview.empty": "L'attività e i risultati dello spazio di lavoro appariranno qui mentre l'agente lavora.",
   "workingPanel.overview.emptyTitle": "Pronto per lavorare",
   "workingPanel.overview.environmentError": "Impossibile caricare lo stato del repository",

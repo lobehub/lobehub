@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Изменений нет",
   "workingPanel.overview.ci.failure": "Проверки не пройдены",
   "workingPanel.overview.ci.pending": "Проверки выполняются",
+  "workingPanel.overview.deviceError": "Не удалось загрузить статус устройства",
   "workingPanel.overview.empty": "Активность и результаты работы будут отображаться здесь, пока агент работает.",
   "workingPanel.overview.emptyTitle": "Готов к работе",
   "workingPanel.overview.environmentError": "Не удалось загрузить статус репозитория",

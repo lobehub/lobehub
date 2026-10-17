@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Няма промени",
   "workingPanel.overview.ci.failure": "Проверките не успяха",
   "workingPanel.overview.ci.pending": "Проверките се изпълняват",
+  "workingPanel.overview.deviceError": "Не можа да се зареди състоянието на устройството",
   "workingPanel.overview.empty": "Дейностите и резултатите от работното пространство ще се появят тук, докато агентът работи.",
   "workingPanel.overview.emptyTitle": "Готов за работа",
   "workingPanel.overview.environmentError": "Неуспешно зареждане на статуса на хранилището",

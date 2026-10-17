@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Brak zmian",
   "workingPanel.overview.ci.failure": "Kontrole nie powiodły się",
   "workingPanel.overview.ci.pending": "Kontrole w toku",
+  "workingPanel.overview.deviceError": "Nie można załadować statusu urządzenia",
   "workingPanel.overview.empty": "Aktywność i wyniki przestrzeni roboczej pojawią się tutaj, gdy agent będzie pracował.",
   "workingPanel.overview.emptyTitle": "Gotowy do pracy",
   "workingPanel.overview.environmentError": "Nie udało się załadować statusu repozytorium",

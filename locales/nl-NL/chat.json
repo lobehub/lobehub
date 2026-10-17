@@ -3141,6 +3141,7 @@
   "workingPanel.overview.changes.none": "Geen wijzigingen",
   "workingPanel.overview.ci.failure": "Controles mislukt",
   "workingPanel.overview.ci.pending": "Controles worden uitgevoerd",
+  "workingPanel.overview.deviceError": "Kon de apparaatstatus niet laden",
   "workingPanel.overview.empty": "Werkruimte-activiteit en uitvoer verschijnen hier terwijl de agent werkt.",
   "workingPanel.overview.emptyTitle": "Klaar om te werken",
   "workingPanel.overview.environmentError": "Kon de status van de repository niet laden",
