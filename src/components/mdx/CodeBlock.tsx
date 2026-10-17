@@ -10,6 +10,19 @@ const countLines = (str: string): number => {
   return matches ? matches.length : 1;
 };
 
+const extractText = (node: any): string => {
+  if (!node) return '';
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(extractText).join('');
+
+  if (node.props) {
+    if (node.type === 'br') return '<br>';
+    if (node.props.children) return extractText(node.props.children);
+  }
+  return '';
+};
+
 const useCode = (raw: any) => {
   if (!raw) return;
 
@@ -17,7 +30,7 @@ const useCode = (raw: any) => {
 
   if (!children) return;
 
-  const content = (Array.isArray(children) ? (children[0] as string) : children).trim();
+  const content = extractText(children).trim();
 
   const lang = className?.replace('language-', '') || 'txt';
 
