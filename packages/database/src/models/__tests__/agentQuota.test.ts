@@ -2,6 +2,8 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+
 import { getTestDB } from '../../core/getTestDB';
 import { agentProviderAccounts, agents, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -249,5 +251,184 @@ describe('quota data tables', () => {
     const latest = await calibrations.latest(a1.id, 'session', '');
     expect(Number(latest?.capacityUsd)).toBe(548);
     expect(latest?.sampleCount).toBe(12);
+  });
+});
+
+describe('AgentProviderAccountModel — lookups and credential lifecycle', () => {
+  it('findByExternalId resolves by provider + external id inside the owner scope', async () => {
+    const created = await accounts.upsertByIdentity('claude-code', {
+      email: 'b@example.com',
+      externalAccountId: 'uuid-ext-1',
+    });
+
+    const found = await accounts.findByExternalId('claude-code', 'uuid-ext-1');
+    expect(found?.id).toBe(created.id);
+    expect(found).not.toHaveProperty('credentials');
+    expect(await accounts.findByExternalId('claude-code', 'missing')).toBeNull();
+    expect(await accounts.findByExternalId('codex', 'uuid-ext-1')).toBeNull();
+  });
+
+  it('upsertByIdentity inserts a new row when no external id is given', async () => {
+    const first = await accounts.upsertByIdentity('claude-code', { displayName: 'A' });
+    const second = await accounts.upsertByIdentity('claude-code', { displayName: 'B' });
+
+    expect(second.id).not.toBe(first.id);
+    expect(await accounts.list()).toHaveLength(2);
+  });
+
+  it('create keeps expiry null when the credentials carry none', async () => {
+    const created = await accounts.create({
+      credentialMode: 'managed',
+      credentials: { accessToken: 'no-expiry' },
+      provider: 'claude-code',
+    });
+
+    const raw = await serverDB.query.agentProviderAccounts.findFirst({
+      where: eq(agentProviderAccounts.id, created.id),
+    });
+    expect(raw?.tokenExpiresAt).toBeNull();
+  });
+
+  it('setCredentials rotates the managed blob and promotes (or clears) expiry', async () => {
+    const created = await accounts.create({
+      credentialMode: 'referenced',
+      provider: 'claude-code',
+    });
+
+    await accounts.setCredentials(created.id, {
+      accessToken: 'rotated',
+      expiresAt: 1_900_000_000_000,
+      refreshToken: 'r2',
+    });
+    expect(await accounts.getCredentials(created.id)).toMatchObject({ accessToken: 'rotated' });
+
+    const promoted = await serverDB.query.agentProviderAccounts.findFirst({
+      where: eq(agentProviderAccounts.id, created.id),
+    });
+    expect(promoted?.credentialMode).toBe('managed');
+    expect(promoted?.tokenExpiresAt?.getTime()).toBe(1_900_000_000_000);
+
+    await accounts.setCredentials(created.id, { accessToken: 'no-expiry' });
+    const cleared = await serverDB.query.agentProviderAccounts.findFirst({
+      where: eq(agentProviderAccounts.id, created.id),
+    });
+    expect(cleared?.tokenExpiresAt).toBeNull();
+  });
+
+  it('update patches non-credential fields and delete removes the row', async () => {
+    const created = await accounts.create({ label: 'before', provider: 'claude-code' });
+
+    await accounts.update(created.id, { label: 'after' });
+    expect((await accounts.findById(created.id))?.label).toBe('after');
+
+    await accounts.delete(created.id);
+    expect(await accounts.findById(created.id)).toBeNull();
+  });
+
+  it('getCredentials returns null for a missing row, a missing blob, a tampered blob and non-JSON plaintext', async () => {
+    expect(await accounts.getCredentials('00000000-0000-0000-0000-000000000000')).toBeNull();
+
+    // referenced mode → no stored blob at all
+    const referenced = await accounts.create({ provider: 'claude-code' });
+    expect(await accounts.getCredentials(referenced.id)).toBeNull();
+
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+    // flipping a ciphertext byte breaks the GCM tag → wasAuthentic = false
+    const authentic = await gateKeeper.encrypt(JSON.stringify({ accessToken: 'tampered' }));
+    const [iv, tag, body] = authentic.split(':');
+    const tampered = `${iv}:${tag}:${body.replace(/^./, (c) => (c === '0' ? '1' : '0'))}`;
+    const [tamperedRow] = await serverDB
+      .insert(agentProviderAccounts)
+      .values({ credentialMode: 'managed', credentials: tampered, provider: 'claude-code', userId })
+      .returning();
+    expect(await accounts.getCredentials(tamperedRow.id)).toBeNull();
+
+    // authentic but not JSON
+    const notJson = await gateKeeper.encrypt('definitely-not-json');
+    const [badRow] = await serverDB
+      .insert(agentProviderAccounts)
+      .values({ credentialMode: 'managed', credentials: notJson, provider: 'claude-code', userId })
+      .returning();
+    expect(await accounts.getCredentials(badRow.id)).toBeNull();
+  });
+});
+
+describe('AgentAccountBindingModel — remove', () => {
+  it('removes a binding by id', async () => {
+    const account = await accounts.create({ provider: 'claude-code' });
+    const binding = await bindings.upsert({ accountId: account.id, agentId });
+
+    await bindings.remove(binding.id);
+
+    expect(await bindings.listByAgent(agentId)).toEqual([]);
+  });
+});
+
+describe('quota data tables — range reads', () => {
+  it('snapshot append short-circuits an empty batch', async () => {
+    expect(await snapshots.append([])).toEqual([]);
+  });
+
+  it('listRange returns readings at or after the cutoff, oldest first', async () => {
+    const account = await accounts.create({ provider: 'claude-code' });
+    await snapshots.append([
+      {
+        accountId: account.id,
+        capturedAt: new Date('2026-07-12T10:00:00Z'),
+        limitType: 'session',
+        scopeKey: '',
+        utilization: 10,
+      },
+      {
+        accountId: account.id,
+        capturedAt: new Date('2026-07-12T18:00:00Z'),
+        limitType: 'session',
+        scopeKey: '',
+        utilization: 20,
+      },
+      {
+        accountId: account.id,
+        capturedAt: new Date('2026-07-12T20:00:00Z'),
+        limitType: 'session',
+        scopeKey: '',
+        utilization: 30,
+      },
+    ]);
+
+    const rows = await snapshots.listRange(account.id, new Date('2026-07-12T15:00:00Z'));
+    expect(rows.map((r) => r.utilization)).toEqual([20, 30]);
+  });
+
+  it('listSince returns per-turn rows at or after the cutoff, oldest first', async () => {
+    const account = await accounts.create({ provider: 'claude-code' });
+    await ledger.append({
+      accountId: account.id,
+      costUsd: 1,
+      occurredAt: new Date('2026-07-12T10:00:00Z'),
+      provider: 'claude-code',
+    });
+    await ledger.append({
+      accountId: account.id,
+      costUsd: 2,
+      occurredAt: new Date('2026-07-12T19:00:00Z'),
+      provider: 'claude-code',
+    });
+
+    const rows = await ledger.listSince(account.id, new Date('2026-07-12T15:00:00Z'));
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].costUsd)).toBe(2);
+  });
+
+  it('sumCostUsd returns 0 when nothing matches', async () => {
+    expect(
+      await ledger.sumCostUsd('00000000-0000-0000-0000-000000000000', new Date(0), new Date()),
+    ).toBe(0);
+  });
+
+  it('latest calibration returns null when no bucket matches', async () => {
+    expect(
+      await calibrations.latest('00000000-0000-0000-0000-000000000000', 'session', ''),
+    ).toBeNull();
   });
 });
