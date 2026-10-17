@@ -229,20 +229,34 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
     copyInstance: async (
       params: RequestContext & {
         from: string;
-        /** The copy's own directory; the runtime writes its work tree there. */
+        /** The copy's own directory. */
         instanceDir?: string;
+        /** Files instances store user files here, independently of a snapshot. */
+        sourceInstanceDir?: string;
         to: string;
       },
-    ): Promise<{ name: string }> =>
-      request(`${CURRENT_STORAGE}/instances/${encodeURIComponent(params.from)}/copy`, {
-        body: JSON.stringify({
-          instanceDir: params.instanceDir,
-          to: params.to,
-          topicId: params.topicId,
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      }),
+    ): Promise<{ instanceDirectoryCopied?: boolean; name: string }> => {
+      // A distinct endpoint makes older deployments refuse before copying
+      // only the snapshot and incorrectly reporting an empty Files copy ready.
+      const action = params.sourceInstanceDir ? 'copy-files' : 'copy';
+      const result = await request<{ instanceDirectoryCopied?: boolean; name: string }>(
+        `${CURRENT_STORAGE}/instances/${encodeURIComponent(params.from)}/${action}`,
+        {
+          body: JSON.stringify({
+            instanceDir: params.instanceDir,
+            sourceInstanceDir: params.sourceInstanceDir,
+            to: params.to,
+            topicId: params.topicId,
+          }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        },
+      );
+      if (params.sourceInstanceDir && !result.instanceDirectoryCopied) {
+        throw new SandboxStorageFilesError('The instance directory copy was not confirmed', 502);
+      }
+      return result;
+    },
 
     deleteInstance: async (
       params: RequestContext & { name: string },

@@ -1276,11 +1276,11 @@ describe('sandboxStorageRouter', () => {
           workingDirectory: 'projects/atlas-copy',
         }),
       );
-      // The copy's own folder, never the source's: sharing one would let either
-      // instance's next save delete what the other still lists.
+      // The destination has its own folder; legacy Files also forwards the source folder.
       expect(mockCopyEnvironment).toHaveBeenCalledWith({
         from: environmentId,
         instanceDir: 'projects/atlas-copy',
+        sourceInstanceDir: 'projects/atlas',
         to: 'copy-id',
       });
     });

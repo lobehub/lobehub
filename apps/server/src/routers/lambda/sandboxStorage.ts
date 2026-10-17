@@ -2,7 +2,7 @@ import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ConnectorDataError } from '@lobechat/connector-data';
 import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { toExecutionConfiguration } from '@lobechat/types';
+import { environmentKind, toExecutionConfiguration } from '@lobechat/types';
 import {
   derivedInstanceDirectory,
   isDefaultInstance,
@@ -686,9 +686,10 @@ export const sandboxStorageRouter = router({
       await ctx.client
         .copyInstance({
           from: source.id,
-          // The copy's own folder. Sharing the source's would let either
-          // instance's next save delete files the other still lists.
           instanceDir: created.workingDirectory,
+          ...(environmentKind({ configuration: source.configurationSnapshot }) === 'files' && {
+            sourceInstanceDir: source.workingDirectory,
+          }),
           to: created.id,
         })
         .catch(async (error) => {
@@ -696,11 +697,8 @@ export const sandboxStorageRouter = router({
           return mapStorageError(error);
         });
 
-      // A copy starts life with everything the source had built, so it is
-      // ready by arrival — there is nothing to clone and nothing to install.
-      // Left at the insert's default it would sit in `pending` with no build
-      // to wait for, which reads as "never built" and offers a rebuild that
-      // would throw the copy away.
+      // The copy already has the source's state. Leaving it pending would
+      // offer a rebuild that throws the copied state away.
       await ctx.instanceModel.update(created.id, { status: 'ready' });
 
       return { ...created, status: 'ready' as const };

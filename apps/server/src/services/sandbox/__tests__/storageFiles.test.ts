@@ -43,6 +43,36 @@ describe('createSandboxStorageClient', () => {
     expect(error.message).toBe('Workspace request failed with status 500');
   });
 
+  it('should use the Files copy endpoint and require the copied-directory acknowledgement', async () => {
+    const params = {
+      from: 'base',
+      instanceDir: 'target',
+      sourceInstanceDir: 'source',
+      to: 'clone',
+    };
+    respond(200, { data: { instanceDirectoryCopied: true, name: 'clone' } });
+    await client.copyInstance(params);
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe(
+      'http://market.test/api/v1/sandbox/storages/current/instances/base/copy-files',
+    );
+    expect(JSON.parse(init!.body as string)).toEqual({
+      instanceDir: 'target',
+      sourceInstanceDir: 'source',
+      to: 'clone',
+    });
+    respond(200, { data: { name: 'clone' } });
+    await expect(client.copyInstance(params)).rejects.toThrow('not confirmed');
+  });
+
+  it('should preserve the snapshot-only copy endpoint for existing callers', async () => {
+    respond(200, { data: { name: 'clone' } });
+    await client.copyInstance({ from: 'base', instanceDir: 'target', to: 'clone' });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      'http://market.test/api/v1/sandbox/storages/current/instances/base/copy',
+    );
+  });
+
   it('should send a build its specification as JSON', async () => {
     // Without the content type the market parses no body at all and answers
     // every build with "specification: Required".
