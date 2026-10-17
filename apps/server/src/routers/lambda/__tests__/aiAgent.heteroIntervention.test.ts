@@ -1148,6 +1148,116 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     });
   });
 
+  describe('group builder editing target inheritance', () => {
+    const execution = {
+      autoStarted: true,
+      messageId: 'assistant-continuation-group',
+      operationId: 'operation-continuation-group',
+      success: true,
+    };
+
+    const resolveGroupContinuation = async (params: {
+      appContext?: Record<string, unknown>;
+      resolutionRequestId: string;
+      sourceOperationId: string;
+    }) => {
+      await insertPendingTool({
+        batchId: `batch-${params.sourceOperationId}`,
+        messageId: 'assistant-runtime',
+        operationId: params.sourceOperationId,
+        toolCallId: 'tool-runtime',
+      });
+      businessV2.resolveAgentIntervention.mockResolvedValueOnce({
+        claimId: `claim-${params.sourceOperationId}`,
+        contractVersion: 2,
+        handled: true,
+        ownerUserId: userId,
+        resolutionRequestId: params.resolutionRequestId,
+        runtimeAction: {
+          agentId: 'agt_group_builder',
+          appContext: params.appContext ?? { topicId: 'topic-runtime' },
+          content: '{"answer":"A"}',
+          operationId: params.sourceOperationId,
+          outcome: 'submitted',
+          parentMessageId: 'assistant-runtime',
+          toolCallId: 'tool-runtime',
+          type: 'resume_tool_result',
+        },
+        state: 'claimed',
+      });
+      aiAgentService.execAgent.mockResolvedValueOnce(execution);
+
+      await userCaller().resolveAgentIntervention({
+        action: { itemId: 'item-runtime', type: 'skip_interaction' },
+        expectedBatchVersion: 1,
+        expectedRequestRevisions: {
+          'item-runtime': { hash: 'c'.repeat(64), version: 1 },
+        },
+        resolutionRequestId: params.resolutionRequestId,
+        reviewToken: 'h'.repeat(43),
+      });
+    };
+
+    const seedGroupTargetOnSourceRow = async (operationId: string) => {
+      const { agentOperations } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(agentOperations)
+        .set({ appContext: { editingGroupId: 'cg_edited', scope: 'group_agent_builder' } })
+        .where(eq(agentOperations.id, operationId));
+    };
+
+    it('recovers the parked run editing group when the request names none', async () => {
+      const sourceOperationId = 'operation-group-source';
+      await insertOperation(sourceOperationId, userId);
+      await seedGroupTargetOnSourceRow(sourceOperationId);
+
+      await resolveGroupContinuation({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000051',
+        sourceOperationId,
+      });
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({ editingGroupId: 'cg_edited' }),
+        }),
+      );
+    });
+
+    it('keeps a continuation without a durable group target unchanged (ordinary topic)', async () => {
+      const sourceOperationId = 'operation-plain-source';
+      await insertOperation(sourceOperationId, userId);
+
+      await resolveGroupContinuation({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000052',
+        sourceOperationId,
+      });
+
+      const call = aiAgentService.execAgent.mock.calls.find(
+        ([input]) => input?.appContext?.topicId === 'topic-runtime',
+      );
+      expect(call?.[0]?.appContext).not.toHaveProperty('editingGroupId');
+    });
+
+    it('lets the parked target win without overwriting a request-named group', async () => {
+      const sourceOperationId = 'operation-group-explicit';
+      await insertOperation(sourceOperationId, userId);
+      await seedGroupTargetOnSourceRow(sourceOperationId);
+
+      await resolveGroupContinuation({
+        appContext: { editingGroupId: 'cg_panel', topicId: 'topic-runtime' },
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000053',
+        sourceOperationId,
+      });
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({ editingGroupId: 'cg_panel' }),
+        }),
+      );
+    });
+  });
+
   it('retries only the published transition after runtime dispatch already settled the source', async () => {
     const reviewToken = 'f'.repeat(43);
     const messageId = 'message-published-retry';
