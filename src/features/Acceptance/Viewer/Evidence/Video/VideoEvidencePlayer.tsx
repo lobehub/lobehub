@@ -2,8 +2,8 @@
 
 import { isFullFrameRect } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
-import { Flexbox, useVideoPlayer, Video } from '@lobehub/ui';
-import type { ReactNode } from 'react';
+import { createStaticStyles, Flexbox, useVideoPlayer, useVideoState, Video } from '@lobehub/ui';
+import type { CSSProperties, ReactNode } from 'react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +14,45 @@ import { VideoClaimList } from './VideoClaimList';
 
 /** Matches the plain `<video>` this replaces, so rows keep their rhythm. */
 const MAX_HEIGHT = 360;
+/** Leave room for the controls even when the recording is portrait. */
+const MIN_PLAYER_WIDTH = 480;
+
+const styles = createStaticStyles(({ css }) => ({
+  player: css`
+    &:fullscreen {
+      display: flex;
+      flex-direction: column;
+      border-radius: 0;
+    }
+
+    &:fullscreen > [data-video-controls] {
+      flex: none;
+    }
+  `,
+  stage: css`
+    display: flex;
+    justify-content: center;
+
+    :fullscreen > & {
+      container-type: size;
+      flex: 1;
+      align-items: center;
+
+      min-width: 0;
+      min-height: 0;
+    }
+  `,
+  frame: css`
+    max-width: var(--acceptance-video-frame-width);
+
+    :fullscreen & {
+      flex: none;
+      width: min(100cqw, calc(100cqh * var(--acceptance-video-aspect)));
+      max-width: none;
+      height: min(100cqh, calc(100cqw / var(--acceptance-video-aspect)));
+    }
+  `,
+}));
 
 interface VideoEvidencePlayerProps {
   /** The evidence description — laid out under the player, at the content area's width. */
@@ -35,6 +74,9 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
   ({ caption, chapters = [], notes = [], onRefreshSource, src }) => {
     const { t } = useTranslation('verify');
     const player = useVideoPlayer();
+    const size = useVideoState(player, (state) => state.size);
+    const aspect = size?.height ? size.width / size.height : 16 / 9;
+    const frameWidth = Math.round(MAX_HEIGHT * aspect);
     const [defaultRate] = useState(readStoredRate);
 
     const timed = useMemo(
@@ -71,21 +113,32 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
     return (
       <Flexbox gap={8} width={'100%'}>
         <Video.Root
+          className={styles.player}
           defaultPlaybackRate={defaultRate}
           markers={markers}
           maxHeight={MAX_HEIGHT}
           player={player}
           sections={sections}
           src={src}
+          style={
+            {
+              '--acceptance-video-aspect': aspect,
+              '--acceptance-video-frame-width': `${frameWidth}px`,
+              'maxWidth': `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,
+            } as CSSProperties
+          }
           onRateChange={storeRate}
           onRetry={onRefreshSource}
         >
-          <Video.Frame>
-            <FrameRegions regions={regions} />
-            <Video.Caption />
-            <Video.CenterPlay />
-            <Video.LoadError />
-          </Video.Frame>
+          {/* The fullscreen frame fits the space left by the controls, not the viewport width. */}
+          <div className={styles.stage}>
+            <Video.Frame className={styles.frame}>
+              <FrameRegions regions={regions} />
+              <Video.Caption />
+              <Video.CenterPlay />
+              <Video.LoadError />
+            </Video.Frame>
+          </div>
           <Video.Controls frameStep />
         </Video.Root>
         {caption && <div style={{ overflowWrap: 'anywhere' }}>{caption}</div>}
