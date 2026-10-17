@@ -65,7 +65,7 @@
     "./imageParameters": "./src/const/imageParameters.ts",
     "./opencodeCodingPlan": "./src/aiModels/opencodeCodingPlan.ts",
     "./opencodeZen": "./src/aiModels/opencodeZen.ts",
-    "./openrouter": "./src/aiModels/openrouter.ts",
+    "./openrouter": "./src/aiModels/openrouter/index.ts",
     "./perplexity": "./src/aiModels/perplexity.ts",
     "./ppio": "./src/aiModels/ppio.ts",
     "./qiniu": "./src/aiModels/qiniu.ts",
