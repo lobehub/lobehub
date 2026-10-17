@@ -22,8 +22,7 @@ export class KagiImpl implements SearchServiceImpl {
   }
 
   private get baseUrl(): string {
-    // Assuming the base URL is consistent with the crawl endpoint
-    return 'https://kagi.com/api/v0';
+    return 'https://kagi.com/api/v1';
   }
 
   async query(query: string, params: SearchParams = {}): Promise<UniformSearchResponse> {
@@ -32,26 +31,23 @@ export class KagiImpl implements SearchServiceImpl {
 
     const body: KagiSearchParameters = {
       limit: 15,
-      q: query,
+      query,
     };
 
     log('Constructed request body: %o', body);
-
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(body)) {
-      searchParams.append(key, String(value));
-    }
 
     let response: Response;
     const startAt = Date.now();
     let costTime: number;
     try {
       log('Sending request to endpoint: %s', endpoint);
-      response = await fetch(`${endpoint}?${searchParams.toString()}`, {
+      response = await fetch(endpoint, {
+        body: JSON.stringify(body),
         headers: {
-          Authorization: this.apiKey ? `Bot ${this.apiKey}` : '',
+          'Authorization': this.apiKey ? `Bearer ${this.apiKey}` : '',
+          'Content-Type': 'application/json',
         },
-        method: 'GET',
+        method: 'POST',
       });
       log('Received response with status: %d', response.status);
       costTime = Date.now() - startAt;
@@ -82,17 +78,19 @@ export class KagiImpl implements SearchServiceImpl {
 
       log('Parsed Kagi response: %o', kagiResponse);
 
-      const mappedResults = (kagiResponse.data || []).map(
-        (result): UniformSearchResult => ({
-          category: 'general', // Default category
-          content: result.snippet || '', // Prioritize content
-          engines: ['kagi'], // Use 'kagi' as the engine name
-          parsedUrl: result.url ? new URL(result.url).hostname : '', // Basic URL parsing
-          score: 1, // Default score to 1
-          title: result.title || '',
-          url: result.url,
-        }),
-      );
+      const mappedResults = (kagiResponse.data?.search || [])
+        .filter((result) => !!result.url)
+        .map(
+          (result): UniformSearchResult => ({
+            category: 'general', // Default category
+            content: result.snippet || '', // Prioritize content
+            engines: ['kagi'], // Use 'kagi' as the engine name
+            parsedUrl: result.url ? new URL(result.url).hostname : '', // Basic URL parsing
+            score: 1, // Default score to 1
+            title: result.title || '',
+            url: result.url,
+          }),
+        );
 
       log('Mapped %d results to SearchResult format', mappedResults.length);
 
