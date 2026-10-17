@@ -95,6 +95,7 @@
     "./xai": "./src/aiModels/xai.ts",
     "./xiaomimimo": "./src/aiModels/xiaomimimo.ts",
     "./xinference": "./src/aiModels/xinference.ts",
+    "./yapi": "./src/aiModels/yapi.ts",
     "./zenmux": "./src/aiModels/zenmux.ts",
     "./zeroone": "./src/aiModels/zeroone.ts",
     "./zhipu": "./src/aiModels/zhipu.ts",

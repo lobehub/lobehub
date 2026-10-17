@@ -83,6 +83,7 @@ import { default as wenxin } from './wenxin';
 import { default as xai } from './xai';
 import { default as xiaomimimo } from './xiaomimimo';
 import { default as xinference } from './xinference';
+import { default as yapi } from './yapi';
 import { default as zenmux } from './zenmux';
 import { default as zeroone } from './zeroone';
 import { default as zhipu } from './zhipu';
@@ -195,6 +196,7 @@ const staticModelMap: ModelsMap = {
   xai,
   xiaomimimo,
   xinference,
+  yapi,
   zenmux,
   zeroone,
   zhipu,
@@ -313,6 +315,7 @@ export { default as wenxin } from './wenxin';
 export { default as xai } from './xai';
 export { default as xiaomimimo } from './xiaomimimo';
 export { default as xinference } from './xinference';
+export { default as yapi } from './yapi';
 export { default as zenmux } from './zenmux';
 export { default as zeroone } from './zeroone';
 export { default as zhipu } from './zhipu';
