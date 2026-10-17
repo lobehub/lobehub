@@ -52,6 +52,7 @@ import { merge } from '@/utils/merge';
 import type { AgentStore } from '../../store';
 import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
+import { getSidebarAgentNames } from '../../utils/sidebarAgentNames';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 import { agentConfigResource } from './projection';
 
@@ -233,10 +234,9 @@ export class AgentSliceActionImpl {
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
     // Seed a default name so a new agent has an identity before the Agent
-    // Builder conversation produces one; the builder may replace it later. This
-    // lives here rather than in the create endpoint because the language only
-    // resolves on the client (`auto` follows the browser). A caller that already
-    // carries a name — e.g. a market agent — keeps it.
+    // Builder conversation produces one; the builder may replace it later. It is
+    // drawn here, not in the create endpoint, because the language (`auto` follows
+    // the browser) resolves on the client. A caller's own name (market) is kept.
     //
     // A heterogeneous agent never draws a random personal name. In personal or
     // workspace-private scope its name is the product title; a shared workspace
@@ -253,7 +253,7 @@ export class AgentSliceActionImpl {
               visibility: params.visibility,
               workspaceId: getActiveWorkspaceId(),
             })
-          : randomAgentName(locale)),
+          : randomAgentName(locale, await getSidebarAgentNames())),
     };
 
     const result = await agentService.createAgent({ ...params, config });
