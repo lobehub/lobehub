@@ -56,7 +56,7 @@ describe('resolveUserMessageParentId', () => {
   });
 
   it('continues the earlier reply the switcher selects, not the newest regenerated one', async () => {
-    // LOBE-14875: the newest row a2 is on the branch the user switched away from.
+    // The newest row a2 is on the branch the user switched away from.
     await expect(resolve(regenerated(0))).resolves.toBe('a1');
     await expect(resolve(regenerated(0), 'a1')).resolves.toBe('a1');
   });

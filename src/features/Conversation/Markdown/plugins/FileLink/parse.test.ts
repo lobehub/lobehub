@@ -88,7 +88,7 @@ describe('getFileLinkOpenAction', () => {
     });
   });
 
-  // Regression (LOBE-14768): the visitor does not own the creator's file, so the
+  // Regression: the visitor does not own the creator's file, so the
   // id-only preview fetched nothing and showed "file unavailable".
   it('previews from the public /f/:id link on the agent-share visitor page', () => {
     expect(getFileLinkOpenAction({ ...link, isAgentShareVisitor: true })).toEqual({

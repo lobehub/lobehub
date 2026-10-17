@@ -123,7 +123,7 @@ describe('EditedFilesCard open action', () => {
     expect(screen.getByText(singleTitle).closest('[role="button"]')).not.toBeNull();
   });
 
-  // Regression (LOBE-14768): the share visitor page's portal hosts no LocalFile
+  // Regression: the share visitor page's portal hosts no LocalFile
   // view, so the header click used to push an invisible view and do nothing.
   it('keeps the header inert on the agent-share visitor page, leaving the diff action', () => {
     conversationState.context.agentShareId = 'share_1';
