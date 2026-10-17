@@ -232,16 +232,18 @@ export class PluginOptimisticUpdateActionImpl {
 
     // Batch optimistic updates - update frontend immediately
     internal_dispatchMessage(
-      { id, type: 'updateMessage', value: { pluginState, content, metadata } },
+      {
+        id,
+        type: 'updateMessage',
+        value: {
+          content,
+          metadata,
+          pluginState,
+          ...(pluginError !== undefined && { pluginError }),
+        },
+      },
       context,
     );
-
-    if (pluginError !== undefined) {
-      internal_dispatchMessage(
-        { id, type: 'updateMessagePlugin', value: { error: pluginError } },
-        context,
-      );
-    }
 
     await messageService.batchMutateOrThrow([
       {

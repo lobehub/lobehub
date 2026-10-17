@@ -1263,6 +1263,50 @@ describe('ChatPluginAction', () => {
         );
       });
 
+      it('optimisticUpdateToolMessage puts a tool error where the conversation reads it', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const toolMessage = {
+          content: '',
+          id: 'tool-message-id',
+          plugin: {
+            apiName: 'bash',
+            arguments: '{}',
+            identifier: 'lobe-page-agent',
+            type: 'builtin',
+          },
+          role: 'tool',
+        } as any;
+        const pluginError = { message: 'nothing was written', type: 'PageChangedDuringCommand' };
+        const key = messageMapKey(groupContext);
+
+        (messageService.batchMutateOrThrow as Mock).mockResolvedValue({ success: true });
+
+        let operationId: string;
+        act(() => {
+          operationId = result.current.startOperation({
+            context: groupContext,
+            type: 'sendMessage',
+          }).operationId;
+          useChatStore.setState({
+            dbMessagesMap: { [key]: [toolMessage] },
+            messagesMap: { [key]: [toolMessage] },
+          });
+        });
+
+        await act(async () => {
+          await result.current.optimisticUpdateToolMessage(
+            toolMessage.id,
+            { content: 'nothing was written', pluginError },
+            { operationId },
+          );
+        });
+
+        const updated = useChatStore
+          .getState()
+          .dbMessagesMap[key].find((message) => message.id === toolMessage.id);
+        expect(updated?.pluginError).toEqual(pluginError);
+      });
+
       it('optimisticUpdateToolMessage should persist through a quiet batch mutation', async () => {
         const { result } = renderHook(() => useChatStore());
         const messageId = 'message-id';
