@@ -11,6 +11,10 @@ import {
   GeneralChatAgent,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
+import {
+  AGENT_ACCOUNT_OUTBOUND_AUDIT,
+  agentAccountOutboundAudit,
+} from '@lobechat/builtin-tool-agent-account';
 import { createDryRunAudit, DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
@@ -83,6 +87,7 @@ const dynamicInterventionAudits = {
   [DASHBOARD_DRY_RUN_AUDIT]: createDryRunAudit({
     loadVersion: (widgetId, versionId) => dashboardService.getVersion(widgetId, versionId),
   }),
+  [AGENT_ACCOUNT_OUTBOUND_AUDIT]: agentAccountOutboundAudit,
   pathScopeAudit: createPathScopeAudit({
     areAllPathsSafe: async ({ paths, resolveAgainstScope }) => {
       if (!isDesktop) return false;

@@ -258,9 +258,17 @@ export class AgentAccountModel {
   query = async (params?: {
     agentId?: string;
     kind?: AgentAccountKind;
+    /**
+     * Only rows inbound still routes to ({@link INBOUND_ROUTABLE_STATUSES}). A
+     * revoked or suspended address is kept for audit, but mail sent to it no
+     * longer reaches the agent — the runtime must not present it as usable.
+     */
+    liveOnly?: boolean;
     provider?: string;
   }): Promise<AgentAccountView[]> => {
     const conditions = [this.ownership()];
+
+    if (params?.liveOnly) conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
 
     if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
     if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
@@ -361,6 +369,27 @@ export class AgentAccountModel {
       .limit(1);
 
     return !!row;
+  };
+
+  /**
+   * Resolve an account by id without a user scope.
+   *
+   * Used by the inbound path, which learns an account id from a verified
+   * (provider, identifier) match and then needs the row's `agentId` / owner to
+   * file the message. Authorization is the caller's job — exactly like
+   * {@link findByRoutingKey}.
+   */
+  static findByIdUnscoped = async (
+    db: LobeChatDatabase,
+    id: string,
+  ): Promise<AgentAccountView | undefined> => {
+    const [row] = await db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(eq(agentAccounts.id, id))
+      .limit(1);
+
+    return row;
   };
 
   /**

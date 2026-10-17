@@ -122,6 +122,14 @@ export class AgentAccountService {
 
   get = (id: string): Promise<AgentAccountView | undefined> => this.model.findById(id);
 
+  /**
+   * Whether this deployment has the named provider registered. The inbound
+   * edge asks before dispatching so an unknown provider is a 404 (a webhook
+   * URL nobody configured) rather than the registry's thrown error read as a
+   * 500.
+   */
+  hasProvider = (provider: string): boolean => this.options.registry.has(provider);
+
   // --------------- Writes ---------------
 
   /**
@@ -385,10 +393,27 @@ export class AgentAccountService {
       return { accountId, event, outcome: 'ignored', reason: 'receive-disabled' };
     }
 
-    const message = await provider.normalizeInbound(event, ref);
+    let message: AgentAccountInboundMessage | null;
+    try {
+      message = await provider.normalizeInbound(event, ref);
+    } catch (error) {
+      // Verified and claimed but not processed: give the event id back so the
+      // provider's retry is handled instead of acknowledged as a duplicate.
+      await provider.releaseInbound?.(event.eventId)?.catch(() => undefined);
+      throw error;
+    }
     if (!message) return { accountId, event, outcome: 'ignored', reason: 'filtered' };
 
     return { accountId, event, message, outcome: 'delivered' };
+  };
+
+  /**
+   * Release the replay claim of a delivery whose handling failed after
+   * {@link handleInbound} accepted it, so the provider's retry is processed
+   * instead of acknowledged as a duplicate.
+   */
+  releaseInbound = async (providerName: string, eventId: string): Promise<void> => {
+    await this.options.registry.get(providerName).releaseInbound?.(eventId);
   };
 
   // --------------- Internals ---------------

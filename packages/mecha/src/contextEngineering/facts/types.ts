@@ -7,6 +7,7 @@ import type {
   OnboardingContext,
 } from '@lobechat/context-engine';
 import type {
+  AgentAccountContext,
   AgentShareVisitorContext,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
@@ -140,6 +141,11 @@ export interface ContextFactProviders {
   getWorkspaceContext?: (
     workspaceId?: string,
   ) => Promise<{ appUrl?: string; slug?: string } | undefined>;
+  /**
+   * The agent's own accounts and inbox, as first-class identity state. Absent
+   * on a host with no identity store.
+   */
+  listAgentAccountContext?: (agentId?: string) => Promise<AgentAccountContext | undefined>;
   /** Context documents attached to an agent. */
   listAgentDocuments?: (agentId: string) => Promise<AgentContextDocument[] | undefined>;
   /** Connector identifiers (Composio services, LobeHub skill providers) connected for the agent. */

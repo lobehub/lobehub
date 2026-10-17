@@ -138,6 +138,8 @@ export const createLinqProvider = (config: LinqProviderConfig): AgentAccountProv
       // Releasing the number itself is an operator action.
     },
 
+    releaseInbound: (eventId: string): Promise<void> => deduplicator.release(eventId),
+
     send: async (
       ref: AgentAccountRef,
       message: AgentAccountOutboundMessage,

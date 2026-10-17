@@ -88,6 +88,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
 
     // --- step facts (gathered per step) ---
     ...definedOnly({
+      agentAccountContext: step?.agentAccountContext,
       agentBuilderContext: step?.agentBuilderContext,
       agentManagementContext: step?.agentManagementContext,
       groupAgentBuilderContext: step?.groupAgentBuilderContext,
