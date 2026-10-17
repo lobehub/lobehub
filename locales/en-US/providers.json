@@ -27,6 +27,7 @@
   "glmcodingplan.description": "GLM Coding Plan provides access to Zhipu AI models including GLM-5 and GLM-4.7 for coding tasks via a fixed-fee subscription.",
   "google.description": "Google's Gemini family is its most advanced general-purpose AI, built by Google DeepMind for multimodal use across text, code, images, audio, and video. It scales from data centers to mobile devices with strong efficiency and reach.",
   "groq.description": "Groq’s LPU inference engine delivers standout benchmark performance with exceptional speed and efficiency, setting a high bar for low-latency, cloud-based LLM inference.",
+  "hefu.description": "HeFu is an AI API aggregation gateway based in Hong Kong, offering unified OpenAI-compatible access to GPT, Claude, Gemini, DeepSeek, Kimi, Qwen, GLM, MiniMax, Grok and more with pay-as-you-go USD billing.",
   "higress.description": "Higress is a cloud-native API gateway created inside Alibaba to address Tengine reload impact on long-lived connections and gaps in gRPC/Dubbo load balancing.",
   "huggingface.description": "The Hugging Face Inference API offers a fast way to explore thousands of models for many tasks, giving instant access to high-performance models for prototyping and ML experimentation.",
   "hunyuan.description": "A Tencent-developed LLM with strong Chinese writing, solid reasoning in complex contexts, and reliable task execution.",
