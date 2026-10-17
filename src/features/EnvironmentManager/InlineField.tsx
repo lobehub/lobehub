@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
 import { describeError } from './errorMessage';
+import { getInlineFieldSelectProps, type InlineFieldSelectConfig } from './inlineFieldSelect';
 
 const styles = createStaticStyles(({ css }) => ({
   /**
@@ -78,7 +79,7 @@ interface InlineFieldProps {
    * field saves on selection, so ✓ is not shown. The current value is always
    * selectable, even when the list does not carry it.
    */
-  select?: { loading?: boolean; options: string[] };
+  select?: InlineFieldSelectConfig;
   value: string;
 }
 
@@ -167,14 +168,7 @@ const InlineField = memo<InlineFieldProps>(
               loading={select.loading || saving}
               placeholder={placeholder}
               style={{ flex: 1 }}
-              value={draft || null}
-              options={(draft && !select.options.includes(draft)
-                ? [draft, ...select.options]
-                : select.options
-              ).map((name) => ({ label: name, value: name }))}
-              onChange={(next) => {
-                if (typeof next === 'string' && next) void commit(next);
-              }}
+              {...getInlineFieldSelectProps(draft, select, commit)}
             />
             <ActionIcon
               disabled={saving}
