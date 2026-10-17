@@ -44,6 +44,8 @@
   "features.selfLearning.title": "Self-evolving",
   "features.taskVerify.desc": "Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.",
   "features.taskVerify.title": "Acceptance",
+  "features.topicBugReport.desc": "Adds Report a Problem to the topic menu. It sends the topic's IDs and your app environment to the LobeHub support team, who look into what happened from there.",
+  "features.topicBugReport.title": "Report a Problem with a Topic",
   "group.desktop": "Desktop",
   "group.general": "General",
   "stage.alpha.desc": "Internal testing only. Not recommended for daily use yet — it may change or break at any time.",

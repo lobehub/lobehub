@@ -15,9 +15,28 @@ const autoRenameTopicTitleMock = vi.hoisted(() => vi.fn());
 const removeTopicMock = vi.hoisted(() => vi.fn());
 const updateTopicTitleMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
+const labState = vi.hoisted(() => ({ enableTopicBugReport: false }));
+const bugReportTargetMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
   useAuthorInfo: () => ({ fullName: 'Miao Miao' }),
+}));
+
+vi.mock('@/business/client/hooks/useTopicBugReportMenuItem', () => ({
+  useTopicBugReportMenuItem: (target: unknown) => {
+    bugReportTargetMock(target);
+    return { key: 'reportProblem', label: 'topic:actions.reportProblem' };
+  },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: typeof labState) => unknown) => selector(labState),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicBugReport: (state: typeof labState) => state.enableTopicBugReport,
+  },
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -116,6 +135,7 @@ const isActionItem = (
 
 describe('Conversation header action menu', () => {
   afterEach(() => {
+    labState.enableTopicBugReport = false;
     vi.restoreAllMocks();
     Reflect.deleteProperty(document, 'execCommand');
   });
@@ -191,5 +211,24 @@ describe('Conversation header action menu', () => {
 
     expect(screen.getByText('topic:info.title')).toBeInTheDocument();
     expect(screen.getByText(/Miao Miao.*topic:info.updatedAt/)).toBeInTheDocument();
+  });
+
+  it('offers the problem report only when its lab is on', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    const findReportItem = (items: unknown[]) =>
+      items.find((item) => isActionItem(item) && item.key === 'reportProblem');
+
+    const { rerender, result } = renderHook(() => useMenu());
+    expect(findReportItem(result.current.menuItems())).toBeUndefined();
+
+    labState.enableTopicBugReport = true;
+    rerender();
+
+    expect(findReportItem(result.current.menuItems())).toBeDefined();
+    expect(bugReportTargetMock).toHaveBeenLastCalledWith({
+      agentId: 'agent-1',
+      threadId: undefined,
+      topicId: 'topic-1',
+    });
   });
 });

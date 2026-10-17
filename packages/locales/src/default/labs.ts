@@ -66,6 +66,9 @@ export default {
   'features.selfLearning.desc':
     'Let every agent learn from your conversations in the background: it remembers facts, refines skills, collects lessons, and reviews its day each night. Rounds you send back become rules. Each nightly review covers at most 50 conversations. See it all under Memory → Self-evolving.',
   'features.selfLearning.title': 'Self-evolving',
+  'features.topicBugReport.desc':
+    "Adds Report a Problem to the topic menu. It sends the topic's IDs and your app environment to the LobeHub support team, who look into what happened from there.",
+  'features.topicBugReport.title': 'Report a Problem with a Topic',
   'group.desktop': 'Desktop',
   'group.general': 'General',
   'stage.alpha.desc':
