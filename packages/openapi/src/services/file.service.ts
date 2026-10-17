@@ -62,6 +62,8 @@ import type {
  * Handles file upload and management functionality in server mode
  */
 export class FileUploadService extends BaseService {
+  protected readonly serviceName = 'FileUploadService';
+
   private fileModel: FileModel;
   private documentModel: DocumentModel;
   private coreFileService: CoreFileService;

@@ -118,6 +118,25 @@ describe('ErrorHandlerService', () => {
       });
     });
 
+    describe('Original error type', () => {
+      it('should keep the explicit error name when the class name is mangled', () => {
+        class MangledServicesError extends ServicesError {}
+        // Simulate a minified production bundle renaming the class
+        Object.defineProperty(MangledServicesError, 'name', { value: 'x' });
+        const error = new MangledServicesError(
+          'Model not found',
+          ServicesError.Reasons.MODEL_NOT_FOUND,
+        );
+
+        expect.assertions(1);
+        try {
+          service.handleError(error);
+        } catch (e: any) {
+          expect(e.cause.error.originalErrorType).toBe('ServicesError');
+        }
+      });
+    });
+
     describe('Pre-formatted framework errors', () => {
       it('should pass through pre-formatted errors', () => {
         const error = {

@@ -76,9 +76,13 @@ export function defineConfig(config: CustomNextConfig) {
         '@lobehub/ui',
         '@lobehub/icons',
       ],
-      // oidc provider depend on constructor.name
-      // but swc minification will remove the name
-      // so we need to disable it
+      // Only honored by webpack builds (`next build --webpack`).
+      // Turbopack, the default `next build` bundler, ignores it and has no server-only
+      // switch: `turbopackMinify` and `--no-mangling` also apply to client bundles.
+      // Production server chunks therefore have mangled class names, so server code
+      // must not rely on `constructor.name`; use explicit names or ids instead.
+      // oidc-provider, the original reason for this flag, stays unminified because it
+      // is listed in `serverExternalPackages`.
       // refs: https://github.com/lobehub/lobe-chat/pull/7430
       serverMinification: false,
       webVitalsAttribution: ['CLS', 'LCP'],

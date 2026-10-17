@@ -30,6 +30,8 @@ import type {
  * Provides a unified interface for conversations with large language models, supporting chat, translation, and message generation
  */
 export class ChatService extends BaseService {
+  protected readonly serviceName = 'ChatService';
+
   private config: ChatServiceConfig;
 
   constructor(
