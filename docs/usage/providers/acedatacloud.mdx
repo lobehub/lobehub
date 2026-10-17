@@ -1,0 +1,43 @@
+---
+title: Using Ace Data Cloud in LobeHub
+description: Select Ace Data Cloud, enter an API token, and fetch the current chat model catalog.
+tags:
+  - Ace Data Cloud
+  - API Key
+  - Chat
+---
+
+# Using Ace Data Cloud in LobeHub
+
+Ace Data Cloud is an independent API service. Use an Ace account and API token; a model vendor's API key is not an Ace credential.
+
+<Steps>
+  ### Get an API token
+
+  Sign in at [Ace Data Cloud → Applications](https://platform.acedata.cloud/console/applications?utm_source=opensource&utm_medium=referral&utm_campaign=evergreen&utm_content=lobehub_provider_guide_api_key). Initialize **General application** if it does not exist, then open it and copy an existing API Token. You can create a dedicated LobeHub token under **Manage Keys**. Check the model's service permissions, balance, and [current pricing](https://platform.acedata.cloud/models?utm_source=opensource&utm_medium=referral&utm_campaign=evergreen&utm_content=lobehub_provider_guide_pricing). Do not use a platform management token.
+
+  <Image alt={'Copy a service API token in Ace Applications; historical screenshot referenced on 2026-10-18'} src={'https://raw.githubusercontent.com/AceDataCloud/SunoDify/8d3d03570e73324220f111f7fe343da0792a8071/_assets/tutorial/get-api-key-en.png'} />
+
+  <Image alt={'Create an optional dedicated token; real credentials are hidden'} src={'https://raw.githubusercontent.com/AceDataCloud/SunoDify/8d3d03570e73324220f111f7fe343da0792a8071/_assets/tutorial/create-api-key-en.png'} />
+
+  ### Select Ace Data Cloud
+
+  Open **App Settings → AI Providers → Ace Data Cloud**, enable it, and paste the token without a `Bearer ` prefix. The default endpoint is already `https://api.acedata.cloud/v1`; there is no need to configure another provider's card. If overriding it, do not combine the legacy `/openai` prefix with `/v1`.
+
+  Availability depends on your client version, administrator settings, and whether the integration has shipped. Older clients can use the [Ace compatibility guide](https://platform.acedata.cloud/documents/development_lobechat?utm_source=opensource&utm_medium=referral&utm_campaign=evergreen&utm_content=lobehub_provider_guide_legacy). Edited screenshots do not substitute for verification of the new provider page.
+
+  ### Fetch models and start a conversation
+
+  Fetch the current model catalog, enable a model, and select it for the Agent. Catalog presence does not establish your token's service permissions or every model capability. Check the service documentation. Connection checks and chat can incur API charges.
+
+  This entry uses the OpenAI-compatible chat client. Model-specific rules may select Chat Completions or Responses; verify those paths separately. It does not turn asynchronous Suno/Seedance media APIs into chat models. Install individual media MCP tools separately and enable them for the Agent. Preserve the same task ID when polling an asynchronous operation; do not generate again while waiting.
+</Steps>
+
+## Troubleshooting
+
+- **401/403:** recopy the service API token and check permissions, expiry, and balance. Do not use platform administration credentials or a model vendor's key.
+- **404:** restore `https://api.acedata.cloud/v1`. Do not use `/openai/v1` or a full `/chat/completions` URL as the base URL.
+- **Empty catalog:** inspect the model-fetch error rather than assuming historical model IDs are available.
+- **Tools or vision:** the catalog has no capability or pricing metadata, so this integration does not infer either from vendor model names. Verify the current service contract before editing model settings.
+
+The images show real historical Ace Applications pages, not successful LobeHub installation or inference. Keep tokens in provider settings, out of chat and screenshots.

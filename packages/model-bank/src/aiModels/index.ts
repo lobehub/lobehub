@@ -1,6 +1,7 @@
 import { getModelKnowledgeCutoff } from '../const/knowledgeCutoff';
 import type { ModelProvider } from '../const/modelProvider';
 import { type AiFullModelCard, type LobeDefaultAiModelListItem } from '../types/aiModel';
+import { acedatacloudModels as acedatacloud } from './acedatacloud';
 import { default as ai21 } from './ai21';
 import { default as ai302 } from './ai302';
 import { default as ai360 } from './ai360';
@@ -113,6 +114,7 @@ const buildDefaultModelList = (map: ModelsMap): LobeDefaultAiModelListItem[] => 
 };
 
 const staticModelMap: ModelsMap = {
+  acedatacloud,
   ai21,
   ai302,
   ai360,
@@ -231,6 +233,7 @@ export const loadModels = async (
 };
 
 export { gptImage1Schema, gptImage2Schema } from '../const/imageParameters';
+export { acedatacloudModels as acedatacloud } from './acedatacloud';
 export { default as ai21 } from './ai21';
 export { default as ai302 } from './ai302';
 export { default as ai360 } from './ai360';

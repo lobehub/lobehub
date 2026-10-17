@@ -1,6 +1,7 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
 import type { ChatModelCard, ModelProviderCard } from '../types';
+import { AceDataCloudProvider } from './acedatacloud';
 import Ai21Provider from './ai21';
 import Ai302Provider from './ai302';
 import Ai360Provider from './ai360';
@@ -169,6 +170,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  AceDataCloudProvider,
   FalProvider,
   OllamaProvider,
   OllamaCloudProvider,
@@ -297,6 +299,7 @@ export const isProviderOAuthDeviceFlow = (id?: string) =>
     (provider) => provider.id === id && provider.settings?.authType === 'oauthDeviceFlow',
   );
 
+export { AceDataCloudProvider as AceDataCloudProviderCard } from './acedatacloud';
 export { default as Ai21ProviderCard } from './ai21';
 export { default as Ai302ProviderCard } from './ai302';
 export { default as Ai360ProviderCard } from './ai360';

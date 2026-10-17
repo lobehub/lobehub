@@ -17,9 +17,10 @@ const isCodingPlanProvider = (id: string) => id.endsWith('codingplan');
  * ChatGPT is an OpenAI subscription, so its icon config points at the OpenAI
  * mark — ProviderCombine renders the OpenAI wordmark and the card reads as a
  * duplicate of the OpenAI one right beside it. Name these providers after the
- * plan instead, the way the detail page header does.
+ * plan instead, the way the detail page header does. Ace Data Cloud has no icon
+ * mapping yet; keep its display name visible next to the neutral fallback.
  */
-const sharesVendorMark = (id: string) => id === 'chatgpt';
+const needsProviderName = (id: string) => id === 'chatgpt' || id === 'acedatacloud';
 
 interface ProviderCardProps extends AiProviderListItem {
   loading?: boolean;
@@ -58,7 +59,7 @@ const ProviderCard = memo<ProviderCardProps>(
               <Flexbox horizontal align={'center'} justify={'space-between'}>
                 {source === 'builtin' ? (
                   <Flexbox horizontal align={'center'} gap={8}>
-                    {sharesVendorMark(id) ? (
+                    {needsProviderName(id) ? (
                       <Flexbox horizontal align={'center'} gap={12}>
                         <ProviderIcon
                           provider={id}

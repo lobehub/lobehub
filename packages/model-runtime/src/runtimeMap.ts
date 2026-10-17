@@ -1,3 +1,4 @@
+import { LobeAceDataCloudAI } from './providers/acedatacloud';
 import { LobeAi21AI } from './providers/ai21';
 import { Lobe302AI } from './providers/ai302';
 import { LobeAi360AI } from './providers/ai360';
@@ -85,6 +86,7 @@ import { LobeZeroOneAI } from './providers/zeroone';
 import { LobeZhipuAI } from './providers/zhipu';
 
 export const providerRuntimeMap = {
+  acedatacloud: LobeAceDataCloudAI,
   ai21: LobeAi21AI,
   ai302: Lobe302AI,
   ai360: LobeAi360AI,

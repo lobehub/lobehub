@@ -1,0 +1,43 @@
+---
+title: 在 LobeHub 中使用 Ace Data Cloud
+description: 在服务商列表中选择 Ace Data Cloud，填写 API Token 并获取当前模型。
+tags:
+  - Ace Data Cloud
+  - API Key
+  - Chat
+---
+
+# 在 LobeHub 中使用 Ace Data Cloud
+
+Ace Data Cloud 提供独立的模型 API 服务。这里使用 Ace 的账户和 Token；模型原厂账户的 Key 不能代替它。
+
+<Steps>
+  ### 获取 API Token
+
+  登录 [Ace Data Cloud → Applications](https://platform.acedata.cloud/console/applications?utm_source=opensource&utm_medium=referral&utm_campaign=evergreen&utm_content=lobehub_provider_guide_api_key)。如果没有 **General application（通用应用）**，先初始化通用应用。打开应用，复制已有 API Token，或在 **Manage Keys** 创建一个专用于 LobeHub 的 Token。确认当前模型的服务权限、余额和[价格](https://platform.acedata.cloud/models?utm_source=opensource&utm_medium=referral&utm_campaign=evergreen&utm_content=lobehub_provider_guide_pricing)。不要使用平台管理 Token。
+
+  <Image alt={'Ace Applications 页面中的 Token 获取位置；历史截图，2026-10-18 引用'} src={'https://raw.githubusercontent.com/AceDataCloud/SunoDify/8d3d03570e73324220f111f7fe343da0792a8071/_assets/tutorial/get-api-key-en.png'} />
+
+  <Image alt={'创建专用 API Token；截图中真实凭据已隐藏'} src={'https://raw.githubusercontent.com/AceDataCloud/SunoDify/8d3d03570e73324220f111f7fe343da0792a8071/_assets/tutorial/create-api-key-en.png'} />
+
+  ### 在 LobeHub 中选择服务商
+
+  打开 **应用设置 → AI 服务商 → Ace Data Cloud**，启用服务商并填写 Token 字符串，不加 `Bearer `。默认地址已设置为 `https://api.acedata.cloud/v1`，无需借用 OpenAI 卡片填写地址。若自行覆盖地址，不要将旧 `/openai` 与 `/v1` 叠加。
+
+  账户可见的服务商取决于客户端版本、管理员设置和是否已包含该集成。旧版本可参考 [Ace 兼容配置指南](https://platform.acedata.cloud/documents/development_lobechat?utm_source=opensource&utm_medium=referral&utm_campaign=evergreen&utm_content=lobehub_provider_guide_legacy)。本页未用编辑图片代替新服务商实际界面验收。
+
+  ### 获取模型并开始对话
+
+  在模型列表中获取当前模型，启用所需项，再为助理选择模型。模型列表不等于当前 Token 的服务授权，也不保证每个模型的所有能力；以实际服务文档为准。连接检查和聊天都会调用模型，可能计费。
+
+  本入口使用 OpenAI 兼容的聊天客户端；不同模型可能选择 Chat Completions 或 Responses 路径，需分别验证。此配置不把 Suno/Seedance 等异步媒体接口变成聊天模型。工具市场中的单服务 MCP 需独立安装、填写认证并为助理启用。异步任务提交后保留同一个任务 ID 查询到终态，不能因等待而重新生成。
+</Steps>
+
+## 常见问题
+
+- **401/403**：重新复制 API Token，检查服务权限、有效期和余额；不要把平台管理凭据或模型原厂 Key 填在这里。
+- **404**：恢复默认 `https://api.acedata.cloud/v1`，不要使用 `/openai/v1` 或完整 `/chat/completions` 作为基础地址。
+- **模型列表为空**：检查模型列表请求错误；不要把静态旧模型名当成当前可用模型。
+- **工具或视觉不匹配**：该 API 的模型目录没有能力或价格元数据，因此不会按模型名猜测这些值。先核当前服务合同，再按需要在模型设置调整。
+
+这些截图来自 Ace Applications 的真实历史页面，不是 LobeHub 安装或调用成功证据。API Token 保存在服务商设置，不要粘贴到对话或截图。

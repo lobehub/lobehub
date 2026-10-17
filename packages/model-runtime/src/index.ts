@@ -39,6 +39,7 @@ export {
   type SpecErrorCode,
 } from './errors';
 export * from './helpers';
+export { LobeAceDataCloudAI } from './providers/acedatacloud';
 export { LobeAkashChatAI } from './providers/akashchat';
 export { LobeAntGroupAI } from './providers/antgroup';
 export { LobeAnthropicAI } from './providers/anthropic';
