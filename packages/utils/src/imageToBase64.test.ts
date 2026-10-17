@@ -73,6 +73,9 @@ describe('imageUrlToBase64', () => {
     mockFetch.mockResolvedValue({
       arrayBuffer: () => Promise.resolve(mockArrayBuffer),
       blob: () => Promise.resolve(new Blob([mockArrayBuffer], { type: 'image/jpg' })),
+      ok: true,
+      status: 200,
+      statusText: 'OK',
     });
 
     const result = await imageUrlToBase64('https://example.com/image.jpg');
@@ -91,6 +94,9 @@ describe('imageUrlToBase64', () => {
 
     mockFetch.mockResolvedValue({
       blob: () => Promise.resolve(new Blob([pngBytes], { type: 'image/jpeg' })),
+      ok: true,
+      status: 200,
+      statusText: 'OK',
     });
 
     const result = await imageUrlToBase64('https://example.com/image.jpg');
@@ -103,6 +109,9 @@ describe('imageUrlToBase64', () => {
 
     mockFetch.mockResolvedValue({
       blob: () => Promise.resolve(new Blob([pdfBytes], { type: '' })),
+      ok: true,
+      status: 200,
+      statusText: 'OK',
     });
 
     const result = await imageUrlToBase64('https://example.com/file');
@@ -126,6 +135,9 @@ describe('imageUrlToBase64', () => {
     mockFetch.mockResolvedValue({
       body: { getReader: () => ({ cancel, read }) },
       headers: { get: () => null },
+      ok: true,
+      status: 200,
+      statusText: 'OK',
     });
 
     await expect(
@@ -139,11 +151,27 @@ describe('imageUrlToBase64', () => {
     mockFetch.mockResolvedValue({
       body: { cancel },
       headers: { get: (key: string) => (key === 'content-length' ? '9' : null) },
+      ok: true,
+      status: 200,
+      statusText: 'OK',
     });
 
     await expect(
       imageUrlToBase64('https://example.com/declared-large.wav', { maxBytes: 8 }),
     ).rejects.toThrow('8-byte download limit');
     expect(cancel).toHaveBeenCalledOnce();
+  });
+  it('should reject an error response instead of encoding the error body', async () => {
+    const htmlBody = new TextEncoder().encode('<html>404 Not Found</html>');
+    mockFetch.mockResolvedValue({
+      blob: () => Promise.resolve(new Blob([htmlBody], { type: 'text/html' })),
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    });
+
+    await expect(imageUrlToBase64('https://example.com/missing.jpg')).rejects.toThrow(
+      'Failed to fetch image: 404 Not Found',
+    );
   });
 });
