@@ -135,6 +135,28 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it('separates installing an account credential from managing the account', () => {
+    // Reading and managing an agent's identity assets rides the agent domain…
+    expect(requiredApiKeyScopeForTrpc('agentAccount.list', 'query')).toEqual({
+      scopes: ['agent:read'],
+    });
+    expect(requiredApiKeyScopeForTrpc('agentAccount.create', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('agentAccount.provision', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('agentAccount.revoke', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+
+    // …but installing a credential adds the dedicated high-risk tier: a key
+    // that may manage the agent's accounts still cannot write a password.
+    expect(requiredApiKeyScopeForTrpc('agentAccount.setCredential', 'mutation')).toEqual({
+      scopes: ['agent:write', 'agent:credential:write'],
+    });
+  });
+
   it('blocks sensitive namespaces for restricted keys', () => {
     expect(requiredApiKeyScopeForTrpc('apiKey.createApiKey', 'mutation')).toEqual({
       blocked: true,

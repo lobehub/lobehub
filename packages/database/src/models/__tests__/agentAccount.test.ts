@@ -154,6 +154,76 @@ describe('AgentAccountModel credential discipline', () => {
   });
 });
 
+describe('AgentAccountModel workspace isolation by agent visibility', () => {
+  const workspaceId = 'agent-account-visibility-ws';
+  const privateAgentId = 'agent-account-private-ws-agent';
+  const publicAgentId = 'agent-account-public-ws-agent';
+
+  beforeEach(async () => {
+    await seedWorkspace(workspaceId);
+    await serverDB.insert(agents).values([
+      { id: privateAgentId, userId, visibility: 'private', workspaceId },
+      { id: publicAgentId, userId, visibility: 'public', workspaceId },
+    ]);
+  });
+
+  /** user1 owns both agents; user2 is a fellow member of the same workspace. */
+  const seedAccounts = async () => {
+    const owner = new AgentAccountModel(serverDB, userId, mockGateKeeper, workspaceId);
+    const privateAccount = await owner.create({
+      ...mailAccount('private-agent@lobe.id'),
+      agentId: privateAgentId,
+      credential: { webhookSecret: 'whsec_private' },
+    });
+    const publicAccount = await owner.create({
+      ...mailAccount('public-agent@lobe.id'),
+      agentId: publicAgentId,
+    });
+
+    return { owner, privateAccount, publicAccount };
+  };
+
+  it('hides a private agent account from another workspace member', async () => {
+    const { owner, privateAccount, publicAccount } = await seedAccounts();
+    const member = new AgentAccountModel(serverDB, userId2, mockGateKeeper, workspaceId);
+
+    expect(await member.findById(privateAccount.id)).toBeUndefined();
+    expect(await member.getCredential(privateAccount.id)).toBeNull();
+    expect((await member.query()).map((a) => a.id)).toEqual([publicAccount.id]);
+    expect(await member.query({ agentId: privateAgentId })).toHaveLength(0);
+
+    // The owner still sees both.
+    expect(await owner.query()).toHaveLength(2);
+  });
+
+  it('refuses a member update / setCredential / revoke on a private agent account', async () => {
+    const { owner, privateAccount } = await seedAccounts();
+    const member = new AgentAccountModel(serverDB, userId2, mockGateKeeper, workspaceId);
+
+    expect(await member.update(privateAccount.id, { displayName: 'hijacked' })).toBeUndefined();
+    expect(await member.setCredential(privateAccount.id, { webhookSecret: 'x' })).toBeUndefined();
+    expect(await member.revoke(privateAccount.id)).toBeUndefined();
+
+    const intact = await owner.findById(privateAccount.id);
+    expect(intact).toMatchObject({
+      displayName: null,
+      hasCredential: true,
+      status: 'provisioning',
+    });
+    expect(await owner.getCredential(privateAccount.id)).toEqual({
+      webhookSecret: 'whsec_private',
+    });
+  });
+
+  it('lets a member use the account of a public agent', async () => {
+    const { publicAccount } = await seedAccounts();
+    const member = new AgentAccountModel(serverDB, userId2, mockGateKeeper, workspaceId);
+
+    expect(await member.findById(publicAccount.id)).toMatchObject({ id: publicAccount.id });
+    expect(await member.update(publicAccount.id, { displayName: 'shared' })).toBe(publicAccount.id);
+  });
+});
+
 describe('AgentAccountModel scope and writes', () => {
   it('does not expose another user account', async () => {
     const model1 = new AgentAccountModel(serverDB, userId);

@@ -6,6 +6,7 @@ import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ApiKeyScope } from '@/const/apiKeyScope';
+import { isValidApiKeyScope } from '@/const/apiKeyScope';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   disabled: css`
@@ -78,13 +79,35 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 /**
  * Scope groups shown to the user. Most domains carry read and write scopes;
- * usage is intentionally read-only, while the model group additionally
- * carries the money-burning `model:invoke` tier.
+ * usage is intentionally read-only, while two domains carry an additional
+ * high-risk tier that is separate from plain write:
+ *
+ * - `model:invoke` burns money;
+ * - `agent:credential:write` installs a secret into one of an agent's
+ *   accounts — managing the agent's accounts must not imply that.
  */
 type ScopeGroupKey =
   'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
 
+/**
+ * Labels an extra scope can carry. Kept as literals (not `string`) so the
+ * `t()` calls stay inside the generated key union.
+ */
+type ScopeExtraLabel =
+  'apikey.scopes.agentCredential' | 'apikey.scopes.invoke' | 'apikey.scopes.modelInvoke';
+
 interface ScopeGroup {
+  /**
+   * A higher-risk scope in the same domain. It gets its own checkbox in the
+   * creation grid and its own entry in the granted-scopes overview; the two
+   * labels differ because the grid spells the act out while the overview lists
+   * grants next to "Read" / "Write".
+   */
+  readonly extra?: {
+    readonly createLabel: ScopeExtraLabel;
+    readonly overviewLabel: ScopeExtraLabel;
+    readonly scope: ApiKeyScope;
+  };
   readonly key: ScopeGroupKey;
   readonly label: `apikey.scopes.groups.${ScopeGroupKey}`;
   readonly read: ApiKeyScope;
@@ -92,9 +115,29 @@ interface ScopeGroup {
 }
 
 const SCOPE_GROUPS: readonly ScopeGroup[] = [
-  { key: 'agent', label: 'apikey.scopes.groups.agent', read: 'agent:read', write: 'agent:write' },
+  {
+    key: 'agent',
+    label: 'apikey.scopes.groups.agent',
+    read: 'agent:read',
+    write: 'agent:write',
+    extra: {
+      createLabel: 'apikey.scopes.agentCredential',
+      overviewLabel: 'apikey.scopes.agentCredential',
+      scope: 'agent:credential:write',
+    },
+  },
   { key: 'chat', label: 'apikey.scopes.groups.chat', read: 'chat:read', write: 'chat:write' },
-  { key: 'model', label: 'apikey.scopes.groups.model', read: 'model:read', write: 'model:write' },
+  {
+    key: 'model',
+    label: 'apikey.scopes.groups.model',
+    read: 'model:read',
+    write: 'model:write',
+    extra: {
+      createLabel: 'apikey.scopes.modelInvoke',
+      overviewLabel: 'apikey.scopes.invoke',
+      scope: 'model:invoke',
+    },
+  },
   { key: 'file', label: 'apikey.scopes.groups.file', read: 'file:read', write: 'file:write' },
   {
     key: 'knowledge',
@@ -135,7 +178,7 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
     const actions = [
       scopeSet.has(group.read) && t('apikey.scopes.read'),
       group.write && scopeSet.has(group.write) && t('apikey.scopes.write'),
-      group.key === 'model' && scopeSet.has('model:invoke') && t('apikey.scopes.invoke'),
+      group.extra && scopeSet.has(group.extra.scope) && t(group.extra.overviewLabel),
     ].filter(Boolean) as string[];
 
     return actions.length > 0 ? [{ actions, key: group.key, label: t(group.label) }] : [];
@@ -161,6 +204,59 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
   );
 };
 
+/**
+ * Scopes a scope cannot work without. The server enforces these pairs — a
+ * credential write is still an agent write — so a key holding the dependent
+ * scope alone would be refused on every call it advertises.
+ */
+const SCOPE_PREREQUISITES: Partial<Record<ApiKeyScope, readonly ApiKeyScope[]>> = {
+  'agent:credential:write': ['agent:write'],
+};
+
+/** Each scope's prerequisites, with every `:write` needing its `:read` twin when one exists. */
+const prerequisitesOf = (scope: ApiKeyScope): ApiKeyScope[] => {
+  const required = [...(SCOPE_PREREQUISITES[scope] ?? [])];
+  if (scope.endsWith(':write')) {
+    const twin = scope.replace(/:write$/, ':read') as ApiKeyScope;
+    if (isValidApiKeyScope(twin)) required.push(twin);
+  }
+  return required;
+};
+
+/**
+ * The selection after toggling one scope. Checking adds everything it needs;
+ * unchecking drops everything that needed it, so the grid never shows a scope
+ * the key could not actually use.
+ */
+export const toggleScopeSelection = (
+  selected: readonly ApiKeyScope[],
+  scope: ApiKeyScope,
+  checked: boolean,
+): ApiKeyScope[] => {
+  const next = new Set(selected);
+
+  if (checked) {
+    const pending = [scope];
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (next.has(current) && current !== scope) continue;
+      next.add(current);
+      pending.push(...prerequisitesOf(current));
+    }
+  } else {
+    const pending = [scope];
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      next.delete(current);
+      for (const candidate of next) {
+        if (prerequisitesOf(candidate).includes(current)) pending.push(candidate);
+      }
+    }
+  }
+
+  return [...next];
+};
+
 export interface ScopeSelectorProps {
   fullAccess: boolean;
   onFullAccessChange: (fullAccess: boolean) => void;
@@ -176,21 +272,8 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
 }) => {
   const { t } = useTranslation('auth');
   const selectedSet = new Set(selected);
-
-  const toggle = (scope: ApiKeyScope, checked: boolean) => {
-    const next = new Set(selectedSet);
-    if (checked) {
-      next.add(scope);
-      // write implies read — keep the UI honest about what the key can do
-      if (scope.endsWith(':write')) next.add(scope.replace(/:write$/, ':read') as ApiKeyScope);
-    } else {
-      next.delete(scope);
-      // dropping read also drops the write that implied it
-      if (scope.endsWith(':read')) next.delete(scope.replace(/:read$/, ':write') as ApiKeyScope);
-    }
-
-    onSelectedChange([...next]);
-  };
+  const toggle = (scope: ApiKeyScope, checked: boolean) =>
+    onSelectedChange(toggleScopeSelection(selected, scope, checked));
 
   return (
     <Flexbox gap={12}>
@@ -227,13 +310,13 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                       {t('apikey.scopes.write')}
                     </Checkbox>
                   )}
-                  {group.key === 'model' && (
+                  {group.extra && (
                     <Checkbox
-                      checked={selectedSet.has('model:invoke')}
+                      checked={selectedSet.has(group.extra.scope)}
                       disabled={fullAccess}
-                      onChange={(checked) => toggle('model:invoke', checked)}
+                      onChange={(checked) => group.extra && toggle(group.extra.scope, checked)}
                     >
-                      {t('apikey.scopes.modelInvoke')}
+                      {t(group.extra.createLabel)}
                     </Checkbox>
                   )}
                 </Flexbox>
