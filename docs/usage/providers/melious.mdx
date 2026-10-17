@@ -1,0 +1,57 @@
+---
+title: Using Melious in LobeHub
+description: >-
+  Learn how to configure and use Melious's API Key in LobeHub to enable
+  AI-powered conversations.
+tags:
+  - LobeHub
+  - Melious
+  - API Key
+  - European Infrastructure
+---
+
+# Using Melious in LobeHub
+
+[Melious](https://melious.ai) serves open-weight models on European infrastructure (GDPR/TTDSG) through an OpenAI-compatible API, and reports the energy use and cost of every response.
+
+This guide will walk you through the steps to quickly integrate Melious's capabilities into LobeHub.
+
+<Callout type="info">
+  LobeHub talks to Melious over the OpenAI-compatible endpoint at `https://api.melious.ai/v1`. Melious also exposes an Anthropic-compatible Messages endpoint, which this provider does not use.
+</Callout>
+
+To configure this provider in LobeHub, open **App Settings → AI Providers**, select the provider, and turn on its switch.
+
+<Steps>
+  ### Step 1: Obtain a Melious API Key
+
+  - Log in to the [Melious console](https://melious.ai/account/api/keys)
+  - Open **Account → API keys** and create a key
+  - Copy the key, which starts with `sk-mel-`. It is shown only once, so store it before closing the dialog
+
+  ### Step 2: Configure the Model Service in LobeHub
+
+  - Open LobeHub and go to the "Settings" page
+  - In the "AI Providers" section, select "Melious"
+  - Paste the API Key you obtained earlier
+  - Click "Check" to verify the connection
+
+  ### Step 3: Choose a model
+
+  - Click "Get Model List" to fetch the live catalog from Melious
+  - Pick a model and start a conversation
+
+  Melious serves chat, embedding, image, audio and guardrail models from the same catalog endpoint. LobeHub filters the list down to chat models, so the picker shows only what you can hold a conversation with.
+</Steps>
+
+## Model availability and billing
+
+The model list is fetched live, so it always reflects what your key can reach. Browse the catalog and current per-model pricing at the [Melious model hub](https://melious.ai/hub/models); usage is billed per token in EUR and aggregated in your [usage dashboard](https://melious.ai/account/usage).
+
+Reasoning-capable models accept a `low`, `medium` or `high` reasoning effort, which LobeHub exposes as a model parameter. There is no off state — an explicit "none" still returns reasoning.
+
+## Troubleshooting
+
+- **The connection check fails.** Confirm the key starts with `sk-mel-` and that the API proxy address is `https://api.melious.ai/v1` with no trailing slash.
+- **The model list comes back empty.** The key is missing the `inference.models` scope. Add it in the console, or type the model ID in manually.
+- **A model returns 404.** The model ID is stale. Fetch the list again to pick up the current catalog.
