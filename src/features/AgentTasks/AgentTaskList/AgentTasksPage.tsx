@@ -25,6 +25,7 @@ import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -111,7 +112,7 @@ interface AgentTasksPageProps {
 export type TaskCollection = 'mine' | 'scheduled' | 'tasks';
 /** "My tasks" sub-view: assigned to me as a member, or created by me. */
 export type MyTaskScope = 'assigned' | 'created';
-const COLLECTION_PAGE_SIZE = 50;
+const COLLECTION_PAGE_SIZE = TASK_COLLECTION_PAGE_SIZE;
 
 export const resolveTaskCollection = (
   searchParams: URLSearchParams,

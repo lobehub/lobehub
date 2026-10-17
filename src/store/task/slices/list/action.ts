@@ -1,8 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
+import { useMemo } from 'react';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { isMyTaskListKey, isScheduledTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -22,13 +21,6 @@ import {
   taskListResource,
   type TaskListValue,
 } from './projection';
-
-/**
- * Scope keys of the scheduled roll-up's SWR key: all agents, or one project.
- * Kept distinct from per-agent ids so the entries never collide.
- */
-const ALL_AGENTS_LIST_KEY = '__all__';
-const PROJECT_LIST_KEY_PREFIX = '__project__:';
 
 // Default kanban groups: 5 columns
 // 'scheduled' shares the 'running' column — both represent "automation in
@@ -64,7 +56,46 @@ const filterToServerVisibility = (
  * the real `total` so the list can say it is showing a subset.
  */
 export const COMPLETE_TASK_LIST_PAGE_SIZE = 100;
+
+/** Page size of the Tasks page's paginated collections (scheduled, "My tasks"). */
+export const TASK_COLLECTION_PAGE_SIZE = 50;
+
+export interface ScheduledTaskListOptions {
+  agentId?: string;
+  limit?: number;
+  offset?: number;
+  projectId?: string;
+}
+
+/**
+ * The task-list query of one scheduled roll-up page. `agentId`/`projectId`
+ * narrow it to a scoped Tasks page and are part of the key, so an agent's
+ * schedules never render under another scope.
+ */
+export const scheduledTaskListQuery = ({
+  agentId,
+  limit,
+  offset,
+  projectId,
+}: ScheduledTaskListOptions): TaskListQuery => ({
+  agentId: projectId ? undefined : agentId,
+  automated: true,
+  limit,
+  offset,
+  orderBy: 'updatedAt',
+  projectId,
+  visibility: 'all',
+});
 export const COMPLETE_TASK_LIST_MAX_ITEMS = 1000;
+
+/**
+ * A paginated collection (scheduled roll-up, "My tasks"): the task-list sync
+ * plus the page in the `{ data, total }` shape of the list endpoint, undefined
+ * until the entry is in the store (persisted or fetched) and while disabled.
+ */
+export interface TaskCollectionPageResult extends TaskCollectionSyncResult {
+  data?: { data: TaskListValue['items']; total: number };
+}
 
 /** Sync result of a task list / board fetch: replica flags plus the SWR-era aliases. */
 export interface TaskCollectionSyncResult extends ReplicaSyncResult {
@@ -128,10 +159,13 @@ export class TaskListSliceActionImpl {
       includeArchived: query.includeArchived,
       orderBy: query.orderBy,
       projectId: query.projectId,
+      ...(query.scope && { scope: query.scope }),
       statuses: query.statuses,
       visibility: filterToServerVisibility(query.visibility),
     };
-    return query.complete ? this.fetchCompleteTaskList(params) : this.fetchTaskList(params);
+    return query.complete
+      ? this.fetchCompleteTaskList(params)
+      : this.fetchTaskList({ ...params, limit: query.limit, offset: query.offset });
   };
 
   #fetchGroups = (query: TaskGroupListQuery) =>
@@ -147,6 +181,19 @@ export class TaskListSliceActionImpl {
       scope: query.scope,
       visibility: filterToServerVisibility(query.visibility),
     });
+
+  /** One page of a paginated collection, read reactively from its replica entry. */
+  #useCollectionPage = (query: TaskListQuery, enabled: boolean): TaskCollectionPageResult => {
+    const queryKey = taskListQueryKey(query);
+    // A collection page is a deliberate view, not a live feed: no refetch on focus.
+    const sync = this.#taskList.useSync(query, { enabled, revalidateOnFocus: false });
+    const value = useTaskStore((s) => (enabled ? s.taskListMap[queryKey] : undefined));
+    const data = useMemo(
+      () => (value ? { data: value.items, total: value.total } : undefined),
+      [value],
+    );
+    return { ...this.#toSyncResult(sync, enabled ? queryKey : undefined, !!value), data };
+  };
 
   #toSyncResult = (
     sync: ReplicaSyncResult,
@@ -256,13 +303,10 @@ export class TaskListSliceActionImpl {
       // Every loaded list and board of the active scope — an edit can move a
       // task across any query boundary (touching reorders `updatedAt`,
       // scheduling flips the automation filter), so none are singled out.
+      // That includes the scheduled roll-up and "My tasks" pages (a schedule
+      // or an assignee can change on any edit) and the agent sidebar panels.
       this.#taskList.revalidate(),
       this.#taskGroupList.revalidate(),
-      // A schedule can be attached, changed or removed from any task edit, so
-      // the automated roll-up has to be revalidated alongside the main list.
-      mutate(isScheduledTaskListKey),
-      // Assigning or creating moves a task in or out of "My tasks".
-      mutate(isMyTaskListKey),
     ]);
   };
 
@@ -287,6 +331,8 @@ export class TaskListSliceActionImpl {
        * server-side exactly like `useFetchMyTaskList` narrows its list.
        */
       scope?: 'assigned' | 'created';
+      /** Override the Task page's persisted filter for embedded consumers (the agent sidebar). */
+      visibility?: TaskListVisibilityFilter;
     } = {},
   ): TaskCollectionSyncResult => {
     const {
@@ -299,6 +345,7 @@ export class TaskListSliceActionImpl {
       includeArchived,
       projectId,
       scope,
+      visibility,
     } = options;
     // Subscribed, so flipping the visibility chip re-keys the board query.
     const listVisibility = useTaskStore((s) => s.listVisibility);
@@ -316,7 +363,7 @@ export class TaskListSliceActionImpl {
           // (`useFetchMyTaskList`) sends no visibility at all, so its board
           // ignores the chip too — otherwise a value left over from the
           // ordinary tab would change the row set on the list ↔ board switch.
-          visibility: scope ? 'all' : listVisibility,
+          visibility: scope ? 'all' : (visibility ?? listVisibility),
         }
       : undefined;
     const queryKey = query ? taskGroupListQueryKey(query) : undefined;
@@ -331,44 +378,32 @@ export class TaskListSliceActionImpl {
 
   /**
    * The automated-task roll-up behind Home's "Scheduled" section and the Tasks
-   * page's scheduled tab. Each caller consumes its own SWR result because Home
-   * and the paginated Tasks page can coexist in Electron with different limits
-   * and offsets. `agentId`/`projectId` narrow the roll-up to the scoped Tasks
-   * page; they are part of the key so an agent's schedules never render under
-   * another scope.
+   * page's scheduled tab. Each limit / offset is its own task-list entry
+   * because Home and the paginated Tasks page can coexist in Electron.
    */
   useFetchScheduledTaskList = (
-    options: {
-      agentId?: string;
-      enabled?: boolean;
-      limit?: number;
-      offset?: number;
-      projectId?: string;
-    } = {},
-  ) => {
-    const { agentId, enabled = true, limit, offset, projectId } = options;
-    const scopeKey = projectId
-      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
-      : (agentId ?? ALL_AGENTS_LIST_KEY);
-    return useClientDataSWR(
-      enabled ? taskKeys.scheduledList(scopeKey, 'all', limit, offset) : null,
-      async () =>
-        this.fetchTaskList({
-          ...(projectId ? { projectId } : agentId ? { assigneeAgentId: agentId } : {}),
-          automated: true,
-          limit,
-          offset,
-          orderBy: 'updatedAt',
-        }),
-      { revalidateOnFocus: false },
-    );
+    options: ScheduledTaskListOptions & { enabled?: boolean } = {},
+  ): TaskCollectionPageResult => {
+    const { enabled = true, ...query } = options;
+    return this.#useCollectionPage(scheduledTaskListQuery(query), enabled);
+  };
+
+  /**
+   * Seed the persisted scheduled page before the route commits, so a reload
+   * paints the local copy instead of the list's loading state. A later
+   * `useSync` hydrate is a no-op once the slot is filled.
+   */
+  preHydrateScheduledTaskList = (options: ScheduledTaskListOptions): Promise<boolean> => {
+    const scope = taskListResource.scope.get();
+    this.#taskList.ensureScope(scope);
+    return this.#taskList.hydrate(scheduledTaskListQuery(options), scope);
   };
 
   /**
    * The Tasks page's "My tasks" tab — the caller's own slice of the workspace
-   * (`assigned` to them as a member, or `created` by them). Consumed like the
-   * scheduled roll-up: its own SWR result, never the shared `tasks` field, so
-   * flipping the tab cannot leak one collection into the other.
+   * (`assigned` to them as a member, or `created` by them). Its own task-list
+   * entries, never the ordinary tab's, so flipping the tab cannot leak one
+   * collection into the other.
    */
   useFetchMyTaskList = (options: {
     enabled?: boolean;
@@ -380,29 +415,24 @@ export class TaskListSliceActionImpl {
      * Server-side status narrowing (the `hideCompleted` display option
      * translated by `getVisibleTaskStatuses`). Applied before `limit` /
      * `offset` so a page can never come back empty while older unfinished
-     * tasks exist; part of the cache key for the same reason as `scope`.
+     * tasks exist; part of the query for the same reason as `scope`.
      */
     statuses?: TaskStatus[];
-  }) => {
+  }): TaskCollectionPageResult => {
     const { enabled = true, includeArchived, limit, offset, scope, statuses } = options;
-    return useClientDataSWR(
-      enabled
-        ? [
-            ...taskKeys.myList(scope, statuses, limit, offset),
-            // Archived rows are a different server page, like the status filter.
-            ...(includeArchived ? ['archived'] : []),
-          ]
-        : null,
-      async () =>
-        this.fetchTaskList({
-          includeArchived,
-          limit,
-          offset,
-          orderBy: 'updatedAt',
-          scope,
-          statuses,
-        }),
-      { revalidateOnFocus: false },
+    return this.#useCollectionPage(
+      {
+        // Archived rows are a different server page, like the status filter.
+        includeArchived: includeArchived || undefined,
+        limit,
+        offset,
+        orderBy: 'updatedAt',
+        scope,
+        statuses: statuses?.length ? [...statuses].sort() : undefined,
+        // The tab offers no visibility chip and sends no visibility filter.
+        visibility: 'all',
+      },
+      enabled,
     );
   };
 

@@ -30,8 +30,13 @@ export interface TaskListQuery {
   complete?: boolean;
   /** Archived tasks are hidden unless the "Show archived" option is on. */
   includeArchived?: boolean;
+  /** One server page of a paginated collection (scheduled / "My tasks"); ignored by `complete`. */
+  limit?: number;
+  offset?: number;
   orderBy?: 'createdAt' | 'updatedAt';
   projectId?: string;
+  /** "My tasks": assigned to, or created by, the caller. */
+  scope?: 'assigned' | 'created';
   /** Sorted, so the same status set is one entry. */
   statuses?: TaskStatus[];
   visibility: TaskListVisibilityFilter;
@@ -70,6 +75,9 @@ export const taskGroupListQueryKey = (query: TaskGroupListQuery) => stableQueryK
 export const taskListResource = defineReplica<TaskListQuery, TaskListValue, TaskListResponse>({
   key: taskListQueryKey,
   name: 'taskList',
+  // Every scope, filter and collection page is its own row, and a `complete`
+  // list holds up to 1000 tasks — keep only the recently opened ones.
+  persist: { maxEntries: 40 },
   storage: 'indexedDB',
   version: 1,
 });
@@ -81,6 +89,8 @@ export const taskGroupListResource = defineReplica<
 >({
   key: taskGroupListQueryKey,
   name: 'taskGroupList',
+  // One row per board and per agent sidebar panel.
+  persist: { maxEntries: 40 },
   storage: 'indexedDB',
   version: 1,
 });
