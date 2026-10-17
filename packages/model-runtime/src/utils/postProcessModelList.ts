@@ -35,7 +35,9 @@ export async function postProcessModelList(
   const imageModels: ChatModelCard[] = [];
 
   for (const whitelistPattern of IMAGE_GENERATION_MODEL_WHITELIST) {
-    const matchingModels = finalModels.filter((model) => model.id.endsWith(whitelistPattern));
+    const matchingModels = finalModels.filter(
+      (model) => model.type !== 'image' && model.id.endsWith(whitelistPattern),
+    );
 
     for (const model of matchingModels) {
       // Remove unnecessary properties, keep the rest

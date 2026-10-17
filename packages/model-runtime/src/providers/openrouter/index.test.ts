@@ -1,8 +1,10 @@
 // @vitest-environment node
+import { validateModelParamsSchema } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { LobeOpenRouterAI, params } from './index';
+import type { OpenRouterImageModelCard } from './type';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 
@@ -14,6 +16,42 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
 let instance: LobeOpenAICompatibleRuntime;
+
+const mockChatCatalogResponse = (response: {
+  json?: () => Promise<unknown>;
+  ok: boolean;
+  status?: number;
+}) =>
+  vi
+    .fn()
+    .mockResolvedValueOnce(response)
+    .mockResolvedValue({
+      json: async () => ({ data: [] }),
+      ok: true,
+    });
+
+const imageModel = (
+  overrides: Partial<OpenRouterImageModelCard> = {},
+): OpenRouterImageModelCard => ({
+  architecture: { input_modalities: ['text'], output_modalities: ['image'] },
+  created: 1_700_000_000,
+  description: 'An image generation model',
+  endpoints: '/api/v1/images/models/new-provider/new-model/endpoints',
+  id: 'new-provider/new-model',
+  name: 'New image model',
+  supported_parameters: {},
+  supports_streaming: false,
+  ...overrides,
+});
+
+const mockCatalogs = (images: OpenRouterImageModelCard[], chat: unknown[] = []) => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({ json: async () => ({ data: chat }), ok: true })
+    .mockResolvedValueOnce({ json: async () => ({ data: images }), ok: true });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+};
 
 beforeEach(() => {
   instance = new LobeOpenRouterAI({ apiKey: 'test' });
@@ -482,13 +520,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         } as any),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
       const gpt55 = models.find((m) => m.id === 'openai/gpt-5.5');
       const gpt52 = models.find((m) => m.id === 'openai/gpt-5.2-mini');
       const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
@@ -530,13 +568,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         } as any),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
       const geminiPro = models.find((m) => m.id === 'google/gemini-3-pro');
       const geminiFlash = models.find((m) => m.id === 'google/gemini-3-flash');
 
@@ -547,52 +585,208 @@ describe('LobeOpenRouterAI - custom features', () => {
     });
   });
 
+  describe('dedicated image models', () => {
+    it('retains unknown image IDs with a valid prompt-only schema', async () => {
+      const fetchMock = mockCatalogs([imageModel()]);
+
+      const models = await instance.models();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://openrouter.ai/api/v1/images/models',
+        expect.anything(),
+      );
+      expect(models).toEqual([
+        expect.objectContaining({
+          displayName: 'New image model',
+          id: 'new-provider/new-model',
+          parameters: { prompt: { default: '' } },
+          type: 'image',
+        }),
+      ]);
+      expect(() => validateModelParamsSchema(models[0].parameters)).not.toThrow();
+    });
+
+    it('merges the catalogs with image metadata winning duplicate IDs and chat retained', async () => {
+      const chatModel = {
+        architecture: { input_modalities: ['text'] },
+        created: 1_700_000_000,
+        id: 'openai/gpt-4',
+        name: 'OpenAI: GPT-4',
+        pricing: { completion: '0.00002', prompt: '0.00001' },
+        supported_parameters: ['tools'],
+        top_provider: { context_length: 8192, max_completion_tokens: 1024 },
+      };
+      mockCatalogs(
+        [imageModel({ id: 'google/gemini-3.1-flash-image', supported_parameters: {} })],
+        [chatModel, { ...chatModel, id: 'google/gemini-3.1-flash-image' }],
+      );
+
+      const models = await instance.models();
+
+      expect(models).toHaveLength(2);
+      expect(models.find((model) => model.id === 'openai/gpt-4')).toMatchObject({
+        contextWindowTokens: 8192,
+        displayName: 'GPT-4',
+        functionCall: true,
+        type: 'chat',
+      });
+      expect(models.find((model) => model.id === 'google/gemini-3.1-flash-image')).toMatchObject({
+        displayName: 'New image model',
+        parameters: { prompt: { default: '' } },
+        type: 'image',
+      });
+      expect(models.find((model) => model.type === 'image')?.parameters).toEqual({
+        prompt: { default: '' },
+      });
+    });
+
+    it('translates advertised enum and range controls without adding unsupported knobs', async () => {
+      mockCatalogs([
+        imageModel({
+          architecture: { input_modalities: ['text', 'image'], output_modalities: ['image'] },
+          supported_parameters: {
+            aspect_ratio: { type: 'enum', values: ['16:9', '1:1'] },
+            background: { type: 'enum', values: ['transparent'] },
+            input_references: { max: 10, min: 0, type: 'range' },
+            n: { max: 10, min: 1, type: 'range' },
+            output_compression: { max: 100, min: 0, type: 'range' },
+            quality: { type: 'enum', values: ['high', 'medium'] },
+            resolution: { type: 'enum', values: ['2K', '4K'] },
+            seed: { max: 1000, min: 10, type: 'range' },
+            size: { type: 'enum', values: ['2048x2048', '4096x4096'] },
+            stream: { type: 'boolean' },
+          },
+        }),
+      ]);
+
+      const models = await params.models({ client: instance['client'] });
+
+      expect(models[0].parameters).toEqual({
+        aspectRatio: { default: '16:9', enum: ['16:9', '1:1'] },
+        imageUrls: { default: [], maxCount: 10 },
+        prompt: { default: '' },
+        quality: { default: 'high', enum: ['high', 'medium'] },
+        resolution: { default: '2K', enum: ['2K', '4K'] },
+        seed: { default: null, max: 1000, min: 10 },
+        size: { default: '2048x2048', enum: ['2048x2048', '4096x4096'] },
+      });
+      expect(() => validateModelParamsSchema(models[0].parameters)).not.toThrow();
+    });
+
+    it('interprets boolean seed descriptors as parameter availability rather than a boolean value', async () => {
+      mockCatalogs([imageModel({ supported_parameters: { seed: { type: 'boolean' } } })]);
+
+      const models = await params.models({ client: instance['client'] });
+
+      expect(models[0].parameters).toEqual({ prompt: { default: '' }, seed: { default: null } });
+    });
+
+    it('only exposes references when input modalities include image', async () => {
+      mockCatalogs([
+        imageModel({
+          supported_parameters: { input_references: { type: 'boolean' } },
+        }),
+        imageModel({
+          architecture: { input_modalities: ['text', 'image'], output_modalities: ['image'] },
+          id: 'new-provider/image-input',
+        }),
+      ]);
+
+      const models = await params.models({ client: instance['client'] });
+
+      expect(models[0].parameters).toEqual({ prompt: { default: '' } });
+      expect(models[1].parameters?.imageUrls).toEqual({ default: [], maxCount: 16 });
+    });
+
+    it('omits empty enum descriptors and incompatible descriptor types', async () => {
+      mockCatalogs([
+        imageModel({
+          supported_parameters: {
+            aspect_ratio: { type: 'enum', values: [] },
+            quality: { type: 'boolean' },
+            resolution: { max: 4, min: 1, type: 'range' },
+            seed: { type: 'enum', values: ['random'] },
+          },
+        }),
+      ]);
+
+      const models = await params.models({ client: instance['client'] });
+
+      expect(models[0].parameters).toEqual({ prompt: { default: '' } });
+    });
+
+    it('authenticates both catalogs with configured gateway headers and fetch', async () => {
+      const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+        const request = new Request(input, init);
+        if (
+          request.headers.get('authorization') !== 'Bearer gateway-key' ||
+          request.headers.get('x-gateway') !== 'gateway-value'
+        ) {
+          return Response.json({ error: { message: 'Authentication required' } }, { status: 401 });
+        }
+        expect(request.headers.get('x-title')).toBe('Gateway App');
+        return Response.json({
+          data: request.url.endsWith('/images/models') ? [imageModel()] : [],
+        });
+      });
+      const customInstance = new LobeOpenRouterAI({
+        apiKey: 'gateway-key',
+        baseURL: 'https://proxy.example/api/v1/',
+        defaultHeaders: { 'X-Gateway': 'gateway-value', 'X-Title': 'Gateway App' },
+        fetch: fetchMock,
+      });
+
+      const models = await customInstance.models();
+
+      expect(models.find((model) => model.id === 'new-provider/new-model')?.type).toBe('image');
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+        'https://proxy.example/api/v1/models',
+        'https://proxy.example/api/v1/images/models',
+      ]);
+    });
+
+    it('reports an unsuccessful image catalog request', async () => {
+      const fetchMock = mockCatalogs([]);
+      fetchMock
+        .mockReset()
+        .mockResolvedValueOnce({ json: async () => ({ data: [] }), ok: true })
+        .mockResolvedValueOnce({ ok: false, status: 500 });
+
+      await expect(params.models({ client: instance['client'] })).rejects.toThrow(
+        'OpenRouter image models API request failed with status 500',
+      );
+    });
+
+    it('propagates image catalog network and JSON failures', async () => {
+      const fetchMock = mockCatalogs([]);
+      fetchMock
+        .mockReset()
+        .mockResolvedValueOnce({ json: async () => ({ data: [] }), ok: true })
+        .mockRejectedValueOnce(new Error('Image catalog network error'));
+
+      await expect(params.models({ client: instance['client'] })).rejects.toThrow(
+        'Image catalog network error',
+      );
+
+      fetchMock
+        .mockReset()
+        .mockResolvedValueOnce({ json: async () => ({ data: [] }), ok: true })
+        .mockResolvedValueOnce({
+          json: async () => {
+            throw new Error('Invalid image JSON');
+          },
+          ok: true,
+        });
+
+      await expect(params.models({ client: instance['client'] })).rejects.toThrow(
+        'Invalid image JSON',
+      );
+    });
+  });
+
   describe('models', () => {
     beforeEach(() => {
       vi.clearAllMocks();
-    });
-
-    it('should fetch and process models successfully', async () => {
-      const mockModels = [
-        {
-          id: 'openai/gpt-4',
-          canonical_slug: 'openai/gpt-4',
-          name: 'OpenAI: GPT-4',
-          created: 1679587200,
-          description: 'GPT-4 model',
-          context_length: 8192,
-          architecture: {
-            modality: 'text->text',
-            input_modalities: ['text'],
-            output_modalities: ['text'],
-            tokenizer: 'gpt-4',
-            instruct_type: null,
-          },
-          pricing: {
-            prompt: '0.00003',
-            completion: '0.00006',
-          },
-          top_provider: {
-            context_length: 8192,
-            max_completion_tokens: 4096,
-            is_moderated: false,
-          },
-          supported_parameters: ['tools', 'temperature'],
-        },
-      ];
-
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({ data: mockModels }),
-        }),
-      );
-
-      const models = await params.models();
-
-      expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models');
-      expect(models.length).toBeGreaterThan(0);
     });
 
     it('should handle display name with colon - remove prefix', async () => {
@@ -625,13 +819,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const claudeModel = models.find((m) => m.id === 'anthropic/claude-3-opus');
       expect(claudeModel?.displayName).toBe('Claude 3 Opus');
@@ -667,13 +861,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const deepseekModel = models.find((m) => m.id === 'deepseek/deepseek-chat');
       expect(deepseekModel?.displayName).toBe('DeepSeek: Chat');
@@ -709,13 +903,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const deepseekModel = models.find((m) => m.id === 'deepseek/deepseek-r1');
       expect(deepseekModel?.displayName).toBe('DeepSeek R1');
@@ -751,13 +945,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const freeModel = models.find((m) => m.id === 'free/model');
       expect(freeModel?.displayName).toBe('Free Model (free)');
@@ -793,13 +987,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const freeModel = models.find((m) => m.id === 'free/model');
       expect(freeModel?.displayName).toBe('Free Model (free)');
@@ -836,13 +1030,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const visionModel = models.find((m) => m.id === 'vision/model');
       expect(visionModel?.vision).toBe(true);
@@ -878,13 +1072,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const functionModel = models.find((m) => m.id === 'function/model');
       expect(functionModel?.functionCall).toBe(true);
@@ -920,13 +1114,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const reasoningModel = models.find((m) => m.id === 'reasoning/model');
       expect(reasoningModel?.reasoning).toBe(true);
@@ -964,13 +1158,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const pricingModel = models.find((m) => m.id === 'pricing/model');
       expect(pricingModel?.pricing).toBeDefined();
@@ -1027,13 +1221,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const noCacheModel = models.find((m) => m.id === 'no-cache-pricing/model');
       expect(noCacheModel?.pricing?.units).toBeDefined();
@@ -1079,13 +1273,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const invalidPricingModel = models.find((m) => m.id === 'invalid-pricing/model');
       // -1 pricing is converted to undefined by formatPrice, so no pricing units should be present
@@ -1122,13 +1316,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const contextModel = models.find((m) => m.id === 'context/model');
       expect(contextModel?.contextWindowTokens).toBe(8192);
@@ -1164,13 +1358,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const fallbackModel = models.find((m) => m.id === 'fallback-context/model');
       expect(fallbackModel?.contextWindowTokens).toBe(4096);
@@ -1206,13 +1400,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const maxOutputModel = models.find((m) => m.id === 'maxoutput/model');
       expect(maxOutputModel?.maxOutput).toBe(4096);
@@ -1248,13 +1442,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const nullMaxOutputModel = models.find((m) => m.id === 'null-maxoutput/model');
       // When top_provider.max_completion_tokens is null, falls back to model.context_length
@@ -1291,13 +1485,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const releasedModel = models.find((m) => m.id === 'released/model');
       expect(releasedModel?.releasedAt).toBe('2023-03-23');
@@ -1306,13 +1500,13 @@ describe('LobeOpenRouterAI - custom features', () => {
     it('should handle empty model list from API', async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: [] }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       expect(models).toEqual([]);
     });
@@ -1320,13 +1514,13 @@ describe('LobeOpenRouterAI - custom features', () => {
     it('should throw when fetch fails', async () => {
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: false,
           status: 401,
         }),
       );
 
-      await expect(params.models()).rejects.toThrow(
+      await expect(params.models({ client: instance['client'] })).rejects.toThrow(
         'OpenRouter models API request failed with status 401',
       );
     });
@@ -1334,7 +1528,7 @@ describe('LobeOpenRouterAI - custom features', () => {
     it('should throw when fetch throws error', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-      await expect(params.models()).rejects.toThrow('Network error');
+      await expect(params.models({ client: instance['client'] })).rejects.toThrow('Network error');
     });
 
     it('should handle models with missing optional fields', async () => {
@@ -1367,13 +1561,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const minimalModel = models.find((m) => m.id === 'minimal/model');
       expect(minimalModel).toBeDefined();
@@ -1412,13 +1606,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const simpleModel = models.find((m) => m.id === 'simple/model');
       expect(simpleModel?.displayName).toBe('Simple Model Name');
@@ -1472,13 +1666,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       expect(models.length).toBeGreaterThanOrEqual(2);
       const model1 = models.find((m) => m.id === 'model-1');
@@ -1520,13 +1714,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const advancedModel = models.find((m) => m.id === 'advanced/model');
       expect(advancedModel?.functionCall).toBe(true);
@@ -1564,13 +1758,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const emptyModel = models.find((m) => m.id === 'empty-modalities/model');
       expect(emptyModel?.vision).toBe(false);
@@ -1606,13 +1800,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const nullPricingModel = models.find((m) => m.id === 'null-pricing/model');
       // null is converted to 0 by formatPrice, which is valid pricing
@@ -1653,13 +1847,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const zeroPricingModel = models.find((m) => m.id === 'zero-pricing/model');
       expect(zeroPricingModel?.pricing).toBeDefined();
@@ -1700,13 +1894,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const mixedModel = models.find((m) => m.id === 'mixed-free/model');
       // Input or output is 0. Current behavior does not append '(free)' for mixed pricing,
@@ -1744,13 +1938,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const expensiveModel = models.find((m) => m.id === 'expensive/model');
       expect(expensiveModel?.pricing?.units).toBeDefined();
@@ -1793,13 +1987,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const testModel = models.find((m) => m.id === 'test/model');
       expect(testModel?.pricing).toBeUndefined();
@@ -1835,13 +2029,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const invalidPriceModel = models.find((m) => m.id === 'invalid-price/model');
       expect(invalidPriceModel?.pricing).toBeUndefined();
@@ -1877,13 +2071,13 @@ describe('LobeOpenRouterAI - custom features', () => {
 
       vi.stubGlobal(
         'fetch',
-        vi.fn().mockResolvedValue({
+        mockChatCatalogResponse({
           ok: true,
           json: async () => ({ data: mockModels }),
         }),
       );
 
-      const models = await params.models();
+      const models = await params.models({ client: instance['client'] });
 
       const microPriceModel = models.find((m) => m.id === 'micro-price/model');
       expect(microPriceModel?.pricing?.units).toBeDefined();
