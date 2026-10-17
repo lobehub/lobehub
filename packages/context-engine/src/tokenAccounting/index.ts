@@ -24,6 +24,7 @@ const ZERO_BY_SOURCE = (): Record<TokenSourceType, number> => ({
   toolCallId: 0,
   toolCalls: 0,
   toolDefinition: 0,
+  toolResult: 0,
 });
 
 const estimate = (value: unknown): number => {
@@ -98,6 +99,7 @@ type AssistantTokenBlock =
  * | `thoughtSignature` | `msg.tools[N].thoughtSignature` (Gemini-specific)          | echoed back per tool call        |
  * | `reasoning`        | `msg.reasoning.content` / `msg.reasoning` (string variant) | echoed back next turn (thinking) |
  * | `toolCallId`       | `msg.tool_call_id` + `tools[].id` (result-bearing)     | `message.tool_call_id`           |
+ * | `toolResult`       | `msg.tools[N].result.content`                              | `tool` role message content      |
  * | `toolDefinition`   | top-level `tools[]` param                                  | request `tools` array            |
  *
  * **Container messages** — the conversation-flow flatteners pack real
@@ -156,7 +158,7 @@ type AssistantTokenBlock =
  *
  * // UI "context by type" panel:
  * accounting.bySource;
- * // → { content: 267058, toolCalls: 201762, reasoning: 110107, toolCallId: 758, toolDefinition: 14339 }
+ * // → { content: 67058, toolCalls: 201762, toolResult: 200000, reasoning: 110107, toolCallId: 758, toolDefinition: 14339 }
  *
  * // UI per-message inspector:
  * accounting.messages;
@@ -180,7 +182,7 @@ export const countContextTokens = ({
         const result = (tool as { result?: { content?: unknown } }).result;
         if (!result) continue;
 
-        bumpSource(bySource, 'content', estimate(result.content));
+        bumpSource(bySource, 'toolResult', estimate(result.content));
         bumpSource(bySource, 'toolCallId', estimate(tool.id));
       }
     };
