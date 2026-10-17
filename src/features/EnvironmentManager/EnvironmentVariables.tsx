@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
+import { editEnvironmentVariable } from './editEnvironmentVariable';
 import { describeError } from './errorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -243,11 +244,17 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
     });
   };
 
+  const saveEntry = async (entry: Entry, previousKey?: string) => {
+    const next = editEnvironmentVariable(entries, entry, previousKey);
+    if (!next) throw new Error(t('environments.form.envKeyExists', { key: entry[0] }));
+    await onSave(next);
+  };
+
   const addNew = () =>
     run(async () => {
       if (!adding) return;
       const key = adding[0].trim();
-      await onSave([...entries.filter(([k]) => k !== key), [key, adding[1]]]);
+      await saveEntry([key, adding[1]]);
       setAdding(null);
     });
 
@@ -365,7 +372,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
               entry={[key, value]}
               key={key}
               onRemove={() => onSave(entries.filter(([k]) => k !== key))}
-              onSave={(entry) => onSave(entries.map(([k, v]) => (k === key ? entry : [k, v])))}
+              onSave={(entry) => saveEntry(entry, key)}
             />
           ))}
         </div>

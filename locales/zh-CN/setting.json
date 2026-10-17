@@ -602,6 +602,7 @@
   "environments.form.envEmpty": "还没有环境变量",
   "environments.form.envEmptyHint": "逐条添加，或整份 .env 粘贴到",
   "environments.form.envHint": "只放非密文内容——它们以明文存储，并会被复制进每一个副本。",
+  "environments.form.envKeyExists": "变量 {{key}} 已存在，请使用其他名称。",
   "environments.form.exclude": "可再生路径",
   "environments.form.excludeHint": "一行一个，相对于副本。列在这里等于声明它可以重建，于是它会跟你的产出分开存放、并且可能被清理掉。写进来但其实重建不了的东西，就是你可能丢掉的东西。",
   "environments.form.filesDesc": "这个文件夹叫什么、放了哪些给 agent 处理的文件。",

@@ -602,6 +602,7 @@
   "environments.form.envEmpty": "No variables yet",
   "environments.form.envEmptyHint": "Add one, or paste a whole .env file in the",
   "environments.form.envHint": "Non-secret values only — these are stored as plain text and copied into every copy of this environment.",
+  "environments.form.envKeyExists": "Variable {{key}} already exists. Choose a different name.",
   "environments.form.exclude": "Regenerable paths",
   "environments.form.excludeHint": "One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.",
   "environments.form.filesDesc": "What this folder is called and what it holds for the agent.",

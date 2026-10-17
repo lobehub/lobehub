@@ -4200,6 +4200,7 @@ When I am ___, I need ___
   'environments.form.envHint':
     'Non-secret values only — these are stored as plain text and copied into every copy of this environment.',
   'environments.form.addEnv': 'New variable',
+  'environments.form.envKeyExists': 'Variable {{key}} already exists. Choose a different name.',
   'environments.form.envCount_one': '{{count}} variable',
   'environments.form.envCount_other': '{{count}} variables',
   'environments.form.envEmpty': 'No variables yet',
