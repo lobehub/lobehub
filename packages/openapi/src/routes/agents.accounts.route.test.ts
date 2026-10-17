@@ -15,7 +15,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
  * map does not resolve; nothing under test is replaced. The only stand-in is
  * the identity *provider* SaaS, which operations has not provisioned yet — so
  * this test mounts accounts through the `user` provider instead of calling
- * lobe.id / Linq.
+ * lobe.id.
  *
  * What it pins down:
  * - the collection / item / credential / revoke routes exist and answer the

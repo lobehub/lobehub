@@ -27,7 +27,7 @@ export type AgentAccount = {
     hasCredential: boolean;
     id: string;
     identifier: string;
-    kind: 'mail' | 'phone' | 'wallet' | 'service';
+    kind: 'mail' | 'wallet' | 'service';
     metadata?: {
         [key: string]: unknown;
     } | null;
@@ -1242,7 +1242,7 @@ export type GetApiV1AgentsByIdAccountsData = {
         id: string;
     };
     query?: {
-        kind?: 'mail' | 'phone' | 'wallet' | 'service';
+        kind?: 'mail' | 'wallet' | 'service';
         provider?: string;
     };
     url: '/api/v1/agents/{id}/accounts';
@@ -1312,7 +1312,7 @@ export type PostApiV1AgentsByIdAccountsData = {
         };
         displayName?: string;
         identifier: string;
-        kind: 'mail' | 'phone' | 'wallet' | 'service';
+        kind: 'mail' | 'wallet' | 'service';
         metadata?: {
             [key: string]: unknown;
         };

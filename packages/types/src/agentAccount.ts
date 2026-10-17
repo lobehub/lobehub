@@ -3,8 +3,8 @@ import type { AgentInboxSourceType, AgentMailAddress, AgentMailAttachment } from
 /**
  * Agent accounts — the identity assets an agent owns.
  *
- * An agent may hold several accounts: a `mail` address, a `phone` number, a
- * `wallet`, or a third-party `service` login. Each one is its own row, belongs
+ * An agent may hold several accounts: a `mail` address, a `wallet`, or a
+ * third-party `service` login. Each one is its own row, belongs
  * to the agent (not to a workspace integration), and may carry credentials.
  *
  * Kinds and statuses are growing domains, so they are plain unions here and the
@@ -13,7 +13,7 @@ import type { AgentInboxSourceType, AgentMailAddress, AgentMailAttachment } from
  */
 
 /** The sorts of identity an agent can own. */
-export const AGENT_ACCOUNT_KINDS = ['mail', 'phone', 'wallet', 'service'] as const;
+export const AGENT_ACCOUNT_KINDS = ['mail', 'wallet', 'service'] as const;
 export type AgentAccountKind = (typeof AGENT_ACCOUNT_KINDS)[number];
 
 /** Lifecycle of one account. */
@@ -22,7 +22,7 @@ export type AgentAccountStatus = (typeof AGENT_ACCOUNT_STATUSES)[number];
 
 /**
  * What the account can do, declared by whoever provisions it rather than
- * inferred from its kind: a `service` account may be login-only, a `phone`
+ * inferred from its kind: a `service` account may be login-only, a `mail`
  * account may be receive-only during warm-up.
  */
 export interface AgentAccountCapabilities {
@@ -230,7 +230,7 @@ export interface AgentAccountRef {
   /** Decrypted credential, present only on trusted internal paths. */
   credential?: Record<string, string> | null;
   id: string;
-  /** The handle that routes to this account: address, number, login. */
+  /** The handle that routes to this account: address, login. */
   identifier: string;
   kind: AgentAccountKind;
   /** Provider-side non-secret handles (inboxId, chatId, …). */
@@ -245,8 +245,9 @@ export interface AgentAccountProvisionInput {
   displayName?: string;
   /**
    * Whether a live account already routes on `identifier` for this provider.
-   * Providers that bind from a finite operator inventory (Linq numbers) use it
-   * to pick a free unit instead of colliding on the routing key.
+   * An idempotent provider (Agent Mail keys inboxes by agent) can be handed back
+   * the resource a committed row already holds after a lost response; this
+   * tells it not to mint a second credential for that resource.
    */
   isIdentifierHeld?: (identifier: string) => Promise<boolean>;
   /**
@@ -325,7 +326,7 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
     ref: AgentAccountRef,
   ) => Promise<AgentAccountInboundMessage | null>;
 
-  /** Stable provider id (`agent-mail`, `linq`, …); the account's `provider` value. */
+  /** Stable provider id (`agent-mail`, …); the account's `provider` value. */
   readonly provider: string;
 
   /** Idempotent open. Runs before the account row exists. */

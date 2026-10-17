@@ -27,7 +27,8 @@ const { IDENTITY_CHANNELS } = await import('./const');
 const { useAccountActions, useInboxActions } = await import('./useIdentityActions');
 
 const mailChannel = IDENTITY_CHANNELS.find((channel) => channel.kind === 'mail')!;
-const phoneChannel = IDENTITY_CHANNELS.find((channel) => channel.kind === 'phone')!;
+/** The mail channel with the prefix preference switched off. */
+const unprefixableChannel = { ...mailChannel, prefixable: false };
 
 const mailAccount = { id: 'acc_mail', identifier: 'research@lobe.id' } as any;
 const unreadMessage = { id: 'msg_1', readAt: null } as any;
@@ -62,12 +63,12 @@ describe('useAccountActions', () => {
       useAccountActions({ agentId: 'agt_1', onChanged: vi.fn() }),
     );
 
-    await result.current.provision(phoneChannel, 'support');
+    await result.current.provision(unprefixableChannel, 'support');
 
     expect(service.provision).toHaveBeenCalledWith({
       agentId: 'agt_1',
       prefix: undefined,
-      provider: 'linq',
+      provider: 'agent-mail',
     });
   });
 

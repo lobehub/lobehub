@@ -11,7 +11,6 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { AgentAccountService } from '../index';
 import { createAgentMailProvider } from '../providers/agentMail';
-import { createLinqProvider } from '../providers/linq';
 import { AgentAccountProviderRegistry } from '../registry';
 
 // The agent's edit ACL is its own suite's subject; here it is the seam whose
@@ -299,6 +298,9 @@ describe('AgentAccountService — provisioning', () => {
 
     expect(retry.id).toBe(first.id);
     expect(retry.identifier).toBe('agent-7@lobe.id');
+    // The live row already stores the first webhook's secret: the retry must
+    // not register a second webhook whose secret nothing would store.
+    expect(calls.filter((c) => c.method === 'POST' && c.path === '/v1/webhooks')).toHaveLength(1);
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
     expect(await service.list()).toHaveLength(1);
   });
@@ -334,30 +336,11 @@ describe('AgentAccountService — provisioning', () => {
     expect(second.id).not.toBe(first.id);
   });
 
-  it('hands out one pool number per live phone account', async () => {
-    const registry = new AgentAccountProviderRegistry().register(
-      createLinqProvider({ apiKey: 'linq_svc', fromNumbers: ['+15550002222'] }),
-    );
-    const service = new AgentAccountService(serverDB, userId, { gateKeeper, registry });
-
-    const first = await service.provision({ agentId, provider: 'linq' });
-    expect(first.identifier).toBe('+15550002222');
-
-    await expect(
-      service.provision({ agentId: otherAgentId, provider: 'linq' }),
-    ).rejects.toMatchObject({ code: 'capacity_exhausted' });
-
-    await service.revoke(first.id);
-    await expect(
-      service.provision({ agentId: otherAgentId, provider: 'linq' }),
-    ).resolves.toMatchObject({ agentId: otherAgentId, identifier: '+15550002222' });
-  });
-
   it('surfaces the registry error for a provider the deployment does not run', async () => {
     const service = buildService(createMailFetch().fetchImpl);
 
-    await expect(service.provision({ agentId, provider: 'linq' })).rejects.toThrow(
-      /Unknown agent account provider "linq"/,
+    await expect(service.provision({ agentId, provider: 'not-configured' })).rejects.toThrow(
+      /Unknown agent account provider "not-configured"/,
     );
   });
 });

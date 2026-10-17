@@ -290,27 +290,4 @@ describe('getServerGlobalConfig', () => {
   it('should omit the OIDC issuer when APP_URL is not configured', async () => {
     await expect(loadServerConfig(false)).resolves.not.toHaveProperty('oidcIssuer');
   });
-
-  it('should only advertise Linq when its number pool has a number to bind', async () => {
-    vi.stubEnv('AGENT_MAIL_API_KEY', undefined);
-    vi.stubEnv('LINQ_API_KEY', 'linq_test');
-    vi.stubEnv('LINQ_WEBHOOK_SECRET', 'whsec_linq');
-
-    vi.stubEnv('LINQ_FROM_NUMBER', ' , ');
-    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', []);
-
-    vi.stubEnv('LINQ_FROM_NUMBER', '+15550001111');
-    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', [
-      'linq',
-    ]);
-  });
-
-  it('should not advertise Linq as receive-capable without its webhook secret', async () => {
-    vi.stubEnv('AGENT_MAIL_API_KEY', undefined);
-    vi.stubEnv('LINQ_API_KEY', 'linq_test');
-    vi.stubEnv('LINQ_FROM_NUMBER', '+15550001111');
-    vi.stubEnv('LINQ_WEBHOOK_SECRET', undefined);
-
-    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', []);
-  });
 });

@@ -135,8 +135,7 @@ AgentRoutes.post(
 );
 
 // ---------------------------------------------------------------------------
-// Agent accounts — the identity assets an agent owns (mail / phone / wallet /
-// service). Reading them needs agent read; mounting or revoking one needs agent
+// Agent accounts — the identity assets an agent owns (mail / wallet / service). Reading them needs agent read; mounting or revoking one needs agent
 // write; installing a *credential* is its own write-only, high-risk act.
 // ---------------------------------------------------------------------------
 const agentAccountRead = requireAnyPermission(

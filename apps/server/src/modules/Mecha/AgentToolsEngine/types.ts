@@ -121,7 +121,8 @@ export interface ServerCreateAgentToolsEngineParams {
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
   /**
-   * Whether the executing agent owns an identity account (mail / phone). Gates
+   * Whether the executing agent owns an identity account (e.g. a mail
+   * address). Gates
    * the agent-account tool: the addresses are injected as context, so the tool
    * only ships when there is something for it to act on.
    */

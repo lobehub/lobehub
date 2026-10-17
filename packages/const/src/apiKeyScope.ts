@@ -183,7 +183,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // the discussion on an acceptance follows the acceptance itself
   acceptanceComment: 'blocked',
   agent: rw('agent:read', 'agent:write'),
-  // an agent's identity assets (mail / phone / wallet / service). Reading and
+  // an agent's identity assets (mail / wallet / service). Reading and
   // managing accounts is ordinary agent read/write; installing a *credential*
   // is separated onto `agent:credential:write` via
   // `TRPC_PROCEDURE_EXTRA_SCOPES` below.
