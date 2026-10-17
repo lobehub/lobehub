@@ -27,6 +27,14 @@ export class MCPConnectionError extends Error {
 }
 
 export class MCPClient {
+  /**
+   * Upper bound on retained stderr lines. Pooled clients can live for the
+   * whole desktop session; without a cap a verbose long-lived MCP server
+   * would grow `stderrLogs` (and every enhanced error built from it)
+   * without limit. Only the most recent tail is kept for diagnostics.
+   */
+  private static readonly STDERR_LOG_LIMIT = 200;
+
   private readonly mcp: Client;
 
   private transport: Transport;
@@ -77,7 +85,7 @@ export class MCPClient {
 
       default: {
         // Exhaustive check
-         
+
         const _never: never = params;
         throw new Error(`Unsupported MCP connection type: ${(params as any).type}`);
       }
@@ -92,6 +100,11 @@ export class MCPClient {
         // Split by newlines and filter empty lines
         const lines = text.split('\n').filter((line) => line.trim());
         this.stderrLogs.push(...lines);
+        // Keep only the most recent tail: a pooled, long-lived stdio
+        // server must not grow desktop memory without bound.
+        if (this.stderrLogs.length > MCPClient.STDERR_LOG_LIMIT) {
+          this.stderrLogs.splice(0, this.stderrLogs.length - MCPClient.STDERR_LOG_LIMIT);
+        }
       });
     }
   }
@@ -106,7 +119,7 @@ export class MCPClient {
   private isMethodNotFoundError(error: unknown) {
     const err = error as any;
     if (!err) return false;
-     
+
     if (err.code === -32601) return true;
     if (typeof err.message === 'string' && err.message.includes('Method not found')) return true;
     return false;
