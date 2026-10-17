@@ -4129,6 +4129,7 @@ When I am ___, I need ___
   'environments.create': 'New environment',
   'environments.cancel': 'Cancel',
   'environments.createFailed': 'Could not create the environment',
+  'environments.nameTooLong': 'Use a name with {{max}} characters or fewer.',
   'environments.namePlaceholder': 'Environment name',
   'environments.empty': 'No environments yet',
   'environments.removeFailed': 'Could not delete this environment',

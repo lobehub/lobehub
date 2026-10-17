@@ -17,12 +17,13 @@ import {
 } from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { CodeXmlIcon, FolderIcon, type LucideIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
+import { ENVIRONMENT_NAME_MAX_LENGTH, validateEnvironmentName } from './environmentName';
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
@@ -108,6 +109,12 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     const [error, setError] = useState<string | undefined>();
 
     const trimmed = name.trim();
+    const nameValidation = validateEnvironmentName(name);
+    const errorId = useId();
+    const displayedError =
+      nameValidation === 'tooLong'
+        ? t('environments.nameTooLong', { max: ENVIRONMENT_NAME_MAX_LENGTH })
+        : error;
 
     const pickRepository = (selection: GithubRepositorySelection | undefined) => {
       setRepository(selection);
@@ -170,7 +177,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // question publishing one does, with the same explanation, rather than
     // publishing it silently because of which tab happened to be open.
     const submit = () => {
-      if (!kind || !trimmed || creating) return;
+      if (!kind || nameValidation || creating) return;
       if (visibility !== 'public') return void create();
 
       confirmModal({
@@ -240,6 +247,9 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
               </Text>
               <Input
                 autoFocus
+                aria-describedby={displayedError ? errorId : undefined}
+                aria-invalid={!!displayedError}
+                aria-label={t('environments.nameLabel')}
                 placeholder={t('environments.namePlaceholder')}
                 value={name}
                 onChange={(event) => {
@@ -252,9 +262,9 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
                 }}
                 {...compositionProps}
               />
-              {error && (
-                <Text fontSize={12} type={'danger'}>
-                  {error}
+              {displayedError && (
+                <Text fontSize={12} id={errorId} role={'alert'} type={'danger'}>
+                  {displayedError}
                 </Text>
               )}
             </Flexbox>
@@ -263,7 +273,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
         <ModalFooter>
           <Button onClick={close}>{t('environments.cancel')}</Button>
           <Button
-            disabled={!kind || !trimmed}
+            disabled={!kind || !!nameValidation}
             loading={creating}
             type={'primary'}
             onClick={() => void submit()}

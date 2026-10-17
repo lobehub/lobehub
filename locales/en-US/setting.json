@@ -712,6 +712,7 @@
   "environments.mine": "My environments",
   "environments.nameLabel": "Name",
   "environments.namePlaceholder": "Environment name",
+  "environments.nameTooLong": "Use a name with {{max}} characters or fewer.",
   "environments.refresh": "Refresh",
   "environments.remove": "Delete environment",
   "environments.removeConfirmContent": "Its specification, variables, its copy's folder and the saved snapshot go with it, and cannot be recovered.",
