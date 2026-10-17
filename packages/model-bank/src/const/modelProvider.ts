@@ -3,6 +3,7 @@ export enum ModelProvider {
   Ai302 = 'ai302',
   Ai360 = 'ai360',
   AiHubMix = 'aihubmix',
+  ApiRoute = 'api-route',
   AkashChat = 'akashchat',
   AntGroup = 'antgroup',
   Anthropic = 'anthropic',
