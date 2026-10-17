@@ -732,6 +732,12 @@ export class DocumentModel {
         .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(documents.id, ids));
 
+      // The old parent stays in the source scope; descendants keep their internal links.
+      await (trx as LobeChatDatabase)
+        .update(documents)
+        .set({ parentId: null })
+        .where(eq(documents.id, documentId));
+
       if (targetWorkspaceId) {
         await (trx as LobeChatDatabase)
           .update(documentComments)

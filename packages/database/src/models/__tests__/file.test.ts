@@ -4,9 +4,11 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { KnowledgeRepo } from '../../repositories/knowledge';
 import {
   asyncTasks,
   chunks,
+  DOCUMENT_FOLDER_TYPE,
   documents,
   embeddings,
   fileChunks,
@@ -23,6 +25,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { DocumentModel } from '../document';
 import { FileModel } from '../file';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -2333,6 +2336,53 @@ describe('FileModel', () => {
         primaryOwnerId: userId,
       });
     });
+
+    it.each([
+      { source: 'transfer-source-ws', target: targetWorkspaceId },
+      { source: 'transfer-source-ws', target: null },
+      { source: undefined, target: targetWorkspaceId },
+    ])(
+      'moves a nested file to the root when transferring $source to $target',
+      async ({ source, target }) => {
+        if (source) {
+          await serverDB.insert(workspaces).values({
+            id: source,
+            name: 'Source WS',
+            slug: source,
+            primaryOwnerId: userId,
+          });
+        }
+        const parent = await new DocumentModel(serverDB, userId, source).create({
+          content: '',
+          fileType: DOCUMENT_FOLDER_TYPE,
+          filename: 'Source folder',
+          source: '',
+          sourceType: 'api',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        });
+        const sourceModel = new FileModel(serverDB, userId, source);
+        const { id } = await sourceModel.create({
+          fileType: 'text/plain',
+          name: 'nested.txt',
+          parentId: parent.id,
+          size: 10,
+          url: 'nested.txt',
+        });
+
+        await sourceModel.transferTo(id, target, userId);
+
+        const targetRoot = await new KnowledgeRepo(serverDB, userId, target ?? undefined).query({
+          parentId: null,
+        });
+        expect(targetRoot.map((item) => item.id)).toContain(id);
+        const moved = await new FileModel(serverDB, userId, target ?? undefined).findById(id);
+        expect(moved?.parentId).toBeNull();
+        expect(moved?.workspaceId).toBe(target);
+        expect(await sourceModel.findById(id)).toBeUndefined();
+        expect(await new DocumentModel(serverDB, userId, source).findById(parent.id)).toBeDefined();
+      },
+    );
 
     it('should transfer ownership of a file and re-point knowledge base links', async () => {
       await serverDB.insert(files).values({
