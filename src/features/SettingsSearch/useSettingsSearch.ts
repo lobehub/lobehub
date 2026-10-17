@@ -83,6 +83,7 @@ export const useSettingsSearch = (
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const isLogin = useUserStore(authSelectors.isLogin);
   const hasEmail = useUserStore((s) => !!userProfileSelectors.userProfile(s)?.email);
@@ -99,6 +100,7 @@ export const useSettingsSearch = (
       enableBusinessFeatures: !!enableBusinessFeatures,
       enableComposio: !!enableComposio,
       enableGatewayMode: !!enableGatewayMode,
+      enableWorkspace: !!enableWorkspace,
       hasEmail,
       hideDocs: !!hideDocs,
       isDesktop,
@@ -243,6 +245,7 @@ export const useSettingsSearch = (
     enableBusinessFeatures,
     enableComposio,
     enableGatewayMode,
+    enableWorkspace,
     hasEmail,
     hideDocs,
     isLogin,

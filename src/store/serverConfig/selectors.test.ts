@@ -27,6 +27,21 @@ describe('featureFlagsSelectors', () => {
 });
 
 describe('serverConfigSelectors', () => {
+  describe('enableWorkspace', () => {
+    it('needs both the business deployment and the per-user workspace flag', () => {
+      const state = (enableBusinessFeatures: boolean, enableWorkspace?: boolean) =>
+        initServerConfigStore({
+          featureFlags: { enableWorkspace } as any,
+          serverConfig: { enableBusinessFeatures } as any,
+        }).getState();
+
+      expect(serverConfigSelectors.enableWorkspace(state(true, true))).toBe(true);
+      expect(serverConfigSelectors.enableWorkspace(state(true, false))).toBe(false);
+      expect(serverConfigSelectors.enableWorkspace(state(true))).toBe(false);
+      expect(serverConfigSelectors.enableWorkspace(state(false, true))).toBe(false);
+    });
+  });
+
   describe('enableDashboard', () => {
     it('is off by default and on only when the flag resolves to true', () => {
       expect(serverConfigSelectors.enableDashboard(initServerConfigStore({}).getState())).toBe(

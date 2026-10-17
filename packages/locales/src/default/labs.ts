@@ -66,8 +66,12 @@ export default {
   'features.selfLearning.desc':
     'Let every agent learn from your conversations in the background: it remembers facts, refines skills, collects lessons, and reviews its day each night. Rounds you send back become rules. Each nightly review covers at most 50 conversations. See it all under Memory → Self-evolving.',
   'features.selfLearning.title': 'Self-evolving',
+  'features.workspaceOnboarding.desc':
+    'When you first enter a workspace you just created, set it up with the new guided flow: connect the team’s apps, get a team profile, hire the team assistant, invite members, connect team chats and devices, and pick starter tasks. Off keeps the previous setup flow.',
+  'features.workspaceOnboarding.title': 'New Workspace Onboarding',
   'group.desktop': 'Desktop',
   'group.general': 'General',
+  'group.workspace': 'Workspace',
   'stage.alpha.desc':
     'Internal testing only. Not recommended for daily use yet — it may change or break at any time.',
   'stage.alpha.label': 'Alpha',

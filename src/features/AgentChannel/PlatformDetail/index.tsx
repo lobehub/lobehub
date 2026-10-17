@@ -13,6 +13,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
 import { keepPendingConnectResult, toTestResult } from './actionResults';
@@ -101,6 +102,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
   ({ platformDef, agentId, currentConfig, disabled }) => {
     const { t } = useTranslation('agent');
     const navigate = useWorkspaceAwareNavigate();
+    const agentName = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
 
     const [isDirty, setIsDirty] = useState(false);
     const form = useForm<ChannelFormValues>({
@@ -509,6 +511,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
               form={form}
               hasConfig={!!currentConfig}
               platformDef={platformDef}
+              quickSetupAppName={agentName}
               onAuthenticated={handleExternalAuth}
               onValuesChange={handleFormValuesChange}
             />

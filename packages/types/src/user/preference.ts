@@ -239,6 +239,11 @@ export const UserLabSchema = z.object({
    * instead of being thrown away with the sandbox
    */
   enablePersistentSandbox: z.boolean().optional(),
+  /**
+   * show the redesigned onboarding flow when this user first enters a newly
+   * created workspace (the previous flow otherwise)
+   */
+  enableWorkspaceOnboardingV2: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

@@ -1,4 +1,80 @@
 export default {
+  'channel.quickSetup.needsApplicationId': 'Fill in the Application ID to get this link.',
+  'channel.quickSetup.link.createSlackApp': 'Create Slack app',
+  'channel.quickSetup.link.inviteBot': 'Invite bot to server',
+  'channel.quickSetup.link.openBotFather': 'Open BotFather',
+  'channel.quickSetup.link.openBotSettings': 'Open bot settings',
+  'channel.quickSetup.link.openConsole': 'Open developer console',
+  'channel.quickSetup.link.openSlackApp': 'Open app settings',
+  'channel.quickSetup.manualToggle': 'Already have an app? Enter credentials manually',
+  'channel.quickSetup.scanToggle': 'Scan to create instead',
+  'channel.quickSetup.guideTitle': 'Setup steps',
+  'channel.quickSetup.feishu.scan.brandMismatch.lark':
+    'This app was created with a Lark account. Connect it from the Lark channel instead.',
+  'channel.quickSetup.feishu.scan.brandMismatch.feishu':
+    'This app was created with a Feishu account. Connect it from the Feishu channel instead.',
+  'channel.quickSetup.feishu.scan.regenerate': 'Generate a new code',
+  'channel.quickSetup.feishu.scan.title': 'Scan with Feishu to create the bot',
+  'channel.quickSetup.feishu.scan.does.app': 'Creates the app with the bot capability turned on',
+  'channel.quickSetup.feishu.scan.does.permissions':
+    'Grants messaging permissions and subscribes to incoming messages',
+  'channel.quickSetup.feishu.scan.does.credentials':
+    'Fills in the credentials and connects — nothing to copy',
+  'channel.quickSetup.feishu.scan.waiting': 'Waiting for you to confirm in Feishu…',
+  'channel.quickSetup.feishu.scan.openInBrowser': 'Open in browser instead',
+  'channel.quickSetup.feishu.scan.created': 'App created. Connecting…',
+  'channel.quickSetup.feishu.scan.expired': 'The QR code expired.',
+  'channel.quickSetup.feishu.scan.denied': 'Creation was declined in Feishu.',
+  'channel.quickSetup.feishu.scan.error': "Couldn't create the app. Try a new code.",
+  'channel.quickSetup.feishu.create.title': 'Create a custom app',
+  'channel.quickSetup.feishu.create.desc':
+    'Copy the App ID and App Secret from Credentials & Basic Info.',
+  'channel.quickSetup.feishu.bot.title': 'Turn on the bot',
+  'channel.quickSetup.feishu.bot.desc': 'Under App Capabilities, add Bot.',
+  'channel.quickSetup.feishu.events.title': 'Subscribe to messages',
+  'channel.quickSetup.feishu.events.desc':
+    'Choose long connection, add im.message.receive_v1 and grant im:message.',
+  'channel.quickSetup.feishu.publish.title': 'Publish a version',
+  'channel.quickSetup.feishu.publish.desc': 'Permission changes take effect once published.',
+  'channel.quickSetup.slack.create.title': 'Create the app in one click',
+  'channel.quickSetup.slack.create.desc':
+    'Scopes, events and Socket Mode are pre-filled; pick a workspace and create.',
+  'channel.quickSetup.slack.install.title': 'Install it and copy the Bot Token',
+  'channel.quickSetup.slack.install.desc':
+    'Install it from OAuth & Permissions, then copy the Bot User OAuth Token.',
+  'channel.quickSetup.slack.tokens.title': 'Copy the App ID, Signing Secret and App Token',
+  'channel.quickSetup.slack.tokens.desc':
+    'All on Basic Information; the App Token needs connections:write.',
+  'channel.quickSetup.discord.create.title': 'Create an application',
+  'channel.quickSetup.discord.create.desc':
+    'In the Developer Portal, click New Application and name it.',
+  'channel.quickSetup.discord.credentials.title': 'Copy the Application ID and Public Key',
+  'channel.quickSetup.discord.credentials.desc': 'Both are on General Information.',
+  'channel.quickSetup.discord.bot.title': 'Get the bot token and allow message content',
+  'channel.quickSetup.discord.bot.desc':
+    'On the Bot page, Reset Token and copy it, then turn on Message Content Intent.',
+  'channel.quickSetup.discord.invite.title': 'Invite the bot to your server',
+  'channel.quickSetup.discord.invite.desc':
+    'The invite link already carries the permissions the bot needs.',
+  'channel.quickSetup.telegram.botfather.title': 'Create a bot with BotFather',
+  'channel.quickSetup.telegram.botfather.desc': 'Send /newbot and pick a name and username.',
+  'channel.quickSetup.telegram.token.title': 'Copy the token',
+  'channel.quickSetup.telegram.token.desc':
+    'BotFather replies with a token like 1234567890:ABC… — paste it here.',
+  'channel.quickSetup.telegram.privacy.title': 'Let it read group messages (optional)',
+  'channel.quickSetup.telegram.privacy.desc':
+    'Send /setprivacy, pick the bot and choose Disable, then add it to your group.',
+  'channel.quickSetup.qq.create.title': 'Create a bot',
+  'channel.quickSetup.qq.create.desc':
+    'On the QQ Open Platform, create a bot and finish its basic setup.',
+  'channel.quickSetup.qq.credentials.title': 'Copy the App ID and App Secret',
+  'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
+  'channel.quickSetup.line.create.title': 'Create a Messaging API channel',
+  'channel.quickSetup.line.create.desc':
+    'In the LINE Developers console, create a provider and a Messaging API channel.',
+  'channel.quickSetup.line.credentials.title': 'Copy the channel secret and access token',
+  'channel.quickSetup.line.credentials.desc':
+    'The secret is on Basic settings; issue a long-lived access token on Messaging API.',
   'channel.applicationId': 'Application ID / Bot Username',
   'channel.applicationIdHint': 'Unique identifier for your bot application.',
   'channel.applicationIdInvalid.discord':

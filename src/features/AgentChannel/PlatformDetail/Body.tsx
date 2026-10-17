@@ -44,6 +44,7 @@ import {
   platformCredentialExtrasMap,
   platformSettingsFieldExtrasMap,
 } from '../platform/registry';
+import QuickSetupSection from '../quickSetup/QuickSetupSection';
 import { extractSettingsDefaults } from './formState';
 import type { ChannelFormValues } from './index';
 
@@ -484,10 +485,21 @@ interface BodyProps {
   }) => void;
   onValuesChange?: (values: ChannelFormValues) => void;
   platformDef: SerializedPlatformDefinition;
+  /** Name a quick-created bot app starts with (the agent's name). */
+  quickSetupAppName?: string;
 }
 
 const Body = memo<BodyProps>(
-  ({ platformDef, form, hasConfig, currentConfig, onAuthenticated, onValuesChange, disabled }) => {
+  ({
+    platformDef,
+    form,
+    hasConfig,
+    currentConfig,
+    onAuthenticated,
+    onValuesChange,
+    disabled,
+    quickSetupAppName,
+  }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
@@ -552,6 +564,14 @@ const Body = memo<BodyProps>(
             />
           ) : (
             <>
+              <QuickSetupSection
+                appName={quickSetupAppName || 'LobeHub'}
+                disabled={disabled}
+                form={form}
+                hasConfig={hasConfig}
+                platformId={platformDef.id}
+                onAuthenticated={onAuthenticated}
+              />
               {/* Render top-level sections in schema order so each platform controls
               its own field ordering. LINE places `credentials` before `applicationId`
               because the operator must enter the channel access token before the
