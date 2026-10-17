@@ -23,6 +23,15 @@ import {
 const log = debug('lobe-store:streaming-handler');
 
 /**
+ * Throttle interval for streamed content updates. Without it every text chunk
+ * dispatches the full accumulated content into the store, which re-runs the
+ * whole conversation `parse()` and re-renders the markdown per token. On long
+ * content or long tool-call chains this saturates the main thread and the UI
+ * freezes while the (independent, async) DB persistence still completes.
+ */
+const CONTENT_UPDATE_THROTTLE_MS = 120;
+
+/**
  * Streaming message handler
  *
  * Encapsulates all state and logic for streaming message processing, including:
@@ -72,6 +81,7 @@ export class StreamingHandler {
 
   // ========== Throttled updates ==========
   private throttledUpdateToolCalls: ReturnType<typeof throttle>;
+  private throttledUpdateContent: ReturnType<typeof throttle>;
 
   constructor(
     private context: StreamingContext,
@@ -84,6 +94,22 @@ export class StreamingHandler {
         this.callbacks.onToolCallsUpdate(tools);
       },
       300,
+      { leading: true, trailing: true },
+    );
+
+    // Throttle content updates so streaming tokens coalesce into a few store
+    // dispatches per second instead of one per token. The leading edge keeps the
+    // first token painting immediately; the trailing edge (plus the flush in
+    // handleFinish) guarantees the final output always reaches the store.
+    this.throttledUpdateContent = throttle(
+      (
+        content: string,
+        reasoning?: ReasoningState,
+        contentMetadata?: { isMultimodal: boolean; tempDisplayContent: string },
+      ) => {
+        this.callbacks.onContentUpdate(content, reasoning, contentMetadata);
+      },
+      CONTENT_UPDATE_THROTTLE_MS,
       { leading: true, trailing: true },
     );
   }
@@ -147,6 +173,10 @@ export class StreamingHandler {
 
     // Process final tool calls
     this.processFinalToolCalls(finishData.toolCalls);
+
+    // Flush any pending throttled content update so the final accumulated
+    // output always reaches the store before the result is built.
+    this.throttledUpdateContent.flush();
 
     // Build final result
     return this.buildFinalResult(finishData, finalImages);
@@ -232,8 +262,8 @@ export class StreamingHandler {
       this.context.operationId,
     );
 
-    // Notify update
-    this.callbacks.onContentUpdate(this.output, this.buildReasoningState());
+    // Notify update (throttled — see CONTENT_UPDATE_THROTTLE_MS)
+    this.throttledUpdateContent(this.output, this.buildReasoningState());
   }
 
   private handleReasoningChunk(chunk: { text: string; type: 'reasoning' }): void {
@@ -424,7 +454,7 @@ export class StreamingHandler {
     const hasContentImages = this.contentParts.some((p) => p.type === 'image');
     const hasReasoningImages = this.reasoningParts.some((p) => p.type === 'image');
 
-    this.callbacks.onContentUpdate(
+    this.throttledUpdateContent(
       this.output,
       hasReasoningImages
         ? {
