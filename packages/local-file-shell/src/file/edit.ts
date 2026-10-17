@@ -165,10 +165,18 @@ const applyEdit = async (
     const writeError = await verifyWrittenContent(filePath, newContent);
     if (writeError) return { error: writeError, replacements: 0, success: false };
 
-    const patch = createPatch(filePath, content, newContent, '', '');
-    const diffText = `diff --git a${filePath} b${filePath}\n${patch}`;
+    const rawPatch = createPatch(filePath, content, newContent, '', '');
+    // createPatch() emits an "Index: …\n===…\n" preamble that makes
+    // PatchDiff's getSingularPatch see multiple diff blocks and crash with
+    // "Provided patch must include only 1 patch, with 1 diff".
+    // Strip the preamble lines (everything before the first "--- ") so the
+    // renderer receives a single clean unified-diff block.
+    const unifiedLines = rawPatch.split('\n');
+    const firstMinusIdx = unifiedLines.findIndex((l) => l.startsWith('--- '));
+    const cleanPatch = firstMinusIdx > 0 ? unifiedLines.slice(firstMinusIdx).join('\n') : rawPatch;
+    const diffText = `diff --git a/${filePath} b/${filePath}\n${cleanPatch}`;
 
-    const patchLines = patch.split('\n');
+    const patchLines = rawPatch.split('\n');
     let linesAdded = 0;
     let linesDeleted = 0;
 
