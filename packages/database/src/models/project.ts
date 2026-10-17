@@ -1,4 +1,5 @@
-import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
+import { BUILTIN_AGENT_SLUGS, createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 
@@ -29,6 +30,8 @@ export interface CreateProjectInput {
   slug?: string;
   visibility?: ProjectVisibility;
 }
+
+const BUILTIN_SLUGS: ReadonlySet<string> = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 export interface UpdateProjectInput {
   avatar?: string | null;
@@ -131,11 +134,59 @@ export class ProjectModel {
         .delete(projects)
         .where(and(eq(projects.id, id), this.manageable()))
         .returning();
-      await new AgentModel(tx as LobeChatDatabase, this.userId, this.workspaceId).delete(
-        project.coordinatorAgentId,
-      );
+      if (project.coordinatorAgentId) {
+        await this.deleteDedicatedCoordinator(tx as LobeChatDatabase, project.coordinatorAgentId);
+      }
       return deleted ?? null;
     });
+  }
+
+  /**
+   * Remove a coordinator only when it was provisioned for this project: a
+   * virtual, non-builtin agent no other project still uses. Reusable agents
+   * (user agents, LobeAI) stay with their sessions intact.
+   */
+  private async deleteDedicatedCoordinator(db: LobeChatDatabase, agentId: string) {
+    const [agent] = await db
+      .select({ slug: agents.slug, virtual: agents.virtual })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.id, agentId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
+        ),
+      )
+      .limit(1);
+    if (!agent?.virtual || (agent.slug && BUILTIN_SLUGS.has(agent.slug))) return;
+
+    const [stillUsed] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.coordinatorAgentId, agentId))
+      .limit(1);
+    if (stillUsed) return;
+
+    await new AgentModel(db, this.userId, this.workspaceId).delete(agentId);
+  }
+
+  /**
+   * Fill each project's main agent. The column is cleared when that agent is
+   * deleted (`ON DELETE SET NULL`); such projects fall back to LobeAI.
+   */
+  async resolveCoordinatorAgents<T extends { coordinatorAgentId: string | null }>(
+    items: T[],
+  ): Promise<(T & { coordinatorAgentId: string })[]> {
+    if (items.every((item) => item.coordinatorAgentId)) {
+      return items as (T & { coordinatorAgentId: string })[];
+    }
+    const inbox = await new AgentModel(this.db, this.userId, this.workspaceId).getBuiltinAgent(
+      INBOX_SESSION_ID,
+    );
+    if (!inbox) throw new Error('Project main agent not found');
+    return items.map((item) => ({
+      ...item,
+      coordinatorAgentId: item.coordinatorAgentId ?? inbox.id,
+    }));
   }
 
   async findById(id: string) {

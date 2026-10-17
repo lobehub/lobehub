@@ -45,10 +45,15 @@ export const projects = pgTable(
     description: text('description'),
     avatar: text('avatar'),
 
-    /** Dedicated agent that coordinates all conversations and work inside this project. */
-    coordinatorAgentId: text('coordinator_agent_id')
-      .references(() => agents.id, { onDelete: 'restrict' })
-      .notNull(),
+    /**
+     * Main agent that coordinates the project's conversations and work. A
+     * reusable agent the user picked (LobeAI by default), so several projects
+     * may share one. Cleared when that agent is deleted; readers fall back to
+     * LobeAI.
+     */
+    coordinatorAgentId: text('coordinator_agent_id').references(() => agents.id, {
+      onDelete: 'set null',
+    }),
 
     status: text('status').$type<ProjectStatus>().notNull().default('backlog'),
 
@@ -90,7 +95,7 @@ export const projects = pgTable(
     index('projects_workspace_id_idx').on(t.workspaceId),
     index('projects_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     index('projects_status_updated_at_idx').on(t.status, t.updatedAt),
-    uniqueIndex('projects_coordinator_agent_id_unique').on(t.coordinatorAgentId),
+    index('projects_coordinator_agent_id_idx').on(t.coordinatorAgentId),
     check(
       'projects_completed_requires_human_review',
       sql`${t.status} <> 'completed' OR (${t.completedReviewId} IS NOT NULL AND ${t.completedAt} IS NOT NULL)`,

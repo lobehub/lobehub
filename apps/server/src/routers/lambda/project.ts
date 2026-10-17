@@ -32,6 +32,15 @@ function requireResult<T>(result: T | null, message = 'Project not found'): T {
   return result;
 }
 
+/** Project rows leave the API with their main agent resolved (LobeAI when cleared). */
+async function withMainAgent<T extends { coordinatorAgentId: string | null }>(
+  projectModel: ProjectModel,
+  project: T,
+) {
+  const [resolved] = await projectModel.resolveCoordinatorAgents([project]);
+  return resolved;
+}
+
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
   const message = error instanceof Error ? error.message : `Failed to ${operation} project`;
@@ -126,7 +135,7 @@ export const projectRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         return {
-          data: await ctx.projectModel.create(input),
+          data: await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input)),
           message: 'Project created',
           success: true,
         };
@@ -149,7 +158,10 @@ export const projectRouter = router({
 
   detail: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
-      const project = requireResult(await ctx.projectModel.findByIdOrSlug(input.id));
+      const project = await withMainAgent(
+        ctx.projectModel,
+        requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+      );
       const [agents, completionReviews, knowledgeBases, tasks, works] = await Promise.all([
         ctx.projectModel.listAgents(project.id),
         ctx.projectModel.listCompletionReviews(project.id),
@@ -169,7 +181,10 @@ export const projectRouter = router({
   find: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
       return {
-        data: requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+        data: await withMainAgent(
+          ctx.projectModel,
+          requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+        ),
         success: true,
       };
     } catch (error) {
@@ -187,7 +202,10 @@ export const projectRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return { data: await ctx.projectModel.list(input), success: true };
+        return {
+          data: await ctx.projectModel.resolveCoordinatorAgents(await ctx.projectModel.list(input)),
+          success: true,
+        };
       } catch (error) {
         mapProjectError(error, 'list');
       }
@@ -304,7 +322,10 @@ export const projectRouter = router({
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
         return {
-          data: requireResult(await ctx.projectModel.update(id, input)),
+          data: await withMainAgent(
+            ctx.projectModel,
+            requireResult(await ctx.projectModel.update(id, input)),
+          ),
           message: 'Project updated',
           success: true,
         };
