@@ -1,5 +1,4 @@
 import { isInThreadScope } from '../indexing';
-import { toTime } from '../utils/timestamp';
 import type {
   ContextNode,
   IdNode,
@@ -8,6 +7,7 @@ import type {
   SignalCallbacksNode,
   ThreadScope,
 } from '../types';
+import { toTime } from '../utils/timestamp';
 import { BranchResolver } from './BranchResolver';
 
 /**
@@ -51,6 +51,32 @@ const isCallbackSignal = (sig: MessageSignal | undefined): boolean =>
 /** `task-completion` — post-task summary, rendered as a plain message AFTER the SignalCallbacks block. */
 const isTaskCompletionSignal = (sig: MessageSignal | undefined): boolean =>
   sig?.type === 'task-completion';
+
+/**
+ * Minimum trimmed prose length for a reactive callback to count as the run's
+ * ANSWER rather than a one-line progress note. When the agent parks on a
+ * long-running background tool, the stdout push that wakes it is how its real
+ * reply arrives — a `tool-stdout` turn carrying the whole answer. Folding that
+ * into the collapsed SignalCallbacks accordion makes the run look like it
+ * trailed off; a short note ("100/84842 全 skip…") belongs in the accordion.
+ * Set well clear of observed notes (5–50 chars) and observed answers (1000+).
+ */
+const SIGNAL_ANSWER_MIN_LENGTH = 200;
+
+/**
+ * A reactive callback (`tool-stdout` / `tool-callback`) whose prose is long
+ * enough to be an answer. Such a turn renders INLINE as a plain message in the
+ * group (like a `task-completion`), not inside the accordion.
+ *
+ * This is a pure RENDERING decision: it does NOT touch `getMessageSignal`, so the
+ * turn stays a signal for chain-walk purposes (excluded from
+ * `findFlatChainContinuation`) and the real continuation is never dropped. The
+ * persisted tree is unchanged, so an older reader that predates this simply
+ * renders the answer in the accordion — graceful, never a dropped continuation.
+ */
+const isSignalAnswer = (msg: Message): boolean =>
+  isCallbackSignal(getMessageSignal(msg)) &&
+  (msg.content?.trim().length ?? 0) > SIGNAL_ANSWER_MIN_LENGTH;
 
 /** Lookups over one message array, each list in that array's order. */
 interface MessageArrayIndex {
@@ -358,7 +384,10 @@ export class MessageCollector {
       .flatMap((parentId) => this.childrenOf(allMessages, parentId))
       .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
-      .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt) || position.get(a.id)! - position.get(b.id)!);
+      .sort(
+        (a, b) =>
+          toTime(a.createdAt) - toTime(b.createdAt) || position.get(a.id)! - position.get(b.id)!,
+      );
 
     const activeId = this.resolveActiveContinuationId(candidates, currentAssistant);
     if (!activeId) {
@@ -493,11 +522,14 @@ export class MessageCollector {
       const callbacks: Message[] = [];
       for (const child of children) {
         if (!isCallbackSignal(getMessageSignal(child))) continue;
+        // Answer-length callbacks render inline via `collectFlatTaskCompletions`,
+        // not folded into the accordion.
+        if (isSignalAnswer(child)) continue;
         callbacks.push(child);
       }
       if (callbacks.length === 0) continue;
-      // (task-completion siblings are emitted separately by
-      // `collectFlatTaskCompletions` so they land in the parent
+      // (task-completion siblings and answer-length callbacks are emitted
+      // separately by `collectFlatTaskCompletions` so they land in the parent
       // AssistantGroup after the callbacks accordion.)
 
       callbacks.sort((a, b) => {
@@ -531,7 +563,9 @@ export class MessageCollector {
     for (const toolMsg of allToolMessages) {
       const children = this.childrenOf(allMessages, toolMsg.id);
       for (const child of children) {
-        if (!isTaskCompletionSignal(getMessageSignal(child))) continue;
+        // Post-task summaries AND answer-length reactive callbacks both render as
+        // plain messages after the accordion (an answer is not a progress note).
+        if (!isTaskCompletionSignal(getMessageSignal(child)) && !isSignalAnswer(child)) continue;
         completions.push(child);
       }
     }
@@ -715,6 +749,8 @@ export class MessageCollector {
         const toolChildMsg = this.messageMap.get(toolChild.id);
         if (!toolChildMsg) continue;
         if (!isCallbackSignal(getMessageSignal(toolChildMsg))) continue;
+        // Answer-length callbacks render inline via `collectTaskCompletions`.
+        if (isSignalAnswer(toolChildMsg)) continue;
         callbacks.push(toolChildMsg);
       }
 
@@ -764,7 +800,12 @@ export class MessageCollector {
         const toolChildMsg = this.messageMap.get(toolChild.id);
         if (!toolChildMsg) continue;
         if (toolChildMsg.agentId !== groupAgentId) continue;
-        if (!isTaskCompletionSignal(getMessageSignal(toolChildMsg))) continue;
+        // Post-task summaries AND answer-length reactive callbacks render inline.
+        if (
+          !isTaskCompletionSignal(getMessageSignal(toolChildMsg)) &&
+          !isSignalAnswer(toolChildMsg)
+        )
+          continue;
         nodes.push({ id: toolChildMsg.id, type: 'message' });
       }
     });
