@@ -3,7 +3,7 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
-import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { stripGoalCommand } from '@lobechat/builtin-tool-goal';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
@@ -91,6 +91,7 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
+import { withHeteroContext } from '../viewedTaskPrompt';
 import { getNativeHeteroSessionBindingKey } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
@@ -2618,9 +2619,8 @@ export const executeHeterogeneousAgent = async (
       get().messagesMap?.[messageMapKey(context)]) as UIChatMessage[] | undefined;
 
     const systemContext = buildLocalHeterogeneousSystemContext({
-      // `/goal` reaches a hetero agent as instructions, not a tool: it creates
-      // and plans the goal through `lh` in this same run.
-      agentSystemContext: withConversationGoalPrompt(heterogeneousProvider.systemContext, message),
+      // `/goal` and the viewed Tasks page reach a hetero agent as instructions.
+      agentSystemContext: withHeteroContext(heterogeneousProvider.systemContext, message, context),
       contextSelections,
       pageSelections,
       // Only a topic created by Codex edit-and-resend starts with copied

@@ -4,7 +4,6 @@ import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
 import { buildGoalOverviewContext, getWorkingDirEffectivePath } from '@lobechat/types';
 import debug from 'debug';
@@ -36,6 +35,7 @@ import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCach
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
+import { buildViewedTaskContextPrompt } from './viewedTaskContext';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -685,16 +685,14 @@ export const prepareOperation = async (
     }
   }
 
-  if (appContext?.scope === 'task' && appContext.defaultTaskAssigneeAgentId) {
+  // Tasks side conversation: the viewed task (or just the assignee defaults).
+  const taskManagerPrompt = await buildViewedTaskContextPrompt(deps, appContext, input.taskId);
+  if (taskManagerPrompt) {
     initialContext = {
       ...initialContext,
       initialContext: {
         ...initialContext.initialContext,
-        taskManager: {
-          contextPrompt: buildTaskManagerDefaultsPrompt({
-            defaultAssigneeAgentId: appContext.defaultTaskAssigneeAgentId,
-          }),
-        },
+        taskManager: { contextPrompt: taskManagerPrompt },
       },
     };
   }

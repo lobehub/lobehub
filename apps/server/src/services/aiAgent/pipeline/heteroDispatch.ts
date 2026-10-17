@@ -66,6 +66,7 @@ import { selectCodexDeviceDispatch } from './codexDeviceRuntime';
 import { finalizeHeteroDispatchError } from './finalizeHeteroDispatchError';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 import type { RunAttachments } from './turnSetup';
+import { buildViewedTaskContextPrompt, joinSystemContext } from './viewedTaskContext';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -398,13 +399,12 @@ export const dispatchHeteroAgent = async (
     : undefined;
   const sandboxPlacement = sandbox && { cwd: sandbox.cwd, mode: sandbox.mode };
 
-  // Build the primary context without conversation history. If native resume
-  // fails, the CLI switches to the complete fallback prompt on its fresh
-  // retry; successful same-session runs never consume the duplicate history.
-  // `/goal` reaches a hetero agent as instructions, not a tool: it creates and
-  // plans the goal through `lh` in this same run.
+  // Primary context omits history (a failed native resume retries with the full
+  // fallback). `/goal` and the task viewed in a Tasks side chat ride along.
+  const providerContext = agentConfig.agencyConfig?.heterogeneousProvider?.systemContext;
+  const viewedTaskContext = await buildViewedTaskContextPrompt(deps, appContext, operationTaskId);
   const agentSystemContext = withConversationGoalPrompt(
-    agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+    joinSystemContext(providerContext, viewedTaskContext),
     prompt,
   );
   const systemContext = buildCloudHeteroContext({
