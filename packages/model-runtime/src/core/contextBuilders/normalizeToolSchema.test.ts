@@ -125,6 +125,64 @@ describe('normalizeToolJsonSchema', () => {
     expect('enum' in result.items).toBe(false);
   });
 
+  it('strips a null enum member and the now-redundant null type so the schema stays consistent', () => {
+    const result = normalizeToolJsonSchema({
+      enum: ['heartbeat', 'schedule', null],
+      type: ['string', 'null'],
+    });
+
+    expect(result.enum).toEqual(['heartbeat', 'schedule']);
+    // `type` and `enum` are conjunctive, so leaving `'null'` in the type while the
+    // enum no longer lists it would forbid null anyway — collapse to the real type.
+    expect(result.type).toBe('string');
+  });
+
+  it('keeps every remaining type when a null enum member is stripped from a multi-type node', () => {
+    const result = normalizeToolJsonSchema({
+      enum: ['a', 1, null],
+      type: ['string', 'number', 'null'],
+    });
+
+    expect(result.enum).toEqual(['a', 1]);
+    expect(result.type).toEqual(['string', 'number']);
+  });
+
+  it('drops an enum that held only null and keeps the nullable type intact', () => {
+    const result = normalizeToolJsonSchema({
+      enum: [null],
+      type: ['string', 'null'],
+    });
+
+    // Nothing is left to constrain, so the enum is dropped and `null` stays valid
+    // through the nullable `type` — no contradiction to resolve here.
+    expect('enum' in result).toBe(false);
+    expect(result.type).toEqual(['string', 'null']);
+  });
+
+  it('keeps a numeric enum with no null members untouched', () => {
+    const result = normalizeToolJsonSchema({
+      enum: [0, 1, 2, 3, 4],
+      type: 'number',
+    });
+
+    expect(result.enum).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('strips a null enum member on a nested property (Gemini `enum[i]: cannot be empty`)', () => {
+    const result = normalizeToolJsonSchema({
+      properties: {
+        automationMode: {
+          enum: ['heartbeat', 'schedule', null],
+          type: ['string', 'null'],
+        },
+      },
+      type: 'object',
+    });
+
+    expect(result.properties.automationMode.enum).toEqual(['heartbeat', 'schedule']);
+    expect(result.properties.automationMode.type).toBe('string');
+  });
+
   it('keeps boolean additionalProperties untouched (a valid, accepted form)', () => {
     expect(normalizeToolJsonSchema({ additionalProperties: false, type: 'object' })).toEqual({
       additionalProperties: false,

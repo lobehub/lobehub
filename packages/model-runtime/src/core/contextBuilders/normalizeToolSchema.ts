@@ -82,6 +82,26 @@ export const normalizeToolJsonSchema = (schema: any): any => {
     }
   }
 
+  // A `null` enum member is coerced to an empty string by strict function-schema
+  // validators (Gemini reached through an OpenAI-compatible proxy rejects it with
+  // `enum[i]: cannot be empty`). Strict validators apply `type` and `enum`
+  // conjunctively, so once `null` is dropped from a still-populated enum the value
+  // is forbidden regardless of `type`; drop `'null'` from an array `type` as well
+  // so the schema stays consistent instead of advertising a nullability the enum
+  // no longer permits. When filtering empties the enum, the guard below removes
+  // the constraint entirely and the nullable `type` is left intact.
+  if (Array.isArray(normalized.enum)) {
+    const hadNullEnumMember = normalized.enum.includes(null);
+    normalized.enum = normalized.enum.filter((value) => value !== null);
+
+    if (hadNullEnumMember && normalized.enum.length > 0 && Array.isArray(normalized.type)) {
+      const typeWithoutNull = normalized.type.filter((entry) => entry !== 'null');
+      if (typeWithoutNull.length > 0) {
+        normalized.type = typeWithoutNull.length === 1 ? typeWithoutNull[0] : typeWithoutNull;
+      }
+    }
+  }
+
   // An empty `enum` ([]) allows no value at all — nonsensical, and strict
   // validators (xAI/grok: `enum: [] has less than 1 item`) reject the whole
   // request. Drop the constraint entirely rather than let it fail upstream.
