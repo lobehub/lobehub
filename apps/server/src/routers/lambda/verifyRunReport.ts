@@ -119,11 +119,10 @@ export const verifyRunReportProcedures = {
     }),
 
   /**
-   * Where an old `/verify/:runId` link now lands: the acceptance and round the
-   * run belongs to. Same access rule as `getReportBundle` — and both fields
-   * were already part of the bundle's `run` — so the redirect reveals nothing
-   * the run id did not. A run outside any acceptance reads as `null`, exactly
-   * like a missing or denied one.
+   * The acceptance and round a run belongs to — the only page its report has.
+   * Same access rule as `getReportBundle` — and both fields were already part
+   * of the bundle's `run` — so it reveals nothing the run id did not. A run
+   * outside any acceptance reads as `null`, exactly like a missing or denied one.
    */
   getRunAcceptanceRound: publicVerifyReportProcedure
     .input(verifyRunIdInputSchema)

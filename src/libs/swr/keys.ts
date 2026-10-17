@@ -801,11 +801,6 @@ export const verifyKeys = {
     verifyRunId,
   ]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
-  /** The acceptance round an old `/verify/:runId` link redirects to. */
-  runAcceptanceRound: def('verify:runAcceptanceRound', (verifyRunId: string) => [
-    'verify:runAcceptanceRound',
-    verifyRunId,
-  ]),
   rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
     'verify:rubricCriteria',
     rubricId,

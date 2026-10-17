@@ -58,15 +58,15 @@ describe('defineConfig locale path-traversal hardening', () => {
 });
 
 describe('defineConfig Workbench SPA rewrite', () => {
-  it('routes verify through Workbench for every user agent', async () => {
+  it('no longer routes retired verify links through Workbench', async () => {
     const mobileVerify = await run(
       'http://localhost:3010/verify/run-1?hl=en-US',
       MOBILE_USER_AGENT,
     );
     const desktopVerify = await run('http://localhost:3010/verify/run-1?hl=en-US');
 
-    expect(new URL(mobileVerify!).pathname).toBe('/spa-workbench/en-US/verify/run-1');
-    expect(new URL(desktopVerify!).pathname).toBe('/spa-workbench/en-US/verify/run-1');
+    expect(new URL(mobileVerify!).pathname).not.toMatch(/^\/spa-workbench\//);
+    expect(new URL(desktopVerify!).pathname).not.toMatch(/^\/spa-workbench\//);
   });
 
   it('keeps acceptance on the main SPA', async () => {

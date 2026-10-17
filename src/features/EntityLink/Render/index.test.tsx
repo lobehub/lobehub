@@ -2,8 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { verifyService } from '@/services/verify';
 
 import { EntityLinkHostProvider, type EntityLinkPortalScope } from '../host';
 import Render from './index';
@@ -430,7 +432,7 @@ describe('Link Render — internal entities', () => {
     expect(container.querySelector('a')!.textContent).toBe('接续 goal');
   });
 
-  it('hard-navigates personal verify pages into the Workbench runtime', () => {
+  it('opens a personal verify link in the report portal, not a retired page', () => {
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
 
     const { getByRole } = renderLink({
@@ -441,8 +443,25 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.click(getByRole('link', { name: 'Verify report' }));
 
-    expect(assign).toHaveBeenCalledWith('/verify/run-1');
+    expect(assign).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockOpenVerifyReport).toHaveBeenCalledWith('run-1');
+  });
+
+  it('opens a verify link off-portal on its acceptance round, its only page', async () => {
+    const getRunAcceptanceRound = vi
+      .spyOn(verifyService, 'getRunAcceptanceRound')
+      .mockResolvedValue({ acceptanceId: 'acc-1', roundIndex: 2 });
+    const { getByRole } = renderLinkInHost(
+      { linkHref: '/verify/run-1', linkKind: 'generic', linkLabel: 'Verify report' },
+      ['acceptance'],
+    );
+
+    fireEvent.click(getByRole('link', { name: 'Verify report' }));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/acceptance/acc-1?r=2'));
+    expect(getRunAcceptanceRound).toHaveBeenCalledWith('run-1');
+    expect(mockNavigate).not.toHaveBeenCalledWith('/verify/run-1');
     expect(mockOpenVerifyReport).not.toHaveBeenCalled();
   });
 

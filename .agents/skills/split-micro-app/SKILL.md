@@ -9,7 +9,7 @@ user-invocable: false
 Canonical living examples, both extracted 2026-08 — read the real files, this skill records
 the decisions and landmines, not copies of the code:
 
-- **`apps/workbench`** (`/acceptance`, `/agent/:aid/docs/:docId`; `/verify` only redirects retired report links into Acceptance) — all code in this repo, builds and deploys from OSS CI.
+- **`apps/workbench`** (`/acceptance`, `/agent/:aid/docs/:docId`) — all code in this repo, builds and deploys from OSS CI.
 - **`apps/share`** (`/share/t/:id`, `/share/page/:id`) — renders Cloud-only surfaces, so it
   builds and deploys from **lobehub-cloud** CI. See §1b before touching it.
 - **`apps/auth`** (`/signin`, `/signup`, …) — the SSG variant: `ssr: false` + `prerender`, so

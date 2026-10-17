@@ -4,7 +4,6 @@ import { lazy, Suspense, useEffect } from 'react';
 import type { RouteObject } from 'react-router';
 import { Outlet, useRouteError } from 'react-router';
 
-import { ACCEPTANCE_LIST_PATH } from '@/features/Acceptance/roundLink';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 import WorkbenchShell, { WorkbenchNamespace } from './shell';
@@ -107,22 +106,6 @@ export const workbenchRoutes: RouteObject[] = [
         ],
         element: <VerifyNamespace />,
         path: 'acceptance',
-      },
-      {
-        children: [
-          {
-            // The standalone report list is gone; reports live on Acceptance.
-            element: <HardRedirect to={ACCEPTANCE_LIST_PATH} />,
-            index: true,
-          },
-          {
-            // Old report links resolve to the run's acceptance round.
-            element: lazyElement(() => import('./routes/verify/[runId]')),
-            path: ':runId',
-          },
-        ],
-        element: <VerifyNamespace />,
-        path: 'verify',
       },
       {
         element: <HardRedirect to={'/'} />,

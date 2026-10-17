@@ -904,9 +904,6 @@ export default {
   'report.surface.mobile': 'Mobile',
   'report.surface.web': 'Web',
   'report.titleFallback': 'Verification report',
-  'report.unavailable.description':
-    'Reports now live on their acceptance. This one is not part of an acceptance, or it was never shared with you.',
-  'report.unavailable.title': 'This report is no longer available',
   'report.verdict.failed': 'Failed',
   'report.verdict.notExecuted': 'Not run',
   'report.verdict.passed': 'Passed',

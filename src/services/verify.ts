@@ -152,12 +152,6 @@ export interface VerifyReportBundle {
   run: VerifyRunItem;
 }
 
-/** The acceptance round a verify run belongs to — where its old `/verify/:runId` link lands. */
-export interface VerifyRunAcceptanceRound {
-  acceptanceId: string;
-  roundIndex: number | null;
-}
-
 export interface GenerateDraftPlanInput {
   context?: string;
   enableAiGeneration?: boolean;
@@ -428,11 +422,10 @@ export class VerifyService {
       verifyRunId,
     }) as Promise<VerifyReportBundle | null>;
 
-  /**
-   * The acceptance round a run belongs to, under the same access rule as
-   * `getReportBundle`. `null` for a missing, denied or standalone run.
-   */
-  getRunAcceptanceRound = (verifyRunId: string): Promise<VerifyRunAcceptanceRound | null> =>
+  /** The acceptance round a run belongs to; `null` for a missing, denied or standalone run. */
+  getRunAcceptanceRound = (
+    verifyRunId: string,
+  ): Promise<{ acceptanceId: string; roundIndex: number | null } | null> =>
     lambdaClient.verify.getRunAcceptanceRound.query({ verifyRunId });
 
   deleteRun = (verifyRunId: string): Promise<unknown> =>

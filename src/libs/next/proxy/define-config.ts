@@ -14,7 +14,7 @@ import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVarian
 
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
 import { isShareSpaRoute } from '../shareRoutes';
-import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
+import { isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -156,10 +156,7 @@ export function defineConfig() {
       return response;
     }
 
-    if (
-      isAlwaysWorkbenchSpaRoute(url.pathname) ||
-      (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname))
-    ) {
+    if (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname)) {
       const workbenchPath = `/spa-workbench/${safeLocale}${url.pathname}`;
       logDefault('Workbench SPA route, rewriting to: %s', workbenchPath);
       url.pathname = workbenchPath;
@@ -256,11 +253,6 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
-    // retired standalone report links (/verify/:runId) — they now redirect to
-    // the run's acceptance round, and must stay reachable without a session:
-    // the run id is still the read capability, enforced by the run's own
-    // `visibility` in `verify.getRunAcceptanceRound`.
-    '/verify/(.*)',
     // acceptance decision page — the id is the capability; the tRPC layer
     // enforces the aggregate's `visibility` (a private aggregate 404s for
     // anyone but the owner / workspace members).

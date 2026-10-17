@@ -15,9 +15,11 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { buildAcceptanceRoundPath } from '@/features/Acceptance/roundLink';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
+import { verifyService } from '@/services/verify';
 import { useAgentStore } from '@/store/agent';
 import {
   agentDocumentActions,
@@ -150,9 +152,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       event.preventDefault();
 
       if (
-        (reference.type === 'acceptance' ||
-          reference.type === 'document' ||
-          reference.type === 'verify') &&
+        (reference.type === 'acceptance' || reference.type === 'document') &&
         shouldHardNavigateToWorkbench(reference.pathname)
       ) {
         window.location.assign(reference.pathname);
@@ -195,9 +195,28 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         // Electron registers no standalone acceptance route, so navigating
         // there lands on a dead destination. An overlay over a portal-capable
         // page can close and let that page's panel show the report instead.
-        if (isDesktop && reference.type === 'acceptance' && dismissHost) {
-          dismissHost();
-          openAcceptance(reference.acceptanceId);
+        if (isDesktop && dismissHost) {
+          if (reference.type === 'acceptance') {
+            dismissHost();
+            openAcceptance(reference.acceptanceId);
+            return;
+          }
+          if (reference.type === 'verify') {
+            dismissHost();
+            openVerifyReport(reference.runId);
+            return;
+          }
+        }
+        // A verify report has no page of its own; its acceptance round is it.
+        if (reference.type === 'verify') {
+          const round = await verifyService
+            .getRunAcceptanceRound(reference.runId)
+            .catch((error: unknown) => {
+              console.error('[EntityLink] resolve verify report round failed', error);
+              return null;
+            });
+          const roundPath = buildAcceptanceRoundPath(round);
+          if (roundPath) navigate(roundPath);
           return;
         }
         navigate(reference.pathname);

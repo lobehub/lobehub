@@ -3,14 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { shouldHardNavigateToWorkbench } from './workbenchNavigation';
 
 describe('shouldHardNavigateToWorkbench', () => {
-  it.each(['/verify', '/verify/run-1'])(
-    'hard-navigates verify out of the main web SPA: %s',
-    (pathname) => {
-      expect(shouldHardNavigateToWorkbench(pathname)).toBe(true);
-    },
-  );
-
   it.each([
+    '/verify',
+    '/verify/run-1',
     '/acceptance',
     '/acceptance/a-1?r=2',
     '/verify-im',

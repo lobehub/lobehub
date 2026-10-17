@@ -7,10 +7,7 @@ const dir = import.meta.dirname;
 const header = readFileSync(path.join(dir, 'WorkbenchHeader.tsx'), 'utf8');
 const brand = readFileSync(path.join(dir, 'WorkbenchBrandLink.tsx'), 'utf8');
 
-const pageFiles = [
-  '../features/acceptance/AcceptanceDetail.tsx',
-  '../features/verify/VerifyReportUnavailable.tsx',
-] as const;
+const pageFiles = ['../features/acceptance/AcceptanceDetail.tsx'] as const;
 
 describe('WorkbenchHeader', () => {
   it('sends guests into the app with a single primary CTA', () => {

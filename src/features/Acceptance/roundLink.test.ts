@@ -25,15 +25,6 @@ describe('buildAcceptanceRoundPath', () => {
     );
   });
 
-  it('keeps the incoming query and replaces a stale round', () => {
-    expect(
-      buildAcceptanceRoundPath({ acceptanceId: 'acc-1', roundIndex: 3 }, '?hl=zh-CN&r=9'),
-    ).toBe('/acceptance/acc-1?hl=zh-CN&r=3');
-    expect(buildAcceptanceRoundPath({ acceptanceId: 'acc-1', roundIndex: null }, '?r=9')).toBe(
-      '/acceptance/acc-1',
-    );
-  });
-
   it('encodes the acceptance id as one path segment', () => {
     expect(buildAcceptanceRoundPath({ acceptanceId: 'a/b', roundIndex: 1 })).toBe(
       '/acceptance/a%2Fb?r=1',

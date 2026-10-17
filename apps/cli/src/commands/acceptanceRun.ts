@@ -10,7 +10,6 @@ import pc from 'picocolors';
 import type { TrpcClient } from '../api/client';
 import { createPublicLambdaClient, getTrpcClient } from '../api/client';
 import { resolveWorkspaceId } from '../api/workspace';
-import { resolveServerUrl } from '../settings';
 import { ensureAcceptanceDirIgnored, ensureAcceptanceDirIgnoredFor } from '../utils/acceptanceDir';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
@@ -28,6 +27,7 @@ import {
   ingestLanguageFields,
   languageSummary,
 } from './acceptanceLanguage';
+import { acceptanceUrls, resolveRunReportUrl } from './acceptanceUrl';
 import {
   type Decision,
   DECISIONS,
@@ -421,7 +421,7 @@ async function submitAction(options: SubmitOptions): Promise<void> {
     log.error('Submitted result did not resolve to a verification run');
     process.exit(1);
   }
-  const url = new URL(`/verify/${verifyRunId}`, resolveServerUrl()).toString();
+  const url = await resolveRunReportUrl(client, verifyRunId);
   if (options.json !== undefined) {
     outputJson({ ...res, url }, typeof options.json === 'string' ? options.json : undefined);
     return;
@@ -431,7 +431,7 @@ async function submitAction(options: SubmitOptions): Promise<void> {
       `${res.checkResult.verdict ? ` (${res.checkResult.verdict})` : ''}` +
       `${res.evidence.length > 0 ? ` +${res.evidence.length} evidence` : ''}`,
   );
-  console.log(`${pc.bold('report')}: ${url}`);
+  if (url) console.log(`${pc.bold('report')}: ${url}`);
 }
 
 async function decisionAction(resultId: string, decision: Decision): Promise<void> {
@@ -929,12 +929,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       `supersedes names no check of this acceptance, so nothing was replaced: ${unresolvedSupersedes.join(', ')}. Name it by a plan item id from an earlier round or a check id from \`lh acceptance view --json\`.`,
     );
   }
-  const acceptanceUrl = new URL(
-    `/acceptance/${encodeURIComponent(acceptanceId)}`,
-    resolveServerUrl(),
-  ).toString();
-  const roundUrl =
-    roundIndex === null ? null : `${acceptanceUrl}?r=${encodeURIComponent(String(roundIndex))}`;
+  const { acceptanceUrl, roundUrl } = acceptanceUrls(acceptanceId, roundIndex);
 
   // 2. Ingest each case as a check result + its evidence. `checkItemId` is
   //    the stable key within this immutable run.

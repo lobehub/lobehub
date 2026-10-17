@@ -797,8 +797,6 @@
   "report.surface.mobile": "移动端",
   "report.surface.web": "网页端",
   "report.titleFallback": "验证报告",
-  "report.unavailable.description": "报告现在随其验收一起查看。这份报告不属于任何验收，或未分享给你。",
-  "report.unavailable.title": "该报告已不再提供",
   "report.verdict.failed": "未通过",
   "report.verdict.notExecuted": "未执行",
   "report.verdict.passed": "已通过",
