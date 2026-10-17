@@ -46,14 +46,12 @@ describe('Search1APIImpl', () => {
     delete process.env.SEARCH1API_API_KEY;
   });
 
-  it('should advertise automatic engine selection', () => {
-    expect(impl.useAutoSearchEngineSelection).toBe(true);
-  });
-
-  it('should use auto mode even when searchEngines are provided', async () => {
+  it('should use Google for multi-keyword queries without changing the query', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(createMockResponse({ results: [] }));
 
-    await impl.query('TypeScript', { searchEngines: ['google', 'bing'] });
+    const query = 'point cloud semantic segmentation transformer survey';
+
+    await impl.query(query);
 
     expect(fetch).toHaveBeenCalledTimes(1);
     const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
@@ -63,26 +61,25 @@ describe('Search1APIImpl', () => {
       crawl_results: 0,
       image: false,
       max_results: 15,
-      query: 'TypeScript',
+      query,
+      search_service: 'google',
     });
-    expect(body[0].search_service).toBeUndefined();
   });
 
-  it('should keep time range while using auto mode', async () => {
+  it('should keep time range while using Google', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(createMockResponse({ results: [] }));
 
     await impl.query('latest AI news', {
-      searchEngines: ['google'],
       searchTimeRange: 'week',
     });
 
     const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
 
-    expect(body[0].search_service).toBeUndefined();
+    expect(body[0].search_service).toBe('google');
     expect(body[0].time_range).toBe('month');
   });
 
-  it('should not emit an empty engine for auto results', async () => {
+  it('should not emit an empty engine when the response omits the search service', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       createMockResponse(makeSearch1ApiResponse({ query: 'test' })),
     );
