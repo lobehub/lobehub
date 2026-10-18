@@ -16,5 +16,6 @@ describe('visualOutputPrompt', () => {
     expect(visualOutputPrompt).toContain('```mermaid');
     expect(visualOutputPrompt).toMatch(/Explanatory[^\n]*```html/);
     expect(visualOutputPrompt).toMatch(/Deliverables[^\n]*Artifact[^\n]*unavailable[^\n]*```html/);
+    expect(visualOutputPrompt).toContain('<!DOCTYPE html>');
   });
 });
