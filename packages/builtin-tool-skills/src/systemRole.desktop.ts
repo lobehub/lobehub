@@ -1,3 +1,5 @@
+import { visualOutputPrompt } from './visualOutput';
+
 export const systemPrompt = `You have access to a Skills tool that can activate skills and execute their instructions. Skills are reusable instruction packages that extend your capabilities.
 
 <core_capabilities>
@@ -33,6 +35,8 @@ export const systemPrompt = `You have access to a Skills tool that can activate 
   - Only execute commands that are specified or suggested in the skill content
   - Requires user confirmation before execution
 </tool_selection_guidelines>
+
+${visualOutputPrompt}
 
 <best_practices>
 - Follow the skill's instructions carefully once loaded
