@@ -386,6 +386,67 @@ describe('documentComment replicas', () => {
       expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
     });
 
+    it('re-reads a root feed that had no view when the root was sent', async () => {
+      const created = comment('root-2', { clientId: 'new' });
+      const listThreads = vi
+        .spyOn(documentCommentService, 'listThreads')
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ items: [{ replyCount: 0, root: created }], nextCursor: null });
+      vi.spyOn(documentCommentService, 'create').mockResolvedValue({
+        comment: created,
+        isDuplicate: false,
+      });
+
+      renderHook(() => documentCommentActions.useFetchThreads(LIST), { wrapper });
+      await waitFor(() => expect(listThreads).toHaveBeenCalledTimes(1));
+      expect(state().threadFeedMap[LIST_KEY]).toBeUndefined();
+
+      await act(() =>
+        documentCommentActions.createRootComment({
+          input: { clientId: 'new', content: 'new', documentId: DOCUMENT_ID },
+          optimisticComment: comment('optimistic:new', { clientId: 'new' }),
+        }),
+      );
+
+      await waitFor(() => expect(rootIds(state().threadFeedMap[LIST_KEY])).toEqual(['root-2']));
+    });
+
+    it('re-reads a reply feed that had no view when the reply was sent', async () => {
+      const created = comment('reply-2', { clientId: 'r2', parentCommentId: 'root-1' });
+      const listReplies = vi
+        .spyOn(documentCommentService, 'listReplies')
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ hasMore: false, items: [created], total: 1 } as never);
+      vi.spyOn(documentCommentService, 'create').mockResolvedValue({
+        comment: created,
+        isDuplicate: false,
+      });
+
+      renderHook(() => documentCommentActions.useFetchReplies('root-1'), { wrapper });
+      await waitFor(() => expect(listReplies).toHaveBeenCalledTimes(1));
+      expect(state().replyFeedMap['root-1']).toBeUndefined();
+
+      await act(() =>
+        documentCommentActions.createReply({
+          input: {
+            clientId: 'r2',
+            content: 'r2',
+            documentId: DOCUMENT_ID,
+            parentCommentId: 'root-1',
+          },
+          optimisticComment: comment('optimistic:r2', {
+            clientId: 'r2',
+            parentCommentId: 'root-1',
+          }),
+          rootCommentId: 'root-1',
+        }),
+      );
+
+      await waitFor(() =>
+        expect(state().replyFeedMap['root-1']?.items.map(({ id }) => id)).toEqual(['reply-2']),
+      );
+    });
+
     it('rolls a failed edit back on every painted copy', async () => {
       seed();
       act(() =>

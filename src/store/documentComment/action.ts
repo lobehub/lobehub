@@ -80,14 +80,16 @@ export interface CreateDocumentCommentReplyParams extends CreateDocumentCommentP
  * drop the pending row.
  */
 export class DocumentCommentActionImpl {
+  readonly #get: () => DocumentCommentState;
   readonly #private: DocumentCommentPrivateAction;
   readonly #set: Setter;
 
   constructor(
     set: Setter,
-    _get: () => DocumentCommentState,
+    get: () => DocumentCommentState,
     privateAction: DocumentCommentPrivateAction,
   ) {
+    this.#get = get;
     this.#set = set;
     this.#private = privateAction;
   }
@@ -211,10 +213,14 @@ export class DocumentCommentActionImpl {
     optimisticComment,
   }: CreateDocumentCommentParams): Promise<CreatedComment> => {
     const { documentId } = input;
-    const key = documentCommentThreadsKey({
+    const threadParams: DocumentCommentThreadsParams = {
       documentId,
       scope: input.selectionAnchor ? 'anchored' : 'document',
-    });
+    };
+    const key = documentCommentThreadsKey(threadParams);
+    // An optimistic write onto a feed that has no view yet (still loading, or
+    // its fetch failed) is dropped, so the created row would stay invisible.
+    const threadUnloaded = !this.#get().threadFeedMap[key];
     const thread = this.#private.thread.beginOptimistic(
       key,
       patchItems<DocumentCommentThread>((threads) => appendThread(threads, optimisticComment)),
@@ -238,6 +244,7 @@ export class DocumentCommentActionImpl {
     thread.commit(
       patchItems<DocumentCommentThread>((threads) => appendThread(threads, created.comment)),
     );
+    if (threadUnloaded) void this.revalidateThreads(threadParams);
     // A retried submit the server already had: the count did not grow.
     if (created.isDuplicate) {
       summary.rollback();
@@ -272,6 +279,8 @@ export class DocumentCommentActionImpl {
     rootCommentId,
   }: CreateDocumentCommentReplyParams): Promise<CreatedComment> => {
     const { documentId } = input;
+    // See createRootComment: a feed with no view drops the optimistic write.
+    const repliesUnloaded = !this.#get().replyFeedMap[rootCommentId];
     const replies = this.#private.replies.beginOptimistic(
       rootCommentId,
       appendReplyToFeed(optimisticComment),
@@ -307,6 +316,7 @@ export class DocumentCommentActionImpl {
     }
 
     replies.commit(appendReplyToFeed(created.comment));
+    if (repliesUnloaded) void this.revalidateReplies(rootCommentId);
     if (created.isDuplicate) {
       for (const token of counts) token.rollback();
       void this.revalidateReplies(rootCommentId);
