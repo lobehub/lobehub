@@ -477,6 +477,115 @@ describe('documentComment replicas', () => {
     });
   });
 
+  describe('counters rebased mid-create', () => {
+    // The creator window gets its own `document.commentsChanged` fanout, so an
+    // event revalidation can land the server count that already includes the
+    // new comment while `create()` is still in flight.
+    it('does not count a new root twice when the summary is re-read mid-create', async () => {
+      vi.spyOn(documentCommentService, 'listThreads').mockResolvedValue({
+        items: [thread('root-1')],
+        nextCursor: null,
+      });
+      const summary = vi.spyOn(documentCommentService, 'summary').mockResolvedValue({ total: 2 });
+      renderHook(
+        () => {
+          documentCommentActions.useFetchThreads(LIST);
+          documentCommentActions.useFetchSummary(DOCUMENT_ID);
+        },
+        { wrapper },
+      );
+      await waitFor(() => expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 2 }));
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]).toBeDefined());
+
+      const request = deferred<{ comment: DocumentCommentItem; isDuplicate: boolean }>();
+      vi.spyOn(documentCommentService, 'create').mockReturnValue(request.promise as never);
+      let done!: Promise<unknown>;
+      act(() => {
+        done = documentCommentActions.createRootComment({
+          input: { clientId: 'new', content: 'new', documentId: DOCUMENT_ID },
+          optimisticComment: comment('optimistic:new', { clientId: 'new' }),
+        });
+      });
+      expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
+
+      // The server already counts the new root.
+      summary.mockResolvedValue({ total: 3 });
+      await act(() => documentCommentActions.revalidateSummary(DOCUMENT_ID));
+      expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
+
+      await act(async () => {
+        request.resolve({ comment: comment('root-2', { clientId: 'new' }), isDuplicate: false });
+        await done;
+      });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
+    });
+
+    it('does not count a new reply twice when the thread and summary are re-read mid-create', async () => {
+      const listThreads = vi.spyOn(documentCommentService, 'listThreads').mockResolvedValue({
+        items: [thread('root-1', 1)],
+        nextCursor: null,
+      });
+      const summary = vi.spyOn(documentCommentService, 'summary').mockResolvedValue({ total: 2 });
+      renderHook(
+        () => {
+          documentCommentActions.useFetchThreads(LIST);
+          documentCommentActions.useFetchSummary(DOCUMENT_ID);
+        },
+        { wrapper },
+      );
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(1));
+      await waitFor(() => expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 2 }));
+
+      const request = deferred<{ comment: DocumentCommentItem; isDuplicate: boolean }>();
+      vi.spyOn(documentCommentService, 'create').mockReturnValue(request.promise as never);
+      vi.spyOn(documentCommentService, 'listReplies').mockResolvedValue({
+        items: [],
+        nextCursor: null,
+      });
+      let done!: Promise<unknown>;
+      act(() => {
+        done = documentCommentActions.createReply({
+          input: {
+            clientId: 'r2',
+            content: 'r2',
+            documentId: DOCUMENT_ID,
+            parentCommentId: 'root-1',
+          },
+          optimisticComment: comment('optimistic:r2', {
+            clientId: 'r2',
+            parentCommentId: 'root-1',
+          }),
+          rootCommentId: 'root-1',
+        });
+      });
+      expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2);
+
+      // The server already counts the new reply.
+      listThreads.mockResolvedValue({ items: [thread('root-1', 2)], nextCursor: null });
+      summary.mockResolvedValue({ total: 3 });
+      await act(() =>
+        Promise.all([
+          documentCommentActions.revalidateThreads(LIST),
+          documentCommentActions.revalidateSummary(DOCUMENT_ID),
+        ]),
+      );
+      expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2);
+      expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
+
+      await act(async () => {
+        request.resolve({
+          comment: comment('reply-2', { clientId: 'r2', parentCommentId: 'root-1' }),
+          isDuplicate: false,
+        });
+        await done;
+      });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2);
+      expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
+    });
+  });
+
   describe('likes', () => {
     const summary: DocumentLikeSummary = { liked: true, likers: [], total: 7 };
 

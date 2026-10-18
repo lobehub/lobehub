@@ -23,7 +23,7 @@ import {
   documentCommentThreadPageSize,
   documentCommentThreadResource,
   documentLikeSummaryResource,
-  partitionThreadPage,
+  fetchThreadPage,
 } from './projection';
 
 type Setter = StoreSetter<DocumentCommentState>;
@@ -61,15 +61,17 @@ export class DocumentCommentPrivateAction {
     this.thread = createReplicaSlice(documentCommentThreadResource, {
       actionPrefix: 'documentComment/threads',
       effects: { onError: dropWhenGone((key, scope) => this.thread.remove(key, scope)) },
-      fetcher: async ({ documentId, scope }, cursor) =>
-        partitionThreadPage(
-          await documentCommentService.listThreads({
-            anchored: scope === 'all' ? undefined : scope === 'anchored',
-            cursor,
-            documentId,
-            limit: documentCommentThreadPageSize(scope),
-          }),
+      fetcher: ({ documentId, scope }, cursor) =>
+        fetchThreadPage(
+          (next) =>
+            documentCommentService.listThreads({
+              anchored: scope === 'all' ? undefined : scope === 'anchored',
+              cursor: next,
+              documentId,
+              limit: documentCommentThreadPageSize(scope),
+            }),
           scope,
+          cursor,
         ),
       get,
       set,

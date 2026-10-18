@@ -69,6 +69,32 @@ export const partitionThreadPage = (
   return items.length === page.items.length ? page : { ...page, items };
 };
 
+/**
+ * Server pages a scope may skip in one fetch. A page that filters down to
+ * nothing (see {@link partitionThreadPage}) would end the feed — the replica
+ * reads an empty page as the last one — so the fetch follows its cursor until
+ * a page keeps a row or the server runs out. Bounded so a document with many
+ * roots of the other scope cannot fan out into an unbounded request chain.
+ */
+export const MAX_EMPTY_THREAD_PAGE_HOPS = 10;
+
+/** One page of a scope's roots, following the server cursor past pages filtered to nothing. */
+export const fetchThreadPage = async (
+  listThreads: (cursor: string | undefined) => Promise<DocumentCommentThreadPage>,
+  scope: DocumentCommentThreadScope,
+  cursor?: string,
+): Promise<DocumentCommentThreadPage> => {
+  let page = partitionThreadPage(await listThreads(cursor), scope);
+  for (
+    let hop = 0;
+    page.items.length === 0 && page.nextCursor && hop < MAX_EMPTY_THREAD_PAGE_HOPS;
+    hop++
+  ) {
+    page = partitionThreadPage(await listThreads(page.nextCursor), scope);
+  }
+  return page;
+};
+
 /** Persisted rows per resource and scope; the least recently used beyond it are evicted. */
 const MAX_PERSISTED_DOCUMENTS = 50;
 /** Reply feeds are per root, so a few documents already hold many of them. */

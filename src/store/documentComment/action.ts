@@ -22,9 +22,9 @@ import {
 import {
   appendReply,
   appendThread,
+  raiseThreadReplyCount,
   replaceReply,
   replaceThreadRoot,
-  updateThreadReplyCount,
 } from './reducers';
 import { useDocumentCommentStore } from './store';
 
@@ -53,6 +53,15 @@ const appendReplyToFeed =
     if (items === feed.items) return feed;
     return { ...feed, items, ...(feed.total === undefined ? {} : { total: feed.total + 1 }) };
   };
+
+/**
+ * A counter overlay for one new comment: "at least what it was when the write
+ * began, plus one". A `+1` would be replayed over a base an event revalidation
+ * already moved past (the server counted the comment before `create()`
+ * settled), and committing it would persist a count one too high.
+ */
+const countedOnce = (baseline: number | undefined) => (current: number) =>
+  baseline === undefined ? current + 1 : Math.max(current, baseline + 1);
 
 export interface DocumentCommentEditorValue {
   content: string;
@@ -225,9 +234,10 @@ export class DocumentCommentActionImpl {
       key,
       patchItems<DocumentCommentThread>((threads) => appendThread(threads, optimisticComment)),
     );
+    const summaryTotal = countedOnce(this.#get().summaryMap[documentId]?.total);
     const summary = this.#private.summary.beginOptimistic(documentId, (current) => ({
       ...current,
-      total: current.total + 1,
+      total: summaryTotal(current.total),
     }));
 
     let created: CreatedComment;
@@ -246,12 +256,10 @@ export class DocumentCommentActionImpl {
     );
     if (threadUnloaded) void this.revalidateThreads(threadParams);
     // A retried submit the server already had: the count did not grow.
-    if (created.isDuplicate) {
-      summary.rollback();
-      void this.revalidateSummary(documentId);
-    } else {
-      summary.commit();
-    }
+    if (created.isDuplicate) summary.rollback();
+    else summary.commit();
+    // Converge on the server's count (another member may have commented meanwhile).
+    void this.revalidateSummary(documentId);
 
     // The body paints from the document-wide anchor list, so the new root
     // joins it now rather than on the next revalidation.
@@ -285,22 +293,34 @@ export class DocumentCommentActionImpl {
       rootCommentId,
       appendReplyToFeed(optimisticComment),
     );
+    // Baselines are read now, before the request: see `countedOnce`.
+    const state = this.#get();
+    const replyCountOf = (scope: DocumentCommentThreadScope) =>
+      state.threadFeedMap[documentCommentThreadsKey({ documentId, scope })]?.items.find(
+        ({ root }) => root.id === rootCommentId,
+      )?.replyCount;
+    const detailReplyCount = countedOnce(state.detailMap[rootCommentId]?.replyCount);
+    const summaryTotal = countedOnce(state.summaryMap[documentId]?.total);
     const counts = [
-      ...ROOT_SCOPES.map((scope) =>
-        this.#private.thread.beginOptimistic(
+      ...ROOT_SCOPES.map((scope) => {
+        const baseline = replyCountOf(scope);
+        return this.#private.thread.beginOptimistic(
           documentCommentThreadsKey({ documentId, scope }),
-          patchItems<DocumentCommentThread>((threads) =>
-            updateThreadReplyCount(threads, rootCommentId, 1),
-          ),
-        ),
-      ),
+          patchItems<DocumentCommentThread>((threads) => {
+            const current = threads.find(({ root }) => root.id === rootCommentId)?.replyCount;
+            return current === undefined
+              ? threads
+              : raiseThreadReplyCount(threads, rootCommentId, countedOnce(baseline)(current));
+          }),
+        );
+      }),
       this.#private.detail.beginOptimistic(rootCommentId, (detail) => ({
         ...detail,
-        replyCount: detail.replyCount + 1,
+        replyCount: detailReplyCount(detail.replyCount),
       })),
       this.#private.summary.beginOptimistic(documentId, (current) => ({
         ...current,
-        total: current.total + 1,
+        total: summaryTotal(current.total),
       })),
     ];
 
@@ -324,6 +344,8 @@ export class DocumentCommentActionImpl {
       void this.revalidateDocument(documentId);
     } else {
       for (const token of counts) token.commit();
+      // Converge on the server's count (another member may have commented meanwhile).
+      void this.revalidateSummary(documentId);
     }
     return created;
   };

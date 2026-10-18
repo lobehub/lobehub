@@ -34,14 +34,19 @@ export const replaceThreadRoot = (threads: DocumentCommentThread[], comment: Doc
     thread.root.id === comment.id ? { ...thread, root: comment } : thread,
   );
 
-export const updateThreadReplyCount = (
+/**
+ * Raise a root's reply count to at least `min`. Unlike a `+1`, this is
+ * idempotent across a rebase: a server count that already includes the reply
+ * (an event revalidated it while the create was in flight) is left as is.
+ */
+export const raiseThreadReplyCount = (
   threads: DocumentCommentThread[],
   rootCommentId: string,
-  delta: number,
+  min: number,
 ) =>
   mapChanged(threads, (thread) =>
-    thread.root.id === rootCommentId
-      ? { ...thread, replyCount: Math.max(0, thread.replyCount + delta) }
+    thread.root.id === rootCommentId && thread.replyCount < min
+      ? { ...thread, replyCount: min }
       : thread,
   );
 
