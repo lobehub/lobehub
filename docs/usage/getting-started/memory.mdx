@@ -7,7 +7,6 @@ tags:
   - LobeHub
   - Memory
   - Personalization
-  - Memory Agent
   - Privacy
   - Context
 ---
@@ -35,7 +34,7 @@ Memory works in four steps:
 <Steps>
   ### Conversation Analysis
 
-  As you interact, the Memory Agent analyzes conversations for insights: explicit preferences, implicit patterns, project context, and communication style.
+  As you interact, the Agent analyzes conversations for insights: explicit preferences, implicit patterns, project context, and communication style.
 
   ### Memory Extraction
 
@@ -105,31 +104,23 @@ Past projects and decisions: lessons learned, reasoning behind past choices, key
 
 ## Understanding Agent Memory
 
-Agent Memory is a built-in plugin in LobeHub. It automatically identifies and extracts key information from your conversations, building a structured memory base. These memories are applied in future interactions, making communication more personalized and efficient. It saves summaries of useful context and preferences rather than a verbatim transcript.
+Agent Memory is a built-in Skill in LobeHub. It automatically identifies and extracts key information from your conversations, building a structured memory base. These memories are applied in future interactions, making communication more personalized and efficient. It saves summaries of useful context and preferences rather than a verbatim transcript.
 
-![Agent Memory Interface](/blog/assets6ebefe8183f31de4de5bac1a921fb153.webp)
+![Saving a Preference Memory in Chat](/docs-images/usage/getting-started/agent-memory-in-chat.png)
 
 ## Enabling Memory
 
-Enable Memory separately for each Agent. You can turn it on from the Agent Profile page or directly in a conversation.
+Memory is a built-in Skill. Enable it separately for each Agent.
 
-### Enable from Agent Profile
+In the chat, click **+** at the bottom left of the input box, select **Skills**, and turn on **Memory**.
 
-Go to the Agent Profile page, click **+ Add Plugin**, and check **Memory** to enable it.
-
-![Add Memory Plugin from Agent Profile](/blog/assets27b2bf8596f8e65d545322c66a0d81a2.webp)
-
-### Enable in a Conversation
-
-Open a conversation, click the plugin icon below the chat input, and check **Memory** to activate it.
-
-![Enable Memory Plugin in Conversation](/blog/assets07820089deb72e5636024ae7e3d1855f.webp)
+![Enable Memory Skill in Chat](/docs-images/usage/getting-started/enable-memory-skill-in-chat.png)
 
 ## Managing Memory
 
 ### View Memory
 
-Click the **Memory** icon at the bottom of the left sidebar to open the Memory panel. It displays all memories extracted from your conversations, organized by type. Each memory shows:
+On the LobeHub homepage, select **Memory** in the left sidebar to open the Memory panel. It displays all memories extracted from your conversations, organized by type. Each memory shows:
 
 - **Title** — A concise summary, e.g. "Dislikes coffee"
 - **Preference Weight** — How strongly the Agent prioritizes this memory. Higher weight = more influence in conversations.
@@ -138,41 +129,25 @@ Click the **Memory** icon at the bottom of the left sidebar to open the Memory p
 - **Possible Actions** — How the Agent might apply this memory, e.g. "Offer tea, hot chocolate, juice, or decaf options depending on context."
 - **Tags** — For categorization and search
 
-![Memory Management Panel](/blog/assetseb9b70814679291052dfa4618a44a856.webp)
+![Memory Management Panel](/docs-images/usage/getting-started/memory-home.png)
 
 ### Search Memory
 
-Use the search function to quickly find specific memories. You can also open the command menu at any time and search for memories there. Filter by keyword, category, date range, or confidence level.
+Use the search function to quickly find specific memories. You can also open the command menu at any time and search for memories there.
+
+![Open Search on the Memory Page](/docs-images/usage/getting-started/search-memory.png)
 
 ### Edit Memory
 
 Modify any memory instruction to better reflect your actual needs and preferences.
 
-![Editing Memory](/blog/assetsd6eba2b1881977c9533ba86c1cd3dfce.webp)
+![Editing Memory](/docs-images/usage/getting-started/edit-memory.png)
 
 ### Delete Memory
 
-Select a memory and click the delete button to remove it. You can also bulk delete by category or clear all memories.
+Select a memory and click the delete button, then confirm in the dialog. Deleted memories cannot be restored.
 
-![Deleting Memory](/blog/assetse14ddb728d66905c164664b8b5e044d3.webp)
-
-## The Memory Agent
-
-The **Memory Agent** is a built-in Agent dedicated to managing your personal Memory:
-
-- **Extraction** — Analyzes conversations to identify valuable insights worth keeping
-- **Organization** — Categorizes and structures memories for easy retrieval
-- **Maintenance** — Identifies outdated or conflicting memories and suggests updates
-- **Application** — Determines when to inject relevant memories into an Agent's context
-
-### Interacting with the Memory Agent
-
-Talk directly to the Memory Agent to request additions or updates, or to review memories. Check the Memory panel afterward to verify that a requested change was saved:
-
-- "Remember that I prefer morning meetings over afternoon ones."
-- "What do you know about my current projects?"
-- "Update my role: I'm now VP of Product, not Senior PM."
-- "What do you remember about my communication preferences?"
+![Deleting Memory](/docs-images/usage/getting-started/delete-memory.png)
 
 ## Advanced Memory Features
 
@@ -220,16 +195,6 @@ Confidence helps you assess how well a memory is supported. Use these examples w
 ### Memory Relationships
 
 Related memories can provide richer context: for example, your role, current project, timeline, and stakeholders.
-
-### Memory Search
-
-Start with keyword search. Other filters and source details depend on your version; use them when available:
-
-- **Keyword search**: Search memory content
-- **Category filter**: Show only specific categories
-- **Date range**: Memories from specific timeframe
-- **Source conversation**: Find where memory originated
-- **Confidence level**: Filter by how certain the memory is
 
 ## Using Memory Effectively
 
@@ -288,7 +253,7 @@ For storage, access, sharing, and model-training policies, consult the privacy t
 
 <AccordionGroup>
   <Accordion title="Start with Key Context">
-    Have a conversation with the Memory Agent when you first start: "Let me tell you about myself and how I work." Cover your role, priorities, communication preferences, and common workflows.
+    Have a conversation with any Agent when you first start: "Let me tell you about myself and how I work." Cover your role, priorities, communication preferences, and common workflows.
   </Accordion>
 
   <Accordion title="Be Explicit About Preferences">
@@ -312,9 +277,9 @@ For storage, access, sharing, and model-training policies, consult the privacy t
 
 <AccordionGroup>
   <Accordion title="Agent Not Recalling Memories">
-    **Checks**: Is the saved memory relevant and accurate? Is the Memory plugin enabled for this Agent?
+    **Checks**: Is the saved memory relevant and accurate? Is the Memory Skill enabled for this Agent?
 
-    **Solutions**: State the preference explicitly, review or manually add the relevant entry, and check the Memory plugin. Recall depends on relevance to the current request.
+    **Solutions**: State the preference explicitly, review or manually add the relevant entry, and check the Memory Skill. Recall depends on relevance to the current request.
   </Accordion>
 
   <Accordion title="Incorrect Memories">
@@ -326,7 +291,7 @@ For storage, access, sharing, and model-training policies, consult the privacy t
   </Accordion>
 
   <Accordion title="Memory Not Extracting">
-    **Solutions**: Be more explicit in stating preferences, manually add important memories, check whether the Memory plugin is enabled, then verify the saved entries in the Memory panel.
+    **Solutions**: Be more explicit in stating preferences, manually add important memories, check whether the Memory Skill is enabled, then verify the saved entries in the Memory panel.
   </Accordion>
 </AccordionGroup>
 

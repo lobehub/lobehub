@@ -1,8 +1,8 @@
 ---
 title: Agent
 description: >-
-  Build an Agent with a system role, model, Skills, Connectors, Web Search,
-  resources, and Memory. Learn what each part controls.
+  Build an Agent with a system role, model, Skills, Connectors, resources,
+  and Memory. Learn what each part controls.
 tags:
   - LobeHub
   - Agent
@@ -29,7 +29,6 @@ For an Agent you create in LobeHub, start with a role and a model. Add instructi
 | **AI Model** | Understands requests, reasons, and generates content | Modalities and tool support depend on the model and provider |
 | **Skills** | `SKILL.md` instruction packages with optional references, templates, or scripts | Installation does not supply tools, account authorization, or an execution environment |
 | **Connectors** | Manage access and call permissions for built-in tools, MCP servers, and third-party integrations | A tool can run directly, request approval, or stay off |
-| **Web Search** | Finds information on the internet | Enable through **+** below the chat input. Choose Smart Search or Provider Search. Not a Skill package |
 | **Resource Library** | Provides uploaded files and knowledge bases for search and reference | Separate from documents the Agent saves itself |
 | **Memory** | Provides relevant personal context across conversations | Not a chat log, project instructions, or model training |
 
@@ -39,7 +38,7 @@ See the [June 8, 2026 changelog](/changelog/2026-06-08-connectors) for details a
 
 ## Types of Agents
 
-- **Built-in Agents** — Agent Builder (helps you create Agents), Pages Agent (writing), Memory Agent (manages your personal Memory)
+- **Built-in Agents** — Agent Builder (helps you create Agents), Pages Agent (writing)
 - **Custom Agents** — Agents you create and configure for your specific workflows
 - **Community Agents** — Ready-to-use Agents shared by the LobeHub community — one click to add
 - **External Agents** — Coding agents and personal agent platforms you connect from an execution device
@@ -64,7 +63,7 @@ Create an Agent with Agent Builder, build one from scratch, add one from the Com
   Review the generated configuration and adjust anything that doesn't fit.
 </Steps>
 
-![Agent Builder Smart Creation](/blog/assets2964497066067ca0588a7767eb4c1709.webp)
+![Agent Builder Smart Creation](/docs-images/usage/getting-started/agent-builder-smart-creation.png)
 
 ### Build a Custom Agent
 
@@ -77,7 +76,7 @@ The Community has thousands of ready-to-use Agents — design experts, coding he
 - Go to **Community → Agents** in the left sidebar, or scroll down the main screen to **Community Agents**.
 - Open an Agent's detail page, then click **Add Agent & Chat** to start immediately.
 
-![Add Agent from Community](/blog/assetsbcd98b0913d2dfc30d5a2b5523115d33.webp)
+![Add Agent from Community](/docs-images/usage/getting-started/add-agent-from-community.png)
 
 ### Connect External Agents
 
@@ -86,6 +85,8 @@ Open **Create Agent → Connect External Agents** to bring an existing external 
 Supported agents include **Codex, Amp, Claude Code, CodeBuddy, Cursor, Factory Droid, Devin, Grok Build, Kimi Code, OpenCode, Pi, Qoder, TRAE CLI, OpenClaw, and Hermes**.
 
 See [Connect External Agents](/docs/usage/agent/connect-external-agents) for installation requirements, device selection, and connection steps. External agents use their own runtimes, so the settings described here do not apply identically to every integration.
+
+![Connect External Agents](/docs-images/usage/getting-started/connect-external-agents.png)
 
 ## Configure Capabilities and Context
 
@@ -101,15 +102,9 @@ Skills describe how to approach tasks. Connectors let Agents use tools. Manage t
 
 Click **Add Skill** in the Agent Profile to select Skills. Configure any required connectors separately. The screenshot below shows the Skill entry point; its layout depends on your version.
 
-![Add Skill from Agent Profile](/blog/assetsdc6362a2c6db476fc1b7b9d6bf443af2.webp)
+![Add Skill from Agent Profile](/docs-images/usage/getting-started/add-skill-from-agent-profile.png)
 
 See [Skills Marketplace](/docs/usage/community/skills-market) and [MCP Marketplace](/docs/usage/community/mcp-market).
-
-### Enable Web Search
-
-Click **+** below the Agent chat input. Enable **Web Search**, then select **Smart Search** or **Provider Search**. Smart Search uses the LobeHub-optimized search service. Provider Search can cause unexpected behavior and is not recommended. Select **Off** to disable Web Search.
-
-Built-in web search does not require a package from **Add Skill**. A research Skill can guide search methods but cannot bypass disabled tools. See [Web Search](/docs/usage/agent/web-search).
 
 ### Choose an Execution Device
 
@@ -119,7 +114,7 @@ The device that shows the conversation is not necessarily the device that runs t
 
 ### Open the Terminal
 
-In the desktop app, click **Terminal** in the top-right corner of an agent page to enter commands and view output without switching to a separate terminal app. See [Terminal](/docs/usage/agent/terminal) for instructions and session management.
+In the desktop app, click the terminal icon in the top-right corner of an agent page to enter commands and view output without switching to a separate terminal app. See [Terminal](/docs/usage/agent/terminal) for instructions and session management.
 
 ### Edit Agent Information
 
@@ -131,9 +126,9 @@ See [Agent Profile](/docs/usage/agent/agent-profile) for appearance customizatio
 
 Attach a knowledge base so your Agent answers from your own data — docs, specs, or research — not just from general training.
 
-In the chat interface, use the Knowledge Base button to select and attach a knowledge base.
+In the chat, click **+** at the bottom left of the input box, select **Attachments**, then click **View More** to attach an entire knowledge base or specific files from it.
 
-![Link Knowledge Base in Chat](/blog/assetsc89931ace11a936d87d0b87a6bca1069.webp)
+![Link Knowledge Base in Chat](/docs-images/usage/getting-started/link-knowledge-base-in-chat.png)
 
 <Callout type="info">
   For more on knowledge bases, see [Resource Library](/docs/usage/getting-started/resource).
@@ -208,21 +203,21 @@ Before sharing, check system prompts, messages, and attachments for sensitive in
 
 ## Manage Agents
 
-When you have many Agents and Group Chats, organizing them into Groups keeps the sidebar clean and makes switching easier.
+When you have many Agents and Group Chats, organizing them into Categories keeps the sidebar clean and makes switching easier.
 
-### Create a Group
+### Create a Category
 
-On the LobeHub homepage, open the Agent list menu and select **Add New Group**.
+On the LobeHub homepage, open the Agent list menu and select **Add New Category**.
 
-![Add New Group in Agent List](/blog/assets98cddf4b80b8bac0c250a5236062d198.webp)
+![Add New Category in Agent List](/docs-images/usage/getting-started/add-new-category-in-agent-list.png)
 
-### Move to a Group
+### Move to a Category
 
-Select an existing Agent or Group Chat, then click **Move to Group**. You can also create new Agents or Group Chats directly inside a Group.
+Select an existing Agent or Group Chat, then click **Move to Category**. You can also create new Agents or Group Chats directly inside a Category.
 
-### Manage Groups
+### Manage Categories
 
-Go to the Agent list or Group menu and select **Manage Groups** to rename or reorder them.
+Go to the Agent list or Category menu and select **Manage Category** to rename or reorder them.
 
 ### Pin Frequently Used Agents
 
