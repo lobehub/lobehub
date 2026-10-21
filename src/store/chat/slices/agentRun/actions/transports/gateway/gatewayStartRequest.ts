@@ -1,4 +1,7 @@
 import { aiAgentService } from '@/services/aiAgent';
+import { shareChatService } from '@/services/shareChat';
+
+import { freezeGatewayRunForStop, unfreezeGatewayRunForStop } from './stopFreeze';
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -18,6 +21,50 @@ export const interruptGatewayTaskOrThrow = async (
       `Gateway operation ${params.operationId ?? 'unknown'} cancellation unconfirmed`,
     );
   }
+};
+
+/**
+ * Forwards a composer Stop to the server with the reply text frozen on screen,
+ * so the server trims its saved reply to it (LOBE-14836).
+ *
+ * Returns:
+ * - `true` once an owner run's shutdown is confirmed; the caller then settles
+ *   the owner-side queue and topic.
+ * - `false` for a share visitor's run, which has none of that state.
+ * - Rejects, with the reply rendering again, when the shutdown is unconfirmed.
+ */
+export const interruptGatewayRunOnStop = async ({
+  agentShareId,
+  gatewayOpId,
+  interrupt,
+  shareTopicId,
+}: {
+  agentShareId?: string;
+  gatewayOpId: string;
+  interrupt: { operationId: string; topicId?: string };
+  shareTopicId: string;
+}): Promise<boolean> => {
+  // Synchronously, before any await: the reply freezes at what is on screen
+  // now, and that exact text goes with the interrupt.
+  const stopSnapshot = freezeGatewayRunForStop(gatewayOpId);
+
+  // Share visitors have no access to the owner-scoped interrupt (and no device
+  // runtimes to confirm), so they go through the share mirror.
+  if (agentShareId) {
+    await shareChatService
+      .interruptTask(agentShareId, shareTopicId, interrupt.operationId, stopSnapshot)
+      .catch((err) => console.error('[Gateway] share interruptTask failed:', err));
+    return false;
+  }
+
+  try {
+    await interruptGatewayTaskOrThrow({ ...interrupt, stopSnapshot });
+  } catch (error) {
+    // `cancelOperation` restores the run as live; keep rendering it.
+    unfreezeGatewayRunForStop(gatewayOpId);
+    throw error;
+  }
+  return true;
 };
 
 /**
