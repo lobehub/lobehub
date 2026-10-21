@@ -1618,6 +1618,7 @@ export class GatewayActionImpl {
           topicId: result.topicId,
         }),
       onSessionComplete: ({ authFailed, completion, succeeded, terminalReceived }) => {
+        eventHandler.dispose();
         // The gateway event handler already completed the op via the shared run
         // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
         // terminal-missing fallback so the op never sticks `running`.
@@ -1986,6 +1987,7 @@ export class GatewayActionImpl {
           topicId,
         }),
       onSessionComplete: ({ authFailed, completion, succeeded, terminalReceived }) => {
+        eventHandler.dispose();
         // A reconnect-local operation has no remaining work once the session
         // completion callback fires. Real streamed terminals are completed by
         // the shared run lifecycle; every terminal-missing fallback (including

@@ -161,15 +161,35 @@ describe('createGatewayEventHandler — stop freeze', () => {
     expect(shownContent()).toBe('abc');
   });
 
-  it('returns no snapshot before any reply text streamed', () => {
-    const { store } = createStreamingStore();
-    createGatewayEventHandler(() => store, {
+  it('keeps rendering when Stop lands before any server state', async () => {
+    // No snapshot goes out, so the server keeps what it streams after Stop;
+    // hiding that text would only bring it back on reload.
+    const { shownContent, store } = createStreamingStore();
+    const handler = createGatewayEventHandler(() => store, {
       assistantMessageId: 'answer-msg',
       context,
       operationId: 'op-empty',
     });
 
     expect(freezeGatewayRunForStop('op-empty')).toBeUndefined();
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'late text' }));
+    await flush();
+
+    expect(shownContent()).toBe('late text');
+  });
+
+  it('releases the Stop control when the session ends without a terminal event', () => {
+    const { store } = createStreamingStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-silent-end',
+    });
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'line 1\n' }));
+
+    handler.dispose();
+
+    expect(freezeGatewayRunForStop('op-silent-end')).toBeUndefined();
   });
 
   it('returns an empty snapshot when Stop lands before the reply text shows', async () => {
@@ -215,5 +235,9 @@ describe('createGatewayEventHandler — stop freeze', () => {
     await flush();
 
     expect(freezeGatewayRunForStop('op-huge')).toBeUndefined();
+    // Without a snapshot the server keeps the full reply; so does the bubble.
+    handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'more' }));
+    await flush();
+    expect(store.dbMessagesMap[messageMapKey(context)][0].content.endsWith('more')).toBe(true);
   });
 });

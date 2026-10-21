@@ -229,8 +229,9 @@ export const createGatewayEventHandler = (
   const unregisterStopFreeze =
     runtimeType === 'gateway'
       ? registerGatewayStopFreeze(operationId, {
+          // Freeze only when a snapshot goes out: without one the server keeps
+          // everything it generates, so the bubble must keep showing it.
           freeze: () => {
-            stopFrozen = true;
             if (!hasStreamedContent) return undefined;
 
             // An empty bubble (still thinking, or text not rendered yet) is a
@@ -244,6 +245,7 @@ export const createGatewayEventHandler = (
             // rejected; stopping matters more than the trim.
             if (content.length > INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH) return undefined;
 
+            stopFrozen = true;
             return { assistantMessageId: currentAssistantMessageId, content };
           },
           unfreeze: () => {
@@ -481,7 +483,7 @@ export const createGatewayEventHandler = (
     );
   };
 
-  return (event: AgentStreamEvent) => {
+  const handleEvent = (event: AgentStreamEvent) => {
     if (terminalState) return;
 
     // Subagent (`Agent`/`Task`) inner-tool events are tagged `data.subagent` and
@@ -1412,4 +1414,12 @@ export const createGatewayEventHandler = (
       }
     }
   };
+
+  return Object.assign(handleEvent, {
+    /**
+     * Release this run's Stop control. A terminal event already does; call it
+     * on every session end, since some (auth failure, silent end) send none.
+     */
+    dispose: () => unregisterStopFreeze?.(),
+  });
 };
