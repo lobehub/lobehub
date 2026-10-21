@@ -24,6 +24,56 @@ describe('Anthropic generateObject', () => {
     );
   });
 
+  it('should use auto tool choice with a tool-use instruction when autoToolChoice is set', async () => {
+    const schemaRequest = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [
+          { content: 'Be concise.', role: 'system' as const },
+          { content: 'Generate data', role: 'user' as const },
+        ],
+        model: 'kimi-k2.7-code',
+        schema: {
+          name: 'result',
+          schema: { properties: { ok: { type: 'boolean' } }, type: 'object' as const },
+          strict: true,
+        },
+      },
+      { autoToolChoice: true, schemaToolChoice: 'any' },
+    );
+
+    expect(schemaRequest.requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect(schemaRequest.requestParams.system).toEqual([
+      {
+        text: 'Be concise.\n\nYou must respond by calling the `result` tool. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
+    // `strict` is only added for Claude models that reject forced tool use
+    expect((schemaRequest.requestParams.tools![0] as any).strict).toBeUndefined();
+
+    const toolsRequest = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [{ content: 'Generate data', role: 'user' as const }],
+        model: 'kimi-k2.7-code',
+        tools: [
+          {
+            function: { name: 'get_data', parameters: { properties: {}, type: 'object' } },
+            type: 'function',
+          },
+        ],
+      },
+      { autoToolChoice: true },
+    );
+
+    expect(toolsRequest.requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect(toolsRequest.requestParams.system).toEqual([
+      {
+        text: 'You must respond by calling one of the provided tools. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
+  });
+
   it('should strip trailing assistant messages for models without prefill support', async () => {
     const { requestParams } = await buildAnthropicGenerateObjectRequest({
       messages: [
