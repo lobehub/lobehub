@@ -1,3 +1,4 @@
+import { InterruptStopSnapshotSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -16,6 +17,8 @@ const InterruptTaskSchema = z
   .object({
     /** Operation ID */
     operationId: z.string().optional(),
+    /** What the client showed when Stop was pressed; see `InterruptStopSnapshot`. */
+    stopSnapshot: InterruptStopSnapshotSchema.optional(),
     /** Thread ID */
     threadId: z.string().optional(),
     /**
@@ -49,12 +52,17 @@ export const runControlRouter = router({
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }) => {
-      const { threadId, operationId, topicId } = input;
+      const { threadId, operationId, stopSnapshot, topicId } = input;
 
       log('interruptTask: threadId=%s, operationId=%s, topicId=%s', threadId, operationId, topicId);
 
       try {
-        return await ctx.aiAgentService.interruptTask({ operationId, threadId, topicId });
+        return await ctx.aiAgentService.interruptTask({
+          operationId,
+          stopSnapshot,
+          threadId,
+          topicId,
+        });
       } catch (error: any) {
         if (error.message === 'Thread not found') {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Thread not found' });

@@ -10,6 +10,7 @@ import { logToolCallPc } from '../../formalObservation';
 import { buildProjectedMessagePatch } from '../../messagePatch';
 import { buildStepPresentation, formatTokenCount } from '../../stepPresentation';
 import { INTERVENTION_LIFECYCLE_CHECKPOINT_KEY } from '../constants';
+import { applyInterruptStopSnapshot } from '../operationControl';
 import type { AgentRuntimeServiceContext, InterventionLifecycleCheckpoint } from '../types';
 import type { PreparedStepInput } from './prepare';
 
@@ -21,6 +22,7 @@ export type StepRunStepDeps = Pick<
   | 'completionLifecycle'
   | 'coordinator'
   | 'determineCompletionReason'
+  | 'messageModel'
   | 'parkForClientLlm'
   | 'publishSubAgentProgress'
   | 'queryUiMessages'
@@ -116,6 +118,9 @@ export async function runAndReconcileStep(
 
     stepResult.newState.status = 'interrupted';
     stepResult.newState.lastModified = new Date().toISOString();
+    // Before the step result is saved and completion hooks run, so the
+    // reply the next turn reads is the one the user stopped on.
+    await applyInterruptStopSnapshot(deps, operationId);
     log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
   } else if (stepResult.newState.status === 'error') {
     // No client could run the step's LLM call: park for one instead of

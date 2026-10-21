@@ -2,7 +2,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agents, chatGroups, sessions, threads, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH, ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -202,6 +202,30 @@ describe('aiAgentRouter.interruptTask', () => {
       expect(result.operationId).toBe('op-direct-interrupt');
       // threadId should be undefined when only operationId is provided
       expect(result.threadId).toBeUndefined();
+    });
+
+    it('should pass the reply shown at Stop to the runtime interrupt', async () => {
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const stopSnapshot = { assistantMessageId: 'msg-1', content: 'shown so far' };
+
+      await caller.interruptTask({ operationId: 'op-direct-interrupt', stopSnapshot });
+
+      expect(mockInterruptOperation).toHaveBeenCalledWith('op-direct-interrupt', stopSnapshot);
+    });
+
+    it('should reject an oversized stop snapshot', async () => {
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await expect(
+        caller.interruptTask({
+          operationId: 'op-direct-interrupt',
+          stopSnapshot: {
+            assistantMessageId: 'msg-1',
+            content: 'x'.repeat(INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH + 1),
+          },
+        }),
+      ).rejects.toThrow();
+      expect(mockInterruptOperation).not.toHaveBeenCalled();
     });
 
     it('should use both threadId and operationId when both provided', async () => {

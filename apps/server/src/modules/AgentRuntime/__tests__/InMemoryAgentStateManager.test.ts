@@ -303,6 +303,16 @@ describe('InMemoryAgentStateManager', () => {
 
       expect(await manager.isInterrupted('op-int')).toBe(false);
     });
+
+    it('should keep the stop snapshot until the operation is deleted', async () => {
+      const stopSnapshot = { assistantMessageId: 'msg-1', content: 'shown so far' };
+      await manager.markInterrupted('op-int', stopSnapshot);
+
+      expect(await manager.getInterruptStopSnapshot('op-int')).toEqual(stopSnapshot);
+
+      await manager.deleteAgentOperation('op-int');
+      expect(await manager.getInterruptStopSnapshot('op-int')).toBeUndefined();
+    });
   });
 
   describe('queued messages flag', () => {

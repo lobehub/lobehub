@@ -19,6 +19,7 @@ import * as serverConfigStore from '@/store/serverConfig';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
+import { registerGatewayStopFreeze } from '../transports/gateway/stopFreeze';
 import { createMockMessage } from './fixtures';
 
 vi.mock('@/services/aiAgent', () => ({
@@ -2627,6 +2628,73 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    it('sends the frozen reply with the interrupt and unfreezes when it fails', async () => {
+      // LOBE-14836: the server trims its stored reply to what the user saw at Stop.
+      const onOperationCancel = vi.fn();
+      const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
+      const set = vi.fn((updater: any) => {
+        Object.assign(state, typeof updater === 'function' ? updater(state) : updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_dispatchTopic: vi.fn(),
+        moveQueuedMessages: vi.fn(),
+        moveVoiceMessages: vi.fn(),
+        onOperationCancel,
+        replaceMessages: vi.fn(),
+        startOperation: vi.fn(() => ({ operationId: 'gw-op-stop' })),
+        switchTopic: vi.fn(),
+      })) as any;
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => createMockClient());
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-stop',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Hello',
+      });
+
+      const stopSnapshot = { assistantMessageId: 'ast-1', content: 'shown so far' };
+      const unfreeze = vi.fn();
+      registerGatewayStopFreeze('gw-op-stop', { freeze: () => stopSnapshot, unfreeze });
+      const [, handler] = onOperationCancel.mock.calls[0];
+
+      const interruptTaskSpy = vi
+        .mocked(aiAgentService.interruptTask)
+        .mockResolvedValueOnce({ operationId: 'server-op-stop', success: true });
+      await handler();
+      expect(interruptTaskSpy).toHaveBeenCalledWith({
+        operationId: 'server-op-stop',
+        stopSnapshot,
+        topicId: 'topic-1',
+      });
+      expect(unfreeze).not.toHaveBeenCalled();
+
+      interruptTaskSpy.mockRejectedValueOnce(new Error('network down'));
+      await expect(handler()).rejects.toThrow('network down');
+      expect(unfreeze).toHaveBeenCalledTimes(1);
+    });
+
     /**
      * @example A confirmed stop settles the sidebar row without the socket's terminal frame.
      */
@@ -4244,10 +4312,12 @@ describe('GatewayActionImpl', () => {
 
         await getCancelHandler()?.();
 
+        // Nothing streamed yet, so there is no reply text to freeze.
         expect(shareChatService.interruptTask).toHaveBeenCalledWith(
           'share-1',
           'topic-1',
           'server-op-1',
+          undefined,
         );
         expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
       });

@@ -1,5 +1,5 @@
 import { type AgentState } from '@lobechat/agent-runtime';
-import { type UIChatMessage } from '@lobechat/types';
+import { type InterruptStopSnapshot, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -280,8 +280,15 @@ export class AgentRuntimeCoordinator {
    * Set the interrupt sentinel so pollers can observe the stop request
    * without loading the full state blob.
    */
-  async markInterrupted(operationId: string): Promise<void> {
-    return this.stateManager.markInterrupted(operationId);
+  async markInterrupted(operationId: string, stopSnapshot?: InterruptStopSnapshot): Promise<void> {
+    return this.stateManager.markInterrupted(operationId, stopSnapshot);
+  }
+
+  /**
+   * Read the Stop snapshot recorded with the interrupt sentinel.
+   */
+  async getInterruptStopSnapshot(operationId: string): Promise<InterruptStopSnapshot | undefined> {
+    return this.stateManager.getInterruptStopSnapshot(operationId);
   }
 
   /**

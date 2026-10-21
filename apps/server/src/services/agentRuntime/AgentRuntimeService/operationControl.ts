@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
+import type { InterruptStopSnapshot } from '@lobechat/types';
 import debug from 'debug';
 
 import { redisService } from '@/server/services/redis';
@@ -104,12 +105,15 @@ export async function isOperationInterrupted(
  * The agent will stop at the next step boundary (cannot abort an in-flight LLM call).
  * Works with both Redis and InMemory state managers via the coordinator abstraction.
  *
+ * @param stopSnapshot What the client was showing when Stop was pressed; the
+ * interrupted step later cuts its persisted reply back to it.
  * @returns true if interruption is acknowledged (including an already terminal operation),
  * false if missing runtime state prevents confirming that the operation has stopped.
  */
 export async function interruptOperation(
   deps: OperationControlDeps,
   operationId: string,
+  stopSnapshot?: InterruptStopSnapshot,
 ): Promise<boolean> {
   const state = await deps.coordinator.loadAgentState(operationId);
   if (!state) {
@@ -154,7 +158,7 @@ export async function interruptOperation(
   // two never diverge. A sentinel that lands without the state save
   // (crash between the writes) only stops the op earlier than the record
   // shows — the step-boundary check then persists the interrupted state.
-  await deps.coordinator.markInterrupted(operationId);
+  await deps.coordinator.markInterrupted(operationId, stopSnapshot);
 
   const parkedWait = state.status === 'waiting_for_client' ? state.clientLlmWait : undefined;
   const interruptedState: AgentState = {
@@ -578,5 +582,55 @@ export async function startExecution(
   } catch (error) {
     log('Failed to start execution for operation %s: %O', operationId, error);
     throw error;
+  }
+}
+
+/**
+ * Cut an interrupted step's reply back to what the client showed at Stop.
+ *
+ * Stop publishes the terminal event right away and the client freezes the
+ * bubble there, but the step only notices the interrupt on its next abort
+ * poll, so the model keeps streaming meanwhile and the step persists the
+ * longer text. Without this, the stopped reply silently grows on the next
+ * reload (LOBE-14836).
+ *
+ * Only shortens: the row must be this operation's assistant message and its
+ * persisted content must extend the snapshot, so a caller can never write
+ * arbitrary text. An empty snapshot is honored: Stop before any reply text
+ * showed (e.g. while thinking) keeps the reply empty.
+ * Reasoning, tool calls and usage stay as produced — those tokens were spent.
+ */
+export async function applyInterruptStopSnapshot(
+  deps: Pick<AgentRuntimeServiceContext, 'coordinator' | 'messageModel'>,
+  operationId: string,
+): Promise<void> {
+  try {
+    const snapshot = await deps.coordinator.getInterruptStopSnapshot(operationId);
+    if (!snapshot) return;
+
+    const message = await deps.messageModel.findById(snapshot.assistantMessageId);
+    if (!message || message.role !== 'assistant') return;
+
+    const messageOperationId = (message.metadata as { operationId?: unknown } | null)
+      ?.operationId;
+    if (messageOperationId !== operationId) return;
+
+    const content = message.content ?? '';
+    if (content.length <= snapshot.content.length || !content.startsWith(snapshot.content)) {
+      return;
+    }
+
+    await deps.messageModel.update(message.id, { content: snapshot.content });
+    log(
+      '[%s] Trimmed stopped reply %s from %d to %d chars',
+      operationId,
+      message.id,
+      content.length,
+      snapshot.content.length,
+    );
+  } catch (error) {
+    // Best-effort: failing to trim leaves today's longer reply, never a
+    // broken run.
+    log('[%s] Failed to apply the stop snapshot: %O', operationId, error);
   }
 }

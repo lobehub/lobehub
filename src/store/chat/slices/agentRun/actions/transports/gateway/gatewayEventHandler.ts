@@ -15,10 +15,11 @@ import type {
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
 import { isSessionTerminalEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
-import { isClientLlmWaitableError } from '@lobechat/types';
+import { INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH, isClientLlmWaitableError } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { readConversationMessages } from '@/helpers/conversationMessageRead';
@@ -44,6 +45,7 @@ import {
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
 import { applyStepMetrics } from './stepMetrics';
+import { registerGatewayStopFreeze } from './stopFreeze';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -373,6 +375,39 @@ export const createGatewayEventHandler = (
   // the store indefinitely).
   let hasStreamedContent = false;
 
+  /**
+   * Set by Stop. Reply text keeps accumulating but is no longer rendered, so
+   * the bubble stays at exactly the text sent as the stop snapshot, which the
+   * server cuts its persisted reply back to. Reasoning and tool calls are not
+   * cut server-side, so they keep rendering.
+   */
+  let stopFrozen = false;
+  const unregisterStopFreeze =
+    runtimeType === 'gateway'
+      ? registerGatewayStopFreeze(operationId, {
+          freeze: () => {
+            stopFrozen = true;
+            if (!hasStreamedContent) return undefined;
+
+            // An empty bubble (still thinking, or text not rendered yet) is a
+            // snapshot too: without it the server keeps text the user never saw.
+            // Until the first text chunk the bubble holds the loading
+            // placeholder, which is not reply text.
+            const shown =
+              dbMessageSelectors.getDbMessageById(currentAssistantMessageId)(get())?.content ?? '';
+            const content = shown === LOADING_FLAT && !accumulatedContent ? '' : shown;
+            // Over the interrupt input limit the whole Stop request would be
+            // rejected; stopping matters more than the trim.
+            if (content.length > INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH) return undefined;
+
+            return { assistantMessageId: currentAssistantMessageId, content };
+          },
+          unfreeze: () => {
+            stopFrozen = false;
+          },
+        })
+      : undefined;
+
   // Active reasoning sub-op id. Mirrors the LLM `StreamingHandler` lifecycle so
   // `isMessageInReasoning(messageId)` (which drives the Thinking UI's
   // "thinking..." title + auto-expand) flips to `true` while thinking is
@@ -577,6 +612,7 @@ export const createGatewayEventHandler = (
         endReasoningIfNeeded();
         accumulatedContent = relayRender.content;
       }
+      if (stopFrozen) return;
       // The whole reply so far, not the delta: a chunk that raced ahead of
       // `stream_start` (the message shell not in the store yet) is not lost.
       get().internal_dispatchMessage(
@@ -620,6 +656,7 @@ export const createGatewayEventHandler = (
     // same session once a client resumes it.
     if (isSessionTerminalEvent(event)) {
       terminalState = event.type === 'error' ? 'error' : 'completed';
+      unregisterStopFreeze?.();
       // A relayed attempt this tab still runs for the run is moot now.
       llmRelayExecutor.cancelOperation(event.operationId || gatewayOperationId);
     }
@@ -807,14 +844,16 @@ export const createGatewayEventHandler = (
                 accumulatedContent = data.content;
               }
               hasStreamedContent = true;
-              get().internal_dispatchMessage(
-                {
-                  id: currentAssistantMessageId,
-                  type: 'updateMessage',
-                  value: { content: accumulatedContent },
-                },
-                dispatchContext,
-              );
+              if (!stopFrozen) {
+                get().internal_dispatchMessage(
+                  {
+                    id: currentAssistantMessageId,
+                    type: 'updateMessage',
+                    value: { content: accumulatedContent },
+                  },
+                  dispatchContext,
+                );
+              }
             }
           }
 
@@ -902,14 +941,16 @@ export const createGatewayEventHandler = (
             // empty completed assistant bubble while waiting for terminal SoT.
             accumulatedContent = finalContent;
             hasStreamedContent = true;
-            get().internal_dispatchMessage(
-              {
-                id: currentAssistantMessageId,
-                type: 'updateMessage',
-                value: { content: accumulatedContent },
-              },
-              dispatchContext,
-            );
+            if (!stopFrozen) {
+              get().internal_dispatchMessage(
+                {
+                  id: currentAssistantMessageId,
+                  type: 'updateMessage',
+                  value: { content: accumulatedContent },
+                },
+                dispatchContext,
+              );
+            }
           }
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();

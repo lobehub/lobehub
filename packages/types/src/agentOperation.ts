@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type AgentOperationStatus =
   | 'abandoned'
   | 'done'
@@ -36,3 +38,23 @@ export type AgentOperationCompletionReason =
   | 'waiting_for_async_tool'
   | 'waiting_for_client'
   | 'waiting_for_human';
+
+/**
+ * Upper bound on the reply text a Stop request may carry. Generous enough for
+ * long answers while keeping the interrupt request and its Redis sentinel small.
+ */
+export const INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH = 200_000;
+
+/**
+ * What the client was showing for the streaming assistant message when the
+ * user pressed Stop. The client freezes the bubble at that moment, while the
+ * server may keep streaming until its step notices the interrupt; the step
+ * boundary cuts the persisted reply back to this text so a later reload shows
+ * the same reply the user stopped on.
+ */
+export const InterruptStopSnapshotSchema = z.object({
+  assistantMessageId: z.string(),
+  content: z.string().max(INTERRUPT_STOP_SNAPSHOT_MAX_LENGTH),
+});
+
+export type InterruptStopSnapshot = z.infer<typeof InterruptStopSnapshotSchema>;

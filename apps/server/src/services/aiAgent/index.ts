@@ -11,6 +11,7 @@ import type {
   ExecSubAgentParams,
   ExecSubAgentResult,
   ExecVirtualSubAgentParams,
+  InterruptStopSnapshot,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
 } from '@lobechat/types';
@@ -874,6 +875,7 @@ export class AiAgentService {
    */
   async interruptTask(params: {
     operationId?: string;
+    stopSnapshot?: InterruptStopSnapshot;
     threadId?: string;
     topicId?: string;
   }): Promise<{

@@ -523,6 +523,89 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    describe('stop snapshot', () => {
+      const runInterruptedStep = async (
+        snapshot: { assistantMessageId: string; content: string } | undefined,
+        message: Record<string, unknown> | undefined,
+      ) => {
+        const mockStepResult = {
+          events: [],
+          newState: { ...mockState, status: 'running', stepCount: 2 },
+          nextContext: mockParams.context,
+        };
+        const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+        vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+        mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+        mockCoordinator.isInterrupted.mockResolvedValueOnce(true);
+        mockCoordinator.getInterruptStopSnapshot.mockResolvedValueOnce(snapshot);
+
+        const findById = vi.fn().mockResolvedValue(message);
+        const update = vi.fn().mockResolvedValue(undefined);
+        (service as any).messageModel.findById = findById;
+        (service as any).messageModel.update = update;
+
+        await service.executeStep(mockParams);
+        return { findById, update };
+      };
+
+      const streamedMessage = (overrides: Record<string, unknown> = {}) => ({
+        content: 'line 1\nline 2\nline 3\nline 4',
+        id: 'msg-assistant',
+        metadata: { operationId: mockParams.operationId },
+        role: 'assistant',
+        ...overrides,
+      });
+
+      it('cuts the persisted reply back to what the client showed at Stop', async () => {
+        const { update } = await runInterruptedStep(
+          { assistantMessageId: 'msg-assistant', content: 'line 1\nline 2' },
+          streamedMessage(),
+        );
+
+        expect(update).toHaveBeenCalledWith('msg-assistant', { content: 'line 1\nline 2' });
+        expect(update.mock.invocationCallOrder[0]).toBeLessThan(
+          mockCoordinator.saveStepResult.mock.invocationCallOrder[0],
+        );
+      });
+
+      it('never rewrites a reply the snapshot is not a prefix of', async () => {
+        const { update } = await runInterruptedStep(
+          { assistantMessageId: 'msg-assistant', content: 'injected text' },
+          streamedMessage(),
+        );
+
+        expect(update).not.toHaveBeenCalled();
+      });
+
+      it("ignores a message that is not this operation's assistant reply", async () => {
+        const otherOperation = await runInterruptedStep(
+          { assistantMessageId: 'msg-assistant', content: 'line 1' },
+          streamedMessage({ metadata: { operationId: 'another-operation' } }),
+        );
+        expect(otherOperation.update).not.toHaveBeenCalled();
+
+        const userMessage = await runInterruptedStep(
+          { assistantMessageId: 'msg-assistant', content: 'line 1' },
+          streamedMessage({ role: 'user' }),
+        );
+        expect(userMessage.update).not.toHaveBeenCalled();
+      });
+
+      it('keeps the reply when Stop carried no snapshot', async () => {
+        const { findById } = await runInterruptedStep(undefined, streamedMessage());
+        expect(findById).not.toHaveBeenCalled();
+      });
+
+      it('empties the reply when Stop landed before any reply text showed', async () => {
+        const { update } = await runInterruptedStep(
+          { assistantMessageId: 'msg-assistant', content: '' },
+          streamedMessage(),
+        );
+        expect(update).toHaveBeenCalledWith('msg-assistant', { content: '' });
+      });
+    });
+
+
     it('should detect an interruption written by an old worker without a sentinel', async () => {
       const mockStepResult = {
         events: [],

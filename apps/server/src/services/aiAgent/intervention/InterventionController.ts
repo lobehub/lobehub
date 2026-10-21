@@ -4,7 +4,7 @@ import {
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
-import { ThreadStatus } from '@lobechat/types';
+import { type InterruptStopSnapshot, ThreadStatus } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
@@ -88,6 +88,8 @@ export class InterventionController {
    */
   async interruptTask(params: {
     operationId?: string;
+    /** What the client showed at Stop; see `InterruptStopSnapshot`. */
+    stopSnapshot?: InterruptStopSnapshot;
     threadId?: string;
     topicId?: string;
   }): Promise<{
@@ -96,7 +98,7 @@ export class InterventionController {
     success: boolean;
     threadId?: string;
   }> {
-    const { threadId, operationId, topicId } = params;
+    const { threadId, operationId, stopSnapshot, topicId } = params;
 
     log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
 
@@ -214,7 +216,10 @@ export class InterventionController {
 
     // 3. Interrupt the runtime operation first. Only mark the thread cancelled
     // after the runtime acknowledges the interrupt to avoid unlocking a live task.
-    const interrupted = await this.deps.agentRuntimeService.interruptOperation(resolvedOperationId);
+    const interrupted = await this.deps.agentRuntimeService.interruptOperation(
+      resolvedOperationId,
+      stopSnapshot,
+    );
     log(
       'interruptTask: interruptOperation=%s for operationId=%s',
       interrupted,

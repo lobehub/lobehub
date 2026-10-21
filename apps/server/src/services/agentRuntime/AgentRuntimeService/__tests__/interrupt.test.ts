@@ -154,7 +154,7 @@ describe('AgentRuntimeService', () => {
           lastModified: expect.any(String),
         }),
       );
-      expect(mockCoordinator.markInterrupted).toHaveBeenCalledWith('op-1');
+      expect(mockCoordinator.markInterrupted).toHaveBeenCalledWith('op-1', undefined);
       // Sentinel must land before the state save: the step-boundary check
       // reads only the sentinel, so state-first ordering would let a check
       // between the two writes miss the interrupt and clobber it.
@@ -162,6 +162,21 @@ describe('AgentRuntimeService', () => {
         mockCoordinator.saveAgentState.mock.invocationCallOrder[0],
       );
     });
+
+    it('should store the stop snapshot with the interrupt sentinel', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        lastModified: new Date().toISOString(),
+        operationId: 'op-1',
+        status: 'running',
+        stepCount: 3,
+      });
+      const stopSnapshot = { assistantMessageId: 'msg-1', content: 'shown so far' };
+
+      await service.interruptOperation('op-1', stopSnapshot);
+
+      expect(await mockCoordinator.getInterruptStopSnapshot('op-1')).toEqual(stopSnapshot);
+    });
+
 
     it('should interrupt a waiting_for_human operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({

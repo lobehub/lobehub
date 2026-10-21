@@ -1,6 +1,7 @@
 import type {
   ExecAgentClientIds,
   ExecAgentResult,
+  InterruptStopSnapshot,
   UIChatMessage,
   UserInterventionConfig,
 } from '@lobechat/types';
@@ -180,8 +181,18 @@ class ShareChatService {
    * the server keeps generating (and billing the creator's share budget) after
    * the visitor walks away.
    */
-  async interruptTask(shareId: string, topicId: string, operationId: string) {
-    return await lambdaClient.shareChat.interruptTask.mutate({ operationId, shareId, topicId });
+  async interruptTask(
+    shareId: string,
+    topicId: string,
+    operationId: string,
+    stopSnapshot?: InterruptStopSnapshot,
+  ) {
+    return await lambdaClient.shareChat.interruptTask.mutate({
+      operationId,
+      shareId,
+      stopSnapshot,
+      topicId,
+    });
   }
 
   /**

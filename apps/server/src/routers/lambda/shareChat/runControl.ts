@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { InterruptStopSnapshotSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -270,7 +271,12 @@ export const runControlRouter = router({
    * see {@link authorizeVisitorRunningOperation}.
    */
   interruptTask: shareChatProcedure
-    .input(ShareTopicScopeSchema.extend({ operationId: z.string() }))
+    .input(
+      ShareTopicScopeSchema.extend({
+        operationId: z.string(),
+        stopSnapshot: InterruptStopSnapshotSchema.optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const { aiAgentService, share } = await authorizeVisitorRunningOperation(
         ctx.serverDB,
@@ -289,6 +295,7 @@ export const runControlRouter = router({
       try {
         return await aiAgentService.interruptTask({
           operationId: input.operationId,
+          stopSnapshot: input.stopSnapshot,
           topicId: input.topicId,
         });
       } catch (error: any) {

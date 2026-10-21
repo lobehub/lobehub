@@ -5,6 +5,7 @@ import {
   getLlmCallCount,
   normalizeAgentState,
 } from '@lobechat/agent-runtime';
+import { type InterruptStopSnapshot, InterruptStopSnapshotSchema } from '@lobechat/types';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
@@ -335,8 +336,30 @@ export class AgentStateManager {
    * this tiny key instead of re-downloading the blob every interval — the
    * blob's `status: 'interrupted'` stays the authoritative record.
    */
-  async markInterrupted(operationId: string): Promise<void> {
-    await this.redis.setex(`${this.INTERRUPT_PREFIX}:${operationId}`, this.DEFAULT_TTL, '1');
+  async markInterrupted(operationId: string, stopSnapshot?: InterruptStopSnapshot): Promise<void> {
+    // The snapshot rides as the sentinel's value: one write keeps the two
+    // atomic, and `isInterrupted` only checks existence.
+    await this.redis.setex(
+      `${this.INTERRUPT_PREFIX}:${operationId}`,
+      this.DEFAULT_TTL,
+      stopSnapshot ? JSON.stringify(stopSnapshot) : '1',
+    );
+  }
+
+  /**
+   * Read the Stop snapshot stored as the sentinel's value. A bare `'1'`
+   * sentinel (Stop without a snapshot, or an older writer) yields undefined.
+   */
+  async getInterruptStopSnapshot(operationId: string): Promise<InterruptStopSnapshot | undefined> {
+    const value = await this.redis.get(`${this.INTERRUPT_PREFIX}:${operationId}`);
+    if (!value || value === '1') return undefined;
+
+    try {
+      const parsed = InterruptStopSnapshotSchema.safeParse(JSON.parse(value));
+      return parsed.success ? parsed.data : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**

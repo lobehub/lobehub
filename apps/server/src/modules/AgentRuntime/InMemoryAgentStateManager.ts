@@ -1,4 +1,5 @@
 import { type AgentState, getLlmCallCount, normalizeAgentState } from '@lobechat/agent-runtime';
+import { type InterruptStopSnapshot } from '@lobechat/types';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -17,6 +18,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   private stepLocks: Map<string, { expiresAt: number; ownerId: string }> = new Map();
   private inlineResumes: Map<string, string> = new Map();
   private interrupted: Set<string> = new Set();
+  private interruptStopSnapshots: Map<string, InterruptStopSnapshot> = new Map();
   private queuedMessages: Set<string> = new Set();
 
   private executionLockKey(operationId: string): string {
@@ -138,8 +140,13 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     log('[%s] Created operation metadata', operationId);
   }
 
-  async markInterrupted(operationId: string): Promise<void> {
+  async markInterrupted(operationId: string, stopSnapshot?: InterruptStopSnapshot): Promise<void> {
     this.interrupted.add(operationId);
+    if (stopSnapshot) this.interruptStopSnapshots.set(operationId, stopSnapshot);
+  }
+
+  async getInterruptStopSnapshot(operationId: string): Promise<InterruptStopSnapshot | undefined> {
+    return this.interruptStopSnapshots.get(operationId);
   }
 
   async isInterrupted(operationId: string): Promise<boolean> {
@@ -160,6 +167,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     this.steps.delete(operationId);
     this.metadata.delete(operationId);
     this.interrupted.delete(operationId);
+    this.interruptStopSnapshots.delete(operationId);
     this.queuedMessages.delete(operationId);
     this.inlineResumes.delete(operationId);
     log('Deleted operation %s', operationId);

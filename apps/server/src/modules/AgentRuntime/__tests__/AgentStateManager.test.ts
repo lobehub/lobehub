@@ -423,6 +423,31 @@ describe('AgentStateManager', () => {
       expect(redisMock.setex).toHaveBeenCalledWith('agent_runtime_interrupt:op-int', 2 * 3600, '1');
     });
 
+    it('stores the stop snapshot as the sentinel value and reads it back', async () => {
+      const stopSnapshot = { assistantMessageId: 'msg-1', content: 'shown so far' };
+      await stateManager.markInterrupted('op-int', stopSnapshot);
+
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        'agent_runtime_interrupt:op-int',
+        2 * 3600,
+        JSON.stringify(stopSnapshot),
+      );
+
+      redisMock.get.mockResolvedValueOnce(JSON.stringify(stopSnapshot));
+      expect(await stateManager.getInterruptStopSnapshot('op-int')).toEqual(stopSnapshot);
+    });
+
+    it('reads no stop snapshot from a bare or malformed sentinel', async () => {
+      redisMock.get.mockResolvedValueOnce('1');
+      expect(await stateManager.getInterruptStopSnapshot('op-int')).toBeUndefined();
+
+      redisMock.get.mockResolvedValueOnce('{not json');
+      expect(await stateManager.getInterruptStopSnapshot('op-int')).toBeUndefined();
+
+      redisMock.get.mockResolvedValueOnce(JSON.stringify({ content: 'missing id' }));
+      expect(await stateManager.getInterruptStopSnapshot('op-int')).toBeUndefined();
+    });
+
     it('isInterrupted checks key existence instead of loading the state blob', async () => {
       redisMock.exists.mockResolvedValueOnce(1);
       expect(await stateManager.isInterrupted('op-int')).toBe(true);
