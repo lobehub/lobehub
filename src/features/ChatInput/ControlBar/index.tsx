@@ -18,7 +18,13 @@ import { resolveControlBarView } from './resolveControlBarView';
 import WorkspaceControls from './WorkspaceControls';
 
 const styles = stylex.create({
+  // `flex: none` keeps the row at 28px inside the column-flex composer; without
+  // it the bar shrinks to the compact chips' min-content height.
   bar: { flex: 'none', height: '28px', paddingBlock: '0', paddingInline: '4px' },
+  // Left cluster (mode + device + working directory + git) is the variable-width
+  // part. It shrinks first and, once its long labels have truncated as far as
+  // they can, scrolls horizontally instead of wrapping each chip's text. The
+  // scrollbar is hidden — trackpad / wheel still works.
   leftGroup: {
     'scrollbarWidth': 'none',
     'overflowX': 'auto',
@@ -27,6 +33,7 @@ const styles = stylex.create({
     'minWidth': '0',
     '::-webkit-scrollbar': { display: 'none' },
   },
+  // Right cluster (approval mode + context window) stays pinned and intact.
   rightGroup: { flex: 'none' },
 });
 
