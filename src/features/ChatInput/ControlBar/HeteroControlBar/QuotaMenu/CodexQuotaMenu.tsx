@@ -6,17 +6,9 @@ import type {
   CodexRateLimitResetCredit,
 } from '@lobechat/electron-client-ipc';
 import { uuid } from '@lobechat/utils';
-import {
-  Accordion,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Accordion, Button, confirmModal, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,71 +31,72 @@ const isConnectionError = (quota: CodexQuotaSnapshot) =>
     quota.error ?? '',
   );
 
-const styles = createStaticStyles(({ css }) => ({
-  credit: css`
-    min-width: 0;
-    padding-block: 8px;
-    padding-inline: 10px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  creditCollapse: css`
-    width: 100%;
-  `,
-  creditExpiry: css`
-    flex: none;
-    text-align: end;
-    white-space: nowrap;
-  `,
-  creditIndex: css`
-    flex: 0 0 20px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  creditList: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  creditTitle: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  feedback: css`
-    padding: 8px;
-    border: 1px solid ${cssVar.colorInfoBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorInfoText};
-
-    background: ${cssVar.colorInfoBg};
-
-    &[data-kind='error'] {
-      border-color: ${cssVar.colorErrorBorder};
-      color: ${cssVar.colorErrorText};
-      background: ${cssVar.colorErrorBg};
-    }
-
-    &[data-kind='success'] {
-      border-color: ${cssVar.colorSuccessBorder};
-      color: ${cssVar.colorSuccessText};
-      background: ${cssVar.colorSuccessBg};
-    }
-  `,
-  resetCredits: css`
-    padding-block-start: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  credit: {
+    minWidth: '0',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': '0' },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  creditCollapse: { width: '100%' },
+  creditExpiry: { flex: 'none', textAlign: 'end', whiteSpace: 'nowrap' },
+  creditIndex: {
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: '20px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  creditList: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  creditTitle: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  feedback: {
+    padding: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorInfoBorder,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorInfoText,
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
+  },
+  // [data-kind='error']
+  feedbackError: {
+    borderColor: cssVar.colorErrorBorder,
+    color: cssVar.colorErrorText,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  // [data-kind='success']
+  feedbackSuccess: {
+    borderColor: cssVar.colorSuccessBorder,
+    color: cssVar.colorSuccessText,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+  resetCredits: {
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const createErrorSnapshot = (error: unknown): CodexQuotaSnapshot => ({
   error: error instanceof Error ? error.message : String(error),
@@ -329,7 +322,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
 
       if (!resetCredits) {
         return (
-          <Flexbox className={styles.resetCredits} gap={4}>
+          <Flexbox className={stylex.props(styles.resetCredits).className} gap={4}>
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={RotateCcwIcon} size={14} />
               <Text style={{ fontSize: 12 }} type="secondary">
@@ -352,9 +345,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
       }));
 
       return (
-        <Flexbox className={styles.resetCredits}>
+        <Flexbox className={stylex.props(styles.resetCredits).className}>
           <Accordion
-            className={styles.creditCollapse}
+            className={stylex.props(styles.creditCollapse).className}
             defaultValue={[]}
             indicatorPlacement={'end'}
             variant={'borderless'}
@@ -363,7 +356,7 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
                 children: (
                   <Flexbox gap={8}>
                     {resetCreditItems.length > 0 && (
-                      <Flexbox className={styles.creditList}>
+                      <Flexbox className={stylex.props(styles.creditList).className}>
                         {resetCreditItems.map(({ credit, index }) => {
                           const fallbackExpiry =
                             index === 1 ? resetCredits.nextExpiresAt : undefined;
@@ -374,18 +367,25 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
                             <Flexbox
                               horizontal
                               align={'center'}
-                              className={styles.credit}
+                              className={stylex.props(styles.credit).className}
                               gap={8}
                               key={credit?.id ?? `reset-credit-${index}`}
                             >
-                              <Text className={styles.creditIndex} style={{ fontSize: 12 }}>
+                              <Text
+                                className={stylex.props(styles.creditIndex).className}
+                                style={{ fontSize: 12 }}
+                              >
                                 {`#${index}`}
                               </Text>
-                              <Text strong className={styles.creditTitle} style={{ fontSize: 12 }}>
+                              <Text
+                                strong
+                                className={stylex.props(styles.creditTitle).className}
+                                style={{ fontSize: 12 }}
+                              >
                                 {credit?.title || t('heteroAgent.codexQuota.resetCreditTitle')}
                               </Text>
                               <Text
-                                className={styles.creditExpiry}
+                                className={stylex.props(styles.creditExpiry).className}
                                 style={{ fontSize: 12 }}
                                 type="secondary"
                               >
@@ -408,9 +408,13 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) =>
                     {resetFeedback && (
                       <div
                         aria-live="polite"
-                        className={styles.feedback}
                         data-kind={resetFeedback.kind}
                         role={resetFeedback.kind === 'error' ? 'alert' : 'status'}
+                        {...stylex.props(
+                          styles.feedback,
+                          resetFeedback.kind === 'error' && styles.feedbackError,
+                          resetFeedback.kind === 'success' && styles.feedbackSuccess,
+                        )}
                       >
                         {resetFeedback.text}
                       </div>
