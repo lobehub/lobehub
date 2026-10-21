@@ -1,7 +1,9 @@
 // @vitest-environment node
+import { Type as SchemaType } from '@google/genai';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { convertOpenAISchemaToGoogleSchema } from '../../providers/google/generateObject';
 import type { DecisionPayload } from '../../types';
 import { emulateDecision } from './emulate';
 
@@ -58,8 +60,19 @@ describe('emulateDecision', () => {
     const { schema } = request.schema;
     expect(schema.required).toEqual(['q0', 'q1', 'q2']);
     expect(Object.keys(schema.properties.q0.properties)).toEqual(['evidence', 'refused', 'value']);
-    expect(schema.properties.q2.properties.value.anyOf[0].enum).toEqual(['c0', 'c1']);
-    expect(schema.properties.q0.properties.value.anyOf[0].enum).toEqual([0, 1, 2, 3, 4]);
+    expect(schema.properties.q2.properties.value).toEqual({ enum: ['c0', 'c1'], type: 'string' });
+    expect(schema.properties.q0.properties.value).toEqual({
+      enum: [0, 1, 2, 3, 4],
+      type: 'integer',
+    });
+    // Gemini's schema converter drops `anyOf`, which would turn every value into a string.
+    const googleSchema = convertOpenAISchemaToGoogleSchema(request.schema);
+    expect(googleSchema.properties.q0.properties.value.type).toBe(SchemaType.INTEGER);
+    expect(googleSchema.properties.q1.properties.value.type).toBe(SchemaType.NUMBER);
+    expect(googleSchema.properties.q2.properties.value).toEqual({
+      enum: ['c0', 'c1'],
+      type: SchemaType.STRING,
+    });
 
     expect(result).toEqual({
       answers: {
@@ -133,9 +146,11 @@ describe('emulateDecision', () => {
 
     expect(generateObject).toHaveBeenCalledTimes(2);
     const retryMessages = generateObject.mock.calls[1][0].messages;
-    expect(retryMessages).toHaveLength(4);
-    expect(retryMessages[2]).toMatchObject({ role: 'assistant' });
-    expect(retryMessages[3].content).toContain('q2.value');
+    // Single user turn: no assistant message before the forced output tool call.
+    expect(retryMessages.map((m: { role: string }) => m.role)).toEqual(['system', 'user']);
+    expect(retryMessages[1].content).toContain('<state>');
+    expect(retryMessages[1].content).toContain('"value":"c7"');
+    expect(retryMessages[1].content).toContain('q2.value');
     expect(result.answers.preset).toEqual({ choice: 'todo/list', type: 'choice' });
     const usage = { inputTextTokens: 250, outputTextTokens: 22, totalTokens: 272 };
     expect(result.usage).toEqual(usage);
