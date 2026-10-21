@@ -75,5 +75,21 @@ describe('interruptGatewayRunOnStop', () => {
       stopSnapshot,
     );
     expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+    expect(unfreeze).not.toHaveBeenCalled();
+  });
+
+  it('renders the reply again when the share mirror interrupt fails', async () => {
+    vi.mocked(shareChatService.interruptTask).mockRejectedValue(new Error('network down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const isOwnerRun = await interruptGatewayRunOnStop({
+      agentShareId: 'share-1',
+      gatewayOpId: 'gw-op',
+      interrupt: { operationId: 'server-op' },
+      shareTopicId: 'topic-1',
+    });
+
+    expect(isOwnerRun).toBe(false);
+    expect(unfreeze).toHaveBeenCalledTimes(1);
   });
 });

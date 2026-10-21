@@ -53,7 +53,12 @@ export const interruptGatewayRunOnStop = async ({
   if (agentShareId) {
     await shareChatService
       .interruptTask(agentShareId, shareTopicId, interrupt.operationId, stopSnapshot)
-      .catch((err) => console.error('[Gateway] share interruptTask failed:', err));
+      .catch((err) => {
+        // The server run keeps going; keep rendering what it streams instead
+        // of hiding text it will save anyway.
+        unfreezeGatewayRunForStop(gatewayOpId);
+        console.error('[Gateway] share interruptTask failed:', err);
+      });
     return false;
   }
 
