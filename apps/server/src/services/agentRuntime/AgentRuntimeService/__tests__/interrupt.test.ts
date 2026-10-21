@@ -177,7 +177,6 @@ describe('AgentRuntimeService', () => {
       expect(await mockCoordinator.getInterruptStopSnapshot('op-1')).toEqual(stopSnapshot);
     });
 
-
     it('should interrupt a waiting_for_human operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-2',

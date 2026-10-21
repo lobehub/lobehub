@@ -605,7 +605,6 @@ describe('AgentRuntimeService', () => {
       });
     });
 
-
     it('should detect an interruption written by an old worker without a sentinel', async () => {
       const mockStepResult = {
         events: [],

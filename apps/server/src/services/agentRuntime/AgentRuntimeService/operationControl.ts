@@ -611,8 +611,7 @@ export async function applyInterruptStopSnapshot(
     const message = await deps.messageModel.findById(snapshot.assistantMessageId);
     if (!message || message.role !== 'assistant') return;
 
-    const messageOperationId = (message.metadata as { operationId?: unknown } | null)
-      ?.operationId;
+    const messageOperationId = (message.metadata as { operationId?: unknown } | null)?.operationId;
     if (messageOperationId !== operationId) return;
 
     const content = message.content ?? '';
