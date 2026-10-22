@@ -96,6 +96,21 @@ describe('topic handoff acceptance', () => {
     expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.handoff.partialFailed');
   });
 
+  it('reports a handoff where every target failed as a failure, not a partial one', async () => {
+    mocks.forwardTopic.mockResolvedValue({
+      succeeded: [],
+      failed: [{ agentId: 'b' }],
+      sourceSchedulePaused: false,
+    });
+    const { result } = renderHook(() =>
+      useForwardTopic({ agentId: 'a', topicId: 'source', cancelSourceContinuation: true }),
+    );
+    await act(async () => result.current([{ id: 'b' }]));
+    expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.handoff.failed');
+    expect(mocks.error).not.toHaveBeenCalledWith('messageForward.topic.handoff.partialFailed');
+    expect(mocks.success).not.toHaveBeenCalled();
+  });
+
   it('does not navigate when every target fails before persistence', async () => {
     mocks.forwardTopic.mockResolvedValue({ succeeded: [], failed: [{ agentId: 'b' }] });
     const { result } = renderHook(() => useForwardTopic({ agentId: 'a', topicId: 'source' }));

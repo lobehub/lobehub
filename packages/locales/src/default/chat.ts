@@ -1109,6 +1109,7 @@ export default {
   'messageForward.topic.context': 'Topic context',
   'messageForward.topic.description':
     "The selected Agent will receive this topic's context and continue the work.",
+  'messageForward.topic.handoff.failed': 'Could not hand off this topic. Please try again.',
   'messageForward.topic.handoff.header':
     'The following topic was handed off from another conversation. Please use it as context and continue:',
   'messageForward.topic.handoff.notStarted':
@@ -1121,7 +1122,8 @@ export default {
   'messageForward.topic.handoff.submit': 'Hand off',
   'messageForward.topic.handoff.submitCount': 'Hand off ({{count}})',
   'messageForward.topic.handoff.success': 'Handed off to {{title}}',
-  'messageForward.topic.handoff.successMulti': 'Handed off to {{count}} Agents',
+  'messageForward.topic.handoff.successMulti_one': 'Handed off to {{count}} Agent',
+  'messageForward.topic.handoff.successMulti_other': 'Handed off to {{count}} Agents',
   'messageForward.topic.handoff.title': 'Hand off to another Agent',
   'messageForward.topic.header':
     'The following topic was forwarded from another conversation. Please use it as context and continue:',

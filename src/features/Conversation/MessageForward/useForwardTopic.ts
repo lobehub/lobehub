@@ -66,16 +66,18 @@ export const useForwardTopic = ({
                   ),
             );
           }
-          if (result.failed.length > 0)
-            toast.error(
-              t(
-                result.sourceSchedulePaused
-                  ? 'messageForward.topic.handoff.sourceSchedulePaused'
-                  : cancelSourceContinuation
-                    ? 'messageForward.topic.handoff.partialFailed'
-                    : 'messageForward.failed',
-              ),
-            );
+          if (result.failed.length > 0) {
+            // A paused source needs the user to inspect the target first; otherwise
+            // "some Agents" only fits when at least one target took the handoff.
+            const failedKey = !cancelSourceContinuation
+              ? 'messageForward.failed'
+              : result.sourceSchedulePaused
+                ? 'messageForward.topic.handoff.sourceSchedulePaused'
+                : result.succeeded.length > 0
+                  ? 'messageForward.topic.handoff.partialFailed'
+                  : 'messageForward.topic.handoff.failed';
+            toast.error(t(failedKey));
+          }
         })
         .catch((error) => {
           console.error('[useForwardTopic] Forwarding failed:', error);
