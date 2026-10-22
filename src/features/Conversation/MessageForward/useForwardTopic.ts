@@ -31,7 +31,11 @@ export const useForwardTopic = ({
       const primaryTarget = targets[0];
       void forwardTopic({
         cancelSourceContinuation,
-        header: t('messageForward.topic.header'),
+        header: t(
+          cancelSourceContinuation
+            ? 'messageForward.topic.handoff.header'
+            : 'messageForward.topic.header',
+        ),
         note,
         onTopicCreated: (target, createdTopicId) => {
           if (target.id !== primaryTarget.id) return;
@@ -48,16 +52,28 @@ export const useForwardTopic = ({
           if (result.succeeded.length > 0) {
             toast.success(
               targets.length === 1
-                ? t('messageForward.success', { title: primaryTarget.title || '' })
-                : t('messageForward.successMulti', { count: result.succeeded.length }),
+                ? t(
+                    cancelSourceContinuation
+                      ? 'messageForward.topic.handoff.success'
+                      : 'messageForward.success',
+                    { title: primaryTarget.title || '' },
+                  )
+                : t(
+                    cancelSourceContinuation
+                      ? 'messageForward.topic.handoff.successMulti'
+                      : 'messageForward.successMulti',
+                    { count: result.succeeded.length },
+                  ),
             );
           }
           if (result.failed.length > 0)
             toast.error(
               t(
                 result.sourceSchedulePaused
-                  ? 'messageForward.topic.sourceSchedulePaused'
-                  : 'messageForward.failed',
+                  ? 'messageForward.topic.handoff.sourceSchedulePaused'
+                  : cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.partialFailed'
+                    : 'messageForward.failed',
               ),
             );
         })
@@ -66,7 +82,7 @@ export const useForwardTopic = ({
           toast.error(
             t(
               cancelSourceContinuation
-                ? 'messageForward.topic.handoffFailed'
+                ? 'messageForward.topic.handoff.notStarted'
                 : 'messageForward.topic.loadFailed',
             ),
           );

@@ -1106,13 +1106,21 @@ export default {
   'messageForward.successMulti': 'Forwarded to {{count}} agents',
   'messageForward.transcript.header':
     'The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:',
-  'messageForward.topic.handoffFailed':
-    'Transfer did not start because the source continuation could not be cancelled. It may already be running. Refresh the conversation and check its status.',
-  'messageForward.topic.sourceSchedulePaused':
-    'Transfer could not be confirmed. The original scheduled continuation is paused. Check the target conversation before retrying or scheduling again.',
   'messageForward.topic.context': 'Topic context',
   'messageForward.topic.description':
     "The selected Agent will receive this topic's context and continue the work.",
+  'messageForward.topic.handoff.header':
+    'The following topic was handed off from another conversation. Please use it as context and continue:',
+  'messageForward.topic.handoff.notStarted':
+    'Handoff did not start because the source continuation could not be cancelled. It may already be running. Refresh the conversation and check its status.',
+  'messageForward.topic.handoff.partialFailed': 'Could not hand off to some Agents',
+  'messageForward.topic.handoff.sourceSchedulePaused':
+    'Handoff could not be confirmed. The original scheduled continuation is paused. Check the target conversation before retrying or scheduling again.',
+  'messageForward.topic.handoff.submit': 'Hand off',
+  'messageForward.topic.handoff.submitCount': 'Hand off ({{count}})',
+  'messageForward.topic.handoff.success': 'Handed off to {{title}}',
+  'messageForward.topic.handoff.successMulti': 'Handed off to {{count}} Agents',
+  'messageForward.topic.handoff.title': 'Hand off to another Agent',
   'messageForward.topic.header':
     'The following topic was forwarded from another conversation. Please use it as context and continue:',
   'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',
@@ -1244,9 +1252,9 @@ export default {
   'cliOverloadedGuide.retryHint':
     'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
   'cliOverloadedGuide.title': '{{name}} is temporarily overloaded',
+  'cliRateLimitGuide.actions.handoff': 'Hand off to another Agent',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
   'cliRateLimitGuide.actions.retry': 'Retry message',
-  'cliRateLimitGuide.actions.transfer': 'Transfer to another Agent',
   'cliRateLimitGuide.afterReset':
     'This account has reached its current usage limit. You can continue after {{resetAt}}.',
   'cliRateLimitGuide.afterResetWithLimitType':
@@ -1271,7 +1279,6 @@ export default {
   'cliRateLimitGuide.schedule.continueAfter': 'Continue in ~{{duration}}',
   'cliRateLimitGuide.schedule.continueAfterReset': 'Continue after reset',
   'cliRateLimitGuide.schedule.retryNow': 'Retry now',
-  'cliRateLimitGuide.schedule.runNow': 'Run now',
   'cliRateLimitGuide.schedule.scheduledAfterReset':
     'Scheduled. This run will continue automatically once the limit resets.',
   'cliRateLimitGuide.schedule.scheduledForApprox':

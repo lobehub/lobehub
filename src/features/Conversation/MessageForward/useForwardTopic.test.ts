@@ -58,7 +58,42 @@ describe('topic handoff acceptance', () => {
       useForwardTopic({ agentId: 'a', topicId: 'source', cancelSourceContinuation: true }),
     );
     await act(async () => result.current([{ id: 'b' }]));
-    expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.sourceSchedulePaused');
+    expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.handoff.sourceSchedulePaused');
+  });
+
+  it('words a handoff as a handoff from the injected header to the success toast', async () => {
+    mocks.forwardTopic.mockResolvedValue({ succeeded: [{ agentId: 'b' }], failed: [] });
+    const { result } = renderHook(() =>
+      useForwardTopic({ agentId: 'a', topicId: 'source', cancelSourceContinuation: true }),
+    );
+    await act(async () => result.current([{ id: 'b', title: 'Codex' }]));
+    expect(mocks.forwardTopic).toHaveBeenCalledWith(
+      expect.objectContaining({ header: 'messageForward.topic.handoff.header' }),
+    );
+    expect(mocks.success).toHaveBeenCalledWith('messageForward.topic.handoff.success');
+  });
+
+  it('keeps forward wording when the source continuation is left alone', async () => {
+    mocks.forwardTopic.mockResolvedValue({ succeeded: [{ agentId: 'b' }], failed: [] });
+    const { result } = renderHook(() => useForwardTopic({ agentId: 'a', topicId: 'source' }));
+    await act(async () => result.current([{ id: 'b', title: 'Codex' }]));
+    expect(mocks.forwardTopic).toHaveBeenCalledWith(
+      expect.objectContaining({ header: 'messageForward.topic.header' }),
+    );
+    expect(mocks.success).toHaveBeenCalledWith('messageForward.success');
+  });
+
+  it('reports a partial handoff failure without calling it a message forward', async () => {
+    mocks.forwardTopic.mockResolvedValue({
+      succeeded: [{ agentId: 'b' }],
+      failed: [{ agentId: 'c' }],
+      sourceSchedulePaused: false,
+    });
+    const { result } = renderHook(() =>
+      useForwardTopic({ agentId: 'a', topicId: 'source', cancelSourceContinuation: true }),
+    );
+    await act(async () => result.current([{ id: 'b' }, { id: 'c' }]));
+    expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.handoff.partialFailed');
   });
 
   it('does not navigate when every target fails before persistence', async () => {

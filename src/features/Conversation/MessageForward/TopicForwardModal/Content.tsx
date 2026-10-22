@@ -172,8 +172,17 @@ export const TopicForwardContent = ({
           <Button onClick={close}>{t('messageForward.bar.cancel')}</Button>
           <Button disabled={selectedIds.length === 0} type={'primary'} onClick={handleForward}>
             {selectedIds.length > 0
-              ? t('messageForward.modal.sendCount', { count: selectedIds.length })
-              : t('messageForward.bar.forward')}
+              ? t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submitCount'
+                    : 'messageForward.modal.sendCount',
+                  { count: selectedIds.length },
+                )
+              : t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submit'
+                    : 'messageForward.bar.forward',
+                )}
           </Button>
         </Flexbox>
       </Flexbox>
