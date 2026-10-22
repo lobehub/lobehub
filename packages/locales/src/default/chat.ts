@@ -1125,6 +1125,8 @@ export default {
   'messageForward.topic.handoff.successMulti_one': 'Handed off to {{count}} Agent',
   'messageForward.topic.handoff.successMulti_other': 'Handed off to {{count}} Agents',
   'messageForward.topic.handoff.title': 'Hand off to another Agent',
+  'messageForward.topic.handoff.unconfirmed':
+    'Handoff could not be confirmed. Check the target conversation before trying again.',
   'messageForward.topic.header':
     'The following topic was forwarded from another conversation. Please use it as context and continue:',
   'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',

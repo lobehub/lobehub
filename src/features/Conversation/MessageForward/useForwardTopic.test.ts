@@ -111,6 +111,20 @@ describe('topic handoff acceptance', () => {
     expect(mocks.success).not.toHaveBeenCalled();
   });
 
+  it('asks to check the target instead of retrying when its topic was already created', async () => {
+    mocks.forwardTopic.mockResolvedValue({
+      succeeded: [],
+      failed: [{ agentId: 'b', topicId: 'topic-b' }],
+      sourceSchedulePaused: false,
+    });
+    const { result } = renderHook(() =>
+      useForwardTopic({ agentId: 'a', topicId: 'source', cancelSourceContinuation: true }),
+    );
+    await act(async () => result.current([{ id: 'b' }]));
+    expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.handoff.unconfirmed');
+    expect(mocks.error).not.toHaveBeenCalledWith('messageForward.topic.handoff.failed');
+  });
+
   it('does not navigate when every target fails before persistence', async () => {
     mocks.forwardTopic.mockResolvedValue({ succeeded: [], failed: [{ agentId: 'b' }] });
     const { result } = renderHook(() => useForwardTopic({ agentId: 'a', topicId: 'source' }));
