@@ -1768,6 +1768,7 @@
   "messageForward.topic.description": "选中的 Agent 将获取该话题的上下文并继续处理。",
   "messageForward.topic.handoff.header": "以下话题转交自另一段对话，请将其作为上下文并继续处理：",
   "messageForward.topic.handoff.notStarted": "未能取消源会话续跑，转交未开始。源任务可能已被领取或正在运行，请刷新会话确认状态。",
+  "messageForward.topic.handoff.notePlaceholder": "附加说明（可选），将随话题上下文一起发送",
   "messageForward.topic.handoff.partialFailed": "部分 Agent 转交失败",
   "messageForward.topic.handoff.sourceSchedulePaused": "无法确认转交结果，原定时续跑已暂停。请先检查目标会话，再重试或重新安排续跑。",
   "messageForward.topic.handoff.submit": "转交",

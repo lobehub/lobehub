@@ -1113,6 +1113,8 @@ export default {
     'The following topic was handed off from another conversation. Please use it as context and continue:',
   'messageForward.topic.handoff.notStarted':
     'Handoff did not start because the source continuation could not be cancelled. It may already be running. Refresh the conversation and check its status.',
+  'messageForward.topic.handoff.notePlaceholder':
+    'Add a note (optional) — sent along with the topic context',
   'messageForward.topic.handoff.partialFailed': 'Could not hand off to some Agents',
   'messageForward.topic.handoff.sourceSchedulePaused':
     'Handoff could not be confirmed. The original scheduled continuation is paused. Check the target conversation before retrying or scheduling again.',

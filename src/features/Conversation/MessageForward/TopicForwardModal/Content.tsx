@@ -163,9 +163,13 @@ export const TopicForwardContent = ({
         </Flexbox>
         <TextArea
           autoSize={{ maxRows: 4, minRows: 2 }}
-          placeholder={t('messageForward.modal.notePlaceholder')}
           resize={false}
           value={note}
+          placeholder={t(
+            cancelSourceContinuation
+              ? 'messageForward.topic.handoff.notePlaceholder'
+              : 'messageForward.modal.notePlaceholder',
+          )}
           onChange={(event) => setNote(event.target.value)}
         />
         <Flexbox horizontal gap={8} justify={'flex-end'}>
