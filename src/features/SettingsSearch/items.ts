@@ -468,24 +468,30 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   // Service Model
   {
     anchor: 'service-model-assignments',
-    keywords: ['model assignment', 'topic naming', 'translation', 'default model'],
-    labelKey: 'serviceModel.modelAssignments.title',
+    descKey: 'serviceModel.desc',
+    keywords: ['main model', 'flash model', 'embedding', 'default model', 'system recommended'],
+    labelKey: 'serviceModel.tier.main.title',
     tab: SettingsTabs.ServiceModel,
   },
   {
-    anchor: 'service-model-memory',
-    keywords: ['memory', 'embedding', 'vector'],
-    labelKey: 'serviceModel.memoryModels.title',
-    tab: SettingsTabs.ServiceModel,
-  },
-  {
-    anchor: 'service-model-optional-features',
-    keywords: ['follow up', 'input completion', 'prompt rewrite', 'suggestion'],
-    labelKey: 'serviceModel.optionalFeatures.title',
+    // Follow-up / input completion stay out of the keywords: inside a workspace
+    // they live on Chat Preferences, not here.
+    anchor: 'service-model-advanced',
+    keywords: [
+      'model assignment',
+      'topic naming',
+      'translation',
+      'memory',
+      'prompt rewrite',
+      'history compress',
+      'voice',
+      'transcription',
+    ],
+    labelKey: 'serviceModel.advanced.title',
     tab: SettingsTabs.ServiceModel,
   },
   // Chat Preferences (workspace only — the personal sidebar keeps these rows in
-  // Service Model › Optional Features)
+  // Service Model › Advanced)
   {
     anchor: 'chat-preference-followUpAction',
     descKey: 'systemAgent.followUpAction.modelDesc',

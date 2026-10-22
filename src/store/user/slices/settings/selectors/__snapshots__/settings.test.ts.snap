@@ -61,8 +61,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   },
   "enableAutoReply": true,
   "expertise": {
-    "model": "gpt-5.6-luna",
-    "provider": "openai",
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
   },
   "followUpAction": {
     "enabled": false,
@@ -74,12 +74,12 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "openai",
   },
   "goal": {
-    "model": "gpt-5.6-luna",
-    "provider": "openai",
-  },
-  "historyCompress": {
     "model": "deepseek-v4-flash",
     "provider": "deepseek",
+  },
+  "historyCompress": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
   },
   "inputCompletion": {
     "enabled": false,
@@ -105,8 +105,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   },
   "replyMessage": "Custom auto reply",
   "thread": {
-    "model": "deepseek-v4-flash",
-    "provider": "deepseek",
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
   },
   "topic": {
     "model": "gpt-5.6-luna",

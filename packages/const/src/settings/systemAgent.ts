@@ -7,8 +7,10 @@ import {
 } from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
+  ServiceModelTier,
   SystemAgentItem,
   UserServiceModelConfig,
+  UserServiceModelConfigKey,
 } from '@lobechat/types';
 
 import { DEFAULT_EMBEDDING_MODEL, DEFAULT_MINI_MODEL, DEFAULT_MODEL } from './llm';
@@ -67,11 +69,11 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
   channelRouting: { enabled: false, model: 'jev-1.14.0', provider: 'typesafe' },
-  expertise: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  expertise: DEFAULT_SYSTEM_AGENT_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
-  goal: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
-  historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
+  goal: DEFAULT_SYSTEM_AGENT_ITEM,
+  historyCompress: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
@@ -79,8 +81,32 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   userMemoryEmbedding: DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM,
   userMemoryPersonaWriter: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   promptRewrite: DEFAULT_PROMPT_REWRITE_SYSTEM_AGENT_ITEM,
-  thread: DEFAULT_SYSTEM_AGENT_ITEM,
+  thread: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topicAutoSummary: DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM,
   translation: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+};
+
+/**
+ * Which top-level Service Model tier each task slot follows. A slot's default
+ * above is its tier's default, so a slot that follows an unset tier runs the
+ * same system-recommended model the tier shows. The first slot of a tier
+ * stands for the tier's own recommendation. Slots left out (`asr`,
+ * `channelRouting`, onboarding) keep their own system default and ignore tier changes.
+ */
+export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModelConfigKey[]> = {
+  embedding: ['userMemoryEmbedding'],
+  flash: [
+    'topic',
+    'thread',
+    'generationTopic',
+    'promptRewrite',
+    'historyCompress',
+    'memoryAnalysisAgentConfig',
+    'userMemoryPersonaWriter',
+    'translation',
+    'inputCompletion',
+    'followUpAction',
+  ],
+  main: ['agentMeta', 'expertise', 'goal', 'topicAutoSummary'],
 };

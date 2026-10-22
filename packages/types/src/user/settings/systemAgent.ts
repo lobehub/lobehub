@@ -49,6 +49,26 @@ export interface UserMemoryServiceModelConfig {
 export interface UserServiceModelConfig
   extends UserSystemAgentConfig, UserMemoryServiceModelConfig {}
 
+/**
+ * The three models a user picks at the top of Service Model settings. Every
+ * task slot follows one of them (see `SERVICE_MODEL_TIER_SLOTS`) unless the
+ * user pins that slot to its own model.
+ */
+export type ServiceModelTier = 'embedding' | 'flash' | 'main';
+
+export interface ServiceModelTierItem {
+  model: string;
+  provider: string;
+}
+
+/**
+ * Tier choices stored next to the task slots in the `systemAgent` column. An
+ * absent tier follows the system recommendation. A chosen tier is also written
+ * into each slot that follows it, so every runtime that reads a slot directly
+ * gets the tier model without knowing tiers exist.
+ */
+export type ServiceModelTierConfig = Partial<Record<ServiceModelTier, ServiceModelTierItem>>;
+
 export type UserSystemAgentConfigKey = keyof UserSystemAgentConfig;
 export type UserMemoryServiceModelConfigKey = keyof UserMemoryServiceModelConfig;
 export type UserServiceModelConfigKey = keyof UserServiceModelConfig;
