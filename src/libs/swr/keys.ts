@@ -728,6 +728,11 @@ export const inboxKeys = {
     'inbox:unreadCount',
     workspaceId,
   ]),
+  /** Desktop mention-banner watcher: unread `mention` rows of the active workspace. */
+  unreadMentions: def('inbox:unreadMentions', (workspaceId: string | null) => [
+    'inbox:unreadMentions',
+    workspaceId,
+  ]),
 };
 
 // ---- share (shared agent / topic / page) ---------------------------------
