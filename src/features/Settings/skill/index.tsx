@@ -1,13 +1,16 @@
 'use client';
 
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
+import { ChevronLeft } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import LeftPanel from './features/LeftPanel';
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
@@ -41,6 +44,8 @@ interface ToolSettingsProps {
 }
 
 export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
+  const { t } = useTranslation('common');
+  const mobile = isMobileSurface();
   const [searchParams] = useSearchParams();
   const querySkillIdentifier = searchParams.get('skill');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
@@ -55,6 +60,9 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   );
 
   useEffect(() => {
+    // Mobile shows one pane at a time and opens on the list, so nothing is
+    // pre-selected there.
+    if (mobile) return;
     if (selected) return;
     if (viewMode === 'skill' && querySkillIdentifier) return;
     if (viewMode === 'connector') {
@@ -70,7 +78,15 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
         setSelected({ identifier: firstSkill.identifier, type: 'builtin-skill' });
       }
     }
-  }, [builtinTools, builtinSkills, installedBuiltinIds, querySkillIdentifier, selected, viewMode]);
+  }, [
+    builtinTools,
+    builtinSkills,
+    installedBuiltinIds,
+    mobile,
+    querySkillIdentifier,
+    selected,
+    viewMode,
+  ]);
 
   useEffect(() => {
     if (viewMode !== 'skill' || !querySkillIdentifier) return;
@@ -84,6 +100,31 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const handleSelect = (identifier: string, type: ToolDetailType) => {
     setSelected({ identifier, type });
   };
+
+  // Mobile: the settings layout owns the header; list and detail take turns
+  // full-width instead of a 300px list squeezing the detail.
+  if (mobile)
+    return selected ? (
+      <Flexbox className={styles.detail}>
+        <Flexbox horizontal align={'center'} paddingBlock={4} paddingInline={8}>
+          <ActionIcon icon={ChevronLeft} title={t('back')} onClick={() => setSelected(null)} />
+        </Flexbox>
+        <SkillDetail
+          identifier={selected.identifier}
+          type={selected.type}
+          onDelete={() => setSelected(null)}
+        />
+      </Flexbox>
+    ) : (
+      <div className={styles.root}>
+        <LeftPanel
+          fullWidth
+          viewMode={viewMode}
+          onDeleteSelected={() => setSelected(null)}
+          onSelect={handleSelect}
+        />
+      </div>
+    );
 
   return (
     <>
