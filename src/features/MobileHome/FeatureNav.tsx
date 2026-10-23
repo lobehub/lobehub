@@ -3,16 +3,12 @@
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FolderClosed, Settings } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { type NavItem, useNavLayout } from '@/hooks/useNavLayout';
-import { SidebarTabKey } from '@/store/global/initialState';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+
+import { useFeatureNavItems } from './useFeatureNavItems';
 
 const styles = stylex.create({
   grid: {
@@ -44,53 +40,11 @@ const styles = stylex.create({
   },
 });
 
-// The tab bar already covers these; search opens the desktop command menu,
-// which mobile does not host.
-const HIDDEN_KEYS = new Set<string>([
-  'search',
-  SidebarTabKey.Home,
-  SidebarTabKey.Community,
-  SidebarTabKey.Chat,
-]);
-
-/**
- * The desktop sidebar's destinations (tasks, goals, resources, pages, memory,
- * generation, …) as shortcuts above the mobile agent list. Built from
- * `useNavLayout`, so the lab, feature-flag and workspace rules that hide an
- * item on desktop hide it here too.
- */
+/** The desktop sidebar's destinations as shortcuts above the mobile agent list. */
 const FeatureNav = memo(() => {
-  const { t } = useTranslation(['common', 'electron']);
+  const { t } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
-  const { topNavItems, bottomMenuItems } = useNavLayout();
-  const enableProjects = useUserStore(labPreferSelectors.enableProjects);
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
-
-  const items = useMemo(() => {
-    const navItems: NavItem[] = [...topNavItems, ...bottomMenuItems].filter(
-      (item) => !item.hidden && item.url && !HIDDEN_KEYS.has(item.key),
-    );
-
-    if (enableProjects)
-      navItems.splice(1, 0, {
-        icon: FolderClosed,
-        key: 'projects',
-        title: t('navigation.projects', { ns: 'electron' }),
-        url: '/projects',
-      });
-
-    // Personal settings live under the Me tab; a workspace's own settings
-    // have no other mobile entry.
-    if (activeWorkspaceSlug)
-      navItems.push({
-        icon: Settings,
-        key: SidebarTabKey.Setting,
-        title: t('tab.setting'),
-        url: '/settings',
-      });
-
-    return navItems;
-  }, [activeWorkspaceSlug, bottomMenuItems, enableProjects, t, topNavItems]);
+  const items = useFeatureNavItems();
 
   if (items.length === 0) return null;
 

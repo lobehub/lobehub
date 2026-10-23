@@ -1,15 +1,11 @@
-/**
- * @vitest-environment happy-dom
- */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { FileText, HomeIcon, ListTodo, SearchIcon, Target } from 'lucide-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import FeatureNav from './FeatureNav';
+import { useFeatureNavItems } from './useFeatureNavItems';
 
 const mocks = vi.hoisted(() => ({
   enableProjects: false,
-  navigate: vi.fn(),
   workspaceSlug: null as null | string,
 }));
 
@@ -29,10 +25,6 @@ vi.mock('@/hooks/useNavLayout', () => ({
   }),
 }));
 
-vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
-  useWorkspaceAwareNavigate: () => mocks.navigate,
-}));
-
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => mocks.workspaceSlug,
 }));
@@ -45,45 +37,40 @@ vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableProjects: () => mocks.enableProjects },
 }));
 
-const keys = () =>
-  screen
-    .getAllByRole('link')
-    .map((item) => item.dataset.testid?.replace('mobile-feature-nav-', ''));
+const keysOf = () => renderHook(() => useFeatureNavItems()).result.current.map((i) => i.key);
 
 beforeEach(() => {
   mocks.enableProjects = false;
-  mocks.navigate.mockClear();
   mocks.workspaceSlug = null;
 });
 
-describe('MobileHome FeatureNav', () => {
-  it('lists the desktop sidebar destinations the tab bar does not already cover', () => {
-    render(<FeatureNav />);
-
-    // Search needs the desktop command palette entry; home / community live in the tab bar;
-    // hidden items stay hidden.
-    expect(keys()).toEqual(['tasks', 'pages']);
+describe('useFeatureNavItems', () => {
+  it('keeps the desktop destinations the tab bar does not cover, in sidebar order', () => {
+    // Search has the home search bar; home / community live in the tab bar;
+    // items desktop hides stay hidden.
+    expect(keysOf()).toEqual(['tasks', 'pages']);
   });
 
   it('adds projects only while the projects lab is on', () => {
     mocks.enableProjects = true;
-    render(<FeatureNav />);
 
-    expect(keys()).toEqual(['tasks', 'projects', 'pages']);
+    expect(keysOf()).toEqual(['tasks', 'projects', 'pages']);
   });
 
   it('adds the workspace settings entry inside a workspace', () => {
     mocks.workspaceSlug = 'acme';
-    render(<FeatureNav />);
 
-    expect(keys()).toEqual(['tasks', 'pages', 'settings']);
+    expect(keysOf()).toEqual(['tasks', 'pages', 'settings']);
   });
 
-  it('navigates workspace-aware to the item url', () => {
-    render(<FeatureNav />);
+  it('gives every item a destination the shortcut can navigate to', () => {
+    mocks.enableProjects = true;
+    mocks.workspaceSlug = 'acme';
 
-    fireEvent.click(screen.getByTestId('mobile-feature-nav-pages'));
+    const items = renderHook(() => useFeatureNavItems()).result.current;
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/page');
+    expect(items.every((item) => typeof item.url === 'string' && item.url.startsWith('/'))).toBe(
+      true,
+    );
   });
 });

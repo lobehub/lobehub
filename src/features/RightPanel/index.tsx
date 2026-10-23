@@ -1,11 +1,13 @@
 import { DraggablePanel, type DraggablePanelProps, Drawer } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui';
-import { memo, Suspense, useEffect, useState } from 'react';
+import { memo, Suspense, useState } from 'react';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
+
+import { useMobilePanelExpand } from './useMobilePanelExpand';
 
 export interface Size {
   height?: string | number;
@@ -57,13 +59,7 @@ const RightPanel = memo<RightPanelProps>(
     const width = widthProp ?? internalWidth;
     const mobile = isMobileSurface();
 
-    // The open state is a persisted desktop preference. On a phone the panel
-    // covers the page, so it starts closed and opens only on an explicit toggle
-    // or selection made on this page.
-    useEffect(() => {
-      if (mobile && expand) handleExpandChange(false);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    useMobilePanelExpand(mobile, !!expand, handleExpandChange);
 
     if (mobile)
       return (

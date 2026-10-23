@@ -8,6 +8,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
+import { getNavHeaderLeading } from './leading';
 import MobileHeaderNav from './MobileHeaderNav';
 
 export interface NavHeaderProps extends Omit<FlexboxProps, 'children'> {
@@ -39,16 +40,16 @@ const NavHeader = memo<NavHeaderProps>(
     ...rest
   }) => {
     const expand = useGlobalStore(systemStatusSelectors.showLeftPanel);
-    const mobile = isMobileSurface();
 
-    const noContent = !left && !right && !children;
+    const leading = getNavHeaderLeading({
+      expand: !!expand,
+      isMacDesktop,
+      mobile: isMobileSurface(),
+      noContent: !left && !right && !children,
+      showTogglePanelButton,
+    });
 
-    // When empty, this header only rendered to host the collapse toggle. Hide it
-    // when expanded, and also on macOS desktop where the toggle moved to the titlebar.
-    // Mobile has no left panel: the slot hosts a back button instead, which a
-    // full-screen page always needs.
-    if (!mobile && noContent && (expand || isMacDesktop)) return;
-    if (mobile && noContent && !showTogglePanelButton) return;
+    if (leading === 'hidden') return;
 
     return (
       <Flexbox
@@ -73,8 +74,8 @@ const NavHeader = memo<NavHeaderProps>(
             justify={'flex-start'}
             style={styles?.left}
           >
-            {showTogglePanelButton &&
-              (mobile ? <MobileHeaderNav /> : !expand && <ToggleLeftPanelButton />)}
+            {leading === 'mobile' && <MobileHeaderNav />}
+            {leading === 'toggle' && <ToggleLeftPanelButton />}
             {left}
           </Flexbox>
           {children && (
