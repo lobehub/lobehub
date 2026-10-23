@@ -1,11 +1,10 @@
-import { Flexbox, Select, type SelectOptions } from '@lobehub/ui';
+import { Select, type SelectOptions } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ModelRef, type SlotChoice } from '../serviceModelState';
 import ModelLabel from './ModelLabel';
-import { styles } from './styles';
+import { PICKER_WIDTH, styles } from './styles';
 import { type ModelKind, toOptionValue, useModelName, useModelOptions } from './useModelCatalog';
 
 const FOLLOW_VALUE = '__follow__';
@@ -16,8 +15,6 @@ export type RowState = { kind: 'custom'; value: ModelRef } | { kind: 'follow' } 
 
 interface SlotRowProps {
   canDisable: boolean;
-  /** Rows below the picker, e.g. a context limit for a pinned memory model. */
-  children?: ReactNode;
   disabled?: boolean;
   /** Who the row follows: 主模型 / Flash 模型 / 向量化模型 / 系统推荐. */
   followLabel: string;
@@ -26,20 +23,17 @@ interface SlotRowProps {
   modelKind: ModelKind;
   onChange: (choice: SlotChoice) => void;
   state: RowState;
-  /** The picker's accessible name; the form row shows the task name as its label. */
+  /** The picker's accessible name; the row shows the same text as its label. */
   title: string;
 }
 
 /**
- * One task's picker. `Form.Field` supplies the name and the description; this
- * renders the borderless control plus anything the row needs under it.
- * Following and disabled rows read as gray text; only a pinned row shows an
- * icon and a model name. Picking the first item (the follow target) is how a
- * single row is restored.
+ * One task's picker: borderless, in the shared 280px right column. Following
+ * and off rows read as gray text; only a pinned row shows an icon and a model
+ * name. Picking the first item (the follow target) restores a single row.
  */
 const SlotRow = ({
   canDisable,
-  children,
   disabled,
   followLabel,
   followModel,
@@ -62,16 +56,10 @@ const SlotRow = ({
   const options: SelectOptions = [
     {
       label: (
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={8}
-          justify={'space-between'}
-          style={{ width: '100%' }}
-        >
+        <span style={{ display: 'flex', gap: 8, justifyContent: 'space-between', width: '100%' }}>
           <span>{followLabel}</span>
           {followModel && <span {...stylex.props(styles.hint)}>{getModelName(followModel)}</span>}
-        </Flexbox>
+        </span>
       ),
       title: followLabel,
       value: FOLLOW_VALUE,
@@ -90,35 +78,33 @@ const SlotRow = ({
   ];
 
   return (
-    <Flexbox gap={8}>
-      <Select
-        aria-label={title}
-        classNames={{ value: stylex.props(styles.triggerValue).className }}
-        disabled={disabled}
-        options={options}
-        style={{ width: '100%' }}
-        value={value}
-        variant={'borderless'}
-        labelRender={() =>
-          state.kind === 'custom' ? (
-            <span {...stylex.props(styles.valueEnd)}>
-              <ModelLabel model={state.value.model} name={getModelName(state.value)} />
-            </span>
-          ) : (
-            <span {...stylex.props(styles.valueMuted)}>
-              {state.kind === 'off' ? t('serviceModel.off') : followLabel}
-            </span>
-          )
-        }
-        onChange={(next) => {
-          if (typeof next !== 'string' || next === value) return;
-          if (next === FOLLOW_VALUE) onChange({ kind: 'follow' });
-          else if (next === OFF_VALUE) onChange({ kind: 'off' });
-          else onChange({ kind: 'custom', value: parseValue(next) });
-        }}
-      />
-      {children}
-    </Flexbox>
+    <Select
+      aria-label={title}
+      classNames={{ value: stylex.props(styles.triggerValue).className }}
+      disabled={disabled}
+      options={options}
+      // borderless sits 1px further right than a filled trigger; keep the arrows in one line
+      style={{ flex: 'none', marginInlineEnd: 1, width: PICKER_WIDTH }}
+      value={value}
+      variant={'borderless'}
+      labelRender={() =>
+        state.kind === 'custom' ? (
+          <span {...stylex.props(styles.valueEnd)}>
+            <ModelLabel model={state.value.model} name={getModelName(state.value)} />
+          </span>
+        ) : (
+          <span {...stylex.props(styles.valueMuted)}>
+            {state.kind === 'off' ? t('serviceModel.off') : followLabel}
+          </span>
+        )
+      }
+      onChange={(next) => {
+        if (typeof next !== 'string' || next === value) return;
+        if (next === FOLLOW_VALUE) onChange({ kind: 'follow' });
+        else if (next === OFF_VALUE) onChange({ kind: 'off' });
+        else onChange({ kind: 'custom', value: parseValue(next) });
+      }}
+    />
   );
 };
 

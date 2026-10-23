@@ -1,7 +1,44 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+/** The advanced rows' picker column; every task picker ends on the same right edge. */
+export const PICKER_WIDTH = 280;
+
 export const styles = stylex.create({
+  /** 「高级」 and the summary under it: a section inside the card, not a group title. */
+  sectionTitle: {
+    color: cssVar.colorText,
+    fontSize: cssVar.fontSize,
+    fontWeight: 500,
+    lineHeight: 1.5,
+  },
+  sectionDesc: {
+    color: cssVar.colorTextTertiary,
+    fontSize: cssVar.fontSizeSM,
+    lineHeight: 1.5,
+  },
+  /** Purpose headings inside 高级: one step quieter than a task name. */
+  groupTitle: {
+    color: cssVar.colorTextSecondary,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    lineHeight: 1.5,
+  },
+  /** Compact rows: the picker is 32px, so 40 leaves 4px above and below. */
+  row: {
+    minHeight: 40,
+  },
+  taskName: {
+    color: cssVar.colorText,
+    fontSize: cssVar.fontSize,
+    lineHeight: 1.5,
+  },
+  /** An off task's name drops to secondary, matching its gray value. */
+  taskNameOff: {
+    color: cssVar.colorTextSecondary,
+    fontSize: cssVar.fontSize,
+    lineHeight: 1.5,
+  },
   /** The model a follow item currently means, next to it in the menu. */
   hint: {
     color: cssVar.colorTextTertiary,
@@ -38,6 +75,7 @@ export const styles = stylex.create({
   valueMuted: {
     color: cssVar.colorTextTertiary,
     display: 'block',
+    fontSize: cssVar.fontSize,
     textAlign: 'end',
   },
   /** A pinned model keeps the same right edge as the muted values. */

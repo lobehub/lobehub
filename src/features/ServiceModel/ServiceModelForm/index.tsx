@@ -1,9 +1,11 @@
 'use client';
 
 import { SERVICE_MODEL_TIER_SLOTS } from '@lobechat/const';
-import { Button, InputNumber, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Icon, InputNumber, TextArea } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -36,6 +38,7 @@ import {
   type StoredSystemAgent,
 } from '../serviceModelState';
 import SlotRow, { type RowState } from './SlotRow';
+import { PICKER_WIDTH, styles } from './styles';
 import TierRow from './TierRow';
 import { type ModelKind } from './useModelCatalog';
 
@@ -224,7 +227,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
           defaultValue={value}
           disabled={!canManage}
           placeholder={t('systemAgent.topicAutoSummary.promptPlaceholder')}
-          style={{ width: '100%' }}
+          style={{ marginBlockEnd: 8, width: '100%' }}
           onBlur={(event) => {
             const customPrompt = event.currentTarget.value.trim();
             if (customPrompt !== (value ?? ''))
@@ -241,20 +244,30 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     )?.contextLimit;
     if (MEMORY_CONTEXT_LIMIT_SLOTS.has(row) && (state.kind === 'custom' || contextLimit)) {
       return (
-        <InputNumber
-          aria-label={t('serviceModel.contextLimit.placeholder')}
-          disabled={!canManage}
-          min={1}
-          placeholder={t('serviceModel.contextLimit.placeholder')}
-          style={{ width: '100%' }}
-          value={contextLimit}
-          variant={'filled'}
-          onChange={(next) =>
-            writeSlotField(row as UserServiceModelConfigKey, {
-              contextLimit: typeof next === 'number' ? next : undefined,
-            })
-          }
-        />
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={24}
+          justify={'space-between'}
+          style={{ minHeight: 40 }}
+        >
+          <span {...stylex.props(styles.taskNameOff)}>
+            {t('serviceModel.contextLimit.placeholder')}
+          </span>
+          <InputNumber
+            aria-label={t('serviceModel.contextLimit.placeholder')}
+            disabled={!canManage}
+            min={1}
+            style={{ flex: 'none', width: PICKER_WIDTH }}
+            value={contextLimit}
+            variant={'filled'}
+            onChange={(next) =>
+              writeSlotField(row as UserServiceModelConfigKey, {
+                contextLimit: typeof next === 'number' ? next : undefined,
+              })
+            }
+          />
+        </Flexbox>
       );
     }
   };
@@ -268,8 +281,9 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     .filter(Boolean)
     .join(t('serviceModel.advanced.summary.separator'));
 
-  // One settings group per page: the tiers, then 「高级」 as a lighter
-  // sub-section inside the same card instead of a second card of its own.
+  // One settings group per page. The tiers are form rows; 「高级」 stays a
+  // lighter sub-section inside the same card — small type, compact 40px rows —
+  // so it reads as a detail of 服务模型 rather than a second group.
   const group: FormGroupItem = {
     children: (
       <>
@@ -306,70 +320,87 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
 
         <Form.Divider />
 
-        <Form.Group
-          collapsible
-          active={expanded}
-          desc={summary}
-          variant={'borderless'}
-          extra={
-            customCount > 0 ? (
-              <Button disabled={!canManage} size={'small'} type={'text'} onClick={restoreAll}>
-                {t('serviceModel.advanced.restoreAll')}
+        <Flexbox style={{ paddingBlock: 16 }}>
+          <Flexbox horizontal align={'center'} gap={24} justify={'space-between'}>
+            <Flexbox gap={2} style={{ minWidth: 0 }}>
+              <SettingsSearchAnchor id={ADVANCED_ANCHOR}>
+                <span {...stylex.props(styles.sectionTitle)}>
+                  {t('serviceModel.advanced.title')}
+                </span>
+              </SettingsSearchAnchor>
+              <span {...stylex.props(styles.sectionDesc)}>{summary}</span>
+            </Flexbox>
+            <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
+              {customCount > 0 && (
+                <Button disabled={!canManage} size={'small'} type={'text'} onClick={restoreAll}>
+                  {t('serviceModel.advanced.restoreAll')}
+                </Button>
+              )}
+              <Button
+                aria-expanded={expanded}
+                icon={<Icon icon={expanded ? ChevronUp : ChevronDown} />}
+                iconPosition={'end'}
+                size={'small'}
+                type={'text'}
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? t('serviceModel.advanced.collapse') : t('serviceModel.advanced.expand')}
               </Button>
-            ) : undefined
-          }
-          title={
-            <SettingsSearchAnchor id={ADVANCED_ANCHOR}>
-              {t('serviceModel.advanced.title')}
-            </SettingsSearchAnchor>
-          }
-          onCollapse={setExpanded}
-        >
-          {groups.map((purpose) => (
-            <Form.Group
-              collapsible={false}
-              key={purpose.key}
-              title={t(`serviceModel.group.${purpose.key}` as 'serviceModel.group.agent')}
-              variant={'borderless'}
-            >
-              {purpose.rows.map((row, index) => {
-                const state = rowState(row);
-                const title =
-                  row === DEFAULT_AGENT_ROW
-                    ? t('defaultAgent.title')
-                    : t(`systemAgent.${row}.title`);
+            </Flexbox>
+          </Flexbox>
 
-                return (
-                  <Form.Field
-                    divider={index > 0}
-                    key={row}
-                    desc={
-                      row === DEFAULT_AGENT_ROW
-                        ? t('defaultAgent.model.desc')
-                        : t(`systemAgent.${row}.modelDesc`)
-                    }
-                    label={
-                      state.kind === 'off' ? <span style={{ opacity: 0.45 }}>{title}</span> : title
-                    }
-                  >
-                    <SlotRow
-                      canDisable={row !== DEFAULT_AGENT_ROW && canDisableSlot(row)}
-                      disabled={!canManage}
-                      followLabel={followLabelOf(row)}
-                      followModel={followModelOf(row)}
-                      modelKind={modelKindOf(row)}
-                      state={state}
-                      title={title}
-                      onChange={(choice) => writeSlot(row, choice)}
-                    >
-                      {renderExtra(row, state)}
-                    </SlotRow>
-                  </Form.Field>
-                );
-              })}
-            </Form.Group>
-          ))}
-        </Form.Group>
+          {expanded && (
+            <Flexbox gap={20} style={{ paddingBlockStart: 16 }}>
+              {groups.map((purpose) => (
+                <Flexbox gap={4} key={purpose.key}>
+                  <span {...stylex.props(styles.groupTitle)}>
+                    {t(`serviceModel.group.${purpose.key}` as 'serviceModel.group.agent')}
+                  </span>
+                  <Flexbox>
+                    {purpose.rows.map((row) => {
+                      const state = rowState(row);
+                      const title =
+                        row === DEFAULT_AGENT_ROW
+                          ? t('defaultAgent.title')
+                          : t(`systemAgent.${row}.title`);
+
+                      return (
+                        <Flexbox key={row}>
+                          <Flexbox
+                            horizontal
+                            align={'center'}
+                            gap={24}
+                            justify={'space-between'}
+                            {...stylex.props(styles.row)}
+                          >
+                            <span
+                              {...stylex.props(
+                                state.kind === 'off' ? styles.taskNameOff : styles.taskName,
+                              )}
+                            >
+                              {title}
+                            </span>
+                            <SlotRow
+                              canDisable={row !== DEFAULT_AGENT_ROW && canDisableSlot(row)}
+                              disabled={!canManage}
+                              followLabel={followLabelOf(row)}
+                              followModel={followModelOf(row)}
+                              modelKind={modelKindOf(row)}
+                              state={state}
+                              title={title}
+                              onChange={(choice) => writeSlot(row, choice)}
+                            />
+                          </Flexbox>
+                          {renderExtra(row, state)}
+                        </Flexbox>
+                      );
+                    })}
+                  </Flexbox>
+                </Flexbox>
+              ))}
+            </Flexbox>
+          )}
+        </Flexbox>
       </>
     ),
     collapsible: false,
