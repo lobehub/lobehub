@@ -1245,6 +1245,7 @@
   "serviceModel.tier.flash.title": "Flash 模型",
   "serviceModel.tier.main.desc": "创作、推理等看重质量的任务",
   "serviceModel.tier.main.title": "主模型",
+  "serviceModel.title": "服务模型",
   "serviceModel.topicAutoSummary.desc": "针对滚动 24 小时内创建、消息已停止更新一小时的话题自动生成摘要。",
   "settingAgent.agentTools.add": "添加工具",
   "settingAgent.agentTools.agentEmpty": "还没有 Agent 专属工具",

@@ -1245,6 +1245,7 @@
   "serviceModel.tier.flash.title": "Flash Model",
   "serviceModel.tier.main.desc": "Quality-sensitive tasks such as writing and reasoning",
   "serviceModel.tier.main.title": "Main Model",
+  "serviceModel.title": "Service Model",
   "serviceModel.topicAutoSummary.desc": "Summarizes topics created in the rolling 24-hour window after one hour without message activity.",
   "settingAgent.agentTools.add": "Add Tool",
   "settingAgent.agentTools.agentEmpty": "No agent-exclusive tools yet",
