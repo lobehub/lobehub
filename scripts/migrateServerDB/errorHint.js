@@ -9,7 +9,7 @@ docker run -p 5432:5432 -d --name pg -e POSTGRES_PASSWORD=mysecretpassword pgvec
 
 2) if you are using cloud postgres instance, please contact your cloud provider for help.
 
-if you have any other question, please open issue here: https://github.com/lobehub/lobe-chat/issues
+if you have any other question, please open issue here: https://github.com/lobehub/lobehub/issues
 `;
 
 const DB_FAIL_INIT_HINT = `------------------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ if you are using docker postgres image, you may need to set DATABASE_DRIVER to n
 DATABASE_DRIVER=node
 \`\`\`
 
-if you have any other question, please open issue here: https://github.com/lobehub/lobe-chat/issues
+if you have any other question, please open issue here: https://github.com/lobehub/lobehub/issues
 `;
 
 const DUPLICATE_EMAIL_HINT = `------------------------------------------------------------------------------------------
@@ -46,7 +46,7 @@ GROUP BY email
 HAVING COUNT(*) > 1;
 \`\`\`
 
-If you need further assistance, please open an issue: https://github.com/lobehub/lobe-chat/issues
+If you need further assistance, please open an issue: https://github.com/lobehub/lobehub/issues
 `;
 
 module.exports = {
