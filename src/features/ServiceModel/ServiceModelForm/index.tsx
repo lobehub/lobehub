@@ -1,8 +1,8 @@
 'use client';
 
 import { SERVICE_MODEL_TIER_SLOTS } from '@lobechat/const';
-import { Button, Flexbox, InputNumber, TextArea } from '@lobehub/ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import { Button, InputNumber, TextArea } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,9 +113,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     ]);
   // A settings-search deep link to 「高级」 lands on it opened.
   const { hash } = useLocation();
-  const [activeKeys, setActiveKeys] = useState<(number | string)[]>(() =>
-    hash === `#${ADVANCED_ANCHOR}` ? [ADVANCED_ANCHOR] : [],
-  );
+  const [expanded, setExpanded] = useState(() => hash === `#${ADVANCED_ANCHOR}`);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const form = useForm();
 
@@ -270,32 +268,111 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     .filter(Boolean)
     .join(t('serviceModel.advanced.summary.separator'));
 
-  const tierGroup: FormGroupItem = {
-    children: TIERS.map(({ key, modelKind }, index): FormFieldProps => {
-      const title = t(`serviceModel.tier.${key}.title`);
-      return {
-        children: (
-          <TierRow
-            disabled={!canManage}
-            modelKind={modelKind}
-            recommended={resolveFollowModel({}, defaults, SERVICE_MODEL_TIER_SLOTS[key][0])!}
-            title={title}
-            value={getTierItem(storedSystemAgent, key)}
-            onChange={(value) =>
-              write({ systemAgent: applyTierChoice(storedSystemAgent, key, value, { skipSlots }) })
-            }
-          />
-        ),
-        desc: t(`serviceModel.tier.${key}.desc`),
-        label: (
-          <SettingsSearchAnchor
-            id={index === 0 ? 'service-model-assignments' : `service-model-${key}`}
-          >
-            {title}
-          </SettingsSearchAnchor>
-        ),
-      };
-    }),
+  // One settings group per page: the tiers, then 「高级」 as a lighter
+  // sub-section inside the same card instead of a second card of its own.
+  const group: FormGroupItem = {
+    children: (
+      <>
+        {TIERS.map(({ key, modelKind }, index) => {
+          const title = t(`serviceModel.tier.${key}.title`);
+          return (
+            <Form.Field
+              desc={t(`serviceModel.tier.${key}.desc`)}
+              divider={index > 0}
+              key={key}
+              label={
+                <SettingsSearchAnchor
+                  id={index === 0 ? 'service-model-assignments' : `service-model-${key}`}
+                >
+                  {title}
+                </SettingsSearchAnchor>
+              }
+            >
+              <TierRow
+                disabled={!canManage}
+                modelKind={modelKind}
+                recommended={resolveFollowModel({}, defaults, SERVICE_MODEL_TIER_SLOTS[key][0])!}
+                title={title}
+                value={getTierItem(storedSystemAgent, key)}
+                onChange={(value) =>
+                  write({
+                    systemAgent: applyTierChoice(storedSystemAgent, key, value, { skipSlots }),
+                  })
+                }
+              />
+            </Form.Field>
+          );
+        })}
+
+        <Form.Divider />
+
+        <Form.Group
+          collapsible
+          active={expanded}
+          desc={summary}
+          variant={'borderless'}
+          extra={
+            customCount > 0 ? (
+              <Button disabled={!canManage} size={'small'} type={'text'} onClick={restoreAll}>
+                {t('serviceModel.advanced.restoreAll')}
+              </Button>
+            ) : undefined
+          }
+          title={
+            <SettingsSearchAnchor id={ADVANCED_ANCHOR}>
+              {t('serviceModel.advanced.title')}
+            </SettingsSearchAnchor>
+          }
+          onCollapse={setExpanded}
+        >
+          {groups.map((purpose) => (
+            <Form.Group
+              collapsible={false}
+              key={purpose.key}
+              title={t(`serviceModel.group.${purpose.key}` as 'serviceModel.group.agent')}
+              variant={'borderless'}
+            >
+              {purpose.rows.map((row, index) => {
+                const state = rowState(row);
+                const title =
+                  row === DEFAULT_AGENT_ROW
+                    ? t('defaultAgent.title')
+                    : t(`systemAgent.${row}.title`);
+
+                return (
+                  <Form.Field
+                    divider={index > 0}
+                    key={row}
+                    desc={
+                      row === DEFAULT_AGENT_ROW
+                        ? t('defaultAgent.model.desc')
+                        : t(`systemAgent.${row}.modelDesc`)
+                    }
+                    label={
+                      state.kind === 'off' ? <span style={{ opacity: 0.45 }}>{title}</span> : title
+                    }
+                  >
+                    <SlotRow
+                      canDisable={row !== DEFAULT_AGENT_ROW && canDisableSlot(row)}
+                      disabled={!canManage}
+                      followLabel={followLabelOf(row)}
+                      followModel={followModelOf(row)}
+                      modelKind={modelKindOf(row)}
+                      state={state}
+                      title={title}
+                      onChange={(choice) => writeSlot(row, choice)}
+                    >
+                      {renderExtra(row, state)}
+                    </SlotRow>
+                  </Form.Field>
+                );
+              })}
+            </Form.Group>
+          ))}
+        </Form.Group>
+      </>
+    ),
+    collapsible: false,
     desc: `${t('serviceModel.desc')}${!canManage && reason ? ` ${reason}` : ''}`,
     extra:
       saveStatus === 'idle' ? undefined : (
@@ -304,79 +381,14 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     title: t('serviceModel.title'),
   };
 
-  const advancedGroup: FormGroupItem = {
-    children: (
-      <Flexbox gap={16}>
-        {groups.map((group) => (
-          <Form.Group
-            collapsible={false}
-            key={group.key}
-            title={t(`serviceModel.group.${group.key}` as 'serviceModel.group.agent')}
-            variant={'borderless'}
-          >
-            {group.rows.map((row, index) => {
-              const state = rowState(row);
-              const title =
-                row === DEFAULT_AGENT_ROW ? t('defaultAgent.title') : t(`systemAgent.${row}.title`);
-
-              return (
-                <Form.Field
-                  divider={index > 0}
-                  key={row}
-                  desc={
-                    row === DEFAULT_AGENT_ROW
-                      ? t('defaultAgent.model.desc')
-                      : t(`systemAgent.${row}.modelDesc`)
-                  }
-                  label={
-                    state.kind === 'off' ? <span style={{ opacity: 0.45 }}>{title}</span> : title
-                  }
-                >
-                  <SlotRow
-                    canDisable={row !== DEFAULT_AGENT_ROW && canDisableSlot(row)}
-                    disabled={!canManage}
-                    followLabel={followLabelOf(row)}
-                    followModel={followModelOf(row)}
-                    modelKind={modelKindOf(row)}
-                    state={state}
-                    title={title}
-                    onChange={(choice) => writeSlot(row, choice)}
-                  >
-                    {renderExtra(row, state)}
-                  </SlotRow>
-                </Form.Field>
-              );
-            })}
-          </Form.Group>
-        ))}
-      </Flexbox>
-    ),
-    collapsible: true,
-    desc: summary,
-    extra:
-      customCount > 0 ? (
-        <Button disabled={!canManage} size={'small'} type={'text'} onClick={restoreAll}>
-          {t('serviceModel.advanced.restoreAll')}
-        </Button>
-      ) : undefined,
-    key: ADVANCED_ANCHOR,
-    title: (
-      <SettingsSearchAnchor id={ADVANCED_ANCHOR}>
-        {t('serviceModel.advanced.title')}
-      </SettingsSearchAnchor>
-    ),
-  };
-
   return (
     <Form
-      activeKey={activeKeys}
       collapsible={false}
       form={form}
-      items={[tierGroup, advancedGroup]}
+      items={[group]}
       itemsType={'group'}
       variant={'filled'}
       {...FORM_STYLE}
-      onCollapse={setActiveKeys}
     />
   );
 };
