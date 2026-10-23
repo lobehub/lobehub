@@ -1,24 +1,10 @@
 'use client';
 
-import {
-  BrainCircuit,
-  FilePenIcon,
-  FilesIcon,
-  FileText,
-  Image,
-  ImageIcon,
-  LayoutPanelTopIcon,
-  LibraryBigIcon,
-  Mic2,
-  Scale,
-  SquarePlay,
-  Video,
-} from 'lucide-react';
+import { BrainCircuit, FilePenIcon, Image, Scale, Video } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import GenerationSkeleton from '@/components/Skeleton/Generation';
 import MemorySkeleton from '@/components/Skeleton/Memory';
-import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
@@ -32,16 +18,14 @@ import {
   projectHomeRouteMeta,
   projectsRouteMeta,
 } from '@/features/Projects/routeMeta';
-import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
 import { activityListLoader } from '@/spa/router/activityListLoader';
 import { contextListLoader } from '@/spa/router/contextListLoader';
 import { identitiesListLoader } from '@/spa/router/identitiesListLoader';
-import { libraryTreeLoader } from '@/spa/router/libraryTreeLoader';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { preferenceListLoader } from '@/spa/router/preferenceListLoader';
+import { resourceRoute as desktopResourceRoute } from '@/spa/router/resourceRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
-import { worksLoader } from '@/spa/router/worksLoader';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 /**
@@ -266,113 +250,16 @@ const projectRoutes: RouteObject[] = [
   },
 ];
 
-const resourceCategoryRoutes: RouteObject[] = [
-  { icon: LayoutPanelTopIcon, path: 'all', titleKey: 'navigation.resourceAll' },
-  { icon: FileText, path: 'documents', titleKey: 'navigation.resourceDocuments' },
-  { icon: ImageIcon, path: 'images', titleKey: 'navigation.resourceImages' },
-  { icon: SquarePlay, path: 'videos', titleKey: 'navigation.resourceVideos' },
-  { icon: Mic2, path: 'audios', titleKey: 'navigation.resourceAudios' },
-  { icon: FilesIcon, path: 'files', titleKey: 'navigation.resourceFiles' },
-  // /resource/page needs a static segment: the dynamic `:category` ties with
-  // the workspace mirror `/:workspaceSlug/page` on route score.
-  { icon: FilePenIcon, path: 'page', titleKey: 'navigation.resourcePages' },
-].map(({ icon, path, titleKey }) => ({
-  element: dynamicElement(
-    () => import('@/routes/(main)/resource/(home)'),
-    `Mobile > Resource > Home > ${path}`,
-  ),
-  handle: { meta: routeMeta({ icon, titleKey }) },
-  path,
-}));
-
+// The shared Docs subtree (home, drive, works, library gallery, libraries)
+// wrapped in the mobile page layout with the drag context its rows need. Reused
+// rather than copied, so the mobile tree follows every desktop route change.
 const resourceRoute: RouteObject = {
-  children: [
-    {
-      children: [
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/resource/(home)'),
-            'Mobile > Resource > Home',
-          ),
-          handle: {
-            meta: routeMeta({
-              icon: LibraryBigIcon,
-              Skeleton: ResourceHomeSkeleton,
-              titleKey: 'navigation.resources',
-            }),
-          },
-          index: true,
-          loader: worksLoader,
-        },
-        ...resourceCategoryRoutes,
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/resource/(home)'),
-            'Mobile > Resource > Home > Category',
-          ),
-          handle: { meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }) },
-          loader: worksLoader,
-          path: ':category',
-        },
-      ],
-      element: dynamicElement(
-        () => import('@/routes/(main)/resource/(home)/_layout'),
-        'Mobile > Resource > Home > Layout',
-      ),
-      handle: { meta: routeMeta({ Skeleton: ResourceCategorySkeleton }) },
-    },
-    {
-      children: [
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/resource/library'),
-            'Mobile > Resource > Library',
-          ),
-          handle: {
-            meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-          },
-          index: true,
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/resource/library/permission'),
-            'Mobile > Resource > Library > Permission',
-          ),
-          handle: {
-            meta: routeMeta({
-              icon: LibraryBigIcon,
-              Skeleton: createSurfaceSkeleton('form'),
-              titleKey: 'navigation.knowledgeBase',
-            }),
-          },
-          path: 'permission',
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/resource/library/[slug]'),
-            'Mobile > Resource > Library > Slug',
-          ),
-          handle: {
-            meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-          },
-          path: ':slug',
-        },
-      ],
-      // Library tree drawer plus the 403 handler for restricted libraries.
-      element: dynamicElement(
-        () => import('@/routes/(main)/resource/library/_layout'),
-        'Mobile > Resource > Library > Layout',
-      ),
-      loader: libraryTreeLoader,
-      path: 'library/:id',
-    },
-  ],
+  children: [{ ...desktopResourceRoute, path: undefined }],
   element: dynamicLayout(
     () => import('@/routes/(mobile)/resource/_layout'),
     'Mobile > Resource > Layout',
   ),
   errorElement: <ErrorBoundary />,
-  handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
   path: 'resource',
 };
 
