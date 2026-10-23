@@ -28,6 +28,7 @@ import { registerMemoryCommand } from './commands/memory';
 import { registerMessageCommand } from './commands/message';
 import { registerMigrateCommand } from './commands/migrate';
 import { registerModelCommand } from './commands/model';
+import { registerNotificationCommand } from './commands/notification';
 import { registerNotifyCommand } from './commands/notify';
 import { registerPluginCommand } from './commands/plugin';
 import { registerProjectCommand } from './commands/project';
@@ -112,6 +113,7 @@ export function createProgram() {
   registerMessageCommand(program);
   registerModelCommand(program);
   registerNotifyCommand(program);
+  registerNotificationCommand(program);
   registerProviderCommand(program);
   registerProjectCommand(program);
   registerDashboardCommand(program);

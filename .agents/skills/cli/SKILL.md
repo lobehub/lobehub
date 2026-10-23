@@ -56,6 +56,7 @@ apps/cli/src/
 │   ├── message.ts            # Message management
 │   ├── migrate/              # Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)
 │   ├── model.ts              # AI model management
+│   ├── notification.ts       # Notification delivery settings (personal / workspace)
 │   ├── notify.ts             # Send a callback message to a topic to trigger the agent
 │   ├── plugin.ts             # Plugin management
 │   ├── project.ts            # Goal-oriented project management
@@ -117,6 +118,7 @@ apps/cli/src/
 | `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
 | `lh topic`         | -     | Topic CRUD + search + recent                                                       |
 | `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
+| `lh notification`  | -     | Notification settings: show, enable/disable channels, IM platforms and types       |
 | `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                  |
 | `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                    |
 | `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                            |
