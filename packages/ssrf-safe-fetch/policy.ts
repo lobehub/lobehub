@@ -24,6 +24,11 @@ export interface SSRFOptions {
    * callers that read the whole body.
    */
   maxContentLength?: number;
+  /**
+   * Don't log a blocked request. For callers that expect the block and handle the thrown
+   * error themselves (e.g. a validation probe that falls back to another path).
+   */
+  silent?: boolean;
 }
 
 export const SSRF_BLOCKED_PREFIX = 'SSRF blocked';
