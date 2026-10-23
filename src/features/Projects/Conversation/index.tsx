@@ -13,8 +13,10 @@ import NavHeader from '@/features/NavHeader';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import ChatConversation from '@/routes/(main)/agent/features/Conversation';
 import ChatHydration from '@/routes/(main)/agent/features/Conversation/ChatHydration';
+import ConversationArea from '@/routes/(main)/agent/features/Conversation/ConversationArea';
 import TerminalPanelToggle from '@/routes/(main)/agent/features/Conversation/Header/TerminalPanelToggle';
 import WorkingPanelToggle from '@/routes/(main)/agent/features/Conversation/Header/WorkingPanelToggle';
+import PortalPanel from '@/routes/(main)/agent/features/Portal/features/PortalPanel';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -24,6 +26,7 @@ import {
   useProjectDirectoryStore,
   useProjectTopics,
 } from '@/store/projectWorkingDirectory';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { getProjectTopicPath } from '../Layout/navigation';
 import { freshProjectTopicAgentId } from './freshProjectTopicAgentId';
@@ -155,29 +158,58 @@ const ProjectConversation = memo(() => {
     );
   }
 
+  const title = topicTitle || selectedTopic?.title || t('sidebar.newConversation');
+  const topicActions = topicId && (
+    <TopicActions
+      id={topicId}
+      status={selectedTopic?.status}
+      title={topicTitle || selectedTopic?.title || t('directories.untitled')}
+      completionLabel={t(
+        selectedTopic?.status === 'completed' ? 'topics.resume' : 'topics.complete',
+      )}
+    />
+  );
+
+  // Mobile has no working/terminal side panels: the project topic runs in the
+  // same conversation stack as a mobile agent chat, under the page header.
+  if (isMobileSurface())
+    return (
+      <Flexbox height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
+        <NavHeader
+          right={topicActions}
+          left={
+            <Text ellipsis weight={600}>
+              {title}
+            </Text>
+          }
+        />
+        <ChatHydration getConversationPath={getConversationPath} getTopicPath={getTopicPath} />
+        <Flexbox
+          flex={1}
+          style={{ minHeight: 0, minWidth: 0, position: 'relative' }}
+          onFocusCapture={restageDraft}
+          onPointerDownCapture={restageDraft}
+        >
+          <ConversationArea />
+        </Flexbox>
+        <PortalPanel mobile />
+      </Flexbox>
+    );
+
   return (
     <ConversationWorkspace
       header={
         <NavHeader
           left={
             <Text ellipsis weight={600}>
-              {topicTitle || selectedTopic?.title || t('sidebar.newConversation')}
+              {title}
             </Text>
           }
           right={
             <Flexbox horizontal align="center" gap={4}>
               <TerminalPanelToggle />
               <WorkingPanelToggle />
-              {topicId && (
-                <TopicActions
-                  id={topicId}
-                  status={selectedTopic?.status}
-                  title={topicTitle || selectedTopic?.title || t('directories.untitled')}
-                  completionLabel={t(
-                    selectedTopic?.status === 'completed' ? 'topics.resume' : 'topics.complete',
-                  )}
-                />
-              )}
+              {topicActions}
             </Flexbox>
           }
         />

@@ -275,11 +275,11 @@ const ProjectListPage = memo(() => {
           <SearchBar
             allowClear
             placeholder={t('list.searchPlaceholder')}
-            style={{ maxWidth: 280 }}
+            style={{ flex: 1, maxWidth: 280, minWidth: 0 }}
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
+          <Button icon={PlusIcon} style={{ flex: 'none' }} onClick={() => openCreateProjectModal()}>
             {t('create.action')}
           </Button>
         </Flexbox>

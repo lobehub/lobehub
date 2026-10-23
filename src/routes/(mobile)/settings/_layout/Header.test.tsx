@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Header from './Header';
@@ -66,5 +66,55 @@ describe('mobile settings Header', () => {
     // Workspace-aware navigate without `escape` keeps the `/acme` prefix, so the
     // user lands on the workspace provider list instead of personal settings.
     expect(navigateMock).toHaveBeenCalledWith('/settings/provider');
+  });
+
+  it.each([
+    ['statistics', 'auth:tab.stats'],
+    ['credential', 'setting:tab.creds'],
+    ['skill', 'setting:workspaceSetting.tab.skill'],
+    ['connector', 'setting:workspaceSetting.tab.connector'],
+  ])('titles the workspace %s tab mobile now mounts', (tab, title) => {
+    renderHeader(tab);
+
+    expect(within(screen.getByRole('banner')).getByText(title)).toBeInTheDocument();
+  });
+
+  it('titles a personal tab served by a static route (no `:tab` param)', () => {
+    render(
+      <MemoryRouter initialEntries={['/settings/memory']}>
+        <Routes>
+          <Route element={<Header />} path={'/settings/memory'} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(within(screen.getByRole('banner')).getByText('setting:tab.memory')).toBeInTheDocument();
+  });
+});
+
+describe('mobile settings Header back navigation inside a workspace', () => {
+  const renderWorkspaceHeader = (pathname: string) =>
+    render(
+      <MemoryRouter initialEntries={[pathname]}>
+        <Routes>
+          <Route element={<Header />} path={'/:workspaceSlug/settings/*'} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+  it('goes from a workspace tab back to the workspace settings menu', () => {
+    renderWorkspaceHeader('/acme/settings/members');
+
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/settings');
+  });
+
+  it('goes from the workspace settings menu back to the workspace', () => {
+    renderWorkspaceHeader('/acme/settings');
+
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/');
   });
 });

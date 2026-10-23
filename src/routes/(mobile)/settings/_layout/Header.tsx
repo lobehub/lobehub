@@ -30,19 +30,28 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
 };
 
 const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
+  'audit-log': 'setting:workspaceSetting.tab.auditLog',
   'budget': 'subscription:tab.budget',
   'chat-preference': 'setting:tab.chatPreference',
+  'connector': 'setting:workspaceSetting.tab.connector',
+  'credential': 'setting:tab.creds',
   'general': 'setting:workspaceSetting.tab.general',
+  'labels': 'setting:workspaceSetting.tab.labels',
   'members': 'setting:workspaceSetting.tab.members',
+  'skill': 'setting:workspaceSetting.tab.skill',
+  'statistics': 'auth:tab.stats',
+  'teams': 'setting:workspaceSetting.tab.teams',
 };
 
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'auth', 'labs', 'subscription']);
   const showMobileWorkspace = useShowMobileWorkspace();
   const navigate = useWorkspaceAwareNavigate();
-  const params = useParams<{ providerId?: string; tab?: string }>();
+  const params = useParams<{ providerId?: string; tab?: string; workspaceSlug?: string }>();
   const [searchParams] = useSearchParams();
   const workspaceSettingsMatch = useMatch('/:workspaceSlug/settings/:workspaceTab/*');
+  // Known tabs are static routes (no `:tab` param), so read the tab off the URL.
+  const personalSettingsMatch = useMatch('/settings/:tab/*');
 
   const isAgentActive = useAgentStore((s) => !!s.activeAgentId);
   // Personal provider details carry the id in the path; the workspace provider
@@ -61,13 +70,18 @@ const Header = memo(() => {
       // Query-selected provider (workspace form): back to the workspace
       // provider list instead of escaping to personal settings.
       navigate('/settings/provider');
+    } else if (params.workspaceSlug) {
+      // Workspace tabs go back to the workspace settings menu; the menu goes
+      // back to the workspace. Workspace-aware paths keep the slug.
+      navigate(workspaceSettingsMatch ? '/settings' : '/');
     } else {
       navigate('/me/settings', { escape: true });
     }
   };
 
   const workspaceTab = workspaceSettingsMatch?.params.workspaceTab;
-  const tab = (params.tab ?? workspaceTab) as SettingsTabs | undefined;
+  const tab = (params.tab ?? personalSettingsMatch?.params.tab ?? workspaceTab) as
+    SettingsTabs | undefined;
   const tabTitleKey = tab
     ? (WORKSPACE_TAB_TITLE_KEY[workspaceTab ?? ''] ?? TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`)
     : 'setting:tab.all';
