@@ -8,8 +8,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
-import MobileBackButton from './MobileBackButton';
-import MobileNavPanelButton from './MobileNavPanelButton';
+import MobileHeaderNav from './MobileHeaderNav';
 
 export interface NavHeaderProps extends Omit<FlexboxProps, 'children'> {
   children?: ReactNode;
@@ -75,14 +74,7 @@ const NavHeader = memo<NavHeaderProps>(
             style={styles?.left}
           >
             {showTogglePanelButton &&
-              (mobile ? (
-                <>
-                  <MobileBackButton />
-                  <MobileNavPanelButton />
-                </>
-              ) : (
-                !expand && <ToggleLeftPanelButton />
-              ))}
+              (mobile ? <MobileHeaderNav /> : !expand && <ToggleLeftPanelButton />)}
             {left}
           </Flexbox>
           {children && (
