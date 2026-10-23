@@ -250,20 +250,22 @@ export const mobileAgentRoute: RouteObject = {
             { preloadId: 'mobile-agent' },
           ),
         },
-        // Settings brings its own header, so it sits beside the chat layout
-        // instead of stacking under the chat header.
         {
-          element: dynamicElement(
-            () => import('@/routes/(mobile)/chat/settings'),
-            'Mobile > Chat > Settings',
-          ),
-          handle: { meta: mobileAgentSettingsRouteMeta },
-          path: 'settings',
-        },
-        {
-          children: agentSubPages,
+          children: [
+            // Settings brings its own header, so it sits beside the chat layout
+            // instead of stacking under the chat header.
+            {
+              element: dynamicElement(
+                () => import('@/routes/(mobile)/chat/settings'),
+                'Mobile > Chat > Settings',
+              ),
+              handle: { meta: mobileAgentSettingsRouteMeta },
+              path: 'settings',
+            },
+            ...agentSubPages,
+          ],
           element: dynamicLayout(
-            () => import('@/routes/(mobile)/_page-layout'),
+            () => import('@/routes/(mobile)/agent/_pages'),
             'Mobile > Agent > Page Layout',
           ),
         },
@@ -318,7 +320,7 @@ export const mobileGroupRoute: RouteObject = {
             },
           ],
           element: dynamicLayout(
-            () => import('@/routes/(mobile)/_page-layout'),
+            () => import('@/routes/(mobile)/group/_pages'),
             'Mobile > Group > Page Layout',
           ),
         },
