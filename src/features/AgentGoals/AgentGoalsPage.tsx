@@ -308,14 +308,20 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
               </Flexbox>
             )}
             <Flexbox gap={10}>
-              <Flexbox horizontal align={'center'} justify={'space-between'}>
-                <Flexbox horizontal align={'center'} gap={8}>
+              {/* Wraps so the filters drop below the title on a phone instead of crushing it. */}
+              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
+                <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
                   <Text fontSize={16} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>
                 </Flexbox>
-                <Flexbox horizontal align={'center'} gap={8}>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  gap={8}
+                  style={{ maxWidth: '100%', overflowX: 'auto' }}
+                >
                   {isGlobal && (
                     <GoalAgentFilter
                       options={agentFilterOptions}

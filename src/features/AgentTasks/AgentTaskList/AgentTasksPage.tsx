@@ -79,7 +79,9 @@ export const getTaskPageHeaderVisibility = ({
   const isGlobalEmpty = !isScoped && isEmptyHero;
 
   return {
-    showBreadcrumb: isScoped,
+    // A phone header only fits the tabs; back and the agent / project drawer
+    // already lead to the scope the breadcrumb names.
+    showBreadcrumb: isScoped && !isMobile,
     showTaskAgentPanelToggle: !isGlobalEmpty && shouldRenderTaskAgentPanelToggle(isMobile),
     showViewOptions: !isGlobalEmpty,
   };

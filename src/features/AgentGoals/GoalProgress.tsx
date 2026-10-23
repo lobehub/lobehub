@@ -30,6 +30,13 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: min(100%, 390px);
     min-width: 390px;
+
+    /* On a phone the fixed width would crush the goal title beside it. */
+    @media (width <= 767px) {
+      flex: 1 1 200px;
+      width: auto;
+      min-width: 0;
+    }
   `,
   needsYou: css`
     flex: none;
