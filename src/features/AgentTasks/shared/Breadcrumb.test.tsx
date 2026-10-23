@@ -66,6 +66,21 @@ describe('Breadcrumb', () => {
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the all-tasks root crumb on desktop', () => {
+    render(<Breadcrumb taskId="T-child" />);
+
+    expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute('href', '/tasks');
+  });
+
+  it('drops the all-tasks root crumb on mobile, where the back button leads up', () => {
+    vi.stubGlobal('__MOBILE__', true);
+    render(<Breadcrumb taskId="T-child" />);
+
+    expect(screen.queryByText('taskList.all')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'T-parent' })).toBeInTheDocument();
   });
 
   it('uses the ancestor owner agent when building breadcrumb links', () => {
