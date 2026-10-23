@@ -137,8 +137,9 @@ apps/cli/src/
 
 Every command runs against one scope, resolved in this order:
 
-1. an explicit `--workspace <id|slug>` on the commands that take it (a slug is
-   resolved against `lh workspace list`; one that matches nothing fails)
+1. an explicit `--workspace <id|slug>` on the `workspace`, `device` and `topic`
+   commands that take it (a slug is resolved against `lh workspace list`; one
+   that matches nothing fails). `lh connect --workspace` takes an id only.
 2. the `LOBEHUB_WORKSPACE_ID` env var (an id only)
 3. the scope persisted by `lh workspace use <id|slug>`
 4. personal content (no workspace)
