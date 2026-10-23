@@ -160,3 +160,14 @@ describe('mobileRouter acceptance routes', () => {
     expect(check?.at(-1)?.params).toMatchObject({ acceptanceId: 'acc_1', checkId: 'chk_1' });
   });
 });
+
+describe('mobileRouter Docs routes', () => {
+  it('reuses the desktop Docs subtree and gives the header-less Works view a shell header', () => {
+    const works = matchRoutes(mobileRoutes, '/resource/works')!.at(-1)!.route;
+    const drive = matchRoutes(mobileRoutes, '/resource/drive/images')!.at(-1)!.route;
+
+    expect((works.handle as { mobileShellHeader?: boolean }).mobileShellHeader).toBe(true);
+    expect((drive.handle as { mobileShellHeader?: boolean }).mobileShellHeader).toBeUndefined();
+    expect(getRouteMetaFromHandle(works.handle)?.titleKey).toBe('navigation.resourceWorks');
+  });
+});

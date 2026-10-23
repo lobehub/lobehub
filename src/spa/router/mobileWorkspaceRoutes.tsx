@@ -250,11 +250,22 @@ const projectRoutes: RouteObject[] = [
   },
 ];
 
+/** Flag routes whose page renders no header of its own (see `MobileShellHandle`). */
+const withShellHeader = (route: RouteObject, paths: ReadonlySet<string>): RouteObject =>
+  ({
+    ...route,
+    ...(route.path && paths.has(route.path)
+      ? { handle: { ...(route.handle as object), mobileShellHeader: true } }
+      : {}),
+    children: route.children?.map((child) => withShellHeader(child, paths)),
+  }) as RouteObject;
+
 // The shared Docs subtree (home, drive, works, library gallery, libraries)
 // wrapped in the mobile page layout with the drag context its rows need. Reused
 // rather than copied, so the mobile tree follows every desktop route change.
+// Works paints no page header, so the shell adds one there.
 const resourceRoute: RouteObject = {
-  children: [{ ...desktopResourceRoute, path: undefined }],
+  children: [withShellHeader({ ...desktopResourceRoute, path: undefined }, new Set(['works']))],
   element: dynamicLayout(
     () => import('@/routes/(mobile)/resource/_layout'),
     'Mobile > Resource > Layout',
