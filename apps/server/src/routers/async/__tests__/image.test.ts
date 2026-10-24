@@ -149,7 +149,22 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
 
   it('persists the localized moderation notice key and account recovery time', async () => {
     asyncTaskModelMock.findById.mockResolvedValue({ metadata: undefined });
-    vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('policy violation'));
+    vi.mocked(resolveBusinessModelMapping).mockResolvedValue({
+      requestedModelId: 'some-model',
+      resolvedModelId: 'mapped-image-model',
+    } as any);
+    const policyError = new Error('policy violation');
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+      createImage: vi.fn(async (_payload: unknown, options: { metadata: Record<string, any> }) => {
+        options.metadata.routeAttempt = {
+          apiType: 'google',
+          channelId: 'channel-1',
+          optionIndex: 0,
+          routerId: 'router-1',
+        };
+        throw policyError;
+      }),
+    } as any);
     vi.mocked(getProviderContentPolicyErrorDetails).mockResolvedValue({
       message: 'response.ProviderImageContentModerationAccountSuspendedUntil',
       retryAt: '2026-10-31T10:00:00.000Z',
@@ -158,6 +173,22 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     const caller = imageRouter.createCaller(mockCtx);
     await caller.createImage(createInput());
 
+    expect(getProviderContentPolicyErrorDetails).toHaveBeenCalledWith({
+      error: policyError,
+      provider: 'test-provider',
+      tracking: {
+        apiType: 'google',
+        channelId: 'channel-1',
+        generationBatchId: 'batch-1',
+        generationId: 'gen-1',
+        model: 'mapped-image-model',
+        optionIndex: 0,
+        routerId: 'router-1',
+        taskId: 'task-1',
+      },
+      trigger: 'image',
+      userId,
+    });
     expect(asyncTaskModelMock.update).toHaveBeenCalledWith(
       'task-1',
       expect.objectContaining({
