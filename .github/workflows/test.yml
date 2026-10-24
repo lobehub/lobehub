@@ -44,7 +44,8 @@ concurrency:
 jobs:
   # Package tests - all packages in single job to save runner resources
   test-packages:
-    runs-on: ubuntu-latest
+    # rdmclin2's own PRs run on the Zeabur self-hosted runners; everyone else and pushes stay on GitHub-hosted.
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'rdmclin2' && fromJSON('["self-hosted","lobe-zeabur-linux"]') || 'ubuntu-latest' }}
     name: Test Packages
     env:
       PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/replica'
@@ -56,9 +57,14 @@ jobs:
           REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
         run: |
           git init .
+          git remote remove origin 2>/dev/null || true
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+          git clean -ffdx -e node_modules
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Verify CI scripts
         run: |
@@ -69,9 +75,6 @@ jobs:
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
-
-      - name: Setup environment
-        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
@@ -192,7 +195,8 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     name: Test App (shard ${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
+    # rdmclin2's own PRs run on the Zeabur self-hosted runners; everyone else and pushes stay on GitHub-hosted.
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'rdmclin2' && fromJSON('["self-hosted","lobe-zeabur-linux"]') || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         env:
@@ -200,9 +204,11 @@ jobs:
           REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
         run: |
           git init .
+          git remote remove origin 2>/dev/null || true
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+          git clean -ffdx -e node_modules
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -250,7 +256,8 @@ jobs:
   test-desktop:
     name: ALint & Test Desktop App
 
-    runs-on: ubuntu-latest
+    # rdmclin2's own PRs run on the Zeabur self-hosted runners; everyone else and pushes stay on GitHub-hosted.
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'rdmclin2' && fromJSON('["self-hosted","lobe-zeabur-linux"]') || 'ubuntu-latest' }}
     # checks + pull-requests: the alint steps publish an "ALint" check run and
     # keep one summary comment on the PR up to date.
     permissions:
@@ -280,9 +287,11 @@ jobs:
           REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
         run: |
           git init .
+          git remote remove origin 2>/dev/null || true
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+          git clean -ffdx -e node_modules
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -391,7 +400,8 @@ jobs:
         shard: [1, 2]
     name: Test Server (shard ${{ matrix.shard }}/2)
 
-    runs-on: ubuntu-latest
+    # rdmclin2's own PRs run on the Zeabur self-hosted runners; everyone else and pushes stay on GitHub-hosted.
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'rdmclin2' && fromJSON('["self-hosted","lobe-zeabur-linux"]') || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout
@@ -400,9 +410,11 @@ jobs:
           REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
         run: |
           git init .
+          git remote remove origin 2>/dev/null || true
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+          git clean -ffdx -e node_modules
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -430,7 +442,8 @@ jobs:
     name: Upload Sharded Coverage
     needs: [test-app, test-server]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    # rdmclin2's own PRs run on the Zeabur self-hosted runners; everyone else and pushes stay on GitHub-hosted.
+    runs-on: ${{ github.event_name == 'pull_request' && github.actor == 'rdmclin2' && fromJSON('["self-hosted","lobe-zeabur-linux"]') || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         env:
@@ -438,9 +451,11 @@ jobs:
           REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
         run: |
           git init .
+          git remote remove origin 2>/dev/null || true
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+          git clean -ffdx -e node_modules
 
       - name: Download App Coverage shards
         if: needs.test-app.result == 'success'
@@ -499,9 +514,11 @@ jobs:
           REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
         run: |
           git init .
+          git remote remove origin 2>/dev/null || true
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git fetch --no-tags --depth=1 origin "${REF_SHA}"
           git checkout --force FETCH_HEAD
+          git clean -ffdx -e node_modules
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
