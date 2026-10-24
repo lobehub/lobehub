@@ -3,11 +3,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
+const { runInNewContext } = require('node:vm');
+const { parse } = require('yaml');
 
 const {
   buildHeadline,
   countJsFiles,
   diffResolvedDeps,
+  measureDesktopEntryGraph,
   measureEntryGraph,
   readResolvedDeps,
   stripHash,
@@ -233,4 +236,101 @@ test('diffResolvedDeps reports changed, added and removed package versions only'
     { after: '', before: '1.0.0', name: 'gone' },
     { after: '0.1.0', before: '', name: 'new' },
   ]);
+});
+
+const LAZY_PAYLOAD = require('node:crypto').randomBytes(150_000).toString('base64');
+
+const writeDesktopRenderer = ({ mainExtra = '' } = {}) =>
+  writeDist({
+    'apps/desktop/index.html':
+      '<script type="module" crossorigin src="/assets/main-AAAAAAAA.js"></script>',
+    'apps/desktop/overlay.html':
+      '<script type="module" crossorigin src="/assets/overlay-BBBBBBBB.js"></script>',
+    'apps/desktop/popup.html':
+      '<script type="module" crossorigin src="/assets/popup-CCCCCCCC.js"></script>',
+    'assets/main-AAAAAAAA.js': `import"./shared-DDDDDDDD.js";const l=()=>import("./settings-EEEEEEEE.js");${mainExtra}`,
+    'assets/overlay-BBBBBBBB.js': 'export const overlay=1;',
+    'assets/popup-CCCCCCCC.js': 'import"./shared-DDDDDDDD.js";',
+    'assets/shared-DDDDDDDD.js': 'export const shared=1;',
+    'assets/settings-EEEEEEEE.js': `export const settings="${LAZY_PAYLOAD}";`,
+  });
+
+test('desktop-entry-graph measures each Electron HTML entry separately', () => {
+  const root = writeDesktopRenderer();
+
+  const report = measureDesktopEntryGraph(root);
+
+  assert.equal(report.type, 'desktop-entry-graph');
+  assert.deepEqual(Object.keys(report.sizes), ['main', 'overlay', 'popup']);
+  assert.equal(report.graphs.main.count, 2);
+  assert.equal(report.graphs.overlay.count, 1);
+  assert.equal(report.graphs.popup.count, 2);
+  assert.deepEqual(report.jsChunks, { targets: { [root]: 5 }, total: 5 });
+});
+
+const runDesktopCheck = (baseline, current) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-gate-'));
+  fs.writeFileSync(path.join(dir, 'baseline.json'), JSON.stringify(baseline));
+  fs.writeFileSync(path.join(dir, 'current.json'), JSON.stringify(current));
+  return spawnSync(
+    process.execPath,
+    [
+      path.join(__dirname, 'bundle-size-gate.cjs'),
+      'check',
+      '--current',
+      path.join(dir, 'current.json'),
+      '--baseline',
+      path.join(dir, 'baseline.json'),
+      '--floor',
+      '65536',
+    ],
+    { encoding: 'utf8' },
+  );
+};
+
+test('desktop-entry-graph fails when a lazy chunk joins the main first screen', () => {
+  const baseline = measureDesktopEntryGraph(writeDesktopRenderer());
+  const regressed = measureDesktopEntryGraph(
+    writeDesktopRenderer({ mainExtra: 'import"./settings-EEEEEEEE.js";' }),
+  );
+
+  assert.equal(runDesktopCheck(baseline, baseline).status, 0);
+  const result = runDesktopCheck(baseline, regressed);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /\| main \|.*❌/);
+});
+
+test('desktop workflow propagates fork size regressions while allowing same-repo review enforcement', () => {
+  const workflow = parse(
+    fs.readFileSync(path.join(__dirname, '../workflows/desktop-bundle-size.yml'), 'utf8'),
+  );
+  const check = workflow.jobs['desktop-entry-graph'].steps.find(
+    (step) => step.id === 'entry_graph_check',
+  );
+  const baseline = measureDesktopEntryGraph(writeDesktopRenderer());
+  const regressed = measureDesktopEntryGraph(
+    writeDesktopRenderer({ mainExtra: 'import"./settings-EEEEEEEE.js";' }),
+  );
+  const passing = runDesktopCheck(baseline, baseline);
+  const failing = runDesktopCheck(baseline, regressed);
+  assert.equal(passing.status, 0);
+  assert.equal(failing.status, 1);
+
+  for (const headRepo of ['contributor/lobehub', 'lobehub/lobehub']) {
+    const policy = check['continue-on-error'] ?? false;
+    // This workflow expression uses property access and equality, shared with JS.
+    const continueOnError =
+      typeof policy === 'boolean'
+        ? policy
+        : runInNewContext(policy.replaceAll(/^\$\{\{\s*|\s*\}\}$/g, ''), {
+            github: {
+              event: { pull_request: { head: { repo: { full_name: headRepo } } } },
+              repository: 'lobehub/lobehub',
+            },
+          });
+    const conclusion = (result) => (result.status === 0 || continueOnError ? 'success' : 'failure');
+
+    assert.equal(conclusion(passing), 'success');
+    assert.equal(conclusion(failing), headRepo === 'lobehub/lobehub' ? 'success' : 'failure');
+  }
 });

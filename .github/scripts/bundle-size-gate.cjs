@@ -4,7 +4,7 @@
  * baseline artifact uploaded by canary branch builds.
  *
  * Usage:
- *   node bundle-size-gate.js measure --type <web|asar|entry-graph> --out <file.json>
+ *   node bundle-size-gate.js measure --type <web|asar|entry-graph|desktop-entry-graph> --out <file.json>
  *   node bundle-size-gate.js check --current <file.json> --baseline <file.json> [--label <name>] [--report <file.md>] [--percent <n>] [--floor <bytes>] [--js-chunk-percent <n>]
  *
  * Thresholds (env, overridable per check via --percent / --floor / --js-chunk-percent):
@@ -20,6 +20,8 @@
  * It also records the total number of Vite-emitted `.js` files under the dist
  * targets and gates that total against the baseline with a separate percentage
  * threshold.
+ * `desktop-entry-graph` does the same for the Electron renderer build
+ * (`apps/desktop/dist/renderer`), once per HTML entry (main, overlay, popup).
  * Missing baseline or missing current report degrades to a warning + exit 0,
  * so the gate never blocks before the first baseline exists.
  */
@@ -37,6 +39,12 @@ const ENTRY_GRAPH_TARGETS = [
 const VITE_JS_TARGETS = [
   ...new Set([...WEB_TARGETS, ...ENTRY_GRAPH_TARGETS.map(({ dir }) => dir)]),
 ];
+const DESKTOP_RENDERER_ROOT = 'apps/desktop/dist/renderer';
+const DESKTOP_ENTRY_HTML = {
+  main: 'apps/desktop/index.html',
+  overlay: 'apps/desktop/overlay.html',
+  popup: 'apps/desktop/popup.html',
+};
 const STATIC_IMPORT_RE =
   /(?:^|[;{}\s)])(?:import(?:[\w$*{},\s]+from\s*)?|export\s*(?:\*|\{[^}]*\})\s*from\s*)["']([^"']+\.js)["']/g;
 const ASAR_SEARCH_ROOT = 'apps/desktop/release';
@@ -157,6 +165,25 @@ const measureEntryGraph = (root, htmlFile = 'index.html') => {
   return { chunks, count: visited.size, entry, gz };
 };
 
+const measureDesktopEntryGraph = (root = DESKTOP_RENDERER_ROOT) => {
+  if (!fs.existsSync(root)) die(`${root} not found — did the desktop renderer build run?`);
+  const sizes = {};
+  const graphs = {};
+  for (const [name, html] of Object.entries(DESKTOP_ENTRY_HTML)) {
+    if (!fs.existsSync(path.join(root, html))) die(`${root}/${html} not found`);
+    const graph = measureEntryGraph(root, html);
+    sizes[name] = graph.gz;
+    graphs[name] = graph;
+  }
+  const total = countJsFiles(root);
+  return {
+    graphs,
+    jsChunks: { targets: { [root]: total }, total },
+    sizes,
+    type: 'desktop-entry-graph',
+  };
+};
+
 // pnpm-workspace.yaml sets `lockfile: false`, so the only record of what a build
 // actually resolved is the virtual store directory: `<name>@<version>[_<peer-hash>]`.
 const readResolvedDeps = (storeDir = PNPM_STORE_DIR) => {
@@ -196,7 +223,8 @@ const diffResolvedDeps = (baseline = [], current = []) => {
 
 const measure = (args) => {
   const { type, out } = args;
-  if (!type || !out) die('measure requires --type <web|asar> and --out <file.json>');
+  if (!type || !out)
+    die('measure requires --type <web|asar|entry-graph|desktop-entry-graph> and --out <file.json>');
 
   let result;
   if (type === 'web') {
@@ -227,6 +255,11 @@ const measure = (args) => {
     if (Object.keys(sizes).length === 0) die('no dist targets found — did the build run?');
     const jsChunks = measureViteJsChunks();
     result = { graphs, jsChunks, sizes, type };
+  } else if (type === 'desktop-entry-graph') {
+    result = measureDesktopEntryGraph();
+    for (const [name, graph] of Object.entries(result.graphs)) {
+      console.log(`   ${name}: ${graph.count} chunks reachable from ${graph.entry}`);
+    }
   } else if (type === 'asar') {
     const asarPath = findAsar(ASAR_SEARCH_ROOT);
     if (!asarPath) die(`app.asar not found under ${ASAR_SEARCH_ROOT}`);
@@ -237,7 +270,7 @@ const measure = (args) => {
       type,
     };
   } else {
-    die(`unknown --type "${type}" (expected web|asar|entry-graph)`);
+    die(`unknown --type "${type}" (expected web|asar|entry-graph|desktop-entry-graph)`);
   }
 
   fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -483,6 +516,7 @@ module.exports = {
   buildHeadline,
   countJsFiles,
   diffResolvedDeps,
+  measureDesktopEntryGraph,
   measureEntryGraph,
   measureViteJsChunks,
   readResolvedDeps,
