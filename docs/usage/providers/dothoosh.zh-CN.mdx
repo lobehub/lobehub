@@ -1,0 +1,51 @@
+---
+title: 在 LobeHub 中使用 DotHoosh
+description: 在 LobeHub 中配置 DotHoosh AI 网关，使用 Claude、GPT、Gemini、DeepSeek 和 Kimi 模型进行对话。
+tags:
+  - LobeHub
+  - DotHoosh
+  - API 密钥
+  - AI 网关
+---
+
+# 在 LobeHub 中使用 DotHoosh
+
+[DotHoosh](https://gateway.dothoosh.com) 是面向伊朗用户的 AI API 网关。一个 API 密钥即可使用 Anthropic、OpenAI、Google、DeepSeek 和月之暗面（Moonshot AI）的模型。费用以土曼（Toman）从预付费钱包扣除，当前价格请查看[模型与价格列表](https://gateway.dothoosh.com/models)，接口说明请查看 [DotHoosh 文档](https://gateway.dothoosh.com/docs)。
+
+在 LobeHub 中配置时，打开 **应用设置 → AI 服务商**，选择对应服务商并打开右侧开关。
+
+<Steps>
+  ### 步骤一：创建 API 密钥
+
+  - 登录 [DotHoosh](https://gateway.dothoosh.com) 并为钱包充值。
+  - 打开 [API 密钥页面](https://gateway.dothoosh.com/api-keys)并创建密钥。
+  - 复制并妥善保存密钥。
+
+  ### 步骤二：在 LobeHub 中配置 DotHoosh
+
+  - 打开 **应用设置 → AI 服务商 → DotHoosh**，然后启用服务商。
+  - 填入 API 密钥。如果自部署实例的管理员已配置服务端密钥，可以直接使用该配置，无需再填写个人密钥。
+  - 保留默认 API 基础地址 `https://gateway.dothoosh.com/v1`；使用兼容代理时再修改。
+  - 执行连通性检查，然后为助手选择 DotHoosh 模型，发送一条简短消息。
+</Steps>
+
+## API 兼容性
+
+LobeHub 会实时从 DotHoosh 网关读取模型列表、上下文窗口、能力和价格，只有模型列表声明支持图片输入时才会启用图片输入。目前 DotHoosh 的所有模型都只接受文本，因此不支持图片和文件附件。LobeHub 根据同一份列表为每个模型选择对应的 API：
+
+- 只在兼容 Anthropic 的路径上提供的模型（例如 Claude）使用 Anthropic Messages API。LobeHub 会把基础地址末尾的 `/v1` 替换为 `/anthropic` 得到其地址（默认为 `https://gateway.dothoosh.com/anthropic`）。
+- 模型列表声明支持 OpenAI Responses API 的模型（例如 GPT-6）使用该 API；DotHoosh 只在这条路径上接受 GPT-6 的函数工具。
+- 其他模型使用兼容 OpenAI 的 Chat Completions API，其中包括同时出现在两个列表中的 DeepSeek。
+
+未填写 API 密钥时，LobeHub 从 `https://www.dothoosh.com/gateway` 读取公开模型列表，因为位于伊朗的 API 无法从境外访问；填写密钥后则从你的基础地址读取，因此限制了可用模型的密钥只会看到这些模型。
+
+自定义代理必须在其基础地址下提供这三个路径；不要把 `/v1/chat/completions` 之类的完整接口地址填为基础地址。请求通过 LobeHub 服务端发送，因此服务端必须能够访问 API。此服务商不支持浏览器直连请求。
+
+密钥可调用的模型取决于你的 DotHoosh 账户，可在服务商设置中获取模型列表。
+
+## 自部署与排查
+
+管理员可在服务端设置 `DOTHOOSH_API_KEY`，启用 DotHoosh 并提供共享密钥。`DOTHOOSH_PROXY_URL` 用于覆盖基础地址，`DOTHOOSH_MODEL_LIST` 用于过滤和重命名实时模型列表，详见 [DotHoosh 环境变量](/zh/docs/self-hosting/environment-variables/model-provider#dothoosh)。
+
+- 身份验证失败时，检查密钥是否有效、是否已被撤销，以及钱包是否有余额。
+- 连通性检查失败时，确认所选模型对当前密钥可用，且服务端或代理可以访问 `gateway.dothoosh.com`。

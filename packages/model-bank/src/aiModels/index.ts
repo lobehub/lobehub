@@ -21,6 +21,7 @@ import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
 import { default as deepseek } from './deepseek';
+import { default as dothoosh } from './dothoosh';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
 import { default as giteeai } from './giteeai';
@@ -134,6 +135,7 @@ const staticModelMap: ModelsMap = {
   cometapi,
   comfyui,
   deepseek,
+  dothoosh,
   fal,
   fireworksai,
   giteeai,
@@ -253,6 +255,7 @@ export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
 export { default as deepseek } from './deepseek';
+export { default as dothoosh } from './dothoosh';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';
 export { default as giteeai } from './giteeai';

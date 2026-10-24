@@ -19,6 +19,7 @@ export enum ModelProvider {
   CometAPI = 'cometapi',
   ComfyUI = 'comfyui',
   DeepSeek = 'deepseek',
+  DotHoosh = 'dothoosh',
   Fal = 'fal',
   FireworksAI = 'fireworksai',
   GiteeAI = 'giteeai',

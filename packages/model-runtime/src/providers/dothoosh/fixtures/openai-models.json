@@ -1,0 +1,348 @@
+{
+  "catalog_version": "sha256:digest-one",
+  "data": [
+    {
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "modality": "text->text",
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "capabilities": [
+        "reasoning",
+        "text",
+        "tools"
+      ],
+      "context_length": 128000,
+      "context_window": 128000,
+      "created": 1700000000,
+      "id": "deepseek-v4",
+      "max_output_tokens": 16000,
+      "model_revision": "catalog-revision-v1_x",
+      "name": "deepseek-v4",
+      "object": "model",
+      "owned_by": "dothoosh",
+      "policy": {
+        "dothoosh_content_retention": "zero",
+        "processing_region": null,
+        "processing_regions": [],
+        "provider_retention": "unknown",
+        "provider_retention_evidence": {
+          "claim": "unknown",
+          "evidence_reference": "evidence",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "policy_revision": "policy-revision-v1_x",
+          "retention_limit_seconds": null,
+          "verification_status": "active",
+          "verified_at": "2026-09-21T14:13:20Z"
+        },
+        "provider_training": "unknown",
+        "provider_visibility": "policy-based-hidden"
+      },
+      "protocols": [
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "openai-chat-completions"
+        }
+      ],
+      "status": "active",
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "tool_choice",
+        "tools"
+      ],
+      "top_provider": {
+        "context_length": 128000,
+        "is_moderated": false,
+        "max_completion_tokens": 16000
+      }
+    },
+    {
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "modality": "text->text",
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "capabilities": [
+        "text"
+      ],
+      "created": 1700000000,
+      "id": "dual-model",
+      "model_revision": "catalog-revision-v1_x",
+      "name": "dual-model",
+      "object": "model",
+      "owned_by": "dothoosh",
+      "policy": {
+        "dothoosh_content_retention": "zero",
+        "processing_region": null,
+        "processing_regions": [],
+        "provider_retention": "unknown",
+        "provider_retention_evidence": {
+          "claim": "unknown",
+          "evidence_reference": "evidence",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "policy_revision": "policy-revision-v1_x",
+          "retention_limit_seconds": null,
+          "verification_status": "active",
+          "verified_at": "2026-09-21T14:13:20Z"
+        },
+        "provider_training": "unknown",
+        "provider_visibility": "policy-based-hidden"
+      },
+      "protocols": [
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "openai-chat-completions"
+        },
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "anthropic-messages"
+        }
+      ],
+      "status": "active",
+      "supported_parameters": [
+        "max_tokens"
+      ],
+      "top_provider": {
+        "context_length": null,
+        "is_moderated": false,
+        "max_completion_tokens": null
+      }
+    },
+    {
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "modality": "text+image->text",
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "capabilities": [
+        "reasoning",
+        "text",
+        "vision"
+      ],
+      "context_length": 1000000,
+      "context_window": 1000000,
+      "created": 1700000000,
+      "id": "gemini-3-pro",
+      "max_output_tokens": 125000,
+      "model_revision": "catalog-revision-v1_x",
+      "name": "gemini-3-pro",
+      "object": "model",
+      "owned_by": "dothoosh",
+      "policy": {
+        "dothoosh_content_retention": "zero",
+        "processing_region": null,
+        "processing_regions": [],
+        "provider_retention": "unknown",
+        "provider_retention_evidence": {
+          "claim": "unknown",
+          "evidence_reference": "evidence",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "policy_revision": "policy-revision-v1_x",
+          "retention_limit_seconds": null,
+          "verification_status": "active",
+          "verified_at": "2026-09-21T14:13:20Z"
+        },
+        "provider_training": "unknown",
+        "provider_visibility": "policy-based-hidden"
+      },
+      "protocols": [
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "openai-chat-completions"
+        }
+      ],
+      "status": "active",
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning"
+      ],
+      "top_provider": {
+        "context_length": 1000000,
+        "is_moderated": false,
+        "max_completion_tokens": 125000
+      }
+    },
+    {
+      "architecture": {
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "modality": "text+image->text",
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "capabilities": [
+        "streaming",
+        "structured-output",
+        "text",
+        "tools",
+        "vision"
+      ],
+      "context_length": 400000,
+      "context_window": 400000,
+      "created": 1700000000,
+      "id": "gpt-5",
+      "max_output_tokens": 50000,
+      "model_revision": "catalog-revision-v1_x",
+      "name": "gpt-5",
+      "object": "model",
+      "owned_by": "dothoosh",
+      "policy": {
+        "dothoosh_content_retention": "zero",
+        "processing_region": null,
+        "processing_regions": [],
+        "provider_retention": "unknown",
+        "provider_retention_evidence": {
+          "claim": "unknown",
+          "evidence_reference": "evidence",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "policy_revision": "policy-revision-v1_x",
+          "retention_limit_seconds": null,
+          "verification_status": "active",
+          "verified_at": "2026-09-21T14:13:20Z"
+        },
+        "provider_training": "unknown",
+        "provider_visibility": "policy-based-hidden"
+      },
+      "pricing": {
+        "completion": "0.00001",
+        "input_cache_read": "0.000000125",
+        "prompt": "0.00000125",
+        "request": "0"
+      },
+      "pricing_tiers": [
+        {
+          "above_input_tokens": 128000,
+          "prompt": "0.000002"
+        },
+        {
+          "above_input_tokens": 272000,
+          "completion": "0.000015",
+          "prompt": "0.0000025"
+        }
+      ],
+      "protocols": [
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "openai-chat-completions"
+        },
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "openai-responses"
+        }
+      ],
+      "status": "active",
+      "supported_parameters": [
+        "max_tokens",
+        "response_format",
+        "structured_outputs",
+        "tool_choice",
+        "tools"
+      ],
+      "top_provider": {
+        "context_length": 400000,
+        "is_moderated": false,
+        "max_completion_tokens": 50000
+      }
+    },
+    {
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "modality": "text->text",
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "capabilities": [
+        "text",
+        "tools"
+      ],
+      "context_length": 256000,
+      "context_window": 256000,
+      "created": 1700000000,
+      "id": "kimi-k3",
+      "max_output_tokens": 32000,
+      "model_revision": "catalog-revision-v1_x",
+      "name": "kimi-k3",
+      "object": "model",
+      "owned_by": "dothoosh",
+      "policy": {
+        "dothoosh_content_retention": "zero",
+        "processing_region": null,
+        "processing_regions": [],
+        "provider_retention": "unknown",
+        "provider_retention_evidence": {
+          "claim": "unknown",
+          "evidence_reference": "evidence",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "policy_revision": "policy-revision-v1_x",
+          "retention_limit_seconds": null,
+          "verification_status": "active",
+          "verified_at": "2026-09-21T14:13:20Z"
+        },
+        "provider_training": "unknown",
+        "provider_visibility": "policy-based-hidden"
+      },
+      "protocols": [
+        {
+          "conformance_reference": "ref",
+          "conformance_status": "verified",
+          "expires_at": "2026-09-21T14:13:20Z",
+          "last_verified_at": "2026-09-21T14:13:20Z",
+          "protocol": "openai-responses"
+        }
+      ],
+      "status": "active",
+      "supported_parameters": [
+        "max_tokens",
+        "tool_choice",
+        "tools"
+      ],
+      "top_provider": {
+        "context_length": 256000,
+        "is_moderated": false,
+        "max_completion_tokens": 32000
+      }
+    }
+  ],
+  "object": "list",
+  "pricing_version": "public-v9"
+}

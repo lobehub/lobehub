@@ -254,6 +254,31 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `-`
 - Example: `-all,+deepseek-reasoner`
 
+## DotHoosh
+
+Use the [DotHoosh](https://gateway.dothoosh.com) AI gateway. See [Using DotHoosh in LobeHub](/docs/usage/providers/dothoosh) for setup instructions.
+
+### `DOTHOOSH_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in DotHoosh provider settings.
+- Description: A key created on the [DotHoosh API keys page](https://gateway.dothoosh.com/api-keys). Setting a non-empty key automatically enables DotHoosh in the server configuration. `ENABLED_DOTHOOSH` is derived from this key, not a separate environment switch.
+- Default: Unset; no shared server key.
+- Example: `your-dothoosh-api-key`
+
+### `DOTHOOSH_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL. Models served only on the Anthropic-compatible route (Claude) use that API, whose URL LobeHub derives from this one by replacing a trailing `/v1` with `/anthropic`, so a custom proxy must serve both paths.
+- Default: `https://gateway.dothoosh.com/v1`
+- Example: `https://dothoosh-proxy.example.com/v1`
+
+### `DOTHOOSH_MODEL_LIST`
+
+- Type: Optional
+- Description: Filters and renames the model list that LobeHub reads live from the DotHoosh gateway, using the shared [model-list syntax][model-list]: `-` hides a model, `-all,+model_id` keeps only the listed models, and `model_id=display_name` renames a model. Separate entries with commas. This does not grant access to models your DotHoosh key cannot call.
+- Default: Unset; shows every model the gateway lists for the key.
+- Example: `-all,+claude-sonnet-5-5,+deepseek-v4-pro`
+
 ## XAI
 
 ### `XAI_API_KEY`
