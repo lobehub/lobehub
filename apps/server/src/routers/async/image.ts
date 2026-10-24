@@ -11,7 +11,7 @@ import debug from 'debug';
 import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
-import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
+import { getProviderContentPolicyErrorDetails } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
@@ -357,7 +357,7 @@ export const imageRouter = router({
         });
 
         // Improved error categorization logic
-        const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        const providerContentPolicyError = await getProviderContentPolicyErrorDetails({
           error,
           provider,
           trigger: RequestTrigger.Image,
@@ -367,11 +367,15 @@ export const imageRouter = router({
           error,
           isEditingImage,
           isAborted: abortController.signal.aborted,
-          providerContentPolicyMessage,
+          providerContentPolicyMessage: providerContentPolicyError?.message,
         });
+        const taskError = new AsyncTaskError(errorType, errorMessage);
+        if (providerContentPolicyError?.retryAt) {
+          taskError.body.retryAt = providerContentPolicyError.retryAt;
+        }
 
         await asyncTaskModel.update(taskId, {
-          error: new AsyncTaskError(errorType, errorMessage),
+          error: taskError,
           status: AsyncTaskStatus.Error,
         });
 

@@ -186,6 +186,12 @@ export default {
     'Content policy check failed. Revise your prompt and try again.',
   'response.ProviderContentModerationWarning':
     'Repeated content policy rejections detected. Please revise your prompt before retrying.',
+  'response.ProviderImageContentModerationAccountWarning':
+    'Repeated image safety rejections detected. Further violations may temporarily restrict your account.',
+  'response.ProviderImageContentModerationAccountSuspendedUntil':
+    'Your account has been temporarily restricted due to repeated image safety rejections and is expected to be restored at {{time}}. Use a compliant prompt after access is restored.',
+  'response.ProviderImageContentModerationAccountSuspensionExpired':
+    'This account restriction has ended. Use a compliant prompt before trying again.',
   'response.ProviderImageContentModerationWarning':
     'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
   'response.ProviderImageContentModerationCooldown':

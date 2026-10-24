@@ -3,6 +3,7 @@ import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { AsyncTaskStatus } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getProviderContentPolicyErrorDetails } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
@@ -23,6 +24,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn(
 
 // Business slots.
 vi.mock('@/business/server/getProviderContentPolicyErrorMessage', () => ({
+  getProviderContentPolicyErrorDetails: vi.fn(async () => undefined),
   getProviderContentPolicyErrorMessage: vi.fn(async () => undefined),
 }));
 vi.mock('@/business/server/image-generation/chargeAfterGenerate', () => ({
@@ -141,6 +143,31 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
       expect.objectContaining({
         isError: true,
         prechargeResult: { reservationKey: 'brk-1' },
+      }),
+    );
+  });
+
+  it('persists the localized moderation notice key and account recovery time', async () => {
+    asyncTaskModelMock.findById.mockResolvedValue({ metadata: undefined });
+    vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('policy violation'));
+    vi.mocked(getProviderContentPolicyErrorDetails).mockResolvedValue({
+      message: 'response.ProviderImageContentModerationAccountSuspendedUntil',
+      retryAt: '2026-10-31T10:00:00.000Z',
+    });
+
+    const caller = imageRouter.createCaller(mockCtx);
+    await caller.createImage(createInput());
+
+    expect(asyncTaskModelMock.update).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({
+        error: expect.objectContaining({
+          body: {
+            detail: 'response.ProviderImageContentModerationAccountSuspendedUntil',
+            retryAt: '2026-10-31T10:00:00.000Z',
+          },
+          name: 'ProviderContentModeration',
+        }),
       }),
     );
   });

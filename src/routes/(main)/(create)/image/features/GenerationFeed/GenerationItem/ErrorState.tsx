@@ -17,6 +17,8 @@ import { getThumbnailMaxWidth } from './utils';
 const providerContentModerationErrorKeys = [
   'response.ProviderContentModeration',
   'response.ProviderContentModerationWarning',
+  'response.ProviderImageContentModerationAccountSuspendedUntil',
+  'response.ProviderImageContentModerationAccountWarning',
   'response.ProviderImageContentModerationCooldown',
   'response.ProviderImageContentModerationWarning',
 ] as const;
@@ -59,12 +61,19 @@ export const ErrorState = memo<ErrorStateProps>(
       if (!generation.task.error) return '';
 
       const error = generation.task.error;
+      const errorBody = typeof error.body === 'string' ? error.body : error.body?.detail;
       if (
         error.name === AsyncTaskErrorType.ProviderContentModeration &&
         Number.isFinite(retryTime)
       ) {
+        const isAccountSuspension =
+          errorBody === 'response.ProviderImageContentModerationAccountSuspendedUntil';
         if (cooldownExpired) {
-          return tError('response.ProviderImageContentModerationCooldownExpired');
+          return tError(
+            isAccountSuspension
+              ? 'response.ProviderImageContentModerationAccountSuspensionExpired'
+              : 'response.ProviderImageContentModerationCooldownExpired',
+          );
         }
 
         const time = new Intl.DateTimeFormat(i18n.resolvedLanguage || i18n.language, {
@@ -74,9 +83,13 @@ export const ErrorState = memo<ErrorStateProps>(
           minute: '2-digit',
           timeZoneName: 'short',
         }).format(retryTime);
-        return tError('response.ProviderImageContentModerationCooldownUntil', { time });
+        return tError(
+          isAccountSuspension
+            ? 'response.ProviderImageContentModerationAccountSuspendedUntil'
+            : 'response.ProviderImageContentModerationCooldownUntil',
+          { time },
+        );
       }
-      const errorBody = typeof error.body === 'string' ? error.body : error.body?.detail;
       const translateErrorKey = (translationKey: string, fallbackKey?: string) => {
         const translated = tError(translationKey as any);
 

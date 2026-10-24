@@ -21,14 +21,16 @@ vi.mock('react-i18next', () => ({
       const namespaces = Array.isArray(namespace) ? namespace : [namespace];
       if (
         namespaces.includes('error') &&
-        key.startsWith('response.ProviderImageContentModerationCooldown')
+        (key.startsWith('response.ProviderImageContentModerationCooldown') ||
+          key.startsWith('response.ProviderImageContentModerationAccountSuspended'))
       ) {
         const value = zhCNError[key as keyof typeof zhCNError];
         return value?.replace('{{time}}', options?.time ?? '') ?? key;
       }
       if (
         namespaces.includes('error') &&
-        key === 'response.ProviderImageContentModerationWarning'
+        (key === 'response.ProviderImageContentModerationWarning' ||
+          key === 'response.ProviderImageContentModerationAccountWarning')
       ) {
         return 'Translated image moderation warning';
       }
@@ -135,6 +137,51 @@ describe('ErrorState', () => {
     expect(screen.queryByText(/预计于/)).toBeNull();
   });
 
+  it('shows an account suspension notice until the recorded recovery time', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-25T10:00:00Z'));
+    const retryAt = '2026-10-31T10:00:00Z';
+    const generation: Generation = {
+      asyncTaskId: 'task-id',
+      createdAt: new Date(),
+      id: 'generation-id',
+      task: {
+        error: {
+          body: {
+            detail: 'response.ProviderImageContentModerationAccountSuspendedUntil',
+            retryAt,
+          },
+          name: AsyncTaskErrorType.ProviderContentModeration,
+        },
+        id: 'task-id',
+        status: AsyncTaskStatus.Error,
+      },
+    };
+
+    render(
+      <ErrorState
+        aspectRatio="1 / 1"
+        generation={generation}
+        generationBatch={generationBatch}
+        onCopyError={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    const time = new Intl.DateTimeFormat('zh-CN', {
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      month: 'short',
+      timeZoneName: 'short',
+    }).format(new Date(retryAt));
+    expect(
+      screen.getByText(
+        `因多次触发图片内容安全限制，你的账号已被临时限制使用，预计于 ${time} 恢复。请在恢复后使用合规提示词重试。`,
+      ),
+    ).toBeTruthy();
+  });
+
   it.each([
     'Image generation is temporarily paused due to repeated safety rejections. Try again later with safer prompts.',
     'response.ProviderImageContentModerationCooldown',
@@ -193,6 +240,37 @@ describe('ErrorState', () => {
 
     expect(screen.getByText('Translated image moderation warning')).toBeTruthy();
     expect(screen.queryByText('response.ProviderImageContentModerationWarning')).toBeNull();
+  });
+
+  it('localizes the account restriction warning before enforcement', () => {
+    const generation: Generation = {
+      asyncTaskId: 'task-id',
+      createdAt: new Date(),
+      id: 'generation-id',
+      task: {
+        error: {
+          body: {
+            detail:
+              'Repeated image safety rejections detected. Further violations may temporarily restrict your account.',
+          },
+          name: AsyncTaskErrorType.ProviderContentModeration,
+        },
+        id: 'task-id',
+        status: AsyncTaskStatus.Error,
+      },
+    };
+
+    render(
+      <ErrorState
+        aspectRatio="1 / 1"
+        generation={generation}
+        generationBatch={generationBatch}
+        onCopyError={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Translated image moderation warning')).toBeTruthy();
   });
 
   it.each([
