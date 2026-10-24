@@ -13,7 +13,7 @@
  */
 import type { CustomWorld } from '../../support/world';
 
-const NOTICE_TITLE = /Pages and Resources are now Docs|页面和资源已合并为 Docs/;
+const NOTICE_TITLE = /Pages and Resources are now Docs|「文稿」和「资源」已合并为「云文档」/;
 const NOTICE_CONFIRM = /^(Got it|知道了|我知道了)$/;
 
 /** How long to wait for a late-mounting notice before deciding it is absent. */

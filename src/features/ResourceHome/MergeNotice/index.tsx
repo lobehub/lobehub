@@ -1,7 +1,6 @@
 'use client';
 
 import { createModal } from '@lobehub/ui';
-import { t } from 'i18next';
 import { useEffect, useRef } from 'react';
 
 import { useHomeStore } from '@/store/home';
@@ -9,10 +8,10 @@ import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
-import { DocsMergeNoticeContent } from './Content';
+import { DocsMergeNoticeContent, DocsMergeNoticeTitle } from './Content';
 import { decideMergeNotice } from './decide';
 
-const openDocsMergeNotice = (onClosed: () => void) =>
+export const openDocsMergeNotice = (onClosed: () => void) =>
   createModal({
     content: <DocsMergeNoticeContent />,
     footer: null,
@@ -21,7 +20,7 @@ const openDocsMergeNotice = (onClosed: () => void) =>
     onOpenChangeComplete: (open) => {
       if (!open) onClosed();
     },
-    title: t('docs.mergeNotice.title', { ns: 'file' }),
+    title: <DocsMergeNoticeTitle />,
     width: 'min(92vw, 480px)',
   });
 
