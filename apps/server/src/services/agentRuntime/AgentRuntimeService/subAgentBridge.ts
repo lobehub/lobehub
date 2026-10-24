@@ -1,4 +1,5 @@
 import type { AgentState } from '@lobechat/agent-runtime';
+import type { CallSubAgentState } from '@lobechat/builtin-tool-lobe-agent';
 import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import debug from 'debug';
 
@@ -18,6 +19,7 @@ export type SubAgentBridgeDeps = Pick<
   AgentRuntimeServiceContext,
   | 'controlCompletedToolResult'
   | 'coordinator'
+  | 'delegate'
   | 'isCallSubAgentToolMessage'
   | 'messageModel'
   | 'resolveLastAssistantContentFromThread'
@@ -173,6 +175,22 @@ export async function completeSubAgentBridge(
       ? `Sub-agent did not complete (${reason}): ${errorReason}`
       : `Sub-agent did not complete (${reason}).`
     : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+
+  // A background sub-agent's parent never parked on it: the placeholder holds
+  // the start receipt the parent already read, so the answer is kept for a
+  // delivery of its own instead of a backfill + resume.
+  if (await isBackgroundSubAgentPlaceholder(deps, toolMessageId)) {
+    await recordBackgroundSubAgentResult(deps, {
+      error: failed ? formatErrorForMetadata(finalState?.error ?? params.errorMessage) : undefined,
+      finalState,
+      result: resultContent,
+      status: failed ? 'error' : 'completed',
+      threadId,
+      toolMessageId,
+    });
+    return false;
+  }
+
   // callSubAgent results carry the sub-agent id so the parent can later send
   // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
   // to hand over what it gathered before failing — instead of redoing it.
@@ -225,6 +243,67 @@ export async function completeSubAgentBridge(
     { parentOperationId },
     { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
   );
+}
+
+/**
+ * Whether the bridged placeholder was started with `runInBackground`
+ * (`callSubAgent` or `callAgent` — only their runner writes the flag).
+ */
+async function isBackgroundSubAgentPlaceholder(
+  deps: SubAgentBridgeDeps,
+  toolMessageId: string,
+): Promise<boolean> {
+  const plugin = await deps.messageModel.findMessagePlugin(toolMessageId);
+  return (plugin?.state as CallSubAgentState | undefined)?.background === true;
+}
+
+/**
+ * Store a finished background sub-agent's answer on its placeholder, then try
+ * to deliver it. The tool result (the start receipt) is left as the parent
+ * read it; the answer goes into `state.result` for the delivery to carry.
+ *
+ * Throws when the answer cannot be stored, so the queue-mode callback is
+ * redelivered. A failed delivery does not throw: the answer is stored, and
+ * the next settle of the topic picks it up.
+ */
+async function recordBackgroundSubAgentResult(
+  deps: SubAgentBridgeDeps,
+  params: {
+    error?: unknown;
+    finalState?: AgentState;
+    result: string;
+    status: 'completed' | 'error';
+    threadId: string;
+    toolMessageId: string;
+  },
+): Promise<void> {
+  const { error, finalState, result, status, threadId, toolMessageId } = params;
+  const state: Partial<CallSubAgentState> = {
+    model: finalState?.modelRuntimeConfig?.model,
+    result,
+    status,
+    threadId,
+    totalCost: finalState?.cost?.total,
+    totalInputTokens: finalState?.usage?.llm?.tokens?.input,
+    totalOutputTokens: finalState?.usage?.llm?.tokens?.output,
+    totalToolCalls: finalState?.usage?.tools?.totalCalls,
+    totalTokens: finalState?.usage?.llm?.tokens?.total,
+  };
+
+  const recorded = await deps.messageModel.updateToolMessage(toolMessageId, {
+    pluginError: error,
+    pluginState: state,
+  });
+  if (!recorded.success) {
+    throw new Error(
+      `Background sub-agent: failed to record the result on tool message ${toolMessageId}`,
+    );
+  }
+
+  const placeholder = await deps.messageModel.findById(toolMessageId);
+  if (!placeholder?.topicId || !deps.delegate.deliverBackgroundSubAgentResults) return;
+
+  await deps.delegate.deliverBackgroundSubAgentResults({ topicId: placeholder.topicId });
 }
 
 /**

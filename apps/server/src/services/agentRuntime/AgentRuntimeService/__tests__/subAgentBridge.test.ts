@@ -145,6 +145,7 @@ describe('AgentRuntimeService', () => {
       });
       updateToolMessage = vi.fn().mockResolvedValue({ success: true });
       (service as any).messageModel.updateToolMessage = updateToolMessage;
+      (service as any).messageModel.findMessagePlugin = vi.fn().mockResolvedValue(undefined);
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
     });
 
@@ -660,6 +661,72 @@ describe('AgentRuntimeService', () => {
         service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
       ).rejects.toThrow('db down');
       expect(resumeSpy).not.toHaveBeenCalled();
+    });
+
+    describe('background sub-agent', () => {
+      let deliver: ReturnType<typeof vi.fn>;
+
+      beforeEach(() => {
+        (service as any).messageModel.findMessagePlugin = vi.fn().mockResolvedValue({
+          apiName: 'callSubAgent',
+          identifier: 'lobe-agent',
+          state: { background: true, status: 'pending' },
+        });
+        (service as any).messageModel.findById = vi
+          .fn()
+          .mockResolvedValue({ id: 'tool-msg-1', topicId: 'topic-1' });
+        deliver = vi.fn().mockResolvedValue(undefined);
+        (service as any).delegate.deliverBackgroundSubAgentResults = deliver;
+      });
+
+      it('keeps the start receipt, stores the answer and delivers instead of resuming', async () => {
+        const won = await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: childState as any,
+        });
+
+        expect(won).toBe(false);
+        // No `content`: the tool result stays the receipt the parent already read.
+        expect(updateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
+          pluginError: undefined,
+          pluginState: {
+            model: 'gpt-test',
+            result: 'final answer',
+            status: 'completed',
+            threadId: 'thread-1',
+            totalCost: undefined,
+            totalInputTokens: undefined,
+            totalOutputTokens: undefined,
+            totalToolCalls: 2,
+            totalTokens: 42,
+          },
+        });
+        expect(resumeSpy).not.toHaveBeenCalled();
+        expect(deliver).toHaveBeenCalledWith({ topicId: 'topic-1' });
+      });
+
+      it('stores a failure as an error result', async () => {
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: { ...childState, error: { message: 'Budget exceeded' } } as any,
+          reason: 'error',
+        });
+
+        const [, update] = updateToolMessage.mock.calls[0];
+        expect(update.pluginState).toMatchObject({ status: 'error' });
+        expect(update.pluginState.result).toContain('Budget exceeded');
+        expect(update.pluginError).toBeDefined();
+        expect(deliver).toHaveBeenCalled();
+      });
+
+      it('throws when the answer cannot be stored, so the callback is redelivered', async () => {
+        updateToolMessage.mockResolvedValue({ success: false });
+
+        await expect(
+          service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
+        ).rejects.toThrow(/failed to record the result/);
+        expect(deliver).not.toHaveBeenCalled();
+      });
     });
   });
 

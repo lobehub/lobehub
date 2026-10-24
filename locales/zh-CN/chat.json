@@ -2254,6 +2254,8 @@
   "stt.action": "语音输入",
   "stt.loading": "识别中…",
   "stt.prettifying": "润色中…",
+  "subAgentCallback.failed": "未完成",
+  "subAgentCallback.tag": "子代理",
   "supervisor.label": "主管",
   "supervisor.todoList.allComplete": "所有任务已完成",
   "supervisor.todoList.title": "任务完成",

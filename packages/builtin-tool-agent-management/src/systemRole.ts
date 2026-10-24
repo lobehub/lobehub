@@ -158,6 +158,13 @@ For quick responses in the conversation context:
 callAgent(agentId, instruction)
 \`\`\`
 The agent will respond directly in the current conversation.
+
+### Background Call
+When you have other independent work to do meanwhile, or the user should not wait:
+\`\`\`
+callAgent(agentId, instruction, runInBackground: true)
+\`\`\`
+The call returns at once. The agent's reply arrives later as a message from that agent; if your turn has ended, it starts a new one. Do not poll or call the agent again to check on it.
 </execution_guide>`;
 
 const subAgentContextSection = `

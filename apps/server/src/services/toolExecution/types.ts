@@ -24,6 +24,13 @@ export interface ToolExecutionMemoryEmbeddingRuntime {
 export interface ServerSubAgentRunParams {
   /** Target agent id; defaults to the parent agent when omitted. */
   agentId?: string;
+  /**
+   * Run detached from the parent (`callSubAgent({ runInBackground })`): the
+   * placeholder is written with the start receipt as its final tool result, and
+   * the child's answer is delivered to the parent as a later message instead of
+   * resuming a parked parent. Only set by `callSubAgent`.
+   */
+  background?: boolean;
   /** Short label shown in the UI (sub-agent thread title). */
   description: string;
   /** Detailed instruction/prompt for the sub-agent run. */
@@ -378,6 +385,11 @@ export interface ToolExecutionResult {
   errorData?: DeviceUnavailableErrorData;
   state?: Record<string, any>;
   success: boolean;
+  /**
+   * The tool message this call already created for itself; the agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
   /**
    * Transient Work-registration intent produced by the executor and consumed by
    * the agent runtime (`callTool` / `callToolsBatch`) once the tool call's

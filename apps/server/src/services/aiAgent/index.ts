@@ -16,6 +16,7 @@ import type {
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -51,6 +52,11 @@ import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
+import {
+  type BackgroundSubAgentResult,
+  deliverBackgroundSubAgentResults,
+} from './backgroundSubAgentDelivery';
+import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
@@ -163,6 +169,7 @@ export class AiAgentService {
       //
       // Arrow fields are auto-bound, so no `.bind(this)`.
       delegate: {
+        deliverBackgroundSubAgentResults: this.deliverBackgroundSubAgentResults,
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
@@ -714,6 +721,7 @@ export class AiAgentService {
    */
   execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> =>
     execAgentThreadRun(this.subAgentRunDeps, params, {
+      background: params.background,
       chatConfig: params.chatConfig,
       deviceId: params.deviceId,
       isSubAgent: true,
@@ -726,6 +734,74 @@ export class AiAgentService {
       provider: params.provider,
       resumeParentOnComplete: true,
     });
+
+  /**
+   * Hand a topic's finished background sub-agent results to their parent agent
+   * as a new turn — see `backgroundSubAgentDelivery`. Runtime delegate entry.
+   */
+  deliverBackgroundSubAgentResults = (params: {
+    settledOperationId?: string;
+    topicId: string;
+  }): Promise<void> =>
+    deliverBackgroundSubAgentResults(
+      {
+        agentOperationModel: this.agentOperationModel,
+        appendResultMessages: this.appendBackgroundResultMessages,
+        execAgent: (execParams) => this.execAgent(execParams),
+        messageModel: this.messageModel,
+        resolveInterventionConfig: () => resolveForegroundInterventionConfig(this.db, this.userId),
+        topicModel: this.topicModel,
+      },
+      params,
+    );
+
+  /**
+   * Land background sub-agent answers on the topic's main line as user
+   * messages whose sender is each sub-agent. Serialized per topic
+   * (with task callbacks too) so concurrent deliveries cannot anchor on the
+   * same leaf and fork the line; ids derive from the call, so a retried
+   * delivery skips what it already wrote. Returns the line's new leaf.
+   */
+  private appendBackgroundResultMessages = async (params: {
+    agentId: string;
+    results: BackgroundSubAgentResult[];
+    topicId: string;
+  }): Promise<string | undefined> => {
+    const { agentId, results, topicId } = params;
+
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${topicId}))`);
+      const messageModel = new MessageModel(tx, this.userId, this.workspaceId);
+      let leafId = await messageModel.getLastMainThreadSpineMessageId(topicId);
+
+      for (const item of results) {
+        const messageId = `subagent-cb-${item.callId}`;
+        if (await messageModel.findById(messageId)) continue;
+
+        await messageModel.create(
+          {
+            agentId,
+            content: item.result,
+            metadata: {
+              subAgentCallback: {
+                agentId: item.sender.agentId,
+                name: item.sender.name,
+                status: item.status,
+                threadId: item.threadId,
+              },
+            },
+            parentId: leafId,
+            role: 'user',
+            topicId,
+          },
+          messageId,
+        );
+        leafId = messageId;
+      }
+
+      return leafId;
+    });
+  };
 
   /**
    * Fork a single group member ("call agent member") under a `lobe-group-management`

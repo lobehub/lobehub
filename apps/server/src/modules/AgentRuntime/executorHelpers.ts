@@ -268,7 +268,14 @@ export const buildServerVirtualSubAgentRunner = (
   const parentDeviceId = resolveRunActiveDeviceId(state);
 
   return {
-    run: async ({ agentId: targetAgentId, description, instruction, subAgentId, timeout }) => {
+    run: async ({
+      agentId: targetAgentId,
+      background,
+      description,
+      instruction,
+      subAgentId,
+      timeout,
+    }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
       //     the parent — it takes the parent's `agencyConfig.subagent` override,
@@ -291,9 +298,18 @@ export const buildServerVirtualSubAgentRunner = (
       // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
-      const pendingState = subAgentId
-        ? { status: 'pending', threadId: subAgentId }
-        : { status: 'pending' };
+      // `background` is written before the child starts so the completion bridge
+      // can never see this row without it, however fast the child finishes. The
+      // sender is who the answer will be delivered as: the named target, or the
+      // parent itself for an anonymous clone.
+      const pendingState = {
+        ...(background && {
+          background: true,
+          sender: { agentId: targetAgentId ?? agentId, name: description },
+        }),
+        status: 'pending',
+        ...(subAgentId && { threadId: subAgentId }),
+      };
       if (existingToolMessageId) {
         await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
       }
@@ -319,6 +335,7 @@ export const buildServerVirtualSubAgentRunner = (
       //    bridge that backfills this tool message and resumes the parent op.
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
+        background,
         chatConfig: subAgentChatConfig,
         deviceId: targetAgentId ? undefined : parentDeviceId,
         groupId: state.origin?.groupId ?? undefined,
@@ -328,6 +345,8 @@ export const buildServerVirtualSubAgentRunner = (
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
         provider: subAgentModel?.provider,
+        // Marks the thread as a sub-agent (the right panel, the thread portal).
+        sourceToolCallId: chatToolPayload.id,
         threadId: subAgentId,
         timeout,
         title: description,
@@ -367,6 +386,21 @@ export const buildServerVirtualSubAgentRunner = (
           subOperationId: result?.operationId,
           threadId: '',
         };
+      }
+
+      // A background parent never parks, so its card has no other way to link
+      // the running thread. Only `threadId` is patched: the merge leaves the
+      // `status` key to the completion bridge, which may already have written it.
+      if (background && result.threadId && !subAgentId) {
+        await ctx.messageModel
+          .updatePluginState(placeholder.id, { threadId: result.threadId })
+          .catch((error: unknown) =>
+            log(
+              'buildServerVirtualSubAgentRunner: failed to link thread on %s: %O',
+              placeholder.id,
+              error,
+            ),
+          );
       }
 
       return {

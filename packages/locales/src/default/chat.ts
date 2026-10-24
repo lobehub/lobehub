@@ -1869,6 +1869,8 @@ export default {
   'stt.action': 'Voice Input',
   'stt.loading': 'Recognizing...',
   'stt.prettifying': 'Polishing...',
+  'subAgentCallback.failed': 'Did not finish',
+  'subAgentCallback.tag': 'Sub-agent',
   'supervisor.label': 'Orchestrator',
   'supervisor.todoList.allComplete': 'All tasks completed',
   'supervisor.todoList.title': 'Tasks Completed',

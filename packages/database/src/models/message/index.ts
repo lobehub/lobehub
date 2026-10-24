@@ -7,6 +7,7 @@ import { messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { MessageAnalyticsQueries } from './analytics';
 import { MessageAnnotationMutations } from './annotation';
+import { MessageBackgroundSubAgentQueries } from './backgroundSubAgent';
 import { MessageBranchSnapshots } from './branchSnapshots';
 import { MessageDeleteMutations } from './delete';
 import { MessageLookupQueries } from './lookup';
@@ -114,6 +115,10 @@ export class MessageModel {
   softDeleteTopicless: MessageTrashMutations['softDeleteTopicless'];
   purgeMessages: MessageTrashMutations['purgeMessages'];
 
+  listBackgroundSubAgentCalls: MessageBackgroundSubAgentQueries['listBackgroundSubAgentCalls'];
+  claimBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['claimBackgroundSubAgentDelivery'];
+  releaseBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['releaseBackgroundSubAgentDelivery'];
+
   private readonly annotations: MessageAnnotationMutations;
 
   constructor(
@@ -134,6 +139,7 @@ export class MessageModel {
     const writes = new MessageWriteMutations(...args);
     const plugins = new MessagePluginStore(args, { lookups });
     const tools = new MessageToolMutations(...args);
+    const backgroundSubAgents = new MessageBackgroundSubAgentQueries(...args);
     const spine = new MessageSpineQueries(...args);
     const annotations = new MessageAnnotationMutations(args, { lookups });
     const snapshots = new MessageBranchSnapshots(...args);
@@ -198,6 +204,9 @@ export class MessageModel {
     this.findToolMessageIdByToolCallId = plugins.findToolMessageIdByToolCallId;
     this.updateToolMessage = tools.updateToolMessage;
     this.updateToolArguments = tools.updateToolArguments;
+    this.listBackgroundSubAgentCalls = backgroundSubAgents.listBackgroundSubAgentCalls;
+    this.claimBackgroundSubAgentDelivery = backgroundSubAgents.claimBackgroundSubAgentDelivery;
+    this.releaseBackgroundSubAgentDelivery = backgroundSubAgents.releaseBackgroundSubAgentDelivery;
     this.getLastMainThreadSpineMessageId = spine.getLastMainThreadSpineMessageId;
     this.isMessageDescendantOf = spine.isMessageDescendantOf;
     this.getLatestSpineMessageId = spine.getLatestSpineMessageId;

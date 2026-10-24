@@ -642,6 +642,12 @@ export interface ExecVirtualSubAgentParams {
   /** The agent ID to execute */
   agentId: string;
   /**
+   * Detached run (`callSubAgent({ runInBackground })`): the parent is not
+   * parked on it, its placeholder already holds the start receipt, and the
+   * answer is delivered to the parent as a separate message on completion.
+   */
+  background?: boolean;
+  /**
    * chatConfig overrides (thinking / reasoning-effort extend params) for the
    * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
    * Merged over the executing agent's own chatConfig, skipping nulled keys.
@@ -676,6 +682,12 @@ export interface ExecVirtualSubAgentParams {
   parentOperationId: string;
   /** Provider for {@link model}. */
   provider?: string;
+  /**
+   * The tool call (`callSubAgent` / `callAgent`) that spawned this sub-agent,
+   * stored on a new thread's metadata so the UI shows the thread as a
+   * sub-agent. A continued thread keeps the call that first spawned it.
+   */
+  sourceToolCallId?: string;
   /**
    * Existing isolation thread of an earlier `callSubAgent` run to continue.
    * When set, the instruction becomes a new turn on that thread (the sub-agent

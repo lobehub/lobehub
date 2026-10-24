@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "Platform bug",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "Schema mismatch",
   "builtins.lobe-agent.apiName.vent.rejected": "Not recorded",
+  "builtins.lobe-agent.subAgent.backgroundHint": "The result will be sent to this conversation when it finishes.",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "Running in background",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} tokens",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} tools",
   "builtins.lobe-agent.subAgent.stopped": "Stopped before finishing",
