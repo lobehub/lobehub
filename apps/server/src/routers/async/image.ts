@@ -11,7 +11,10 @@ import debug from 'debug';
 import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
-import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
+import {
+  getProviderContentPolicyErrorDetails,
+  type ProviderContentPolicyViolationTrackingContext,
+} from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
@@ -136,6 +139,12 @@ export const imageRouter = router({
       const isEditingImage =
         Boolean((params as any).imageUrl) ||
         Boolean(params.imageUrls && params.imageUrls.length > 0);
+      const runtimeMetadata: Record<string, unknown> = {
+        generationBatchId,
+        generationId,
+        taskId,
+        trigger: RequestTrigger.Image,
+      };
 
       try {
         // Opaque billing handle stored on the task at submission time; threaded
@@ -172,12 +181,7 @@ export const imageRouter = router({
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
           const runtimeOptions: CreateImageMethodOptions = {
-            metadata: {
-              generationBatchId,
-              generationId,
-              taskId,
-              trigger: RequestTrigger.Image,
-            },
+            metadata: runtimeMetadata,
           };
           const response = await modelRuntime.createImage!(
             {
@@ -357,9 +361,25 @@ export const imageRouter = router({
         });
 
         // Improved error categorization logic
-        const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+        const routeAttempt = runtimeMetadata.routeAttempt as
+          | Pick<
+              ProviderContentPolicyViolationTrackingContext,
+              'apiType' | 'channelId' | 'optionIndex' | 'routerId'
+            >
+          | undefined;
+        const providerContentPolicyError = await getProviderContentPolicyErrorDetails({
           error,
           provider,
+          tracking: {
+            apiType: routeAttempt?.apiType,
+            channelId: routeAttempt?.channelId,
+            generationBatchId,
+            generationId,
+            model: resolvedModelId,
+            optionIndex: routeAttempt?.optionIndex,
+            routerId: routeAttempt?.routerId,
+            taskId,
+          },
           trigger: RequestTrigger.Image,
           userId: ctx.userId,
         });
@@ -367,11 +387,15 @@ export const imageRouter = router({
           error,
           isEditingImage,
           isAborted: abortController.signal.aborted,
-          providerContentPolicyMessage,
+          providerContentPolicyMessage: providerContentPolicyError?.message,
         });
+        const taskError = new AsyncTaskError(errorType, errorMessage);
+        if (providerContentPolicyError?.retryAt) {
+          taskError.body.retryAt = providerContentPolicyError.retryAt;
+        }
 
         await asyncTaskModel.update(taskId, {
-          error: new AsyncTaskError(errorType, errorMessage),
+          error: taskError,
           status: AsyncTaskStatus.Error,
         });
 
