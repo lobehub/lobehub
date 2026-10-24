@@ -119,6 +119,28 @@ describe('/api/agent/stream route', () => {
       expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
     });
 
+    it('should return 404 when an API key belongs to a different workspace', async () => {
+      mockCreateLambdaContext.mockResolvedValue({
+        apiKeyScopes: null,
+        userId: OWNER_USER_ID,
+        workspaceId: 'workspace-1',
+      });
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: OWNER_USER_ID,
+        workspaceId: 'workspace-2',
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(404);
+      const data = await response.json();
+      expect(data.error).toBe('operation_not_found');
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+    });
+
     it('should return 404 for a share-visitor operation even when the caller is the visitor', async () => {
       mockCreateLambdaContext.mockResolvedValue({ userId: 'visitor-user' });
       mockAgentStateManager.getOperationMetadata.mockResolvedValue({
@@ -734,7 +756,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
         },
       );
 
-      const response = await GET(request);
+      await GET(request);
 
       expect(capturedCallback).toBeDefined();
       expect(capturedSignal).toBeDefined();
