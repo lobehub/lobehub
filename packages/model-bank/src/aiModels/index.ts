@@ -21,6 +21,7 @@ import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
 import { default as comfyui } from './comfyui';
 import { default as deepseek } from './deepseek';
+import { default as dothoosh } from './dothoosh';
 import { default as doubaospeech } from './doubaospeech';
 import { default as elevenlabs } from './elevenlabs';
 import { default as fal } from './fal';
@@ -138,6 +139,7 @@ const staticModelMap: ModelsMap = {
   cometapi,
   comfyui,
   deepseek,
+  dothoosh,
   doubaospeech,
   elevenlabs,
   fal,
@@ -261,6 +263,7 @@ export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
 export { default as comfyui } from './comfyui';
 export { default as deepseek } from './deepseek';
+export { default as dothoosh } from './dothoosh';
 export { default as doubaospeech } from './doubaospeech';
 export { default as elevenlabs } from './elevenlabs';
 export { default as fal, fluxSchnellParamsSchema } from './fal';

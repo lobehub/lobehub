@@ -7,7 +7,10 @@ import { providerRuntimeMap } from '../../runtimeMap';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { LobeElevenLabsAI } from './index';
 
-vi.mock('../../utils/getModelPricing', () => ({ getModelPricing: vi.fn() }));
+vi.mock('../../utils/getModelPricing', () => ({
+  getModelPricing: vi.fn(),
+  registerModelPricingResolver: vi.fn(),
+}));
 
 const VOICE = 'OZ0L6eISlOejga3XjDFt';
 

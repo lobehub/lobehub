@@ -32,6 +32,7 @@
     "./cometapi": "./src/aiModels/cometapi.ts",
     "./comfyui": "./src/aiModels/comfyui.ts",
     "./deepseek": "./src/aiModels/deepseek.ts",
+    "./dothoosh": "./src/aiModels/dothoosh.ts",
     "./doubaospeech": "./src/aiModels/doubaospeech.ts",
     "./elevenlabs": "./src/aiModels/elevenlabs.ts",
     "./fal": "./src/aiModels/fal.ts",

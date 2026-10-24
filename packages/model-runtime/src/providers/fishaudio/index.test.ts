@@ -7,7 +7,10 @@ import { providerRuntimeMap } from '../../runtimeMap';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { LobeFishAudioAI } from './index';
 
-vi.mock('../../utils/getModelPricing', () => ({ getModelPricing: vi.fn() }));
+vi.mock('../../utils/getModelPricing', () => ({
+  getModelPricing: vi.fn(),
+  registerModelPricingResolver: vi.fn(),
+}));
 
 describe('LobeFishAudioAI', () => {
   let fetchMock: ReturnType<typeof vi.fn>;

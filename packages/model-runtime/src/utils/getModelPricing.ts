@@ -41,11 +41,33 @@ const findModelCard = async (
   return fallbackMatch && hasProperty(fallbackMatch) ? fallbackMatch : undefined;
 };
 
+export type ModelPricingResolver = (
+  model: string,
+  pricingContext?: ModelPricingContext,
+) => Pricing | undefined | Promise<Pricing | undefined>;
+
+const pricingResolvers = new Map<string, ModelPricingResolver>();
+
+/**
+ * A provider whose prices are read live rather than from the model bank answers for its own models.
+ * Its answer is final: another provider's card with the same model id never prices them.
+ * Returns a function that removes the resolver.
+ */
+export const registerModelPricingResolver = (provider: string, resolver: ModelPricingResolver) => {
+  pricingResolvers.set(provider, resolver);
+  return () => {
+    if (pricingResolvers.get(provider) === resolver) pricingResolvers.delete(provider);
+  };
+};
+
 export async function getModelPricing(
   model: string,
   provider?: string,
   pricingContext?: ModelPricingContext,
 ): Promise<Pricing | undefined> {
+  const resolver = provider ? pricingResolvers.get(provider) : undefined;
+  if (resolver) return resolver(model, pricingContext);
+
   const card = await findModelCard(model, provider, pricingContext, (m) => !!m.pricing);
   return card?.pricing;
 }
