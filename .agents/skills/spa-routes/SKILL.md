@@ -97,11 +97,11 @@ Each feature should:
 
 ## 3a. Shared desktop route definition and platform adapters
 
-| File                               | Role                                                                                                            |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `desktopRouter.shared.tsx`         | Single source of truth for common paths, nesting, metadata, lazy imports, and prioritized route preload groups. |
-| `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                               |
-| `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and Electron-only onboarding.         |
+| File                               | Role                                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `desktopRouter.shared.tsx`         | Single source of truth for common paths, nesting, metadata, lazy imports, and prioritized route preload groups.                    |
+| `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                                                  |
+| `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and the Electron-only `/desktop-onboarding` local setup. |
 
 Add or remove common routes only in `desktopRouter.shared.tsx`, or in a subtree module it imports (`taskWorkspaceRoutes.tsx`, `workspaceSettingsRoutes.tsx` for the padded `/:slug/settings/*` tabs) — the shared file is over the 1200-line limit, so large subtrees move out instead of growing it. Add any new subtree module to `readRouterSources` in `desktopRouter.sync.test.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
 

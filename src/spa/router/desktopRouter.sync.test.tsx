@@ -83,6 +83,7 @@ async function readRouterSources() {
       'taskWorkspaceRoutes.tsx',
       'workspaceSettingsRoutes.tsx',
       'resourceRoutes.tsx',
+      'onboardingRoute.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -382,7 +383,8 @@ describe('desktop router shared definition', () => {
     expect(electronPaths).not.toContain('/share/page');
     expect(electronPaths).not.toContain('/verify');
     expect(electronPaths).not.toContain('/acceptance');
-    expect(electronPaths).not.toContain('/onboarding');
+    // Electron runs account onboarding after its local first-run setup.
+    expect(electronPaths).toContain('/onboarding');
     expect(electronPaths).toContain('/desktop-onboarding');
   });
 

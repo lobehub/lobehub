@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { type UserInitializationState } from '@/types/user';
 
-import { shouldDeferOnboardingRedirect, useWebUserStateRedirect } from './useUserStateRedirect';
+import {
+  getOnboardingRedirectUrl,
+  shouldDeferOnboardingRedirect,
+  useUserStateRedirect,
+} from './useUserStateRedirect';
 
 describe('shouldDeferOnboardingRedirect', () => {
   it('defers on invite routes so invited users can accept before onboarding', () => {
@@ -25,7 +29,7 @@ describe('shouldDeferOnboardingRedirect', () => {
   });
 });
 
-describe('useWebUserStateRedirect', () => {
+describe('useUserStateRedirect on Web', () => {
   const originalLocation = window.location;
 
   const openPage = (url: string) => {
@@ -49,7 +53,7 @@ describe('useWebUserStateRedirect', () => {
     const bindingLink = '/verify-im?random_id=abcdefgh&im_type=telegram';
     openPage(bindingLink);
 
-    const { result } = renderHook(() => useWebUserStateRedirect());
+    const { result } = renderHook(() => useUserStateRedirect());
     result.current(notOnboarded);
 
     expect(window.location.href).toBe(`/onboarding?callbackUrl=${encodeURIComponent(bindingLink)}`);
@@ -59,7 +63,7 @@ describe('useWebUserStateRedirect', () => {
     const bindingLink = '/verify-im?random_id=abcdefgh&im_type=telegram';
     openPage(bindingLink);
 
-    const { result } = renderHook(() => useWebUserStateRedirect());
+    const { result } = renderHook(() => useUserStateRedirect());
     result.current(onboarded);
 
     expect(window.location.href).toBe(bindingLink);
@@ -68,9 +72,74 @@ describe('useWebUserStateRedirect', () => {
   it('still lets an un-onboarded user accept a workspace invite first', () => {
     openPage('/invite/abc');
 
-    const { result } = renderHook(() => useWebUserStateRedirect());
+    const { result } = renderHook(() => useUserStateRedirect());
     result.current(notOnboarded);
 
     expect(window.location.href).toBe('/invite/abc');
+  });
+});
+
+describe('getOnboardingRedirectUrl', () => {
+  const unfinished = { onboarding: { currentStep: 2, version: 1 } };
+  const finished = { onboarding: { currentStep: 5, finishedAt: '2026-10-01', version: 1 } };
+
+  it('sends a Desktop user whose account onboarding is unfinished to /onboarding', () => {
+    // Started onboarding on Web, closed the tab, then signed in through Desktop:
+    // the main window must not open until account onboarding finishes.
+    expect(
+      getOnboardingRedirectUrl({
+        isDesktopRuntime: true,
+        pathname: '/',
+        search: '',
+        state: unfinished,
+      }),
+    ).toBe('/onboarding');
+  });
+
+  it('keeps the Desktop page the user was opening as the post-onboarding target', () => {
+    expect(
+      getOnboardingRedirectUrl({
+        isDesktopRuntime: true,
+        pathname: '/agent/inbox',
+        search: '?topic=1',
+        state: unfinished,
+      }),
+    ).toBe(`/onboarding?callbackUrl=${encodeURIComponent('/agent/inbox?topic=1')}`);
+  });
+
+  it('lets Desktop local first-run setup finish before account onboarding', () => {
+    expect(
+      getOnboardingRedirectUrl({
+        isDesktopRuntime: true,
+        pathname: '/desktop-onboarding',
+        search: '?screen=login',
+        state: unfinished,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('opens the Desktop main window once account onboarding is finished', () => {
+    expect(
+      getOnboardingRedirectUrl({
+        isDesktopRuntime: true,
+        pathname: '/',
+        search: '',
+        state: finished,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps the existing Web redirect', () => {
+    expect(
+      getOnboardingRedirectUrl({ isDesktopRuntime: false, pathname: '/', search: '', state: {} }),
+    ).toBe('/onboarding');
+    expect(
+      getOnboardingRedirectUrl({
+        isDesktopRuntime: false,
+        pathname: '/onboarding',
+        search: '',
+        state: unfinished,
+      }),
+    ).toBeUndefined();
   });
 });
