@@ -49,7 +49,7 @@ export const resolveWorkspace = async (idOrSlug: string): Promise<WorkspaceRow> 
  * Turn an optional `--workspace <id|slug>` value into a workspace id. Leaves
  * `undefined` alone so the ambient scope (env, `workspace use`) still applies.
  * When the caller's credentials cannot list workspaces, the value is passed
- * through as an id, which is how `--workspace` behaved before slugs.
+ * through as an id (how `--workspace` behaved before slugs) with a warning.
  */
 export const resolveWorkspaceRef = async (idOrSlug?: string): Promise<string | undefined> => {
   if (!idOrSlug) return undefined;
@@ -58,7 +58,12 @@ export const resolveWorkspaceRef = async (idOrSlug?: string): Promise<string | u
   try {
     workspaces = await listWorkspaces();
   } catch (error) {
-    log.debug(`Could not list workspaces to resolve "${idOrSlug}"; using it as an id`, error);
+    // Keep ids working for credentials scoped below `workspace:read`, but say
+    // so: a slug sent as `X-Workspace-Id` is rejected or read the wrong scope.
+    log.debug('workspace.list failed', error);
+    log.warn(
+      `Could not look up workspaces with these credentials, so "${idOrSlug}" is used as a workspace id. If it is a slug, pass the workspace id instead.`,
+    );
     return idOrSlug;
   }
 

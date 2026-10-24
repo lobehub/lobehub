@@ -43,6 +43,7 @@ describe('workspaceRef', () => {
     mockList.mockRejectedValue(new Error('FORBIDDEN'));
 
     await expect(resolveWorkspaceRef('ws_x')).resolves.toBe('ws_x');
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('pass the workspace id'));
   });
 
   it('exits when nothing matches', async () => {
