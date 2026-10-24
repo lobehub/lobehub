@@ -1050,13 +1050,13 @@ export class GatewayActionImpl {
         : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
-    // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
-    // is still running, so the ChatInput stop button is active. Forward the
-    // abort into the round-trip wait (never into the fetch itself, see
-    // `awaitStartRequest`): the send rejects at once and the run the server
-    // still creates is interrupted when its result arrives. If the server has
-    // already persisted the turn, interrupt generation but still reconcile the
-    // message locally before returning.
+    // execAgentTask round-trip the caller's loading state is still running, so
+    // the ChatInput stop button is active. Forward the abort into the
+    // round-trip wait (never into the fetch itself, see `awaitStartRequest`):
+    // the send rejects at once and the run the server still creates is
+    // interrupted when its result arrives, as is a run the intervention claim
+    // already precreated. If the server has already persisted the turn,
+    // interrupt generation but still reconcile the message locally.
     const abortSignal = parentOperationId
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
@@ -1069,7 +1069,7 @@ export class GatewayActionImpl {
     );
     const userInterventionConfig = resolveUserInterventionConfig();
 
-    if (abortSignal?.aborted) {
+    if (abortSignal?.aborted && !precreatedResult) {
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
 
