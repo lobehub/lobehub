@@ -4308,7 +4308,7 @@ When I am ___, I need ___
     'Runs once in the checkout, with network access, before the conversation starts.',
   'environments.form.env': 'Environment variables',
   'environments.form.envHint':
-    'Non-secret values only — stored as plain text and exported while the repository is cloned and the setup command runs.',
+    'Non-secret values only — stored as plain text and exported while the repository is cloned, while the setup command runs, and into every command the conversation runs.',
   'environments.form.addEnv': 'New variable',
   'environments.form.envCount_one': '{{count}} variable',
   'environments.form.envCount_other': '{{count}} variables',

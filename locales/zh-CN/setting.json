@@ -671,7 +671,7 @@
   "environments.form.envCount_other": "{{count}} 个变量",
   "environments.form.envEmpty": "还没有环境变量",
   "environments.form.envEmptyHint": "逐条添加，或整份 .env 粘贴到",
-  "environments.form.envHint": "仅限非敏感值——以明文保存，在克隆仓库和执行初始化命令时导出。",
+  "environments.form.envHint": "仅限非敏感值——以明文保存，在克隆仓库、执行初始化命令以及对话运行的每条命令中导出。",
   "environments.form.exclude": "可再生路径",
   "environments.form.excludeHint": "一行一个，相对于副本。列在这里等于声明它可以重建，于是它会跟你的产出分开存放、并且可能被清理掉。写进来但其实重建不了的东西，就是你可能丢掉的东西。",
   "environments.form.filesDesc": "这个文件夹叫什么、放了哪些给 agent 处理的文件。",
