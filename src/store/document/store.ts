@@ -14,12 +14,21 @@ import {
 import { createDocumentSlice } from './slices/document';
 import { type EditorAction, type EditorState } from './slices/editor';
 import { createEditorSlice, initialEditorState } from './slices/editor';
+import {
+  createDocumentHistorySlice,
+  type DocumentHistoryAction,
+  type DocumentHistoryState,
+  initialDocumentHistoryState,
+} from './slices/history';
 
 // State type
-export type DocumentState = EditorState & DocumentDetailSliceState;
+export type DocumentState = EditorState & DocumentDetailSliceState & DocumentHistoryState;
 
 // Action type
-export type DocumentStoreAction = DocumentAction & EditorAction & ResetableStore;
+export type DocumentStoreAction = DocumentAction &
+  DocumentHistoryAction &
+  EditorAction &
+  ResetableStore;
 
 // Full store type
 export type DocumentStore = DocumentState & DocumentStoreAction;
@@ -28,6 +37,7 @@ export type DocumentStore = DocumentState & DocumentStoreAction;
 const initialState: DocumentState = {
   ...initialEditorState,
   ...initialDocumentDetailSliceState,
+  ...initialDocumentHistoryState,
 };
 
 class DocumentStoreResetAction extends ResetableStoreAction<DocumentStore> {
@@ -40,6 +50,7 @@ const createStore: StateCreator<DocumentStore, [['zustand/devtools', never]]> = 
   ...initialState,
   ...flattenActions<DocumentStoreAction>([
     createDocumentSlice(...parameters),
+    createDocumentHistorySlice(...parameters),
     createEditorSlice(...parameters),
     new DocumentStoreResetAction(...parameters),
   ]),

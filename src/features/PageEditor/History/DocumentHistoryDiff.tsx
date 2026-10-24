@@ -9,9 +9,6 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CircleLoading from '@/components/Loading/CircleLoading';
-import { useClientDataSWR } from '@/libs/swr';
-import type { CompareHistoryItemsOutput } from '@/server/routers/lambda/_schema/documentHistory';
-import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
@@ -63,15 +60,9 @@ const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(({ documentId, histor
     (s) => editorSelectors.lastUpdatedTime(documentId)(s) ?? null,
   );
 
-  const { data, error, isLoading } = useClientDataSWR<CompareHistoryItemsOutput>(
-    ['page-editor-document-history-compare', documentId, historyId, lastUpdatedTime],
-    async () =>
-      documentService.compareDocumentHistoryItems({
-        documentId,
-        fromHistoryId: 'head',
-        toHistoryId: historyId,
-      }),
-  );
+  const useFetchDocumentHistoryCompare = useDocumentStore((s) => s.useFetchDocumentHistoryCompare);
+  const params = useMemo(() => ({ documentId, historyId }), [documentId, historyId]);
+  const { data, error, isLoading } = useFetchDocumentHistoryCompare(params, lastUpdatedTime);
 
   const labels = useMemo<NonNullable<LexicalDiffProps['labels']>>(
     () => ({

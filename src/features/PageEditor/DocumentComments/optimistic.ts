@@ -2,10 +2,11 @@ import type {
   DocumentCommentAuthor,
   DocumentCommentItem,
   DocumentCommentJson,
-  DocumentCommentReplyPage,
   DocumentCommentSelectionAnchor,
-  DocumentCommentThreadPage,
+  DocumentCommentThread,
 } from '@lobechat/types';
+
+import type { DocumentCommentEditorValue } from '@/store/documentComment';
 
 interface CreateOptimisticCommentParams {
   author: DocumentCommentAuthor;
@@ -28,10 +29,7 @@ export interface DocumentCommentSubmitInput {
   selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
-export interface DocumentCommentEditorValue {
-  content: string;
-  editorData: DocumentCommentJson;
-}
+export type { DocumentCommentEditorValue };
 
 export type DocumentCommentUpdateHandler = (
   comment: DocumentCommentItem,
@@ -46,17 +44,17 @@ const compareComments = (first: DocumentCommentItem, second: DocumentCommentItem
   return timeDelta || first.id.localeCompare(second.id);
 };
 
-export const flattenDocumentCommentThreads = (pages: DocumentCommentThreadPage[] | undefined) => {
-  const threads = new Map<string, DocumentCommentThreadPage['items'][number]>();
-  for (const thread of pages?.flatMap((page) => page.items) ?? []) {
-    threads.set(thread.root.id, thread);
-  }
+/** A feed's roots, oldest first (an optimistic root sorts by its client-side time). */
+export const flattenDocumentCommentThreads = (items: DocumentCommentThread[] | undefined) => {
+  const threads = new Map<string, DocumentCommentThread>();
+  for (const thread of items ?? []) threads.set(thread.root.id, thread);
   return [...threads.values()].sort((first, second) => compareComments(first.root, second.root));
 };
 
-export const flattenDocumentCommentReplies = (pages: DocumentCommentReplyPage[] | undefined) => {
+/** A thread's replies, oldest first, each reply-to-reply placed right after its target. */
+export const flattenDocumentCommentReplies = (items: DocumentCommentItem[] | undefined) => {
   const replies = new Map<string, DocumentCommentItem>();
-  for (const reply of pages?.flatMap((page) => page.items) ?? []) replies.set(reply.id, reply);
+  for (const reply of items ?? []) replies.set(reply.id, reply);
   const chronologicalReplies = [...replies.values()].sort(compareComments);
   const childrenByReplyId = new Map<string, DocumentCommentItem[]>();
   const threadReplies: DocumentCommentItem[] = [];
@@ -120,116 +118,3 @@ export const createOptimisticComment = ({
     workspaceId,
   };
 };
-
-export const appendOptimisticThread = (
-  pages: DocumentCommentThreadPage[] | undefined,
-  comment: DocumentCommentItem,
-): DocumentCommentThreadPage[] => {
-  if (!pages?.length) return [{ items: [{ replyCount: 0, root: comment }], nextCursor: null }];
-  if (pages.some((page) => page.items.some(({ root }) => root.clientId === comment.clientId))) {
-    return pages;
-  }
-
-  const nextPages = [...pages];
-  const lastPage = nextPages.at(-1)!;
-  nextPages[nextPages.length - 1] = {
-    ...lastPage,
-    items: [...lastPage.items, { replyCount: 0, root: comment }],
-  };
-  return nextPages;
-};
-
-export const replaceOptimisticThread = (
-  pages: DocumentCommentThreadPage[] | undefined,
-  comment: DocumentCommentItem,
-) =>
-  pages?.map((page) => ({
-    ...page,
-    items: page.items.map((thread) =>
-      thread.root.clientId === comment.clientId ? { ...thread, root: comment } : thread,
-    ),
-  }));
-
-export const replaceThreadComment = (
-  pages: DocumentCommentThreadPage[] | undefined,
-  comment: DocumentCommentItem,
-) =>
-  pages?.map((page) => ({
-    ...page,
-    items: page.items.map((thread) =>
-      thread.root.id === comment.id ? { ...thread, root: comment } : thread,
-    ),
-  }));
-
-export const removeOptimisticThread = (
-  pages: DocumentCommentThreadPage[] | undefined,
-  clientId: string,
-) =>
-  pages?.map((page) => ({
-    ...page,
-    items: page.items.filter(({ root }) => root.clientId !== clientId),
-  }));
-
-export const appendOptimisticReply = (
-  pages: DocumentCommentReplyPage[] | undefined,
-  comment: DocumentCommentItem,
-): DocumentCommentReplyPage[] => {
-  if (!pages?.length) return [{ items: [comment], nextCursor: null, total: 1 }];
-  if (pages.some((page) => page.items.some((item) => item.clientId === comment.clientId))) {
-    return pages;
-  }
-
-  const nextPages = [...pages];
-  const lastPage = nextPages.at(-1)!;
-  nextPages[nextPages.length - 1] = {
-    ...lastPage,
-    items: [...lastPage.items, comment],
-    ...(lastPage.total === undefined ? {} : { total: lastPage.total + 1 }),
-  };
-  return nextPages;
-};
-
-export const replaceOptimisticReply = (
-  pages: DocumentCommentReplyPage[] | undefined,
-  comment: DocumentCommentItem,
-) =>
-  pages?.map((page) => ({
-    ...page,
-    items: page.items.map((item) => (item.clientId === comment.clientId ? comment : item)),
-  }));
-
-export const replaceReplyComment = (
-  pages: DocumentCommentReplyPage[] | undefined,
-  comment: DocumentCommentItem,
-) =>
-  pages?.map((page) => ({
-    ...page,
-    items: page.items.map((item) => (item.id === comment.id ? comment : item)),
-  }));
-
-export const removeOptimisticReply = (
-  pages: DocumentCommentReplyPage[] | undefined,
-  clientId: string,
-) =>
-  pages?.map((page) => {
-    const removedCount = page.items.filter((item) => item.clientId === clientId).length;
-    return {
-      ...page,
-      items: page.items.filter((item) => item.clientId !== clientId),
-      ...(page.total === undefined ? {} : { total: Math.max(0, page.total - removedCount) }),
-    };
-  });
-
-export const updateThreadReplyCount = (
-  pages: DocumentCommentThreadPage[] | undefined,
-  rootCommentId: string,
-  delta: number,
-) =>
-  pages?.map((page) => ({
-    ...page,
-    items: page.items.map((thread) =>
-      thread.root.id === rootCommentId
-        ? { ...thread, replyCount: Math.max(0, thread.replyCount + delta) }
-        : thread,
-    ),
-  }));
