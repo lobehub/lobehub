@@ -46,7 +46,7 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * Channel (LOBE-15104 §4): people and Agents in one shared conversation.
+ * Channel: people and Agents in one shared conversation.
  *
  * Access is by membership, not by creator: a user reaches a channel only through an active
  * `channel_members` row. Every write first locks the `channels` row, then touches child rows,

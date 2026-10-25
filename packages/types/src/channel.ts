@@ -1,7 +1,7 @@
 import type { LobeAgentConfig } from './agent';
 
 /**
- * Channel: a shared conversation where people and Agents talk together (LOBE-15104).
+ * Channel: a shared conversation where people and Agents talk together.
  *
  * Public content lives in channel_messages. Channel jobs trigger ordinary Agent topics
  * and operations; the internal transcript stays separate from the public timeline.

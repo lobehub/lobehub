@@ -32,7 +32,7 @@ const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
   ROLE_RANK[role ?? 'member'] >= ROLE_RANK[minRole];
 
 /**
- * Membership-scoped access to channels (LOBE-15104 §4).
+ * Membership-scoped access to channels.
  *
  * A caller reaches a channel only through its own active human member row, in the current
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
