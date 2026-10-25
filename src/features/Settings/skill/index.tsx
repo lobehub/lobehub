@@ -5,7 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
@@ -48,6 +48,8 @@ interface ToolSettingsProps {
   viewMode: SkillViewMode;
 }
 
+const PUSHED_DETAIL_STATE = 'skillDetailPushed';
+
 export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const { t } = useTranslation('common');
   const mobile = isMobileSurface();
@@ -68,11 +70,20 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
           params.delete('skill');
           return params;
         },
-        { replace },
+        // A pushed detail remembers it, so closing it can step back to the list.
+        { replace, state: replace ? undefined : { [PUSHED_DETAIL_STATE]: true } },
       ),
     [setSearchParams],
   );
-  const closeMobileDetail = () =>
+  const location = useLocation();
+  const navigate = useNavigate();
+  const closeMobileDetail = () => {
+    // Pop the entry this page pushed, so history keeps one list entry; a
+    // deep-linked detail has none to pop and is replaced by the list instead.
+    if ((location.state as Record<string, unknown> | null)?.[PUSHED_DETAIL_STATE]) {
+      navigate(-1);
+      return;
+    }
     setSearchParams(
       (prev) => {
         const params = new URLSearchParams(prev);
@@ -81,6 +92,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
       },
       { replace: true },
     );
+  };
 
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
