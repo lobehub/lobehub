@@ -182,6 +182,27 @@ describe('hand-linked pull requests', () => {
     expect(await statusOf(acceptance.id)).toBe('delivered');
   });
 
+  it('lets only one of two acceptances claiming the same PR at once win', async () => {
+    const first = await botAcceptance();
+    const second = await botAcceptance('s-2');
+    const row = await authorRow('open');
+
+    const claims = await Promise.all([
+      bindHandLinkedChangeRequest(serverDB, first, pr),
+      bindHandLinkedChangeRequest(serverDB, second, pr),
+    ]);
+
+    const holder = (await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId;
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect([first.id, second.id]).toContain(holder);
+    // Both read the row as free before either wrote; the loser must not overwrite.
+    expect(
+      await ScmChangeRequestModel.claimAcceptance(serverDB, row.id, {
+        acceptanceId: holder === first.id ? second.id : first.id,
+      }),
+    ).toBeNull();
+  });
+
   it('does nothing for a PR the provider has not reported yet', async () => {
     const acceptance = await botAcceptance();
     expect(await bindHandLinkedChangeRequest(serverDB, acceptance, pr)).toBeNull();

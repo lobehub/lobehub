@@ -51,14 +51,15 @@ export const bindHandLinkedChangeRequest = async (
 ): Promise<string | null> => {
   const row = await findRow(db, pr);
   if (!row || !sameTenant(row, acceptance)) return null;
-  if (row.acceptanceId && row.acceptanceId !== acceptance.id) return null;
 
-  const bound = await ScmChangeRequestModel.attachLinks(db, row.id, {
+  // Conditional on the row still being free: another acceptance may be
+  // claiming the same PR right now, under a lock on its own row, not ours.
+  const bound = await ScmChangeRequestModel.claimAcceptance(db, row.id, {
     acceptanceId: acceptance.id,
     taskId: acceptance.subjectType === 'task' ? acceptance.subjectId : undefined,
     topicId: acceptance.subjectType === 'topic' ? acceptance.subjectId : undefined,
   });
-  return bound?.acceptanceId === acceptance.id ? bound.id : null;
+  return bound?.id ?? null;
 };
 
 /** Undo {@link bindHandLinkedChangeRequest} when the hand link is removed. */
