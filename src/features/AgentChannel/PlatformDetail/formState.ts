@@ -17,7 +17,13 @@ interface ChannelFormSettings {
  * editor can mount without crashing on a string. Still safe to write back —
  * the runtime parser (`parseIdList`) keeps accepting all three shapes.
  */
-const ALLOWLIST_KEYS = new Set(['allowFrom', 'groupAllowFrom']);
+const ALLOWLIST_KEYS = new Set([
+  'allowFrom',
+  'groupAllowFrom',
+  // The bot-wake channel lists share the `[{ id }]` row shape (see `BOT_WAKE_SETTING_KEYS`).
+  'botWakeAllowChannels',
+  'botWakeDenyChannels',
+]);
 
 const migrateAllowList = (value: unknown): Array<{ id: string; name?: string }> => {
   if (typeof value === 'string') {
@@ -138,3 +144,13 @@ export const mergeSettingsWithDefaults = (
   ...extractSettingsDefaults(schema),
   ...settings,
 });
+
+/**
+ * Whether a field is released to the signed-in user. A field that names a `featureFlag` is shown
+ * only when that flag is explicitly on; an unset flag, or flags that have not loaded yet, hide it.
+ * Hiding is cosmetic: the server stays authoritative for what a setting does.
+ */
+export const isFieldReleased = (
+  field: Pick<FieldSchema, 'featureFlag'>,
+  featureFlags: Record<string, unknown> | undefined,
+): boolean => !field.featureFlag || featureFlags?.[field.featureFlag] === true;

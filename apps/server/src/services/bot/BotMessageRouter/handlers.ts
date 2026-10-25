@@ -225,7 +225,6 @@ export function registerHandlers(
   const wakeRecorder = createBotWakeRecorder({
     agentId,
     applicationId,
-    botWakeConfig: info.settings?.botWake,
     classify: createWakeClassify({
       agentId,
       db: serverDB,

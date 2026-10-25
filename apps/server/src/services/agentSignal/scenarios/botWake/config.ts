@@ -31,9 +31,15 @@ const MAX_CHANNEL_LIST = 200;
 // `.catch` on every field: one malformed value in a user-edited JSON blob falls back to its
 // default instead of discarding the rest of the owner's rules.
 const mode = z.enum(['off', 'shadow', 'enforce']);
+// The settings form stores a list of ids as rows (`[{ id }]`); a hand-written config may use bare ids.
 const idList = z
-  .array(z.union([z.string(), z.number()]).transform(String))
+  .array(
+    z
+      .union([z.string(), z.number(), z.object({ id: z.union([z.string(), z.number()]) })])
+      .transform((value) => String(typeof value === 'object' ? value.id : value).trim()),
+  )
   .max(MAX_CHANNEL_LIST)
+  .transform((ids) => ids.filter(Boolean))
   .catch([]);
 const seconds = (fallback: number, min = 0) =>
   z.number().finite().min(min).max(86_400).catch(fallback);
@@ -72,6 +78,74 @@ const SettingsSchema = z
   })
   .partial();
 
+/**
+ * The provider setting keys the channel settings form writes. The form renders every field of the
+ * `settings` group flat, so the bot-wake options are flat keys there rather than one nested
+ * object.
+ */
+export const BOT_WAKE_SETTING_KEYS = {
+  allowChannels: 'botWakeAllowChannels',
+  classifierMode: 'botWakeClassifierMode',
+  classifierThreshold: 'botWakeClassifierThreshold',
+  collectSeconds: 'botWakeCollectSeconds',
+  cooldownSeconds: 'botWakeCooldownSeconds',
+  customInstructions: 'botWakeCustomInstructions',
+  denyChannels: 'botWakeDenyChannels',
+  enabled: 'botWakeEnabled',
+  maxSilentWakes: 'botWakeMaxSilentWakes',
+  mode: 'botWakeMode',
+  ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
+  schedulerMode: 'botWakeSchedulerMode',
+  scope: 'botWakeScope',
+  windowSeconds: 'botWakeWindowSeconds',
+} as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** A form leaves an untouched field `undefined`, `null` or an empty string; none of them is a choice. */
+const isChosen = (value: unknown) => value !== undefined && value !== null && value !== '';
+
+const chosen = (values: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(values).filter(([, value]) => isChosen(value)));
+
+/**
+ * Collects the bot-wake options from a provider's settings.
+ *
+ * A nested `botWake` object, which is how a hand-written config spells it, is taken as it is and
+ * the flat form keys are not looked at. Anything else reads the flat keys the settings form
+ * writes. The two are never merged field by field: the form always saves its defaults, so a
+ * merge would let an untouched default quietly switch off what a hand-written config enabled.
+ */
+const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefined) => {
+  if (isRecord(settings?.botWake)) return settings.botWake;
+
+  const flat = (key: string) => settings?.[key];
+  const k = BOT_WAKE_SETTING_KEYS;
+
+  return {
+    ...chosen({
+      customInstructions: flat(k.customInstructions),
+      enabled: flat(k.enabled),
+      mode: flat(k.mode),
+    }),
+    classifier: chosen({ mode: flat(k.classifierMode), threshold: flat(k.classifierThreshold) }),
+    rules: chosen({
+      allowChannels: flat(k.allowChannels),
+      denyChannels: flat(k.denyChannels),
+      maxSilentWakes: flat(k.maxSilentWakes),
+      ownerPresenceSeconds: flat(k.ownerPresenceSeconds),
+      scope: flat(k.scope),
+      windowSeconds: flat(k.windowSeconds),
+    }),
+    scheduler: chosen({
+      collectSeconds: flat(k.collectSeconds),
+      cooldownSeconds: flat(k.cooldownSeconds),
+      mode: flat(k.schedulerMode),
+    }),
+  };
+};
+
 export interface ParsedBotWakeSettings {
   config: BotWakeConfig;
   /** Mode of the rule policies (internal rules, owner rules). */
@@ -81,7 +155,8 @@ export interface ParsedBotWakeSettings {
 }
 
 /**
- * Parses `settings.botWake` into a config with defaults applied.
+ * Parses the provider's bot-wake settings (a nested `botWake` object, else the flat form keys) into
+ * a config with defaults applied.
  *
  * Use when:
  * - Anything reads the owner's wake rules: the policy set, the scheduler, the gateway mapping
@@ -96,11 +171,7 @@ export interface ParsedBotWakeSettings {
 export const parseBotWakeSettings = (
   settings: Record<string, unknown> | null | undefined,
 ): ParsedBotWakeSettings => {
-  const parsed = SettingsSchema.safeParse(
-    settings && typeof settings.botWake === 'object' && settings.botWake !== null
-      ? settings.botWake
-      : {},
-  );
+  const parsed = SettingsSchema.safeParse(gatherBotWakeSettings(settings));
   const raw = parsed.success ? parsed.data : {};
 
   const rules: WakeRules = {

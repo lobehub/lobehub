@@ -1,5 +1,6 @@
 // @vitest-environment node
 import {
+  BOT_WAKE_SETTING_KEYS,
   DEFAULT_WAKE_RULES,
   hasPassiveListeningRule,
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
@@ -135,5 +136,114 @@ describe('hasPassiveListeningRule', () => {
     { expected: false, keywords: 0, name: 'null settings', settings: null },
   ])('$name -> $expected', ({ expected, keywords, settings }) => {
     expect(hasPassiveListeningRule(settings, keywords)).toBe(expected);
+  });
+});
+
+describe('parseBotWakeSettings from the settings form', () => {
+  const K = BOT_WAKE_SETTING_KEYS;
+
+  it('keeps the setting keys a bot has already saved', () => {
+    // These strings are persisted in every saved provider; renaming one orphans the stored value.
+    expect(BOT_WAKE_SETTING_KEYS).toEqual({
+      allowChannels: 'botWakeAllowChannels',
+      classifierMode: 'botWakeClassifierMode',
+      classifierThreshold: 'botWakeClassifierThreshold',
+      collectSeconds: 'botWakeCollectSeconds',
+      cooldownSeconds: 'botWakeCooldownSeconds',
+      customInstructions: 'botWakeCustomInstructions',
+      denyChannels: 'botWakeDenyChannels',
+      enabled: 'botWakeEnabled',
+      maxSilentWakes: 'botWakeMaxSilentWakes',
+      mode: 'botWakeMode',
+      ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
+      schedulerMode: 'botWakeSchedulerMode',
+      scope: 'botWakeScope',
+      windowSeconds: 'botWakeWindowSeconds',
+    });
+  });
+
+  it('reads the flat keys the channel form writes', () => {
+    const { config, rules, ruleMode, scheduler } = parseBotWakeSettings({
+      [K.allowChannels]: [{ id: 'c1' }, { id: ' 22 ' }, { id: '' }],
+      [K.classifierMode]: 'enforce',
+      [K.classifierThreshold]: 0.7,
+      [K.collectSeconds]: 40,
+      [K.cooldownSeconds]: 90,
+      [K.customInstructions]: '  Only billing questions.  ',
+      [K.denyChannels]: [{ id: 'c9' }],
+      [K.enabled]: true,
+      [K.maxSilentWakes]: 1,
+      [K.mode]: 'enforce',
+      [K.ownerPresenceSeconds]: 15,
+      [K.schedulerMode]: 'enforce',
+      [K.scope]: 'bot-threads',
+      [K.windowSeconds]: 60,
+    });
+
+    expect(config.enabled).toBe(true);
+    expect(ruleMode).toBe('enforce');
+    expect(rules).toEqual({
+      allowChannels: ['c1', '22'],
+      classifier: { mode: 'enforce', threshold: 0.7 },
+      customInstructions: 'Only billing questions.',
+      denyChannels: ['c9'],
+      maxSilentWakes: 1,
+      ownerPresenceSeconds: 15,
+      scope: 'bot-threads',
+      windowSeconds: 60,
+    });
+    expect(scheduler).toEqual({ collectMs: 40_000, cooldownMs: 90_000, mode: 'enforce' });
+  });
+
+  it('treats an untouched form field as no choice, not as zero or empty', () => {
+    const { rules } = parseBotWakeSettings({
+      [K.classifierThreshold]: null,
+      [K.customInstructions]: '',
+      [K.maxSilentWakes]: undefined,
+      [K.windowSeconds]: '',
+    });
+
+    expect(rules.classifier.threshold).toBe(DEFAULT_WAKE_RULES.classifier.threshold);
+    expect(rules.customInstructions).toBeUndefined();
+    expect(rules.maxSilentWakes).toBe(DEFAULT_WAKE_RULES.maxSilentWakes);
+    expect(rules.windowSeconds).toBe(DEFAULT_WAKE_RULES.windowSeconds);
+  });
+
+  it('takes a nested botWake object as it is, so the form defaults saved beside it cannot switch it off', () => {
+    // The channel form always saves its defaults, including `botWakeEnabled: false`.
+    const { config, rules, ruleMode, scheduler } = parseBotWakeSettings({
+      botWake: { enabled: true, mode: 'enforce', rules: { scope: 'none', windowSeconds: 99 } },
+      [K.enabled]: false,
+      [K.mode]: 'shadow',
+      [K.scope]: 'all',
+      [K.schedulerMode]: 'enforce',
+      [K.windowSeconds]: 300,
+    });
+
+    expect(config.enabled).toBe(true);
+    expect(ruleMode).toBe('enforce');
+    expect(rules.scope).toBe('none');
+    expect(rules.windowSeconds).toBe(99);
+    expect(scheduler.mode).toBe('off');
+  });
+
+  it('reads the flat keys when botWake is not an object', () => {
+    for (const botWake of [null, 'yes', [], 7]) {
+      expect(
+        parseBotWakeSettings({ botWake, [K.enabled]: true, [K.scope]: 'bot-threads' } as never)
+          .rules.scope,
+      ).toBe('bot-threads');
+    }
+  });
+
+  it('keeps a cleared form from enabling anything', () => {
+    expect(parseBotWakeSettings({ [K.enabled]: false }).config.enabled).toBe(false);
+    expect(parseBotWakeSettings({ [K.enabled]: 'true' }).config.enabled).toBe(false);
+  });
+
+  it('counts a form-enabled bot as listening to messages nobody addressed to it', () => {
+    expect(hasPassiveListeningRule({ [K.enabled]: true }, 0)).toBe(true);
+    expect(hasPassiveListeningRule({ [K.enabled]: true, [K.scope]: 'none' }, 0)).toBe(false);
+    expect(hasPassiveListeningRule({ [K.enabled]: false }, 0)).toBe(false);
   });
 });

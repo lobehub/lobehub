@@ -29,6 +29,21 @@ describe('resolveBotGatewayCapabilities', () => {
       settings: { botWake: { classifier: { mode: 'enforce' }, enabled: true } },
     },
     {
+      enabled: true,
+      name: 'bot-wake switched on in the settings form',
+      settings: { botWakeEnabled: true },
+    },
+    {
+      enabled: false,
+      name: 'the settings form saved with bot-wake off',
+      settings: { botWakeEnabled: false, botWakeMode: 'shadow', botWakeScope: 'all' },
+    },
+    {
+      enabled: false,
+      name: 'bot-wake on in the form but never joining unprompted',
+      settings: { botWakeEnabled: true, botWakeScope: 'none' },
+    },
+    {
       enabled: false,
       name: 'bot-wake configured but not enabled',
       settings: { botWake: { enabled: false, rules: { scope: 'all' } } },

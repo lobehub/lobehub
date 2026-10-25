@@ -71,6 +71,21 @@ describe('wake scheduler wiring', () => {
         settings: { botWake: { enabled: true, mode: 'off', scheduler: { mode: 'enforce' } } },
       },
       { expected: true, name: 'enabled with the scheduler enforcing', settings: enabled },
+      {
+        expected: true,
+        name: 'switched on in the settings form with batching on',
+        settings: { botWakeEnabled: true, botWakeSchedulerMode: 'enforce' },
+      },
+      {
+        expected: false,
+        name: 'switched on in the settings form, batching left off',
+        settings: { botWakeEnabled: true, botWakeSchedulerMode: 'off' },
+      },
+      {
+        expected: false,
+        name: 'batching on in the settings form but bot-wake off',
+        settings: { botWakeEnabled: false, botWakeSchedulerMode: 'enforce' },
+      },
     ])('$name -> available=$expected', ({ expected, settings }) => {
       expect(!!resolveWakeScheduler('discord', 'app', settings)).toBe(expected);
     });

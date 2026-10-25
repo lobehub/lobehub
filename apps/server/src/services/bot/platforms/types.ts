@@ -59,6 +59,12 @@ export interface FieldSchema {
   enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
+  /**
+   * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
+   * `enableBotWake`). The form hides the field unless that flag is on for the signed-in user.
+   * The server stays authoritative; this only keeps unreleased options out of sight.
+   */
+  featureFlag?: string;
   /** Array item schema */
   items?: FieldSchema;
   /** Unique field identifier */

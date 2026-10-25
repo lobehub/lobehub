@@ -435,6 +435,76 @@ export default {
   'channel.watchKeywordsAdd': 'Add keyword',
   'channel.watchKeywordsEmpty':
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
+  'channel.botWakeEnabled': 'Join conversations unprompted',
+  'channel.botWakeEnabledHint':
+    "When nobody @mentions the bot, let it decide whether to chime in, following the rules below. Off keeps today's behavior: it only answers @mentions, DMs and watch keywords.",
+  'channel.botWakeMode': 'Rules',
+  'channel.botWakeModeHint': 'How the built-in rules and the settings below are applied.',
+  'channel.botWakeModeOff': 'Off',
+  'channel.botWakeModeOffHint': 'Rules are not evaluated.',
+  'channel.botWakeModeShadow': 'Record only',
+  'channel.botWakeModeShadowHint': 'Rules are evaluated and recorded, but never stop a reply.',
+  'channel.botWakeModeEnforce': 'Enforce',
+  'channel.botWakeModeEnforceHint': 'A rule that says no stops the bot from joining.',
+  'channel.botWakeScope': 'Where it may join',
+  'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
+  'channel.botWakeScopeAll': 'Everywhere it can see',
+  'channel.botWakeScopeAllHint': 'Any channel or thread the bot can read.',
+  'channel.botWakeScopeBotThreads': 'Only threads it already took part in',
+  'channel.botWakeScopeBotThreadsHint': 'Not in top-level channels.',
+  'channel.botWakeScopeNone': 'Nowhere',
+  'channel.botWakeScopeNoneHint': 'The bot never joins unprompted.',
+  'channel.botWakeAllowChannels': 'Allowed channels',
+  'channel.botWakeAllowChannelsHint':
+    'Channel or thread IDs where the bot may join. Leave empty for no limit.',
+  'channel.botWakeAllowChannelsAdd': 'Add channel',
+  'channel.botWakeAllowChannelsEmpty': 'No limit — the bot may join anywhere in scope.',
+  'channel.botWakeDenyChannels': 'Blocked channels',
+  'channel.botWakeDenyChannelsHint':
+    'Channel or thread IDs where the bot never joins. Takes priority over allowed channels.',
+  'channel.botWakeDenyChannelsAdd': 'Add channel',
+  'channel.botWakeDenyChannelsEmpty': 'No channels blocked.',
+  'channel.botWakeChannelIdLabel': 'Channel ID',
+  'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
+  'channel.botWakeWindowSeconds': 'Follow-up window (seconds)',
+  'channel.botWakeWindowSecondsHint':
+    'After the bot speaks, plain messages in the same place within this time count as a follow-up to it.',
+  'channel.botWakeMaxSilentWakes': 'Silent wake limit',
+  'channel.botWakeMaxSilentWakesHint':
+    'After this many wakes in a row where the bot chose to stay silent, it stops joining until it speaks again. 0 means no limit.',
+  'channel.botWakeOwnerPresenceSeconds': 'Owner presence (seconds)',
+  'channel.botWakeOwnerPresenceSecondsHint':
+    "If the bot's owner posted in the channel within this time, the bot stays quiet. 0 turns this off.",
+  'channel.botWakeClassifierMode': 'Addressed-to-bot check',
+  'channel.botWakeClassifierModeHint':
+    'A small model scores whether a message is directed at the bot. It only runs on ambiguous follow-ups.',
+  'channel.botWakeClassifierModeOff': 'Off',
+  'channel.botWakeClassifierModeOffHint': 'No model calls.',
+  'channel.botWakeClassifierModeShadow': 'Record only',
+  'channel.botWakeClassifierModeShadowHint': 'Scores are recorded; nothing is blocked.',
+  'channel.botWakeClassifierModeEnforce': 'Enforce',
+  'channel.botWakeClassifierModeEnforceHint': 'Messages scoring below the threshold are skipped.',
+  'channel.botWakeClassifierThreshold': 'Score threshold',
+  'channel.botWakeClassifierThresholdHint':
+    'Used when the check is set to enforce. From 0 to 1; a higher value skips more messages.',
+  'channel.botWakeCustomInstructions': 'Custom instructions',
+  'channel.botWakeCustomInstructionsHint':
+    'Plain-language guidance for the check, such as when to join and when to stay out. It informs the model and is not a hard rule. Up to 1000 characters.',
+  'channel.botWakeCustomInstructionsPlaceholder':
+    'e.g. Join when someone asks about billing; stay out of casual chat',
+  'channel.botWakeSchedulerMode': 'Batch follow-ups',
+  'channel.botWakeSchedulerModeHint':
+    'Hold follow-ups briefly and answer a burst of messages in one run instead of one run per message. Has no effect on deployments without a job queue.',
+  'channel.botWakeSchedulerOff': 'Off',
+  'channel.botWakeSchedulerOffHint': 'Each follow-up is handled immediately.',
+  'channel.botWakeSchedulerEnforce': 'On',
+  'channel.botWakeSchedulerEnforceHint': 'Messages are collected, then answered together.',
+  'channel.botWakeCollectSeconds': 'Collect for (seconds)',
+  'channel.botWakeCollectSecondsHint':
+    'How long a burst is collected before the bot answers. At least 20.',
+  'channel.botWakeCooldownSeconds': 'Cool down (seconds)',
+  'channel.botWakeCooldownSecondsHint':
+    'Quiet time after a run before the next one may start. At least 60.',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',

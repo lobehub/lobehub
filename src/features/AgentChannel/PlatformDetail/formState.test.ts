@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
 import {
   extractSettingsDefaults,
   getChannelFormValues,
+  isFieldReleased,
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
@@ -190,5 +192,41 @@ describe('mergeSettingsWithDefaults', () => {
       connectionMode: 'websocket',
       extra: 'keep-me',
     });
+  });
+});
+
+describe('bot-wake channel lists', () => {
+  it.each([BOT_WAKE_SETTING_KEYS.allowChannels, BOT_WAKE_SETTING_KEYS.denyChannels])(
+    'migrates a hand-written %s to the row shape the list editor needs',
+    (key) => {
+      const { settings } = getChannelFormValues({
+        settings: { [key]: ['c1', ' c2 '] },
+      }) as { settings: Record<string, unknown> };
+
+      expect(settings[key]).toEqual([{ id: 'c1' }, { id: 'c2' }]);
+    },
+  );
+});
+
+describe('isFieldReleased', () => {
+  it('shows a field that names no rollout flag', () => {
+    expect(isFieldReleased({}, undefined)).toBe(true);
+    expect(isFieldReleased({}, { enableBotWake: false })).toBe(true);
+  });
+
+  it('shows a gated field only when its flag is explicitly on', () => {
+    const field = { featureFlag: 'enableBotWake' };
+
+    expect(isFieldReleased(field, { enableBotWake: true })).toBe(true);
+    expect(isFieldReleased(field, { enableBotWake: false })).toBe(false);
+  });
+
+  it('hides a gated field while the flags are unset or have not loaded', () => {
+    const field = { featureFlag: 'enableBotWake' };
+
+    expect(isFieldReleased(field, undefined)).toBe(false);
+    expect(isFieldReleased(field, {})).toBe(false);
+    expect(isFieldReleased(field, { enableBotWake: undefined })).toBe(false);
+    expect(isFieldReleased(field, { enableBotWake: 'yes' })).toBe(false);
   });
 });
