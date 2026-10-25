@@ -46,6 +46,49 @@ if redis.call('get', KEYS[1]) == ARGV[1] then
 end
 return 0`;
 
+/**
+ * Process-local cache of each operation's serialized tool set, keyed by
+ * operationId.
+ *
+ * The tool set is the heaviest thing on an AgentState (manifest schemas + tool
+ * definitions, ~300–400 KB) and is immutable for the life of the operation —
+ * nothing ever reassigns `state.operationToolSet` after creation. So rather
+ * than re-serialize it into the state blob at every step (and re-download it at
+ * every step entry), it lives in its own Redis key written once per process,
+ * and this cache lets the inline step loop — which runs many steps in one
+ * process under one lock — attach it on load without a second Redis round-trip.
+ *
+ * Bounded + TTL'd: the value is always re-fetchable from Redis, so eviction
+ * only costs a re-read. The cached string is exactly what a normal blob parse
+ * would have produced, so `JSON.parse(json)` on load yields the same fresh,
+ * independent object the old inline path handed each reader.
+ */
+const TOOLSET_CACHE_MAX = 64;
+const toolSetJsonCache = new Map<string, { expiresAt: number; json: string }>();
+
+const readToolSetCache = (operationId: string): string | undefined => {
+  const hit = toolSetJsonCache.get(operationId);
+  if (!hit) return undefined;
+  if (hit.expiresAt <= Date.now()) {
+    toolSetJsonCache.delete(operationId);
+    return undefined;
+  }
+  // Touch for LRU recency.
+  toolSetJsonCache.delete(operationId);
+  toolSetJsonCache.set(operationId, hit);
+  return hit.json;
+};
+
+const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number): void => {
+  toolSetJsonCache.delete(operationId);
+  toolSetJsonCache.set(operationId, { expiresAt: Date.now() + ttlSeconds * 1000, json });
+  while (toolSetJsonCache.size > TOOLSET_CACHE_MAX) {
+    const oldest = toolSetJsonCache.keys().next().value;
+    if (oldest === undefined) break;
+    toolSetJsonCache.delete(oldest);
+  }
+};
+
 export interface StepResult {
   events?: AgentEvent[];
   executionTime: number;
@@ -105,6 +148,7 @@ export interface AgentOperationMetadata {
 export class AgentStateManager {
   private redis: Redis;
   private readonly STATE_PREFIX = 'agent_runtime_state';
+  private readonly TOOLSET_PREFIX = 'agent_runtime_toolset';
   private readonly STEPS_PREFIX = 'agent_runtime_steps';
   private readonly METADATA_PREFIX = 'agent_runtime_meta';
   private readonly INTERRUPT_PREFIX = 'agent_runtime_interrupt';
@@ -144,11 +188,63 @@ export class AgentStateManager {
    * the prompt.
    */
   private serializeStateForPersist(state: AgentState): string {
-    if (hasNonPersistedMessage((state as { messages?: unknown }).messages)) {
-      return JSON.stringify(state);
+    // `operationToolSet` is externalized to its own key (see
+    // `externalizeToolSet`) and re-attached on load, so it never travels in the
+    // blob. It is immutable after creation, so a single write per operation
+    // replaces re-serializing ~300–400 KB of tool schemas at every step.
+    const { operationToolSet: _toolSet, ...withoutToolSet } = state as AgentState & {
+      operationToolSet?: unknown;
+    };
+    if (hasNonPersistedMessage((withoutToolSet as { messages?: unknown }).messages)) {
+      return JSON.stringify(withoutToolSet);
     }
-    const { messages: _messages, ...rest } = state as AgentState & { messages?: unknown };
+    const { messages: _messages, ...rest } = withoutToolSet as typeof withoutToolSet & {
+      messages?: unknown;
+    };
     return JSON.stringify(rest);
+  }
+
+  private toolSetKey(operationId: string): string {
+    return `${this.TOOLSET_PREFIX}:${operationId}`;
+  }
+
+  /**
+   * Persist the operation's tool set to its own key, once per process.
+   *
+   * Write-once is guarded by the process cache: the first save in a process
+   * writes the key and seeds the cache; every later save (each step of an
+   * inline loop) finds the cache warm and skips the ~300–400 KB write
+   * entirely — the save paths only refresh the key's TTL in lockstep with the
+   * state blob. A queue redelivery lands in a fresh process and re-writes once,
+   * which is negligible beside the per-step writes it removes.
+   */
+  private async externalizeToolSet(operationId: string, state: AgentState): Promise<void> {
+    const toolSet = (state as { operationToolSet?: unknown }).operationToolSet;
+    if (!toolSet) return;
+    if (readToolSetCache(operationId)) return;
+    const json = JSON.stringify(toolSet);
+    await this.redis.setex(this.toolSetKey(operationId), this.DEFAULT_TTL, json);
+    writeToolSetCache(operationId, json, this.DEFAULT_TTL);
+  }
+
+  /**
+   * Re-attach the externalized tool set to a freshly loaded state. Served from
+   * the process cache after the first read, so an inline loop reads it from
+   * Redis at most once per process. A blob that still carries its tool set
+   * inline — written by pre-externalization code during a rolling deploy — is
+   * left untouched, and an operation whose key has genuinely gone degrades to
+   * the same empty-tool-set fallback the selectors already apply.
+   */
+  private async rehydrateToolSet(operationId: string, state: AgentState): Promise<void> {
+    if ((state as { operationToolSet?: unknown }).operationToolSet) return;
+    let json = readToolSetCache(operationId);
+    if (!json) {
+      json = (await this.redis.get(this.toolSetKey(operationId))) ?? undefined;
+      if (json) writeToolSetCache(operationId, json, this.DEFAULT_TTL);
+    }
+    if (json) {
+      (state as { operationToolSet?: unknown }).operationToolSet = JSON.parse(json);
+    }
   }
 
   /**
@@ -158,8 +254,12 @@ export class AgentStateManager {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
 
     try {
+      await this.externalizeToolSet(operationId, state);
       const serializedState = this.serializeStateForPersist(state);
       await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
+      // Keep the externalized tool set alive in lockstep with the blob so a
+      // long run never loads a stripped blob whose tool set has expired.
+      await this.redis.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
 
       // Update metadata
       await this.updateOperationMetadata(operationId, {
@@ -194,6 +294,7 @@ export class AgentStateManager {
       // Blobs written before the typed `world` / `binding` slots existed carry
       // that context in `metadata`; lift it once here so readers see one shape.
       const state = normalizeAgentState(JSON.parse(serializedState) as AgentState);
+      await this.rehydrateToolSet(operationId, state);
       log('[%s] Loaded state (step %d)', operationId, state.stepCount);
 
       return state;
@@ -241,9 +342,13 @@ export class AgentStateManager {
    * Save step execution result
    */
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
-    const pipeline = this.redis.multi();
-
     try {
+      // Write-once before opening the pipeline; the inline loop warms the cache
+      // on its first step and every later step skips the tool-set write.
+      await this.externalizeToolSet(operationId, stepResult.newState);
+
+      const pipeline = this.redis.multi();
+
       // Save latest state
       const stateKey = `${this.STATE_PREFIX}:${operationId}`;
       pipeline.setex(
@@ -251,6 +356,8 @@ export class AgentStateManager {
         this.DEFAULT_TTL,
         this.serializeStateForPersist(stepResult.newState),
       );
+      // Refresh the externalized tool set's TTL alongside the blob.
+      pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
 
       // Save step history
       const stepsKey = `${this.STEPS_PREFIX}:${operationId}`;
@@ -448,6 +555,7 @@ export class AgentStateManager {
   async deleteAgentOperation(operationId: string): Promise<void> {
     const keys = [
       `${this.STATE_PREFIX}:${operationId}`,
+      this.toolSetKey(operationId),
       `${this.STEPS_PREFIX}:${operationId}`,
       `${this.METADATA_PREFIX}:${operationId}`,
       `${this.INTERRUPT_PREFIX}:${operationId}`,
@@ -456,6 +564,7 @@ export class AgentStateManager {
     ];
 
     try {
+      toolSetJsonCache.delete(operationId);
       await this.redis.del(...keys);
       log('Deleted operation %s', operationId);
     } catch (error) {
