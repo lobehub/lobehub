@@ -3,26 +3,30 @@
 import type { WidgetLevelFilter } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { ActionIcon, confirmModal, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui';
-import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
+import { MoreHorizontalIcon, Settings2Icon, TrashIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import type { DashboardListItem } from '@/services/dashboard';
 import { useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { openRenameDashboardModal } from './DashboardFormModal';
+import { openDashboardSettingsModal } from './DashboardSettingsModal';
 
 interface DashboardActionsMenuProps {
-  dashboard: { id: string; title: string; userId: string };
+  dashboard: Pick<
+    DashboardListItem,
+    'description' | 'id' | 'title' | 'userId' | 'visibility' | 'workspaceId'
+  >;
   level?: WidgetLevelFilter;
   /** Called after the board moved to the trash, e.g. to leave its page. */
   onTrashed?: () => void;
 }
 
 /**
- * Rename / trash a board. Only its creator with the create_content
+ * Open a board's settings or trash it. Only its creator with the create_content
  * permission may change it — a demoted owner keeps ownership but the server
  * refuses their writes, so they get no menu either.
  */
@@ -36,11 +40,10 @@ const DashboardActionsMenu = memo<DashboardActionsMenuProps>(({ dashboard, level
 
   const items: DropdownItem[] = [
     {
-      icon: <Icon icon={PencilIcon} />,
-      key: 'rename',
-      label: t('actions.rename'),
-      onClick: () =>
-        openRenameDashboardModal({ dashboardId: dashboard.id, level, title: dashboard.title }),
+      icon: <Icon icon={Settings2Icon} />,
+      key: 'settings',
+      label: t('actions.settings'),
+      onClick: () => openDashboardSettingsModal({ dashboard, level }),
     },
     { type: 'divider' },
     {

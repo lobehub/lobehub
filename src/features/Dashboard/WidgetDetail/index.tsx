@@ -10,6 +10,7 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
 import { ErrorLine } from '../ErrorLine';
 import { useWidgetTrend } from '../hooks/useWidgetTrend';
+import { formatSchedule } from '../utils/schedule';
 import { getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import HealthDot, { getHealthTone, HEALTH_TONE_COLOR } from '../WidgetCard/HealthDot';
 import StatusBadges from '../WidgetCard/StatusBadges';
@@ -134,7 +135,7 @@ const WidgetSummary = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
             }
           >
             {widget.schedulePattern
-              ? [widget.schedulePattern, widget.scheduleTimezone].filter(Boolean).join(' · ')
+              ? formatSchedule(t, widget.schedulePattern, widget.scheduleTimezone)
               : t('detail.manualOnly')}
           </Cell>
           <Cell

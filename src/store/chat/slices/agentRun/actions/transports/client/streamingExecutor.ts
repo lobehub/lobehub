@@ -12,9 +12,7 @@ import {
   getLlmCallCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
-import { createDryRunAudit, DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import {
@@ -41,8 +39,6 @@ import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
-import { dashboardService } from '@/services/dashboard';
-import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
 import { workService } from '@/services/work';
@@ -74,22 +70,9 @@ import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
 import { buildRunManifestMap } from './discoverableManifests';
+import { clientInterventionAudits } from './interventionAudits';
 
 const log = debug('lobe-store:streaming-executor');
-
-const dynamicInterventionAudits = {
-  [DASHBOARD_DRY_RUN_AUDIT]: createDryRunAudit({
-    loadVersion: (widgetId, versionId) => dashboardService.getVersion(widgetId, versionId),
-  }),
-  pathScopeAudit: createPathScopeAudit({
-    areAllPathsSafe: async ({ paths, resolveAgainstScope }) => {
-      if (!isDesktop) return false;
-
-      const result = await localFileService.auditSafePaths({ paths, resolveAgainstScope });
-      return result.allSafe;
-    },
-  }),
-};
 
 const getMediaAvailability = (messages: UIChatMessage[]) => ({
   hasAudios: messages.some((message) => message.role === 'user' && !!message.audioList?.length),
@@ -711,7 +694,7 @@ export class StreamingExecutorActionImpl {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
         maxWindowToken: contextWindowTokens ?? undefined,
       },
-      dynamicInterventionAudits,
+      dynamicInterventionAudits: clientInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig,
     });
