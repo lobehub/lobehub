@@ -170,7 +170,7 @@ export const flattenBotWakeSettings = (
   );
   // Every flat key goes: the nested object is authoritative at runtime, so a stale flat value it
   // does not mention would otherwise become live the moment the nested object is dropped.
-  const flatKeys = new Set(Object.values(BOT_WAKE_SETTING_KEYS));
+  const flatKeys = new Set<string>(Object.values(BOT_WAKE_SETTING_KEYS));
   const rest = Object.fromEntries(
     Object.entries(settings).filter(([key]) => key !== 'botWake' && !flatKeys.has(key)),
   );
