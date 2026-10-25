@@ -1,9 +1,10 @@
 'use client';
 
-import { Alert, Button, createModal, Flexbox, Text, TextArea, useModalContext } from '@lobehub/ui';
+import { Button, createModal, Flexbox, Text, TextArea, useModalContext } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { verifyService } from '@/services/verify';
@@ -26,6 +27,7 @@ const RepairRequestContent = ({
   const { close } = useModalContext();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const retry = data?.repair?.state === 'failed' ? data.repair : null;
+  const commentIds = retry?.commentIds ?? [];
   const [comment, setComment] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -61,9 +63,9 @@ const RepairRequestContent = ({
       </Text>
       {retry ? (
         <Flexbox gap={8}>
-          <Text>{t('acceptance.repair.retryDescription', { count: retry.commentIds.length })}</Text>
+          <Text>{t('acceptance.repair.retryDescription', { count: commentIds.length })}</Text>
           {retry.comment && <Text>{retry.comment}</Text>}
-          {retry.commentIds.map((id, index) => (
+          {commentIds.map((id, index) => (
             <WorkspaceLink
               key={id}
               to={`${acceptanceOverviewPath(acceptanceId, routeBase)}#${commentAnchorId(id)}`}
@@ -86,7 +88,11 @@ const RepairRequestContent = ({
           onChange={(event) => setComment(event.target.value)}
         />
       )}
-      {error && <Alert title={error} type={'error'} />}
+      {error && (
+        <Flexbox role={'alert'}>
+          <AsyncError title={error} variant={'inline'} />
+        </Flexbox>
+      )}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={pending} onClick={close}>
           {t('acceptance.actions.cancel')}
@@ -119,9 +125,23 @@ export const AcceptanceRepair = () => {
       )}
       {repair && (
         <Flexbox gap={8} role={'status'}>
-          <Text>{t(`acceptance.repair.${repairPresentation(repair)}`)}</Text>
-          {repair.state === 'failed' && (
-            <Text type={'secondary'}>{repair.error ?? t('acceptance.repair.failureHint')}</Text>
+          {repair.state === 'failed' ? (
+            <AsyncError
+              title={`${t('acceptance.repair.failed')}. ${t('acceptance.repair.failureHint')}`}
+              variant={'inline'}
+            />
+          ) : (
+            <Text>{t(`acceptance.repair.${repairPresentation(repair)}`)}</Text>
+          )}
+          {repair.state === 'failed' && repair.error && (
+            <details>
+              <summary style={{ cursor: 'pointer', paddingBlock: 12 }}>
+                {t('report.sections.details')}
+              </summary>
+              <Text style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }} type={'secondary'}>
+                {repair.error}
+              </Text>
+            </details>
           )}
           <Flexbox horizontal gap={16} style={{ flexWrap: 'wrap' }}>
             {repair.taskId && (
@@ -143,11 +163,14 @@ export const AcceptanceRepair = () => {
         </Flexbox>
       )}
       {Boolean(error) && (
-        <Alert
-          action={<Button onClick={() => void mutate()}>{t('report.actions.retry')}</Button>}
-          title={t('acceptance.repair.refreshError')}
-          type={'warning'}
-        />
+        <Flexbox role={'alert'}>
+          <AsyncError
+            error={error}
+            title={t('acceptance.repair.refreshError')}
+            variant={'inline'}
+            onRetry={() => void mutate()}
+          />
+        </Flexbox>
       )}
       {data.canRequestRepair && (site || repair?.state === 'failed') && (
         <Button
