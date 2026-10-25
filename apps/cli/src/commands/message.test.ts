@@ -276,6 +276,28 @@ describe('message command', () => {
       expect(output).toContain('Only the most relevant matches were considered');
     });
 
+    it('keeps the truncation caveat on stderr for --json output', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockTrpcClient.message.searchByKeyword.query.mockResolvedValue({
+        hasMore: false,
+        items: [{ contentLength: 1, createdAt: new Date(2026, 9, 15), id: 'msg_1', role: 'user' }],
+        truncated: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'search', 'x', '--json']);
+
+      // stdout stays a bare array so scripts keep parsing it
+      const stdout = consoleSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      expect(() => JSON.parse(stdout)).not.toThrow();
+      expect(JSON.parse(stdout)).toHaveLength(1);
+
+      const stderr = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      expect(stderr).toContain('Only the most relevant matches were considered');
+
+      errorSpy.mockRestore();
+    });
+
     it('rejects an impossible calendar date instead of shifting the window', async () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'message', 'search', 'x', '--until', '2026-02-31']);

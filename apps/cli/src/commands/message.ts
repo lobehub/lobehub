@@ -30,12 +30,17 @@ interface MessageSearchOptions {
   user?: boolean;
 }
 
-const printTruncationNote = () =>
-  console.log(
-    pc.yellow(
-      'Only the most relevant matches were considered; narrow with --since/--until or --topic-id to see the rest.',
-    ),
-  );
+const TRUNCATION_NOTE =
+  'Only the most relevant matches were considered; narrow with --since/--until or --topic-id to see the rest.';
+
+const printTruncationNote = () => console.log(pc.yellow(TRUNCATION_NOTE));
+
+/**
+ * `--json` consumers read stdout, so the caveat rides on stderr: an extra field
+ * would break both the bare-array contract and `--json <fields>` shaping, while
+ * dropping it silently hides that lower-ranked matches were cut.
+ */
+const warnTruncationNote = () => console.error(pc.yellow(TRUNCATION_NOTE));
 
 export function registerMessageCommand(program: Command) {
   const message = program.command('message').description('Manage messages');
@@ -198,6 +203,7 @@ export function registerMessageCommand(program: Command) {
           withUrls(result.items, await resolveUrlBuilder(client), resourcePath.message),
           fields,
         );
+        if (result.truncated) warnTruncationNote();
         return;
       }
 
