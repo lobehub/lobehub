@@ -100,10 +100,15 @@ export const toMessageListPage = (page: RoundCursorQueryResult): MessageListPage
 export const readMessagesByRoundCursor = async (
   params: RoundCursorReadParams,
   cursor: MessageRoundCursor | null,
-): Promise<MessageListPage> =>
-  toMessageListPage(
+): Promise<MessageListPage> => {
+  // The newest page is the head: reading it at the normal budget replaces any
+  // prefetch window the conversation was painting from.
+  if (cursor === null) markFullHeadWindow(params);
+
+  return toMessageListPage(
     await lambdaClient.message.getMessagesByCursor.query(toRoundCursorQueryInput(params, cursor)),
   );
+};
 
 /** The `getMessagesByCursor` input for one forward page, starting after `cursor`. */
 export const toForwardRoundCursorQueryInput = (
@@ -203,9 +208,43 @@ export const takePrimedMessageListPage = (
 ): Promise<MessageListPage> | undefined => {
   const key = primeKey(context);
   const page = primedPages.get(key);
-  if (page) primedPages.delete(key);
+  if (page) {
+    primedPages.delete(key);
+    // The reader now paints from a prefetch window, not the normal page budget.
+    partialHeadWindows.add(key);
+  }
 
   return page;
+};
+
+/**
+ * Drop a page a caller primed when no head read took it. A read that joins an
+ * already in-flight query never consumes the prime, and an unclaimed page would
+ * otherwise answer a later, unrelated read with an old window: its snapshot can
+ * predate server-confirmed rows the head merge then drops.
+ */
+export const releaseUnusedPrimedMessageListPage = (
+  context: MessageListQueryContext,
+  page: Promise<MessageListPage>,
+): void => {
+  const key = primeKey(context);
+  if (primedPages.get(key) === page) primedPages.delete(key);
+};
+
+/**
+ * Conversations whose loaded head is a prefetch window rather than the normal
+ * `MESSAGE_PAGE_ROW_BUDGET` page. Enough to paint a row's first screen, but a
+ * consumer that turns the loaded rows into model history (a client-runtime
+ * resume) needs the normal window first.
+ */
+const partialHeadWindows = new Set<string>();
+
+export const isPartialHeadWindow = (context: MessageListQueryContext): boolean =>
+  partialHeadWindows.has(primeKey(context));
+
+/** A full-budget head read replaced the prefetch window with the normal one. */
+const markFullHeadWindow = (context: MessageListQueryContext): void => {
+  partialHeadWindows.delete(primeKey(context));
 };
 
 /** First forward pages handed over by the document, by conversation. */

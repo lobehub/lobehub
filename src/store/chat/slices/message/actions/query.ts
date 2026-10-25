@@ -13,6 +13,7 @@ import {
   PREFETCH_BATCH_SIZE,
   primeMessageListPage,
   readMessagesByRoundCursorBatch,
+  releaseUnusedPrimedMessageListPage,
 } from '@/services/message/roundCursorPage';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -173,26 +174,30 @@ export class MessageQueryActionImpl {
       const chunk = contexts.slice(index, index + PREFETCH_BATCH_SIZE);
       const pages = readMessagesByRoundCursorBatch(chunk);
 
-      for (const context of chunk) {
-        primeMessageListPage(
-          context,
-          pages.then((result) => {
-            const page = result.get(context.topicId!);
-            // A topic the batch skipped must not settle as an empty transcript.
-            if (!page) throw new Error(`No batch page for topic ${context.topicId}`);
+      const primed = chunk.map((context) => {
+        const page = pages.then((result) => {
+          const batched = result.get(context.topicId!);
+          // A topic the batch skipped must not settle as an empty transcript.
+          if (!batched) throw new Error(`No batch page for topic ${context.topicId}`);
 
-            return page;
-          }),
-        );
-      }
+          return batched;
+        });
+        primeMessageListPage(context, page);
+
+        return { context, page };
+      });
 
       await Promise.all(
-        chunk.map(async (context) => {
+        primed.map(async ({ context, page }) => {
           try {
             await transcript.slice.fetch(context);
           } catch (error) {
             log('Failed to warm the topic transcript %s: %O', context.topicId, error);
           }
+          // This fetch joins a read already in flight when one is out, and a
+          // joined read never takes the page primed here. Dropping the unused
+          // prime keeps an old batch window from answering a later head read.
+          releaseUnusedPrimedMessageListPage(context, page);
         }),
       );
     }
