@@ -153,7 +153,7 @@ const DashboardSettingsForm = ({ dashboard, level }: DashboardSettingsFormProps)
   };
 
   const renderSchedule = () => {
-    if (!data) return <Skeleton.Button active block size={'small'} />;
+    if (!data) return <Skeleton height={32} width={'100%'} />;
     if (ownWidgets.length === 0) {
       return (
         <Text fontSize={12} type={'secondary'}>
