@@ -38,10 +38,15 @@ const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
   'general': 'setting:workspaceSetting.tab.general',
   'labels': 'setting:workspaceSetting.tab.labels',
   'members': 'setting:workspaceSetting.tab.members',
+  'oauth-apps': 'auth:tab.oauthApps',
   'skill': 'setting:workspaceSetting.tab.skill',
   'statistics': 'auth:tab.stats',
   'teams': 'setting:workspaceSetting.tab.teams',
 };
+
+/** URL slugs are kebab-case (`subscription-accounts`); `setting:tab.*` keys are camelCase. */
+const camelCaseSlug = (slug: string) =>
+  slug.replaceAll(/-([a-z])/g, (_, char) => char.toUpperCase());
 
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'auth', 'labs', 'subscription']);
@@ -83,7 +88,9 @@ const Header = memo(() => {
   const tab = (params.tab ?? personalSettingsMatch?.params.tab ?? workspaceTab) as
     SettingsTabs | undefined;
   const tabTitleKey = tab
-    ? (WORKSPACE_TAB_TITLE_KEY[workspaceTab ?? ''] ?? TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`)
+    ? (WORKSPACE_TAB_TITLE_KEY[workspaceTab ?? ''] ??
+      TAB_TITLE_KEY[tab] ??
+      `setting:tab.${camelCaseSlug(tab)}`)
     : 'setting:tab.all';
   // i18next's strict key union rejects dynamic strings. `Parameters<typeof t>[0]` would push TS
   // onto the wrong overload and infer the return as `unknown`, so we fall back to `as any`.

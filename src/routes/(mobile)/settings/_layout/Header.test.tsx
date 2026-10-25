@@ -38,6 +38,9 @@ describe('mobile settings Header', () => {
     ['devices', 'setting:tab.devices'],
     ['service-model', 'setting:tab.serviceModel'],
     ['chat-preference', 'setting:tab.chatPreference'],
+    // No explicit entry: the kebab-case slug maps onto the camelCase key.
+    ['subscription-accounts', 'setting:tab.subscriptionAccounts'],
+    ['oauth-apps', 'auth:tab.oauthApps'],
   ])('resolves the workspace %s title', (tab, title) => {
     renderHeader(tab);
 

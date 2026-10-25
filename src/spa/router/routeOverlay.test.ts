@@ -23,10 +23,14 @@ describe('overlayRoutes', () => {
     expect(result[1].children?.map((route) => route.path)).toEqual(['goals']);
   });
 
-  it('returns the source routes untouched when no overlay matches', () => {
-    const result = overlayRoutes(tree, { missing: dropRoute });
+  it('returns the source routes untouched without overlays', () => {
+    const result = overlayRoutes(tree, {});
 
     expect(result).toEqual(tree);
     expect(result[0].children?.[1]).toBe(tree[0].children?.[1]);
+  });
+
+  it('throws when a key matches no route, so a renamed source route cannot slip past', () => {
+    expect(() => overlayRoutes(tree, { 'docs/:id': dropRoute })).toThrow('docs/:id');
   });
 });
