@@ -14,7 +14,7 @@ interface CanvasShareButtonProps {
   onShared: () => unknown;
 }
 
-const triggerStyle = { flex: 'none', paddingInline: 4 } as const;
+const triggerStyle = { flex: 'none', paddingInline: 5 } as const;
 
 /**
  * The canvas toolbar's explicit share affordance. Publishing a canvas and
@@ -46,7 +46,7 @@ const CanvasShareButton = memo<CanvasShareButtonProps>(({ data, onShared }) => {
         type={'text'}
         onClick={action.onClick}
       >
-        <Icon icon={Share2} size={16} />
+        <Icon icon={Share2} size={'small'} />
       </Button>
     );
   }
@@ -57,7 +57,7 @@ const CanvasShareButton = memo<CanvasShareButtonProps>(({ data, onShared }) => {
     <DropdownMenu items={trigger.items} placement={'bottomRight'}>
       <Button aria-label={label} size={'small'} style={triggerStyle} title={label} type={'text'}>
         <Flexbox horizontal align={'center'} gap={2}>
-          <Icon icon={Share2} size={16} />
+          <Icon icon={Share2} size={'small'} />
           <Icon icon={ChevronDownIcon} size={12} />
         </Flexbox>
       </Button>

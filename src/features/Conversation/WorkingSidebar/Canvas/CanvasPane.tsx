@@ -104,8 +104,12 @@ const CanvasPane = memo<CanvasPaneProps>(({ canvasId }) => {
         <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
           {data.title}
         </Text>
-        <CanvasShareButton data={data} onShared={() => mutate()} />
-        <PortalMoreMenu config={moreMenu} outdent={'end'} />
+        {/* Two ghost icon buttons: their own padding is the separation, so the
+            flex gap only needs to keep the hover washes from touching. */}
+        <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+          <CanvasShareButton data={data} onShared={() => mutate()} />
+          <PortalMoreMenu config={moreMenu} outdent={'end'} />
+        </Flexbox>
       </Flexbox>
       {showPending && (
         <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.pill)}>
