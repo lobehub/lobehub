@@ -4,7 +4,6 @@
   "actions.trashConfirm": "「{{title}}」及其佈局將移至垃圾桶。小工具仍可用並保留其歷史記錄。",
   "actions.trashTitle": "將此儀表板移至垃圾桶？",
   "actions.trashed": "「{{title}}」已移至垃圾桶",
-  "board.empty": "尚無小工具。在對話中請求代理人建立監控小工具並將其添加到此儀表板。",
   "board.health.failed": "{{count}} 失敗",
   "board.health.ok": "{{count}} 最新",
   "board.health.running": "{{count}} 正在刷新",

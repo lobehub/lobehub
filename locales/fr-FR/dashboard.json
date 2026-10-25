@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" et sa mise en page seront déplacés à la corbeille. Les widgets restent disponibles et conservent leur historique.",
   "actions.trashTitle": "Déplacer ce tableau de bord à la corbeille ?",
   "actions.trashed": "\"{{title}}\" a été déplacé à la corbeille",
-  "board.empty": "Pas encore de widgets. Demandez à un agent dans une conversation de créer un widget de surveillance et de l'ajouter à ce tableau de bord.",
   "board.health.failed": "{{count}} échoué",
   "board.health.ok": "{{count}} à jour",
   "board.health.running": "{{count}} en cours de rafraîchissement",

@@ -4,7 +4,6 @@
   "actions.trashConfirm": "سيتم نقل \"{{title}}\" وتخطيطه إلى المهملات. ستظل الأدوات متاحة وتحافظ على تاريخها.",
   "actions.trashTitle": "نقل لوحة التحكم هذه إلى المهملات؟",
   "actions.trashed": "تم نقل \"{{title}}\" إلى المهملات",
-  "board.empty": "لا توجد أدوات حتى الآن. اطلب من وكيل في محادثة إنشاء أداة مراقبة وإضافتها إلى لوحة التحكم هذه.",
   "board.health.failed": "{{count}} فشل",
   "board.health.ok": "{{count}} محدث",
   "board.health.running": "{{count}} يتم تحديثه",

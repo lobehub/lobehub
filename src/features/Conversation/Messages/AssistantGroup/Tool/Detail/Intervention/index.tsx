@@ -325,6 +325,7 @@ const Intervention = memo<InterventionProps>(
             identifier={identifier}
             messageId={id}
             rememberOption={rememberOption}
+            toolArgs={parsedArgs}
             toolCallId={toolCallId}
             onBeforeApprove={handleBeforeApprove}
           />

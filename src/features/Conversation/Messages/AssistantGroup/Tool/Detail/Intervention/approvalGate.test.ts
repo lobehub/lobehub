@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getApprovalChoices, isChoiceSubmitBlocked, resolveRememberAction } from './approvalGate';
+import {
+  canRememberViaAllowList,
+  getApprovalChoices,
+  isChoiceSubmitBlocked,
+  resolveRememberAction,
+} from './approvalGate';
 
 describe('isChoiceSubmitBlocked', () => {
   it('holds both approve choices while the intervention blocks approval', () => {
@@ -20,29 +25,64 @@ describe('isChoiceSubmitBlocked', () => {
 });
 
 describe('getApprovalChoices', () => {
-  it('offers approve-and-remember for the allow-list or a tool-offered choice', () => {
-    expect(getApprovalChoices({ allowListMode: false, toolRemember: false })).toEqual([
-      'approve',
-      'reject',
-    ]);
-    expect(getApprovalChoices({ allowListMode: true, toolRemember: false })).toEqual([
-      'approve',
-      'approve-remember',
-      'reject',
-    ]);
-    expect(getApprovalChoices({ allowListMode: false, toolRemember: true })).toEqual([
-      'approve',
-      'approve-remember',
-      'reject',
-    ]);
+  const withRemember = ['approve', 'approve-remember', 'reject'];
+
+  it('offers the shared remember choice in manual and allow-list modes', () => {
+    for (const approvalMode of ['manual', 'allow-list']) {
+      expect(
+        getApprovalChoices({ allowListRememberable: true, approvalMode, toolRemember: false }),
+      ).toEqual(withRemember);
+    }
+  });
+
+  it('hides it when remembering could never take effect', () => {
+    expect(
+      getApprovalChoices({
+        allowListRememberable: false,
+        approvalMode: 'manual',
+        toolRemember: false,
+      }),
+    ).toEqual(['approve', 'reject']);
+    expect(
+      getApprovalChoices({
+        allowListRememberable: true,
+        approvalMode: 'auto-run',
+        toolRemember: false,
+      }),
+    ).toEqual(['approve', 'reject']);
+  });
+
+  it("offers it whenever the tool defines its own 'similar'", () => {
+    expect(
+      getApprovalChoices({
+        allowListRememberable: false,
+        approvalMode: 'manual',
+        toolRemember: true,
+      }),
+    ).toEqual(withRemember);
   });
 });
 
 describe('resolveRememberAction', () => {
-  it("prefers the tool's own remember step over the allow-list", () => {
-    expect(resolveRememberAction({ allowListMode: true, toolRemember: true })).toBe('tool');
-    expect(resolveRememberAction({ allowListMode: false, toolRemember: true })).toBe('tool');
-    expect(resolveRememberAction({ allowListMode: true, toolRemember: false })).toBe('allow-list');
-    expect(resolveRememberAction({ allowListMode: false, toolRemember: false })).toBe('none');
+  it("uses the tool's own remember step, else the allow-list", () => {
+    expect(resolveRememberAction({ toolRemember: true })).toBe('tool');
+    expect(resolveRememberAction({ toolRemember: false })).toBe('allow-list');
+  });
+});
+
+describe('canRememberViaAllowList', () => {
+  it('allows tools that ask by default or by rule', () => {
+    expect(canRememberViaAllowList({ config: 'required' })).toBe(true);
+    expect(canRememberViaAllowList({ config: undefined })).toBe(true);
+  });
+
+  it('refuses calls that must always ask', () => {
+    expect(canRememberViaAllowList({ config: 'always' })).toBe(false);
+    expect(
+      canRememberViaAllowList({ config: { dynamic: { policy: 'always', type: 'audit' } } }),
+    ).toBe(false);
+    expect(canRememberViaAllowList({ config: 'required', toolArgs: { command: 'rm -rf /' } })).toBe(
+      false,
+    );
   });
 });

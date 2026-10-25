@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" und sein Layout werden in den Papierkorb verschoben. Widgets bleiben verfügbar und behalten ihre Historie.",
   "actions.trashTitle": "Dieses Dashboard in den Papierkorb verschieben?",
   "actions.trashed": "\"{{title}}\" wurde in den Papierkorb verschoben",
-  "board.empty": "Noch keine Widgets. Bitten Sie einen Agenten in einem Gespräch, ein Überwachungs-Widget zu erstellen und es zu diesem Dashboard hinzuzufügen.",
   "board.health.failed": "{{count}} fehlgeschlagen",
   "board.health.ok": "{{count}} auf dem neuesten Stand",
   "board.health.running": "{{count}} wird aktualisiert",

@@ -119,13 +119,13 @@ const DryRunReview = memo<DryRunReviewProps>(
     const canRemember = !!widget && !!userId && widget.userId === userId;
     const targetId = target?.id;
 
-    // Offered as an approval choice ("approve, and don't ask again …"): the
-    // grant is recorded only when the user picks it, never on a plain approve
-    // or a rejection. A failed grant does not hold the approval itself.
+    // "Similar" for a dry run means the same connectors and hosts: picking the
+    // shared "approve, and don't ask again for similar actions" choice records
+    // a standing grant of this version's access — never a plain approve or a
+    // rejection. A failed grant does not hold the approval itself.
     useEffect(() => {
       if (!canRemember || !targetId || !registerRememberApproval) return;
       return registerRememberApproval({
-        label: t('dryRun.remember'),
         onRemember: async () => {
           try {
             await grantDryRunAccess(widgetId, targetId);

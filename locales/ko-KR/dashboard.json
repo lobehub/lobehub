@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" 및 해당 레이아웃이 휴지통으로 이동합니다. 위젯은 계속 사용할 수 있으며 기록을 유지합니다.",
   "actions.trashTitle": "이 대시보드를 휴지통으로 이동하시겠습니까?",
   "actions.trashed": "\"{{title}}\"이(가) 휴지통으로 이동되었습니다",
-  "board.empty": "아직 위젯이 없습니다. 대화를 통해 에이전트에게 모니터링 위젯을 생성하고 이 대시보드에 추가하도록 요청하세요.",
   "board.health.failed": "{{count}} 실패",
   "board.health.ok": "{{count}} 최신 상태",
   "board.health.running": "{{count}} 새로 고침 중",

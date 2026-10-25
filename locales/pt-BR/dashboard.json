@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" e seu layout serão movidos para a lixeira. Os widgets permanecem disponíveis e mantêm seu histórico.",
   "actions.trashTitle": "Mover este painel para a lixeira?",
   "actions.trashed": "\"{{title}}\" movido para a lixeira",
-  "board.empty": "Ainda não há widgets. Peça a um agente em uma conversa para criar um widget de monitoramento e adicioná-lo a este painel.",
   "board.health.failed": "{{count}} falhou",
   "board.health.ok": "{{count}} atualizado",
   "board.health.running": "{{count}} atualizando",

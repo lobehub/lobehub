@@ -6,10 +6,14 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useToolStore } from '@/store/tool';
+import { toolSelectors } from '@/store/tool/selectors';
+
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
 import {
   type ApprovalChoice,
+  canRememberViaAllowList,
   getApprovalChoices,
   isChoiceSubmitBlocked,
   resolveRememberAction,
@@ -34,8 +38,10 @@ interface ApprovalActionsProps {
    */
   onBeforeApprove?: () =>
     Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined;
-  /** The tool's own "approve and remember" choice, when its intervention offers one. */
+  /** The tool's own "approve and remember" step, when its intervention defines "similar". */
   rememberOption?: BuiltinRememberApproval;
+  /** The call's arguments: a call that must always ask cannot be remembered. */
+  toolArgs?: Record<string, unknown>;
   toolCallId: string;
 }
 
@@ -151,6 +157,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     messageId,
     onBeforeApprove,
     rememberOption,
+    toolArgs,
   }) => {
     const { t } = useTranslation('chat');
     const [choice, setChoice] = useState<Choice>('approve');
@@ -159,25 +166,38 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const rejectInputRef = useRef<HTMLInputElement>(null);
 
     const isMessageCreating = messageId.startsWith('tmp_');
-    const isAllowListMode = approvalMode === 'allow-list';
     // Workspace topics are shared: a view-only member can be LOOKING at a
     // teammate's running conversation — they must not drive its tool approvals.
     const { canUseResource } = useConversationResourceAccess();
 
-    // Ordered choices drive both the numbered rows and the 1/2/3 shortcuts.
-    // "Approve & don't ask again" is a first-class option — the allow-list's,
-    // or the tool's own — rather than a checkbox nested under approve.
+    // "Approve, and don't ask again for similar actions" is one shared choice
+    // for every tool. A tool may define "similar" itself (its own remember
+    // step); otherwise the tool joins the allow-list, which only helps when
+    // this call is not one that must always ask.
+    const interventionConfig = useToolStore(
+      (s) =>
+        toolSelectors
+          .getManifestById(identifier)(s)
+          ?.api?.find((api) => api.name === apiName)?.humanIntervention,
+    );
+    const allowListRememberable = useMemo(
+      () => canRememberViaAllowList({ config: interventionConfig, toolArgs }),
+      [interventionConfig, toolArgs],
+    );
     const hasToolRemember = !!rememberOption;
+    // Ordered choices drive both the numbered rows and the 1/2/3 shortcuts.
     const choices = useMemo<Choice[]>(
-      () => getApprovalChoices({ allowListMode: isAllowListMode, toolRemember: hasToolRemember }),
-      [hasToolRemember, isAllowListMode],
+      () =>
+        getApprovalChoices({
+          allowListRememberable,
+          approvalMode,
+          toolRemember: hasToolRemember,
+        }),
+      [allowListRememberable, approvalMode, hasToolRemember],
     );
     // A tool's choice can be withdrawn while the card is open; fall back to plain approve.
     const effectiveChoice: Choice = choices.includes(choice) ? choice : 'approve';
-    const rememberAction = resolveRememberAction({
-      allowListMode: isAllowListMode,
-      toolRemember: hasToolRemember,
-    });
+    const rememberAction = resolveRememberAction({ toolRemember: hasToolRemember });
 
     const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
       useConversationStore((s) => [
@@ -396,11 +416,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                 onClick={() => setChoice(c)}
               >
                 <span className={styles.number}>{index + 1}.</span>
-                <span className={styles.optionLabel}>
-                  {c === 'approve-remember' && rememberOption
-                    ? rememberOption.label
-                    : approveLabel[c]}
-                </span>
+                <span className={styles.optionLabel}>{approveLabel[c]}</span>
               </div>
             );
           })}

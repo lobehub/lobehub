@@ -2719,7 +2719,7 @@
   "tool.intervention.mode.autoRun": "Auto Approve",
   "tool.intervention.mode.autoRunDesc": "Automatically approve all tool executions",
   "tool.intervention.mode.manual": "Manual",
-  "tool.intervention.mode.manualDesc": "Manual approval required for each invocation",
+  "tool.intervention.mode.manualDesc": "Asks before each invocation, except actions you chose not to be asked about again",
   "tool.intervention.onboarding.agentIdentity.editHint": "You can edit the name or avatar directly below.",
   "tool.intervention.onboarding.agentIdentity.namePlaceholder": "Agent name",
   "tool.intervention.onboarding.agentIdentity.title": "I'll update my name and avatar",

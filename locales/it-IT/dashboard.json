@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" e il suo layout saranno spostati nel cestino. I widget rimangono disponibili e mantengono la loro cronologia.",
   "actions.trashTitle": "Spostare questa dashboard nel cestino?",
   "actions.trashed": "\"{{title}}\" spostato nel cestino",
-  "board.empty": "Nessun widget ancora. Chiedi a un agente in una conversazione di creare un widget di monitoraggio e aggiungerlo a questa dashboard.",
   "board.health.failed": "{{count}} non riusciti",
   "board.health.ok": "{{count}} aggiornati",
   "board.health.running": "{{count}} in aggiornamento",

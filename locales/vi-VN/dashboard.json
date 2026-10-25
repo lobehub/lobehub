@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" và bố cục của nó sẽ được chuyển vào thùng rác. Các tiện ích vẫn khả dụng và giữ lại lịch sử của chúng.",
   "actions.trashTitle": "Chuyển bảng điều khiển này vào thùng rác?",
   "actions.trashed": "\"{{title}}\" đã được chuyển vào thùng rác",
-  "board.empty": "Chưa có tiện ích nào. Hãy yêu cầu một agent trong cuộc trò chuyện để tạo một tiện ích giám sát và thêm nó vào bảng điều khiển này.",
   "board.health.failed": "{{count}} thất bại",
   "board.health.ok": "{{count}} cập nhật",
   "board.health.running": "{{count}} đang làm mới",

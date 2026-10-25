@@ -5,8 +5,6 @@ export default {
     '"{{title}}" and its layout will move to the trash. Widgets stay available and keep their history.',
   'actions.trashTitle': 'Move this dashboard to the trash?',
   'actions.trashed': '"{{title}}" moved to the trash',
-  'board.empty':
-    'No widgets yet. Ask an agent in a conversation to build a monitoring widget and add it to this dashboard.',
   'board.health.failed': '{{count}} failed',
   'board.health.ok': '{{count}} up to date',
   'board.health.running': '{{count}} refreshing',
@@ -192,8 +190,6 @@ export default {
   'layout.save': 'Save layout',
   'layout.saveFailed': 'Could not save the layout. The previous layout is restored.',
   'layout.saved': 'Layout saved',
-  'dryRun.remember':
-    "Approve, and don't ask again for dry runs that use only this network access and these credentials",
   'review.expectedSample':
     'sample data showing the card it will make; approving produces the real result',
   'review.sampleTag': 'Sample',
@@ -205,4 +201,15 @@ export default {
   'widgetEdit.titleLabel': 'Title',
   'widgetEdit.descriptionPlaceholder': 'Data source, filters, time window and unit',
   'widgetEdit.saved': 'Widget updated',
+  'board.emptyTitle': 'This dashboard has no widgets yet',
+  'board.emptyDescription':
+    'A widget is a small script that runs on a schedule and shows its result as a card here. Ask an agent to write and dry-run one for you; it goes live only after you approve it.',
+  'board.emptyKind.stat': 'Number',
+  'board.emptyKind.list': 'List',
+  'board.emptyKind.series': 'Trend',
+  'board.emptyKind.table': 'Table',
+  'board.emptyAction': 'Ask an agent to build a widget',
+  'board.emptyPrompt':
+    'Build a monitoring widget and put it on the dashboard "{{title}}". I want to see: ',
+  'board.emptyAgentUnavailable': "Couldn't open the agent. Try again in a moment.",
 };

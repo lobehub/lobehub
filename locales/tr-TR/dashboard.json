@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" ve düzeni çöpe taşınacak. Araçlar kullanılabilir durumda kalacak ve geçmişlerini koruyacak.",
   "actions.trashTitle": "Bu panoyu çöpe taşımak istiyor musunuz?",
   "actions.trashed": "\"{{title}}\" çöpe taşındı",
-  "board.empty": "Henüz araç yok. Bir ajanla konuşarak bir izleme aracı oluşturmasını ve bu panele eklemesini isteyin.",
   "board.health.failed": "{{count}} başarısız",
   "board.health.ok": "{{count}} güncel",
   "board.health.running": "{{count}} yenileniyor",

@@ -2719,7 +2719,7 @@
   "tool.intervention.mode.autoRun": "自动批准",
   "tool.intervention.mode.autoRunDesc": "自动批准所有技能调用",
   "tool.intervention.mode.manual": "手动批准",
-  "tool.intervention.mode.manualDesc": "每次调用都需要你确认",
+  "tool.intervention.mode.manualDesc": "每次调用都需要你确认（已选择不再询问的操作除外）",
   "tool.intervention.onboarding.agentIdentity.editHint": "你可以直接在下方修改名字或头像",
   "tool.intervention.onboarding.agentIdentity.namePlaceholder": "助手名字",
   "tool.intervention.onboarding.agentIdentity.title": "我将更新自己的名字与头像",

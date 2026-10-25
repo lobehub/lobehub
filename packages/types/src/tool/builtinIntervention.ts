@@ -48,19 +48,19 @@ export interface BuiltinInterventionProps<Arguments = any> {
    */
   registerBeforeApprove?: (id: string, callback: () => void | Promise<void>) => () => void;
   /**
-   * Offer an "approve, and stop asking for calls like this" choice beside the
-   * plain approve. The host lists it among the approval choices with `label`,
-   * and runs `onRemember` right before approving when the user picks it; a
-   * plain approve or a rejection never runs it. Only approval-mode
-   * interventions receive it.
-   * @returns Cleanup function that withdraws the choice
+   * Define what "similar" means for this tool's shared "approve, and don't
+   * ask again for similar actions" choice (e.g. the same access rather than
+   * the whole tool). The host runs `onRemember` right before approving when
+   * the user picks that choice; a plain approve or a rejection never runs it.
+   * Without it, the choice puts the whole tool on the allow-list. Only
+   * approval-mode interventions receive it.
+   * @returns Cleanup function that withdraws the definition
    */
   registerRememberApproval?: (option: BuiltinRememberApproval) => () => void;
 }
 
-/** A tool-specific "approve and remember" choice (see `registerRememberApproval`). */
+/** A tool's own "don't ask again for similar actions" step (see `registerRememberApproval`). */
 export interface BuiltinRememberApproval {
-  label: string;
   onRemember: () => void | Promise<void>;
 }
 

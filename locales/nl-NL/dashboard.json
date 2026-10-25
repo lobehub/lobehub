@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" en de indeling worden verplaatst naar de prullenbak. Widgets blijven beschikbaar en behouden hun geschiedenis.",
   "actions.trashTitle": "Dit dashboard naar de prullenbak verplaatsen?",
   "actions.trashed": "\"{{title}}\" verplaatst naar de prullenbak",
-  "board.empty": "Nog geen widgets. Vraag een agent in een gesprek om een monitoringwidget te maken en toe te voegen aan dit dashboard.",
   "board.health.failed": "{{count}} mislukt",
   "board.health.ok": "{{count}} up-to-date",
   "board.health.running": "{{count}} aan het verversen",

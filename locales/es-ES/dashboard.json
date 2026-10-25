@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" y su diseño se moverán a la papelera. Los widgets permanecen disponibles y conservan su historial.",
   "actions.trashTitle": "¿Mover este tablero a la papelera?",
   "actions.trashed": "\"{{title}}\" se movió a la papelera",
-  "board.empty": "Aún no hay widgets. Pide a un agente en una conversación que cree un widget de monitoreo y lo agregue a este tablero.",
   "board.health.failed": "{{count}} fallidos",
   "board.health.ok": "{{count}} actualizados",
   "board.health.running": "{{count}} actualizándose",

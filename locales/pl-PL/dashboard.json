@@ -4,7 +4,6 @@
   "actions.trashConfirm": "\"{{title}}\" i jego układ zostaną przeniesione do kosza. Widżety pozostaną dostępne i zachowają swoją historię.",
   "actions.trashTitle": "Przenieść ten pulpit nawigacyjny do kosza?",
   "actions.trashed": "\"{{title}}\" przeniesiono do kosza",
-  "board.empty": "Brak widżetów. Poproś agenta w rozmowie o utworzenie widżetu monitorującego i dodanie go do tego pulpitu nawigacyjnego.",
   "board.health.failed": "{{count}} nieudanych",
   "board.health.ok": "{{count}} aktualnych",
   "board.health.running": "{{count}} odświeżających się",

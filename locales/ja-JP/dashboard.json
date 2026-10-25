@@ -4,7 +4,6 @@
   "actions.trashConfirm": "「{{title}}」とそのレイアウトはゴミ箱に移動します。ウィジェットは利用可能で履歴を保持します。",
   "actions.trashTitle": "このダッシュボードをゴミ箱に移動しますか？",
   "actions.trashed": "「{{title}}」がゴミ箱に移動されました",
-  "board.empty": "まだウィジェットがありません。会話でエージェントにモニタリングウィジェットを作成して、このダッシュボードに追加するよう依頼してください。",
   "board.health.failed": "{{count}} 失敗",
   "board.health.ok": "{{count}} 最新",
   "board.health.running": "{{count}} 更新中",
