@@ -38,6 +38,7 @@ minimumReleaseAgeExclude:
   - '@auv-js/sdk@0.0.25'
   - '@lobehub/*'
   - virtua@0.53.5
+  - local-replica
 
 # Build scripts run one at a time. Several peer-variant copies of
 # @lobehub/editor resolve in this workspace and every copy's postinstall

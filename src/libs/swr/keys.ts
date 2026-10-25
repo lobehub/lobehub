@@ -253,7 +253,7 @@ export const recentKeys = {
  * "what needs you" feeds, and the topic link is a discovery poll.
  *
  * The goal list, the home roll-up, the graph snapshot and the metric series
- * used to live here — they are `@lobechat/replica` resources now (see
+ * used to live here — they are `local-replica` resources now (see
  * `src/store/goal/projection.ts`), so their sync keys are not SWR cache keys.
  */
 export const goalKeys = {
@@ -292,7 +292,7 @@ export const workKeys = {
 
 // ---- brief --------------------------------------------------------------
 // The unresolved brief feed no longer has an SWR key: it moved onto
-// `@lobechat/replica` (`briefList`, partitioned by identity scope). Only the
+// `local-replica` (`briefList`, partitioned by identity scope). Only the
 // day-scoped news digest still reads through SWR.
 export const briefKeys = {
   /**
@@ -313,7 +313,7 @@ export const agentConfigKeys = {
 };
 
 // ---- image generation ---------------------------------------------------
-// The topic list and the per-topic batches live in `@lobechat/replica`
+// The topic list and the per-topic batches live in `local-replica`
 // resources now (see `src/store/image/slices/*/projection.ts`); only the
 // generation-status poll is still an SWR key.
 export const imageKeys = {
@@ -325,7 +325,7 @@ export const imageKeys = {
 };
 
 // ---- video generation ---------------------------------------------------
-// The topic list and the per-topic batches live in `@lobechat/replica`
+// The topic list and the per-topic batches live in `local-replica`
 // resources now (see `src/store/video/slices/*/projection.ts`); only the
 // generation-status poll is still an SWR key.
 export const videoKeys = {

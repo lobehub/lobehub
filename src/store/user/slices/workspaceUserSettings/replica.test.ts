@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The workspace-user preference bucket is a `@lobechat/replica` resource whose
+ * The workspace-user preference bucket is a `local-replica` resource whose
  * view is the user store's flat `workspaceUserPreference` field (+ the
  * `workspaceUserPreferenceWorkspaceId` loaded marker): a persisted projection
  * paints while the network confirms it, personal mode never hits the network,

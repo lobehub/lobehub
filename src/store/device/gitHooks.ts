@@ -1,6 +1,4 @@
 import { isDesktop } from '@lobechat/const';
-import type { ReplicaOptimisticToken } from '@lobechat/replica';
-import type { ReplicaSlice, ReplicaSyncSchedule } from '@lobechat/replica/zustand';
 import type {
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
@@ -12,6 +10,8 @@ import type {
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
+import type { ReplicaOptimisticToken } from 'local-replica';
+import type { ReplicaSlice, ReplicaSyncSchedule } from 'local-replica/zustand';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { mutate } from '@/libs/swr';

@@ -1,5 +1,5 @@
-import { replicaKeys } from '@lobechat/replica';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { replicaKeys } from 'local-replica';
 import useSWR from 'swr';
 import { describe, expect, it, vi } from 'vitest';
 
