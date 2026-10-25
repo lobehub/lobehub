@@ -189,6 +189,15 @@ export async function dispatchAcceptanceFeedbackRepair(
     if (!updated) throw new Error('The repair handoff is no longer available');
     notifyAcceptance(acceptance.id, 'session');
   };
+  const retireFailedStart = async () => {
+    if (!request.operationId) return;
+    // A failed enqueue keeps resumable state; retire it before allowing a replacement.
+    await new AgentOperationModel(
+      ctx.serverDB,
+      request.executionUserId ?? ctx.userId,
+      acceptance.workspaceId ?? undefined,
+    ).settleLive(request.operationId, 'error');
+  };
   try {
     if (origin?.topicId) {
       const result = await dispatchAcceptanceRepair(
@@ -214,6 +223,7 @@ export async function dispatchAcceptanceFeedbackRepair(
           state: 'running',
         });
       } else {
+        await retireFailedStart();
         await patch({ error: result.error ?? result.reason, state: 'failed' });
       }
       return result;
@@ -324,6 +334,7 @@ export async function dispatchAcceptanceFeedbackRepair(
     console.error('[acceptance:repair]', error);
     // Once execution exists, a failed progress write must never make a retry start it twice.
     if (started) return started;
+    await retireFailedStart();
     const message = error instanceof Error ? error.message : String(error);
     await patch({ ...request, error: message, state: 'failed' });
     return {

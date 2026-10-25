@@ -201,6 +201,46 @@ describe('acceptance repair handoff', () => {
     );
   });
 
+  it.each(['site', 'origin'])(
+    'retires a failed %s enqueue before allowing recovery or retry',
+    async (source) => {
+      if (source === 'origin') {
+        await serverDB
+          .update(acceptances)
+          .set({ subjectType: 'standalone', status: 'delivered' })
+          .where(eq(acceptances.id, acceptanceId));
+        const [topic] = await serverDB.insert(topics).values({ userId, agentId }).returning();
+        await serverDB.insert(verifyRuns).values({
+          acceptanceId,
+          userId,
+          roundIndex: 1,
+          status: 'passed',
+          metadata: { origin: { agentId, topicId: topic.id } },
+        });
+      }
+      const start = execAgent.getMockImplementation()!;
+      let failedOperationId: string;
+      execAgent.mockImplementationOnce(async (params) => {
+        const result = await start(params);
+        failedOperationId = result.operationId;
+        throw new Error('Queue enqueue failed after persistence');
+      });
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      expect(
+        await caller.requestRepair({ id: acceptanceId, comment: 'Frozen scope' }),
+      ).toMatchObject({ dispatched: false, reason: 'failed' });
+      const failed = await serverDB.query.agentOperations.findFirst({
+        where: eq(agentOperations.id, failedOperationId!),
+      });
+      expect(failed?.status).toBe('error');
+      expect(await caller.requestRepair({ id: acceptanceId })).toMatchObject({ dispatched: true });
+      const stale = await serverDB.query.agentOperations.findFirst({
+        where: eq(agentOperations.id, failedOperationId!),
+      });
+      expect(stale?.status).toBe('error');
+    },
+  );
+
   it('continues the original conversation instead of creating a Task when the source is known', async () => {
     await serverDB
       .update(acceptances)
