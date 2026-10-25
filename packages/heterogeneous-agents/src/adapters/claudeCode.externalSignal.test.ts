@@ -258,6 +258,100 @@ describe('ClaudeCodeAdapter', () => {
     });
 
     /**
+     * Real-world regression (a production topic): two background subagents ran at
+     * once. `Agent` runs in the background by default, so neither call carried
+     * `run_in_background`. When the first finished, its wake-up turn was tagged
+     * as a `tool-stdout` callback of the OTHER, still-running subagent.
+     */
+    it('attributes each background Agent wake-up to the subagent that finished', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      const agentCall = (id: string) => ({
+        id,
+        input: { description: id, prompt: 'research', subagent_type: 'Explore' },
+        name: 'Agent',
+        type: 'tool_use',
+      });
+      adapter.adapt({
+        message: { content: [agentCall('toolu_srv'), agentCall('toolu_fe')], id: 'msg_01' },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_srv', 'toolu_srv'));
+      adapter.adapt(ccTaskStarted('task_fe', 'toolu_fe'));
+      adapter.adapt(ccUser('toolu_srv', 'Async agent launched successfully.'));
+      adapter.adapt(ccUser('toolu_fe', 'Async agent launched successfully.'));
+      adapter.adapt(ccMessageStart('msg_02')); // "both still running" reply
+      adapter.adapt({ is_error: false, result: 'running', type: 'result' });
+
+      const signalOf = (events: ReturnType<typeof adapter.adapt>) =>
+        events.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal;
+
+      adapter.adapt(ccTaskNotification('task_srv'));
+      expect(signalOf(adapter.adapt(ccMessageStart('msg_03')))).toEqual({
+        sourceToolCallId: 'toolu_srv',
+        sourceToolName: 'Agent',
+        type: 'task-completion',
+      });
+      adapter.adapt({ is_error: false, result: 'one done', type: 'result' });
+
+      adapter.adapt(ccTaskNotification('task_fe'));
+      expect(signalOf(adapter.adapt(ccMessageStart('msg_04')))).toEqual({
+        sourceToolCallId: 'toolu_fe',
+        sourceToolName: 'Agent',
+        type: 'task-completion',
+      });
+    });
+
+    it('drops a task completion the next natural turn already answered', () => {
+      const adapter = new ClaudeCodeSdkAdapter();
+      init(adapter);
+
+      // A Monitor stays alive for the whole run.
+      adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
+          id: 'msg_01',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_mon', 'toolu_mon'));
+      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
+
+      // A background Bash starts and finishes while the run is still busy.
+      adapter.adapt({
+        message: {
+          content: [
+            {
+              id: 'toolu_bg',
+              input: { command: 'sleep 1', run_in_background: true },
+              name: 'Bash',
+              type: 'tool_use',
+            },
+          ],
+          id: 'msg_02',
+        },
+        type: 'assistant',
+      });
+      adapter.adapt(ccTaskStarted('task_bg', 'toolu_bg'));
+      adapter.adapt(ccUser('toolu_bg', 'Background command started'));
+      adapter.adapt(ccTaskNotification('task_bg'));
+      // The tool_result follow-up delivers the finished task's notification.
+      adapter.adapt(ccMessageStart('msg_03'));
+
+      // The next wake-up comes from the Monitor, not the finished Bash.
+      const cb = adapter.adapt(ccMessageStart('msg_04'));
+      expect(
+        cb.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
+      ).toEqual({
+        sequence: 1,
+        sourceToolCallId: 'toolu_mon',
+        sourceToolName: 'Monitor',
+        type: 'tool-stdout',
+      });
+    });
+
+    /**
      * Real-world regression (recorded on tpc_joZS2mksoY5L): a slow `git commit`
      * (running a lint-staged hook) makes CC track the Bash call as a task and
      * emit `task_started` + `task_notification` back-to-back, with NO out-of-band

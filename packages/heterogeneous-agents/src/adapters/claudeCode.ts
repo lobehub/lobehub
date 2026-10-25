@@ -1848,6 +1848,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       // signal pipeline.
       if (!subagentCtx) {
         this.hasUnhandledUserInput = true;
+        this.taskSignals.noteToolResult(toolCallId);
       }
 
       // `Read` on images yields `{type: 'image', source: {...}}` blocks. We
@@ -2276,7 +2277,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       // turn opened while a task is active) would see a stale `true` and skip
       // its external-signal tag.
       this.hasUnhandledUserInput = false;
-      this.pendingExternalSignal = undefined;
+      this.pendingExternalSignal = this.taskSignals.openTurn(true);
       // Reusing the tool turn's message.id as the newStep id would make the
       // reducer treat this as a REPLAY and drop it (it ignores a `newStep` whose
       // id === currentMainMessageId). For any tool turn opened by a prior

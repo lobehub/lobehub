@@ -31,9 +31,9 @@ export class ClaudeCodeTaskSignals {
    * waiting to be stamped on the post-task summary turn with
    * `type: 'task-completion'`.
    *
-   * Armed when `task_notification` ends an active task; consumed by the NEXT
-   * turn that opens without user input while no other task is alive to claim
-   * it as a callback. Cleared on `result` so it never leaks across LLM runs.
+   * Armed when `task_notification` ends a background task; consumed by the
+   * NEXT turn that opens, which carries the tag only when it opened without
+   * user input. Cleared on `result` so it never leaks across LLM runs.
    *
    * Lets the renderer keep the summary inside the same AssistantGroup as
    * the preceding callbacks instead of letting it spawn a separate group.
@@ -61,6 +61,21 @@ export class ClaudeCodeTaskSignals {
     });
   }
 
+  /**
+   * A main-agent tool_result landed. If its task is still alive, the task
+   * outlived its own call — it runs in the background (`run_in_background`
+   * Bash, an `Agent` launched async, which is CC's default), so its
+   * `task_notification` wakes the LLM for a summary turn. An inline tool CC
+   * merely tracked as a task ends before its result arrives, so it never gets
+   * here.
+   */
+  noteToolResult(toolCallId: string): void {
+    if (!this.signalBackgroundTaskCompletion) return;
+    for (const task of this.activeTasks.values()) {
+      if (task.toolUseId === toolCallId) task.shouldSignalCompletion = true;
+    }
+  }
+
   end(taskId: string): void {
     // Capture lineage BEFORE deleting so the next turn (the post-task summary,
     // after CC re-invokes the LLM with a synthesized task-ended notification)
@@ -76,7 +91,8 @@ export class ClaudeCodeTaskSignals {
     // tool that CC merely tracked as a task (e.g. a slow `git commit` running a
     // lint-staged hook); its `tool_result` is consumed by the next turn in the
     // normal main chain. Tagging that turn `task-completion` mis-anchors it and
-    // drops it from the rendered chain — so leave it untagged.
+    // drops it from the rendered chain — so leave it untagged. A background
+    // task (`shouldSignalCompletion`) wakes the LLM even with no callbacks.
     const ending = this.activeTasks.get(taskId);
     if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
       this.pendingTaskCompletion = {
@@ -90,10 +106,25 @@ export class ClaudeCodeTaskSignals {
   /**
    * Lineage for a newly opened turn. `answersInput` is true when the turn
    * follows a `tool_result` / user message — a natural main-chain turn that
-   * carries no signal.
+   * carries no signal. CC hands it any task notification that arrived
+   * meanwhile, so it also consumes the pending completion.
    */
   openTurn(answersInput: boolean): ExternalSignalContext | undefined {
-    if (answersInput) return undefined;
+    if (answersInput) {
+      this.pendingTaskCompletion = undefined;
+      return undefined;
+    }
+
+    if (this.pendingTaskCompletion) {
+      // The turn that follows a `task_notification` is that task's post-task
+      // summary, even while other tasks are still alive. Tag it with the
+      // source-tool lineage so the collector keeps it inside the same
+      // AssistantGroup as the preceding callbacks (rendered after the
+      // SignalCallbacks block).
+      const completion = this.pendingTaskCompletion;
+      this.pendingTaskCompletion = undefined;
+      return { ...completion, type: 'task-completion' };
+    }
 
     if (this.activeTasks.size > 0) {
       // Pick the most recently registered active task. Multi-task
@@ -108,16 +139,6 @@ export class ClaudeCodeTaskSignals {
         sourceToolName: task.sourceToolName,
         type: 'tool-stdout',
       };
-    }
-
-    if (this.pendingTaskCompletion) {
-      // The turn that follows a `task_notification` is the post-task summary.
-      // Tag it with the source-tool lineage so the collector keeps it inside
-      // the same AssistantGroup as the preceding callbacks (rendered after the
-      // SignalCallbacks block).
-      const completion = this.pendingTaskCompletion;
-      this.pendingTaskCompletion = undefined;
-      return { ...completion, type: 'task-completion' };
     }
 
     return undefined;
