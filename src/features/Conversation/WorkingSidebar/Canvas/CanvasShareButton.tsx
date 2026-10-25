@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Button, cssVar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { ChevronDownIcon, Share2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +46,7 @@ const CanvasShareButton = memo<CanvasShareButtonProps>(({ data, onShared }) => {
         type={'text'}
         onClick={action.onClick}
       >
-        <Icon icon={Share2} size={'small'} />
+        <Icon color={cssVar.colorIcon} icon={Share2} size={'small'} />
       </Button>
     );
   }
@@ -57,8 +57,8 @@ const CanvasShareButton = memo<CanvasShareButtonProps>(({ data, onShared }) => {
     <DropdownMenu items={trigger.items} placement={'bottomRight'}>
       <Button aria-label={label} size={'small'} style={triggerStyle} title={label} type={'text'}>
         <Flexbox horizontal align={'center'} gap={2}>
-          <Icon icon={Share2} size={'small'} />
-          <Icon icon={ChevronDownIcon} size={12} />
+          <Icon color={cssVar.colorIcon} icon={Share2} size={'small'} />
+          <Icon color={cssVar.colorIcon} icon={ChevronDownIcon} size={12} />
         </Flexbox>
       </Button>
     </DropdownMenu>
