@@ -3,7 +3,7 @@
 import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ChevronLeft } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -15,6 +15,11 @@ import { isMobileSurface } from '@/utils/mobileSurface';
 import LeftPanel from './features/LeftPanel';
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
 import { type SkillViewMode } from './features/SkillList';
+import {
+  encodeMobileSelection,
+  MOBILE_SELECTION_PARAM,
+  parseMobileSelection,
+} from './mobileSelection';
 
 export interface SelectedTool {
   identifier: string;
@@ -46,9 +51,36 @@ interface ToolSettingsProps {
 export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const { t } = useTranslation('common');
   const mobile = isMobileSurface();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const querySkillIdentifier = searchParams.get('skill');
   const [selected, setSelected] = useState<SelectedTool | null>(null);
+  const mobileSelected = mobile
+    ? parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM))
+    : undefined;
+
+  // Mobile: opening a detail is a history entry, so back returns to the list.
+  const openMobileDetail = useCallback(
+    (next: SelectedTool, replace = false) =>
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          params.set(MOBILE_SELECTION_PARAM, encodeMobileSelection(next));
+          params.delete('skill');
+          return params;
+        },
+        { replace },
+      ),
+    [setSearchParams],
+  );
+  const closeMobileDetail = () =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.delete(MOBILE_SELECTION_PARAM);
+        return params;
+      },
+      { replace: true },
+    );
 
   const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
   const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
@@ -94,25 +126,37 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
     const skill = [...marketAgentSkills, ...userAgentSkills].find(
       (item) => item.identifier === querySkillIdentifier,
     );
-    if (skill) setSelected({ identifier: skill.id, type: 'agent-skill' });
-  }, [marketAgentSkills, querySkillIdentifier, userAgentSkills, viewMode]);
+    if (!skill) return;
+    // Mobile turns the deep link into the detail entry once (dropping `skill`),
+    // so a later store refresh cannot reopen a detail the user closed.
+    if (mobile) openMobileDetail({ identifier: skill.id, type: 'agent-skill' }, true);
+    else setSelected({ identifier: skill.id, type: 'agent-skill' });
+  }, [
+    marketAgentSkills,
+    mobile,
+    openMobileDetail,
+    querySkillIdentifier,
+    userAgentSkills,
+    viewMode,
+  ]);
 
   const handleSelect = (identifier: string, type: ToolDetailType) => {
-    setSelected({ identifier, type });
+    if (mobile) openMobileDetail({ identifier, type });
+    else setSelected({ identifier, type });
   };
 
   // Mobile: the settings layout owns the header; list and detail take turns
   // full-width instead of a 300px list squeezing the detail.
   if (mobile)
-    return selected ? (
+    return mobileSelected ? (
       <Flexbox className={styles.detail}>
         <Flexbox horizontal align={'center'} paddingBlock={4} paddingInline={8}>
-          <ActionIcon icon={ChevronLeft} title={t('back')} onClick={() => setSelected(null)} />
+          <ActionIcon icon={ChevronLeft} title={t('back')} onClick={closeMobileDetail} />
         </Flexbox>
         <SkillDetail
-          identifier={selected.identifier}
-          type={selected.type}
-          onDelete={() => setSelected(null)}
+          identifier={mobileSelected.identifier}
+          type={mobileSelected.type}
+          onDelete={closeMobileDetail}
         />
       </Flexbox>
     ) : (
@@ -120,7 +164,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
         <LeftPanel
           fullWidth
           viewMode={viewMode}
-          onDeleteSelected={() => setSelected(null)}
+          onDeleteSelected={closeMobileDetail}
           onSelect={handleSelect}
         />
       </div>

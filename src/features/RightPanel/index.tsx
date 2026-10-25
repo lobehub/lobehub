@@ -25,6 +25,13 @@ interface RightPanelProps extends Omit<
    * surface (Page editor, Task layout, etc.) own an independent visibility state.
    */
   expand?: boolean;
+  /**
+   * `expand` mirrors a selection made on this page (e.g. the picked record), not
+   * a saved open/closed preference. Mobile closes a panel that mounts open,
+   * since a saved desktop preference would otherwise cover the phone page; a
+   * fresh selection must stay open.
+   */
+  expandFollowsSelection?: boolean;
   onExpandChange?: (expand: boolean) => void;
   onSizeChange?: (size?: Size) => void;
   /**
@@ -42,6 +49,7 @@ const RightPanel = memo<RightPanelProps>(
     children,
     defaultWidth = 360,
     expand: expandProp,
+    expandFollowsSelection,
     onExpandChange,
     onSizeChange,
     width: widthProp,
@@ -59,7 +67,12 @@ const RightPanel = memo<RightPanelProps>(
     const width = widthProp ?? internalWidth;
     const mobile = isMobileSurface();
 
-    useMobilePanelExpand(mobile, !!expand, handleExpandChange);
+    useMobilePanelExpand({
+      expand: !!expand,
+      expandFollowsSelection,
+      mobile,
+      onExpandChange: handleExpandChange,
+    });
 
     if (mobile)
       return (

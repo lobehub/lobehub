@@ -3,13 +3,16 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { UserCircle } from 'lucide-react';
-import { Fragment, isValidElement, memo } from 'react';
+import { Fragment, memo } from 'react';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import Cell from '@/components/Cell';
 import Divider from '@/components/Cell/Divider';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 import { useWorkspaceSettingCategory } from './hooks/useCategory';
+import { getWorkspaceSettingsTabUrl } from './hooks/useSettingsSearchScope';
 
 const styles = stylex.create({
   groupTitle: {
@@ -30,6 +33,10 @@ const styles = stylex.create({
 const MobileWorkspaceSettingCategory = memo(() => {
   const groups = useWorkspaceSettingCategory();
   const navigate = useWorkspaceAwareNavigate();
+  const slug = useActiveWorkspaceSlug();
+
+  // Only mounted under `/:workspaceSlug/settings`; same guard as the desktop sidebar.
+  if (!slug) return null;
 
   return (
     <>
@@ -39,11 +46,12 @@ const MobileWorkspaceSettingCategory = memo(() => {
           <div {...stylex.props(styles.groupTitle)}>{group.title}</div>
           {group.items.map((item) => (
             <Cell
-              // The profile row carries the user's avatar element; cells take icon components.
-              icon={isValidElement(item.icon) ? UserCircle : item.icon}
+              // The profile row carries the user's avatar (or nothing); cells take icon components.
+              icon={item.key === WorkspaceSettingsTabs.Profile ? UserCircle : item.icon}
               key={item.key}
               label={item.label}
-              onClick={() => navigate(`/settings/${item.key}`)}
+              // Same URL builder as the desktop sidebar and settings search.
+              onClick={() => navigate(getWorkspaceSettingsTabUrl(slug, item.key))}
             />
           ))}
         </Fragment>
