@@ -43,7 +43,7 @@
 
 **Good - Coverage (80-89%)**:
 
-- ai302, qwen, google, azureOpenai, azureai, infiniai, aihubmix, bfl, anthropic, openai, RouterRuntime
+- ai302, quicksilverpro, qwen, google, azureOpenai, azureai, infiniai, aihubmix, bfl, anthropic, openai, RouterRuntime
 
 ## Testing Strategy
 
@@ -574,6 +574,7 @@ bunx eslint src/providers/{provider}/
 - Enhanced 14 files with significant test improvements:
 
   **Core Modules (6 files, +96 tests):**
+
   - **responsesStream.ts** (50.6% → 91.56%) - 19 tests, response events, function calls, reasoning, citations
   - **createImage.ts** (54.76% → 100%) - 24 tests, chat model mode, image mode, routing logic
   - **computeImageCost.ts** (64.47% → 100%) - 12 tests, lookup/fixed/tiered pricing strategies
@@ -582,6 +583,7 @@ bunx eslint src/providers/{provider}/
   - **computeChatCost.ts** (79.78% → 95.74%) - 10 tests, tiered pricing, error handling
 
   **Providers (8 providers, +102 tests):**
+
   - **deepseek** (77.77% → 100%) - 9 tests, models function, generateObject config
   - **nvidia** (78.12% → 100%) - 14 tests, thinking mode handling, chat template kwargs
   - **qiniu** (75% → 100%) - 24 tests, multi-provider model detection

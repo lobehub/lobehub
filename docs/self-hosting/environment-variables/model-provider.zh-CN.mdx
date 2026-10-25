@@ -591,6 +591,22 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`https://dashscope.aliyuncs.com/compatible-mode/v1`
 - 示例：`https://my-qwen-proxy.com/v1`
 
+## QuickSilver Pro
+
+### `QUICKSILVERPRO_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 QuickSilver Pro 服务中申请的 API 密钥
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `QUICKSILVERPRO_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制 QuickSilver Pro 的模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名` 来自定义模型的展示名，用英文逗号隔开。定义语法规则与其他供应商的模型列表一致，见 [模型列表][model-list]
+- 默认值：`-`
+- 示例：`-all,+claude-opus-5-5,+gpt-6.1-sol`
+
 ## Stepfun AI
 
 ### `STEPFUN_API_KEY`
