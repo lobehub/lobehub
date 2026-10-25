@@ -376,10 +376,8 @@ describe('resolveChangeRequestLinks', () => {
       .insert(workspaceMembers)
       .values({ role: 'member', userId, workspaceId: workspace.id });
     const resolved = await resolveChangeRequestLinks(serverDB, { ...base, scope });
-    expect(resolved).toEqual({
-      links: { acceptanceId, topicId: topic.id },
-      workspaceId: workspace.id,
-    });
+    // The acceptance only: a hand link does not hand over the subject's conversation.
+    expect(resolved).toEqual({ links: { acceptanceId }, workspaceId: workspace.id });
 
     // Another PR number in the same repository is not linked.
     expect(await resolve({ ...base, number: 19_720, scope })).toEqual({});

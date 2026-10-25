@@ -14,10 +14,7 @@ import { ScmControlService } from './ScmControlService';
 
 const log = debug('lobe-server:scm:hand-link');
 
-type LinkableAcceptance = Pick<
-  AcceptanceItem,
-  'id' | 'subjectId' | 'subjectType' | 'userId' | 'workspaceId'
->;
+type LinkableAcceptance = Pick<AcceptanceItem, 'id' | 'userId' | 'workspaceId'>;
 
 /**
  * A hand link may only claim a provider row that lives in the acceptance's
@@ -54,11 +51,10 @@ export const bindHandLinkedChangeRequest = async (
 
   // Conditional on the row still being free: another acceptance may be
   // claiming the same PR right now, under a lock on its own row, not ours.
-  const bound = await ScmChangeRequestModel.claimAcceptance(db, row.id, {
-    acceptanceId: acceptance.id,
-    taskId: acceptance.subjectType === 'task' ? acceptance.subjectId : undefined,
-    topicId: acceptance.subjectType === 'topic' ? acceptance.subjectId : undefined,
-  });
+  // The subject's conversation is deliberately not linked: a hand link says
+  // which delivery the PR closes, not whose conversation its CI failures and
+  // reviews should wake, and an unlink must leave nothing behind.
+  const bound = await ScmChangeRequestModel.claimAcceptance(db, row.id, acceptance.id);
   return bound?.id ?? null;
 };
 

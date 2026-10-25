@@ -291,7 +291,10 @@ export const resolveChangeRequestLinks = async (
   // delivery from the acceptance side, so it is often written by someone
   // other than the PR's author — a bot verifies, a person opens the PR. The
   // fence is the tenant rather than the creator: a workspace acceptance the
-  // author can write to, or the author's own personal one.
+  // author can write to, or the author's own personal one. It contributes
+  // the acceptance only, not its subject's conversation: the link says which
+  // delivery the PR closes, not whose agent its failures should wake, and
+  // removing it must leave nothing behind on the row.
   if (!links.acceptanceId) {
     const linkedPullRequest = sql`EXISTS (
       SELECT 1 FROM jsonb_array_elements(COALESCE(${acceptances.metadata} -> 'pullRequests', '[]'::jsonb)) AS pr
@@ -300,12 +303,7 @@ export const resolveChangeRequestLinks = async (
         AND lower(pr ->> 'repoFullName') = ${params.repoFullName.toLowerCase()}
     )`;
     const [row] = await db
-      .select({
-        id: acceptances.id,
-        subjectId: acceptances.subjectId,
-        subjectType: acceptances.subjectType,
-        workspaceId: acceptances.workspaceId,
-      })
+      .select({ id: acceptances.id, workspaceId: acceptances.workspaceId })
       .from(acceptances)
       .where(and(linkedPullRequest, inTenantScope(db, acceptances, params.scope, pin)))
       .orderBy(desc(acceptances.updatedAt))
@@ -313,8 +311,6 @@ export const resolveChangeRequestLinks = async (
     if (row) {
       links.acceptanceId = row.id;
       pin ??= row.workspaceId ?? null;
-      if (!links.topicId && row.subjectType === 'topic') links.topicId = row.subjectId;
-      if (!links.taskId && row.subjectType === 'task') links.taskId = row.subjectId;
     }
   }
 

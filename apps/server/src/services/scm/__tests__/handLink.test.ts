@@ -197,10 +197,35 @@ describe('hand-linked pull requests', () => {
     expect([first.id, second.id]).toContain(holder);
     // Both read the row as free before either wrote; the loser must not overwrite.
     expect(
-      await ScmChangeRequestModel.claimAcceptance(serverDB, row.id, {
-        acceptanceId: holder === first.id ? second.id : first.id,
-      }),
+      await ScmChangeRequestModel.claimAcceptance(
+        serverDB,
+        row.id,
+        holder === first.id ? second.id : first.id,
+      ),
     ).toBeNull();
+  });
+
+  it("links the delivery, never the subject's conversation, so unlinking leaves nothing", async () => {
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({
+        status: 'delivered',
+        subjectId: 'tpc_bot_conversation',
+        subjectType: 'topic',
+        userId: bot,
+        workspaceId,
+      })
+      .returning();
+    const row = await authorRow('open');
+
+    await linkHandPullRequest(serverDB, acceptance, pr);
+    const bound = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(bound?.acceptanceId).toBe(acceptance.id);
+    expect(bound?.topicId).toBeNull();
+
+    await unlinkHandPullRequest(serverDB, acceptance, pr);
+    const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after).toMatchObject({ acceptanceId: null, taskId: null, topicId: null });
   });
 
   it('does nothing for a PR the provider has not reported yet', async () => {

@@ -549,28 +549,24 @@ export class ScmChangeRequestModel {
   /**
    * Point the row at `acceptanceId` unless it already names another one,
    * decided in the UPDATE itself so two acceptances claiming the same row at
-   * once cannot overwrite each other. The subject links only fill nulls.
-   * Returns the row when this acceptance holds it.
+   * once cannot overwrite each other. Only the acceptance link moves, so
+   * {@link detachAcceptance} undoes it completely. Returns the row when this
+   * acceptance holds it.
    */
   static claimAcceptance = async (
     db: LobeChatDatabase,
     id: string,
-    links: { acceptanceId: string; taskId?: string; topicId?: string },
+    acceptanceId: string,
   ): Promise<ScmChangeRequestItem | null> => {
     const [row] = await db
       .update(scmChangeRequests)
-      .set({
-        acceptanceId: links.acceptanceId,
-        taskId: sql`COALESCE(${scmChangeRequests.taskId}, ${links.taskId ?? null})`,
-        topicId: sql`COALESCE(${scmChangeRequests.topicId}, ${links.topicId ?? null})`,
-        updatedAt: new Date(),
-      })
+      .set({ acceptanceId, updatedAt: new Date() })
       .where(
         and(
           eq(scmChangeRequests.id, id),
           or(
             isNull(scmChangeRequests.acceptanceId),
-            eq(scmChangeRequests.acceptanceId, links.acceptanceId),
+            eq(scmChangeRequests.acceptanceId, acceptanceId),
           ),
         ),
       )
