@@ -90,6 +90,7 @@ import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import { TopicSearchPane } from './Search';
+import { useRetainAfterHide } from './useRetainAfterHide';
 import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
 import { useTabContextMenuItems } from './useTabContextMenuItems';
 import WorkspaceTab from './WorkspaceTab';
@@ -187,6 +188,8 @@ const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
 const OVERVIEW_TRANSITION = { duration: 0.25, ease: [0.32, 0.72, 0, 1] } as const;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
+/** How long a collapsed panel keeps Review mounted for a quick reopen. */
+const REVIEW_RETAIN_MS = 30_000;
 
 interface AgentWorkingSidebarProps {
   /**
@@ -830,6 +833,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     portalWidth: portalOpen ? portalWidth : 0,
   });
   const fits = widthBudget >= minDisplayWidth;
+  const panelVisible = !!showRightPanel && fits;
+  const retainReview = useRetainAfterHide(panelVisible, REVIEW_RETAIN_MS);
   const overviewFits = widthBudget >= MIN_PANEL_WIDTH;
   const renderWidth = Math.min(displayWidth, Math.max(widthBudget, minDisplayWidth));
   // Also cap the drag range so releasing a drag can never persist a width that
@@ -1080,17 +1085,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     </Suspense>
                   </Flexbox>
                 )}
-                {reviewAvailable && showRightPanel && fits && activeTab === 'review' && (
-                  <Flexbox className={styles.pane}>
-                    <Review
-                      active
-                      composerTarget={composerTarget}
-                      deviceId={remoteDeviceId}
-                      showTree={showReviewTree}
-                      workingDirectory={workingDirectory}
-                      onToggleTree={() => setShowReviewTree((v) => !v)}
-                    />
-                  </Flexbox>
+                {/* Switching tabs unmounts Review to release its diff DOM (#18984).
+                    Collapsing the panel hides it for REVIEW_RETAIN_MS first: remounting
+                    all diffs and the tree on a quick reopen stalls the open animation
+                    for ~200ms. */}
+                {reviewAvailable && activeTab === 'review' && retainReview && (
+                  <Activity mode={panelVisible ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane}>
+                      <Review
+                        active={panelVisible}
+                        composerTarget={composerTarget}
+                        deviceId={remoteDeviceId}
+                        showTree={showReviewTree}
+                        workingDirectory={workingDirectory}
+                        onToggleTree={() => setShowReviewTree((v) => !v)}
+                      />
+                    </Flexbox>
+                  </Activity>
                 )}
                 {pullRequest && workingDirectory && (
                   <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>

@@ -6,7 +6,7 @@ import { memoryListKey } from '../../utils/replica';
 import { type ExperienceListData, type ExperienceListSort } from './projection';
 
 /**
- * The experience list is a `@lobechat/replica` paged resource with one page set
+ * The experience list is a `local-replica` paged resource with one page set
  * per search / sort (`experienceListEntries`). The long-standing flat fields
  * (`experienceListData`, `experiences`, `experiencesTotal`, `experiencesPage`,
  * `experiencesHasMore`, `experiencesInit`) mirror the active query's entry so every

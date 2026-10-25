@@ -39,6 +39,7 @@ import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces'
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
+import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
 import { agentAccessLoader, agentGroupAccessLoader } from '@/spa/router/resourceAccessLoader';
@@ -910,18 +911,16 @@ export const createMainAreaRouteFactory = (options: MainAreaRouteOptions = {}) =
 
 export interface SharedDesktopRouteOptions {
   mainAreaChildren: RouteObject[];
-  onboardingRoute: RouteObject;
-  /** Routes that intentionally exist on only one runtime, such as Web `/verify-im`. */
+  /** Runtime-only routes, such as Web `/verify-im` or Electron `/desktop-onboarding`. */
   platformRoutes?: RouteObject[];
 }
 
 /**
  * Builds the common Web/Electron top-level route tree. Platform entry files
- * supply only the root children, runtime-only routes, and onboarding route.
+ * supply only the root children and runtime-only routes.
  */
 export const createSharedDesktopRoutes = ({
   mainAreaChildren,
-  onboardingRoute,
   platformRoutes = [],
 }: SharedDesktopRouteOptions): RouteObject[] => [
   {

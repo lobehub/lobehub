@@ -1066,7 +1066,6 @@
   "goalProcess.result.continueSeed.open": "لا يزال مفتوحًا:",
   "goalProcess.result.continueSeed.requirement": "المتطلب الأصلي:",
   "goalProcess.result.continueSeed.title": "تابع: {{title}}",
-  "goalProcess.result.criteria.document": "وثيقة الأدلة",
   "goalProcess.result.criteria.empty": "لا يحتوي هذا الهدف على معايير قبول منظمة.",
   "goalProcess.result.criteria.evidenceCount": "{{count}} دليل",
   "goalProcess.result.criteria.state.failed": "لم يتم الوفاء به",

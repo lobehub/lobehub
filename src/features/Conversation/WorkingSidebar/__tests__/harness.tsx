@@ -107,7 +107,7 @@ const browserPanes = vi.hoisted(() => ({
 }));
 
 const renderedReview = vi.hoisted(() => ({
-  current: undefined as { composerTarget: ComposerTarget } | undefined,
+  current: undefined as { active: boolean; composerTarget: ComposerTarget } | undefined,
 }));
 
 const localStorageState = vi.hoisted(() => ({
@@ -189,7 +189,7 @@ vi.mock('../Files/FilesPrefetch', () => ({
   },
 }));
 vi.mock('../Review', () => ({
-  default: (props: { composerTarget: ComposerTarget }) => {
+  default: (props: { active: boolean; composerTarget: ComposerTarget }) => {
     renderedReview.current = props;
     return <div data-testid="review" />;
   },

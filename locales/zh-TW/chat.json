@@ -1066,7 +1066,6 @@
   "goalProcess.result.continueSeed.open": "仍然開放：",
   "goalProcess.result.continueSeed.requirement": "原始需求：",
   "goalProcess.result.continueSeed.title": "繼續：{{title}}",
-  "goalProcess.result.criteria.document": "證據文件",
   "goalProcess.result.criteria.empty": "此目標沒有結構化的接受標準。",
   "goalProcess.result.criteria.evidenceCount": "{{count}} 條證據",
   "goalProcess.result.criteria.state.failed": "未滿足",

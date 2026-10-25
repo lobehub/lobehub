@@ -120,7 +120,7 @@ export const createResourceSlice = (set: Setter, get: () => FileStore, api?: unk
 export class ResourceActionImpl {
   readonly #get: () => FileStore;
   /**
-   * The explorer list is a `@lobechat/replica` paged resource: the persisted
+   * The explorer list is a `local-replica` paged resource: the persisted
    * head page paints before the network answers, and "load more" appends further
    * pages through the engine instead of a hand-rolled `offset` accumulator.
    */

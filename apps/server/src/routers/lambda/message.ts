@@ -15,7 +15,7 @@ import {
   cloudWorkspaceAuth,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { MessageModel } from '@/database/models/message';
+import { MESSAGE_KEYWORD_SEARCH_MAX_LIMIT, MessageModel } from '@/database/models/message';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
@@ -693,6 +693,31 @@ export const messageRouter = router({
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.messageModel.queryByKeyword(input.keywords);
+    }),
+
+  /**
+   * Filtered, paginated history search for CLI and agent callers. Returns a
+   * lean projection (topic title, snippet) instead of full message rows, and
+   * hides system-written prompts of automation topics unless asked.
+   */
+  searchByKeyword: messageSearchProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        endDate: z.coerce.date().optional(),
+        exact: z.boolean().optional(),
+        includeAutomatedPrompts: z.boolean().optional(),
+        keywords: z.string(),
+        limit: z.number().int().min(1).max(MESSAGE_KEYWORD_SEARCH_MAX_LIMIT).optional(),
+        offset: z.number().int().min(0).optional(),
+        roles: z.array(z.string()).optional(),
+        startDate: z.coerce.date().optional(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const { keywords, ...params } = input;
+      return ctx.messageModel.searchByKeyword({ ...params, keyword: keywords });
     }),
 
   update: messageProcedure

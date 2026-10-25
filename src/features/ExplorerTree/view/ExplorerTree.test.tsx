@@ -1,7 +1,7 @@
 import { AGENT_DOCUMENT_CATEGORY, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import type { RefObject } from 'react';
-import { useRef } from 'react';
+import { Activity, useRef } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -556,5 +556,28 @@ describe('ExplorerTree sort', () => {
     await waitFor(() =>
       expect(getSortedRowPaths(view.container)).toEqual(['a.md', 'b.md', 'docs/']),
     );
+  });
+});
+
+describe('ExplorerTree inside a hidden Activity', () => {
+  // The working sidebar keeps its panes mounted in <Activity>; hiding it runs
+  // effect cleanups without unmounting the tree.
+  it('keeps rows added before the tree was hidden and shown again', async () => {
+    const nodes: ExplorerTreeNode[] = [{ id: 'a', isFolder: false, name: 'a.md', parentId: null }];
+    const added = [...nodes, { id: 'b', isFolder: false, name: 'b.md', parentId: null }];
+    const renderIn = (mode: 'hidden' | 'visible', treeNodes: ExplorerTreeNode[]) => (
+      <Activity mode={mode}>
+        <ExplorerTree nodes={treeNodes} />
+      </Activity>
+    );
+
+    const view = render(renderIn('visible', nodes));
+    view.rerender(renderIn('visible', added));
+    await waitFor(() => expect(getSortedRowPaths(view.container)).toEqual(['a.md', 'b.md']));
+
+    view.rerender(renderIn('hidden', added));
+    view.rerender(renderIn('visible', added));
+
+    await waitFor(() => expect(getSortedRowPaths(view.container)).toEqual(['a.md', 'b.md']));
   });
 });

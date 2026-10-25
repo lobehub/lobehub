@@ -346,7 +346,7 @@ class ChatGroupInternalAction implements ResetableStore {
    *
    * The write is a `seed`, not authoritative detail: it is in-memory only, and
    * the detail replica may still hydrate the persisted full detail over it (see
-   * `packages/replica/src/core/reducer.ts`). A plain local entry would have
+   * `local-replica`'s `src/core/state/reducer.ts`). A plain local entry would have
    * blocked that hydrate, stranding the group page on default config and no
    * members whenever the network was slow, failed or offline.
    *

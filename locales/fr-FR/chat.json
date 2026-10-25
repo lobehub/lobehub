@@ -1066,7 +1066,6 @@
   "goalProcess.result.continueSeed.open": "Toujours ouvert :",
   "goalProcess.result.continueSeed.requirement": "Exigence initiale :",
   "goalProcess.result.continueSeed.title": "Continuer : {{title}}",
-  "goalProcess.result.criteria.document": "Document de preuve",
   "goalProcess.result.criteria.empty": "Cet objectif n'a pas de critères d'acceptation structurés.",
   "goalProcess.result.criteria.evidenceCount": "{{count}} preuve",
   "goalProcess.result.criteria.state.failed": "Non atteint",

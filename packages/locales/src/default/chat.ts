@@ -342,6 +342,9 @@ export default {
     'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.collapsed': 'Compressed {{turns}} earlier turns · View summary',
   'compression.collapsedUnknown': 'Compressed earlier history · View summary',
+  'compression.emptySummary': 'The model returned an empty summary',
+  'compression.failed': 'Context compression failed, original messages kept',
+  'compression.failedReason': 'Summary generation failed: {{reason}}',
   'compression.history': 'Original conversation',
   'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
@@ -2684,7 +2687,6 @@ export default {
   'goalProcess.result.continueSeed.open': 'Still open:',
   'goalProcess.result.continueSeed.requirement': 'Original requirement:',
   'goalProcess.result.continueSeed.title': 'Continue: {{title}}',
-  'goalProcess.result.criteria.document': 'Evidence document',
   'goalProcess.result.criteria.empty': 'This Goal has no structured acceptance criteria.',
   'goalProcess.result.criteria.evidenceCount': '{{count}} evidence',
   'goalProcess.result.criteria.state.failed': 'Not met',

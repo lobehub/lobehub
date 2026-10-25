@@ -265,7 +265,7 @@ export const WIDGET_RUN_OUTPUT_STATUSES = [
 ] as const satisfies readonly WidgetRunFinalStatus[];
 
 export interface WidgetRunError {
-  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'NON_ZERO_EXIT'. */
+  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'SANDBOX_BUSY', 'NON_ZERO_EXIT'. */
   code: string;
   message: string;
 }

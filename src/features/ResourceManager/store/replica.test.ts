@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The ResourceManager's two search surfaces are `@lobechat/replica` paged
+ * The ResourceManager's two search surfaces are `local-replica` paged
  * resources owned by the feature store: the persisted head page paints before
  * the network answers, the response confirms and persists it, "load more"
  * appends through the engine, and a new keyword repaints from its own head page
