@@ -31,6 +31,7 @@ const db = await getTestDB();
 const userId = 'wake-db-user';
 const agentId = 'wake-db-agent';
 
+vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),

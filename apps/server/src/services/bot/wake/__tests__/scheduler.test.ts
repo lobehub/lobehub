@@ -173,8 +173,8 @@ describe('wake scheduler wiring', () => {
 
     it('flushes with the bot’s current settings', async () => {
       mocks.botWake.mutateScheduler.mockResolvedValue({ decisions: [], effects: [] });
-      const load = vi.fn(async () => enabled);
-      await handleWakeFlush(payload, load);
+      const load = vi.fn(async () => ({ settings: enabled, userId: 'owner' }));
+      await handleWakeFlush(payload, load, { rollout: async () => true });
 
       expect(load).toHaveBeenCalledWith('discord', 'app');
       expect(mocks.botWake.mutateScheduler).toHaveBeenCalledWith(
@@ -184,9 +184,25 @@ describe('wake scheduler wiring', () => {
     });
 
     it('does nothing once the owner switched the scheduler off or deleted the bot', async () => {
-      await handleWakeFlush(payload, async () => ({ botWake: { enabled: true } }));
-      await handleWakeFlush(payload, async () => undefined);
+      const rollout = async () => true;
+      await handleWakeFlush(
+        payload,
+        async () => ({ settings: { botWake: { enabled: true } }, userId: 'owner' }),
+        { rollout },
+      );
+      await handleWakeFlush(payload, async () => undefined, { rollout });
 
+      expect(mocks.botWake.mutateScheduler).not.toHaveBeenCalled();
+    });
+
+    it('drops the parked batch instead of replaying it once the rollout is switched off', async () => {
+      const rollout = vi.fn(async () => false);
+
+      await handleWakeFlush(payload, async () => ({ settings: enabled, userId: 'owner' }), {
+        rollout,
+      });
+
+      expect(rollout).toHaveBeenCalledWith('owner');
       expect(mocks.botWake.mutateScheduler).not.toHaveBeenCalled();
     });
   });

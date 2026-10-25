@@ -1,3 +1,4 @@
+import { botWakeSchedulerCounter } from '@lobechat/observability-otel/modules/bot-wake';
 import type { Message } from 'chat';
 import debug from 'debug';
 
@@ -21,7 +22,7 @@ export interface FollowupGateDeps {
     threadSubscribed?: boolean,
   ) => void;
   platform: string;
-  recorder: Pick<BotWakeRecorder, 'judge'>;
+  recorder: Pick<BotWakeRecorder, 'isRolledOut' | 'judge'>;
   scheduler?: WakeScheduler;
 }
 
@@ -52,6 +53,9 @@ export const createFollowupGate = (deps: FollowupGateDeps) => {
   return async (input: FollowupGateInput): Promise<'proceed' | 'stop'> => {
     const { entryPoint, merged, parked, thread, threadSubscribed } = input;
 
+    // Rollout off: no judging, no scheduling, no parking. The wake runs exactly as it used to.
+    if (!(await deps.recorder.isRolledOut())) return 'proceed';
+
     const decision = await deps.recorder.judge({
       entryPoint,
       message: merged,
@@ -78,6 +82,7 @@ export const createFollowupGate = (deps: FollowupGateDeps) => {
         threadId: thread.id,
       })),
     });
+    botWakeSchedulerCounter.add(1, { verdict });
     if (verdict !== 'hold') return 'proceed';
 
     // The scheduler owns the message now; if it cannot be parked, run it rather than lose it.

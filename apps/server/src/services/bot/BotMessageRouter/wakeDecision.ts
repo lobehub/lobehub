@@ -1,4 +1,12 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import {
+  botWakeClassifierCounter,
+  botWakeClassifierDurationHistogram,
+  botWakeDecisionCounter,
+  botWakeFailureCounter,
+  botWakeRecordDurationHistogram,
+  botWakeVerdictCounter,
+} from '@lobechat/observability-otel/modules/bot-wake';
 import type { BotWakeKind, SignalDecisionVerdict } from '@lobechat/types';
 import debug from 'debug';
 
@@ -11,6 +19,7 @@ import {
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
+import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type { WakeClassify } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import { createWakePolicySet } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import type {
@@ -113,6 +122,11 @@ export interface BotWakeRecorderOptions {
   platform: string;
   /** Raw provider settings (`botWake` is parsed from them). Overrides `botWakeConfig` rules. */
   settings?: Record<string, unknown> | null;
+  /**
+   * Whether the `bot_wake` rollout flag is on for this bot's owner. Defaults to the runtime
+   * feature flag; injectable for tests. Off means the recorder does nothing at all.
+   */
+  rollout?: () => Promise<boolean>;
   /** Replaces the policy set built from `settings`. */
   shadowPolicies?: readonly WakePolicy[];
   state?: WakeStatePort;
@@ -134,6 +148,11 @@ export interface BotWakeRecorder {
    *   Never throws: a failure is `undefined`.
    */
   judge: (observation: BotWakeObservation) => Promise<WakeDecision | undefined>;
+  /**
+   * The `bot_wake` rollout flag for this bot's owner. Callers that change behaviour on their own
+   * (follow-up wakes that may end in silence, the follow-up gate) must ask this first.
+   */
+  isRolledOut: () => Promise<boolean>;
   /** Fire-and-forget. Never throws and never rejects; a failed write is logged and dropped. */
   record: (observation: BotWakeObservation) => void;
 }
@@ -227,16 +246,33 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     (async (input, abortSignal) => {
       const calls = await state.countClassifierCall(applicationId, utcHour(Date.now()));
       if (calls === undefined || calls > CLASSIFIER_CALLS_PER_HOUR) {
+        botWakeClassifierCounter.add(1, { result: 'budget' });
         throw new Error('classifier-budget');
       }
 
-      return options.classify!(input, abortSignal);
+      const startedAt = Date.now();
+      try {
+        const answer = await options.classify!(input, abortSignal);
+        botWakeClassifierCounter.add(1, { result: 'ok' });
+
+        return answer;
+      } catch (error) {
+        botWakeClassifierCounter.add(1, {
+          result: abortSignal?.aborted || (error as Error)?.name === 'AbortError' ? 'timeout' : 'error',
+        });
+        throw error;
+      } finally {
+        botWakeClassifierDurationHistogram.record(Date.now() - startedAt);
+      }
     });
+
+  const rolledOut = options.rollout ?? createBotWakeRolloutProbe(userId);
 
   const policies =
     options.shadowPolicies ?? createWakePolicySet({ classify, settings: options.settings });
 
-  const signalFor = (observation: BotWakeObservation): WakeSignal =>
+  /** `observedAt` is when the handler saw the message, not when this ran: a slow flag read must not shift event time. */
+  const signalFor = (observation: BotWakeObservation, observedAt: number): WakeSignal =>
     buildWakeSignal({
       agentId,
       applicationId,
@@ -244,15 +280,19 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       operatorUserId,
       platform,
       platformThreadId: observation.threadId,
-      timestamp: Date.now(),
+      timestamp: observedAt,
     });
 
   const readState = async (signal: WakeSignal) =>
     toChannelState(await state.readChannel(wakeStateKeys(signal.channelKeys!)));
 
-  const persist = async (observation: BotWakeObservation) => {
+  const persist = async (observation: BotWakeObservation, observedAt: number) => {
+    // Rollout off: no row, no Redis write, no model call. The bot behaves as it did before.
+    if (!(await rolledOut())) return;
+
+    const startedAt = Date.now();
     const text = observation.message.text ?? '';
-    const signal = signalFor(observation);
+    const signal = signalFor(observation, observedAt);
 
     if (enabled && signal.author?.isOwner) {
       await state.recordOwnerSpoke(wakeStateKeys(signal.channelKeys!), signal.timestamp);
@@ -262,7 +302,15 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     // The state the policies read, so the decision can be replayed and explained later.
     const stateSnapshot = { ...buildSnapshot(observation, signal, channel) };
 
-    await recordSignalDecision(db, {
+    const verdicts = await buildWakeVerdicts(
+      observation,
+      { ...signal, message: text },
+      policies,
+      enabled,
+      channel,
+    );
+
+    const recorded = await recordSignalDecision(db, {
       agentId,
       decision: {
         finalReason: observation.reason,
@@ -270,13 +318,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         outcome: observation.outcome,
         pipelineVersion: BOT_WAKE_PIPELINE_VERSION,
         toTag: TAG_BY_REASON[observation.reason],
-        verdicts: await buildWakeVerdicts(
-          observation,
-          { ...signal, message: text },
-          policies,
-          enabled,
-          channel,
-        ),
+        verdicts,
       },
       scopeKey,
       signal: {
@@ -301,14 +343,35 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       userId,
       workspaceId,
     });
+
+    botWakeRecordDurationHistogram.record(Date.now() - startedAt);
+    if (!recorded.persisted) return;
+
+    botWakeDecisionCounter.add(1, {
+      entry_point: observation.entryPoint,
+      outcome: observation.outcome,
+      platform,
+      reason: observation.reason,
+      tag: TAG_BY_REASON[observation.reason],
+    });
+    for (const verdict of verdicts) {
+      botWakeVerdictCounter.add(1, {
+        mode: verdict.mode,
+        policy_id: verdict.policyId,
+        verdict: verdict.verdict,
+      });
+    }
   };
 
   return {
+    isRolledOut: rolledOut,
     judge: async (observation) => {
+      const observedAt = Date.now();
       try {
+        if (!(await rolledOut())) return;
         if (!enabled || !policies.some((policy) => policy.mode === 'enforce')) return;
 
-        const signal = signalFor(observation);
+        const signal = signalFor(observation, observedAt);
 
         return await aggregateWakeVerdictsAsync(
           policies,
@@ -316,22 +379,24 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           buildSnapshot(observation, signal, await readState(signal)),
         );
       } catch (error) {
+        botWakeFailureCounter.add(1, { stage: 'judge' });
         log('judge failed: entry=%s %O', observation.entryPoint, error);
       }
     },
     record: (observation) => {
+      const observedAt = Date.now();
       // `Promise.resolve().then` also catches a synchronous throw, so a malformed message can
       // never surface in the handler that called this.
       void Promise.resolve()
-        .then(() => persist(observation))
-        .catch((error) =>
-          log(
-            'record failed: entry=%s reason=%s %O',
-            observation.entryPoint,
-            observation.reason,
+        .then(() => persist(observation, observedAt))
+        .catch((error) => {
+          botWakeFailureCounter.add(1, { stage: 'persist' });
+          // Recording never changes what the bot does, so this is the only trace of a failure.
+          console.error(
+            `[bot-wake] record failed: entry=${observation.entryPoint} reason=${observation.reason}`,
             error,
-          ),
-        );
+          );
+        });
     },
   };
 };

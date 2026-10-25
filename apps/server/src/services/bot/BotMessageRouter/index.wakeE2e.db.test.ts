@@ -110,6 +110,7 @@ vi.mock('../deferredReplay', () => ({
     }
   },
 }));
+vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -274,7 +275,9 @@ run(
       const subscribed = mockOnSubscribedMessage.mock.calls.at(-1)![0];
       const mention = mockOnNewMention.mock.calls.at(-1)![0];
       const { handleWakeFlush, recordWakeRunOutcome } = await import('../wake/scheduler');
-      const loadSettings = async () => settings;
+      // The flush loads the provider (settings and owner) and checks the owner's rollout flag, which
+      // the featureFlags mock above turns on.
+      const loadSettings = async () => ({ settings, userId: 'owner-user' });
       const field = async (key: string, name: string) =>
         redis.hget(`${redisPrefix}:bot-wake:channel:v1:${key}`, name);
 
@@ -489,6 +492,9 @@ run(
           author: { isBot: false, userId: OWNER, userName: 'owner' },
         }),
       );
+      // Recording is fire-and-forget; in production the two messages are seconds apart, so the
+      // owner's message is always on record before the next one is judged. Say so here too.
+      await settle(10);
       at(210);
       await catchAll(thread(CHANNEL_THREAD_ID), message('m10', 'sounds good to me, thanks'));
       found = await settle(11);

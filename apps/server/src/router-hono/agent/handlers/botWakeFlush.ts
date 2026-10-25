@@ -35,7 +35,12 @@ export async function botWakeFlush(c: Context): Promise<Response> {
         gateKeeper,
       );
 
-      return provider?.settings as Record<string, unknown> | undefined;
+      return provider
+        ? {
+            settings: provider.settings as Record<string, unknown> | undefined,
+            userId: provider.userId,
+          }
+        : undefined;
     });
 
     return c.json({ success: true });

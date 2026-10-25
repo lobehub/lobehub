@@ -1,3 +1,4 @@
+import { botWakeFlushCounter } from '@lobechat/observability-otel/modules/bot-wake';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
@@ -7,6 +8,7 @@ import {
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
+import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type { SchedulerOptions } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
 import { WakeScheduler } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
 import { QueueService } from '@/server/services/queue';
@@ -106,22 +108,53 @@ export const resolveWakeScheduler = (
   });
 };
 
-/** QStash delivered a flush. Re-reads the bot's settings, so a changed config applies at once. */
+/** The slice of a bot provider a flush needs: its settings and whose rollout flag applies. */
+export interface WakeFlushProvider {
+  settings?: Record<string, unknown> | null;
+  userId: string;
+}
+
+/**
+ * QStash delivered a flush. Re-reads the bot's settings, so a changed config applies at once.
+ *
+ * Nothing is replayed when the `bot_wake` rollout flag has been turned off since the messages
+ * were parked: a parked follow-up nobody addressed to the bot would otherwise run as a plain
+ * wake and be answered, which is the behaviour the flag exists to take away.
+ */
 export const handleWakeFlush = async (
   payload: WakeFlushPayload,
-  loadSettings: (
-    platform: string,
-    applicationId: string,
-  ) => Promise<Record<string, unknown> | null | undefined>,
+  loadProvider: (platform: string, applicationId: string) => Promise<WakeFlushProvider | undefined>,
+  options: { rollout?: (userId: string) => Promise<boolean> } = {},
 ): Promise<void> => {
-  const settings = await loadSettings(payload.platform, payload.applicationId);
-  const scheduler = resolveWakeScheduler(payload.platform, payload.applicationId, settings);
+  const provider = await loadProvider(payload.platform, payload.applicationId);
+  if (!provider) {
+    botWakeFlushCounter.add(1, { result: 'no_provider' });
+    return;
+  }
+
+  const rolledOut =
+    options.rollout ?? ((userId: string) => createBotWakeRolloutProbe(userId)());
+  if (!(await rolledOut(provider.userId))) {
+    botWakeFlushCounter.add(1, { result: 'flag_off' });
+    return;
+  }
+
+  const scheduler = resolveWakeScheduler(payload.platform, payload.applicationId, provider.settings);
 
   // The owner turned the scheduler off or disabled the bot after messages were parked. Those
   // stay in the deferred-message store until it expires; nothing is run on a stale config.
-  if (!scheduler) return;
+  if (!scheduler) {
+    botWakeFlushCounter.add(1, { result: 'no_scheduler' });
+    return;
+  }
 
-  await scheduler.flush(payload.channelKey);
+  try {
+    await scheduler.flush(payload.channelKey);
+    botWakeFlushCounter.add(1, { result: 'flushed' });
+  } catch (error) {
+    botWakeFlushCounter.add(1, { result: 'failed' });
+    throw error;
+  }
 };
 
 /** Keys the bot's wake state is filed under for a conversation. */

@@ -1,3 +1,4 @@
+import { botWakeRetentionCounter } from '@lobechat/observability-otel/modules/bot-wake';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -23,6 +24,8 @@ export async function pruneSignals(c: Context) {
     const db = await getServerDB();
     const outcome = await sweepSignals(db, body ?? {});
 
+    botWakeRetentionCounter.add(outcome.deleted, { kind: 'pruned' });
+    botWakeRetentionCounter.add(outcome.purgedPayloads, { kind: 'payload_purged' });
     log(
       'Signal retention: buckets=%d deleted=%d purgedPayloads=%d',
       outcome.buckets,

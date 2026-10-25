@@ -36,9 +36,13 @@ describe('botWakeFlush', () => {
   });
 
   it('flushes and loads the bot settings through the provider model', async () => {
-    mocks.find.mockResolvedValue({ settings: { botWake: { enabled: true } } });
+    mocks.find.mockResolvedValue({ settings: { botWake: { enabled: true } }, userId: 'owner' });
     mocks.handleWakeFlush.mockImplementation(async (_payload, load) => {
-      expect(await load('discord', 'app')).toEqual({ botWake: { enabled: true } });
+      // The owner travels with the settings: the rollout flag is evaluated for them.
+      expect(await load('discord', 'app')).toEqual({
+        settings: { botWake: { enabled: true } },
+        userId: 'owner',
+      });
     });
 
     const response = await post({ payload });
@@ -46,6 +50,15 @@ describe('botWakeFlush', () => {
     expect(response.status).toBe(200);
     expect(mocks.handleWakeFlush).toHaveBeenCalledWith(payload, expect.any(Function));
     expect(mocks.find).toHaveBeenCalledWith(expect.anything(), 'discord', 'app', expect.anything());
+  });
+
+  it('hands the flush no provider when the bot is gone', async () => {
+    mocks.find.mockResolvedValue(null);
+    mocks.handleWakeFlush.mockImplementation(async (_payload, load) => {
+      expect(await load('discord', 'app')).toBeUndefined();
+    });
+
+    expect((await post({ payload })).status).toBe(200);
   });
 
   it('answers 500 so the queue redelivers when the flush fails', async () => {

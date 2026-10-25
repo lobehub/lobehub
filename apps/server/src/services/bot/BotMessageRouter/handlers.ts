@@ -581,8 +581,9 @@ export function registerHandlers(
             ? 'watch-keyword'
             : 'addressed';
     // Only a wake nobody asked for may end in silence; a DM, @mention, command or solo
-    // conversation is always answered, exactly as before.
-    const wakeKind = botWakeKindFor(wakeReason);
+    // conversation is always answered, exactly as before. Until the bot-wake rollout reaches this
+    // bot's owner nothing may: every wake is answered, as it was before the pipeline existed.
+    const wakeKind = (await wakeRecorder.isRolledOut()) ? botWakeKindFor(wakeReason) : 'mention';
     if (
       wakeKind === 'followup' &&
       (await gateFollowup({

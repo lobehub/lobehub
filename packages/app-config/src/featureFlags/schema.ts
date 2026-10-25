@@ -67,6 +67,15 @@ export const FeatureFlagsSchema = z.object({
   agent_llm_relay: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for the bot-wake pipeline: recording every inbound bot message as a signal with
+   * its wake decision, follow-up wakes that may end in silence (`NO_REPLY`), and the scheduler,
+   * policies and classifier behind them. Evaluated per bot owner, so array values are the user
+   * ids of bot owners. Off means the bot behaves exactly as it did before the pipeline existed
+   * and nothing is written. Server-only: no client reads it.
+   */
+  bot_wake: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `lobe-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -145,6 +154,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
 
+  // Off until an admin publishes a bot-owner allowlist or flips it to true.
+  bot_wake: false,
+
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
@@ -181,6 +193,7 @@ export const mapFeatureFlagsEnvToState = (
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
     enableGatewayMux: evaluateFeatureFlag(config.agent_gateway_mux, userId),
     enableGatewayMuxMobile: evaluateFeatureFlag(config.agent_gateway_mux_mobile, userId),
+    enableBotWake: evaluateFeatureFlag(config.bot_wake, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),

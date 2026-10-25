@@ -1,4 +1,5 @@
 import type { BotNoReplyResult } from '@lobechat/types';
+import { botWakeNoReplyCounter } from '@lobechat/observability-otel/modules/bot-wake';
 import { BOT_NO_REPLY_LABELS } from '@lobechat/types';
 import debug from 'debug';
 
@@ -46,6 +47,7 @@ export const recordNoReplyLabel = async (
       `${applicationId}:${platformThreadId}:${userMessageId}`,
     );
     if (!signal) {
+      botWakeNoReplyCounter.add(1, { reason: noReply.reason, result: 'no_decision' });
       log('no signal for thread=%s message=%s, label skipped', platformThreadId, userMessageId);
       return undefined;
     }
@@ -55,6 +57,7 @@ export const recordNoReplyLabel = async (
       (d) => d.pipelineVersion === BOT_WAKE_PIPELINE_VERSION,
     );
     if (!decision) {
+      botWakeNoReplyCounter.add(1, { reason: noReply.reason, result: 'no_decision' });
       log('no decision for signal=%s, label skipped', signal.id);
       return undefined;
     }
@@ -66,8 +69,10 @@ export const recordNoReplyLabel = async (
       metadata: { reason: noReply.reason, surface: 'agent' },
       source: NO_REPLY_LABEL_SOURCE,
     });
+    botWakeNoReplyCounter.add(1, { reason: noReply.reason, result: 'labelled' });
     return label;
   } catch (error) {
+    botWakeNoReplyCounter.add(1, { reason: noReply.reason, result: 'error' });
     log('recordNoReplyLabel failed: %O', error);
     return undefined;
   }

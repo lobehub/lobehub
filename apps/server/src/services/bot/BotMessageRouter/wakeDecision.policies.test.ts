@@ -60,6 +60,7 @@ const make = (
     db: {} as never,
     operatorUserId: OWNER,
     platform: 'discord',
+    rollout: async () => true,
     settings,
     state,
     userId: 'u1',
@@ -82,6 +83,21 @@ describe('bot-wake recorder policy set', () => {
     expect(recorded()[0].verdicts).toHaveLength(1);
     expect(recorded()[0].verdicts[0]).toMatchObject({ policyId: 'legacy-router', verdict: 'deny' });
     expect(state.readChannel).not.toHaveBeenCalled();
+    expect(classify).not.toHaveBeenCalled();
+  });
+
+  it('does nothing at all while the rollout is off: no row, no state read or write, no model call', async () => {
+    const state = fakeState();
+    const recorder = make({ botWake: { enabled: true } }, state, { rollout: async () => false });
+
+    recorder.record(observation({ outcome: 'wake', reason: 'watch-keyword' }));
+    await flush();
+
+    expect(await recorder.isRolledOut()).toBe(false);
+    expect(await recorder.judge(observation())).toBeUndefined();
+    expect(mockRecordSignalDecision).not.toHaveBeenCalled();
+    expect(state.readChannel).not.toHaveBeenCalled();
+    expect(state.recordOwnerSpoke).not.toHaveBeenCalled();
     expect(classify).not.toHaveBeenCalled();
   });
 
@@ -209,6 +225,27 @@ describe('bot-wake recorder policy set', () => {
       ['discord:app:g1:c1', 'discord:app:g1:c1:t9'],
       expect.any(Number),
     );
+  });
+
+  it('stamps the message with the time it was seen, not when a slow flag read finished', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000);
+      let release!: () => void;
+      const slowFlag = new Promise<boolean>((resolve) => (release = () => resolve(true)));
+      const state = fakeState();
+
+      make({ botWake: { enabled: true } }, state, { rollout: () => slowFlag }).record(
+        observation({}, { author: { isBot: false, isMe: false, userId: OWNER } }),
+      );
+      vi.setSystemTime(9_000);
+      release();
+      await flush();
+
+      expect(state.recordOwnerSpoke).toHaveBeenCalledWith(expect.any(Array), 1_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('feeds recorded channel state into the owner rules', async () => {
