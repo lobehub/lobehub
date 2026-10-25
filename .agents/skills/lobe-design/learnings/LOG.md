@@ -619,3 +619,143 @@ artifacts: stages/75-copy.md, scripts/pipeline.json, scripts/refs.mjs, scripts/c
 regression: tests/route-cases.json, tests/fixtures/bad-copy.tsx
 version: 5.4.0
 ```
+
+## LRN-20261016-03 · init 识别出 mobile，lint 与托管块仍按 Web 执行（5.5.0）
+
+```learning
+id: LRN-20261016-03
+date: 2026-10-16
+status: landed
+symptom: React Native / Expo 项目跑完 05-init 后，lint 仍报 603 FAIL（cssVar、createStaticStyles、把 @lobehub/ui-rn 当成重写原子层）；托管块「冲突时以 skill 为准」让 product.md 的「不适用」失效；Round 2 分类要求整个 RN 组件库改用 @lobehub/ui
+source: user-correction
+scenario: bootstrap
+stage: 05-init
+occurrences: 1
+previous_layer:
+root_cause: 平台只写进 product.md 的文字，脚本与托管块都不读它；lint 规则没有平台作用域，项目层适用性也没有机读入口；优先级一句话把项目层的裁剪压回通用规则
+layer: lint
+layer_reason: 平台与适用性都能机械读取（product.md 的平台行 / 不适用行 / lint-off、package.json 依赖），由 scripts/platform.mjs 统一解析，lint 规则声明 platforms，托管块与 project-scan 按平台输出；RN fixture 项目锁住 0 web-only FAIL
+artifacts: LOBE-RN-DOM-UI, scripts/platform.mjs, scripts/lint-lobe.mjs, scripts/bootstrap.mjs, scripts/project-scan.mjs, references/init.md
+regression: tests/fixtures/bad-rn.tsx
+version: 5.5.0
+```
+
+## LRN-20261019-01 · RN 宿主里工具函数被当成 DOM 组件，托管块篇幅与语言不贴宿主（5.6.0）
+
+```learning
+id: LRN-20261019-01
+date: 2026-10-19
+status: landed
+symptom: 5.5.0 在 RN 项目里把 @lobehub/ui/es 下的 Markdown 插件、hooks、颜色种子报成 LOBE-RN-DOM-UI（9 处）；托管块 88 行中文写进英文 AGENTS.md，每次会话都加载；SKILL.md 描述与 50-visual 仍把 @lobehub/ui / cssVar 写成通用做法；RN 上的图标按钮提示还提 aria-label
+source: user-correction
+scenario: bootstrap
+stage: 05-init
+occurrences: 1
+previous_layer:
+root_cause: LOBE-RN-DOM-UI 按导入来源判断而不是按导入的是不是组件；托管块只有一种完整中文写法；入口文档的 web 写法没有标平台作用域
+layer: lint
+layer_reason: 组件导入可按来源子路径 + PascalCase 名字机械判断，路径放行由 product.md 的 lint-allow 声明；托管块模式与语言写进块内模式行，由 bootstrap 测试锁住幂等与旧块迁移；措辞由测试断言
+artifacts: LOBE-RN-DOM-UI, scripts/lint-lobe.mjs, scripts/platform.mjs, scripts/bootstrap.mjs, SKILL.md, stages/50-visual.md
+regression: tests/fixtures/bad-rn.tsx
+version: 5.6.0
+```
+
+## LRN-20261022-01 · 按环境配置的凭证平铺成一张表，看不出归属（5.7.0）
+
+```learning
+id: LRN-20261022-01
+date: 2026-10-22
+status: landed
+symptom: 轮换 Vercel / QStash / Redis 这类按环境配置的 token 时，凭证页是一张平铺的表，env 只是其中一列，同名 token 一行一行排下来，看不出哪个 token 属于哪个环境
+source: user-correction
+scenario: operate-build
+stage: 30-structure
+occurrences: 1
+previous_layer:
+root_cause: 规则缺失：C-08 只管表格选型，P-05 只说按影响范围分组，没有「环境 / 作用域是顶层分组」的判据
+layer: rule
+layer_reason: 是否按环境分组、同名 key 是否在各环境下分别列出要读页面结构判断，无法用正则确定性识别；落 C-18 并在 30-structure 症状表登记
+artifacts: references/components.md, C-18, stages/30-structure.md
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.7.0
+```
+
+## LRN-20261023-01 · 从现有页面和组件清单出发修补（5.8.0）
+
+```learning
+id: LRN-20261023-01
+date: 2026-10-23
+status: landed
+symptom: 改界面时先在现有页面或组件清单上改几处，说不出用户要理解或决定什么
+source: user-correction
+scenario: product-polish
+stage: 00-brief
+occurrences: 1
+previous_layer:
+root_cause: 规则太模糊：M-01 没讲「问题 → 呈现 → 组件」的先后
+layer: rule
+layer_reason: 起点对不对要读方案判断；合并进 M-01 判据 3
+artifacts: references/models.md, M-01
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.8.0
+```
+
+## LRN-20261023-02 · 示意图画整个应用、密度高（5.8.0）
+
+```learning
+id: LRN-20261023-02
+date: 2026-10-23
+status: landed
+symptom: 给用户看的示意图画整个 app，信息密，设计理由靠猜
+source: user-correction
+scenario: product-polish
+stage: 40-flow
+occurrences: 1
+previous_layer:
+root_cause: 规则缺失：输出契约没讲讲方案用的示意图
+layer: structure
+layer_reason: 示意图是各 stage 都会交付的产物，放进 SKILL.md 输出契约，wording 测试锁住约定存在
+artifacts: SKILL.md
+regression: tests/run.mjs wording: SKILL.md 输出契约有示意图约定
+version: 5.8.0
+```
+
+## LRN-20261023-03 · 设置页用 badge 和额外按钮复述状态（5.8.0）
+
+```learning
+id: LRN-20261023-03
+date: 2026-10-23
+status: landed
+symptom: 设置项旁挂复述值的 badge、另加开关或恢复按钮；按默认值而非功能分组；布局和其他设置页不一致
+source: user-correction
+scenario: product-polish
+stage: 30-structure
+occurrences: 1
+previous_layer:
+root_cause: 规则缺失：C-17 只讲就地编辑和回显
+layer: rule
+layer_reason: 是否复述状态要读结构判断；合并进 C-17
+artifacts: references/components.md, C-17
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.8.0
+```
+
+## LRN-20261023-04 · 滚动边缘的模糊吃进正文；移动端被实底栏框住（5.8.0）
+
+```learning
+id: LRN-20261023-04
+date: 2026-10-23
+status: landed
+symptom: 模糊带压进正文、用黑色或硬切遮罩、半透明盖在文字上；移动端上下两条实底栏占掉屏幕
+source: user-correction
+scenario: product-polish
+stage: 30-structure
+occurrences: 1
+previous_layer:
+root_cause: 规则缺失：没有滚动边缘与移动端悬浮框架的判据
+layer: rule
+layer_reason: 要看渲染与结构判断；落 C-19（web 用 ProgressiveBlur）与 C-20（仅 mobile）
+artifacts: references/components.md, C-19, C-20, C-02, stages/30-structure.md
+regression: tests/run.mjs wording: C-19 / C-20
+version: 5.8.0
+```
