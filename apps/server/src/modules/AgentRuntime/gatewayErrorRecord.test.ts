@@ -32,4 +32,43 @@ describe('shouldRecordGatewayError', () => {
   ] as const)('%s → %s', (_label, errorType, provider, expected) => {
     expect(shouldRecordGatewayError({ errorType, provider })).toBe(expected);
   });
+
+  describe('code without a spec', () => {
+    // A platform admission refusal keeps the numeric `Forbidden` type; the
+    // normalizer classifies it on the error itself.
+    const forbidden = '403';
+
+    it('keeps a user-side refusal off the board', () => {
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'user', countAsFailure: false },
+          errorType: forbidden,
+          provider: BRANDING_PROVIDER,
+        }),
+      ).toBe(false);
+    });
+
+    it('files an unclassified refusal', () => {
+      expect(shouldRecordGatewayError({ error: {}, errorType: forbidden })).toBe(true);
+    });
+
+    it('files a refusal the normalizer counts as a failure', () => {
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'harness', countAsFailure: true },
+          errorType: forbidden,
+        }),
+      ).toBe(true);
+    });
+
+    it('lets the spec win over the error classification', () => {
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'user', countAsFailure: false },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: 'openai',
+        }),
+      ).toBe(true);
+    });
+  });
 });
