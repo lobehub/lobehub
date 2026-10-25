@@ -22,9 +22,10 @@ import {
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import {
-  type AcceptanceRepairDispatch,
-  dispatchAcceptanceRepair,
-} from '../_helpers/acceptanceRepairDispatch';
+  dispatchAcceptanceFeedbackRepair as dispatchAcceptanceRepair,
+  readAcceptanceRepair,
+} from '../_helpers/acceptanceFeedbackRepair';
+import { type AcceptanceRepairDispatch } from '../_helpers/acceptanceRepairDispatch';
 import { settleGoalSignOff } from '../_helpers/acceptanceStatus';
 import * as goalGate from '../_helpers/goalGateAcceptance';
 import {
@@ -356,6 +357,11 @@ export const reviewRouter = router({
         input,
       }): Promise<AcceptanceItem & { repairDispatch: AcceptanceRepairDispatch }> => {
         const { acceptance, delegated, service } = await resolveAcceptanceForReject(ctx, input.id);
+
+        const active = await readAcceptanceRepair(ctx, acceptance);
+        if (active?.state === 'starting' || active?.state === 'running') {
+          return { ...acceptance, repairDispatch: { dispatched: false, reason: 'in_progress' } };
+        }
 
         const comment = input.comment || undefined;
         const rejected = await goalGate.withGoalGateAnswer(

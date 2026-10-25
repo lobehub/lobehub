@@ -27,7 +27,7 @@ const log = debug('lobe-server:acceptance-repair-dispatch');
  * - `failed`: the agent could not be started; the reject itself still stands.
  */
 export type AcceptanceRepairDispatch =
-  | { agentId: string; dispatched: true; operationId: string; topicId: string }
+  | { agentId: string; dispatched: true; operationId: string; taskId?: string; topicId: string }
   | {
       dispatched: false;
       error?: string;
@@ -35,6 +35,7 @@ export type AcceptanceRepairDispatch =
         | 'failed'
         | 'forbidden'
         | 'goal_coordinator'
+        | 'in_progress'
         | 'no_origin'
         | 'origin_unavailable'
         | 'skipped';
