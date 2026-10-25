@@ -116,6 +116,12 @@ describe('resizeByPointer', () => {
     });
   });
 
+  it('changes only the height on a stacked board, keeping the saved width', () => {
+    expect(
+      resizeByPointer({ h: 3, w: 4 }, { dx: 400, dy: rowStep }, 360, { stacked: true }),
+    ).toEqual({ h: 4, w: 4 });
+  });
+
   it('keeps the size while the grid has no width yet', () => {
     expect(resizeByPointer({ h: 3, w: 4 }, { dx: 100, dy: 100 }, 0)).toEqual({ h: 3, w: 4 });
   });
@@ -127,5 +133,10 @@ describe('resizeByKey', () => {
     expect(resizeByKey({ h: 3, w: 4 }, 'ArrowUp')).toEqual({ h: 2, w: 4 });
     expect(resizeByKey({ h: 2, w: 3 }, 'ArrowUp')).toEqual({ h: 2, w: 3 });
     expect(resizeByKey({ h: 3, w: 4 }, 'Enter')).toBeUndefined();
+  });
+
+  it('steps only the height on a stacked board', () => {
+    expect(resizeByKey({ h: 3, w: 4 }, 'ArrowDown', { stacked: true })).toEqual({ h: 4, w: 4 });
+    expect(resizeByKey({ h: 3, w: 4 }, 'ArrowRight', { stacked: true })).toBeUndefined();
   });
 });

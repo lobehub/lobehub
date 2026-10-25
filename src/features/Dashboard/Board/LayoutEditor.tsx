@@ -34,7 +34,13 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { DASHBOARD_MIN_H, flowLayouts, resizeByKey, resizeByPointer } from '../utils/layout';
+import {
+  DASHBOARD_MIN_H,
+  DASHBOARD_STACKED_QUERY,
+  flowLayouts,
+  resizeByKey,
+  resizeByPointer,
+} from '../utils/layout';
 import WidgetCard from '../WidgetCard';
 import { openWidgetEditModal } from '../WidgetEditModal';
 import { cellStyle, gridStyles } from './style';
@@ -46,9 +52,14 @@ interface ResizeHandleProps {
   onResize: (size: Size) => void;
 }
 
+/** Whether the board is stacked in one column right now (narrow screen). */
+const isStacked = () =>
+  typeof window !== 'undefined' && window.matchMedia(DASHBOARD_STACKED_QUERY).matches;
+
 /**
  * The card's bottom-right corner: drag to resize in whole columns and rows,
- * or focus it and use the arrow keys.
+ * or focus it and use the arrow keys. On a stacked (narrow) board it resizes
+ * height only, since every card spans the full width there.
  */
 const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
   const { t } = useTranslation('dashboard');
@@ -62,6 +73,7 @@ const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
     const gridWidth = handle.closest('[data-dashboard-grid]')?.getBoundingClientRect().width ?? 0;
     const start = { h: layout.h, w: layout.w };
     const origin = { x: event.clientX, y: event.clientY };
+    const stacked = isStacked();
 
     const handleMove = (moveEvent: PointerEvent) =>
       onResize(
@@ -69,6 +81,7 @@ const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
           start,
           { dx: moveEvent.clientX - origin.x, dy: moveEvent.clientY - origin.y },
           gridWidth,
+          { stacked },
         ),
       );
     const handleEnd = () => {
@@ -86,7 +99,7 @@ const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    const next = resizeByKey(layout, event.key);
+    const next = resizeByKey(layout, event.key, { stacked: isStacked() });
     if (!next) return;
     event.preventDefault();
     onResize(next);

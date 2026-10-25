@@ -83,8 +83,9 @@ export const gridStyles = createStaticStyles(({ css, cssVar }) => ({
       outline: 2px solid ${cssVar.colorPrimary};
     }
 
+    /* Stacked cards span the full width: the handle resizes height only. */
     @media (width <= 767px) {
-      display: none;
+      cursor: ns-resize;
     }
   `,
   handle: css`
