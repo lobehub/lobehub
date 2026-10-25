@@ -435,9 +435,9 @@ export default {
   'channel.watchKeywordsAdd': 'Add keyword',
   'channel.watchKeywordsEmpty':
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
-  'channel.botWakeEnabled': 'Join conversations unprompted',
+  'channel.botWakeEnabled': 'Judge unprompted follow-ups',
   'channel.botWakeEnabledHint':
-    "When nobody @mentions the bot, let it decide whether to chime in, following the rules below. Off keeps today's behavior: it only answers @mentions, DMs and watch keywords.",
+    "Turns on the rules below. They decide whether the bot may answer a message nobody addressed to it: a watch keyword in a thread it was not mentioned in, or a message continuing a conversation it already joined. Plain channel chatter is only judged and recorded, never answered. Off keeps today's behavior, where a watch keyword wakes the bot without a rule check.",
   'channel.botWakeMode': 'Rules',
   'channel.botWakeModeHint': 'How the built-in rules and the settings below are applied.',
   'channel.botWakeModeOff': 'Off',
@@ -450,8 +450,9 @@ export default {
   'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
   'channel.botWakeScopeAll': 'Everywhere it can see',
   'channel.botWakeScopeAllHint': 'Any channel or thread the bot can read.',
-  'channel.botWakeScopeBotThreads': 'Only threads it already took part in',
-  'channel.botWakeScopeBotThreadsHint': 'Not in top-level channels.',
+  'channel.botWakeScopeBotThreads': 'Only where it already spoke',
+  'channel.botWakeScopeBotThreadsHint':
+    'A channel or thread where the bot posted within the follow-up window. Discord counts a channel and its threads as one place.',
   'channel.botWakeScopeNone': 'Nowhere',
   'channel.botWakeScopeNoneHint': 'The bot never joins unprompted.',
   'channel.botWakeAllowChannels': 'Allowed channels',

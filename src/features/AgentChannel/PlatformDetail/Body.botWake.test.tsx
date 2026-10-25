@@ -143,7 +143,7 @@ describe('channel settings form: bot-wake options', () => {
 
     render(<Harness settings={{ botWakeEnabled: true }} />);
 
-    expect(screen.getByText('主动参与对话')).toBeInTheDocument();
+    expect(screen.getByText('按规则判断未定向消息')).toBeInTheDocument();
     expect(screen.getByText('跟进窗口（秒）')).toBeInTheDocument();
     expect(screen.getByText('自定义说明')).toBeInTheDocument();
     expect(screen.queryByText('channel.botWakeMode')).not.toBeInTheDocument();

@@ -110,6 +110,75 @@ const chosen = (values: Record<string, unknown>) =>
   Object.fromEntries(Object.entries(values).filter(([, value]) => isChosen(value)));
 
 /**
+ * How a nested `settings.botWake` object maps onto the flat keys the settings form writes.
+ *
+ * Kept next to `BOT_WAKE_SETTING_KEYS` so a new option cannot be added to one without the other:
+ * `flattenBotWakeSettings` is what carries a hand-written config into the form.
+ */
+const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
+  { key: BOT_WAKE_SETTING_KEYS.enabled, path: ['enabled'] },
+  { key: BOT_WAKE_SETTING_KEYS.mode, path: ['mode'] },
+  { key: BOT_WAKE_SETTING_KEYS.customInstructions, path: ['customInstructions'] },
+  { key: BOT_WAKE_SETTING_KEYS.classifierMode, path: ['classifier', 'mode'] },
+  { key: BOT_WAKE_SETTING_KEYS.classifierThreshold, path: ['classifier', 'threshold'] },
+  { key: BOT_WAKE_SETTING_KEYS.allowChannels, path: ['rules', 'allowChannels'] },
+  { key: BOT_WAKE_SETTING_KEYS.denyChannels, path: ['rules', 'denyChannels'] },
+  { key: BOT_WAKE_SETTING_KEYS.maxSilentWakes, path: ['rules', 'maxSilentWakes'] },
+  { key: BOT_WAKE_SETTING_KEYS.ownerPresenceSeconds, path: ['rules', 'ownerPresenceSeconds'] },
+  { key: BOT_WAKE_SETTING_KEYS.scope, path: ['rules', 'scope'] },
+  { key: BOT_WAKE_SETTING_KEYS.windowSeconds, path: ['rules', 'windowSeconds'] },
+  { key: BOT_WAKE_SETTING_KEYS.collectSeconds, path: ['scheduler', 'collectSeconds'] },
+  { key: BOT_WAKE_SETTING_KEYS.cooldownSeconds, path: ['scheduler', 'cooldownSeconds'] },
+  { key: BOT_WAKE_SETTING_KEYS.schedulerMode, path: ['scheduler', 'mode'] },
+];
+
+const readPath = (source: unknown, path: string[]) =>
+  path.reduce<unknown>((value, segment) => (isRecord(value) ? value[segment] : undefined), source);
+
+/**
+ * Expands a hand-written nested `settings.botWake` into the flat keys the settings form renders,
+ * dropping the nested object so the next save persists the migrated shape.
+ *
+ * The runtime deliberately prefers the nested object (see `gatherBotWakeSettings`), and the form
+ * only reads the flat keys — so a channel configured the old way painted every control at its
+ * default and its edits were ignored: an enabled bot looked switched off, and flipping the switch
+ * changed nothing. The nested values win here for the same reason they win at runtime, and the
+ * nested object is removed rather than copied so the form's own save is the migration. Anything
+ * the nested object carries beyond the known options is dropped with it; the parser ignores those
+ * keys at runtime too.
+ *
+ * Use when:
+ * - Projecting a stored provider for the settings form (`getByAgentId`, `query`)
+ *
+ * Expects:
+ * - `settings` is the provider's raw settings object; any shape, including `null`
+ *
+ * Returns:
+ * - The same object when there is no nested `botWake`, otherwise settings with the flat keys set
+ */
+export const flattenBotWakeSettings = (
+  settings: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null | undefined => {
+  if (!isRecord(settings?.botWake)) return settings;
+
+  const nested = settings.botWake;
+  const flat = Object.fromEntries(
+    BOT_WAKE_NESTED_PATHS.flatMap(({ key, path }) => {
+      const value = readPath(nested, path);
+      return isChosen(value) ? [[key, value]] : [];
+    }),
+  );
+  // Every flat key goes: the nested object is authoritative at runtime, so a stale flat value it
+  // does not mention would otherwise become live the moment the nested object is dropped.
+  const flatKeys = new Set(Object.values(BOT_WAKE_SETTING_KEYS));
+  const rest = Object.fromEntries(
+    Object.entries(settings).filter(([key]) => key !== 'botWake' && !flatKeys.has(key)),
+  );
+
+  return { ...rest, ...flat };
+};
+
+/**
  * Collects the bot-wake options from a provider's settings.
  *
  * A nested `botWake` object, which is how a hand-written config spells it, is taken as it is and

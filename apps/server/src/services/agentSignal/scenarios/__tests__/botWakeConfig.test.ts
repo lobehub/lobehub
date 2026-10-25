@@ -2,6 +2,7 @@
 import {
   BOT_WAKE_SETTING_KEYS,
   DEFAULT_WAKE_RULES,
+  flattenBotWakeSettings,
   hasPassiveListeningRule,
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
   parseBotWakeSettings,
@@ -245,5 +246,89 @@ describe('parseBotWakeSettings from the settings form', () => {
     expect(hasPassiveListeningRule({ [K.enabled]: true }, 0)).toBe(true);
     expect(hasPassiveListeningRule({ [K.enabled]: true, [K.scope]: 'none' }, 0)).toBe(false);
     expect(hasPassiveListeningRule({ [K.enabled]: false }, 0)).toBe(false);
+  });
+});
+
+describe('flattenBotWakeSettings', () => {
+  it('leaves settings without a nested botWake untouched', () => {
+    const settings = { concurrency: 'queue', [BOT_WAKE_SETTING_KEYS.enabled]: true };
+
+    expect(flattenBotWakeSettings(settings)).toBe(settings);
+    expect(flattenBotWakeSettings(null)).toBeNull();
+    expect(flattenBotWakeSettings(undefined)).toBeUndefined();
+    for (const botWake of ['yes', [], 7]) {
+      expect(flattenBotWakeSettings({ botWake } as never)).toEqual({ botWake });
+    }
+  });
+
+  it('expands every nested option onto the flat keys the form writes', () => {
+    const nested = {
+      classifier: { mode: 'enforce', threshold: 0.8 },
+      customInstructions: 'reply to release questions',
+      enabled: true,
+      mode: 'enforce',
+      rules: {
+        allowChannels: [{ id: '100' }],
+        denyChannels: ['200'],
+        maxSilentWakes: 1,
+        ownerPresenceSeconds: 60,
+        scope: 'bot-threads',
+        windowSeconds: 240,
+      },
+      scheduler: { cooldownSeconds: 90, collectSeconds: 30, mode: 'enforce' },
+    };
+    const K = BOT_WAKE_SETTING_KEYS;
+
+    const flattened = flattenBotWakeSettings({ botWake: nested, concurrency: 'burst' });
+
+    expect(flattened).toEqual({
+      concurrency: 'burst',
+      [K.allowChannels]: [{ id: '100' }],
+      [K.classifierMode]: 'enforce',
+      [K.classifierThreshold]: 0.8,
+      [K.cooldownSeconds]: 90,
+      [K.collectSeconds]: 30,
+      [K.customInstructions]: 'reply to release questions',
+      [K.denyChannels]: ['200'],
+      [K.enabled]: true,
+      [K.maxSilentWakes]: 1,
+      [K.mode]: 'enforce',
+      [K.ownerPresenceSeconds]: 60,
+      [K.schedulerMode]: 'enforce',
+      [K.scope]: 'bot-threads',
+      [K.windowSeconds]: 240,
+    });
+    // The nested object is dropped so a save from the form migrates the row.
+    expect(flattened).not.toHaveProperty('botWake');
+  });
+
+  it('keeps the migrated row reading the same as the nested one', () => {
+    const nested = {
+      botWake: {
+        classifier: { mode: 'enforce' },
+        enabled: true,
+        rules: { denyChannels: ['200'], scope: 'bot-threads' },
+        scheduler: { mode: 'enforce' },
+      },
+    };
+
+    expect(parseBotWakeSettings(flattenBotWakeSettings(nested))).toEqual(
+      parseBotWakeSettings(nested),
+    );
+  });
+
+  it('lets the nested values win over stale flat keys', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+
+    const flattened = flattenBotWakeSettings({
+      [K.enabled]: false,
+      [K.mode]: 'off',
+      [K.scope]: 'all',
+      botWake: { enabled: true, rules: { scope: 'none' } },
+    });
+
+    // The stale flat `mode` is dropped too: the nested object never mentioned it, so leaving it
+    // behind would switch the migrated row off on the next read.
+    expect(flattened).toEqual({ [K.enabled]: true, [K.scope]: 'none' });
   });
 });
