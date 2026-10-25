@@ -2,6 +2,7 @@ import type { PropsWithChildren } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DEFAULT_AVATAR } from '@/const/meta';
 import { useHomeAgentRows } from '@/features/Home/AgentSelect/useHomeAgentRows';
 import { resolvePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { SidebarHeaderSelectPopover } from '@/features/NavPanel/SidebarHeaderSelect';
@@ -26,7 +27,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
   const items = useMemo<SwitcherItem[]>(
     () => [
       ...privateRows.map((row) => ({
-        avatar: row.avatar,
+        avatar: row.avatar || DEFAULT_AVATAR,
         background: row.backgroundColor,
         id: row.id,
         private: true,
@@ -34,7 +35,7 @@ const SwitchPanel = memo<PropsWithChildren>(({ children }) => {
         title: row.title,
       })),
       ...workspaceRows.map((row) => ({
-        avatar: row.avatar,
+        avatar: row.avatar || DEFAULT_AVATAR,
         background: row.backgroundColor,
         id: row.id,
         subtitle: row.subtitle,

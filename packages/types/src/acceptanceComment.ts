@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { ReviewAnchor } from './acceptanceReview';
 import type { DocumentCommentJson } from './documentComment';
 import type { AcceptanceAttachment, AcceptanceReviewAnnotation } from './verify';
@@ -6,7 +8,7 @@ import type { AcceptanceAttachment, AcceptanceReviewAnnotation } from './verify'
  * Where a discussion thread hangs on the acceptance page.
  *
  * - `acceptance`: the delivery as a whole (the global discussion under the checklist).
- * - `evidence`: a region circled on one evidence image of one check.
+ * - `evidence`: a region on one image or video frame of one check.
  */
 export type AcceptanceCommentAnchorType = 'acceptance' | 'evidence';
 
@@ -21,8 +23,41 @@ export type AcceptanceCommentAnchorType = 'acceptance' | 'evidence';
  * - `proposal`: the round's own note, written by the agent that produced it.
  *   It belongs to the round rather than to the conversation, so the page folds
  *   it into that round's entry instead of listing it as another message.
+ * - `access_request`: someone who may only remark asking the deciders for the
+ *   right to collaborate on this delivery — send it back, and talk to the
+ *   agent bound to it. The answer is server-owned state on the same row
+ *   ({@link AcceptanceAccessRequest}).
  */
-export type AcceptanceCommentKind = 'approval' | 'comment' | 'proposal' | 'reaction';
+export type AcceptanceCommentKind =
+  'access_request' | 'approval' | 'comment' | 'proposal' | 'reaction';
+
+/**
+ * What an access request asks for. `collaborate` is edit-collaboration on one
+ * acceptance: rejecting the delivery, and talking to the agent bound to it in
+ * the owner's conversation. Accepting a delivery stays with its deciders.
+ */
+export type AcceptanceAccessPermission = 'collaborate';
+
+/**
+ * Where an access request stands.
+ *
+ * - `pending`: waiting on a decider.
+ * - `granted`: the requester collaborates on this acceptance. Whatever they
+ *   start — a reject's repair, a message to the bound agent — runs on the
+ *   owner's agent, in the owner's conversation.
+ * - `declined`: a decider said no; the requester may ask again.
+ * - `revoked`: a decider took a grant back.
+ */
+export type AcceptanceAccessRequestStatus = 'declined' | 'granted' | 'pending' | 'revoked';
+
+export interface AcceptanceAccessRequest {
+  decidedAt?: string;
+  decidedByUserId?: string;
+  permission: AcceptanceAccessPermission;
+  status: AcceptanceAccessRequestStatus;
+}
+
+export type AcceptanceAccessDecision = 'decline' | 'grant' | 'revoke';
 
 /**
  * A file hung on a comment, as it is STORED: an object rather than a bare id,
@@ -35,6 +70,24 @@ export interface AcceptanceCommentAttachmentRef {
 }
 
 export type AcceptanceCommentSource = ReviewAnchor;
+
+/** A video comment is anchored to a single frame. */
+export const acceptanceCommentTimeSchema = z
+  .object({
+    start: z.number().finite().nonnegative(),
+  })
+  .strict();
+
+export type AcceptanceCommentTime = z.infer<typeof acceptanceCommentTimeSchema>;
+
+/** Server-owned facts; other comment producers may retain their own keys. */
+export interface AcceptanceCommentMetadata extends Record<string, unknown> {
+  /** Only on `access_request` rows; never written by a client. */
+  accessRequest?: AcceptanceAccessRequest;
+  evidenceAnchor?: {
+    time: AcceptanceCommentTime;
+  };
+}
 
 /** One emoji on one comment, already tallied for display. */
 export interface AcceptanceCommentReaction {
@@ -72,10 +125,14 @@ export interface AcceptanceCommentAnchor {
   evidenceId?: string | null;
   /** Normalized (0–1) region on the evidence image. */
   rect?: AcceptanceReviewAnnotation['rect'] | null;
+  /** Video time in seconds, pinned to this evidence version. */
+  time?: AcceptanceCommentTime | null;
 }
 
 export interface AcceptanceCommentItem extends AcceptanceCommentAnchor {
   acceptanceId: string;
+  /** Set on `access_request` rows only. */
+  accessRequest?: AcceptanceAccessRequest | null;
   /**
    * Files hung on the remark, resolved to display URLs by the read. Deliberately
    * NOT inline in the body: a screenshot answering "what do you see instead" is
@@ -134,6 +191,8 @@ export interface AcceptanceCommentList {
   canApprove: boolean;
   /** May the caller write comments, annotations and reactions here? */
   canComment: boolean;
+  /** May the caller answer access requests — the acceptance's deciders. */
+  canManageAccess?: boolean;
   items: AcceptanceCommentItem[];
 }
 
@@ -143,6 +202,7 @@ export interface CreateAcceptanceCommentInput {
     checkItemId: string;
     evidenceId: string;
     rect: AcceptanceReviewAnnotation['rect'];
+    time?: AcceptanceCommentTime;
   };
   /** Files to hang on the remark, already uploaded. */
   attachments?: AcceptanceCommentAttachmentRef[];
@@ -153,7 +213,7 @@ export interface CreateAcceptanceCommentInput {
   contextRunId?: string;
   /** The editor's own JSON, when the body was written in one. */
   editorData?: DocumentCommentJson;
-  /** Reactions are not written here; they have their own toggle endpoint. */
-  kind?: Exclude<AcceptanceCommentKind, 'reaction'>;
+  /** Reactions and access requests have their own endpoints. */
+  kind?: Exclude<AcceptanceCommentKind, 'access_request' | 'reaction'>;
   parentCommentId?: string;
 }

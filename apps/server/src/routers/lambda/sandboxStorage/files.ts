@@ -1,141 +1,149 @@
-import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import type { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { router } from '@/libs/trpc/lambda';
-import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import { forgetDriveFolders, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
+import { assertReadable, isHidden, resolveDriveScope, resolveWritableScope } from './driveScope';
 import { instanceProcedure, mapStorageError } from './procedures';
-import { idSchema, relativePathSchema, topicIdSchema } from './schemas';
+import { driveSchema, instanceIdSchema, relativePathSchema, topicIdSchema } from './schemas';
 
 /**
  * Ceiling on a single write. Generous for anything a person edits by hand and
  * small enough that a runaway body is refused before it is buffered — this is
  * an editor's save path, not a bulk upload.
  */
-const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
+export const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
 
 /**
  * Checked in UTF-8 bytes, which is what the cap is denominated in and what the
  * execution plane actually receives. `z.string().max()` counts UTF-16 code
  * units, so a megabyte of CJK would pass it and send roughly three.
  */
-const fileContentSchema = z
+export const fileContentSchema = z
   .string()
   .refine((value) => Buffer.byteLength(value, 'utf8') <= MAX_FILE_CONTENT_BYTES, {
     message: `File content exceeds ${MAX_FILE_CONTENT_BYTES} bytes`,
   });
 
-/**
- * The directory a file route may touch, as a path relative to the workspace
- * root; `''` is the whole root.
- *
- * A workspace's root is shared by every member and holds every instance's
- * directory, so a path alone authorizes nothing: it is confined to one
- * instance, reached through the same rules as everywhere else. Reads follow
- * visibility — a published instance is readable by the members who run in it.
- * Writes stay with the instance's owner, as every other write to an instance
- * does. A conversation's own files are read through the instance its runs
- * resolve to, so a public agent's conversation is held to published ones.
- *
- * A personal account's root belongs to its owner alone, which is the one case
- * where no instance is needed.
- *
- * An instance's directory is never written through here: it is
- * the saved copy of the sandbox's work tree, written by the sandbox alone. A
- * write from outside would be overwritten by the next save, or leave the
- * directory disagreeing with the record the next restore reads it by.
- */
-const resolveFileRoot = async (
-  ctx: {
-    instanceModel: EnvironmentInstanceModel;
-    serverDB: Parameters<typeof resolveSandboxSessionConfig>[0]['serverDB'];
-    userId: string;
-    workspaceId?: string | null;
-  },
-  { instanceId, topicId }: { instanceId?: string; topicId?: string },
-  access: 'read' | 'write',
-): Promise<string> => {
-  if (instanceId) {
-    // Refused before the lookup: the answer is the same whether or not the
-    // instance exists, so there is nothing to find out by asking.
-    if (access === 'write') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
-    }
-    const instance = await ctx.instanceModel.findById(instanceId);
-    if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
-
-    return instance.workingDirectory;
-  }
-
-  if (!ctx.workspaceId) return '';
-
-  if (access === 'read' && topicId) {
-    const { cwd } = await resolveSandboxSessionConfig({
-      isShareVisitorRun: false,
-      serverDB: ctx.serverDB,
-      topicId,
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    if (cwd) return cwd;
-  }
-
-  throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_REQUIRED' });
-};
-
-/** Whether `path` is `root` itself or somewhere beneath it. */
-const isWithinRoot = (path: string, root: string) =>
-  !root || path === root || path.startsWith(`${root}/`);
-
-const assertWithinRoot = (path: string, root: string) => {
-  if (!isWithinRoot(path, root)) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
-  }
-};
-
-/** Names the instance a file route works in; see {@link resolveFileRoot}. */
-const instanceIdSchema = idSchema.optional();
-
 export const filesRouter = router({
+  /**
+   * Create a folder, parents included. Idempotent — an existing folder is a
+   * success, so a picker can offer "new folder" without first proving the
+   * name is free.
+   */
   createDirectory: instanceProcedure
     .input(
-      z.object({ instanceId: instanceIdSchema, path: relativePathSchema, topicId: topicIdSchema }),
+      z.object({
+        drive: driveSchema,
+        instanceId: instanceIdSchema,
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
     )
-    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
-      assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
+    .mutation(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { instanceId, path: input.path });
 
-      return ctx.client.createDirectory(input).catch(mapStorageError);
+      const created = await scope.client.createDirectory(input).catch(mapStorageError);
+      forgetDriveFolders(ctx.claim.key);
+
+      return created;
     }),
+  /**
+   * One folder's entries — or, with `recursive`, everything under it — with
+   * the private environment directories left on the public drive left out.
+   *
+   * No path means "where this conversation works" when a topic is named and
+   * it has a folder or an environment directory, and the drive's root
+   * otherwise: the file panel asks the first question, the directory picker
+   * the second.
+   */
   listFiles: instanceProcedure
     .input(
       z.object({
+        drive: driveSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema.optional(),
         recursive: z.boolean().optional(),
         topicId: topicIdSchema,
       }),
     )
-    .query(async ({ ctx, input: { instanceId, ...input } }) => {
-      const root = await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read');
-      // No path means "the top of what may be listed", which inside a
-      // workspace is the instance's directory, not the shared root.
-      const path = input.path ?? (root || undefined);
-      if (path !== undefined) assertWithinRoot(path, root);
+    .query(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      let scope = await resolveDriveScope(ctx, instanceId);
 
-      return ctx.client.listFiles({ ...input, path }).catch(mapStorageError);
+      let path = input.path ?? (scope.root || undefined);
+      if (path === undefined && input.topicId && !instanceId) {
+        const placement = await resolveSandboxSessionConfig({
+          isShareVisitorRun: false,
+          serverDB: ctx.serverDB,
+          topicId: input.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        if (placement.mode !== 'ephemeral') {
+          path = placement.cwd;
+          // The conversation's folder is on the drive it resolved to — an
+          // environment directory's own drive, say — which is not
+          // necessarily the one this call was routed by.
+          if (placement.drive !== ctx.drive) {
+            const access = await ctx.drives.client(placement.drive);
+            if (access) {
+              scope = await resolveDriveScope({
+                ...ctx,
+                claim: access.claim,
+                client: access.client,
+                drive: placement.drive,
+              });
+            }
+          }
+        }
+      }
+      if (path !== undefined) assertReadable(path, scope);
+
+      const listing = await scope.client.listFiles({ ...input, path }).catch(mapStorageError);
+      if (scope.hidden.length === 0) return listing;
+
+      return {
+        ...listing,
+        entries: listing.entries.filter((entry) => !isHidden(entry.path, scope)),
+      };
     }),
   readFile: instanceProcedure
     .input(
-      z.object({ instanceId: instanceIdSchema, path: relativePathSchema, topicId: topicIdSchema }),
+      z.object({
+        drive: driveSchema,
+        instanceId: instanceIdSchema,
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
     )
-    .query(async ({ ctx, input: { instanceId, ...input } }) => {
-      assertWithinRoot(
-        input.path,
-        await resolveFileRoot(ctx, { instanceId, topicId: input.topicId }, 'read'),
-      );
+    .query(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveDriveScope(ctx, instanceId);
+      assertReadable(input.path, scope);
 
-      return ctx.client.readFile(input).catch(mapStorageError);
+      return scope.client.readFile(input).catch(mapStorageError);
+    }),
+  /**
+   * Rename or move a file or folder. Never overwrites: a destination that is
+   * already there is refused, and so is anything touching an environment
+   * directory — at either end.
+   */
+  renameFile: instanceProcedure
+    .input(
+      z.object({
+        drive: driveSchema,
+        newPath: relativePathSchema,
+        path: relativePathSchema,
+        topicId: topicIdSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input: { drive: _drive, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { path: input.path });
+      await resolveWritableScope(ctx, { path: input.newPath });
+
+      const renamed = await scope.client.renameFile(input).catch(mapStorageError);
+      forgetDriveFolders(ctx.claim.key);
+
+      return renamed;
     }),
   /**
    * Write a file's whole contents, creating it and its parents if needed.
@@ -149,34 +157,33 @@ export const filesRouter = router({
     .input(
       z.object({
         content: fileContentSchema,
+        drive: driveSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema,
         topicId: topicIdSchema,
       }),
     )
-    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
-      assertWithinRoot(input.path, await resolveFileRoot(ctx, { instanceId }, 'write'));
+    .mutation(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { instanceId, path: input.path });
 
-      return ctx.client.writeFile(input).catch(mapStorageError);
+      return scope.client.writeFile(input).catch(mapStorageError);
     }),
   removeFile: instanceProcedure
     .input(
       z.object({
+        drive: driveSchema,
         instanceId: instanceIdSchema,
         path: relativePathSchema,
         recursive: z.boolean().optional(),
         topicId: topicIdSchema,
       }),
     )
-    .mutation(async ({ ctx, input: { instanceId, ...input } }) => {
-      const root = await resolveFileRoot(ctx, { instanceId }, 'write');
-      assertWithinRoot(input.path, root);
-      // The instance's own directory is its identity, not a file in it:
-      // removing it would orphan the row and the snapshot that name it.
-      if (root && input.path === root) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_OUTSIDE_INSTANCE' });
-      }
+    .mutation(async ({ ctx, input: { drive: _drive, instanceId, ...input } }) => {
+      const scope = await resolveWritableScope(ctx, { instanceId, path: input.path });
 
-      return ctx.client.deleteFile(input).catch(mapStorageError);
+      const removed = await scope.client.deleteFile(input).catch(mapStorageError);
+      forgetDriveFolders(ctx.claim.key);
+
+      return removed;
     }),
 });

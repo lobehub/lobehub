@@ -1,16 +1,18 @@
-import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ReviewTargetInput, reviewTargetView } from './reviewTargetView';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  origin: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    word-break: break-all;
-  `,
-}));
+const styles = stylex.create({
+  origin: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 12,
+    wordBreak: 'break-all',
+  },
+});
 
 const blockStyle = { marginBottom: 16 };
 
@@ -46,7 +48,7 @@ const ReviewTarget = memo<{ review: ReviewTargetInput }>(({ review }) => {
             {t('consent.acceptanceReview.unregisteredTitle')}
           </Text>
           {view.origin && (
-            <Text className={styles.origin} type={'danger'}>
+            <Text {...stylex.props(styles.origin)} type={'danger'}>
               {view.origin}
             </Text>
           )}
@@ -70,7 +72,7 @@ const ReviewTarget = memo<{ review: ReviewTargetInput }>(({ review }) => {
           </Text>
           {view.origin && (
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-              <Text className={styles.origin} type={'secondary'}>
+              <Text {...stylex.props(styles.origin)} type={'secondary'}>
                 {view.origin}
               </Text>
               <Text fontSize={12} type={'success'}>

@@ -5,7 +5,6 @@ import {
   Button,
   confirmModal,
   CopyButton,
-  createStaticStyles,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
@@ -14,6 +13,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLinkIcon, MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,24 +25,22 @@ import { projectReviewService, type ProjectSiteItem } from '@/services/projectRe
 import { openSiteModal } from './SiteFormModal';
 import { reviewLink, siteSnippet } from './siteSnippet';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  origin: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  snippet: css`
-    flex: 1;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.7;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-all;
-    white-space: pre-wrap;
-  `,
-}));
+const styles = stylex.create({
+  origin: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 12,
+  },
+  snippet: {
+    color: cssVar.colorTextSecondary,
+    flex: '1',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 12,
+    lineHeight: 1.7,
+    minWidth: 0,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+  },
+});
 
 const reviewServer = () => (isDesktop ? OFFICIAL_URL : window.location.origin);
 
@@ -96,7 +95,7 @@ export function SiteCard({ onChanged, site }: { onChanged: () => void; site: Pro
           <Text weight={600}>{site.name}</Text>
           <Flexbox horizontal gap={6} wrap="wrap">
             {site.origins.map((origin) => (
-              <Tag className={styles.origin} key={origin}>
+              <Tag {...stylex.props(styles.origin)} key={origin}>
                 {origin}
               </Tag>
             ))}
@@ -125,7 +124,7 @@ export function SiteCard({ onChanged, site }: { onChanged: () => void; site: Pro
         </Flexbox>
       </Flexbox>
       <Block horizontal align="flex-start" gap={10} padding={12} variant="filled">
-        <code className={styles.snippet}>{snippet}</code>
+        <code {...stylex.props(styles.snippet)}>{snippet}</code>
         <CopyButton content={snippet} size="small" title={t('review.sites.copySnippet')} />
       </Block>
       {site.acceptanceId ? (

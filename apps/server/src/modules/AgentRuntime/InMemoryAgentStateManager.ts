@@ -1,4 +1,4 @@
-import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
+import { type AgentState, getLlmCallCount, normalizeAgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -33,7 +33,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       existingMeta.lastActiveAt = new Date().toISOString();
       existingMeta.status = state.status;
       existingMeta.totalCost = state.cost?.total || 0;
-      existingMeta.totalSteps = state.stepCount;
+      existingMeta.totalSteps = getLlmCallCount(state);
     }
 
     log('[%s] Saved state for step %d', operationId, state.stepCount);
@@ -85,7 +85,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       existingMeta.lastActiveAt = new Date().toISOString();
       existingMeta.status = stepResult.newState.status;
       existingMeta.totalCost = stepResult.newState.cost?.total || 0;
-      existingMeta.totalSteps = stepResult.newState.stepCount;
+      existingMeta.totalSteps = getLlmCallCount(stepResult.newState);
     }
 
     log('[%s:%d] Saved step result', operationId, stepResult.stepIndex);

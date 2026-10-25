@@ -108,6 +108,7 @@ const effectSpies = () => ({
   onError: vi.fn(),
   onMissing: vi.fn(),
   onPurge: vi.fn(),
+  onSettled: vi.fn(),
 });
 
 beforeEach(() => {
@@ -158,6 +159,23 @@ describe('createReplicaSlice fetch', () => {
     await expect(pending).resolves.toMatchObject({ applied: false });
     expect(store.getState().lists.a).toBeUndefined();
     expect(effects.onApplied).not.toHaveBeenCalled();
+  });
+
+  it('settles a discarded response so per-request bookkeeping can be released', async () => {
+    const { calls, fetcher } = deferredFetcher();
+    const effects = effectSpies();
+    const { slice } = setup({ effects, fetcher });
+
+    const pending = slice.fetch({ id: 'a' });
+    slice.remove('a');
+    calls[0].resolve(['deleted on the server']);
+
+    await expect(pending).resolves.toMatchObject({ applied: false });
+    expect(effects.onSettled).toHaveBeenCalledWith(
+      ['deleted on the server'],
+      { id: 'a' },
+      { key: 'a', scope: 'user-1:personal', source: 'fetch' },
+    );
   });
 
   it('drops a response whose request started before a clear()', async () => {

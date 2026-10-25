@@ -64,6 +64,7 @@ export const registerClientWorkFromIntent = async ({
         // document-delete intent a no-op.
         deleteTaskWork: (params) => workService.deleteTaskWork(params),
         handleSkillToolResult: (params) => workService.handleSkillToolResult(params),
+        registerCanvas: (params) => workService.registerCanvas(params),
         registerDocument: (params) => workService.registerDocument(params),
         registerTask: (params) => workService.registerTask(params),
       },

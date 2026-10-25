@@ -9,18 +9,22 @@ import { TaskRestService } from './task.service';
 const {
   createTaskMock,
   deleteTaskMock,
+  findWithHandoffMock,
   hasAnyPermissionMock,
   notifyAssignedMock,
   resolveMock,
   resolveTaskPatchInvariantsMock,
+  runTaskMock,
   updateTaskMock,
 } = vi.hoisted(() => ({
   createTaskMock: vi.fn(),
   deleteTaskMock: vi.fn(),
+  findWithHandoffMock: vi.fn(),
   hasAnyPermissionMock: vi.fn(),
   notifyAssignedMock: vi.fn(),
   resolveMock: vi.fn(),
   resolveTaskPatchInvariantsMock: vi.fn(),
+  runTaskMock: vi.fn(),
   updateTaskMock: vi.fn(),
 }));
 
@@ -53,6 +57,18 @@ vi.mock('@/database/models/agent', () => ({
 vi.mock('@/database/models/task', () => ({
   TaskModel: class {
     resolve = resolveMock;
+  },
+}));
+vi.mock('@/database/models/taskTopic', () => ({
+  TaskTopicModel: class {
+    findWithHandoff = findWithHandoffMock;
+  },
+}));
+// The run itself (archived-task refusal, rollback on a failed start) is covered
+// by the runner's own tests; here we only pin that the REST run reaches it.
+vi.mock('@/server/services/taskRunner', () => ({
+  TaskRunnerService: class {
+    runTask = runTaskMock;
   },
 }));
 vi.mock('@/server/services/editLock', () => ({
@@ -280,5 +296,91 @@ describe('TaskRestService assignment notification', () => {
     await service().updateTask('task-1', { name: 'renamed' });
 
     expect(notifyAssignedMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('TaskRestService runs', () => {
+  const service = () => new TaskRestService({} as LobeChatDatabase, CALLER, WORKSPACE);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hasAnyPermissionMock.mockResolvedValue(false);
+    resolveMock.mockResolvedValue({ createdByUserId: CALLER, id: 'task-1' });
+  });
+
+  it('starts a run on the resolved task with the extra prompt', async () => {
+    runTaskMock.mockResolvedValue({ taskId: 'task-1', topicId: 'tpc-1' });
+
+    await expect(service().runTask('TASK-1', { prompt: 'focus on Osaka' })).resolves.toEqual({
+      taskId: 'task-1',
+      topicId: 'tpc-1',
+    });
+    expect(runTaskMock).toHaveBeenCalledWith({ extraPrompt: 'focus on Osaka', taskId: 'task-1' });
+  });
+
+  it('reports a task the caller cannot see as not found instead of running it', async () => {
+    resolveMock.mockResolvedValue(null);
+
+    await expect(service().runTask('task-1', {})).rejects.toThrow(/Task not found/);
+    expect(runTaskMock).not.toHaveBeenCalled();
+  });
+
+  it('lists runs newest first with the handoff result and without the brief audit', async () => {
+    findWithHandoffMock.mockResolvedValue([
+      {
+        agentId: 'agt-1',
+        completedAt: new Date('2026-10-23T08:05:00Z'),
+        createdAt: new Date('2026-10-23T08:00:00Z'),
+        handoff: {
+          briefDecision: { emit: true, reason: 'changed', source: 'rule' },
+          content: 'Round trip to Osaka is ¥1,880 on ANA.',
+          summary: 'Found a fare under budget',
+        },
+        metadata: { internal: true },
+        operationId: 'op-1',
+        seq: 3,
+        status: 'completed',
+        title: 'Osaka fares',
+        topicId: 'tpc-3',
+        trigger: 'schedule',
+      },
+    ]);
+
+    const runs = (await service().listRuns('task-1', {})) as Record<string, unknown>[];
+
+    expect(findWithHandoffMock).toHaveBeenCalledWith('task-1', 20);
+    expect(runs).toEqual([
+      expect.objectContaining({
+        content: 'Round trip to Osaka is ¥1,880 on ANA.',
+        notable: true,
+        seq: 3,
+        status: 'completed',
+        summary: 'Found a fare under budget',
+        title: 'Osaka fares',
+        topicId: 'tpc-3',
+        trigger: 'schedule',
+      }),
+    ]);
+    expect(runs[0]).not.toHaveProperty('briefDecision');
+    expect(runs[0]).not.toHaveProperty('metadata');
+    expect(runs[0]).not.toHaveProperty('operationId');
+  });
+
+  it('reports a run the lifecycle never judged as notable: null', async () => {
+    findWithHandoffMock.mockResolvedValue([
+      { createdAt: new Date(), handoff: null, seq: 1, status: 'running', topicId: 'tpc-1' },
+    ]);
+
+    const [run] = (await service().listRuns('task-1', {})) as Record<string, unknown>[];
+
+    expect(run).toMatchObject({ notable: null, summary: null, topicId: 'tpc-1' });
+  });
+
+  it('passes the requested page size through', async () => {
+    findWithHandoffMock.mockResolvedValue([]);
+
+    await service().listRuns('task-1', { limit: 5 });
+
+    expect(findWithHandoffMock).toHaveBeenCalledWith('task-1', 5);
   });
 });

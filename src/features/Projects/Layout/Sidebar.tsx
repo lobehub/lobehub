@@ -3,6 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import {
   ClipboardCheckIcon,
+  HouseIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
   SettingsIcon,
@@ -26,7 +27,10 @@ import {
   getProjectAcceptancePath,
   getProjectDashboardPath,
   getProjectGoalsPath,
+  getProjectHomePath,
   getProjectTasksPath,
+  isProjectSectionActive,
+  toProjectPathname,
 } from './navigation';
 import ProjectHeader from './ProjectHeader';
 
@@ -34,10 +38,11 @@ const ProjectSidebarContent = memo(() => {
   const { t } = useTranslation('project');
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
   const navigate = useWorkspaceAwareNavigate();
-  const { pathname } = useLocation();
+  const pathname = toProjectPathname(useLocation().pathname);
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const { enabled: dashboardEnabled } = useDashboardFeature();
+  const projectHomePath = getProjectHomePath(projectId!);
   const projectTasksPath = getProjectTasksPath(projectId!);
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
@@ -59,7 +64,13 @@ const ProjectSidebarContent = memo(() => {
     <SideBarLayout
       header={header}
       body={
-        <Flexbox gap={8} paddingInline={4}>
+        <Flexbox gap={1} paddingInline={4}>
+          <NavItem
+            active={pathname === projectHomePath}
+            icon={HouseIcon}
+            title={t('sections.home')}
+            onClick={() => navigate(projectHomePath)}
+          />
           <NavItem
             active={pathname === projectTasksPath}
             icon={ListTodoIcon}
@@ -74,16 +85,14 @@ const ProjectSidebarContent = memo(() => {
           />
           {dashboardEnabled && (
             <NavItem
+              active={isProjectSectionActive(pathname, projectDashboardPath)}
               icon={LayoutDashboardIcon}
               title={t('sections.dashboard')}
-              active={
-                pathname === projectDashboardPath || pathname.startsWith(`${projectDashboardPath}/`)
-              }
               onClick={() => navigate(projectDashboardPath)}
             />
           )}
           <NavItem
-            active={pathname === projectAcceptancePath}
+            active={isProjectSectionActive(pathname, projectAcceptancePath)}
             icon={ClipboardCheckIcon}
             title={t('sections.acceptance')}
             onClick={() => navigate(projectAcceptancePath)}

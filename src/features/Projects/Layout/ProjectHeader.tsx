@@ -1,7 +1,5 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { SettingsIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,6 +32,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   const items = useMemo<SwitcherItem[]>(
     () =>
       (projects ?? []).map((item) => ({
+        // No logo: the row's Avatar generates one from the project name.
         avatar: item.avatar || undefined,
         id: item.slug ?? item.id,
         private: item.visibility === 'private',
@@ -71,15 +70,6 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
             title={project?.name || t('sidebar.title')}
           />
         </SidebarHeaderSelectPopover>
-      }
-      right={
-        <ActionIcon
-          aria-label={t('settings.title')}
-          icon={SettingsIcon}
-          size="small"
-          title={t('settings.title')}
-          onClick={() => navigate(`/project/${project?.slug ?? project?.id}/settings`)}
-        />
       }
     />
   );

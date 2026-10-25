@@ -407,7 +407,9 @@ export class TaskTopicModel {
   async findWithDetails(taskId: string) {
     return this.db
       .select({
+        agentId: topics.agentId,
         createdAt: topics.createdAt,
+        groupId: topics.groupId,
         handoff: taskTopics.handoff,
         id: topics.id,
         metadata: topics.metadata,

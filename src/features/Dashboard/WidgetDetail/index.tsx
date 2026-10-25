@@ -10,6 +10,7 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
 import { ErrorLine } from '../ErrorLine';
 import { useWidgetTrend } from '../hooks/useWidgetTrend';
+import { formatSchedule } from '../utils/schedule';
 import { getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import HealthDot, { getHealthTone, HEALTH_TONE_COLOR } from '../WidgetCard/HealthDot';
 import StatusBadges from '../WidgetCard/StatusBadges';
@@ -22,7 +23,7 @@ import VersionList from './VersionList';
 const styles = createStaticStyles(({ css }) => ({
   cell: css`
     min-width: 0;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
     background: ${cssVar.colorBgContainer};
   `,
@@ -41,16 +42,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   grid: css`
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
     gap: 1px;
     background: ${cssVar.colorBorderSecondary};
   `,
-  hint: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   status: css`
-    padding-block: 10px;
+    padding-block: 6px;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -61,20 +58,25 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** One fact of the summary grid: a quiet label over its value, with an optional second line. */
+/**
+ * One fact of the summary row: a quiet label over a short value. The exact
+ * detail (full timestamps, next run) sits in the value's tooltip so the row
+ * stays two lines tall.
+ */
 const Cell = ({
-  hint,
+  detail,
   label,
   children,
 }: {
   children: ReactNode;
-  hint?: ReactNode;
+  detail?: string;
   label: string;
 }) => (
   <Flexbox className={styles.cell} gap={2}>
     <span className={styles.cellLabel}>{label}</span>
-    <span className={styles.cellValue}>{children}</span>
-    {hint && <span className={styles.hint}>{hint}</span>}
+    <span className={styles.cellValue} title={detail}>
+      {children}
+    </span>
   </Flexbox>
 );
 
@@ -114,38 +116,37 @@ const WidgetSummary = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
           <WidgetRefreshButton widget={widget} />
         </Flexbox>
         <div className={styles.grid}>
-          <Cell hint={fromNow(updatedAt)} label={t('detail.updatedAt')}>
-            {formatTime(updatedAt) ?? '—'}
+          <Cell detail={formatTime(updatedAt)} label={t('detail.updatedAt')}>
+            {fromNow(updatedAt) ?? '—'}
           </Cell>
-          <Cell
-            label={t('detail.lastRunAt')}
-            hint={
-              widget.lastRunAt ? t(`run.status.${widget.lastRunStatus ?? 'running'}`) : undefined
-            }
-          >
-            {formatTime(widget.lastRunAt) ?? '—'}
+          <Cell detail={formatTime(widget.lastRunAt)} label={t('detail.lastRunAt')}>
+            {widget.lastRunAt
+              ? `${fromNow(widget.lastRunAt)} · ${t(`run.status.${widget.lastRunStatus ?? 'running'}`)}`
+              : '—'}
           </Cell>
           <Cell
             label={t('detail.schedule')}
-            hint={
+            detail={
               widget.nextRunAt
                 ? `${t('detail.nextRunAt')} ${formatTime(widget.nextRunAt)}`
                 : undefined
             }
           >
             {widget.schedulePattern
-              ? [widget.schedulePattern, widget.scheduleTimezone].filter(Boolean).join(' · ')
+              ? formatSchedule(t, widget.schedulePattern, widget.scheduleTimezone)
               : t('detail.manualOnly')}
           </Cell>
-          <Cell
-            hint={draft ? t('detail.versionDraft', { version: draft.version }) : undefined}
-            label={t('detail.version')}
-          >
-            {published
-              ? t('detail.versionPublished', { version: published.version })
-              : widget.publishedVersionId
-                ? '…'
-                : t('detail.versionNone')}
+          <Cell label={t('detail.version')}>
+            {[
+              published
+                ? t('detail.versionPublished', { version: published.version })
+                : widget.publishedVersionId
+                  ? '…'
+                  : t('detail.versionNone'),
+              draft && t('detail.versionDraft', { version: draft.version }),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </Cell>
         </div>
       </div>
@@ -253,7 +254,7 @@ const WidgetDetailDrawer = memo<WidgetDetailDrawerProps>(({ widget, onClose }) =
   >
     {widget && (
       <Flexbox gap={16}>
-        {widget.description && <Text type={'secondary'}>{widget.description}</Text>}
+        {widget.description && <Text>{widget.description}</Text>}
         <WidgetDetailPanel widget={widget} />
       </Flexbox>
     )}

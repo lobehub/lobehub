@@ -1,4 +1,5 @@
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
+import { hasPassiveListeningRule } from '@/server/services/agentSignal/scenarios/botWake/config';
 import { GatewayService } from '@/server/services/gateway';
 
 import { getBotMessageRouter } from './BotMessageRouter';
@@ -111,7 +112,7 @@ export async function invalidateBotAfterUpdate(
 ): Promise<void> {
   const service = new GatewayService();
 
-  // Watch-keyword presence feeds the external gateway's edge-filtering
+  // Passive-listening presence (watch keywords, or an enabled bot-wake scenario) feeds the external gateway's edge-filtering
   // capability (`messageMonitoring.enabled`), which is only sent at connect
   // time — a flip needs a runtime stop so the reconcile pass reconnects with
   // the fresh capability. Same-presence keyword edits don't need it. Scoped
@@ -125,8 +126,11 @@ export async function invalidateBotAfterUpdate(
     service.useMessageGateway &&
     value.settings !== undefined &&
     existing.settings !== undefined &&
-    extractWatchKeywordEntries(value.settings).length > 0 !==
-      extractWatchKeywordEntries(existing.settings ?? undefined).length > 0 &&
+    hasPassiveListeningRule(value.settings, extractWatchKeywordEntries(value.settings).length) !==
+      hasPassiveListeningRule(
+        existing.settings,
+        extractWatchKeywordEntries(existing.settings ?? undefined).length,
+      ) &&
     resolveConnectionMode(platformRegistry.getPlatform(existing.platform), value.settings) !==
       'webhook';
 

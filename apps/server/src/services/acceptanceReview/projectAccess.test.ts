@@ -163,7 +163,7 @@ describe('site review access', () => {
 
   it('never offers Accept or Send back on a site review', async () => {
     const access = await resolveReviewAccess(db, ownerId, siteAcceptanceId);
-    expect(access?.can).toEqual({ comment: true, decide: false, moderate: true });
+    expect(access?.can).toEqual({ comment: true, decide: false, moderate: true, reject: false });
   });
 
   it('names the role each person holds on the project', async () => {

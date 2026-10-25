@@ -169,6 +169,7 @@ const resetAssistantProjection = (
         },
       },
       { operationId },
+      { creationOrigin: 'client' },
     );
   }
 

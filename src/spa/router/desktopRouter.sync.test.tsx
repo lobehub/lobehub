@@ -79,7 +79,10 @@ async function readRouterSources() {
       'desktopRouter.shared.tsx',
       'desktopRouter.config.tsx',
       'desktopRouter.config.desktop.tsx',
+      'projectWorkspaceRoutes.tsx',
       'taskWorkspaceRoutes.tsx',
+      'workspaceSettingsRoutes.tsx',
+      'resourceRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -205,6 +208,7 @@ describe('desktop router shared definition', () => {
         .filter((routePath): routePath is string => Boolean(routePath));
 
       expect(projectPaths).toEqual([
+        'topic/:topicId?',
         'conversation/:topicId?',
         'tasks',
         'settings/:section?',
@@ -212,16 +216,35 @@ describe('desktop router shared definition', () => {
         'dashboard',
         'acceptance',
       ]);
-      for (const section of ['general', 'environments', 'directories']) {
+      for (const section of ['general', 'members', 'knowledge', 'environments', 'directories']) {
         const matches = matchRoutes(
           createMainAreaRoutes(factory),
           `/project/project-1/settings/${section}`,
         );
         expect(matches?.at(-1)?.params.section).toBe(section);
       }
+      // The project root is its home page (composer + overview), not a redirect.
       expect(
-        (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
-      ).toBe('conversation');
+        (projectIndexRoute?.element as ReactElement<{ to?: string }> | undefined)?.props.to,
+      ).toBeUndefined();
+      expect(projectIndexRoute?.handle?.meta?.titleKey).toBe('project:sections.home');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s opens a project acceptance record inside the project section',
+    (_, factory) => {
+      const list = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1/acceptance');
+      const record = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1/acceptance/acc_1');
+      const check = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/project/prj_1/acceptance/acc_1/check/chk_1',
+      );
+
+      expect(list?.at(-1)?.route.index).toBe(true);
+      expect(record?.at(-1)?.route.path).toBe(':acceptanceId');
+      expect(record?.at(-1)?.params.acceptanceId).toBe('acc_1');
+      expect(check?.at(-1)?.params.checkId).toBe('chk_1');
     },
   );
 
@@ -343,7 +366,15 @@ describe('desktop router shared definition', () => {
     expect(webPaths).not.toContain('/a/:slugOrId/:topicId?');
     expect(electronPaths).not.toContain('/a/:slugOrId/:topicId?');
     expect(webPaths).not.toContain('/verify');
-    expect(webPaths).toContain('/acceptance');
+    // Acceptance sits under a pathless layout that owns its workspace context,
+    // personal at `/acceptance` and mirrored at `/:workspaceSlug/acceptance`.
+    const acceptanceLayout = webDesktopRoutes.find((route) =>
+      route.children?.some((child) => child.path === '/acceptance'),
+    );
+    expect(acceptanceLayout?.path).toBeUndefined();
+    expect(
+      acceptanceLayout?.children?.find((child) => child.path === ':workspaceSlug')?.children,
+    ).toMatchObject([{ path: 'acceptance' }]);
     expect(webPaths).toContain('/onboarding');
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');
@@ -487,9 +518,11 @@ describe('desktop router shared definition', () => {
       ['/apps', AppsSkeleton],
       ['/memory', MemorySkeleton],
       ['/resource', ResourceHomeSkeleton],
-      ['/resource/files', ResourceCategorySkeleton],
-      ['/resource/images', ResourceCategorySkeleton],
+      ['/resource/drive', ResourceCategorySkeleton],
+      ['/resource/drive/files', ResourceCategorySkeleton],
+      ['/resource/drive/images', ResourceCategorySkeleton],
       ['/resource/works', ResourceCategorySkeleton],
+      ['/resource/library', ResourceCategorySkeleton],
     ] as const) {
       const matches = matchRoutes(getRoutes(pathname), pathname);
       expect(
@@ -542,13 +575,13 @@ describe('desktop router shared definition', () => {
   ])(
     '%s paints the resource skeleton on its first render, without a chunk wait',
     (_, getRoutes) => {
-      const matches = matchRoutes(getRoutes('/resource/files'), '/resource/files');
+      const matches = matchRoutes(getRoutes('/resource/drive/files'), '/resource/drive/files');
       const Skeleton = resolveRouteSkeleton(
         matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
       );
 
       const html = renderToString(
-        <MemoryRouter initialEntries={['/resource/files']}>
+        <MemoryRouter initialEntries={['/resource/drive/files']}>
           {Skeleton && <Skeleton />}
         </MemoryRouter>,
       );
@@ -704,9 +737,10 @@ describe('desktop router shared definition', () => {
   });
 
   it('keeps business resource and task routes in the shared definition', async () => {
-    const [sharedSource] = await readRouterSources();
+    const [sharedSource, , , , , , resourceSource] = await readRouterSources();
 
-    expect(sharedSource).toContain('...BusinessResourceRoutes');
+    expect(sharedSource).toContain('resourceRoute,');
+    expect(resourceSource).toContain('...BusinessResourceRoutes');
     expect(sharedSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
     expect(sharedSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");

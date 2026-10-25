@@ -276,7 +276,8 @@ export const connectorRouter = router({
       // to know an OAuth flow is configured (reflected via oidcConfig presence).
       const safeCredentials = credentials?.type === 'oauth2' ? null : credentials;
 
-      return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig };
+      const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
+      return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig, tools };
     }),
 
   /**

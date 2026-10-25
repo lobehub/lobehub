@@ -21,7 +21,7 @@ import {
   useProjectDirectoryStore,
 } from '@/store/projectWorkingDirectory';
 
-import { getProjectConversationPath } from '../Layout/navigation';
+import { getProjectTopicPath } from '../Layout/navigation';
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openEnvironmentModal } from './EnvironmentModal';
 import { useDirectoryAgent } from './useDirectoryAgent';
@@ -63,7 +63,7 @@ export function StartDirectoryContent({
         ? await startTopic(directory.id, agentId, t('directories.untitled'))
         : await createTopic({ projectId, agentId, title: t('directories.untitled') });
       close();
-      navigate(getProjectConversationPath(projectId, topic.id));
+      navigate(getProjectTopicPath(projectId, topic.id));
     } catch (error) {
       console.error('Failed to start directory work', error);
       setError(error);

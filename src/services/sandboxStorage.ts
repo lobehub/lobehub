@@ -1,92 +1,43 @@
-import type { EnvironmentKind, EnvironmentSource, EnvironmentVisibility } from '@lobechat/types';
+import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { markDefaultInstances } from '@lobechat/utils/environmentInstance';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
+export type { SandboxDrive };
+
 /**
- * Renderer-side data layer for the persistent cloud-sandbox workspace.
+ * Renderer-side data layer for the user's network drives and the environment
+ * directories initialized on them.
  *
- * Every path is relative to the workspace root (`reports/q3.md`); the absolute
+ * `drive` names which of a workspace's drives a call means — `public`, shared
+ * by every member, or `personal`, the caller's own — and defaults to the
+ * public one there; a personal account has one drive and ignores it. A call
+ * about an environment directory goes to the drive that directory is on.
+ *
+ * Every path is relative to the drive's root (`reports/q3.md`); the absolute
  * mount path stays server-side, so there is nothing here for a caller to point
- * outside the workspace with.
+ * outside the drive with.
  *
- * `topicId` is an optimization, not a scope: the workspace belongs to the user,
- * not the topic, but the volume is only reachable from inside a sandbox
- * session, so naming the topic the user is already talking to reuses that warm
- * session instead of cold-starting a second sandbox to list a directory.
- */
-/**
- * The part of a specification this API accepts today, and deliberately narrower
- * than `EnvironmentConfiguration`.
+ * `topicId` is an optimization, not a scope: the drive belongs to the user (or
+ * the team), not the topic, but some calls are only reachable from inside a
+ * sandbox session, so naming the topic the user is already talking to reuses
+ * that warm session instead of cold-starting a second sandbox.
  *
- * `sources` is git-only because every other transport authenticates with a key,
- * and a specification documented as carrying no credentials cannot present one.
- * `requirements` is absent because nothing schedules on it yet — the server
- * would drop it without a word, and a field the types refuse is better than one
- * that quietly evaporates.
+ * The definitions environments are built from need no drive and live in
+ * `environmentService`.
  */
-export interface SandboxEnvironmentSpecification {
-  bootstrapCommand?: string;
-  env?: Record<string, string>;
-  excludePaths?: string[];
-  internetAccess?: boolean;
-  kind?: EnvironmentKind;
-  maintenanceCommand?: string;
-  sources?: Extract<EnvironmentSource, { kind: 'git' }>[];
-}
-
 class SandboxStorageService {
-  /**
-   * Environment specifications: what an environment should contain. Answered
-   * from the database alone, so this returns immediately.
-   */
-  listEnvironments = async (params?: { visibility?: EnvironmentVisibility }) =>
-    lambdaClient.sandboxStorage.listEnvironments.query(params);
-
-  createEnvironment = async (params: {
-    configuration?: SandboxEnvironmentSpecification;
-    description?: string;
-    name: string;
-    visibility?: EnvironmentVisibility;
-  }) =>
-    // Always with its default instance: this client has no create-instance
-    // dialog to follow with. The server leaves it out for clients that do.
-    lambdaClient.sandboxStorage.createEnvironment.mutate({ ...params, withDefaultInstance: true });
-
-  /**
-   * Edits the specification. Existing instances keep the one they were created
-   * with; the change shapes what the next instance is built from.
-   */
-  updateEnvironment = async (params: {
-    configuration?: SandboxEnvironmentSpecification;
-    description?: string;
-    id: string;
-    name?: string;
-  }) => lambdaClient.sandboxStorage.updateEnvironment.mutate(params);
-
-  /**
-   * Publishes an environment to the workspace, or takes it back.
-   *
-   * Separate from {@link updateEnvironment} because it changes who else can run
-   * in what this environment built, not what the environment is.
-   */
-  setEnvironmentVisibility = async (params: { id: string; visibility: EnvironmentVisibility }) =>
-    lambdaClient.sandboxStorage.setEnvironmentVisibility.mutate(params);
-
   /**
    * Replaces a file's whole contents, creating it and its parents if needed.
    * Text only — the execution plane carries the body as a JSON string.
    */
   writeFile = async (params: {
     content: string;
+    drive?: SandboxDrive;
     instanceId?: string;
     path: string;
     topicId?: string;
   }) => lambdaClient.sandboxStorage.writeFile.mutate(params);
-
-  /** Refused while instances still reference it — those go first. */
-  removeEnvironment = async (params: { id: string }) =>
-    lambdaClient.sandboxStorage.removeEnvironment.mutate(params);
 
   /**
    * Instances, each joined with the state the execution plane holds. A
@@ -100,7 +51,12 @@ class SandboxStorageService {
    * guard applies, so no caller has to re-derive which copy is the default.
    */
   listInstances = async (
-    params: { environmentId?: string; topicId?: string; withSizes?: boolean } = {},
+    params: {
+      drive?: SandboxDrive;
+      environmentId?: string;
+      topicId?: string;
+      withSizes?: boolean;
+    } = {},
   ) => {
     const result = await lambdaClient.sandboxStorage.listInstances.query(params);
 
@@ -179,46 +135,66 @@ class SandboxStorageService {
   stopInstance = async (params: { id: string }) =>
     lambdaClient.sandboxStorage.stopInstance.mutate(params);
 
+  /** Rename or move a file or folder; never overwrites an existing one. */
+  renameFile = async (params: {
+    drive?: SandboxDrive;
+    newPath: string;
+    path: string;
+    topicId?: string;
+  }) => lambdaClient.sandboxStorage.renameFile.mutate(params);
+
   /** Create a directory (parents included, idempotent). */
-  createDirectory = async (params: { instanceId?: string; path: string; topicId?: string }) =>
-    lambdaClient.sandboxStorage.createDirectory.mutate(params);
+  createDirectory = async (params: {
+    drive?: SandboxDrive;
+    instanceId?: string;
+    path: string;
+    topicId?: string;
+  }) => lambdaClient.sandboxStorage.createDirectory.mutate(params);
 
   /**
-   * Whether this account has a persistent workspace at all. Pair it with the
-   * `enablePersistentSandbox` lab flag the client already holds: flag off shows
-   * nothing, flag on without an entitlement shows the upgrade prompt.
+   * Whether this account has a drive at all. Without one, the directory
+   * picker's sandbox side shows the way to a plan instead of folders.
    */
   getEntitlement = async () => lambdaClient.sandboxStorage.getEntitlement.query();
 
-  /** Quota and last measured usage of the workspace directory. */
-  getStorage = async () => lambdaClient.sandboxStorage.getStorage.query();
+  /** Quota and last measured usage of one drive. */
+  getStorage = async (params: { drive?: SandboxDrive; topicId?: string } = {}) =>
+    lambdaClient.sandboxStorage.getStorage.query(params);
+
+  /**
+   * Usage of each of the caller's drives against the plan's one quota pool —
+   * and, for a workspace owner or admin, of every member's personal drive.
+   * Amounts only; nobody can browse another member's drive.
+   */
+  getDriveUsage = async () => lambdaClient.sandboxStorage.getDriveUsage.query();
 
   /**
    * Walk the workspace and answer with the fresh figure. For a refresh the
    * user asked for — {@link getStorage} reads what was last measured, which
    * is what a page load should show.
    */
-  refreshStorageUsage = async () => lambdaClient.sandboxStorage.refreshStorageUsage.mutate();
+  refreshStorageUsage = async (params: { drive?: SandboxDrive } = {}) =>
+    lambdaClient.sandboxStorage.refreshStorageUsage.mutate(params);
 
   listFiles = async (
-    params: { instanceId?: string; path?: string; recursive?: boolean; topicId?: string } = {},
+    params: {
+      drive?: SandboxDrive;
+      instanceId?: string;
+      path?: string;
+      recursive?: boolean;
+      topicId?: string;
+    } = {},
   ) => lambdaClient.sandboxStorage.listFiles.query(params);
 
-  /**
-   * Repositories this account can build an environment from. Answers
-   * `connected: false` rather than failing when GitHub is not linked — for the
-   * picker that is a state to resolve, not an error.
-   */
-  listGithubRepositories = async () => lambdaClient.sandboxStorage.listGithubRepositories.query();
-
-  /** The branches of one repository, or `connected: false` when GitHub is not linked. */
-  listGithubBranches = async (params: { owner: string; repository: string }) =>
-    lambdaClient.sandboxStorage.listGithubBranches.query(params);
-
-  readFile = async (params: { instanceId?: string; path: string; topicId?: string }) =>
-    lambdaClient.sandboxStorage.readFile.query(params);
+  readFile = async (params: {
+    drive?: SandboxDrive;
+    instanceId?: string;
+    path: string;
+    topicId?: string;
+  }) => lambdaClient.sandboxStorage.readFile.query(params);
 
   removeFile = async (params: {
+    drive?: SandboxDrive;
     instanceId?: string;
     path: string;
     recursive?: boolean;

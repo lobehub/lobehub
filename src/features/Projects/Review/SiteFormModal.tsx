@@ -2,12 +2,13 @@ import {
   ActionIcon,
   Button,
   createModal,
-  createStaticStyles,
   Flexbox,
   Input,
   Text,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -19,17 +20,17 @@ import { checkOrigins, originErrorFromServer } from './siteSnippet';
 
 const MAX_ORIGINS = 20;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  error: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorError};
-  `,
-  origin: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-  `,
-}));
+const styles = stylex.create({
+  error: {
+    color: cssVar.colorError,
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+  origin: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 13,
+  },
+});
 
 interface SiteModalProps {
   onSaved: () => void;
@@ -105,7 +106,7 @@ function SiteForm({ onSaved, projectId, site }: SiteModalProps) {
                 <Input
                   aria-invalid={Boolean(message)}
                   aria-label={t('review.sites.originLabel', { index: index + 1 })}
-                  className={styles.origin}
+                  {...stylex.props(styles.origin)}
                   disabled={pending}
                   placeholder="https://example.com"
                   value={origin}
@@ -120,7 +121,7 @@ function SiteForm({ onSaved, projectId, site }: SiteModalProps) {
                   />
                 )}
               </Flexbox>
-              {message && <span className={styles.error}>{message}</span>}
+              {message && <span {...stylex.props(styles.error)}>{message}</span>}
             </Flexbox>
           );
         })}
@@ -140,7 +141,7 @@ function SiteForm({ onSaved, projectId, site }: SiteModalProps) {
         </Text>
       </Flexbox>
       {serverError && serverError.index === undefined ? (
-        <span className={styles.error} role="alert">
+        <span {...stylex.props(styles.error)} role="alert">
           {serverError.message}
         </span>
       ) : null}

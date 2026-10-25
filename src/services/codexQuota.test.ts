@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAgentQuotaStore } from '@/store/agentQuota';
+import { initialState } from '@/store/agentQuota/initialState';
+
 import { agentQuotaService } from './agentQuota';
 import { createCodexQuotaReader } from './codexQuota';
 import { heterogeneousAgentService } from './electron/heterogeneousAgent';
@@ -44,6 +47,9 @@ const sample = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Reads go through the global quota replica: start every case without the
+  // previous case's accounts / readings (they would answer inside the dedupe window).
+  useAgentQuotaStore.setState(initialState, false);
   vi.mocked(agentQuotaService.listAccounts).mockResolvedValue([account] as never);
   vi.mocked(agentQuotaService.listBindings).mockResolvedValue([]);
   vi.mocked(agentQuotaService.getLatestReadings).mockResolvedValue([reading]);
@@ -116,5 +122,22 @@ describe('account-scoped Codex quota', () => {
     const result = await reader({ revalidate: true });
     expect(result.identity?.externalAccountId).toBe('external-b');
     expect(result.session?.usedPercent).toBe(80);
+  });
+
+  it('refreshes the quota replica after accepting a local snapshot', async () => {
+    const first = createCodexQuotaReader({});
+    expect((await first({})).session?.usedPercent).toBe(23);
+
+    // A reset lands locally and is ingested; the server now holds the new reading.
+    const resetReading = { ...reading, capturedAt: Date.now() + 1, utilization: 0 };
+    vi.mocked(agentQuotaService.getLatestReadings).mockResolvedValue([resetReading]);
+    await first.acceptLocalSnapshot({
+      ...sample,
+      readings: [resetReading],
+      session: { ...sample.session, usedPercent: 0 },
+    });
+
+    // A reader mounted right after (inside the dedupe window) must not repaint the old reading.
+    expect((await createCodexQuotaReader({})({})).session?.usedPercent).toBe(0);
   });
 });

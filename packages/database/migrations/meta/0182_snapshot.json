@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "be3b231c-107f-4861-806d-b8f3cd5d68f0",
+  "id": "c99e72d2-93e1-4bcf-95c6-0ed39a86c5b8",
   "policies": {},
   "prevId": "99e50879-4239-4179-94cb-d4a391b46df4",
   "roles": {},
@@ -24676,7 +24676,7 @@
           "name": "coordinator_agent_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -24929,8 +24929,8 @@
           "method": "btree",
           "with": {}
         },
-        "projects_coordinator_agent_id_unique": {
-          "name": "projects_coordinator_agent_id_unique",
+        "projects_coordinator_agent_id_idx": {
+          "name": "projects_coordinator_agent_id_idx",
           "columns": [
             {
               "expression": "coordinator_agent_id",
@@ -24939,7 +24939,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -24952,7 +24952,7 @@
           "tableTo": "agents",
           "columnsFrom": ["coordinator_agent_id"],
           "columnsTo": ["id"],
-          "onDelete": "restrict",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "projects_user_id_users_id_fk": {
@@ -25243,311 +25243,6 @@
         "project_environments_default_enabled": {
           "name": "project_environments_default_enabled",
           "value": "NOT \"project_environments\".\"is_default\" OR \"project_environments\".\"enabled\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.project_members": {
-      "name": "project_members",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "added_by_user_id": {
-          "name": "added_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'member'"
-        },
-        "accessed_at": {
-          "name": "accessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "project_members_project_user_unique": {
-          "name": "project_members_project_user_unique",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_members_workspace_id_idx": {
-          "name": "project_members_workspace_id_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_members_user_id_idx": {
-          "name": "project_members_user_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "project_members_project_id_projects_id_fk": {
-          "name": "project_members_project_id_projects_id_fk",
-          "tableFrom": "project_members",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_members_user_id_users_id_fk": {
-          "name": "project_members_user_id_users_id_fk",
-          "tableFrom": "project_members",
-          "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_members_added_by_user_id_users_id_fk": {
-          "name": "project_members_added_by_user_id_users_id_fk",
-          "tableFrom": "project_members",
-          "tableTo": "users",
-          "columnsFrom": ["added_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.project_sites": {
-      "name": "project_sites",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "origins": {
-          "name": "origins",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "acceptance_id": {
-          "name": "acceptance_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "accessed_at": {
-          "name": "accessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "project_sites_project_id_idx": {
-          "name": "project_sites_project_id_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_sites_workspace_id_idx": {
-          "name": "project_sites_workspace_id_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "project_sites_project_id_projects_id_fk": {
-          "name": "project_sites_project_id_projects_id_fk",
-          "tableFrom": "project_sites",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_sites_workspace_id_workspaces_id_fk": {
-          "name": "project_sites_workspace_id_workspaces_id_fk",
-          "tableFrom": "project_sites",
-          "tableTo": "workspaces",
-          "columnsFrom": ["workspace_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_sites_created_by_user_id_users_id_fk": {
-          "name": "project_sites_created_by_user_id_users_id_fk",
-          "tableFrom": "project_sites",
-          "tableTo": "users",
-          "columnsFrom": ["created_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "project_sites_acceptance_id_acceptances_id_fk": {
-          "name": "project_sites_acceptance_id_acceptances_id_fk",
-          "tableFrom": "project_sites",
-          "tableTo": "acceptances",
-          "columnsFrom": ["acceptance_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "project_sites_name_not_empty": {
-          "name": "project_sites_name_not_empty",
-          "value": "length(btrim(\"project_sites\".\"name\")) > 0"
-        },
-        "project_sites_origins_not_empty": {
-          "name": "project_sites_origins_not_empty",
-          "value": "cardinality(\"project_sites\".\"origins\") > 0"
         }
       },
       "isRLSEnabled": false

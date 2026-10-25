@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ComposerUserMessage, MessageMetadata } from '@lobechat/types';
+import { COMPOSER_USER_MESSAGE_METADATA_KEYS, toComposerUserMessage } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
+import { foldLegacyUserMessageFields } from '@/server/routers/lambda/aiAgent/execSchemas';
 import { assertCanUseAgentRunConversation } from '@/server/routers/lambda/aiAgent/guards';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueEntry, SteerQueueScope } from '@/server/services/redis/steerQueue';
@@ -36,12 +39,36 @@ export type QueuedFollowUpRequest = Omit<
 export interface QueuedFollowUp extends SteerQueueEntry {
   /** Server-derived provenance of the request that queued it. */
   audit?: { clientIp?: string; userAgent?: string };
+  /**
+   * The composer state the follow-up was sent from, opaque to the server, so a
+   * client that reloads can show and resend it exactly as typed (selections,
+   * mentions). Never used to run it.
+   */
+  composer?: { editorData?: Record<string, unknown>; filesPreview?: Record<string, unknown>[] };
   request: QueuedFollowUpRequest;
   /** Who queued it; only the run owner's own follow-ups are started for them. */
   userId: string;
 }
 
 const uniq = <T>(items: T[]) => [...new Set(items)];
+
+/**
+ * Every follow-up's attached content is kept, in queue order. Rich text belongs
+ * to one message's text, so it survives only when a single follow-up is sent:
+ * a merged send's text is the joined prompts.
+ */
+const mergeComposerUserMessages = (
+  messages: (ComposerUserMessage | undefined)[],
+): ComposerUserMessage | undefined => {
+  const metadata: Record<string, unknown[]> = {};
+  for (const key of COMPOSER_USER_MESSAGE_METADATA_KEYS) {
+    const values = messages.flatMap((message): unknown[] => message?.metadata?.[key] ?? []);
+    if (values.length) metadata[key] = values;
+  }
+  const editorData = messages.length === 1 ? messages[0]?.editorData : undefined;
+
+  return toComposerUserMessage({ editorData, metadata: metadata as MessageMetadata });
+};
 
 /**
  * Fold every waiting follow-up into one request, the way the client merges its
@@ -72,6 +99,7 @@ export const mergeQueuedFollowUps = (entries: QueuedFollowUp[]): QueuedFollowUpR
     prompt: sorted.map((entry) => entry.request.prompt).join('\n\n'),
     selectedSkillIds: selectedSkillIds.length ? selectedSkillIds : undefined,
     selectedToolIds: selectedToolIds.length ? selectedToolIds : undefined,
+    userMessage: mergeComposerUserMessages(sorted.map((entry) => entry.request.userMessage)),
   };
 };
 
@@ -170,7 +198,11 @@ export const drainOwnFollowUps = async (
     return drain();
   });
 
-  const entries = drained.filter((entry) => entry.userId === ctx.userId);
+  const entries = drained
+    .filter((entry) => entry.userId === ctx.userId)
+    // Entries queued before `userMessage` existed (they live in Redis across a
+    // deploy) still carry the top-level selection fields; read them as one shape.
+    .map((entry) => ({ ...entry, request: foldLegacyUserMessageFields(entry.request) }));
   if (entries.length < drained.length) {
     // Acknowledged along with the rest of the batch; never sent.
     log('[%s] Dropped %d foreign queued follow-ups', operationId, drained.length - entries.length);

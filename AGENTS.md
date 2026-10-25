@@ -92,7 +92,7 @@ Use the `acceptance` skill to decide whether the delivery needs product verifica
 - Changes to rendered UI text, including locale keys and translations, change product behavior and are not exempt. A test that only asserts key presence does not show that the page renders the text.
 - Reuse a completed acceptance that covers the delivered behavior. If its report and evidence exist only locally, inspect and upload them with `lh acceptance run ingest`; if already published, reuse the link. Do not rerun the product merely to open a PR or obtain a report URL.
 - For new or changed product behavior not covered by valid evidence, verify the affected outcomes on the real product, capture the required evidence, and publish the result. The skill owns reuse criteria and the execution workflow.
-- Agent tool results shown in chat are Web UI outcomes even when the implementation is server-side. Verify the rendered tool card and parent reply, including the failure state when recovery is the goal.
+- Agent tool results and model replies shown in chat are Web UI outcomes even when the implementation is server-side. Verify the rendered tool card and parent reply, including the failure state when recovery is the goal. A provider request-payload fix that stops a chat error (for example, an upstream 400 on a model switch) needs a before/after chat run; unit tests and a direct upstream probe do not replace it.
 
 When acceptance is required, put its published `https://app.lobehub.com/acceptance/<id>` link in the PR body. Tests, lint, and type-check remain separate quality gates; they do not replace product acceptance.
 

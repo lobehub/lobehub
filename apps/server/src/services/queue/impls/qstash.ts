@@ -92,6 +92,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
       context,
       deduplicationId,
       endpoint,
+      flowControl,
       payload,
       delay = 50,
       priority = 'normal',
@@ -114,6 +115,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
         },
         ...(qstashDelay === undefined ? {} : { delay: qstashDelay }),
         ...(deduplicationId ? { deduplicationId: toQStashDeduplicationId(deduplicationId) } : {}),
+        ...(flowControl ? { flowControl } : {}),
         headers: {
           'Content-Type': 'application/json',
           'X-Agent-Operation-Id': operationId,

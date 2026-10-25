@@ -6,7 +6,7 @@ const upsertSource = vi.fn();
 const extractBenchmarkSource = vi.fn();
 
 vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
-  parseMemoryExtractionConfig: () => ({ webhook: { headers: {} } }),
+  parseMemoryExtractionConfig: () => ({ webhook: { headers: { 'x-memory-secret': 'secret' } } }),
 }));
 
 vi.mock('@/database/models/userMemory/sources/benchmarkLoCoMo', () => ({
@@ -105,7 +105,7 @@ describe('benchmark LoCoMo memory extraction webhook', () => {
           ],
           userId: 'locomo-user-conv-26',
         }),
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-memory-secret': 'secret' },
         method: 'POST',
       }),
     );

@@ -102,10 +102,6 @@ vi.mock('@/services/agentQuota', () => ({
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
 vi.mock('../transports/gateway/gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
-  // Faithful re-impl (the real one is unmocked to keep the import cycle out of
-  // this test): only 'interrupted' / 'waiting_for_async_tool' are non-clean.
-  isCompletedRuntimeEnd: (reason?: string | null) =>
-    reason !== 'interrupted' && reason !== 'waiting_for_async_tool',
 }));
 
 // isDesktop — defaults to `false` (matching the real test env / __ELECTRON__
@@ -6003,18 +5999,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();
     });
 
-    // ── 4. error terminal → no notification, no drain (the onError branch) ──
-    it('an error terminal fires NO completion notification and NO queue drain', async () => {
-      desktopFlag.value = true; // even on desktop, the error terminal must stay silent
+    // ── 4. error terminal → failure notification, no drain (the onError branch) ──
+    it('an error terminal fires a FAILURE notification and NO queue drain', async () => {
+      desktopFlag.value = true;
       const store = createMockStore({
         drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
       });
 
       await runToError(store);
 
-      // No completion signal on the error path (onComplete skips notifyCompletion
-      // when isErrorTerminal).
-      expect(mockShowNotification).not.toHaveBeenCalled();
+      // One failure banner, never the "finished" one (no completion badge).
+      expect(mockShowNotification).toHaveBeenCalledTimes(1);
+      expect(mockShowNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('the run failed') }),
+      );
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
       // No queue drain on the error path (gated by terminalEvent?.type !== 'error').
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();

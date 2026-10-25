@@ -19,6 +19,8 @@ vi.mock('./Comments/hooks', () => ({
 }));
 vi.mock('./Comments/discussionTimeline', () => ({ countDiscussionMessages: () => 0 }));
 vi.mock('@/services/verify', () => ({ verifyService: { setAcceptanceVisibility: vi.fn() } }));
+// Desktop renders from `app://renderer`; shared links must use the server origin instead.
+vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.lobehub.com' }));
 
 // Everything else in the page is out of scope here: the test is about which
 // header controls the main SPA mounts, not how the record's body renders.
@@ -26,6 +28,7 @@ vi.mock('./Checks/AcceptanceCheckInventory', () => ({ default: () => null }));
 vi.mock('./Checks/AcceptanceCheckOwnerToolbar', () => ({ default: () => null }));
 vi.mock('./Comments/AcceptanceDiscussion', () => ({ default: () => null }));
 vi.mock('./Comments/ReviewerApprovalBar', () => ({ default: () => null }));
+vi.mock('./Comments/CollaborationRequestBanner', () => ({ default: () => null }));
 vi.mock('./Conversation/AcceptanceOriginTopic', () => ({ default: () => null }));
 vi.mock('./Evidence/AcceptanceResources', () => ({ default: () => null }));
 vi.mock('./Flow/AcceptanceFlow', () => ({ AcceptanceFlow: () => null }));
@@ -69,6 +72,20 @@ describe('AcceptanceOverview sharing', () => {
 
     expect(await screen.findByText('acceptance.share.makePublic')).toBeTruthy();
     expect(screen.getByText('report.actions.copyLink')).toBeTruthy();
+  });
+
+  it('copies the acceptance link under the app origin, not the page origin', async () => {
+    bundle.current = buildBundle({ canReview: true, visibility: 'private' });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard);
+    renderOverview();
+
+    fireEvent.click(screen.getByRole('button', { name: /acceptance\.share\.title/ }));
+    fireEvent.click(await screen.findByText('report.actions.copyLink'));
+
+    await vi.waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('https://app.lobehub.com/acceptance/acc-1'),
+    );
   });
 
   it('offers to make a public acceptance private', async () => {

@@ -40,8 +40,9 @@ beforeEach(() => {
 
 describe('galleryKeyOfUrl', () => {
   it.each([
-    ['https://app.test/resource', 'all'],
-    ['https://app.test/acme/resource/', 'all'],
+    ['https://app.test/resource', null],
+    ['https://app.test/acme/resource/', null],
+    ['https://app.test/resource/drive', null],
     ['https://app.test/resource/works', 'all'],
     ['https://app.test/resource/works?works=task', 'task'],
     ['https://app.test/resource/works?works=bogus', 'all'],
@@ -66,13 +67,13 @@ describe('worksLoader', () => {
 
   it('uses the persisted Private / Workspace mode of the active workspace', async () => {
     mocks.workspaceId = 'ws_private';
-    await load('https://app.test/resource');
+    await load('https://app.test/resource/works');
     expect(mocks.preHydrateWorkspaceWorks).toHaveBeenLastCalledWith(
       expect.objectContaining({ visibility: 'private', workspaceId: 'ws_private' }),
     );
 
     mocks.workspaceId = 'ws_other';
-    await load('https://app.test/resource');
+    await load('https://app.test/resource/works');
     expect(mocks.preHydrateWorkspaceWorks).toHaveBeenLastCalledWith(
       expect.objectContaining({ visibility: 'public', workspaceId: 'ws_other' }),
     );
@@ -96,7 +97,7 @@ describe('worksLoader', () => {
     mocks.workspaceId = 'ws_other';
     mocks.workspaceSlug = 'acme';
 
-    await load('https://app.test/acme/resource', { workspaceSlug: 'acme' });
+    await load('https://app.test/acme/resource/works', { workspaceSlug: 'acme' });
 
     expect(mocks.preHydrateWorkspaceWorks).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'ws_other' }),
@@ -104,11 +105,16 @@ describe('worksLoader', () => {
   });
 
   it.each([
-    ['another workspace', 'https://app.test/beta/resource', { workspaceSlug: 'beta' }, 'acme'],
-    ['the personal space', 'https://app.test/resource', {}, 'acme'],
+    [
+      'another workspace',
+      'https://app.test/beta/resource/works',
+      { workspaceSlug: 'beta' },
+      'acme',
+    ],
+    ['the personal space', 'https://app.test/resource/works', {}, 'acme'],
     [
       'a workspace from the personal space',
-      'https://app.test/acme/resource',
+      'https://app.test/acme/resource/works',
       { workspaceSlug: 'acme' },
       null,
     ],

@@ -1,52 +1,55 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 import AddButton from '@/features/ResourceManager/components/Header/AddButton';
+import { useHomeStore } from '@/store/home';
+import type { DocsHomeTab } from '@/store/home/slices/recent/projection';
 
-import Libraries from './Libraries';
-import RecentFiles from './RecentFiles';
-import RecentPages from './RecentPages';
-import RecentWorks from './RecentWorks';
+import HomeList from './HomeList';
+import QuickActions from './QuickActions';
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    width: 100%;
-    max-width: 1080px;
-    margin-inline: auto;
-    padding-block: 32px 64px;
-    padding-inline: 32px;
-  `,
-  scroll: css`
-    overflow: hidden auto;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    width: '100%',
+    maxWidth: '1200px',
+    marginInline: 'auto',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '64px',
+    paddingInline: '32px',
+  },
+  scroll: {
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    flex: '1',
+  },
+});
 
 /**
- * The library-style landing page of /resource: libraries (once — the sidebar
- * holds the full index), then works → recent pages → recent files, instead of
- * the flat all-files table (which now lives at /resource/all).
+ * The Docs home: three ways to add something, then everything in Docs as one
+ * list — recently updated, created by me, or shared by teammates.
  */
 const ResourceHomeDashboard = memo(() => {
   const { t } = useTranslation('file');
+  const [tab, setTab] = useState<DocsHomeTab>('recent');
+  const refreshDocsHome = useHomeStore((s) => s.refreshDocsHome);
 
   return (
     <Flexbox height={'100%'}>
       <NavHeader
-        left={<Flexbox style={{ marginLeft: 8 }}>{t('resource')}</Flexbox>}
+        left={<Flexbox style={{ marginLeft: 8 }}>{t('docs.section.home')}</Flexbox>}
         right={<AddButton />}
         style={{ borderBottom: `1px solid ${cssVar.colorBorderSecondary}` }}
       />
-      <div className={styles.scroll}>
-        <Flexbox className={styles.content} gap={40}>
-          <Libraries />
-          <RecentWorks />
-          <RecentPages />
-          <RecentFiles />
+      <div {...stylex.props(styles.scroll)}>
+        <Flexbox gap={28} {...stylex.props(styles.content)}>
+          <QuickActions onCreated={() => void refreshDocsHome()} />
+          <HomeList tab={tab} onTabChange={setTab} />
         </Flexbox>
       </div>
     </Flexbox>

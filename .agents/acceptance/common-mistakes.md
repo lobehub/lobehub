@@ -39,6 +39,7 @@ the next free number of that prefix.
 - **L-E20** Build fixtures through the same composition the product uses; compare an entity page against a canary-created sibling before publishing it as evidence.
 - **L-E21** Evidence for "A is unaffected by B" must be able to tell A from B: distinct content and the target echoed in the request line.
 - **L-E21** Publish against production even when the subject exists only locally; a local ingest may supplement, never replace.
+- **L-E22** `requiredEvidence: text` is satisfied only by `.txt`/`.json`-style files; an `.md` file ingests as `markdown` and leaves the check `uncertain`.
 
 **Product and interaction contracts**
 
@@ -66,6 +67,7 @@ the next free number of that prefix.
 - **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
 - **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
 - **L-S25** `dev:static` 的 Electron 重启会清空 `dist/renderer`（renderer Vite dev server 启动即删 outDir）；`start`/`restart` 后必须重建 renderer 再驱动，否则页面只有 Internal Server Error。
+- **L-S26** 根 `.env` 起不来时不修它：开一个没有 `.env` 的 worktree，先按 L-S23 装依赖、L-S20 取端口、L-S9 建 per-run 库，再 `setup-db` → `migrate` → `seed-user` → `dev`。
 
 ## Entries
 
@@ -605,3 +607,32 @@ dev.mjs 每次启动都会拉起 renderer Vite dev server，而后者启动即�
 **Rule:** 每次 `start`/`restart` 之后、驱动之前，先 `cd apps/desktop && pnpm build:renderer`
 （约 25s）并确认 `dist/renderer/apps/desktop/index.html` 存在。同一个 dev.mjs 生命周期内
 的后续重启不会再次清空；改用 `restart` 而不是 `start` 时也按同一规则处理。
+
+### L-E22 — 用 .md 文件充当 text 证据
+
+`since 2026-10-21` · `holds-while: lh acceptance run ingest 按扩展名推断证据类型，.md → markdown`
+
+**Trap:** 计划项声明 `requiredEvidence: ["text"]`，唯一的文本证据是 `assets/*.md`。`ingest --dry-run`
+不报错，正式发布却返回 `publicationStatus: partial`，这些检查被记成 `uncertain`。原因是 `.md`
+被存成 `markdown` 类型，不算 `text`。
+
+**Rule:** 文本类执行记录用 `.txt` 或 `.json` 保存；必须用 Markdown 排版时，另附一份同内容的
+`.txt`。发布后用 `lh acceptance run result list --run <id> --json` 核对每项 verdict。已发布的轮次
+用 `lh acceptance run result submit --type text --file <x>.txt --verdict ...` 补交，不要新开一轮。
+
+### L-S26 — 在坏掉的根 `.env` 上原地硬修
+
+`since 2026-10-23` · `holds-while: init-dev-env.sh 在根 .env 存在时直接退出，dev-server.md 只写了「有 .env 用现有配置」这一条分支`
+
+**Trap:** repo 根目录有 `.env`（Neon 口令已失效，或 `DATABASE_URL` 被指到本地库但 schema 落后、缺
+`agent_history_jobs`），于是走「有 `.env` 就用现有配置」这条分支：`bun run dev` 起来但登录 500，
+`setup-auth.sh` 又提示 `root .env exists; do not seed or modify this DB`。接下来会去改根 `.env`、改
+`node_modules` 里的依赖硬救——那都是别人的本地配置，救回来也只是这一轮能跑，下一轮照旧。
+
+**Rule:** 根 `.env` 起不来就离开它：`git worktree add --detach /tmp/<slug> <ref-or-sha>` 开一棵没有
+根 `.env` 的树（`--detach`：正在检出的分支不能重复 checkout），再把这条路径走完整——按 L-S23 复制
+一份可用的 `node_modules`（含各 package 自己的），按 L-S20 从 `docker ps` 取容器真实端口，按 L-S9
+在容器里建 per-run 库并导出 `DATABASE_URL`，然后 `init-dev-env.sh setup-db` → `migrate` →
+`seed-user` → `dev`（脚本一律用绝对路径，L-S21；端口从日志取，L-S24）。worktree 路径写进 report，
+teardown 时 `clean` 停服、删掉这个库、`git worktree remove` 移除这棵树。不要在被改坏的根 `.env` 上
+继续调试。

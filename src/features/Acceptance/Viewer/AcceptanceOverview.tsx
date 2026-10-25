@@ -9,6 +9,7 @@ import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
 import AcceptanceCheckOwnerToolbar from './Checks/AcceptanceCheckOwnerToolbar';
 import AcceptanceDiscussion from './Comments/AcceptanceDiscussion';
 import { commentIdFromHash } from './Comments/anchor';
+import CollaborationRequestBanner from './Comments/CollaborationRequestBanner';
 import { countDiscussionMessages } from './Comments/discussionTimeline';
 import { useAcceptanceComments } from './Comments/hooks';
 import ReviewerApprovalBar from './Comments/ReviewerApprovalBar';
@@ -108,6 +109,9 @@ export const AcceptanceOverview = ({
             <AcceptanceShare />
           </Flexbox>
           {!gateDossier && <AcceptanceGoal editSlot={<AcceptanceGoalEdit />} />}
+          {/* About the delivery as a whole, not one tab's face of it — a reviewer
+              reading the discussion needs it as much as one on the checklist. */}
+          <CollaborationRequestBanner />
           {/* The requirement needs room to land before the tabs start a new
               thought — at the band's uniform gap it read as another row of
               the same list. */}

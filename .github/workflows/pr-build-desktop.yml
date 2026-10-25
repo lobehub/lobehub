@@ -103,11 +103,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
-          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          cloud-token: ${{ steps.overlay-token.outputs.token }}
           node-version: 24.11.1
 
       # 设置 package.json 的版本号

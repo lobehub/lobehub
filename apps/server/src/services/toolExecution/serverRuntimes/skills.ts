@@ -44,6 +44,7 @@ import {
   resolveSandboxSessionConfig,
   type SandboxSessionSpecification,
 } from '@/server/services/sandbox';
+import type { SandboxInitialization } from '@/server/services/sandbox/environmentInit';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
@@ -159,6 +160,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
+  private sandboxInitialization?: SandboxInitialization;
   private sandboxWorkingDir?: string;
   private sandboxInstanceId?: string;
   private sandboxMode?: SandboxMode;
@@ -197,6 +199,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      * CLIs, injected credentials and anything outside the workspace with it.
      */
     sandboxCwd?: string;
+    sandboxInitialization?: SandboxInitialization;
     sandboxInstanceId?: string;
     sandboxMode?: SandboxMode;
     sandboxSpecification?: SandboxSessionSpecification;
@@ -221,6 +224,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
+    this.sandboxInitialization = options.sandboxInitialization;
     this.sandboxWorkingDir = options.sandboxWorkingDir;
     this.sandboxInstanceId = options.sandboxInstanceId;
     this.sandboxMode = options.sandboxMode;
@@ -360,6 +364,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -718,6 +723,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -781,6 +787,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -957,6 +964,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       operationId: context.operationId,
       resourceService,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,

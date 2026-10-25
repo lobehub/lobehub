@@ -38,8 +38,31 @@ export interface SecretInputViewProps {
 }
 
 /**
+ * Whether the primary Save button must stay disabled: blocked (lookup failed /
+ * permission lost / type mismatch — the fields are replaced by the reason, so
+ * a completed form must not submit over it), inert (disabled or a write in
+ * flight), a prose confirmation pending (handleSubmit rejects ordinary saves
+ * until `confirmProseSubmit` runs, so a clickable Save would only look stuck),
+ * or incomplete without a prose confirmation pending. The secondary "Save
+ * anyway" control has its own gates and is unaffected by this predicate.
+ */
+export const isSecretSubmitDisabled = ({
+  blockedReason,
+  complete,
+  inert,
+  proseWarning,
+}: {
+  blockedReason?: ReactNode;
+  complete: boolean;
+  inert: boolean;
+  proseWarning?: string[] | undefined;
+}) => inert || !!blockedReason || !!proseWarning || (!complete && !proseWarning);
+
+/**
  * Password-style form for secrets that must not enter the agent context. See
- * {@link useSecretInputForm} for how long the values are kept.
+ * {@link useSecretInputForm} for how long the values are kept, and for the
+ * prose guard that holds a submit whose values look like pasted chat text
+ * (a CJK sentence or a long multi-word paste) until the user confirms.
  */
 const SecretInputView = memo<SecretInputViewProps>(
   ({
@@ -53,22 +76,53 @@ const SecretInputView = memo<SecretInputViewProps>(
     onCancel,
     onSubmit,
   }) => {
-    const { complete, formKey, handleChange, handleSubmit, submitting } = useSecretInputForm({
-      fields,
-      onSubmit,
-    });
+    const {
+      complete,
+      confirmProseSubmit,
+      formKey,
+      handleChange,
+      handleSubmit,
+      proseWarning,
+      submitting,
+    } = useSecretInputForm({ fields, onSubmit });
 
     const inert = disabled || submitting;
-    const canSubmit = !inert && !blockedReason && complete;
+
+    const proseActions = proseWarning && (
+      <Flexbox gap={8} role={'alert'}>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <Icon color={cssVar.colorWarning} icon={CircleAlert} size={14} />
+          <Text fontSize={12} type={'warning'}>
+            {labels.proseWarning(proseWarning)}
+          </Text>
+        </Flexbox>
+        <Button
+          disabled={inert || !!blockedReason}
+          loading={submitting}
+          onClick={() => void confirmProseSubmit()}
+          size={'small'}
+        >
+          {labels.confirmProse}
+        </Button>
+      </Flexbox>
+    );
 
     const actions = (
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button disabled={inert} onClick={onCancel}>
-          {labels.cancel}
-        </Button>
-        <Button disabled={!canSubmit} loading={submitting} type={'primary'} onClick={handleSubmit}>
-          {submitting ? labels.submitting : labels.submit}
-        </Button>
+      <Flexbox gap={8}>
+        {proseActions}
+        <Flexbox horizontal gap={8} justify={'flex-end'}>
+          <Button disabled={inert} onClick={onCancel}>
+            {labels.cancel}
+          </Button>
+          <Button
+            disabled={isSecretSubmitDisabled({ blockedReason, complete, inert, proseWarning })}
+            loading={submitting}
+            type={'primary'}
+            onClick={() => void handleSubmit()}
+          >
+            {submitting ? labels.submitting : labels.submit}
+          </Button>
+        </Flexbox>
       </Flexbox>
     );
 
@@ -95,7 +149,7 @@ const SecretInputView = memo<SecretInputViewProps>(
                   spellCheck={false}
                   onChange={(event) => handleChange(field, event.target.value)}
                   onPressEnter={() => {
-                    if (canSubmit) void handleSubmit();
+                    if (complete || proseWarning) void handleSubmit();
                   }}
                 />
               </Flexbox>

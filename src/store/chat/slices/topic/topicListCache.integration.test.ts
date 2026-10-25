@@ -20,6 +20,7 @@ import { type Cache, SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, createReplicaState } from '@/libs/replica';
+import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
 import { localDataCache } from '@/libs/swr/localDataCache';
 import { createCacheProvider } from '@/libs/swr/localStorageProvider';
 import { setScopedMutate } from '@/libs/swr/mutate';
@@ -366,5 +367,29 @@ describe('persisted topic list across a reload', () => {
     expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]).toBeUndefined();
     expect(useChatStore.getState().topicListReplica.scope).toBe(scopeB);
     sessionB.unmount();
+  });
+
+  /** @example A workspace switch while the "only mine" preference loads must not keep the previous workspace's topics on screen. */
+  it('drops another scope’s list on a scope switch while the sync is gated off', async () => {
+    resetCacheScopeBroadcast();
+    const scopeA = createScope();
+    vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
+    const sessionA = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
+      wrapper: wrapper(makeProvider(scopeA)),
+    });
+    await waitFor(() =>
+      expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items).toHaveLength(1),
+    );
+    sessionA.unmount();
+
+    const scopeB = useScope(`${SCOPE_PREFIX}:${randomUUID()}`);
+    const gated = renderHook(() => useChatStore().useFetchTopics(false, { agentId: AGENT_ID }), {
+      wrapper: wrapper(makeProvider(scopeB)),
+    });
+    act(() => broadcastCacheScope(scopeB));
+
+    expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]).toBeUndefined();
+    expect(useChatStore.getState().topicListReplica.scope).toBe(scopeB);
+    gated.unmount();
   });
 });

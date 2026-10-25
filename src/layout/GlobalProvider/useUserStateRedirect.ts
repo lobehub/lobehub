@@ -12,6 +12,9 @@ const DEFER_REDIRECT_PREFIXES = ['/invite'];
 // `/a/:slugOrId` (agent-share visitor page) is deliberately NOT listed: a
 // user who followed a share link should reach the shared agent, not be
 // bounced into onboarding first.
+// `verify-im` must stay listed: binding an IM account lets that platform start
+// agent runs, which an un-onboarded account cannot use, so the binding link
+// detours through onboarding and returns via `callbackUrl`.
 const RESERVED_FIRST_SEGMENTS = new Set([
   'agent',
   'apps',
@@ -37,6 +40,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'subscription',
   'task',
   'tasks',
+  'verify-im',
   'video',
 ]);
 

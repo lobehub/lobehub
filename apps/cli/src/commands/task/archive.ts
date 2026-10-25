@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { outputJson } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl } from '../resourceUrl';
 
 export function registerArchiveCommands(task: Command) {
   // ── archive / unarchive ─────────────────────────────────
@@ -20,7 +21,10 @@ export function registerArchiveCommands(task: Command) {
         const result = await client.task.archive.mutate({ archived, id });
 
         if (options.json !== undefined) {
-          outputJson(result.data, options.json);
+          outputJson(
+            withUrl(result.data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
+            options.json,
+          );
           return;
         }
 

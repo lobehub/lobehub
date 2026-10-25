@@ -50,6 +50,20 @@ describe('deduplicateRemoteModels', () => {
     ]);
   });
 
+  it('should keep the last auto-generated decision model with a duplicate id', () => {
+    const result = deduplicateRemoteModels([
+      { id: 'gpt-6-luna', source: 'base' },
+      { id: 'gpt-6-luna:decision', source: 'provider' },
+      { id: 'gpt-6-luna:decision', source: 'generated' },
+    ]);
+
+    expect(result.models).toEqual([
+      { id: 'gpt-6-luna', source: 'base' },
+      { id: 'gpt-6-luna:decision', source: 'generated' },
+    ]);
+    expect(result.duplicateIds).toEqual(['gpt-6-luna:decision']);
+  });
+
   it('should count every removed entry while reporting each duplicate id once', () => {
     const result = deduplicateRemoteModels([
       { id: 'duplicate-model', value: 1 },

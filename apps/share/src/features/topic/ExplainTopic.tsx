@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-export default function ExplainTopic({ shareId }: { shareId: string }) {
+export function useExplainTopicAction(shareId: string) {
   const { t } = useTranslation('chat');
   const [loading, setLoading] = useState(false);
 
@@ -23,9 +23,18 @@ export default function ExplainTopic({ shareId }: { shareId: string }) {
     }
   };
 
+  return { copyPrompt, loading, label: t('sharePage.explain.action') };
+}
+
+export default function ExplainTopic({
+  action,
+}: {
+  action: ReturnType<typeof useExplainTopicAction>;
+}) {
+  const { copyPrompt, loading, label } = action;
   return (
     <Button icon={Sparkles} loading={loading} size={'small'} type={'fill'} onClick={copyPrompt}>
-      {t('sharePage.explain.action')}
+      {label}
     </Button>
   );
 }

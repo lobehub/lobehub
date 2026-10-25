@@ -46,8 +46,6 @@
   "features.taskVerify.title": "Acceptance",
   "features.topicBugReport.desc": "Adds Report Bug to the topic menu. Send the topic’s IDs, your app environment, and optional attachments to the LobeHub support team.",
   "features.topicBugReport.title": "Report Bug",
-  "features.workspaceOnboarding.desc": "When you first enter a workspace you just created, set it up with the new guided flow: connect the team’s apps, get a team profile, hire the team assistant, invite members, connect team chats and devices, and pick starter tasks. Off keeps the previous setup flow.",
-  "features.workspaceOnboarding.title": "New Workspace Onboarding",
   "group.desktop": "Desktop",
   "group.general": "General",
   "group.workspace": "Workspace",

@@ -211,6 +211,11 @@ export interface ToolEndData {
 export interface StepCompleteData {
   /** Present only when the run opts into includeFinalState. */
   finalState?: unknown;
+  /**
+   * User-facing LLM-call total after this step. Independent of `event.stepIndex`
+   * (the internal execution index used for scheduling and idempotency).
+   */
+  llmCalls?: number;
   phase: string;
   reason?: string;
   reasonDetail?: string;

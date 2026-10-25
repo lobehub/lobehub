@@ -1,8 +1,10 @@
 import {
+  type CanvasWorkPublishMetadata,
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
   type DeleteWorkParams,
   isWorkSkillProvider,
+  type RegisterCanvasWorkParams,
   type RegisterDocumentWorkParams,
   type RegisterExternalWorkParams,
   type RegisterFileWorkParams,
@@ -16,6 +18,14 @@ import {
 } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '../../type';
+import {
+  findCanvasWork,
+  findCanvasWorkVersion,
+  findReferencedCanvasManifestKeys,
+  listCanvasWorks,
+  recordCanvasPublish,
+  registerCanvasWork,
+} from './canvas';
 import type { WorkContext } from './context';
 import { registerDocumentWork } from './document';
 import { registerExternalWork } from './external';
@@ -82,6 +92,25 @@ export class WorkModel {
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
 
+  registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
+    registerCanvasWork(this.ctx, params);
+
+  findCanvas = (canvasId: string) => findCanvasWork(this.ctx, canvasId);
+
+  recordCanvasPublish = (
+    canvasId: string,
+    params: CanvasWorkPublishMetadata & { url: string },
+  ): Promise<WorkItem | null> => recordCanvasPublish(this.ctx, canvasId, params);
+
+  findCanvasVersion = (workId: string, version: number) =>
+    findCanvasWorkVersion(this.ctx, workId, version);
+
+  findReferencedCanvasManifestKeys = (keys: string[]) =>
+    findReferencedCanvasManifestKeys(this.ctx, keys);
+
+  listCanvases = (params: { agentId?: string | null; limit?: number }) =>
+    listCanvasWorks(this.ctx, params);
+
   registerGoalReport = (params: RegisterGoalReportWorkParams): Promise<WorkItem> =>
     registerGoalReportWork(this.ctx, params);
 
@@ -139,7 +168,7 @@ export class WorkModel {
   deleteTaskWork = (params: DeleteTaskWorkParams): Promise<void> =>
     writes.deleteTaskWork(this.ctx, params);
 
-  deleteWork = (params: DeleteWorkParams): Promise<void> => writes.deleteWork(this.ctx, params);
+  deleteWork = (params: DeleteWorkParams) => writes.deleteWork(this.ctx, params);
 
   /** See {@link writes.setTaskWorksVisibility}. */
   setTaskWorksVisibility = (taskIds: string[], visibility: WorkVisibility): Promise<void> =>

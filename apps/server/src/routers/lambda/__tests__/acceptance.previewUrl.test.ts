@@ -74,11 +74,23 @@ describe('acceptanceRouter.setPreviewUrl', () => {
       });
   });
 
-  it('hides the acceptance from someone who cannot manage it', async () => {
+  it('hides a private acceptance from someone who cannot read it', async () => {
+    await testDB
+      .update(acceptances)
+      .set({ visibility: 'private' })
+      .where(eq(acceptances.id, acceptanceId));
     const stranger = await createTestUser(testDB);
     await expect(
       caller(stranger).setPreviewUrl({ id: acceptanceId, url: 'https://x.example.com/' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('tells a reader of a public acceptance that they cannot change it', async () => {
+    const stranger = await createTestUser(testDB);
+    await expect(
+      caller(stranger).setPreviewUrl({ id: acceptanceId, url: 'https://x.example.com/' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect((await metadataOf(latestRunId))?.previewUrl).toBeUndefined();
   });
 
   it('needs a round to attach the preview to', async () => {

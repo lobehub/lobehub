@@ -16,6 +16,8 @@ export interface BotPlatformContext {
   /** Pre-injected recent same-channel history for platforms without history-read. */
   recentChannelHistory?: BotPlatformInfo['recentChannelHistory'];
   supportsMarkdown: boolean;
+  /** `followup` tells the agent it may stay silent (see `formatBotPlatformContext`). */
+  wakeKind?: BotPlatformInfo['wakeKind'];
   warnings?: string[];
 }
 

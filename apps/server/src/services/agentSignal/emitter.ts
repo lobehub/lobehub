@@ -2,7 +2,6 @@ import type { DedupedSourceEventResult } from '@lobechat/agent-signal';
 import {
   type AgentSignalSourceEventInput as SharedAgentSignalSourceEventInput,
   type AgentSignalSourceType,
-  createSourceEvent,
   getSourceEventScopeKey,
   type SourceAgentExecutionCompleted,
   type SourceAgentExecutionFailed,
@@ -11,18 +10,17 @@ import {
   type SourceRuntimeAfterStep,
   type SourceRuntimeBeforeStep,
 } from '@lobechat/agent-signal/source';
-import debug from 'debug';
 
-import { getServerDB } from '@/database/server';
 import type { LobeChatDatabase } from '@/database/type';
-import { assertAgentUsableBy } from '@/database/utils/agent-access';
-import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 
-import { isAgentSignalEnabledForUser } from './featureGate';
-import type { GeneratedAgentSignalEmissionResult } from './orchestrator';
+import {
+  executeAgentSignalSourceEvent,
+  type GeneratedAgentSignalEmissionResult,
+} from './orchestrator';
 import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
-
-const log = debug('lobe-server:agent-signal:service');
+import type { BotWakeConfig, CreateBotWakePolicyOptions } from './scenarios/botWake';
+import { getAgentSignalScenarioMeta, isAgentSignalScenarioEnabled } from './scenarios/meta';
+import type { AgentSignalScenarioId } from './scenarios/types';
 
 export interface AgentSignalExecutionContext {
   agentId?: string;
@@ -51,21 +49,18 @@ export interface AgentSignalPolicyOptionOverrides extends Omit<
   Partial<CreateDefaultAgentSignalPoliciesOptions>,
   'skillManagement'
 > {
+  /** Bot-wake scenario policy wiring. */
+  botWake?: CreateBotWakePolicyOptions;
   skillManagement?: Partial<
     NonNullable<CreateDefaultAgentSignalPoliciesOptions['skillManagement']>
   >;
 }
 
 export interface AgentSignalEmitOptions {
+  /** Bot configuration the bot-wake scenario gate reads. Ignored by other scenarios. */
+  botWakeConfig?: BotWakeConfig | null;
   ignoreError?: boolean;
   policyOptions?: AgentSignalPolicyOptionOverrides;
-}
-
-/** One AgentSignal async handoff result. */
-export interface QueuedAgentSignalEmissionResult {
-  accepted: boolean;
-  scopeKey: string;
-  workflowRunId: string;
 }
 
 export type RuntimeAgentSignalSourceInput<TSourceType extends RuntimeProducerSourceType> =
@@ -113,82 +108,61 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
   context: AgentSignalExecutionContext,
   options: AgentSignalEmitOptions = {},
 ): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
-  const selfIterationEnabled = await isAgentSignalEnabledForUser(context.db, context.userId);
+  const selfIterationEnabled = await isAgentSignalScenarioEnabled('self-iteration', {
+    db: context.db,
+    userId: context.userId,
+  });
 
   if (!selfIterationEnabled) {
     return undefined;
   }
 
-  // Lazy-loaded on purpose: `orchestrator` pulls the agent-execution / model-runtime
-  // core, while this emitter is imported on the light request path (e.g. from
-  // aiAgent). Importing it statically would drag that whole subsystem — which
-  // eagerly touches server-only env at module init — into every emitter import.
-  const { executeAgentSignalSourceEvent } = await import('./orchestrator');
-
+  // Static import on purpose: server code keeps a single, visible dependency graph
+  // (`no-dynamic-import-in-server`), so `orchestrator` is loaded with this module rather
+  // than deferred to request time.
   return executeAgentSignalSourceEvent(input, context, withSelfIterationPolicy(options, true));
 };
 
+// Re-exported so the public `agentSignal` boundary keeps a single entry point while
+// `procedure/*` imports the leaf module directly (see enqueue.ts for why).
+export type { QueuedAgentSignalEmissionResult } from './enqueue';
+export { enqueueAgentSignalSourceEvent } from './enqueue';
+
 /**
- * Enqueues one source event for async AgentSignal execution through Upstash Workflow.
+ * Runs one source event through a named scenario and awaits its orchestration result.
  *
  * Use when:
- * - The caller should return quickly and let async policy execution happen out-of-band
- * - The source event should still reuse the normal AgentSignal normalization boundary
+ * - The caller needs the verdict in the same request, for example the bot-wake decision
+ * - The scenario is registered as `sync`; the event never goes through the Upstash workflow
  *
  * Expects:
- * - Payload contains enough routing context to derive a stable scope key
+ * - `options.botWakeConfig` carries the bot configuration for the bot-wake gate
  *
  * Returns:
- * - The accepted workflow run identifier and normalized scope key
+ * - `undefined` when the scenario gate is closed, otherwise the same result as
+ *   {@link emitAgentSignalSourceEvent}
  */
-export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSignalSourceType>(
+export const emitAgentSignalScenarioEvent = async <TSourceType extends AgentSignalSourceType>(
+  scenarioId: AgentSignalScenarioId,
   input: AgentSignalSourceEventInput<TSourceType>,
-  context: Pick<AgentSignalExecutionContext, 'agentId' | 'userId' | 'workspaceId'>,
-): Promise<QueuedAgentSignalEmissionResult> => {
-  const db = await getServerDB();
+  context: AgentSignalExecutionContext,
+  options: AgentSignalEmitOptions = {},
+): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
+  const scenario = getAgentSignalScenarioMeta(scenarioId);
 
-  // Reject signals targeting an agent the caller can't use. Source events from
-  // user-facing TRPC routes (`emitSourceEvent` / `triggerSourceEvent`) accept a
-  // free-form `agentId`; without this gate a workspace member could enqueue
-  // events against another user's private agent. Server-internal callers always
-  // pass an agentId the user owns, so the check is a no-op for them.
-  if (context.agentId) {
-    await assertAgentUsableBy(db, context.agentId, {
-      userId: context.userId,
-      workspaceId: context.workspaceId,
-    });
+  if (scenario.execution !== 'sync') {
+    throw new Error(
+      `[AgentSignal] Scenario "${scenarioId}" is async; enqueue it instead of awaiting it.`,
+    );
   }
 
-  if (!(await isAgentSignalEnabledForUser(db, context.userId))) {
-    return {
-      accepted: false,
-      scopeKey: input.scopeKey ?? resolveSourceScopeKey(input.payload),
-      workflowRunId: '',
-    };
-  }
-
-  const sourceEvent = createSourceEvent(input);
-
-  log('Enqueueing source event payload=%O', {
-    agentId: context.agentId,
-    payload: sourceEvent.payload,
-    scopeKey: sourceEvent.scopeKey,
-    sourceId: sourceEvent.sourceId,
-    sourceType: sourceEvent.sourceType,
-    timestamp: sourceEvent.timestamp,
+  const enabled = await isAgentSignalScenarioEnabled(scenarioId, {
+    botWake: options.botWakeConfig,
+    db: context.db,
     userId: context.userId,
   });
 
-  const trigger = await AgentSignalWorkflow.triggerRun({
-    agentId: context.agentId,
-    sourceEvent,
-    userId: context.userId,
-    workspaceId: context.workspaceId,
-  });
+  if (!enabled) return undefined;
 
-  return {
-    accepted: true,
-    scopeKey: sourceEvent.scopeKey,
-    workflowRunId: trigger.workflowRunId,
-  };
+  return executeAgentSignalSourceEvent(input, context, { ...options, scenario: scenarioId });
 };

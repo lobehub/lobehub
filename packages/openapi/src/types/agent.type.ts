@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
+import { PaginationQuerySchema } from './common.type';
 
 // ==================== Agent CRUD Types ====================
 
@@ -17,13 +18,21 @@ export interface CreateAgentRequest {
   description?: string;
   model?: string;
   params?: Record<string, unknown>;
+  personal?: boolean;
   plugins?: Array<{ identifier: string; mode?: 'pinned' | 'auto' | 'disabled' }>;
   provider?: string;
   systemRole?: string;
   title: string;
 }
 
-export type GetAgentsRequest = IPaginationQuery;
+export type GetAgentsRequest = IPaginationQuery & { personal?: boolean };
+
+export const GetAgentsQuerySchema = PaginationQuerySchema.extend({
+  personal: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+});
 
 export const CreateAgentRequestSchema = z.object({
   agencyConfig: z
@@ -68,6 +77,7 @@ export const CreateAgentRequestSchema = z.object({
     )
     .optional(),
   params: z.record(z.string(), z.unknown()).nullish(),
+  personal: z.boolean().optional(),
   provider: z.string().nullish(),
   systemRole: z.string().nullish(),
   title: z.string().min(1, 'Title cannot be empty'),

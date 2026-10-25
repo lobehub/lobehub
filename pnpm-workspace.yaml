@@ -62,11 +62,13 @@ allowBuilds:
   workerd: true
 
 overrides:
-  '@lobehub/ui': ^6.0.4
+  '@lobehub/ui': ^6.1.0
   '@lobehub/icons': ^6.0.0
   '@lobehub/editor': ^5.0.0
   '@lobehub/charts': ^6.0.0
   '@lobehub/fluent-emoji': ^5.0.0
+  # Stay on the latest 1.9.x: @opentelemetry/*@2.x peers reject 1.10.0, and mixing both splits drizzle-orm into duplicate peer variants.
+  '@opentelemetry/api': 1.9.1
   '@react-pdf/image': 3.0.4
   # 0.2.11 moved the optional `import('zod-openapi')` out of try/catch, which fails the Turbopack build.
   '@standard-community/standard-openapi': 0.2.10

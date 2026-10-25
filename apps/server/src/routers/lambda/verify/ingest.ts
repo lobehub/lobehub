@@ -17,6 +17,8 @@ import { evidenceTypeForStoredFile, resolveLiveRoundForItem } from '@/server/ser
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
+  assertEvidenceOnlySubmission,
+  assertOperationInScope,
   resolveCheckResult,
   resolveVerifyRun,
   verifyProcedure,
@@ -199,6 +201,12 @@ export const ingestRouter = router({
       // Attaching evidence mutates another member's result — creator-scoped,
       // mirroring submitCheckEvidence.
       assertWorkspaceRowManageable(ctx, result.userId, 'verify result');
+      if (ctx.heteroOperationScope) {
+        const run = result.verifyRunId
+          ? await ctx.runModel.findById(result.verifyRunId)
+          : undefined;
+        assertOperationInScope(ctx, run?.operationId);
+      }
 
       return createVerifyEvidenceRow(ctx, result.id, input);
     }),
@@ -249,11 +257,15 @@ export const ingestRouter = router({
         }),
     )
     .mutation(async ({ ctx, input }) => {
+      assertEvidenceOnlySubmission(ctx, input);
       const namedRun = input.verifyRunId
         ? await resolveVerifyRun(ctx, input.verifyRunId)
         : await resolveRunByOperation(ctx, input.operationId!);
       // The idempotent upsert overwrites the run's existing result rows.
       assertWorkspaceRowManageable(ctx, namedRun.userId, 'verify run');
+      // A run's token names its own round; the repair redirect below is the
+      // server's choice, not the caller's.
+      assertOperationInScope(ctx, namedRun.operationId);
       // A round whose failure already spawned a repair is never judged again;
       // land the submission on the round the repair will be judged in.
       const run = await resolveLiveRoundForItem(ctx, namedRun, input.checkItemId);
@@ -297,11 +309,9 @@ export const ingestRouter = router({
       });
 
       const evidence = input.evidence?.length
-        ? await pMap(
-            input.evidence,
-            (e) => createVerifyEvidenceRow(ctx, checkResult.id, e),
-            { concurrency: EVIDENCE_WRITE_CONCURRENCY },
-          )
+        ? await pMap(input.evidence, (e) => createVerifyEvidenceRow(ctx, checkResult.id, e), {
+            concurrency: EVIDENCE_WRITE_CONCURRENCY,
+          })
         : [];
 
       return { checkResult, evidence };

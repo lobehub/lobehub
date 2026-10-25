@@ -10,6 +10,9 @@ import type {
   PlatformClient,
   WatchKeywordEntry,
 } from '../platforms';
+import type { WakeMessageLike } from '../wake/signal';
+import type { FollowupGate } from './followupGate';
+import type { BotWakeEntryPoint, BotWakeReason } from './wakeDecision';
 
 export interface ResolvedAgentInfo {
   agentId: string;
@@ -117,6 +120,8 @@ export type BotAccessGate = (
 export interface BotHandlerContext {
   agentId: string;
   applicationId: string;
+  /** The bot has the bot-wake scenario enabled: it listens to unaddressed channel chatter. */
+  botWakeEnabled: boolean;
   bridge: AgentBridgeService;
   charLimit?: number;
   client: PlatformClient;
@@ -124,7 +129,18 @@ export interface BotHandlerContext {
   detectReplyLocale: (message: { author?: unknown }) => BotReplyLocale;
   displayToolCalls: boolean;
   dmSettings: DmSettings;
+  /** Last check before a follow-up wake (watch keyword) runs: enforced policies, then the scheduler. */
+  gateFollowup: FollowupGate;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
+  /** Records the wake decision a branch just made. Observation only; never throws. */
+  observe: (
+    entryPoint: BotWakeEntryPoint,
+    message: WakeMessageLike,
+    thread: { id: string },
+    outcome: 'defer' | 'skip' | 'wake',
+    reason: BotWakeReason,
+    threadSubscribed?: boolean,
+  ) => void;
   operatorUserId?: string;
   passGatesOrNotify: BotAccessGate;
   platform: string;

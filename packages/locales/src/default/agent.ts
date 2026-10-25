@@ -634,6 +634,8 @@ export default {
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
   'share.settings.tools.onDemandDesc':
     'Not enabled on this Agent. Once granted, the model turns it on in a visitor run only when needed.',
+  'share.settings.tools.ownerCredentials':
+    'Visitors use MCP servers, connections and plugins with your accounts and credentials.',
   'share.settings.tools.showOnDemand': 'Show on-demand tools',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',
@@ -669,9 +671,13 @@ export default {
   'share.visitor.input.send': 'Send',
   'share.visitor.input.stop': 'Stop',
   'share.visitor.privacyNotice':
-    'This topic runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+    'This topic runs on the creator’s account. Only you can see its messages.',
+  'share.visitor.privacyNoticeCreatorVisible':
+    'This topic runs on the creator’s account. The creator has turned on topic access and may read its messages, so avoid sharing sensitive information.',
   'share.visitor.privacyNoticeWorkspace':
-    'This topic is paid for by the Workspace and may be visible to the Agent creator. Avoid sharing sensitive information.',
+    'This topic runs in the owner Workspace. Only you can see its messages.',
+  'share.visitor.privacyNoticeWorkspaceCreatorVisible':
+    'This topic runs in the owner Workspace. The Agent creator has turned on topic access and may read its messages, so avoid sharing sensitive information.',
   'share.visitor.profile.about': 'About',
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
   'share.visitor.profile.cta': 'Start a topic',
@@ -705,7 +711,7 @@ export default {
     'You can attach files; this Agent has {{size}} of file storage for visitors.',
   'share.visitor.profile.terms.uploadsOff': 'Attachments are turned off.',
   'share.visitor.profile.terms.visibilityCreator':
-    'The creator has enabled topic access, so they can read the messages in this topic.',
+    'The creator has turned on topic access and may read the messages in your topics.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.topics.empty': 'No topics yet',
@@ -818,6 +824,7 @@ export default {
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
   'share.visitor.profile.works.open': 'Open work',
+  'share.visitor.profile.works.type.canvas': 'Canvas',
   'share.visitor.profile.works.type.document': 'Document',
   'share.visitor.profile.works.type.task': 'Task',
   'share.visitor.profile.works.type.file': 'File',

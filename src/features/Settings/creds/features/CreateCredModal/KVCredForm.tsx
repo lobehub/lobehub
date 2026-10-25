@@ -1,7 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Input, InputPassword, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Input, InputPassword, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
@@ -9,19 +10,10 @@ import { useTranslation } from 'react-i18next';
 
 import { type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-  kvPair: css`
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-  `,
-}));
+const styles = stylex.create({
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+  kvPair: { display: 'flex', gap: '8px', alignItems: 'flex-start' },
+});
 
 interface KVCredFormProps {
   credsApi: CredsApi;
@@ -101,7 +93,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
           {({ fields, add, remove }) => (
             <Flexbox gap={8}>
               {fields.map(({ key, index }) => (
-                <div className={styles.kvPair} key={key}>
+                <div {...stylex.props(styles.kvPair)} key={key}>
                   <div style={{ flex: 1 }}>
                     <Form.Field bare name={`kvPairs.${index}.key`}>
                       <Input
@@ -152,7 +144,7 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
         />
       </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
         <Button
           disabled={disabled}

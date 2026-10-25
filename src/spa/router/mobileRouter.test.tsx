@@ -7,6 +7,31 @@ import { describe, expect, it } from 'vitest';
 import { mobileRoutes } from './mobileRouter.config';
 import { getRouteMetaFromHandle } from './routeMeta';
 
+describe('mobileRouter workspace home', () => {
+  it.each(['/acme', '/acme/'])(
+    'renders the mobile home page and layout within the workspace boundary at %s',
+    (pathname) => {
+      const personalMatches = matchRoutes(mobileRoutes, '/')!;
+      const workspaceMatches = matchRoutes(mobileRoutes, pathname)!;
+
+      expect(workspaceMatches.some((match) => match.route.path === ':workspaceSlug')).toBe(true);
+      expect(workspaceMatches.at(-1)?.params.workspaceSlug).toBe('acme');
+      expect(workspaceMatches.at(-1)?.route.element).toBeTruthy();
+      expect(workspaceMatches.at(-1)?.route.element).toBe(personalMatches.at(-1)?.route.element);
+      expect(workspaceMatches.at(-2)?.route.element).toBe(personalMatches.at(-2)?.route.element);
+    },
+  );
+
+  it('keeps workspace conversations outside the home layout', () => {
+    const homeMatches = matchRoutes(mobileRoutes, '/acme')!;
+    const chatMatches = matchRoutes(mobileRoutes, '/acme/agent/agt_fixture')!;
+    const homeLayout = homeMatches.at(-2)?.route;
+
+    expect(chatMatches.at(-1)?.params).toMatchObject({ aid: 'agt_fixture', workspaceSlug: 'acme' });
+    expect(chatMatches.some((match) => match.route === homeLayout)).toBe(false);
+  });
+});
+
 describe('mobileRouter agent share route', () => {
   it('leaves the agent-share visitor surface to the business routes', () => {
     // Agent sharing runs a visitor's conversation on the creator's account, so
@@ -110,5 +135,29 @@ describe('mobileRouter page routes', () => {
 
     expect(matches?.some((match) => match.route.path === ':workspaceSlug')).toBe(true);
     expect(matches?.at(-1)?.route.path).toBe(':id');
+  });
+});
+
+describe('mobileRouter acceptance routes', () => {
+  it('keeps the personal report and check routes unprefixed', () => {
+    expect(matchRoutes(mobileRoutes, '/acceptance/acc_1')?.at(-1)?.route.path).toBe(
+      '/acceptance/:acceptanceId',
+    );
+    expect(
+      matchRoutes(mobileRoutes, '/acceptance/acc_1/check/chk_1')?.at(-1)?.params,
+    ).toMatchObject({ acceptanceId: 'acc_1', checkId: 'chk_1' });
+  });
+
+  it('mirrors the report and check routes under a workspace slug', () => {
+    const report = matchRoutes(mobileRoutes, '/my-team/acceptance/acc_1');
+    const check = matchRoutes(mobileRoutes, '/my-team/acceptance/acc_1/check/chk_1');
+
+    expect(report?.some((match) => match.route.path === ':workspaceSlug')).toBe(true);
+    expect(report?.at(-1)?.route.path).toBe('acceptance/:acceptanceId');
+    expect(report?.at(-1)?.params).toMatchObject({
+      acceptanceId: 'acc_1',
+      workspaceSlug: 'my-team',
+    });
+    expect(check?.at(-1)?.params).toMatchObject({ acceptanceId: 'acc_1', checkId: 'chk_1' });
   });
 });

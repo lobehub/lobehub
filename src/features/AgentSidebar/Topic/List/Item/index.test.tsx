@@ -3,7 +3,7 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
 import TopicItem from './index';
@@ -17,6 +17,8 @@ const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undef
 const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
+const onlyMineMock = vi.hoisted(() => ({ value: false }));
+const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as
     | { pullRequest?: { ciStatus?: 'failure' | 'pending' | 'success' | 'unknown'; state: string } }
@@ -92,7 +94,25 @@ vi.mock('@/store/agent', () => ({
       agentMap: Record<string, unknown>;
       builtinAgentIdMap: Record<string, string>;
     }) => unknown,
-  ) => selector({ activeAgentId: 'agt_test', agentMap: {}, builtinAgentIdMap: {} }),
+  ) =>
+    selector({
+      activeAgentId: 'agt_test',
+      agentMap: { agt_test: { visibility: 'public' } },
+      builtinAgentIdMap: {},
+    }),
+}));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/user/selectors', () => ({
+  userProfileSelectors: { userId: () => currentUserIdMock.value },
+}));
+vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
+vi.mock('@/features/TopicCreatorAvatar', () => ({
+  default: ({ userId }: { userId?: string }) => (
+    <div data-testid="creator-avatar" data-user-id={userId} />
+  ),
+  useTopicCreator: (userId?: string) => (userId ? { fullName: 'Member' } : undefined),
 }));
 vi.mock('@/store/chat', () => {
   const useChatStore = (
@@ -166,7 +186,44 @@ describe('TopicItem active state', () => {
     runningStartTimeMock.value = undefined;
     topicUnreadCompletedMock.value = false;
     topicMetaCardMock.value = undefined;
+    onlyMineMock.value = false;
+    currentUserIdMock.value = 'user-1';
     vi.useRealTimers();
+  });
+
+  describe('creator avatar', () => {
+    beforeEach(() => {
+      useTopicNavigationMock.mockReturnValue({
+        focusTopicPopup: vi.fn(),
+        isInAgentSubRoute: false,
+        isInTopicContextRoute: false,
+        navigateToTopic: vi.fn(),
+        routeTopicId: undefined,
+        urlTopicId: undefined,
+      });
+    });
+
+    it('shows the creator avatar on a shared agent topic', () => {
+      render(<TopicItem id="tpc_test" title="Topic" userId="user-1" />);
+
+      expect(screen.getByTestId('creator-avatar')).toHaveAttribute('data-user-id', 'user-1');
+    });
+
+    it('hides the creator avatar on my own topic when only my topics are shown', () => {
+      onlyMineMock.value = true;
+
+      render(<TopicItem id="tpc_test" title="Topic" userId="user-1" />);
+
+      expect(screen.queryByTestId('creator-avatar')).not.toBeInTheDocument();
+    });
+
+    it('keeps the creator avatar on a retained teammate topic when only my topics are shown', () => {
+      onlyMineMock.value = true;
+
+      render(<TopicItem id="tpc_test" title="Topic" userId="user-2" />);
+
+      expect(screen.getByTestId('creator-avatar')).toHaveAttribute('data-user-id', 'user-2');
+    });
   });
 
   it('renders the Project row Agent avatar and keeps its link in the Project', () => {
@@ -194,7 +251,7 @@ describe('TopicItem active state', () => {
     );
     expect(screen.getByTestId('nav-item')).toHaveAttribute(
       'data-href',
-      '/team/project/project-1/conversation/project-topic',
+      '/team/project/project-1/topic/project-topic',
     );
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'true');
   });
@@ -463,6 +520,25 @@ describe('TopicItem active state', () => {
     });
 
     render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-unread-dot')).toBeInTheDocument();
+  });
+
+  /** @example A project row is not in the chat store, so only its own status says unread. */
+  it('shows the unread dot for a project row whose own status is unread', () => {
+    scopedTopicMock.value = { agentId: 'other-agent', agentName: 'Other Agent' };
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(
+      <TopicListScopeContext value={{ projectId: 'project-1' }}>
+        <TopicItem id="project-topic" status="unread" title="Project work" />
+      </TopicListScopeContext>,
+    );
 
     expect(screen.getByTestId('topic-unread-dot')).toBeInTheDocument();
   });

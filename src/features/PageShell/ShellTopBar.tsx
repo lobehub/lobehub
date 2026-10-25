@@ -32,6 +32,11 @@ interface ShellTopBarProps {
    * is only occasionally wanted.
    */
   onBack?: () => void;
+  /**
+   * Replaces the read-only workspace pill, e.g. with a control that switches
+   * the page's scope. Rendered in personal scope too.
+   */
+  scope?: ReactNode;
   /** The collection this page belongs to, e.g. Deliveries. */
   title?: ReactNode;
   /** Sits right after the title — typically the button opening the list drawer. */
@@ -91,7 +96,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ShellTopBar = ({ actions, onBack, title, titleExtra }: ShellTopBarProps) => {
+const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarProps) => {
   const workspace = useActiveWorkspace();
   const workspaces = useWorkspaces();
 
@@ -124,15 +129,16 @@ const ShellTopBar = ({ actions, onBack, title, titleExtra }: ShellTopBarProps) =
       )}
       {titleExtra}
 
-      {scopeName && (
-        <Flexbox horizontal align={'center'} className={styles.scopePill} gap={6}>
-          <Avatar avatar={scopeAvatar} shape={'square'} size={20} />
-          <Text fontSize={13} weight={600}>
-            {scopeName}
-          </Text>
-          {switchable && <ChevronsUpDownIcon color={cssVar.colorTextQuaternary} size={12} />}
-        </Flexbox>
-      )}
+      {scope ??
+        (scopeName && (
+          <Flexbox horizontal align={'center'} className={styles.scopePill} gap={6}>
+            <Avatar avatar={scopeAvatar} shape={'square'} size={20} />
+            <Text fontSize={13} weight={600}>
+              {scopeName}
+            </Text>
+            {switchable && <ChevronsUpDownIcon color={cssVar.colorTextQuaternary} size={12} />}
+          </Flexbox>
+        ))}
 
       <Flexbox flex={1} />
       {actions}

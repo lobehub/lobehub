@@ -11,7 +11,6 @@ import type {
   HeterogeneousProviderConfig,
   HeterogeneousRuntimePinSources,
   HeterogeneousTopicPin,
-  RequestTrigger,
 } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
@@ -44,8 +43,10 @@ import { ingestAttachment } from '../ingestAttachment';
 import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
+import { buildNewTopicMetadata } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
+import { resolveTurnProjectId } from './topicProject';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -373,6 +374,8 @@ export interface TurnSetupInput {
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   title?: string;
   trigger?: string;
+  /** The composer-authored part of the user message; see `ExecAgentParams.userMessage`. */
+  userMessage?: InternalExecAgentParams['userMessage'];
 }
 
 export interface TurnSetupResult {
@@ -395,18 +398,16 @@ export interface TurnSetupResult {
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
   /** Which layer supplied each pin, for the dispatched configuration receipt. */
   pinnedHeterogeneousTopicSources?: HeterogeneousRuntimePinSources;
+  /** Project the turn runs in — see `resolveTurnProjectId`. */
+  projectId?: string;
   provider: string;
   /**
    * The request's device, or — when it named none — the device a reused topic
    * is bound to. Use this instead of the raw request value downstream.
    */
   requestedDeviceId?: string;
-  requestTriggerMetadata: {
-    agentDispatch?: { kind: 'callAgent'; visibility: 'internal' };
-    agentSender?: AgentSenderMetadata;
-    steer?: true;
-    trigger?: RequestTrigger;
-  };
+  /** Metadata persisted on this turn's user message; see `buildUserTurnMetadata`. */
+  requestTriggerMetadata: ReturnType<typeof buildUserTurnMetadata>;
   runAttachments: RunAttachments;
   /** Rows THIS turn persisted — the history loader must exclude them. */
   selfMessageIds: Set<string>;
@@ -467,10 +468,12 @@ export const setupTurn = async (
     throwIfExecutionAborted,
     title,
     trigger,
+    userMessage,
   } = input;
 
   let topicId = appContext?.topicId;
   let editingAgentId = appContext?.editingAgentId;
+  let turnProjectId: string | undefined;
 
   const isFixedExecutionTargetSelection =
     !!deps.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
@@ -588,50 +591,21 @@ export const setupTurn = async (
         await routeToProjectDirectory(projectDirectory);
       }
 
-      // Prepare metadata with cronJobId, taskId, botContext, bound device, and any
-      // client-supplied initial metadata (e.g. repos selected before first message).
-      const initialTopicMeta = projectDirectory
-        ? {
-            ...appContext?.initialTopicMetadata,
-            workingDirectory: projectDirectory.path,
-            workingDirectoryConfig: { path: projectDirectory.path },
-          }
-        : appContext?.initialTopicMetadata;
-      // Builder conversations are owned by a builtin builder agent and get no
-      // `groupId` / `sessionId` (those columns mark the target's own chat), so
-      // without this the row keeps no trace of what it was configuring. The
-      // association exists only at run time: a topic written without it can
-      // never be attributed afterwards, which is why it is stamped even though
-      // nothing filters on it yet.
-      const { editingGroupId } = appContext ?? {};
-      const metadata =
-        cronJobId ||
-        operationTaskId ||
-        botContext ||
-        topicBoundDeviceId ||
-        initialTopicMeta ||
-        editingGroupId ||
-        editingAgentId
-          ? {
-              bot: botContext,
-              boundDeviceId: topicBoundDeviceId,
-              cronJobId: cronJobId || undefined,
-              ...(editingAgentId && { editingAgentId }),
-              ...(editingGroupId && { editingGroupId }),
-              taskId: operationTaskId,
-              ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
-              ...(initialTopicMeta?.sandboxInstanceId && {
-                sandboxInstanceId: initialTopicMeta.sandboxInstanceId,
-              }),
-              ...(initialTopicMeta?.sandboxMode && { sandboxMode: initialTopicMeta.sandboxMode }),
-              ...(initialTopicMeta?.workingDirectory && {
-                workingDirectory: initialTopicMeta.workingDirectory,
-              }),
-              ...(initialTopicMeta?.workingDirectoryConfig && {
-                workingDirectoryConfig: initialTopicMeta.workingDirectoryConfig,
-              }),
-            }
-          : undefined;
+      const metadata = buildNewTopicMetadata({
+        appContext,
+        botContext,
+        cronJobId,
+        editingAgentId,
+        projectDirectory,
+        taskId: operationTaskId,
+        topicBoundDeviceId,
+      });
+      turnProjectId = await resolveTurnProjectId(deps, {
+        directoryProjectId: projectDirectory?.projectId,
+        requestedProjectId: appContext?.projectId,
+        shareGate,
+        taskId: operationTaskId,
+      });
 
       const fallbackTitleSource = markdownToTxt(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
@@ -650,10 +624,8 @@ export const setupTurn = async (
         // must carry the groupId through too (group topic sidebar + ownership fix).
         groupId: appContext?.groupId,
         metadata: metadataWithSnapshot,
-        ...(projectDirectory && {
-          projectId: projectDirectory.projectId,
-          projectWorkingDirectoryId: projectDirectory.id,
-        }),
+        projectId: turnProjectId,
+        projectWorkingDirectoryId: projectDirectory?.id,
         // Snapshot the effective model as the topic's pinned model (config).
         model: snapshot.model,
         provider: snapshot.provider,
@@ -706,6 +678,11 @@ export const setupTurn = async (
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
+      turnProjectId = await resolveTurnProjectId(deps, {
+        shareGate,
+        taskId: operationTaskId,
+        topicProjectId: existingTopic?.projectId ?? null,
+      });
       // A project conversation without a directory follows the plain
       // topic-pinned device path below, like any other conversation.
       if (existingTopic?.projectWorkingDirectoryId) {
@@ -870,6 +847,7 @@ export const setupTurn = async (
     agentSender,
     appContext,
     botSender,
+    composerMetadata: userMessage?.metadata,
     externalOrigin,
     selectedSkillIds,
     steer,
@@ -927,6 +905,8 @@ export const setupTurn = async (
       const userMessageParams = {
         agentId: conversationAgentId,
         content: prompt,
+        // Rich text as the composer authored it, like a client-runtime send stores.
+        editorData: userMessage?.editorData,
         files: runAttachments.fileIds,
         // Group reads filter on messages.groupId (MessageModel.query group
         // branch), so a group turn must stamp groupId or the message never
@@ -1105,6 +1085,7 @@ export const setupTurn = async (
     model,
     pinnedHeterogeneousTopicModel,
     pinnedHeterogeneousTopicSources,
+    projectId: turnProjectId,
     provider,
     requestedDeviceId: resolvedRequestedDeviceId,
     requestTriggerMetadata,

@@ -175,6 +175,23 @@ describe('formatErrorEventData', () => {
       });
     });
 
+    it('keeps the provider and trace id of a provider stream error in the event body', () => {
+      const err = Object.assign(new Error('got status: RESOURCE_EXHAUSTED'), {
+        _responseBody: { traceId: 'trace-1' },
+        error: { message: 'got status: RESOURCE_EXHAUSTED', name: 'StreamChunkError' },
+        errorType: AgentRuntimeErrorType.StreamChunkError,
+        provider: 'lobehub',
+      });
+
+      const out = formatErrorEventData(err, 'llm_execution');
+
+      expect(out).toMatchObject({
+        body: { provider: 'lobehub', traceId: 'trace-1' },
+        error: 'got status: RESOURCE_EXHAUSTED',
+        errorType: AgentRuntimeErrorType.StreamChunkError,
+      });
+    });
+
     it('preserves a custom errorType even when no .cause PG info exists', () => {
       const err = Object.assign(new Error('rate limited'), {
         errorType: 'ProviderRateLimited',

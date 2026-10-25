@@ -60,12 +60,18 @@ describe('acceptanceRouter on a site review', () => {
   it('refuses decisions, visibility changes and deletion even to the person who created the site', async () => {
     await expect(
       caller(adminId).setVisibility({ id: acceptanceId, visibility: 'public' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(caller(adminId).remove({ id: acceptanceId })).rejects.toMatchObject({
-      code: 'NOT_FOUND',
+      code: 'FORBIDDEN',
     });
     await expect(caller(ownerId).rename({ id: acceptanceId, title: 'x' })).rejects.toMatchObject({
-      code: 'NOT_FOUND',
+      code: 'FORBIDDEN',
+    });
+    await expect(caller(ownerId).accept({ id: acceptanceId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(caller(ownerId).reject({ id: acceptanceId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
     });
   });
 

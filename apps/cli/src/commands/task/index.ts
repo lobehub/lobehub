@@ -13,6 +13,7 @@ import {
   truncate,
 } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { registerArchiveCommands } from './archive';
 import { resolveAssigneeUserId } from './assignee';
 import { registerCheckpointCommands } from './checkpoint';
@@ -78,7 +79,10 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.list.query(input as any);
 
         if (options.json !== undefined) {
-          outputJson(result.data, options.json);
+          outputJson(
+            withUrls(result.data, await resolveUrlBuilder(client), resourcePath.task),
+            options.json,
+          );
           return;
         }
 
@@ -213,7 +217,10 @@ export function registerTaskCommand(program: Command) {
         const doc = await client.document.getDocumentDetail.query({ id });
 
         if (options.json !== undefined) {
-          outputJson(doc, options.json);
+          outputJson(
+            withUrl(doc, await resolveUrlBuilder(client), resourcePath.document(doc)),
+            options.json,
+          );
           return;
         }
 
@@ -239,7 +246,10 @@ export function registerTaskCommand(program: Command) {
         const items = Array.isArray(messages) ? messages : [];
 
         if (options.json !== undefined) {
-          outputJson(items, options.json);
+          outputJson(
+            withUrls(items, await resolveUrlBuilder(client), resourcePath.message),
+            options.json,
+          );
           return;
         }
 
@@ -643,7 +653,10 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.update.mutate(input as any);
 
         if (options.json !== undefined) {
-          outputJson(result.data, typeof options.json === 'string' ? options.json : undefined);
+          outputJson(
+            withUrl(result.data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
+            typeof options.json === 'string' ? options.json : undefined,
+          );
           return;
         }
 
@@ -697,7 +710,10 @@ export function registerTaskCommand(program: Command) {
       const result = await client.task.getTaskTree.query({ id });
 
       if (options.json !== undefined) {
-        outputJson(result.data, options.json);
+        outputJson(
+          withUrls(result.data, await resolveUrlBuilder(client), resourcePath.task),
+          options.json,
+        );
         return;
       }
 

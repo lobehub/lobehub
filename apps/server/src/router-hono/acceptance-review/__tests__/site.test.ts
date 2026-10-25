@@ -84,7 +84,7 @@ describe('site review tokens', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       acceptance: { id: site.acceptanceId, title: 'Site review · Marketing site' },
-      can: { comment: true, decide: false, moderate: true },
+      can: { comment: true, decide: false, moderate: true, reject: false },
       project: { id: projectId, name: 'Fieldnotes 官网' },
       role: 'admin',
       site: { id: site.id, name: 'Marketing site' },

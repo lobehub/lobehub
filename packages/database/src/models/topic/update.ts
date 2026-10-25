@@ -2,6 +2,7 @@ import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
 
 import { type TopicItem, topics } from '../../schemas';
+import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
 import type { TopicMetadataPatch } from './types';
@@ -46,11 +47,18 @@ export const update = async (ctx: TopicModelContext, id: string, data: Partial<T
           ? persistedMetadata
           : undefined;
 
-  return ctx.db
+  const updated = await ctx.db
     .update(topics)
     .set({ ...data, metadata, updatedAt: new Date() })
     .where(and(eq(topics.id, id), ctx.ownership()))
     .returning();
+
+  // Moving a topic into a project, or handing it to another agent, makes that
+  // agent a project member.
+  if ((data.projectId || data.agentId) && updated.some((topic) => topic.projectId && topic.agentId))
+    await joinTopicAgentsToProjects(ctx.db, { topicIds: updated.map((topic) => topic.id) });
+
+  return updated;
 };
 
 /**
@@ -74,6 +82,24 @@ export const settleRunningStatus = async (
     .update(topics)
     .set({ status, updatedAt: new Date() })
     .where(and(eq(topics.id, id), eq(topics.status, 'running'), ctx.ownership()))
+    .returning({ id: topics.id, status: topics.status });
+};
+
+/**
+ * Clear a topic's unread mark: `unread` → `active`.
+ *
+ * Guarded on `status = 'unread'` like `settleRunningStatus`, so a reader acting
+ * on a stale copy of the row (a persisted list, another tab) degrades to a no-op
+ * instead of overwriting a status that has moved on — a run started since, or
+ * one now waiting for a human.
+ *
+ * Returns the cleared row, or nothing when the topic was not unread.
+ */
+export const markRead = async (ctx: TopicModelContext, id: string) => {
+  return ctx.db
+    .update(topics)
+    .set({ status: 'active', updatedAt: new Date() })
+    .where(and(eq(topics.id, id), eq(topics.status, 'unread'), ctx.ownership()))
     .returning({ id: topics.id, status: topics.status });
 };
 

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/conversation/topic-1' }));
+const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/topic/topic-1' }));
 const removeMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/DeleteTopicConfirm', () => ({ confirmRemoveTopic: confirmDeleteMock }));
@@ -35,7 +35,10 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 const versionMock = vi.hoisted(() => ({ isDesktop: false }));
-const workspaceMock = vi.hoisted(() => ({ id: null as string | null }));
+const workspaceMock = vi.hoisted(() => ({
+  id: null as string | null,
+  slug: null as string | null,
+}));
 
 vi.mock('antd', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -53,6 +56,27 @@ vi.mock('antd', async (importOriginal) => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspaceMock.id,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => workspaceMock.slug,
+}));
+
+const labState = vi.hoisted(() => ({ enableTopicBugReport: false }));
+const bugReportTargetMock = vi.hoisted(() => vi.fn());
+vi.mock('@/business/client/hooks/useTopicBugReportMenuItem', () => ({
+  useTopicBugReportMenuItem: (target: unknown) => {
+    bugReportTargetMock(target);
+    return { key: 'reportProblem', label: 'actions.reportProblem' };
+  },
+}));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: typeof labState) => unknown) => selector(labState),
+}));
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicBugReport: (state: typeof labState) => state.enableTopicBugReport,
+  },
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -131,6 +155,8 @@ describe('useTopicItemDropdownMenu', () => {
     permissionMock.edit_own_content = true;
     versionMock.isDesktop = false;
     workspaceMock.id = null;
+    workspaceMock.slug = null;
+    labState.enableTopicBugReport = false;
   });
 
   afterEach(() => {
@@ -182,8 +208,8 @@ describe('useTopicItemDropdownMenu', () => {
   });
 
   it.each([
-    ['/team/project/project-1/conversation/topic-1', true],
-    ['/project/project-1/conversation/topic-other', false],
+    ['/team/project/project-1/topic/topic-1', true],
+    ['/project/project-1/topic/topic-other', false],
     ['/project/project-1/settings', false],
   ])(
     'after deleting a Project row at %s, navigates home only for the current Topic',
@@ -215,6 +241,19 @@ describe('useTopicItemDropdownMenu', () => {
     if (!item || !('onClick' in item)) throw new Error('Missing copy link');
     await item.onClick?.({} as never);
     expect(writeText).toHaveBeenCalledWith('https://example.com/agent/agent-other/topic-1');
+  });
+
+  it('keeps the active workspace prefix in the copied link', async () => {
+    workspaceMock.slug = 'lobehub';
+    const writeText = vi.fn();
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard);
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const item = getMenuItem(result.current.dropdownMenu(), 'copyLink');
+    if (!item || !('onClick' in item)) throw new Error('Missing copy link');
+    await item.onClick?.({} as never);
+    expect(writeText).toHaveBeenCalledWith('https://example.com/lobehub/agent/agent-1/topic-1');
   });
 
   it.each(['favorite', 'markCompleted'])(
@@ -254,7 +293,7 @@ describe('useTopicItemDropdownMenu', () => {
     await item.onClick?.({} as never);
     expect(cloneMock).toHaveBeenCalled();
     expect(refreshProjectMock).toHaveBeenCalledOnce();
-    expect(navigateMock).toHaveBeenCalledWith('/project/project-1/conversation/topic-copy');
+    expect(navigateMock).toHaveBeenCalledWith('/project/project-1/topic/topic-copy');
   });
 
   it('keeps project association out of the individual topic menu', () => {
@@ -278,7 +317,6 @@ describe('useTopicItemDropdownMenu', () => {
       'divider',
       'autoRename',
       'rename',
-      'diagnose',
       'divider',
       'openInNewTab',
       'openOnRight',
@@ -289,14 +327,29 @@ describe('useTopicItemDropdownMenu', () => {
       'copyTopicPrompt',
       'divider',
       'duplicate',
+      'share',
       'forwardToAgent',
       'moveToAgent',
       'divider',
-      'share',
+      'diagnose',
       'divider',
       'delete',
     ]);
     expect(getMenuItem(items, 'share')).toMatchObject({ label: 'shareModal.title' });
+  });
+
+  it('puts Report Bug next to the message chain check when the lab is on', () => {
+    labState.enableTopicBugReport = true;
+
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const keys = result.current
+      .dropdownMenu()
+      .map((item) => (item && 'key' in item ? item.key : 'divider'));
+
+    expect(keys.slice(-5)).toEqual(['divider', 'diagnose', 'reportProblem', 'divider', 'delete']);
+    expect(bugReportTargetMock).toHaveBeenCalledWith({ agentId: 'agent-1', topicId: 'topic-1' });
   });
 
   it('disables topic management actions for workspace viewers', () => {

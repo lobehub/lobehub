@@ -420,13 +420,16 @@ describe('widget + dashboard routers integration', () => {
       await owner.publish({ versionId: v2.id, widgetId: widget.id });
 
       // a v2 run starts, then a newer one finishes first and owns the snapshot
-      const startedEarly = await WidgetModel.startRun(db, await widgetRow(), {
+      const reserved = await WidgetModel.startRun(db, await widgetRow(), {
         trigger: 'schedule',
       });
-      await db
+      // Re-read after backdating: completion is fenced on the `startedAt` the
+      // worker holds, so the late worker must hold the row as it now stands.
+      const [startedEarly] = await db
         .update(widgetRuns)
         .set({ startedAt: new Date(Date.now() - 60_000) })
-        .where(eq(widgetRuns.id, startedEarly.id));
+        .where(eq(widgetRuns.id, reserved.id))
+        .returning();
       runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 10 }));
       await owner.run({ widgetId: widget.id });
       const current = await widgetRow();
@@ -584,11 +587,20 @@ describe('widget + dashboard routers integration', () => {
         ],
         type: 'series' as const,
       };
+      const persistedModel = new WidgetModel(db, ownerId);
+      const version = await persistedModel.createVersion(widget.id, {
+        ...statScript,
+        outputType: 'series',
+        sourceType: 'agent',
+      });
+      await persistedModel.publishVersion(widget.id, version!.id);
+      const first = await persistedModel.startRun(widget.id, { trigger: 'manual' });
+      const second = await persistedModel.startRun(widget.id, { trigger: 'schedule' });
       const record = (runId: string) =>
         recordWidgetMetrics(db, widget, { observedAt: new Date(), output, runId });
 
       // a manual refresh and a scheduled run report the same window at once
-      const results = await Promise.all([record('run-a'), record('run-b')]);
+      const results = await Promise.all([record(first!.id), record(second!.id)]);
       expect(results.map((r) => r.pointsWritten).sort()).toEqual([0, 2]);
 
       const [metric] = await db

@@ -4,6 +4,8 @@ import debug from 'debug';
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import type { LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
@@ -27,9 +29,13 @@ import {
   type UserAllowlist,
 } from '../platforms';
 import { renderThrownAgentError } from '../renderThrownError';
+import { createWakeClassify } from '../wake/classify';
+import { resolveWakeScheduler } from '../wake/scheduler';
+import type { WakeMessageLike } from '../wake/signal';
 import { createAccessGate } from './accessGate';
 import { registerCatchAllHandler } from './catchAll';
 import { registerCommands } from './commands';
+import { createFollowupGate, type FollowupGateDeps } from './followupGate';
 import {
   createParticipantTracker,
   isSoloThreadConversation,
@@ -43,6 +49,12 @@ import {
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
+import {
+  botWakeKindFor,
+  type BotWakeObservation,
+  type BotWakeReason,
+  createBotWakeRecorder,
+} from './wakeDecision';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -209,6 +221,57 @@ export function registerHandlers(
 
   const trackThreadParticipants = createParticipantTracker(bot);
 
+  // Observation only: records the decision each branch below already makes (see ./wakeDecision).
+  const wakeRecorder = createBotWakeRecorder({
+    agentId,
+    applicationId,
+    botWakeConfig: info.settings?.botWake,
+    classify: createWakeClassify({
+      agentId,
+      db: serverDB,
+      userId,
+      workspaceId: workspaceId ?? undefined,
+    }),
+    db: serverDB,
+    operatorUserId,
+    platform,
+    settings: info.settings,
+    userId,
+    workspaceId: workspaceId ?? undefined,
+  });
+
+  const observe = (
+    entryPoint: BotWakeObservation['entryPoint'],
+    message: WakeMessageLike,
+    thread: { id: string },
+    outcome: BotWakeObservation['outcome'],
+    reason: BotWakeObservation['reason'],
+    threadSubscribed = false,
+  ) =>
+    wakeRecorder.record({
+      entryPoint,
+      message: {
+        attachments: message.attachments,
+        author: message.author,
+        id: message.id,
+        isMention: message.isMention,
+        raw: message.raw,
+        text: message.text,
+      },
+      outcome,
+      reason,
+      threadId: thread.id,
+      threadSubscribed,
+    });
+
+  const gateFollowup = createFollowupGate({
+    applicationId,
+    observe: observe as FollowupGateDeps['observe'],
+    platform,
+    recorder: wakeRecorder,
+    scheduler: resolveWakeScheduler(platform, applicationId, info.settings),
+  });
+
   bot.onNewMention(async (thread, message, context?: MessageContext) => {
     const replyLocale = detectReplyLocale(message);
     // Record the original @mentioner so the first follow-up in
@@ -224,16 +287,21 @@ export function registerHandlers(
         ungatedOnly: true,
       })
     ) {
+      observe('onNewMention', message, thread, 'skip', 'command');
       return;
     }
 
     // Gate first — must run before tryDispatch so a /command from a
     // non-allowlisted sender can't slip through and side-effect.
     if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onNewMention'))) {
+      observe('onNewMention', message, thread, 'skip', 'access-gate-rejected');
       return;
     }
 
-    if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
+    if (await tryDispatch(thread, message.text, message.author, replyLocale)) {
+      observe('onNewMention', message, thread, 'skip', 'command');
+      return;
+    }
 
     log(
       'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -256,6 +324,13 @@ export function registerHandlers(
     }
 
     const merged = mergeSkippedMessages(message, context);
+    observe(
+      'onNewMention',
+      merged,
+      thread,
+      'wake',
+      thread.isDM ? 'direct-message' : 'explicit-mention',
+    );
     void emitAgentSignalSourceEvent(
       {
         payload: {
@@ -413,11 +488,15 @@ export function registerHandlers(
           log('onSubscribedMessage: mention-mode announcement failed: %O', error);
         }
       }
+      observe('onSubscribedMessage', message, thread, 'skip', 'not-addressed', true);
       return;
     }
 
     if (matchesWatchKeyword && !isAddressedToBot && !isCommand) {
-      if (!(await isMessageMonitoringAllowed('onSubscribedMessage', thread.id))) return;
+      if (!(await isMessageMonitoringAllowed('onSubscribedMessage', thread.id))) {
+        observe('onSubscribedMessage', message, thread, 'skip', 'monitoring-not-allowed', true);
+        return;
+      }
       log(
         'onSubscribedMessage: keyword match wakes bot, agent=%s, platform=%s, author=%s, thread=%s, keywords=%o',
         agentId,
@@ -435,16 +514,21 @@ export function registerHandlers(
         ungatedOnly: true,
       })
     ) {
+      observe('onSubscribedMessage', message, thread, 'skip', 'command', true);
       return;
     }
 
     // Gate before tryDispatch so a /command from a non-allowlisted sender
     // (or in a disabled DM/group scope) cannot side-effect.
     if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onSubscribedMessage'))) {
+      observe('onSubscribedMessage', message, thread, 'skip', 'access-gate-rejected', true);
       return;
     }
 
-    if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
+    if (await tryDispatch(thread, message.text, message.author, replyLocale)) {
+      observe('onSubscribedMessage', message, thread, 'skip', 'command', true);
+      return;
+    }
 
     log(
       'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -487,6 +571,32 @@ export function registerHandlers(
         );
       }
     }
+    const wakeReason: BotWakeReason = thread.isDM
+      ? 'direct-message'
+      : message.isMention === true || isExplicitlyAddressed
+        ? 'explicit-mention'
+        : isSoloBotConversation
+          ? 'solo-conversation'
+          : matchesWatchKeyword && !isCommand
+            ? 'watch-keyword'
+            : 'addressed';
+    // Only a wake nobody asked for may end in silence; a DM, @mention, command or solo
+    // conversation is always answered, exactly as before. Until the bot-wake rollout reaches this
+    // bot's owner nothing may: every wake is answered, as it was before the pipeline existed.
+    const wakeKind = (await wakeRecorder.isRolledOut()) ? botWakeKindFor(wakeReason) : 'mention';
+    if (
+      wakeKind === 'followup' &&
+      (await gateFollowup({
+        entryPoint: 'onSubscribedMessage',
+        merged,
+        parked: [...(context?.skipped ?? []), message],
+        thread,
+        threadSubscribed: true,
+      })) === 'stop'
+    ) {
+      return;
+    }
+    observe('onSubscribedMessage', merged, thread, 'wake', wakeReason, true);
     void emitAgentSignalSourceEvent(
       {
         payload: {
@@ -533,6 +643,7 @@ export function registerHandlers(
         displayToolCalls,
         reactionMode,
         replyLocale,
+        wakeKind,
       });
     } catch (error) {
       const operationId = AgentBridgeService.getActiveOperationId(thread.id);
@@ -567,6 +678,7 @@ export function registerHandlers(
   registerCatchAllHandler(bot, {
     agentId,
     applicationId,
+    botWakeEnabled: isBotWakeEnabled(parseBotWakeSettings(info.settings).config),
     bridge,
     charLimit,
     client,
@@ -574,10 +686,12 @@ export function registerHandlers(
     detectReplyLocale,
     displayToolCalls,
     dmSettings,
+    gateFollowup,
     isMessageMonitoringAllowed,
     operatorUserId,
     passGatesOrNotify,
     platform,
+    observe,
     reactionMode,
     serverDB,
     userId,

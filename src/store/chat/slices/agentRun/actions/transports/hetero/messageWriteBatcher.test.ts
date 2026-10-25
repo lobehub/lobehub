@@ -42,6 +42,32 @@ describe('createMessageWriteBatcher', () => {
     expect(deps.batchMutate).not.toHaveBeenCalled();
   });
 
+  it('reports the creates the server acknowledged, skipping failed ones', async () => {
+    const deps = { ...createDeps(), onCreated: vi.fn() };
+    deps.batchMutate.mockResolvedValue({
+      results: [{ index: 1, success: false }],
+      success: false,
+    });
+    const batcher = createMessageWriteBatcher(deps);
+
+    batcher.enqueueCreateMessage(createRow('msg-ok'));
+    batcher.enqueueCreateMessage(createRow('msg-failed'), vi.fn());
+    batcher.enqueueUpdateMessage('msg-ok', { content: 'x' });
+    await batcher.flush('test');
+
+    expect(deps.onCreated).toHaveBeenCalledWith(['msg-ok']);
+  });
+
+  it('reports an acknowledged create without batchMutate', async () => {
+    const deps = { ...createDeps(), batchMutate: undefined, onCreated: vi.fn() };
+    const batcher = createMessageWriteBatcher(deps);
+
+    batcher.enqueueCreateMessage(createRow('msg-a'));
+    await batcher.flush('test');
+
+    expect(deps.onCreated).toHaveBeenCalledWith(['msg-a']);
+  });
+
   /**
    * The semantic that made subagent rows die against `messages_parent_id_messages_id_fk`:
    * a failed create is reported ONLY through `onFailure`, and `flush` still resolves.

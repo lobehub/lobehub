@@ -153,6 +153,7 @@ export const knowledgeItemsRouter = router({
             fileType: item.fileType,
             finishEmbedding: status.finishEmbedding,
             id: item.id,
+            knowledgeBaseIds: item.knowledgeBaseIds,
             metadata: item.metadata,
             name: item.name,
             size: item.size,

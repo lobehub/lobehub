@@ -103,14 +103,14 @@ const ERROR_HINTS: Record<string, string> = {
   INVALID_OUTPUT:
     'The JSON does not match the output contract for this outputType; compare field names and types with the contract.',
   MISSING_ENV:
-    "A required variable has no source. If the message lists a connector's headers, set manifest.env[].field to the right one with updateWidgetDraft; otherwise tell the user which connector to connect for this agent or workspace — never ask for the secret in chat.",
+    "A declared variable could not be filled. If the message lists a connector's headers, set manifest.env[].field to the right one; if it asks to add a host to manifest.network.allow (a LobeHub Market connector such as github sends its token only as a header to its API host), add exactly that host; if it asks for manifest.env[].inject.host, set the provider's API host. Apply fixes with updateWidgetDraft and dry-run again. Only when it says to connect or reconnect a connector, tell the user which connector to connect for this agent or workspace — never ask for the secret in chat.",
   NON_ZERO_EXIT: 'The script failed; read stderr, fix the script and dry-run again.',
   OUTPUT_TOO_LARGE: 'Trim the output: fewer rows / items / points (use view.limit for display).',
   OUTPUT_TYPE_MISMATCH: 'The printed "type" differs from the widget outputType; align them.',
   PARTIAL_OUTPUT:
     'The script reported an incomplete result (meta.complete=false). Fine if intended; otherwise fix the failing source.',
   SANDBOX_BAD_REQUEST:
-    'The sandbox rejected the request; check runtime and manifest.timeoutMs (max 120000).',
+    'The sandbox rejected the request; check runtime and manifest.timeoutMs (max 120000). "secret_not_found" means a LobeHub Market connector is not connected on Market for this account: ask the user to reconnect it.',
   SANDBOX_ERROR: 'The sandbox itself failed, not the script. Retry the dry run once.',
   SANDBOX_NOT_CONFIGURED:
     'Script execution is not configured on this server. Tell the user; do not retry.',

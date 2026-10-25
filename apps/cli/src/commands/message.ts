@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 
 export function registerMessageCommand(program: Command) {
   const message = program.command('message').description('Manage messages');
@@ -56,7 +57,10 @@ export function registerMessageCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(items, fields);
+          outputJson(
+            withUrls(items, await resolveUrlBuilder(client), resourcePath.message),
+            fields,
+          );
           return;
         }
 
@@ -91,7 +95,7 @@ export function registerMessageCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(withUrls(items, await resolveUrlBuilder(client), resourcePath.message), fields);
         return;
       }
 

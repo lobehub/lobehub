@@ -5,7 +5,7 @@ import { t } from 'i18next';
 
 import AgentIdentityContent from './Content';
 
-/** Open the identity form (name / role / slug) for a specific agent. */
+/** Open the identity form (name / role / description / slug) for a specific agent. */
 export const createAgentIdentityModal = (agentId: string) =>
   createModal({
     content: <AgentIdentityContent agentId={agentId} />,

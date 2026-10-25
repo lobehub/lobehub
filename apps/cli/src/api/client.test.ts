@@ -27,6 +27,7 @@ const headersOfLastLink = () => {
 
 describe('api/client workspace scoping', () => {
   const originalJwt = process.env.LOBEHUB_JWT;
+  const originalApiKey = process.env.LOBEHUB_CLI_API_KEY;
   const originalWorkspaceId = process.env.LOBEHUB_WORKSPACE_ID;
 
   beforeEach(() => {
@@ -39,6 +40,9 @@ describe('api/client workspace scoping', () => {
   afterEach(() => {
     if (originalJwt === undefined) delete process.env.LOBEHUB_JWT;
     else process.env.LOBEHUB_JWT = originalJwt;
+
+    if (originalApiKey === undefined) delete process.env.LOBEHUB_CLI_API_KEY;
+    else process.env.LOBEHUB_CLI_API_KEY = originalApiKey;
 
     if (originalWorkspaceId === undefined) delete process.env.LOBEHUB_WORKSPACE_ID;
     else process.env.LOBEHUB_WORKSPACE_ID = originalWorkspaceId;
@@ -53,10 +57,36 @@ describe('api/client workspace scoping', () => {
   it('sends a renewed LOBEHUB_JWT on requests from an existing client', async () => {
     const { getTrpcClient } = await import('./client');
     await getTrpcClient();
-    expect(headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'env-jwt' });
+    expect(await headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'env-jwt' });
 
     process.env.LOBEHUB_JWT = 'renewed-jwt';
-    expect(headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'renewed-jwt' });
+    expect(await headersOfLastLink()).toMatchObject({ 'Oidc-Auth': 'renewed-jwt' });
+  });
+
+  it('refreshes stored-login credentials for journal reads on a cached client', async () => {
+    delete process.env.LOBEHUB_JWT;
+    delete process.env.LOBEHUB_CLI_API_KEY;
+    const { getValidToken } = await import('../auth/refresh');
+    vi.mocked(getValidToken).mockResolvedValue({
+      credentials: { accessToken: 'original-token' },
+      status: 'ok',
+    });
+    const { getTrpcClient } = await import('./client');
+    const client = await getTrpcClient('workspace-1');
+    expect(await headersOfLastLink()).toMatchObject({
+      'Oidc-Auth': 'original-token',
+      'X-Workspace-Id': 'workspace-1',
+    });
+
+    vi.mocked(getValidToken).mockResolvedValue({
+      credentials: { accessToken: 'renewed-token' },
+      status: 'ok',
+    });
+    expect(await getTrpcClient('workspace-1')).toBe(client);
+    expect(await headersOfLastLink()).toMatchObject({
+      'Oidc-Auth': 'renewed-token',
+      'X-Workspace-Id': 'workspace-1',
+    });
   });
 
   it('creates an anonymous Lambda client without resolving credentials or workspace headers', async () => {
@@ -90,14 +120,14 @@ describe('api/client workspace scoping', () => {
     const { getToolsTrpcClient } = await import('./client');
     await getToolsTrpcClient();
 
-    expect(headersOfLastLink()).toMatchObject({ 'X-Workspace-Id': 'workspace-1' });
+    expect(await headersOfLastLink()).toMatchObject({ 'X-Workspace-Id': 'workspace-1' });
   });
 
   it('omits the header for the tools client in personal mode', async () => {
     const { getToolsTrpcClient } = await import('./client');
     await getToolsTrpcClient();
 
-    expect(headersOfLastLink()).not.toHaveProperty('X-Workspace-Id');
+    expect(await headersOfLastLink()).not.toHaveProperty('X-Workspace-Id');
   });
 
   it('caches tools clients per workspace instead of returning the first one forever', async () => {

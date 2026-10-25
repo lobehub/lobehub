@@ -9,16 +9,17 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import Image from '../image/features/Image';
 
 interface PageProps {
+  hidePersonalPreferences?: boolean;
   showSettingHeader?: boolean;
 }
 
-const Page = ({ showSettingHeader = true }: PageProps) => {
+const Page = ({ hidePersonalPreferences, showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
   const { showAiImage } = useServerConfigStore(featureFlagsSelectors);
   return (
     <>
       {showSettingHeader && <SettingHeader title={t('tab.serviceModel')} />}
-      <ModelAssignmentsForm />
+      <ModelAssignmentsForm hidePersonalPreferences={hidePersonalPreferences} />
       {showAiImage && <Image />}
     </>
   );

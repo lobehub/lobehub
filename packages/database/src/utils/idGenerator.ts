@@ -14,6 +14,8 @@ const prefixes = {
   tasks: 'task',
   agents: 'agt',
   budget: 'bgt',
+  channelThreads: 'cht',
+  channels: 'chn',
   chatGroups: 'cg',
   documents: 'docs',
   evalBenchmarks: 'evb',

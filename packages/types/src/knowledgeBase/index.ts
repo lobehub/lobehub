@@ -31,6 +31,8 @@ export interface KnowledgeBaseItem {
 
 export interface CreateKnowledgeBaseParams {
   avatar?: string;
+  /** Cover image: a preset key (`preset:<id>`) or an uploaded image URL. */
+  cover?: string;
   description?: string;
   name: string;
   /** Workspace-scoped visibility for a newly created KB. Derived from the current resource-mode. */

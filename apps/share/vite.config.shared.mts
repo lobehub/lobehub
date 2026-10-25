@@ -13,6 +13,7 @@ import {
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
+import { stylexPlugin, stylexTokenModules } from '../../plugins/vite/stylex';
 
 export interface ShareRrConfigOptions {
   /** Directory holding `app/` and `src/` — the submodule copy when a host repo overlays this app. */
@@ -170,8 +171,9 @@ export const createShareRrConfig = ({
     base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
     environments: {
       client: { define },
-      ssr: { define: ssrDefine },
+      ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
     },
+    optimizeDeps: { exclude: [...stylexTokenModules] },
     plugins: [
       process.env.SHARE_CHUNK_REPORT ? ssrChunkReport() : undefined,
       process.env.SHARE_TRACE_MODULE ? ssrModuleTrace(process.env.SHARE_TRACE_MODULE) : undefined,
@@ -182,6 +184,8 @@ export const createShareRrConfig = ({
       viteNodeModuleStub(),
       vitePlatformResolve('web'),
       cloudflare({ viteEnvironment: { name: 'ssr' } }),
+      // Both environments render StyleX components; the client build emits the CSS.
+      stylexPlugin({ overlaySrcDirs: [path.join(repoRoot, 'src')] }),
       reactRouter(),
       ...lobeIconImports(),
       ...(resolvePlugins ?? []),

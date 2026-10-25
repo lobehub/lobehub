@@ -53,6 +53,14 @@ export interface EditorContentState {
    */
   lastUpdatedTime: Date | null;
   /**
+   * The body as the editor serialized it right after loading it. Loading is not
+   * byte-stable (fresh node ids, the editor's own markdown export), so a body
+   * equal to this is unedited even when it differs from `lastSaved*`. Only the
+   * dirty check reads it; `lastSaved*` stays the server's body, which conflict
+   * reconciliation compares remote rows against. Cleared once a save lands.
+   */
+  loadedBody?: { content: string; editorData: unknown };
+  /**
    * Edit-session id that currently owns this document's collaborative lock.
    * Used by workspace page saves to prove the client still holds the lease.
    */

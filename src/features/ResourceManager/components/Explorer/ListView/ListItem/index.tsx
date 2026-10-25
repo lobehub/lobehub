@@ -154,6 +154,7 @@ const FileListItem = ({
   finishEmbedding,
   id,
   index,
+  knowledgeBaseIds,
   metadata,
   name,
   onSelectedChange,
@@ -345,6 +346,7 @@ const FileListItem = ({
             isPage={isPage}
             isPrivate={isPrivate}
             isRenaming={isRenaming}
+            knowledgeBaseIds={resourceManagerState.libraryId ? undefined : knowledgeBaseIds}
             name={name}
             privateTooltip={t('resources.visibility.privateTooltip', { ns: 'chat' })}
             renamingValue={renamingValue}

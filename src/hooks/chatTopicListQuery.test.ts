@@ -13,6 +13,7 @@ const globalStateMock = vi.hoisted(() => ({ topicPageSize: 20 }));
 const userStateMock = vi.hoisted(() => ({
   topicGroupMode: 'byTime' as string,
   topicIncludeCompleted: false,
+  topicOnlyMine: false,
 }));
 
 vi.mock('@/store/agent', () => ({ useAgentStore: { getState: () => agentStateMock } }));
@@ -40,6 +41,9 @@ vi.mock('@/store/user/selectors', () => ({
     topicGroupMode: (s: typeof userStateMock) => s.topicGroupMode,
     topicIncludeCompleted: (s: typeof userStateMock) => s.topicIncludeCompleted,
   },
+  workspaceUserSettingsSelectors: {
+    topicOnlyMine: () => (s: typeof userStateMock) => s.topicOnlyMine,
+  },
 }));
 
 describe('deriveSidebarTopicListQuery', () => {
@@ -48,6 +52,7 @@ describe('deriveSidebarTopicListQuery', () => {
       deriveSidebarTopicListQuery({
         includeCompleted: false,
         isGroupSession: false,
+        onlyMine: false,
         topicGroupMode: 'byTime',
       }),
     ).toEqual({
@@ -62,6 +67,7 @@ describe('deriveSidebarTopicListQuery', () => {
       deriveSidebarTopicListQuery({
         includeCompleted: true,
         isGroupSession: false,
+        onlyMine: false,
         topicGroupMode: 'byTime',
       }).excludeStatuses,
     ).toBeUndefined();
@@ -72,6 +78,7 @@ describe('deriveSidebarTopicListQuery', () => {
       deriveSidebarTopicListQuery({
         includeCompleted: false,
         isGroupSession: false,
+        onlyMine: false,
         topicGroupMode: 'byStatus',
       }).sortBy,
     ).toBe('status');
@@ -80,8 +87,29 @@ describe('deriveSidebarTopicListQuery', () => {
       deriveSidebarTopicListQuery({
         includeCompleted: false,
         isGroupSession: true,
+        onlyMine: false,
         topicGroupMode: 'byStatus',
       }).sortBy,
+    ).toBeUndefined();
+  });
+
+  it('asks the server for only the caller topics when the workspace filter is on', () => {
+    expect(
+      deriveSidebarTopicListQuery({
+        includeCompleted: false,
+        isGroupSession: false,
+        onlyMine: true,
+        topicGroupMode: 'byTime',
+      }).onlyMine,
+    ).toBe(true);
+
+    expect(
+      deriveSidebarTopicListQuery({
+        includeCompleted: false,
+        isGroupSession: false,
+        onlyMine: false,
+        topicGroupMode: 'byTime',
+      }).onlyMine,
     ).toBeUndefined();
   });
 });
@@ -93,6 +121,7 @@ describe('getSidebarTopicListParams', () => {
     globalStateMock.topicPageSize = 20;
     userStateMock.topicGroupMode = 'byTime';
     userStateMock.topicIncludeCompleted = false;
+    userStateMock.topicOnlyMine = false;
   });
 
   it('returns nothing without a session', () => {
@@ -123,6 +152,12 @@ describe('getSidebarTopicListParams', () => {
     agentStateMock.agentMap['agent-7'] = { chatConfig: { topicGroupMode: 'byStatus' } };
 
     expect(getSidebarTopicListParams({ agentId: 'agent-7' })?.sortBy).toBe('status');
+  });
+
+  it('carries the workspace only-mine filter into the pre-paint request', () => {
+    userStateMock.topicOnlyMine = true;
+
+    expect(getSidebarTopicListParams({ agentId: 'agent-7' })?.onlyMine).toBe(true);
   });
 
   it('never flags a group session as inbox and keeps its default ordering', () => {

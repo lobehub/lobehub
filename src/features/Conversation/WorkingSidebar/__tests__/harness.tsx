@@ -206,6 +206,12 @@ vi.mock('../ParamsSection', () => ({
   },
 }));
 vi.mock('../WorksSection', () => ({ default: () => <div /> }));
+vi.mock('../Search', () => ({
+  TopicSearchPane: ({ topicId }: { topicId: string }) => (
+    <div data-testid="topic-search">{topicId}</div>
+  ),
+}));
+vi.mock('@/hooks/useHotkeys', () => ({ useFindInTopicHotkey: () => undefined }));
 vi.mock('../Browser', () => ({
   default: (props: (typeof browserPanes.current)[number]) => {
     browserPanes.current.push(props);

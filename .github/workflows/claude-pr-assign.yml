@@ -18,6 +18,12 @@ jobs:
       issues: read
 
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v7
 
@@ -32,7 +38,7 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           if [[ "$HEAD_REF" == hotfix/* ]] || [[ "$HEAD_REF" == release/* ]]; then
             echo "✅ Release/hotfix branch ($HEAD_REF) -> main is allowed"
@@ -83,7 +89,7 @@ jobs:
         if: steps.check-team.outputs.is_team == 'false'
         uses: anthropics/claude-code-action@v1
         with:
-          github_token: ${{ secrets.GH_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token }}
           allowed_non_write_users: '*'
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
@@ -126,4 +132,4 @@ jobs:
         run: |
           gh pr edit ${{ github.event.pull_request.number }} --remove-label "trigger:assign"
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

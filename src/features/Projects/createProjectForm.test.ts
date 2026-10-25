@@ -8,23 +8,24 @@ import {
 } from './createProjectForm';
 
 describe('createProjectForm', () => {
-  it('derives a valid identifier and slug from the project name', () => {
-    expect(getProjectFieldSuggestions('LobeHub')).toEqual({
-      identifier: 'LOBE',
-      slug: 'lobe-hub',
-    });
-    expect(getProjectFieldSuggestions('LobeHub Mobile')).toEqual({
-      identifier: 'LHM',
-      slug: 'lobe-hub-mobile',
-    });
-    expect(getProjectFieldSuggestions('用户记忆')).toEqual({
-      identifier: 'YHJY',
-      slug: 'yong-hu-ji-yi',
+  it('derives only the slug from the project name, leaving the identifier to the user', () => {
+    expect(getProjectFieldSuggestions('LobeHub')).toEqual({ slug: 'lobe-hub' });
+    expect(getProjectFieldSuggestions('LobeHub Mobile')).toEqual({ slug: 'lobe-hub-mobile' });
+    expect(getProjectFieldSuggestions('用户记忆')).toEqual({ slug: 'yong-hu-ji-yi' });
+  });
+
+  it('returns an empty suggestion when the project name is empty', () => {
+    expect(getProjectFieldSuggestions('  ')).toEqual({ slug: '' });
+  });
+
+  it('omits an empty identifier so tasks keep the default prefix', () => {
+    expect(getCreateProjectInput({ identifier: '  ', name: 'LobeHub', slug: '' })).toEqual({
+      name: 'LobeHub',
     });
   });
 
-  it('returns empty suggestions when the project name is empty', () => {
-    expect(getProjectFieldSuggestions('  ')).toEqual({ identifier: '', slug: '' });
+  it('rejects a filled identifier that is malformed', () => {
+    expect(getCreateProjectInput({ identifier: 'AC', name: 'LobeHub', slug: '' })).toBeNull();
   });
 
   it('validates the identifier format shown by the form', () => {

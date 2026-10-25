@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, readReplicaStoredKeys } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
+import { environmentService } from '@/services/environment';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 import { sandboxActions } from './action';
@@ -47,7 +48,7 @@ const wrapper = ({ children }: PropsWithChildren) =>
 /** Never-resolving fetch: what the store holds can only have come from storage. */
 const pending = () => new Promise<never>(() => {});
 
-type ListedEnvironments = Awaited<ReturnType<typeof sandboxStorageService.listEnvironments>>;
+type ListedEnvironments = Awaited<ReturnType<typeof environmentService.listEnvironments>>;
 type ListedInstances = Awaited<ReturnType<typeof sandboxStorageService.listInstances>>;
 type InstanceDetail = Awaited<ReturnType<typeof sandboxStorageService.getInstance>>;
 
@@ -178,7 +179,7 @@ describe('sandbox replicas', () => {
       { data: { workingDirectory: 'lobehub-main' }, updatedAt: 1 },
     );
     vi.spyOn(sandboxStorageService, 'getEntitlement').mockImplementation(pending);
-    vi.spyOn(sandboxStorageService, 'listEnvironments').mockImplementation(pending);
+    vi.spyOn(environmentService, 'listEnvironments').mockImplementation(pending);
     vi.spyOn(sandboxStorageService, 'listInstances').mockImplementation(pending);
     vi.spyOn(sandboxStorageService, 'getInstance').mockImplementation(pending);
 
@@ -205,7 +206,7 @@ describe('sandbox replicas', () => {
   });
 
   it('persists only the slim projections: no configuration, env, source URL or build log', async () => {
-    vi.spyOn(sandboxStorageService, 'listEnvironments').mockResolvedValue({
+    vi.spyOn(environmentService, 'listEnvironments').mockResolvedValue({
       environments: [rawEnvironment],
     } as unknown as ListedEnvironments);
     vi.spyOn(sandboxStorageService, 'listInstances').mockResolvedValue(listed(rawInstance()));

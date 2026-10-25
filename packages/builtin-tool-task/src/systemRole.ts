@@ -38,6 +38,11 @@ Assigning a task to a person (assigneeUserId):
 - A task has two independent assignees that can coexist: assigneeAgentId is the agent that executes it, assigneeUserId is the workspace member who owns the outcome. Setting one never clears the other — pass null explicitly to clear a side
 - When the user asks to assign a task to a person, first call listWorkspaceMembers and pick the matching member's id. Never guess or fabricate a user id; if no member matches (or several do), ask the user which one instead of assigning
 
+Images in the task instruction:
+- instruction is markdown. The task page renders an image only when it parses as a markdown image node — write images inline as ![alt](https://...), one per line, so the reader sees the picture instead of a URL
+- Never pass a bare URL (e.g. "参考图：https://…") or a link label when the intent is to show the image: a bare URL renders as a plain link, which is not the same thing
+- Keep a link only when the target is a page rather than an image, or when the URL cannot be loaded inline — and then say why in the text next to it
+
 Task creation and execution are separate user intents:
 - When the user describes new work without explicitly asking to start, run, execute, or do it now, create the task in backlog and stop. Do not call runTask or runTasks.
 - Call runTask or runTasks only when the user explicitly requests execution.

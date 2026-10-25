@@ -91,7 +91,9 @@ import {
   DroidAcpSession,
   DSH_COMMAND,
   ensureClaudeCodeResumeTranscript,
+  findClaudeCodeTranscriptPath,
   getCodexAppServerUnsupportedArgs,
+  getHeterogeneousAgentPresetEnv,
   GrokAcpSession,
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
@@ -99,7 +101,6 @@ import {
   normalizeImage,
   readClaudeCodeSessionCost,
   readCodexSessionModel,
-  resolveClaudeCodeTranscriptPath,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
@@ -181,6 +182,7 @@ import { createLogger } from '@/utils/logger';
 import BrowserControlCtr from './BrowserControlCtr';
 import { sendPromptWithCodexAppServer } from './codexAppServer';
 import type { AgentSession, CliTraceSession, SendPromptParams } from './heterogeneousAgentSession';
+import { claudeProfileDirOf } from './heterogeneousAgentSession';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
@@ -1077,9 +1079,7 @@ export default class HeterogeneousAgentCtr {
     const env: NodeJS.ProcessEnv = {
       ...withEmbeddedCliEnv(inheritedEnv),
       ...proxyEnv,
-      ...(session.agentType === 'codebuddy'
-        ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' }
-        : {}),
+      ...getHeterogeneousAgentPresetEnv(session.agentType),
       ...session.env,
       ...(includeProcessOwnership
         ? managedProcessEnvironment(
@@ -1737,7 +1737,7 @@ export default class HeterogeneousAgentCtr {
     ) {
       try {
         const ensured = await ensureClaudeCodeResumeTranscript({
-          configDir: session.hostedProviderBinding?.profileDir,
+          configDir: claudeProfileDirOf(session),
           cwd: session.cwd,
           messages: params.resumeReplayMessages,
           sessionId: session.agentSessionId,
@@ -3388,7 +3388,7 @@ export default class HeterogeneousAgentCtr {
     notBefore?: string;
     sessionId: string;
   }): Promise<ReturnType<typeof buildClaudeCodeReplayTurn>> {
-    const filePath = await resolveClaudeCodeTranscriptPath(params);
+    const filePath = await findClaudeCodeTranscriptPath(params);
     if (!filePath) throw new Error(`Transcript replay rejected session id ${params.sessionId}`);
 
     let content: string;
@@ -3468,10 +3468,7 @@ export default class HeterogeneousAgentCtr {
     }
 
     const turn = (await this.readClaudeCodeReplayTurn({
-      configDir:
-        params.replayTranscriptConfigDir ??
-        session.env?.CLAUDE_CONFIG_DIR ??
-        session.hostedProviderBinding?.profileDir,
+      configDir: params.replayTranscriptConfigDir ?? claudeProfileDirOf(session),
       cwd: session.cwd,
       // The prompt this run was given — re-checked here, not just at probe time.
       expectedPrompt: params.prompt,

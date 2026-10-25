@@ -1,8 +1,9 @@
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type { ChatTopicMetadata, ExecGroupAgentResult } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, lte, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { PushLiveActivityModel, PushTokenModel } from '@/database/models/pushToken';
 import { TopicModel } from '@/database/models/topic';
 import { agentOperations, messages, pushTokens, topics } from '@/database/schemas';
@@ -47,6 +48,7 @@ const TYPING_STATUSES = new Set([
 ]);
 
 type MessageRow = {
+  agentId: string | null;
   content: string | null;
   createdAt: Date;
   /** Exact `created_at` in epoch microseconds; a JS Date drops the last three digits. */
@@ -107,6 +109,7 @@ const asCursor = ({ createdAtUs, messageId }: ReadCursor): ParsedCursor => ({
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toImMessage = (row: Omit<MessageRow, 'createdAtUs'>): ImMessage => ({
+  agentId: row.role === 'user' ? null : row.agentId,
   content: row.content ?? '',
   createdAt: row.createdAt.toISOString(),
   error: row.error !== null && row.error !== undefined,
@@ -161,14 +164,24 @@ export class ImRestService extends BaseService {
       throw this.createAuthorizationError(permission.message || 'No permission to send messages');
     }
 
+    const supervisorId = input.groupId
+      ? await this.resolveGroupSupervisor(input.groupId, input.agentId)
+      : undefined;
+
     await assertCanUseWorkspaceAgent({
-      agentId: input.agentId,
+      agentId: supervisorId ?? input.agentId,
       db: this.db,
+      groupId: input.groupId,
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
 
-    if (input.topicId) await this.requireTopic(input.topicId);
+    if (input.topicId) {
+      const topic = await this.requireTopic(input.topicId);
+      if (input.groupId && topic.groupId !== input.groupId) {
+        throw this.createConflictError('The conversation does not belong to this group');
+      }
+    }
 
     // Idempotent retry: the client minted this id and already got through once.
     const receipt = await this.idempotentReceipt(input.clientMessageId);
@@ -178,16 +191,28 @@ export class ImRestService extends BaseService {
       workspaceId: this.workspaceId,
     });
 
-    let result: Awaited<ReturnType<typeof aiAgentService.execAgent>>;
+    const clientIds = input.clientMessageId ? { userMessageId: input.clientMessageId } : undefined;
+
+    let result: Awaited<ReturnType<typeof aiAgentService.execAgent>> | ExecGroupAgentResult;
     try {
-      result = await aiAgentService.execAgent({
-        agentId: input.agentId,
-        appContext: input.topicId ? { topicId: input.topicId } : undefined,
-        clientIds: input.clientMessageId ? { userMessageId: input.clientMessageId } : undefined,
-        interactiveStart: true,
-        prompt: input.content,
-        trigger: RequestTrigger.Chat,
-      });
+      result =
+        supervisorId && input.groupId
+          ? await aiAgentService.execGroupAgent({
+              agentId: supervisorId,
+              clientIds,
+              groupId: input.groupId,
+              interactiveStart: true,
+              message: input.content,
+              topicId: input.topicId,
+            })
+          : await aiAgentService.execAgent({
+              agentId: input.agentId,
+              appContext: input.topicId ? { topicId: input.topicId } : undefined,
+              clientIds,
+              interactiveStart: true,
+              prompt: input.content,
+              trigger: RequestTrigger.Chat,
+            });
     } catch (error) {
       // Two concurrent first sends can both miss the pre-check above; the loser
       // then collides with the winner on the message primary key. Report the
@@ -316,6 +341,25 @@ export class ImRestService extends BaseService {
 
   // ------------------------------------------------------------------ internals
 
+  private async resolveGroupSupervisor(groupId: string, agentId?: string): Promise<string> {
+    const groupModel = new ChatGroupModel(this.db, this.userId, this.workspaceId);
+    if (!(await groupModel.findById(groupId))) throw this.createNotFoundError('Group not found');
+
+    if (agentId) {
+      const members = await groupModel.getGroupAgents(groupId);
+      if (!members.some((member) => member.agentId === agentId)) {
+        throw this.createConflictError('agentId is not a member of this group');
+      }
+    }
+
+    const supervisorId = await groupModel.getSupervisorAgentId(groupId);
+    // Deliberately no fallback to a member: only a supervisor orchestrates a group turn.
+    if (!supervisorId) {
+      throw this.createConflictError('This group has no supervisor agent to answer messages');
+    }
+    return supervisorId;
+  }
+
   /**
    * The receipt for a `clientMessageId` this user already got through, or
    * `undefined` when the id is unused — or was consumed by a send that never got
@@ -437,6 +481,7 @@ export class ImRestService extends BaseService {
   }
 
   private readonly rowSelect = {
+    agentId: messages.agentId,
     content: messages.content,
     createdAt: messages.createdAt,
     createdAtUs: epochUs(messages.createdAt),

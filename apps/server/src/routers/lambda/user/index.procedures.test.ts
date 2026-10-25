@@ -55,6 +55,7 @@ function expected(): Array<
     ['updateInterests', 'mutation', 11],
     ['updateOnboarding', 'mutation', 11],
     ['updateOnboardingDocument', 'mutation', 11],
+    ['updatePersonalSystemAgent', 'mutation', 11],
     ['updatePreference', 'mutation', 11],
     ['updateSettings', 'mutation', 11],
     ['updateToolChannels', 'mutation', 11],

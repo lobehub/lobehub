@@ -1,3 +1,6 @@
+import type { BotWakeKind } from '@lobechat/types';
+import { BOT_NO_REPLY_REASONS, BOT_NO_REPLY_TOKEN } from '@lobechat/types';
+
 /** One prior topic (session) from the same IM channel. */
 export interface RecentChannelTopic {
   /** Topic creation time as a UTC ISO-8601 string. */
@@ -51,6 +54,11 @@ export interface BotPlatformInfo {
   /** Pre-injected recent same-channel history (cross-session). */
   recentChannelHistory?: RecentChannelHistory;
   supportsMarkdown: boolean;
+  /**
+   * How the bot was woken. On `followup` the agent is told it may stay silent; on `mention` (or
+   * when omitted) it must answer, so the prompt is unchanged.
+   */
+  wakeKind?: BotWakeKind;
   /** Non-fatal warnings from message processing (e.g. file too large, parse failure) */
   warnings?: string[];
 }
@@ -78,6 +86,7 @@ export const formatBotPlatformContext = ({
   platformName,
   recentChannelHistory,
   supportsMarkdown,
+  wakeKind,
   warnings,
 }: BotPlatformInfo): string => {
   const lines = [
@@ -136,6 +145,18 @@ export const formatBotPlatformContext = ({
       'NEVER ask the user for a chat / channel / group ID, and never call `listChannels` to look up the current one — it is right here.',
       'When a `lobe-message` send targets this conversation, omit `botId` / `messengerInstallationId` — the runtime already knows which connection this conversation uses.',
       '</current_conversation>',
+    );
+  }
+
+  if (wakeKind === 'followup') {
+    lines.push(
+      '',
+      '<optional_reply>',
+      'You were woken by the conversation itself, not by someone addressing you directly. Speaking is optional.',
+      `If you have nothing worth adding — the message is not for you, is off topic, repeats something already answered, or was already handled — end your turn with exactly \`${BOT_NO_REPLY_TOKEN}\` and no other text.`,
+      `You may append a reason: \`${BOT_NO_REPLY_TOKEN}:<reason>\`, where reason is one of ${BOT_NO_REPLY_REASONS.filter((r) => r !== 'empty_completion').join(', ')}.`,
+      'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
+      '</optional_reply>',
     );
   }
 

@@ -1,5 +1,3 @@
-import type { AgentState } from '@lobechat/agent-runtime';
-import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import {
@@ -15,6 +13,11 @@ import {
   type OperationCreationParams,
   type OperationCreationResult,
 } from '../types';
+import {
+  applyOperationInitSlots,
+  buildPreInitState,
+  pickOperationInitSlots,
+} from './operationInitSlots';
 import type { AgentRuntimeServiceContext } from './types';
 import { withoutFrozenModelFacts } from './utils';
 
@@ -44,49 +47,26 @@ export async function createOperation(
   const {
     acceptsFileWorks,
     acceptsMemberRuntimeEnd,
-    activeDeviceId,
-    activeDeviceScope,
     operationId,
     initialContext,
     agentConfig,
-    agentGroup,
     agentShareVisitor,
     modelRuntimeConfig,
-    operationCredentials,
     userId,
     autoStart = true,
-    stream,
     initialMessages = [],
     interventionResolution,
     onInterventionPrepared,
     appContext,
     toolSet,
     hooks,
-    userInterventionConfig,
     queueRetries,
     queueRetryDelay,
-    searchDecision,
-    botContext,
-    botPlatformContext,
-    deviceAccessPolicy,
-    connectorOwnershipNote,
-    discordContext,
-    evalContext,
-    evalRuntime,
-    enableExpertise,
-    expertise,
-    projectInstructions,
-    executionPlan,
     maxSteps,
     userMemory,
-    deviceSystemInfo,
-    disabledPluginIds,
-    operationSkillSet,
     parentOperationId,
     signal,
-    userTimezone,
     initialStepCount = 0,
-    workspaceId,
   } = params;
 
   // Persist initial agent_operations row. CompletionLifecycle owns both
@@ -117,6 +97,11 @@ export async function createOperation(
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
         documentId: appContext?.documentId,
         editingAgentId: appContext?.editingAgentId,
+        // The Group Agent Builder target must survive on the durable row: an
+        // intervention continuation rebuilds its app context from this row
+        // (never from client input), and a topic whose metadata predates the
+        // `editingGroupId` stamp has nothing else to recover it from.
+        editingGroupId: appContext?.editingGroupId,
         groupId: appContext?.groupId,
         scope: appContext?.scope,
         sessionId: appContext?.sessionId,
@@ -192,20 +177,6 @@ export async function createOperation(
         : 'none',
     );
 
-    // Initialize operation state - create state before saving
-    const activatableToolIds = new Set(operationToolSet.activatableToolIds ?? []);
-    const restoredActivatedToolIds = extractActivatedToolIdsFromMessages(initialMessages)?.filter(
-      (id) => activatableToolIds.has(id),
-    );
-    const activatedStepTools = restoredActivatedToolIds?.length
-      ? restoredActivatedToolIds.map((id) => ({
-          activatedAtStep: initialStepCount,
-          id,
-          manifest: operationToolSet.manifestMap[id],
-          source: 'discovery' as const,
-        }))
-      : undefined;
-
     const llmExecutor = await deps.resolveLlmExecutor(params.llmExecutor, parentOperationId);
     // A member's pushes reach the supervisor's client, so it renders what
     // that client declared.
@@ -215,127 +186,8 @@ export async function createOperation(
         ? await deps.acceptsFileWorks(parentOperationId)
         : undefined);
 
-    const initialState = {
-      activatedStepTools,
-      createdAt: new Date().toISOString(),
-      // Store initialContext for executeSync to use
-      initialContext,
-      lastModified: new Date().toISOString(),
-      // Use the passed initial messages
-      messages: initialMessages,
-      // Late-bound execution facts. The device may be unrouted here and get
-      // bound at a later step boundary (`computeDeviceContext`).
-      ...((activeDeviceId || deviceSystemInfo) && {
-        binding: {
-          device: {
-            ...(activeDeviceId && { id: activeDeviceId }),
-            ...(deviceSystemInfo && { systemInfo: deviceSystemInfo }),
-          },
-        },
-      }),
-      // What the host needs to deliver and retry the run. Hooks are stamped
-      // right after creation once the dispatcher has serialized them.
-      host: {
-        ...(fileWorksAccepted === true && { acceptsFileWorks: true }),
-        ...(params.clientProtocol === 2 && { clientProtocol: 2 as const }),
-        ...(params.includeFinalState === true && { includeFinalState: true }),
-        ...(llmExecutor && { llmExecutor }),
-        queue: { retries: queueRetries, retryDelay: queueRetryDelay },
-      },
-      // Run ledger — everything fixed at creation lives in the typed slots.
-      metadata: {},
-      // Where the run came from — frozen from here on. Mirrors the
-      // agent_operations row so the runtime can hang its output on the right
-      // conversation node without a lookup.
-      origin: {
-        agentId: appContext?.agentId,
-        continuation: interventionResolution,
-        defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
-        documentId: appContext?.documentId ?? undefined,
-        editingAgentId: appContext?.editingAgentId,
-        editingGroupId: appContext?.editingGroupId,
-        groupId: appContext?.groupId ?? undefined,
-        lineage: {
-          isSubAgent: appContext?.isSubAgent,
-          orchestrationRole: appContext?.orchestrationRole,
-          parentOperationId,
-          progressAnchor: appContext?.subAgentProgress,
-        },
-        scope: appContext?.scope ?? undefined,
-        sessionId: appContext?.sessionId,
-        signal: appContext?.agentSignal,
-        sourceMessageId: appContext?.sourceMessageId,
-        taskId: appContext?.taskId,
-        threadId: appContext?.threadId ?? undefined,
-        topicId: appContext?.topicId ?? undefined,
-        trigger: appContext?.trigger,
-        userId,
-        workspaceId,
-      },
-      maxSteps,
-      // modelRuntimeConfig at state level for executor fallback
-      modelRuntimeConfig,
-      // Read once during discovery; dropped again as soon as the run changes
-      // its own credentials (see the creds invalidation after a step).
-      operationCredentials,
-      operationId,
-      // The run's only copy of its tool set. The manifest map is the heaviest
-      // thing on the state and the state is re-serialized at every step, so the
-      // former top-level mirrors (`tools`, `toolManifestMap`, `toolSourceMap`,
-      // `toolExecutorMap`) are no longer written; readers go through
-      // `selectToolManifestMap` and friends.
-      operationToolSet,
-      status: 'idle',
-      stepCount: initialStepCount,
-      // How the run executes — frozen from here on.
-      plan: {
-        eval: evalRuntime,
-        execution: executionPlan,
-        skills: operationSkillSet,
-        stream,
-        workingDirectory: agentConfig?.chatConfig?.runtimeEnv?.workingDirectory,
-      },
-      // Under whose authority the run acts and what it may do — decided here,
-      // re-presented (never re-derived) at each dispatch boundary.
-      principal: {
-        actor: {
-          bot: botContext,
-          deviceScope: activeDeviceScope,
-          shareVisitor: agentShareVisitor,
-        },
-        audit: { clientIp: appContext?.clientIp, userAgent: appContext?.userAgent },
-        // What the run may do, decided once here: device access and the
-        // approval mode its tool calls answer to.
-        policy: { deviceAccess: deviceAccessPolicy, userIntervention: userInterventionConfig },
-      },
-      // Compat mirrors for a rolling deploy: a worker still running the
-      // pre-slot build reads only these, and a missing approval mode defaults
-      // to `manual` there — which parks a headless run on an approval nobody
-      // can give. Drop them (and the matching entries in
-      // `normalizeAgentState`'s COMPAT_MIRROR_PATHS) once no pre-slot worker
-      // can pick up a step.
-      enableExpertise,
-      expertise,
-      userInterventionConfig,
-      // What the model is told about the run's world — frozen from here on;
-      // the context engine reads it on every step.
-      world: {
-        agent: agentConfig,
-        ...((botPlatformContext || discordContext) && {
-          channel: { botPlatform: botPlatformContext, discord: discordContext },
-        }),
-        connectorOwnershipNote,
-        disabledPluginIds,
-        enableExpertise,
-        eval: evalContext,
-        expertise,
-        group: agentGroup,
-        projectInstructions,
-        searchDecision,
-        userMemory,
-        userTimezone,
-      },
-    } as Partial<AgentState>;
+    const preInitState = buildPreInitState(params, { fileWorksAccepted, llmExecutor });
+    const initialState = applyOperationInitSlots(preInitState, pickOperationInitSlots(params));
 
     // Use coordinator to create operation, automatically sends initialization event.
     // For an in-group broadcast/speak member, mirror its Gateway stream events
@@ -345,26 +197,38 @@ export async function createOperation(
     const mirrorToOperationId =
       appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
     await traceStartStage('runtime_meta', () =>
-      deps.coordinator.createAgentOperation(operationId, {
-        acceptsMemberRuntimeEnd,
-        agentConfig,
-        // Persisted so a queue worker that never ran this op's init still
-        // applies the owner-configured visitor redaction policy instead of the
-        // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-        visitorRedaction: agentShareVisitor
-          ? {
-              showErrorDetails: agentShareVisitor.showErrorDetails,
-              showModelInfo: agentShareVisitor.showModelInfo,
-            }
-          : undefined,
-        mirrorToOperationId,
-        modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
-        // Share-visitor runs execute as the creator (`userId`) but stream only
-        // to the visitor — the gateway registers the WS channel under this id.
-        streamOwnerUserId: agentShareVisitor?.visitorUserId,
-        userId,
-        workspaceId: deps.workspaceId,
-      }),
+      deps.coordinator.createAgentOperation(
+        operationId,
+        {
+          acceptsMemberRuntimeEnd,
+          agentConfig,
+          // Persisted so a queue worker that never ran this op's init still
+          // applies the owner-configured visitor redaction policy instead of the
+          // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
+          visitorRedaction: agentShareVisitor
+            ? {
+                showErrorDetails: agentShareVisitor.showErrorDetails,
+                showModelInfo: agentShareVisitor.showModelInfo,
+              }
+            : undefined,
+          mirrorToOperationId,
+          modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+          // Share-visitor runs execute as the creator (`userId`) but stream only
+          // to the visitor — the gateway registers the WS channel under this id.
+          streamOwnerUserId: agentShareVisitor?.visitorUserId,
+          userId,
+          workspaceId: deps.workspaceId,
+        },
+        {
+          agentId: appContext?.agentId ?? undefined,
+          groupId: appContext?.groupId ?? undefined,
+          parentOperationId: parentOperationId ?? undefined,
+          scope: appContext?.scope ?? undefined,
+          taskId: appContext?.taskId ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+          topicId: appContext?.topicId ?? undefined,
+        },
+      ),
     );
     operationCreated = true;
 

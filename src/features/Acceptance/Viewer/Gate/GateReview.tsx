@@ -25,15 +25,18 @@ import {
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { GoalDecisionAsker } from '@/features/AgentGoals/GoalDecision';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import { useAcceptanceComments } from '../Comments/hooks';
 import { acceptanceOverviewPath } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
-import { canReviewAcceptance } from '../visibility';
+import { canReviewAcceptance, isReadOnlyAcceptanceDecider } from '../visibility';
 import { latestRound, unitArtifacts } from './dossier';
 import SkillDirectory from './SkillDirectory';
 import { usePlanFiles } from './usePlanFiles';
@@ -276,6 +279,7 @@ const NextRow = memo<{ active: boolean; onSelect: () => void; title: string }>(
 const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
   ({ onClose, selection }) => {
     const { t } = useTranslation('verify');
+    const workspaceSlug = useActiveWorkspaceSlug();
     const title = selection.kind === 'result' ? selection.unit.title : selection.title;
     const brief = selection.kind === 'result' ? selection.unit.brief : selection.brief;
     return (
@@ -297,9 +301,12 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
             {selection.unit.acceptance && (
               <a
                 className={styles.link}
-                href={acceptanceOverviewPath(selection.unit.acceptance.id)}
                 rel="noreferrer"
                 target="_blank"
+                href={buildWorkspaceAwarePath(
+                  acceptanceOverviewPath(selection.unit.acceptance.id),
+                  workspaceSlug,
+                )}
               >
                 {selection.unit.acceptance.checks
                   ? t('acceptance.gate.unitAcceptance', {
@@ -357,7 +364,9 @@ const GateDecision = memo<{
   const [revising, setRevising] = useState(false);
   const [correction, setCorrection] = useState('');
   const [pending, setPending] = useState(false);
-  if (!data || !canReviewAcceptance(data)) return null;
+  const { canApprove } = useAcceptanceComments(acceptanceId);
+  const readOnly = isReadOnlyAcceptanceDecider(data, canApprove);
+  if (!data || (!canReviewAcceptance(data) && !readOnly)) return null;
 
   const status = data.acceptance.status;
   if (status === 'accepted' || status === 'rejected')
@@ -393,6 +402,22 @@ const GateDecision = memo<{
     dossier.kind === 'probes'
       ? t('acceptance.gate.startBatch', { count: dossier.nextWave.length })
       : t('acceptance.gate.releaseWave', { count: dossier.nextWave.length, wave: dossier.wave });
+
+  // A teammate who cannot sign the gate still sees what it asks and who signs it.
+  if (readOnly)
+    return (
+      <Flexbox className={cx(styles.footer, !inModal && styles.footerOnPage)}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Text style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
+            {t('acceptance.bar.readOnlyReason')}
+          </Text>
+          <Button disabled>{t('acceptance.gate.revise')}</Button>
+          <Button disabled type={'primary'}>
+            {releaseLabel}
+          </Button>
+        </Flexbox>
+      </Flexbox>
+    );
 
   return (
     <Flexbox className={cx(styles.footer, !inModal && styles.footerOnPage)} gap={12}>

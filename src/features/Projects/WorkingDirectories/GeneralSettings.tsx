@@ -139,7 +139,7 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
                   <Input
                     readOnly
                     aria-label={t('settings.identifier')}
-                    value={project.identifier}
+                    value={project.identifier ?? ''}
                   />
                 ),
               },

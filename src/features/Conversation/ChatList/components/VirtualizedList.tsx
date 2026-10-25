@@ -27,6 +27,7 @@ import {
   useConversationStoreApi,
   virtuaListSelectors,
 } from '../../store';
+import { VLIST_CLASS_NAME } from '../constants';
 import {
   CONVERSATION_SPACER_TRANSITION_MS,
   useConversationScroll,
@@ -43,6 +44,7 @@ import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 import HistoryPageError from './HistoryPageError';
 import HistoryPageSkeleton from './HistoryPageSkeleton';
+import PrintTranscript from './PrintTranscript';
 
 const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 
@@ -57,7 +59,6 @@ const CONVERSATION_HEADER_ID = '__conversation_header__';
 // that talk to virtua directly) work in MESSAGE index space; this offset
 // translates at the virtua boundary.
 const LEADING_ROWS = 1;
-const VLIST_CLASS_NAME = 'conversation-vlist';
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -69,6 +70,8 @@ interface VirtualizedListProps {
   itemContent: (index: number, data: string) => ReactNode;
   messageDeepLink?: ResolvedMessageDeepLink;
   paging?: 'backward' | 'forward';
+  /** Print the loaded transcript, without the app chrome, when the page prints. */
+  printable?: boolean;
 }
 
 /**
@@ -85,6 +88,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     itemContent,
     messageDeepLink,
     paging,
+    printable,
   }) => {
     const isForward = paging === 'forward';
     const virtuaRef = useRef<VListHandle>(null);
@@ -584,6 +588,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
             onScrollToBottom={handleBackBottom}
           />
         </WideScreenContainer>
+        {printable && <PrintTranscript dataSource={dataSource} itemContent={itemContent} />}
       </div>
     );
   },

@@ -21,7 +21,7 @@ const _clients = new Map<string, TrpcClient>();
 const _toolsClients = new Map<string, ToolsTrpcClient>();
 
 async function getAuthAndServer(): Promise<{
-  headers: () => Record<string, string>;
+  headers: () => Record<string, string> | Promise<Record<string, string>>;
   serverUrl: string;
 }> {
   // Precedence lives in `pickAuthSource`, shared with `resolveToken` and
@@ -61,10 +61,17 @@ async function getAuthAndServer(): Promise<{
   }
 
   const serverUrl = resolveServerUrl();
-  const { accessToken } = result.credentials;
-
   return {
-    headers: () => ({ 'Oidc-Auth': accessToken }),
+    // Cached clients outlive access tokens. Resolve stored credentials for
+    // every request, including journal pages after a WebSocket reconnect.
+    headers: async () => {
+      const current = await getValidToken();
+      if (current.status !== 'ok') {
+        const report = describeTokenLookup(current);
+        throw new Error(report ? `${report.detail} ${report.fix}` : 'No authentication found');
+      }
+      return { 'Oidc-Auth': current.credentials.accessToken };
+    },
     serverUrl,
   };
 }
@@ -79,7 +86,7 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   const client = createTRPCClient<LambdaRouter>({
     links: [
       httpLink({
-        headers: () => withWorkspaceHeader(headers(), wsId),
+        headers: async () => withWorkspaceHeader(await headers(), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/lambda`,
       }),
@@ -90,13 +97,17 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   return client;
 }
 
-/** Create an anonymous client for public Lambda procedures, without credential discovery. */
-export function createPublicLambdaClient(): TrpcClient {
+/**
+ * Create an anonymous client for public Lambda procedures, without credential
+ * discovery. Pass `serverUrl` to stay on the server an already-resolved
+ * credential belongs to.
+ */
+export function createPublicLambdaClient(serverUrl: string = resolveServerUrl()): TrpcClient {
   return createTRPCClient<LambdaRouter>({
     links: [
       httpLink({
         transformer: superjson,
-        url: `${resolveServerUrl()}/trpc/lambda`,
+        url: `${serverUrl}/trpc/lambda`,
       }),
     ],
   });
@@ -149,7 +160,7 @@ export async function getToolsTrpcClient(workspaceId?: string): Promise<ToolsTrp
   const client = createTRPCClient<ToolsRouter>({
     links: [
       httpLink({
-        headers: () => withWorkspaceHeader(headers(), wsId),
+        headers: async () => withWorkspaceHeader(await headers(), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/tools`,
       }),
