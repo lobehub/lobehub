@@ -121,8 +121,8 @@ import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
-import { materializeLocalSystemToolSnapshots } from '../transports/client/localSystemToolSnapshots';
-import type { CommandSendOverrides } from './commandBus';
+import { materializeLocalSystemToolSnapshots } from '../../transports/client/localSystemToolSnapshots';
+import type { CommandSendOverrides } from '../commandBus';
 import {
   hasNonActionContent,
   injectReferTopicNode,
@@ -133,10 +133,10 @@ import {
   parseSelectedToolsFromEditorData,
   parseSingleAgentMentionDirectRoute,
   processCommands,
-} from './commandBus';
-import { mergePartialPersistedMessages, resolveSendResponseMessages } from './persistedMessages';
-import { resolveExistingTopicForRun } from './resolveExistingTopic';
-import { resolveProjectDirectoryRun } from './resolveProjectDirectoryRun';
+} from '../commandBus';
+import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
+import { resolveExistingTopicForRun } from '../resolveExistingTopic';
+import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
 
 /**
  * Extended params for sendMessage with context
@@ -1673,7 +1673,7 @@ export class ConversationLifecycleActionImpl {
 
       try {
         const { executeHeterogeneousAgent } =
-          await import('../transports/hetero/heterogeneousAgentExecutor');
+          await import('../../transports/hetero/heterogeneousAgentExecutor');
         // Extract imageList from the persisted user message (chatUploadFileList
         // may already be cleared by this point, so we read from DB instead)
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
