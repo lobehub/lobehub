@@ -237,6 +237,55 @@ describe('acceptance repair handoff', () => {
     );
   });
 
+  it.each(['startup', 'runtime'])(
+    'retries an original-topic %s failure without a second decision',
+    async (failure) => {
+      await serverDB
+        .update(acceptances)
+        .set({ subjectType: 'standalone', status: 'delivered' })
+        .where(eq(acceptances.id, acceptanceId));
+      const [topic] = await serverDB.insert(topics).values({ userId, agentId }).returning();
+      const [round] = await serverDB
+        .insert(verifyRuns)
+        .values({
+          acceptanceId,
+          userId,
+          roundIndex: 1,
+          status: 'passed',
+          metadata: { origin: { agentId, topicId: topic.id } },
+        })
+        .returning();
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      if (failure === 'startup') execAgent.mockRejectedValueOnce(new Error('offline'));
+      const first = await caller.requestRepair({
+        id: acceptanceId,
+        comment: 'Frozen requirements',
+      });
+      if (failure === 'runtime') {
+        if (!first.dispatched) throw new Error('Expected a running operation');
+        await serverDB
+          .update(agentOperations)
+          .set({ status: 'error', error: { message: 'offline' } })
+          .where(eq(agentOperations.id, first.operationId));
+      }
+      const decided = await serverDB.query.verifyRuns.findFirst({
+        where: eq(verifyRuns.id, round.id),
+      });
+      const retried = await caller.requestRepair({
+        id: acceptanceId,
+        comment: 'New instructions excluded',
+      });
+      expect(retried).toMatchObject({ dispatched: true, topicId: topic.id });
+      expect(execAgent).toHaveBeenCalledTimes(2);
+      expect(execAgent.mock.lastCall![0].prompt).toContain('Frozen requirements');
+      expect(execAgent.mock.lastCall![0].prompt).not.toContain('New instructions excluded');
+      const after = await serverDB.query.verifyRuns.findFirst({
+        where: eq(verifyRuns.id, round.id),
+      });
+      expect(after?.decisionDetail).toEqual(decided?.decisionDetail);
+    },
+  );
+
   it('applies current project roles and revokes repair access immediately', async () => {
     const [workspace] = await serverDB
       .insert(workspaces)

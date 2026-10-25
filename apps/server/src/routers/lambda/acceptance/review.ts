@@ -368,20 +368,28 @@ export const reviewRouter = router({
         }
 
         const comment = input.comment || undefined;
-        const rejected = await goalGate.withGoalGateAnswer(
-          ctx.serverDB,
-          service,
-          acceptance,
-          'revise',
-          { comment, roundId: input.roundId },
-          () => service.reject(acceptance.id, comment),
-        );
-        await settleGoalSignOff(
-          ctx.serverDB,
-          acceptance,
-          'requestChanges',
-          input.comment || undefined,
-        );
+        const retry =
+          input.dispatch !== false &&
+          active?.state === 'failed' &&
+          (acceptance.status === 'rejected' || acceptance.status === 'repairing');
+        // A retry resumes the recorded handoff; it does not decide the same round again.
+        const rejected = retry
+          ? acceptance
+          : await goalGate.withGoalGateAnswer(
+              ctx.serverDB,
+              service,
+              acceptance,
+              'revise',
+              { comment, roundId: input.roundId },
+              () => service.reject(acceptance.id, comment),
+            );
+        if (!retry)
+          await settleGoalSignOff(
+            ctx.serverDB,
+            acceptance,
+            'requestChanges',
+            input.comment || undefined,
+          );
         // A gate's revision is carried out by the goal: its main Agent rewrites the plan.
         if (input.dispatch === false || acceptance.subjectType === 'goal_gate') {
           return {
