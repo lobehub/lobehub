@@ -24,8 +24,9 @@ const sameTenant = (row: ScmChangeRequestItem, acceptance: LinkableAcceptance) =
     ? row.workspaceId === acceptance.workspaceId
     : !row.workspaceId && row.userId === acceptance.userId;
 
+/** The URL was pasted by a person, so its owner/repo casing may differ from GitHub's. */
 const findRow = (db: LobeChatDatabase, pr: ParsedChangeRequestUrl) =>
-  ScmChangeRequestModel.findByIdentity(db, 'github', pr.repoFullName, pr.number);
+  ScmChangeRequestModel.findByIdentityIgnoringCase(db, 'github', pr.repoFullName, pr.number);
 
 /**
  * Give the provider row of a hand-linked PR its acceptance, so a merge

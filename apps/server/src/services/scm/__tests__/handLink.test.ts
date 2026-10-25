@@ -121,6 +121,20 @@ describe('bindHandLinkedChangeRequest', () => {
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBeNull();
   });
 
+  it('matches the row whatever casing the pasted URL uses', async () => {
+    const acceptance = await botAcceptance();
+    const row = await authorRow('open');
+    const shouted = parseChangeRequestUrl('https://github.com/LobeHub/LobeHub/pull/21560')!;
+
+    await bindHandLinkedChangeRequest(serverDB, acceptance, shouted);
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBe(
+      acceptance.id,
+    );
+
+    await unbindHandLinkedChangeRequest(serverDB, acceptance, shouted);
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBeNull();
+  });
+
   it('never claims a row in another tenant or one that names another acceptance', async () => {
     const acceptance = await botAcceptance();
 

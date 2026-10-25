@@ -153,6 +153,32 @@ export class ScmChangeRequestModel {
     return row ?? null;
   };
 
+  /**
+   * {@link findByIdentity} for a name typed by a person, e.g. a pasted PR URL:
+   * GitHub names are case-insensitive, while the row keeps the provider's
+   * canonical casing.
+   */
+  static findByIdentityIgnoringCase = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    repoFullName: string,
+    number: number,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const [row] = await db
+      .select()
+      .from(scmChangeRequests)
+      .where(
+        and(
+          eq(scmChangeRequests.provider, provider),
+          eq(scmChangeRequests.number, number),
+          sql`lower(${scmChangeRequests.repoFullName}) = ${repoFullName.toLowerCase()}`,
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
+  };
+
   static findById = async (
     db: LobeChatDatabase,
     id: string,
