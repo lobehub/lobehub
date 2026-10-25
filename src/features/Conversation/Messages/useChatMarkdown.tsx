@@ -1,7 +1,7 @@
 'use client';
 
 import { type MarkdownProps } from '@lobehub/ui';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 import { HtmlPreviewDrawer } from '@/components/HtmlPreview';
 import { useUserStore } from '@/store/user';
@@ -23,9 +23,19 @@ const remarkPlugins = assistantMarkdownElements
   .map((element: MarkdownElement) => element.remarkPlugin)
   .filter(Boolean);
 
+/**
+ * Message ids whose text has already been on screen. The stream renderer fades
+ * every character in from zero on mount, so a remount — the group re-partitions,
+ * or a stream patch and a snapshot refresh disagree about the block's shape —
+ * must not replay that fade over text the user has already read.
+ */
+const shownTextIds = new Set<string>();
+
 interface UseChatMarkdownOptions {
   citations?: MarkdownProps['citations'];
   enableStream?: boolean;
+  /** Whether the message has text to show yet; loading placeholders do not count. */
+  hasContent?: boolean;
   id: string;
   isGenerating: boolean;
 }
@@ -34,12 +44,22 @@ export const useChatMarkdown = ({
   id,
   isGenerating,
   citations,
-  enableStream = true,
+  enableStream: enableStreamOption = true,
+  hasContent = false,
 }: UseChatMarkdownOptions): {
   drawer: ReactNode;
   markdownProps: Partial<MarkdownProps>;
 } => {
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
+  // Once text has settled (rendered statically, or shown by an earlier mount),
+  // it never re-enters streaming: switching back remounts the stream renderer.
+  const [settled, setSettled] = useState(() => shownTextIds.has(id));
+  if (!settled && hasContent && !enableStreamOption) setSettled(true);
+  useEffect(() => {
+    if (hasContent) shownTextIds.add(id);
+  }, [hasContent, id]);
+
+  const enableStream = enableStreamOption && !settled;
   const animated = enableStream && transitionMode === 'fadeIn' && isGenerating;
 
   const [drawerContent, setDrawerContent] = useState<string | null>(null);
