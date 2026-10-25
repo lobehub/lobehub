@@ -2,23 +2,21 @@
 
 import { Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useMatches } from 'react-router';
 
 import { findRouteTitleKey } from './routeTitle';
+import { useRouteTitle } from './useRouteTitle';
 
 /**
  * On desktop the sidebar tells the user where they are; a full-screen mobile
  * page whose header has no title of its own names the route instead.
  */
 const MobileRouteTitle = memo(() => {
-  const { t } = useTranslation('electron');
   const matches = useMatches();
   const titleKey = useMemo(() => findRouteTitleKey(matches.map((m) => m.handle)), [matches]);
+  const title = useRouteTitle(titleKey);
 
-  if (!titleKey) return null;
-  const title = t(titleKey as any);
-  if (title === titleKey) return null;
+  if (!title) return null;
 
   return (
     <Text ellipsis weight={500}>

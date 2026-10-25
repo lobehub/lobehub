@@ -2,12 +2,12 @@
 
 import { Flexbox, Text } from '@lobehub/ui';
 import { type ComponentType, type FC, type PropsWithChildren, Suspense, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Outlet, useMatches } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 import NavHeader from '@/features/NavHeader';
 import { findRouteTitleKey } from '@/features/NavHeader/routeTitle';
+import { useRouteTitle } from '@/features/NavHeader/useRouteTitle';
 
 export interface MobileShellHandle {
   /**
@@ -50,13 +50,13 @@ const useShellHeader = (): ShellHeader | undefined => {
  * sidebar drawer; routes flagged `mobileShellHeader` get one from here.
  */
 const MobilePageLayout: FC<PropsWithChildren> = ({ children }) => {
-  const { t } = useTranslation('electron');
   const header = useShellHeader();
+  const title = useRouteTitle(header?.titleKey ?? undefined);
 
   const content = children ?? <Outlet />;
-  const staticTitle = header?.titleKey ? (
+  const staticTitle = title ? (
     <Text ellipsis weight={500}>
-      {t(header.titleKey as any)}
+      {title}
     </Text>
   ) : null;
 
