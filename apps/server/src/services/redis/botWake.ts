@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { RedisKeys } from '@/server/modules/Redis';
 
@@ -15,6 +16,10 @@ const getClient = () => getRedisServiceClient('botWake');
 const CHANNEL_TTL_SECONDS = 24 * 60 * 60;
 const SCHEDULER_TTL_SECONDS = 24 * 60 * 60;
 const CLASSIFIER_CALLS_TTL_SECONDS = 2 * 60 * 60;
+
+// A conversation contributes its own key plus its Discord thread keys, so the read fan-out stays
+// small but is still bounded: an unbounded `Promise.all` would open one Redis round trip per key.
+const CHANNEL_READ_CONCURRENCY = 5;
 
 // A burst of chat messages lands within a few hundred ms, and each holder spends a few round
 // trips under the lock. The retry window (~1s with jitter) is sized for that burst; a writer
@@ -123,8 +128,10 @@ export const botWake = {
       const redis = await getClient();
       if (!redis) return;
 
-      const hashes = await Promise.all(
-        keys.map((key) => redis.hgetall(RedisKeys.botWake.channel(key))),
+      const hashes = await pMap(
+        keys,
+        (key) => redis.hgetall(RedisKeys.botWake.channel(key)),
+        { concurrency: CHANNEL_READ_CONCURRENCY },
       );
 
       return mergeBotWakeChannelFields(hashes.map(parseFields));

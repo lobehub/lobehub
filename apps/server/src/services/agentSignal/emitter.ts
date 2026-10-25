@@ -18,7 +18,10 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 
-import type { GeneratedAgentSignalEmissionResult } from './orchestrator';
+import {
+  executeAgentSignalSourceEvent,
+  type GeneratedAgentSignalEmissionResult,
+} from './orchestrator';
 import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
 import type { BotWakeConfig, CreateBotWakePolicyOptions } from './scenarios/botWake';
 import { getAgentSignalScenarioMeta, isAgentSignalScenarioEnabled } from './scenarios/meta';
@@ -128,12 +131,9 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
     return undefined;
   }
 
-  // Lazy-loaded on purpose: `orchestrator` pulls the agent-execution / model-runtime
-  // core, while this emitter is imported on the light request path (e.g. from
-  // aiAgent). Importing it statically would drag that whole subsystem — which
-  // eagerly touches server-only env at module init — into every emitter import.
-  const { executeAgentSignalSourceEvent } = await import('./orchestrator');
-
+  // Static import on purpose: server code keeps a single, visible dependency graph
+  // (`no-dynamic-import-in-server`), so `orchestrator` is loaded with this module rather
+  // than deferred to request time.
   return executeAgentSignalSourceEvent(input, context, withSelfIterationPolicy(options, true));
 };
 
