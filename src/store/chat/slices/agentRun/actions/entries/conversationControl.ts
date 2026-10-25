@@ -788,7 +788,10 @@ export class ConversationControlActionImpl {
         message: err.message || 'Unknown error',
       });
       throw error;
+    }
+  };
 
+  /**
    * Widen a prefetch-sized head window before a client-runtime resume.
    *
    * A topic opened from the visible-row prefetch paints from a smaller page than
