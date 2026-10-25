@@ -37,6 +37,11 @@ const migrateAllowList = (value: unknown): Array<{ id: string; name?: string }> 
     return value
       .map((entry) => {
         if (typeof entry === 'string') return { id: entry.trim() };
+        // Discord channel IDs are snowflakes: a hand-written config may carry them as bare
+        // numbers. `parseIdList` accepts that shape, so dropping them here would silently
+        // turn an allowlist into "unrestricted" (or a denylist into "nothing blocked") on
+        // the next save of an untouched form.
+        if (typeof entry === 'number' && Number.isFinite(entry)) return { id: String(entry) };
         if (entry && typeof entry === 'object' && 'id' in entry) {
           const id = String((entry as { id?: unknown }).id ?? '').trim();
           const rawName = (entry as { name?: unknown }).name;

@@ -206,6 +206,20 @@ describe('bot-wake channel lists', () => {
       expect(settings[key]).toEqual([{ id: 'c1' }, { id: 'c2' }]);
     },
   );
+
+  it.each([BOT_WAKE_SETTING_KEYS.allowChannels, BOT_WAKE_SETTING_KEYS.denyChannels])(
+    'keeps numeric snowflake %s entries a hand-written config may carry',
+    (key) => {
+      // The runtime parser accepts bare numbers (`parseIdList`), so dropping them here would
+      // save an allowlist back as "unrestricted" — or a denylist as "nothing blocked" — just
+      // because the operator opened the form.
+      const { settings } = getChannelFormValues({
+        settings: { [key]: [22, '33', 445566] },
+      }) as { settings: Record<string, unknown> };
+
+      expect(settings[key]).toEqual([{ id: '22' }, { id: '33' }, { id: '445566' }]);
+    },
+  );
 });
 
 describe('isFieldReleased', () => {
