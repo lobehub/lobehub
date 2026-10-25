@@ -34,6 +34,7 @@
   "internlm.description": "一个专注于大模型研究与工具链的开源组织，提供高效、易用的平台，让前沿模型与算法触手可及。",
   "jina.description": "Jina AI 成立于 2020 年，是领先的搜索 AI 公司，其搜索技术栈包括向量模型、重排序器与小型语言模型，支持构建高质量的生成式与多模态搜索应用。",
   "kimicodingplan.description": "Kimi Code Plan 由 Moonshot AI 提供，通过固定月费订阅方式访问 Kimi 模型（包括 K2.5）用于编程任务。",
+  "litellm.description": "LiteLLM 是一个开源网关，通过一个兼容 OpenAI 的 API 接入 100 多个模型服务商，并提供虚拟密钥、费用追踪、预算与故障回退。",
   "lmstudio.description": "LM Studio 是一款桌面应用，支持在本地开发与实验大语言模型。",
   "lobehub.description": "LobeHub Cloud 通过官方 API 接入 AI 模型，并按模型令牌用量消耗积分。",
   "longcat.description": "LongCat 是由美团自主研发的生成式 AI 大模型系列，旨在通过高效的计算架构和强大的多模态能力，提升企业内部工作效率并推动创新应用的发展。",

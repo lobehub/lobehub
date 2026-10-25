@@ -36,6 +36,7 @@ import { default as infiniai } from './infiniai';
 import { default as internlm } from './internlm';
 import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
+import { default as litellm } from './litellm';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
 import { default as meta } from './meta';
@@ -149,6 +150,7 @@ const staticModelMap: ModelsMap = {
   internlm,
   jina,
   kimicodingplan,
+  litellm,
   lmstudio,
   longcat,
   meta,
@@ -268,6 +270,7 @@ export { default as infiniai } from './infiniai';
 export { default as internlm } from './internlm';
 export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
+export { default as litellm } from './litellm';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
 export { default as meta } from './meta';

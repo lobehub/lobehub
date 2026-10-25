@@ -1,0 +1,42 @@
+---
+title: 在 LobeHub 中使用 LiteLLM
+description: 学习如何将 LobeHub 连接到 LiteLLM Proxy 网关，并使用你在其配置中设置的模型进行对话。
+tags:
+  - LobeHub
+  - LiteLLM
+  - LLM 网关
+  - Web UI
+---
+
+# 在 LobeHub 中使用 LiteLLM
+
+[LiteLLM](https://docs.litellm.ai) 是一个开源的大模型网关。LiteLLM Proxy 运行在你自己的服务器上，通过一个兼容 OpenAI 的 API 接入 100 多个模型服务商，并支持虚拟密钥、费用追踪、预算与故障回退。LobeHub 连接的是你正在运行的代理。此集成不提供托管账号，也不提供固定的模型列表。
+
+<Steps>
+  ### 步骤一：运行 LiteLLM Proxy
+
+  - 按照[代理快速开始](https://docs.litellm.ai/docs/proxy/quick_start)安装代理，并使用列出你所用模型的 `config.yaml` 文件启动。
+  - 默认地址为 `http://localhost:4000`。LobeHub 使用兼容 OpenAI 的根路径 `http://localhost:4000/v1`。
+  - 配置中的每个 `model_name` 都是一个模型别名。LobeHub 通过 `GET /v1/models` 读取这些别名。
+
+  ### 步骤二：获取 API 密钥（可选）
+
+  - 代理可以在不启用认证的情况下运行。此时在 LobeHub 中将 API 密钥留空即可。
+  - 如需要求密钥，请设置主密钥，或创建[虚拟密钥](https://docs.litellm.ai/docs/proxy/virtual_keys)。虚拟密钥以 `sk-` 开头。
+
+  ### 步骤三：在 LobeHub 中配置 LiteLLM
+
+  - 打开 **应用设置 → AI 服务商**
+  - 在列表中找到并选择 `LiteLLM`
+  - 启用该服务商，并填写**代理地址**，例如 `http://localhost:4000/v1`。如果代理需要密钥，请填写 API 密钥。
+  - 点击**获取模型列表**，启用你想使用的别名
+  - 选择**检查**以测试连接，然后为你的助手选择一个别名
+</Steps>
+
+## 连接说明
+
+- **只填代理地址、不填 API 密钥：** LobeHub 从你的浏览器发送请求。浏览器必须能访问代理，且代理必须接受 LobeHub 页面的来源。
+- **同时填写代理地址和 API 密钥：** 默认由 LobeHub 服务端发送请求。请填写服务端可访问的地址。在 Docker 内，`localhost` 指容器自身，而不是宿主机。
+- **未知模型：** 请使用 `config.yaml` 中的别名，即 `/v1/models` 返回的别名。LiteLLM 会将别名路由到你在 `litellm_params` 中设置的服务商模型。
+
+共享的服务端配置请参阅 [LiteLLM 环境变量](/zh/docs/self-hosting/environment-variables/model-provider#litellm)。关于 LiteLLM 作为服务商的更多信息，请参阅 [LiteLLM Proxy 文档](https://docs.litellm.ai/docs/providers/litellm_proxy)。模型、价格与限制取决于你的代理配置及其背后的服务商。

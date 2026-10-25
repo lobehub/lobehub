@@ -99,6 +99,9 @@ export const getLLMConfig = () => {
       ENABLED_LMSTUDIO: z.boolean(),
       LMSTUDIO_API_KEY: z.string().optional(),
 
+      ENABLED_LITELLM: z.boolean(),
+      LITELLM_API_KEY: z.string().optional(),
+
       ENABLED_UNSLOTH: z.boolean(),
       UNSLOTH_API_KEY: z.string().optional(),
 
@@ -360,6 +363,9 @@ export const getLLMConfig = () => {
 
       ENABLED_LMSTUDIO: !!process.env.LMSTUDIO_API_KEY,
       LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
+
+      ENABLED_LITELLM: !!process.env.LITELLM_API_KEY,
+      LITELLM_API_KEY: process.env.LITELLM_API_KEY,
 
       ENABLED_UNSLOTH: !!process.env.UNSLOTH_API_KEY,
       UNSLOTH_API_KEY: process.env.UNSLOTH_API_KEY,
