@@ -10,6 +10,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ScmChangeRequestModel } from '@/database/models/scm';
 import { TaskModel } from '@/database/models/task';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { users } from '@/database/schemas';
 import { acceptances } from '@/database/schemas/verify';
 import { isUuid } from '@/database/utils/uuid';
