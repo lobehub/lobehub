@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   dispatchAgentRun: vi.fn(),
   executeToolCall: vi.fn(),
   finalizeHeteroDispatchError: vi.fn(),
+  planDeviceRouting: vi.fn(),
   publishAgentRuntimeInit: vi.fn(),
   readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
@@ -56,6 +57,12 @@ vi.mock('@/libs/trpc/utils/internalJwt', () => ({
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
   createAgentStateManager: () => ({ createOperationMetadata: mocks.createOperationMetadata }),
   createStreamEventManager: () => ({ publishAgentRuntimeInit: mocks.publishAgentRuntimeInit }),
+}));
+
+vi.mock('@/server/services/agentQuota', () => ({
+  AgentQuotaService: vi.fn(function () {
+    return { planDeviceRouting: mocks.planDeviceRouting };
+  }),
 }));
 
 vi.mock('@/server/services/deviceGateway', () => ({
@@ -182,6 +189,7 @@ beforeEach(() => {
   mocks.resolveSandboxSessionConfig.mockResolvedValue(undefined);
   mocks.selectCodexDeviceDispatch.mockResolvedValue({ kind: 'exec' });
   mocks.dispatchAgentRun.mockResolvedValue({ success: true });
+  mocks.planDeviceRouting.mockResolvedValue(null);
   mocks.executeToolCall.mockResolvedValue({ success: true });
   mocks.spawnHeteroSandbox.mockResolvedValue(undefined);
   mocks.publishAgentRuntimeInit.mockResolvedValue('init');
@@ -493,6 +501,56 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       heteroType: 'claude-code',
     });
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
+  });
+
+  it('sends the Claude Code account the agent is routed to', async () => {
+    // Without it the device always spawned on its default login, so picking an
+    // account in Manage accounts changed nothing for a device-bound agent.
+    const routing = { candidates: [{ externalAccountId: 'acc-1' }], mode: 'pinned' };
+    mocks.planDeviceRouting.mockResolvedValueOnce(routing);
+    const { deps } = createDeps();
+    const deviceCtx = {
+      boundDeviceId: 'dev-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'claude-code' },
+    };
+
+    await dispatchHeteroAgent(deps, createCtx(deviceCtx), createInput('claude-code'));
+
+    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', { provider: 'claude-code' });
+    expect(mocks.dispatchAgentRun.mock.calls[0][0].claudeAccountRouting).toEqual(routing);
+  });
+
+  it('dispatches without account routing when the agent env picks the login or routing fails', async () => {
+    const { deps } = createDeps();
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code', {
+        heterogeneousProvider: { env: { ANTHROPIC_API_KEY: 'sk' }, type: 'claude-code' },
+      }),
+    );
+    expect(mocks.planDeviceRouting).not.toHaveBeenCalled();
+
+    mocks.planDeviceRouting.mockRejectedValueOnce(new Error('db down'));
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(2);
+    for (const [params] of mocks.dispatchAgentRun.mock.calls)
+      expect(params).not.toHaveProperty('claudeAccountRouting');
   });
 
   it('spawns in the source repo and names the active worktree in the context', async () => {

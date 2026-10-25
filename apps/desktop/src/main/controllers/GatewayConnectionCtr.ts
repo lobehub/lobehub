@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { DeviceControlDeps } from '@lobechat/device-control';
+import { resolveClaudeAccountSpawnEnv } from '@lobechat/device-control/claude-code-account-routing';
 import {
   COMPUTER_USE_IDENTIFIER as AuvIdentifier,
   toAuvToolOutput,
@@ -386,11 +387,17 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const accessToken = await this.remoteServerConfigCtr.getAccessToken();
       const jwt = accessToken || request.jwt;
 
+      // Run on the Claude Code account the agent is routed to: its login on
+      // this desktop (default, or a profile signed in from Manage accounts).
+      const account = await this.resolveClaudeAccountEnv(request);
+      if (account.kind === 'reject') return { reason: account.reason, status: 'rejected' };
+
       // The embedded CLI handles spawn -> adapt -> BatchIngester ->
       // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
       // the process has actually spawned (or emitted an early error) before
       // acknowledging the server request.
       return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
+        accountEnv: account.env,
         agentId: request.agentId,
         agentType: request.agentType,
         assistantMessageId: request.assistantMessageId,
@@ -435,6 +442,17 @@ export default class GatewayConnectionCtr extends ControllerModule {
       const reason = err instanceof Error ? err.message : String(err);
       return { reason, status: 'rejected' };
     }
+  }
+
+  private async resolveClaudeAccountEnv(request: AgentRunRequestMessage) {
+    const ctr = this.heterogeneousAgentCtr;
+    return resolveClaudeAccountSpawnEnv(request.claudeAccountRouting, {
+      inheritedEnv: request.claudeAccountRouting
+        ? await ctr.getClaudeCodeInheritedRoutingEnv().catch(() => ({}))
+        : {},
+      listLogins: () => ctr.listClaudeCodeAccounts(),
+      prepareLogin: (externalAccountId) => ctr.resolveClaudeCodeAccount({ externalAccountId }),
+    });
   }
 
   // ─── Tool Call Routing ───

@@ -4075,6 +4075,8 @@ export default class HeterogeneousAgentCtr {
    * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
+    /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
+    accountEnv?: Record<string, string>;
     agentId?: string;
     agentType: string;
     assistantMessageId?: string;
@@ -4188,6 +4190,7 @@ export default class HeterogeneousAgentCtr {
       // CLI's heteroIngest/heteroFinish fall back to personal scope and the
       // workspace topic 404s (empty assistant, topic stuck `running`).
       ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
+      ...params.accountEnv,
     };
 
     logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);
