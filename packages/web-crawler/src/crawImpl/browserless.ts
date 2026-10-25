@@ -15,6 +15,7 @@ const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
 
 const BROWSERLESS_BLOCK_ADS = process.env.BROWSERLESS_BLOCK_ADS === '1';
 const BROWSERLESS_STEALTH_MODE = process.env.BROWSERLESS_STEALTH_MODE === '1';
+const BROWSERLESS_PROXY = process.env.BROWSERLESS_PROXY;
 
 class BrowserlessInitError extends Error {
   constructor() {
@@ -44,6 +45,7 @@ export const browserless: CrawlImpl = async (url, { filterOptions }) => {
             query: {
               blockAds: BROWSERLESS_BLOCK_ADS,
               launch: JSON.stringify({ stealth: BROWSERLESS_STEALTH_MODE }),
+              proxy: BROWSERLESS_PROXY,
               token: BROWSERLESS_TOKEN,
             },
             url: urlJoin(BASE_URL, '/content'),
