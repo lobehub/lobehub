@@ -1,6 +1,7 @@
 'use client';
 
 import { BrainCircuit, FilePenIcon, Image, Scale, Video } from 'lucide-react';
+import { lazy } from 'react';
 import type { RouteObject } from 'react-router';
 
 import GenerationSkeleton from '@/components/Skeleton/Generation';
@@ -35,6 +36,9 @@ import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@
  * the sidebar they register opens from the mobile page header as a drawer.
  * Mounted under both `/` and `/:workspaceSlug` by `mobileRouter.config.tsx`.
  */
+
+// Reads the project store, so keep it out of the router's entry graph.
+const ProjectMobileShellTitle = lazy(() => import('@/features/Projects/MobileShellTitle'));
 
 const pageLayout = (name: string) =>
   dynamicLayout(() => import('@/routes/(mobile)/_page-layout'), name);
@@ -139,12 +143,16 @@ const projectRoutes: RouteObject[] = [
               () => import('@/routes/(main)/project/[projectId]'),
               'Mobile > Project Home',
             ),
-            handle: { meta: projectHomeRouteMeta, mobileShellHeader: true },
+            handle: {
+              meta: projectHomeRouteMeta,
+              mobileShellHeader: true,
+              mobileShellTitle: ProjectMobileShellTitle,
+            },
             index: true,
           },
           {
             element: dynamicElement(
-              () => import('@/routes/(main)/project/[projectId]/conversation'),
+              () => import('@/routes/(mobile)/project/[projectId]/conversation'),
               'Mobile > Project Conversation',
             ),
             handle: { meta: projectConversationRouteMeta },

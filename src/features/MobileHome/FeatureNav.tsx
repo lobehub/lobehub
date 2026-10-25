@@ -1,69 +1,79 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Icon, ScrollShadow } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import { useFeatureNavItems } from './useFeatureNavItems';
 
 const styles = stylex.create({
-  grid: {
-    display: 'grid',
-    gap: 4,
-    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-    paddingBlockStart: '8px',
-    paddingBlockEnd: '4px',
-    paddingInline: 8,
-  },
-  item: {
-    backgroundColor: { 'default': 'transparent', ':active': cssVar.colorFillTertiary },
-    borderRadius: cssVar.borderRadiusLG,
-    cursor: 'pointer',
-    paddingBlockStart: '10px',
-    paddingBlockEnd: '8px',
-    paddingInline: 4,
+  chip: {
+    alignItems: 'center',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':active': cssVar.colorFillSecondary },
+    borderRadius: 999,
+    color: cssVar.colorText,
+    display: 'flex',
+    fontSize: 13,
+    gap: 6,
+    height: 36,
+    paddingInline: 12,
     transitionDuration: '150ms',
     transitionProperty: 'background-color',
     transitionTimingFunction: cssVar.motionEaseOut,
-  },
-  label: {
-    color: cssVar.colorTextSecondary,
-    fontSize: 12,
-    maxWidth: '100%',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  // The link is the 44px touch target; the pill inside stays light.
+  link: {
+    color: 'inherit',
+    display: 'flex',
+    flex: 'none',
+    paddingBlock: 4,
+  },
+  row: {
+    gap: 8,
+    paddingBlock: 4,
+    paddingInline: 12,
   },
 });
 
-/** The desktop sidebar's destinations as shortcuts above the mobile agent list. */
+/**
+ * The desktop sidebar's destinations as one scrollable row of links above the
+ * mobile agent list: findable from home without pushing the agent list — the
+ * page's main job — below the fold.
+ */
 const FeatureNav = memo(() => {
   const { t } = useTranslation('common');
-  const navigate = useWorkspaceAwareNavigate();
   const items = useFeatureNavItems();
 
   if (items.length === 0) return null;
 
   return (
-    <nav aria-label={t('tab.home')} {...stylex.props(styles.grid)}>
-      {items.map((item) => (
-        <Flexbox
-          align={'center'}
-          className={stylex.props(styles.item).className}
-          data-testid={`mobile-feature-nav-${item.key}`}
-          gap={6}
-          key={item.key}
-          role={'link'}
-          onClick={() => navigate(item.url!)}
-        >
-          <Icon icon={item.icon} size={22} />
-          <Text className={stylex.props(styles.label).className}>{item.title}</Text>
-        </Flexbox>
-      ))}
+    <nav aria-label={t('tab.home')}>
+      <ScrollShadow
+        hideScrollBar
+        horizontal
+        className={stylex.props(styles.row).className}
+        orientation={'horizontal'}
+        size={24}
+      >
+        {items.map((item) => (
+          <WorkspaceLink
+            className={stylex.props(styles.link).className}
+            data-testid={`mobile-feature-nav-${item.key}`}
+            key={item.key}
+            to={item.url!}
+          >
+            <span {...stylex.props(styles.chip)}>
+              <Icon icon={item.icon} size={16} />
+              {item.title}
+            </span>
+          </WorkspaceLink>
+        ))}
+      </ScrollShadow>
     </nav>
   );
 });

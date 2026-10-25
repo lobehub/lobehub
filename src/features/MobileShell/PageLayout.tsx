@@ -1,13 +1,13 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { type FC, type PropsWithChildren, useMemo } from 'react';
+import { type ComponentType, type FC, type PropsWithChildren, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useMatches } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 import NavHeader from '@/features/NavHeader';
-import { getRouteMetaFromHandle } from '@/spa/router/routeMeta';
+import { findRouteTitleKey } from '@/features/NavHeader/routeTitle';
 
 export interface MobileShellHandle {
   /**
@@ -17,26 +17,30 @@ export interface MobileShellHandle {
    * opens with its own heading.
    */
   mobileShellHeader?: boolean | 'untitled';
+  /** Replaces the static route title when the header should name the record. */
+  mobileShellTitle?: ComponentType;
 }
 
-const getShellHeader = (handle: unknown): MobileShellHandle['mobileShellHeader'] =>
-  handle && typeof handle === 'object'
-    ? (handle as MobileShellHandle).mobileShellHeader
-    : undefined;
+const getShellHandle = (handle: unknown): MobileShellHandle =>
+  handle && typeof handle === 'object' ? (handle as MobileShellHandle) : {};
 
-const useShellHeaderTitle = (): string | null | undefined => {
+interface ShellHeader {
+  Title?: ComponentType;
+  titleKey: string | null;
+}
+
+const useShellHeader = (): ShellHeader | undefined => {
   const matches = useMatches();
 
   return useMemo(() => {
-    const shellHeader = getShellHeader(matches.at(-1)?.handle);
-    if (!shellHeader) return undefined;
-    if (shellHeader === 'untitled') return null;
+    const { mobileShellHeader, mobileShellTitle } = getShellHandle(matches.at(-1)?.handle);
+    if (!mobileShellHeader) return undefined;
+    if (mobileShellHeader === 'untitled') return { titleKey: null };
 
-    for (const match of [...matches].reverse()) {
-      const titleKey = getRouteMetaFromHandle(match.handle)?.titleKey;
-      if (titleKey) return titleKey;
-    }
-    return null;
+    return {
+      Title: mobileShellTitle,
+      titleKey: findRouteTitleKey(matches.map((match) => match.handle)) ?? null,
+    };
   }, [matches]);
 };
 
@@ -47,17 +51,32 @@ const useShellHeaderTitle = (): string | null | undefined => {
  */
 const MobilePageLayout: FC<PropsWithChildren> = ({ children }) => {
   const { t } = useTranslation('electron');
-  const titleKey = useShellHeaderTitle();
+  const header = useShellHeader();
 
   const content = children ?? <Outlet />;
+  const staticTitle = header?.titleKey ? (
+    <Text ellipsis weight={500}>
+      {t(header.titleKey as any)}
+    </Text>
+  ) : null;
 
   return (
     <MobileContentLayout style={{ overflowY: 'hidden' }}>
-      {titleKey === undefined ? (
+      {header === undefined ? (
         content
       ) : (
         <Flexbox height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
-          <NavHeader left={titleKey ? <Text weight={500}>{t(titleKey as any)}</Text> : undefined} />
+          <NavHeader
+            left={
+              header.Title ? (
+                <Suspense fallback={staticTitle}>
+                  <header.Title />
+                </Suspense>
+              ) : (
+                staticTitle
+              )
+            }
+          />
           <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
             {content}
           </Flexbox>

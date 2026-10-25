@@ -8,6 +8,7 @@ import {
   cssVar,
   Empty,
   Flexbox,
+  ScrollShadow,
   Segmented,
   Text,
 } from '@lobehub/ui';
@@ -316,11 +317,15 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>
                 </Flexbox>
-                <Flexbox
+                {/* On a phone the filters can outgrow the row; the edge fade shows it scrolls. */}
+                <ScrollShadow
+                  hideScrollBar
                   horizontal
                   align={'center'}
                   gap={8}
-                  style={{ maxWidth: '100%', overflowX: 'auto' }}
+                  orientation={'horizontal'}
+                  size={24}
+                  style={{ maxWidth: '100%' }}
                 >
                   {isGlobal && (
                     <GoalAgentFilter
@@ -368,7 +373,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                     variant={viewMode === 'card' ? 'filled' : 'borderless'}
                     onClick={() => setViewMode('card')}
                   />
-                </Flexbox>
+                </ScrollShadow>
               </Flexbox>
               <div className={viewMode === 'card' ? styles.list : styles.listRows}>
                 {isTabError ? (

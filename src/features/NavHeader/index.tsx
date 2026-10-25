@@ -10,6 +10,7 @@ import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { getNavHeaderLeading } from './leading';
 import MobileHeaderNav from './MobileHeaderNav';
+import MobileRouteTitle from './MobileRouteTitle';
 
 export interface NavHeaderProps extends Omit<FlexboxProps, 'children'> {
   children?: ReactNode;
@@ -76,7 +77,8 @@ const NavHeader = memo<NavHeaderProps>(
           >
             {leading === 'mobile' && <MobileHeaderNav />}
             {leading === 'toggle' && <ToggleLeftPanelButton />}
-            {left}
+            {/* `left={null}` opts a mobile header out of the route-title fallback. */}
+            {left === undefined && leading === 'mobile' && !children ? <MobileRouteTitle /> : left}
           </Flexbox>
           {children && (
             <Flexbox className={slotClassNames?.center} flex={1} style={styles?.center}>

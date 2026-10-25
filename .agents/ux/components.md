@@ -57,14 +57,14 @@
 
 mobile 与 web 是同一套 DOM 组件；分类同 web（薄包装 / 重复 / 业务组件），没有单独的 RN 原子层。
 
-| 组件                                                                      | 什么时候用                                  | 注意点                                                                                                       |
-| ------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `NavHeader`（mobile 分支）                                                | mobile 上的桌面页面页头                     | 左侧自动是返回 + 侧栏抽屉；不要再在页面里加返回或左栏开关。面板头（`showTogglePanelButton={false}`）不出返回 |
-| `features/MobileShell` 的 `PageLayout`（路由 handle `mobileShellHeader`） | 页面自己不画页头时（项目首页、Docs Works）  | 在路由上声明，不改页面；页面开头已有大标题时用 `'untitled'`                                                  |
-| `MobileShell` 的 `AgentScopeLayout` / `GroupScopeLayout`                  | `/agent/:aid/*`、`/group/:gid/*` 的公共外层 | 只放初始化与 id 同步；404 守卫放在各自的页头下面，缺失时仍有返回                                             |
-| `features/MobileHome/FeatureNav`                                          | mobile 首页的功能入口                       | 条目来自 `useNavLayout`，跟随桌面侧栏的实验 / 开关 / 工作区规则；不要在这里另写一份入口列表                  |
-| `features/RightPanel`（mobile）                                           | 桌面右侧面板在 mobile 的形态                | 自动变成全屏抽屉、进页面时收起；新的侧面板用 `RightPanel`，不要直接用 `DraggablePanel`                       |
-| `features/WorkspaceSetting/MobileCategory`                                | mobile 工作区设置菜单                       | 读 `useWorkspaceSettingCategory`，权限与实验开关与桌面一致                                                   |
+| 组件                                                                      | 什么时候用                                  | 注意点                                                                                                                                                                               |
+| ------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NavHeader`（mobile 分支）                                                | mobile 上的桌面页面页头                     | 左侧自动是返回 + 侧栏抽屉（菜单图标）；不传 `left` 且没有中间内容时补路由标题，`left={null}` 关掉。不要再在页面里加返回或左栏开关。面板头（`showTogglePanelButton={false}`）不出返回 |
+| `features/MobileShell` 的 `PageLayout`（路由 handle `mobileShellHeader`） | 页面自己不画页头时（项目首页、Docs Works）  | 在路由上声明，不改页面；页面开头已有大标题时用 `'untitled'`；标题应是记录名（如项目名）时加 `mobileShellTitle`（lazy 组件）                                                          |
+| `MobileShell` 的 `AgentScopeLayout` / `GroupScopeLayout`                  | `/agent/:aid/*`、`/group/:gid/*` 的公共外层 | 只放初始化与 id 同步；404 守卫放在各自的页头下面，缺失时仍有返回                                                                                                                     |
+| `features/MobileHome/FeatureNav`                                          | mobile 首页的功能入口                       | 条目来自 `useNavLayout`，跟随桌面侧栏的实验 / 开关 / 工作区规则；不要在这里另写一份入口列表。一行横滑链接，不做宫格，避免把 agent 列表挤出首屏                                       |
+| `features/RightPanel`（mobile）                                           | 桌面右侧面板在 mobile 的形态                | 自动变成全屏抽屉、进页面时收起；新的侧面板用 `RightPanel`，不要直接用 `DraggablePanel`                                                                                               |
+| `features/WorkspaceSetting/MobileCategory`                                | mobile 工作区设置菜单                       | 读 `useWorkspaceSettingCategory`，权限与实验开关与桌面一致                                                                                                                           |
 
 ### 对话与 Agent
 

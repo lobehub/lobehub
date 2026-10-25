@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, cssVar, Drawer } from '@lobehub/ui';
-import { PanelLeftOpen } from 'lucide-react';
+import { MenuIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -20,7 +20,7 @@ const DRAWER_WIDTH = 300;
  * without a mobile copy of every sidebar.
  */
 const MobileNavPanelButton = memo(() => {
-  const { t } = useTranslation('hotkey');
+  const { t } = useTranslation('common');
   const { pathname, search } = useLocation();
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
@@ -37,10 +37,10 @@ const MobileNavPanelButton = memo(() => {
   return (
     <>
       <ActionIcon
-        aria-label={t('toggleLeftPanel.title')}
-        icon={PanelLeftOpen}
+        aria-label={t('navPanel.openMenu')}
+        icon={MenuIcon}
         size={MOBILE_HEADER_ICON_SIZE}
-        title={t('toggleLeftPanel.title')}
+        title={t('navPanel.openMenu')}
         onClick={() => setOpen(true)}
       />
       <Drawer
