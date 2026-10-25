@@ -16,6 +16,8 @@ import { type ChatAIAgentAction } from './slices/aiAgent/actions';
 import { chatAiAgent } from './slices/aiAgent/actions';
 import { type ChatBuiltinToolAction } from './slices/builtinTool/actions';
 import { chatToolSlice } from './slices/builtinTool/actions';
+import { type ChatCompressionAction } from './slices/compression/action';
+import { ChatCompressionActionImpl } from './slices/compression/action';
 import { type ChatForwardAction, ChatForwardActionImpl } from './slices/forward/action';
 import { type ChatMessageAction } from './slices/message/actions';
 import { chatMessage } from './slices/message/actions';
@@ -41,6 +43,7 @@ export type ChatStoreAction = ChatMessageAction &
   ChatAgentRunAction &
   ChatTopicAction &
   ChatTranslateAction &
+  ChatCompressionAction &
   ChatPluginAction &
   ChatBuiltinToolAction &
   ChatPortalAction &
@@ -81,6 +84,7 @@ const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
       chatAgentRun(...params),
       new ChatTopicActionImpl(...params),
       new ChatTranslateActionImpl(...params),
+      new ChatCompressionActionImpl(...params),
       chatToolSlice(...params),
       chatPlugin(...params),
       new ChatPortalActionImpl(...params),

@@ -134,7 +134,6 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
-import { type ContextCompressionOptions, executeContextCompression } from './contextCompression';
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from './persistedMessages';
 import { resolveExistingTopicForRun } from './resolveExistingTopic';
 import { resolveProjectDirectoryRun } from './resolveProjectDirectoryRun';
@@ -497,7 +496,7 @@ export class ConversationLifecycleActionImpl {
         compressContext.topicId &&
         !hasRunningCompressionOperation(Object.values(this.#get().operations), compressContext)
       ) {
-        await this.executeCompression(compressContext, '');
+        await this.#get().executeCompression(compressContext, '');
       }
       return;
     }
@@ -2361,17 +2360,6 @@ export class ConversationLifecycleActionImpl {
       userMessageId: data.userMessageId,
     };
   };
-
-  /**
-   * Execute context compression for /compact command.
-   *
-   * @returns Whether the history was replaced by a summary.
-   */
-  executeCompression = async (
-    context: Record<string, any>,
-    parentOperationId: string,
-    options?: ContextCompressionOptions,
-  ): Promise<boolean> => executeContextCompression(this.#get, context, parentOperationId, options);
 }
 
 export type ConversationLifecycleAction = Pick<

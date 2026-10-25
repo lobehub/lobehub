@@ -4,11 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
+import { agentSelectors } from '@/store/agent/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { useChatStore } from '../../../../store';
-import { createMockMessage, TEST_IDS } from './fixtures';
-import { resetTestEnvironment, setupMockSelectors } from './helpers';
+import { useChatStore } from '../../store';
 
 vi.mock('@/services/resourcePermission', () => ({
   resourcePermissionService: { getGeneralAccess: vi.fn() },
@@ -20,22 +19,23 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
-const agentId = TEST_IDS.SESSION_ID;
-const topicId = TEST_IDS.TOPIC_ID;
+const agentId = 'agent-1';
+const topicId = 'topic-1';
 const context = { agentId, threadId: null, topicId };
 const key = messageMapKey({ agentId, topicId });
 const originalMessages = [
-  createMockMessage({ content: 'question', id: 'user-1', role: 'user', topicId }),
-  createMockMessage({ content: 'answer', id: 'assistant-1', role: 'assistant', topicId }),
-];
+  { content: 'question', id: 'user-1', role: 'user', topicId },
+  { content: 'answer', id: 'assistant-1', role: 'assistant', topicId },
+] as any[];
 
 const closeToast = vi.fn();
 
 const getMessageIds = () => (useChatStore.getState().dbMessagesMap[key] ?? []).map((m) => m.id);
 
 beforeEach(() => {
-  resetTestEnvironment();
-  setupMockSelectors();
+  vi.spyOn(agentSelectors, 'getAgentConfigById').mockImplementation(
+    () => () => ({ model: 'gpt-4o-mini', provider: 'openai' }) as any,
+  );
 
   act(() => {
     useChatStore.setState({
