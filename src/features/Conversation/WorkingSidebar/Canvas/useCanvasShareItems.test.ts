@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CanvasVersionDetail } from '@/services/canvas';
 
-import { useCanvasShareItems } from './useCanvasShareItems';
+import { useCanvasShareItems, useCanvasShareTrigger } from './useCanvasShareItems';
 
 const mocks = vi.hoisted(() => ({
   openPublishConfirm: vi.fn(),
@@ -97,5 +97,49 @@ describe('useCanvasShareItems', () => {
     );
 
     expect(result.current).toHaveLength(0);
+  });
+});
+
+describe('useCanvasShareTrigger', () => {
+  it('runs a fresh canvas’s only action directly', () => {
+    const { result } = renderHook(() =>
+      useCanvasShareTrigger(detail({ latestVersion: 1 }), vi.fn()),
+    );
+
+    expect(result.current).toMatchObject({ action: { key: 'share' }, kind: 'action' });
+  });
+
+  it('runs the public link directly when sharing is already up to date', () => {
+    const { result } = renderHook(() =>
+      useCanvasShareTrigger(
+        detail({ publishedUrl: 'https://cost.lobehub.sites', publishedVersion: 2 }),
+        vi.fn(),
+      ),
+    );
+
+    expect(result.current).toMatchObject({ action: { key: 'open-public' }, kind: 'action' });
+  });
+
+  it('opens a menu once updating the share and opening the link both apply', () => {
+    const { result } = renderHook(() =>
+      useCanvasShareTrigger(
+        detail({ publishedUrl: 'https://cost.lobehub.sites', publishedVersion: 1 }),
+        vi.fn(),
+      ),
+    );
+
+    const trigger = result.current;
+    expect(trigger.kind).toBe('menu');
+    if (trigger.kind !== 'menu') throw new Error('the trigger should be a menu');
+
+    expect(trigger.items.map((item) => item.key)).toEqual(['share', 'open-public']);
+  });
+
+  it('renders nothing when there is no action to offer', () => {
+    const { result } = renderHook(() =>
+      useCanvasShareTrigger(detail({ canPublish: false }), vi.fn()),
+    );
+
+    expect(result.current.kind).toBe('none');
   });
 });
