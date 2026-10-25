@@ -68,6 +68,7 @@ the next free number of that prefix.
 - **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
 - **L-S25** `dev:static` 的 Electron 重启会清空 `dist/renderer`（renderer Vite dev server 启动即删 outDir）；`start`/`restart` 后必须重建 renderer 再驱动，否则页面只有 Internal Server Error。
 - **L-S26** 根 `.env` 起不来时不修它：开一个没有 `.env` 的 worktree，先按 L-S23 装依赖、L-S20 取端口、L-S9 建 per-run 库，再 `setup-db` → `migrate` → `seed-user` → `dev`。
+- **L-S27** A standalone `apps/cli` install relinks the shared `packages/*` it lists into its own store; before Web evidence in that worktree, rerun `pnpm install --force` at the root and restart the dev server.
 
 ## Entries
 
@@ -627,12 +628,30 @@ dev.mjs 每次启动都会拉起 renderer Vite dev server，而后者启动即�
 **Trap:** repo 根目录有 `.env`（Neon 口令已失效，或 `DATABASE_URL` 被指到本地库但 schema 落后、缺
 `agent_history_jobs`），于是走「有 `.env` 就用现有配置」这条分支：`bun run dev` 起来但登录 500，
 `setup-auth.sh` 又提示 `root .env exists; do not seed or modify this DB`。接下来会去改根 `.env`、改
-`node_modules` 里的依赖硬救——那都是别人的本地配置，救回来也只是这一轮能跑，下一轮照旧。
+`node_modules` 里的依赖硬救 —— 那都是别人的本地配置，救回来也只是这一轮能跑，下一轮照旧。
 
 **Rule:** 根 `.env` 起不来就离开它：`git worktree add --detach /tmp/<slug> <ref-or-sha>` 开一棵没有
-根 `.env` 的树（`--detach`：正在检出的分支不能重复 checkout），再把这条路径走完整——按 L-S23 复制
+根 `.env` 的树（`--detach`：正在检出的分支不能重复 checkout），再把这条路径走完整 —— 按 L-S23 复制
 一份可用的 `node_modules`（含各 package 自己的），按 L-S20 从 `docker ps` 取容器真实端口，按 L-S9
 在容器里建 per-run 库并导出 `DATABASE_URL`，然后 `init-dev-env.sh setup-db` → `migrate` →
 `seed-user` → `dev`（脚本一律用绝对路径，L-S21；端口从日志取，L-S24）。worktree 路径写进 report，
 teardown 时 `clean` 停服、删掉这个库、`git worktree remove` 移除这棵树。不要在被改坏的根 `.env` 上
 继续调试。
+
+### L-S27 — Taking Web evidence after a standalone `apps/cli` install
+
+`since 2026-10-25` · `holds-while: apps/cli/pnpm-workspace.yaml lists ../../packages/* as its own workspace projects`
+
+**Trap:** running `cd apps/cli && pnpm install` (PROJECT.md §6) in the worktree that also
+serves the Web surface. The CLI's workspace covers the shared packages, so the install
+rewrites their `packages/*/node_modules` links to point into `apps/cli/node_modules/.pnpm`.
+The server keeps working, but the SPA now loads a second React copy: routes fail with
+`The requested module '/apps/cli/node_modules/.pnpm/…' does not provide an export named
+'useSyncExternalStore'` and the page shows the error boundary, which reads like a broken
+build of the change under test.
+
+**Rule:** after a standalone CLI install, count the links that point into it
+(`find packages/*/node_modules -maxdepth 2 -type l -lname '*apps/cli/node_modules*'`).
+If any exist, run `pnpm install --force` at the root (a plain install reports "Already
+up to date" and leaves them), delete `node_modules/.vite`, and restart the dev server
+before capturing Web evidence.
