@@ -1,0 +1,48 @@
+---
+title: Deploy LobeHub Database Version on Railway
+description: >-
+  Deploy LobeHub on Railway with one click: LobeHub, ParadeDB Postgres and
+  RustFS object storage, with sign-up limited to your email address.
+tags:
+  - Deploy LobeHub
+  - Railway Deployment
+  - Custom Domain Binding
+---
+
+# Deploying LobeHub Database Version on Railway
+
+<Callout type="info">
+  This article assumes that you are familiar with the basic principles and processes of deploying
+  the LobeHub server database version, so it only includes content related to core environment
+  variable configuration. If you are not familiar with the deployment principles of the LobeHub
+  server database version, please refer to [Getting
+  Started](/docs/self-hosting/start) first.
+</Callout>
+
+The Railway template includes 3 services:
+
+- LobeHub database version, from the official `lobehub/lobehub` image.
+- PostgreSQL with pgvector and pg_search (ParadeDB) for data storage and indexing.
+- RustFS for file storage.
+
+<Steps>
+  ### Deploy the template
+
+  [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/lobehub-1?referralCode=9bD9mT)
+
+  The only required field is `AUTH_ALLOWED_EMAILS`: the email address, or comma-separated addresses and domains, allowed to register. `KEY_VAULTS_SECRET`, `AUTH_SECRET`, the database password and the storage keys are generated.
+
+  ### Sign up
+
+  When the deploy finishes, open the public domain of the `lobehub` service (it is also in the `LOBEHUB_URL` variable) and sign up with the email address you entered. Then add your model provider API keys in the settings.
+
+  ### Bind a custom domain (optional)
+
+  Add your domain to the `lobehub` service in Railway, set `APP_URL` to `https://your-domain` and redeploy the service. The template's start step updates the storage CORS rule to the new origin on every start.
+</Steps>
+
+## How files and keys are handled
+
+Uploads go from the browser to the RustFS public domain through presigned URLs, so the bucket needs a CORS rule for your `APP_URL`. The template's start step creates the bucket and sets that rule. The bucket stays private: files are shown through presigned URLs.
+
+`JWKS_KEY` is created on first start and stored in the private bucket, then read back on every restart. To use your own key, set `JWKS_KEY` on the `lobehub` service.
