@@ -73,7 +73,25 @@ export class TopicDoctorRepo {
       );
 
     const targetById = new Map(targets.map((row) => [row.id, row]));
-    const writable = patch.filter((op) => targetById.has(op.messageId));
+
+    // Reparent targets must be real messages too: diagnosis runs over a list
+    // that includes synthetic compression-group nodes, whose ids live in
+    // message_groups, not messages. Writing one into messages.parent_id
+    // violates messages_parent_id_messages_id_fk (500 on repair).
+    const reparentTargets = [
+      ...new Set(patch.filter((op) => op.type === 'reparent').map((op) => op.parentId)),
+    ];
+    const parentRows =
+      reparentTargets.length > 0
+        ? await this.db
+            .select({ id: messages.id })
+            .from(messages)
+            .where(inArray(messages.id, reparentTargets))
+        : [];
+    const realParentIds = new Set(parentRows.map((row) => row.id));
+    const writable = patch.filter(
+      (op) => targetById.has(op.messageId) && (op.type !== 'reparent' || realParentIds.has(op.parentId)),
+    );
 
     await this.db.transaction(async (tx) => {
       for (const op of writable) {
