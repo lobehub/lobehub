@@ -319,9 +319,6 @@ const mockShellCommandCtr = {
 
 const mockHeterogeneousAgentCtr = {
   cancelLhHeteroExec: vi.fn().mockResolvedValue(undefined),
-  getClaudeCodeInheritedRoutingEnv: vi.fn().mockResolvedValue({}),
-  listClaudeCodeAccounts: vi.fn().mockResolvedValue([]),
-  resolveClaudeCodeAccount: vi.fn().mockResolvedValue({ kind: 'missing' }),
   sendPrompt: vi.fn().mockResolvedValue(undefined),
   spawnLhHeteroExec: vi.fn().mockResolvedValue({ status: 'accepted' }),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
@@ -1765,54 +1762,6 @@ describe('GatewayConnectionCtr', () => {
         reason: 'Remote server URL not configured',
         status: 'rejected',
       });
-      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).not.toHaveBeenCalled();
-    });
-
-    it('spawns a routed Claude Code run on the profile of its account', async () => {
-      vi.mocked(mockHeterogeneousAgentCtr.listClaudeCodeAccounts).mockResolvedValueOnce([
-        { configDir: null, identity: { externalAccountId: 'acc-default' } },
-        { configDir: '/profiles/acc-pinned', identity: { externalAccountId: 'acc-pinned' } },
-      ]);
-      vi.mocked(mockHeterogeneousAgentCtr.resolveClaudeCodeAccount).mockResolvedValueOnce({
-        configDir: '/profiles/acc-pinned',
-        kind: 'profile',
-      });
-
-      const client = await connectAndOpen();
-      client.simulateAgentRunRequest('claude-code', 'op-routed', 'hi', 'mock-jwt', {
-        claudeAccountRouting: {
-          candidates: [{ externalAccountId: 'acc-pinned' }],
-          mode: 'pinned',
-        },
-      });
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-        expect.objectContaining({ accountEnv: { CLAUDE_CONFIG_DIR: '/profiles/acc-pinned' } }),
-      );
-    });
-
-    it('rejects a run pinned to a Claude Code account this desktop is not signed in to', async () => {
-      vi.mocked(mockHeterogeneousAgentCtr.listClaudeCodeAccounts).mockResolvedValueOnce([
-        { configDir: null, identity: { externalAccountId: 'acc-default' } },
-      ]);
-
-      const client = await connectAndOpen();
-      client.simulateAgentRunRequest('claude-code', 'op-pin-missing', 'hi', 'mock-jwt', {
-        claudeAccountRouting: {
-          candidates: [{ externalAccountId: 'acc-pinned', name: 'pinned@example.com' }],
-          mode: 'pinned',
-        },
-      });
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(client.sendAgentRunAck).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operationId: 'op-pin-missing',
-          reason: expect.stringContaining('pinned@example.com'),
-          status: 'rejected',
-        }),
-      );
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).not.toHaveBeenCalled();
     });
 

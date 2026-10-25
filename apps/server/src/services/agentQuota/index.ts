@@ -527,10 +527,9 @@ export class AgentQuotaService {
     const bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
     if (!provider) return bindings;
 
-    const candidates = await Promise.all(
-      bindings.map((binding) => this.accounts.findById(binding.accountId)),
-    );
-    return bindings.filter((_, index) => candidates[index]?.provider === provider);
+    // One read of the caller's accounts rather than a lookup per binding.
+    const providerById = new Map((await this.accounts.list()).map((a) => [a.id, a.provider]));
+    return bindings.filter((binding) => providerById.get(binding.accountId) === provider);
   };
 
   private selectAccountId = async (
