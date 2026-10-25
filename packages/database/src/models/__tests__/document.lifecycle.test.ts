@@ -3,10 +3,11 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, files, users } from '../../schemas';
+import { documents, files, knowledgeBases, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 import { FileModel } from '../file';
+import { KnowledgeBaseModel } from '../knowledgeBase';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -19,6 +20,8 @@ const otherDocumentModel = new DocumentModel(serverDB, otherUserId);
 const fileModel = new FileModel(serverDB, userId);
 const otherFileModel = new FileModel(serverDB, otherUserId);
 
+const knowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId);
+
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -27,6 +30,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(files);
   await serverDB.delete(documents);
+  await serverDB.delete(knowledgeBases);
   await serverDB.delete(users);
 });
 
@@ -54,6 +58,23 @@ const readDocument = async (id: string) => {
   const [row] = await serverDB.select().from(documents).where(eq(documents.id, id));
   return row;
 };
+
+describe('DocumentModel.query', () => {
+  it('drops documents filed into an excluded knowledge base', async () => {
+    const knowledgeBase = await knowledgeBaseModel.create({ name: 'restricted' });
+    const filed = await createDocument(documentModel, {
+      knowledgeBaseId: knowledgeBase.id,
+      title: 'Filed',
+    });
+    const standalone = await createDocument(documentModel, { title: 'Standalone' });
+
+    const result = await documentModel.query({ excludeKnowledgeBaseIds: [knowledgeBase.id] });
+
+    expect(result.items.map((item) => item.id)).toEqual([standalone.id]);
+    expect(result.total).toBe(1);
+    expect(filed.id).not.toBe(standalone.id);
+  });
+});
 
 describe('DocumentModel.findByIds', () => {
   it('short-circuits an empty id list without touching the database', async () => {
