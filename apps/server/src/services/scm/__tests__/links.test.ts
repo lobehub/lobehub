@@ -345,6 +345,46 @@ describe('resolveChangeRequestLinks', () => {
     expect(resolved.links.topicId).toBeUndefined();
   });
 
+  it("finds a teammate's hand link in a workspace the author can write to", async () => {
+    // A bot verified the delivery and linked the PR; a person opened it.
+    const workspace = await workspaceWith('scm-links-hand-ws', otherUserId);
+    const handLink = {
+      linkedAt: new Date().toISOString(),
+      number: 19_719,
+      provider: 'github',
+      repoFullName: 'LobeHub/LobeHub',
+      url: 'https://github.com/LobeHub/LobeHub/pull/19719',
+    };
+    const [topic] = await serverDB
+      .insert(topics)
+      .values({ title: 't', userId: otherUserId })
+      .returning();
+    await serverDB.insert(acceptances).values({
+      id: acceptanceId,
+      metadata: { pullRequests: [handLink] },
+      subjectId: topic.id,
+      subjectType: 'topic',
+      userId: otherUserId,
+      workspaceId: workspace.id,
+    });
+    const scope = { kind: 'author', userId } as const;
+
+    // Not a member: the link stays out of reach.
+    expect(await resolve({ ...base, scope })).toEqual({});
+
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId, workspaceId: workspace.id });
+    const resolved = await resolveChangeRequestLinks(serverDB, { ...base, scope });
+    expect(resolved).toEqual({
+      links: { acceptanceId, topicId: topic.id },
+      workspaceId: workspace.id,
+    });
+
+    // Another PR number in the same repository is not linked.
+    expect(await resolve({ ...base, number: 19_720, scope })).toEqual({});
+  });
+
   it('returns nothing when no source matches', async () => {
     expect(await resolve(base)).toEqual({});
   });

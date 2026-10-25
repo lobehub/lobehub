@@ -520,6 +520,18 @@ export class ScmChangeRequestModel {
     return row;
   };
 
+  /** Clear the acceptance link, but only while it still points at `acceptanceId`. */
+  static detachAcceptance = async (
+    db: LobeChatDatabase,
+    id: string,
+    acceptanceId: string,
+  ): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({ acceptanceId: null, updatedAt: new Date() })
+      .where(and(eq(scmChangeRequests.id, id), eq(scmChangeRequests.acceptanceId, acceptanceId)));
+  };
+
   /**
    * Merge check results for a commit into the row and recompute the rollup.
    * Results for a commit other than the row's current head are stale (the
