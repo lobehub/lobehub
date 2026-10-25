@@ -4,7 +4,7 @@ import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } fro
 import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
-import { memo, Suspense, useCallback, useMemo } from 'react';
+import { Fragment, memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -49,8 +49,10 @@ import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
 import { resolveWorkflowExpandLevel } from './components/segments';
+import TaskCompletionNotice from './components/TaskCompletionNotice';
 import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
 import { buildContinuationChains, collectSignalCallbacks } from './utils/continuations';
+import { resolveTaskCompletionSource } from './utils/taskCompletionSource';
 
 const EditState = dynamic(() => import('./components/EditState'), {
   ssr: false,
@@ -144,6 +146,22 @@ const GroupMessage = memo<GroupMessageProps>(
     const allChildren = useMemo(
       () => [...(children ?? []), ...chains.flatMap((chain) => chain.blocks)],
       [chains, children],
+    );
+    // One Group per wake-up turn, each preceded by a notice naming the tool
+    // whose completion woke it. The block arrays depend on the completions
+    // only, so the main chain streaming does not re-render those Groups.
+    const completionBlocks = useMemo(
+      () =>
+        ((taskCompletions as AssistantContentBlock[] | undefined) ?? []).map((block) => [block]),
+      [taskCompletions],
+    );
+    const completionItems = useMemo(
+      () =>
+        completionBlocks.map((blocks: AssistantContentBlock[]) => ({
+          blocks,
+          source: resolveTaskCompletionSource(blocks[0]!, allChildren),
+        })),
+      [allChildren, completionBlocks],
     );
 
     // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
@@ -407,16 +425,19 @@ const GroupMessage = memo<GroupMessageProps>(
           {allSignalCallbacks.map((block) => (
             <SignalCallbacks block={block} key={block.sourceToolMessageId} />
           ))}
-          {taskCompletions && taskCompletions.length > 0 && (
-            <Group
-              blocks={taskCompletions}
-              contentId={taskCompletions.at(-1)?.id}
-              defaultWorkflowExpandLevel={workflowExpandLevel}
-              disableEditing={disableEditing}
-              id={id}
-              messageIndex={index}
-            />
-          )}
+          {completionItems.map(({ blocks, source }) => (
+            <Fragment key={blocks[0]!.id}>
+              {source && <TaskCompletionNotice {...source} />}
+              <Group
+                blocks={blocks}
+                contentId={blocks[0]!.id}
+                defaultWorkflowExpandLevel={workflowExpandLevel}
+                disableEditing={disableEditing}
+                id={id}
+                messageIndex={index}
+              />
+            </Fragment>
+          ))}
         </Flexbox>
 
         {aggregatedFileList.length > 0 && (

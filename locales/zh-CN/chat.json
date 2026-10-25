@@ -2308,6 +2308,8 @@
   "taskCard.field.reviewRubrics": "审核标准",
   "taskCard.field.subtasks": "子任务",
   "taskCard.field.workspace": "工作区",
+  "taskCompletion.title": "{{tool}}「{{description}}」已结束",
+  "taskCompletion.titleWithoutDescription": "{{tool}} 已结束",
   "taskDetail.acceptance.checklist": "验收清单",
   "taskDetail.acceptance.closeDetail": "关闭检查详情",
   "taskDetail.acceptance.collapseAll": "折叠全部分组",

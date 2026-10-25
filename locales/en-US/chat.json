@@ -2308,6 +2308,8 @@
   "taskCard.field.reviewRubrics": "Review rubrics",
   "taskCard.field.subtasks": "Subtasks",
   "taskCard.field.workspace": "Workspace",
+  "taskCompletion.title": "{{tool}} \"{{description}}\" finished",
+  "taskCompletion.titleWithoutDescription": "{{tool}} finished",
   "taskDetail.acceptance.checklist": "Acceptance checklist",
   "taskDetail.acceptance.closeDetail": "Close check detail",
   "taskDetail.acceptance.collapseAll": "Collapse all groups",

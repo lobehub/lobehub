@@ -1868,6 +1868,8 @@ export default {
   'signalCallbacks.empty': 'No callback messages',
   'signalCallbacks.expand': 'Show details',
   'signalCallbacks.title': '{{tool}} · {{count}} callback updates',
+  'taskCompletion.title': '{{tool}} "{{description}}" finished',
+  'taskCompletion.titleWithoutDescription': '{{tool}} finished',
   'skillViewer.files': 'Files',
   'skillViewer.foldFiles': 'Hide files',
   'skillViewer.unfoldFiles': 'Show files',
