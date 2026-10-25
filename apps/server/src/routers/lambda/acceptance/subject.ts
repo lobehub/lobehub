@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 
 import { acceptanceProcedure, acceptanceWriteProcedure } from './procedures';
 
@@ -43,7 +44,7 @@ export const subjectRouter = router({
         title: input.title,
       };
       try {
-        return input.foldTaskRunTopic
+        const result = input.foldTaskRunTopic
           ? await ctx.acceptanceService.ensureForIngest(
               input.subjectType,
               input.subjectId,
@@ -54,6 +55,7 @@ export const subjectRouter = router({
               input.subjectId,
               defaults,
             );
+        return acceptanceResponse(result);
       } catch (error) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -83,7 +85,7 @@ export const subjectRouter = router({
       // to load the whole bundle for one field.
       const latest = await ctx.acceptanceService.latestRound(acceptance.id);
       return {
-        ...acceptance,
+        ...acceptanceResponse(acceptance),
         latestRunStatus: latest?.status ?? null,
         latestRunUserDecision: latest?.userDecision ?? null,
       };

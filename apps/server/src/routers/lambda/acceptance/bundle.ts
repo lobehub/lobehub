@@ -262,9 +262,10 @@ export const bundleRouter = router({
           ? (await resolveAcceptanceCommentAccess(ctx.serverDB, ctx.userId, acceptance.id))
               .canComment
           : canReview || collaborationGranted;
-      const storedRepair = canRequestRepair
-        ? await readAcceptanceRepair(ctx, acceptance)
-        : undefined;
+      const storedRepair =
+        canRequestRepair || acceptance.subjectType === 'site'
+          ? await readAcceptanceRepair(ctx, acceptance)
+          : undefined;
       const task =
         storedRepair?.taskId && ctx.userId
           ? await new TaskModel(
@@ -279,27 +280,30 @@ export const bundleRouter = router({
               where: eq(acceptances.id, storedRepair.deliveryAcceptanceId),
             })
           : null;
-      const repairPreview = repairDelivery
-        ? (
-            await new VerifyRunModel(
-              ctx.serverDB,
-              repairDelivery.userId,
-              repairDelivery.workspaceId ?? undefined,
-            ).listByAcceptance(repairDelivery.id)
-          ).at(-1)?.metadata?.previewUrl
-        : undefined;
+      const repairRuns = repairDelivery
+        ? await new VerifyRunModel(
+            ctx.serverDB,
+            repairDelivery.userId,
+            repairDelivery.workspaceId ?? undefined,
+          ).listByAcceptance(repairDelivery.id)
+        : storedRepair && !storedRepair.taskId
+          ? runs.filter((run) => run.createdAt.getTime() >= Date.parse(storedRepair.requestedAt))
+          : [];
+      const repairRound = repairRuns.at(-1);
       const repair = storedRepair
         ? {
             commentIds: storedRepair.commentIds,
             error: storedRepair.error,
             requestedAt: storedRepair.requestedAt,
             state: storedRepair.state,
+            deliveryRunStatus: repairRound?.status,
+            deliveryStatus:
+              repairDelivery?.status ?? (!storedRepair.taskId ? acceptance.status : undefined),
+            previewUrl: repairRound?.metadata?.previewUrl,
             ...(task
               ? {
                   taskId: task.id,
                   deliveryAcceptanceId: storedRepair.deliveryAcceptanceId,
-                  deliveryStatus: repairDelivery?.status,
-                  previewUrl: repairPreview,
                 }
               : {}),
             ...(isOwner && !storedRepair.taskId

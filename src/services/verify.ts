@@ -326,6 +326,9 @@ export class VerifyService {
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
 
+  requestAcceptanceRepair = (id: string, comment?: string) =>
+    lambdaClient.acceptance.requestRepair.mutate({ id, comment });
+
   /** Rename the acceptance's sidebar entry (a metadata title override). */
   renameAcceptance = (id: string, title: string) =>
     lambdaClient.acceptance.rename.mutate({ id, title });

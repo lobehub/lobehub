@@ -260,4 +260,55 @@ describe('acceptance repair handoff', () => {
     expect(bundle.canReview).toBe(false);
     expect(bundle.canReject).toBe(false);
   });
+
+  it('keeps frozen repair context out of list and subject payloads', async () => {
+    await serverDB
+      .update(acceptances)
+      .set({ subjectType: 'standalone', status: 'delivered' })
+      .where(eq(acceptances.id, acceptanceId));
+    await serverDB
+      .insert(verifyRuns)
+      .values({ acceptanceId, userId, roundIndex: 1, status: 'passed' });
+    const caller = acceptanceRouter.createCaller(createTestContext(userId));
+    await caller.requestRepair({ id: acceptanceId });
+    const list = await caller.list({});
+    expect(list.find((item) => item.id === acceptanceId)?.metadata?.repair).toBeUndefined();
+    const stored = await serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, acceptanceId),
+    });
+    const subject = await caller.getBySubject({
+      subjectId: stored!.subjectId,
+      subjectType: 'standalone',
+    });
+    expect(subject?.metadata?.repair).toBeUndefined();
+    expect(stored?.metadata?.repair?.feedback).toContain('Fix the unreadable menu');
+  });
+
+  it('does not extend an acceptance collaboration grant into project Task execution', async () => {
+    await serverDB
+      .update(acceptances)
+      .set({ subjectType: 'standalone', status: 'delivered', visibility: 'public' })
+      .where(eq(acceptances.id, acceptanceId));
+    await serverDB
+      .insert(verifyRuns)
+      .values({ acceptanceId, userId, roundIndex: 1, status: 'passed' });
+    await serverDB.insert(acceptanceComments).values({
+      acceptanceId,
+      authorUserId: outsiderId,
+      clientId: randomUUID(),
+      content: 'Can help with this delivery',
+      kind: 'access_request',
+      metadata: {
+        accessRequest: { permission: 'collaborate', status: 'granted', decidedByUserId: userId },
+      },
+    });
+    const result = await acceptanceRouter
+      .createCaller(createTestContext(outsiderId))
+      .requestRepair({ id: acceptanceId });
+    expect(result.dispatched).toBe(false);
+    expect(await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId))).toHaveLength(
+      0,
+    );
+    expect(execAgent).not.toHaveBeenCalled();
+  });
 });

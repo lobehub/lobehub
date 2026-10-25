@@ -19,6 +19,7 @@ import {
   REVIEW_PREDICT_MODEL_CONFIG,
   VerifyReviewPredictorService,
 } from '@/server/services/verify';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -76,7 +77,7 @@ export const reviewRouter = router({
       );
       // Signed where it lives — the inbox stops asking for the same sign-off.
       await settleGoalSignOff(ctx.serverDB, acceptance, 'signOff', input.comment);
-      return accepted;
+      return acceptanceResponse(accepted);
     }),
   /**
    * Feedback addressed to a check GROUP (business category) rather than any
@@ -360,7 +361,10 @@ export const reviewRouter = router({
 
         const active = await readAcceptanceRepair(ctx, acceptance);
         if (active?.state === 'starting' || active?.state === 'running') {
-          return { ...acceptance, repairDispatch: { dispatched: false, reason: 'in_progress' } };
+          return {
+            ...acceptanceResponse(acceptance),
+            repairDispatch: { dispatched: false, reason: 'in_progress' },
+          };
         }
 
         const comment = input.comment || undefined;
@@ -380,7 +384,10 @@ export const reviewRouter = router({
         );
         // A gate's revision is carried out by the goal: its main Agent rewrites the plan.
         if (input.dispatch === false || acceptance.subjectType === 'goal_gate') {
-          return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
+          return {
+            ...acceptanceResponse(rejected),
+            repairDispatch: { dispatched: false, reason: 'skipped' },
+          };
         }
 
         const repairDispatch = await dispatchAcceptanceRepair(
@@ -390,11 +397,12 @@ export const reviewRouter = router({
           service,
           acceptance,
           input.comment || undefined,
+          ctx,
         );
-        if (!repairDispatch.dispatched) return { ...rejected, repairDispatch };
+        if (!repairDispatch.dispatched) return { ...acceptanceResponse(rejected), repairDispatch };
 
         const current = await service.acceptanceModel.findById(acceptance.id);
-        return { ...(current ?? rejected), repairDispatch };
+        return { ...acceptanceResponse(current ?? rejected), repairDispatch };
       },
     ),
 });

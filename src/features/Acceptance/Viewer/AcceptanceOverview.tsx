@@ -29,6 +29,7 @@ import AcceptanceTabs from './Header/AcceptanceTabs';
 import { acceptanceContentLayout } from './layout';
 import { flowPlanPhase } from './Plan/planReview';
 import AcceptanceDecision from './Review/AcceptanceDecision';
+import { AcceptanceRepair } from './Review/AcceptanceRepair';
 import { checksForTurn } from './turnChecks';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { useAcceptanceTurn } from './useAcceptanceTurn';
@@ -112,6 +113,7 @@ export const AcceptanceOverview = ({
           {/* About the delivery as a whole, not one tab's face of it — a reviewer
               reading the discussion needs it as much as one on the checklist. */}
           <CollaborationRequestBanner />
+          <AcceptanceRepair />
           {/* The requirement needs room to land before the tabs start a new
               thought — at the band's uniform gap it read as another row of
               the same list. */}

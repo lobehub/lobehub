@@ -194,6 +194,7 @@ export interface AcceptanceRepairRequest {
   commentIds: string[];
   deliveryAcceptanceId?: string;
   error?: string;
+  executionUserId?: string;
   /** Frozen feedback, including page anchors and attachment references. */
   feedback: string;
   id: string;

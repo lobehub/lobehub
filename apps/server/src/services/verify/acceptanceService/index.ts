@@ -25,6 +25,7 @@ import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejectio
 
 import { requireDecidableAcceptance } from '../acceptanceDecision';
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from '../acceptanceMerge';
+import { acceptanceResponse } from '../acceptanceResponse';
 import {
   assertPlanLeavesAcceptedChecksAlone,
   type AttachedRun,
@@ -713,7 +714,7 @@ export class AcceptanceService {
     ]);
 
     return rows.map((row) => ({
-      ...row,
+      ...acceptanceResponse(row),
       checkCount: checkCounts.get(row.id) ?? null,
       project: projects.get(row.id) ?? null,
       subject: subjects.get(row.id)!,

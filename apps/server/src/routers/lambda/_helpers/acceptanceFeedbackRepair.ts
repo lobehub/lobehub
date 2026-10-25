@@ -38,11 +38,21 @@ export async function readAcceptanceRepair(
   if (!repair?.operationId || repair.state !== 'running') return repair;
   const operation = await new AgentOperationModel(
     ctx.serverDB,
-    acceptance.userId,
+    repair.executionUserId ?? acceptance.userId,
     acceptance.workspaceId ?? undefined,
   ).findById(repair.operationId);
   if (!operation) return repair;
-  if (operation.status === 'done') return { ...repair, state: 'finished' };
+  if (operation.status === 'done') {
+    const delivery = repair.deliveryAcceptanceId
+      ? await new AcceptanceModel(
+          ctx.serverDB,
+          repair.requestedBy,
+          acceptance.workspaceId ?? undefined,
+        ).findById(repair.deliveryAcceptanceId)
+      : acceptance;
+    if (delivery?.status === 'verifying' || delivery?.status === 'planned') return repair;
+    return { ...repair, state: 'finished' };
+  }
   if (['error', 'interrupted', 'abandoned'].includes(operation.status)) {
     return { ...repair, error: operation.completionReason ?? operation.status, state: 'failed' };
   }
@@ -116,6 +126,7 @@ export async function dispatchAcceptanceFeedbackRepair(
   service: AcceptanceService,
   acceptance: AcceptanceItem,
   comment?: string,
+  actorCtx: RepairContext = ctx,
 ): Promise<AcceptanceRepairDispatch> {
   // Goal coordination remains authoritative for its own attempts.
   if (
@@ -143,7 +154,7 @@ export async function dispatchAcceptanceFeedbackRepair(
     comment,
     id: randomUUID(),
     requestedAt: new Date().toISOString(),
-    requestedBy: ctx.userId,
+    requestedBy: actorCtx.userId,
     state: 'starting',
   });
   if (!claim.claimed) return { dispatched: false, reason: 'in_progress' };
@@ -166,6 +177,7 @@ export async function dispatchAcceptanceFeedbackRepair(
           agentId: result.agentId,
           operationId: result.operationId,
           topicId: result.topicId,
+          executionUserId: ctx.userId,
           state: 'running',
         });
       } else {
@@ -173,28 +185,29 @@ export async function dispatchAcceptanceFeedbackRepair(
       }
       return result;
     }
-    const projectCtx = { ...ctx, workspaceId: acceptance.workspaceId };
+    const projectCtx = { ...actorCtx, workspaceId: acceptance.workspaceId };
     const projectModel = new ProjectModel(
       ctx.serverDB,
-      ctx.userId,
+      actorCtx.userId,
       acceptance.workspaceId ?? undefined,
     );
     const project = await projectModel.findById(acceptance.projectId!);
     if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project is unavailable' });
     const scope = await findProjectReviewScope(ctx.serverDB, project.id);
-    const role = scope && (await resolveProjectReviewRole(ctx.serverDB, ctx.userId, scope));
+    const role = scope && (await resolveProjectReviewRole(ctx.serverDB, actorCtx.userId, scope));
     if (!role || role === 'viewer' || project.workspaceId !== acceptance.workspaceId) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Project edit access is required to run its Agent',
       });
     }
-    const [resolved] = await projectModel.resolveCoordinatorAgents([project]);
-    const agentId = request.agentId ?? resolved.coordinatorAgentId;
+    const agentId =
+      request.agentId ??
+      (await projectModel.resolveCoordinatorAgents([project]))[0].coordinatorAgentId;
     await assertCanUseWorkspaceAgent({
       agentId,
       db: ctx.serverDB,
-      userId: ctx.userId,
+      userId: actorCtx.userId,
       workspaceId: acceptance.workspaceId,
     });
     const caller = taskRouter.createCaller(projectCtx);
@@ -218,7 +231,7 @@ export async function dispatchAcceptanceFeedbackRepair(
       // Persist the task before starting it: a failed kickoff retries this same task.
       const delivery = await new AcceptanceModel(
         ctx.serverDB,
-        ctx.userId,
+        actorCtx.userId,
         acceptance.workspaceId ?? undefined,
       ).findBySubject('task', task.id);
       await patch({ agentId, deliveryAcceptanceId: delivery?.id, taskId: task.id });
@@ -226,7 +239,7 @@ export async function dispatchAcceptanceFeedbackRepair(
     if (request.deliveryAcceptanceId) {
       await new AcceptanceModel(
         ctx.serverDB,
-        ctx.userId,
+        actorCtx.userId,
         acceptance.workspaceId ?? undefined,
       ).patchMetadata(request.deliveryAcceptanceId, {
         repairSource: { acceptanceId: acceptance.id, requestId: request.id },
@@ -238,6 +251,7 @@ export async function dispatchAcceptanceFeedbackRepair(
       agentId,
       operationId: result.operationId,
       topicId: result.topicId,
+      executionUserId: actorCtx.userId,
       state: 'running',
     });
     return {

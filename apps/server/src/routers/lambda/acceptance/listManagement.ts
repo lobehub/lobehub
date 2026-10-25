@@ -17,6 +17,7 @@ import {
   previewAcceptancePurge,
   purgeAcceptance,
 } from '@/server/services/verify';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 
 import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import {
@@ -153,7 +154,7 @@ export const listManagementRouter = router({
         acceptance.userId,
         acceptance.workspaceId ?? undefined,
       ).setVisibilityByAcceptance(acceptance.id, input.visibility);
-      return updated;
+      return updated ? acceptanceResponse(updated) : updated;
     }),
   /**
    * Rename the acceptance in the caller's list — a display-title override kept
@@ -166,7 +167,10 @@ export const listManagementRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return service.acceptanceModel.patchMetadata(acceptance.id, { title: input.title });
+      const updated = await service.acceptanceModel.patchMetadata(acceptance.id, {
+        title: input.title,
+      });
+      return updated ? acceptanceResponse(updated) : updated;
     }),
   setProject: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
