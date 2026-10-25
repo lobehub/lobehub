@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messages, topics, users } from '../../../schemas';
+import { agents, chatGroups, messages, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 import { buildMessageSnippet, MESSAGE_KEYWORD_SEARCH_CANDIDATE_POOL } from '../../message/search';
@@ -75,6 +75,29 @@ describe('MessageModel.searchByKeyword', () => {
       snippet: 'newer replica summary',
       topicId: 'kw-chat',
       topicTitle: 'Weekly planning',
+    });
+  });
+
+  it('retains groupId so a group-chat hit keeps its route', async () => {
+    await serverDB.insert(chatGroups).values([{ id: 'kw-group', title: 'Squad', userId }]);
+    const messageModel = await seed([
+      {
+        content: 'group replica handoff',
+        groupId: 'kw-group',
+        id: 'kw-group-msg',
+        role: 'user',
+        userId,
+      },
+    ]);
+
+    const result = await messageModel.searchByKeyword({ keyword: 'replica' });
+
+    // A group message carries `groupId` rather than `agentId`; the CLI resolves
+    // its URL from these two, so the projection has to keep the group ref.
+    expect(result.items[0]).toMatchObject({
+      agentId: null,
+      groupId: 'kw-group',
+      id: 'kw-group-msg',
     });
   });
 

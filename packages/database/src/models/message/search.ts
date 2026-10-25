@@ -63,6 +63,12 @@ export interface MessageKeywordSearchItem {
   agentId: string | null;
   contentLength: number;
   createdAt: Date;
+  /**
+   * Kept so callers can resolve a group-topic hit back to its group route: a
+   * group message carries `groupId` instead of `agentId`, so dropping it loses
+   * the link (and an agent-only resolver would build the wrong URL).
+   */
+  groupId: string | null;
   id: string;
   role: string;
   snippet: string;
@@ -218,6 +224,7 @@ export class MessageKeywordSearchQueries extends MessageScope {
         agentId: messages.agentId,
         content: messages.content,
         createdAt: messages.createdAt,
+        groupId: messages.groupId,
         id: messages.id,
         role: messages.role,
         summary: messages.summary,
