@@ -1066,7 +1066,6 @@
   "goalProcess.result.continueSeed.open": "Wciąż otwarte:",
   "goalProcess.result.continueSeed.requirement": "Oryginalne wymaganie:",
   "goalProcess.result.continueSeed.title": "Kontynuuj: {{title}}",
-  "goalProcess.result.criteria.document": "Dokument dowodowy",
   "goalProcess.result.criteria.empty": "Ten Cel nie ma zdefiniowanych kryteriów akceptacji.",
   "goalProcess.result.criteria.evidenceCount": "{{count}} dowodów",
   "goalProcess.result.criteria.state.failed": "Nie spełnione",

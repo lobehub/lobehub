@@ -1066,7 +1066,6 @@
   "goalProcess.result.continueSeed.open": "هنوز باز است:",
   "goalProcess.result.continueSeed.requirement": "نیاز اصلی:",
   "goalProcess.result.continueSeed.title": "ادامه: {{title}}",
-  "goalProcess.result.criteria.document": "سند شواهد",
   "goalProcess.result.criteria.empty": "این هدف هیچ معیار پذیرش ساختاری ندارد.",
   "goalProcess.result.criteria.evidenceCount": "{{count}} شواهد",
   "goalProcess.result.criteria.state.failed": "برآورده نشده",

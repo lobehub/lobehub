@@ -2684,7 +2684,6 @@ export default {
   'goalProcess.result.continueSeed.open': 'Still open:',
   'goalProcess.result.continueSeed.requirement': 'Original requirement:',
   'goalProcess.result.continueSeed.title': 'Continue: {{title}}',
-  'goalProcess.result.criteria.document': 'Evidence document',
   'goalProcess.result.criteria.empty': 'This Goal has no structured acceptance criteria.',
   'goalProcess.result.criteria.evidenceCount': '{{count}} evidence',
   'goalProcess.result.criteria.state.failed': 'Not met',

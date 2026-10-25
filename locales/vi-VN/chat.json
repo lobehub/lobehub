@@ -1066,7 +1066,6 @@
   "goalProcess.result.continueSeed.open": "Vẫn mở:",
   "goalProcess.result.continueSeed.requirement": "Yêu cầu ban đầu:",
   "goalProcess.result.continueSeed.title": "Tiếp tục: {{title}}",
-  "goalProcess.result.criteria.document": "Tài liệu bằng chứng",
   "goalProcess.result.criteria.empty": "Mục tiêu này không có tiêu chí chấp nhận có cấu trúc.",
   "goalProcess.result.criteria.evidenceCount": "{{count}} bằng chứng",
   "goalProcess.result.criteria.state.failed": "Không đạt",
