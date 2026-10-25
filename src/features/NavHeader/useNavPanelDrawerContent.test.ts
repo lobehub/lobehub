@@ -45,7 +45,12 @@ describe('useNavPanelDrawerContent', () => {
   it('never offers the desktop home sidebar, which mobile shows as its home page', () => {
     mocks.navKey = 'home';
     registerNavPanelContent('home', Symbol('home-sidebar'), 'agent list');
+    registerNavPanelContent('memory', Symbol('memory-sidebar'), 'memory sections');
 
     expect(renderHook(() => useNavPanelDrawerContent()).result.current).toBeUndefined();
+
+    // The same registry still serves another route's sidebar.
+    mocks.navKey = 'memory';
+    expect(renderHook(() => useNavPanelDrawerContent()).result.current).toBe('memory sections');
   });
 });
