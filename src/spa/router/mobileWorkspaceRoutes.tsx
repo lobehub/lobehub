@@ -1,32 +1,22 @@
 'use client';
 
-import { BrainCircuit, FilePenIcon, Image, Scale, Video } from 'lucide-react';
+import { FilePenIcon, Image, Video } from 'lucide-react';
 import { lazy } from 'react';
 import type { RouteObject } from 'react-router';
 
 import GenerationSkeleton from '@/components/Skeleton/Generation';
-import MemorySkeleton from '@/components/Skeleton/Memory';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
-import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
-import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
-import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { taskRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import {
-  projectAcceptanceRouteMeta,
-  projectConversationRouteMeta,
-  projectDirectoriesRouteMeta,
-  projectHomeRouteMeta,
-  projectsRouteMeta,
-} from '@/features/Projects/routeMeta';
-import { activityListLoader } from '@/spa/router/activityListLoader';
-import { contextListLoader } from '@/spa/router/contextListLoader';
-import { identitiesListLoader } from '@/spa/router/identitiesListLoader';
+import { projectsRouteMeta } from '@/features/Projects/routeMeta';
+import { memoryChildren } from '@/spa/router/memoryRoutes';
 import { pageListLoader } from '@/spa/router/pageListLoader';
-import { preferenceListLoader } from '@/spa/router/preferenceListLoader';
+import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
 import { resourceRoute as desktopResourceRoute } from '@/spa/router/resourceRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
-import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
+import { overlayRoutes, withHandle } from '@/spa/router/routeOverlay';
+import { createTaskWorkspaceChildren } from '@/spa/router/taskWorkspaceRoutes';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 /**
@@ -45,60 +35,9 @@ const pageLayout = (name: string) =>
 
 const taskWorkspaceRoute: RouteObject = {
   children: [
-    {
-      children: [
-        {
-          element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks', {
-            preloadId: 'mobile-tasks',
-          }),
-          handle: { meta: tasksRouteMeta },
-          index: true,
-          loader: scheduledTaskListLoader,
-        },
-      ],
-      errorElement: <ErrorBoundary resetPath=".." />,
-      path: 'tasks',
-    },
-    {
-      children: [
-        {
-          element: dynamicElement(() => import('@/routes/(main)/goals'), 'Mobile > Goals'),
-          handle: { meta: goalsRouteMeta },
-          index: true,
-        },
-      ],
-      errorElement: <ErrorBoundary resetPath=".." />,
-      path: 'goals',
-    },
-    {
-      children: [
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/task/[taskId]'),
-            'Mobile > Task Detail',
-          ),
-          handle: { meta: taskRouteMeta },
-          // Optional readable title tail; `:taskId` alone resolves the task.
-          path: ':taskId/:slug?',
-        },
-      ],
-      errorElement: <ErrorBoundary resetPath="../tasks" />,
-      path: 'task',
-    },
-    {
-      children: [
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/goal/[goalId]'),
-            'Mobile > Goal Detail',
-          ),
-          handle: { meta: goalDetailRouteMeta },
-          path: ':goalId',
-        },
-      ],
-      errorElement: <ErrorBoundary resetPath="../goals" />,
-      path: 'goal',
-    },
+    ...createTaskWorkspaceChildren({ label: 'Mobile', preloadId: 'mobile-tasks' }),
+    // Desktop serves this under the agent layout; mobile keeps it in the task
+    // workspace so the task detail gets the workspace's task sidebar drawer.
     {
       children: [
         {
@@ -134,123 +73,32 @@ const projectRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary resetPath=".." />,
     path: 'projects',
   },
+  // The desktop project workspace (home, topics, tasks, settings, goals,
+  // dashboards, acceptance) inside the mobile page layout. Its layout gates on
+  // `enableProjects`, loads the project and registers the project sidebar,
+  // which mobile opens as a drawer.
   {
     children: [
       {
-        children: [
-          {
+        ...projectWorkspaceRoute,
+        children: overlayRoutes(projectWorkspaceRoute.children ?? [], {
+          'index': withHandle({
+            mobileShellHeader: true,
+            mobileShellTitle: ProjectMobileShellTitle,
+          }),
+          // The settings page opens with its own "Project settings" heading.
+          'settings/:section?': withHandle({ mobileShellHeader: 'untitled' }),
+          'topic/:topicId?': (route) => ({
+            ...route,
             element: dynamicElement(
-              () => import('@/routes/(main)/project/[projectId]'),
-              'Mobile > Project Home',
+              () => import('@/routes/(mobile)/project/[projectId]/topic'),
+              'Mobile > Project Topic',
             ),
-            handle: {
-              meta: projectHomeRouteMeta,
-              mobileShellHeader: true,
-              mobileShellTitle: ProjectMobileShellTitle,
-            },
-            index: true,
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(mobile)/project/[projectId]/conversation'),
-              'Mobile > Project Conversation',
-            ),
-            handle: { meta: projectConversationRouteMeta },
-            path: 'conversation/:topicId?',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/project/[projectId]/tasks'),
-              'Mobile > Project Tasks',
-            ),
-            handle: { meta: tasksRouteMeta },
-            loader: scheduledTaskListLoader,
-            path: 'tasks',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/project/[projectId]/settings'),
-              'Mobile > Project Working Directories',
-            ),
-            // The settings page opens with its own "Project settings" heading.
-            handle: { meta: projectDirectoriesRouteMeta, mobileShellHeader: 'untitled' },
-            path: 'settings/:section?',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/project/[projectId]/goals'),
-              'Mobile > Project Goals',
-            ),
-            handle: { meta: goalsRouteMeta },
-            path: 'goals',
-          },
-          {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/project/[projectId]/dashboard'),
-                  'Mobile > Project Dashboards',
-                ),
-                handle: { meta: dashboardsRouteMeta },
-                index: true,
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/project/[projectId]/dashboard/[dashboardId]'),
-                  'Mobile > Project Dashboard Detail',
-                ),
-                handle: { meta: dashboardRouteMeta },
-                path: ':dashboardId',
-              },
-            ],
-            // Off unless the `dashboard` feature flag is on: the gate leaves for the project.
-            element: dynamicLayout(
-              () => import('@/routes/(main)/project/[projectId]/dashboard/_layout'),
-              'Mobile > Project Dashboards > Layout',
-            ),
-            path: 'dashboard',
-          },
-          {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/project/[projectId]/acceptance'),
-                  'Mobile > Project Acceptance > List',
-                ),
-                index: true,
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/project/[projectId]/acceptance/[acceptanceId]'),
-                  'Mobile > Project Acceptance > Detail',
-                ),
-                handle: { meta: acceptanceRouteMeta },
-                path: ':acceptanceId',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/project/[projectId]/acceptance/[acceptanceId]'),
-                  'Mobile > Project Acceptance > Check',
-                ),
-                handle: { meta: acceptanceRouteMeta },
-                path: ':acceptanceId/check/:checkId',
-              },
-            ],
-            element: dynamicLayout(
-              () => import('@/routes/(main)/project/[projectId]/acceptance/_layout'),
-              'Mobile > Project Acceptance',
-            ),
-            handle: { meta: projectAcceptanceRouteMeta },
-            path: 'acceptance',
-          },
-        ],
-        // The `enableProjects` gate, the project detail load and the project
-        // sidebar (sections + topics), which mobile opens as a drawer.
-        element: dynamicLayout(
-          () => import('@/routes/(main)/project/_layout'),
-          'Mobile > Project Workspace > Layout',
-        ),
-      },
+          }),
+        }),
+        errorElement: undefined,
+        path: undefined,
+      } as RouteObject,
     ],
     element: pageLayout('Mobile > Project > Page Layout'),
     errorElement: <ErrorBoundary resetPath=".." />,
@@ -258,22 +106,14 @@ const projectRoutes: RouteObject[] = [
   },
 ];
 
-/** Flag routes whose page renders no header of its own (see `MobileShellHandle`). */
-const withShellHeader = (route: RouteObject, paths: ReadonlySet<string>): RouteObject =>
-  ({
-    ...route,
-    ...(route.path && paths.has(route.path)
-      ? { handle: { ...(route.handle as object), mobileShellHeader: true } }
-      : {}),
-    children: route.children?.map((child) => withShellHeader(child, paths)),
-  }) as RouteObject;
-
 // The shared Docs subtree (home, drive, works, library gallery, libraries)
 // wrapped in the mobile page layout with the drag context its rows need. Reused
 // rather than copied, so the mobile tree follows every desktop route change.
 // Works paints no page header, so the shell adds one there.
 const resourceRoute: RouteObject = {
-  children: [withShellHeader({ ...desktopResourceRoute, path: undefined }, new Set(['works']))],
+  children: overlayRoutes([{ ...desktopResourceRoute, path: undefined }], {
+    works: withHandle({ mobileShellHeader: true }),
+  }),
   element: dynamicLayout(
     () => import('@/routes/(mobile)/resource/_layout'),
     'Mobile > Resource > Layout',
@@ -285,72 +125,7 @@ const resourceRoute: RouteObject = {
 const memoryRoute: RouteObject = {
   children: [
     {
-      children: [
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/memory/(home)'),
-            'Mobile > Memory > Home',
-          ),
-          handle: {
-            meta: routeMeta({
-              icon: BrainCircuit,
-              Skeleton: MemorySkeleton,
-              titleKey: 'navigation.memory',
-            }),
-          },
-          index: true,
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/memory/identities'),
-            'Mobile > Memory > Identities',
-          ),
-          handle: {
-            meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryIdentities' }),
-          },
-          loader: identitiesListLoader,
-          path: 'identities',
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/memory/contexts'),
-            'Mobile > Memory > Contexts',
-          ),
-          handle: {
-            meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryContexts' }),
-          },
-          loader: contextListLoader,
-          path: 'contexts',
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/memory/preferences'),
-            'Mobile > Memory > Preferences',
-          ),
-          handle: {
-            meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryPreferences' }),
-          },
-          loader: preferenceListLoader,
-          path: 'preferences',
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/memory/rules'),
-            'Mobile > Memory > Rules',
-          ),
-          handle: { meta: routeMeta({ icon: Scale, titleKey: 'navigation.memoryRules' }) },
-          path: 'rules',
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/memory/activities'),
-            'Mobile > Memory > Activities',
-          ),
-          handle: { meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }) },
-          loader: activityListLoader,
-          path: 'activities',
-        },
-      ],
+      children: memoryChildren,
       // Section nav sidebar (opened as a drawer on mobile).
       element: dynamicLayout(
         () => import('@/routes/(main)/memory/_layout'),

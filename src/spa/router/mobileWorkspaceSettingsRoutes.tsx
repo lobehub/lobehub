@@ -2,96 +2,40 @@
 
 import type { RouteObject } from 'react-router';
 
-import { dynamicElement, redirectElement } from '@/utils/router';
+import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
+import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
+import { dynamicElement } from '@/utils/router';
 
 /**
- * Workspace settings tabs the mobile tree mounts beside the ones listed inline
- * in `mobileRouter.config.tsx`. Same pages as desktop's
- * `workspaceSettingsRoutes.tsx`; mobile renders them under the mobile settings
- * header instead of the desktop sidebar + content layout.
+ * `/:slug/settings/*` on mobile: the mobile settings menu, then every padded
+ * desktop tab from `workspaceSettingsContentRoute` (so a tab added there is
+ * mounted here too), then the full-bleed tabs desktop mounts beside them.
+ * Mobile renders them under the mobile settings header instead of the desktop
+ * sidebar + content layout.
  */
-export const mobileWorkspaceSettingsExtraRoutes: RouteObject[] = [
+export const mobileWorkspaceSettingsChildren: RouteObject[] = [
   {
     element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/statistics'),
-      'Mobile > Workspace > Settings > Statistics',
+      () => import('@/routes/(mobile)/[workspaceSlug]/settings'),
+      'Mobile > Workspace > Settings > Index',
     ),
-    path: 'statistics',
+    index: true,
   },
-  // Legacy `/:slug/settings/stats` URLs — kept for deep-links.
-  { element: redirectElement('../statistics'), path: 'stats' },
+  ...(workspaceSettingsContentRoute.children ?? []),
   {
     element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/service-model'),
-      'Mobile > Workspace > Settings > Service Model',
+      () =>
+        import('@/routes/(main)/[workspaceSlug]/settings/provider').then(
+          (m) => m.WorkspaceProviderSettingMobile,
+        ),
+      'Mobile > Workspace > Settings > Provider',
     ),
-    path: 'service-model',
+    path: 'provider',
   },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/credential'),
-      'Mobile > Workspace > Settings > Credential',
-    ),
-    path: 'credential',
-  },
-  // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
-  { element: redirectElement('../credential'), path: 'creds' },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/apikey'),
-      'Mobile > Workspace > Settings > API Key',
-    ),
-    path: 'apikey',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/storage'),
-      'Mobile > Workspace > Settings > Storage',
-    ),
-    path: 'storage',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
-      'Mobile > Workspace > Settings > Devices',
-    ),
-    path: 'devices',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
-      'Mobile > Workspace > Settings > Devices > Detail',
-    ),
-    path: 'devices/:sub',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/environments'),
-      'Mobile > Workspace > Settings > Environments',
-    ),
-    path: 'environments',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/drive'),
-      'Mobile > Workspace > Settings > Drive',
-    ),
-    path: 'drive',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
-      'Mobile > Workspace > Settings > Integrations',
-    ),
-    path: 'integrations',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/integrations'),
-      'Mobile > Workspace > Settings > Integrations > Detail',
-    ),
-    path: 'integrations/:sub',
-  },
+  // Path-shaped provider deep-links (`/:slug/settings/provider/:id`) redirect
+  // to the query form the workspace provider page uses. Static element: the
+  // redirect is tiny and lazy-loading it would flash the brand loader first.
+  { element: <WorkspaceProviderRedirect />, path: 'provider/:providerId' },
   {
     element: dynamicElement(
       () => import('@/routes/(main)/[workspaceSlug]/settings/skill'),

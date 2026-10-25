@@ -72,7 +72,7 @@ describe('mobileRouter task routes', () => {
 describe('mobileRouter workspace provider routes', () => {
   it('registers workspace provider list and path-shaped deep-link redirect', async () => {
     const source = await readFile(
-      path.join(process.cwd(), 'src/spa/router/mobileRouter.config.tsx'),
+      path.join(process.cwd(), 'src/spa/router/mobileWorkspaceSettingsRoutes.tsx'),
       'utf8',
     );
 
