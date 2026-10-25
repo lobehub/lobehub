@@ -238,7 +238,5 @@ export const emitAgentSignalScenarioEvent = async <TSourceType extends AgentSign
 
   if (!enabled) return undefined;
 
-  const { executeAgentSignalSourceEvent } = await import('./orchestrator');
-
   return executeAgentSignalSourceEvent(input, context, { ...options, scenario: scenarioId });
 };
