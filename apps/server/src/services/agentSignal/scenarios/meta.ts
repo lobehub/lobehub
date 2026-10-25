@@ -1,3 +1,4 @@
+import { isAgentSignalEnabledForUser } from '../featureGate';
 import { isBotWakeEnabled } from './botWake/gate';
 import type {
   AgentSignalScenarioGateInput,
@@ -14,13 +15,7 @@ export const botWakeScenarioMeta: AgentSignalScenarioMeta = {
 
 export const selfIterationScenarioMeta: AgentSignalScenarioMeta = {
   execution: 'async',
-  // Lazy on purpose: the gate reads `UserModel`, and policy construction (tests, evals) must not
-  // load the database model graph just to install handlers.
-  gate: async ({ db, userId }) => {
-    const { isAgentSignalEnabledForUser } = await import('../featureGate');
-
-    return isAgentSignalEnabledForUser(db, userId);
-  },
+  gate: ({ db, userId }) => isAgentSignalEnabledForUser(db, userId),
   id: AGENT_SIGNAL_SCENARIO_IDS.selfIteration,
 };
 
