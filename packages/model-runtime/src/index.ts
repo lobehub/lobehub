@@ -1,4 +1,8 @@
 export * from './core/BaseAI';
+export {
+  type InlineImageNormalizer,
+  setInlineImageNormalizer,
+} from './core/contextBuilders/inlineImageBudget';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
 export { mergeModelRuntimeHooks } from './core/mergeHooks';
 export type { ModelRuntimeHooks } from './core/ModelRuntime';

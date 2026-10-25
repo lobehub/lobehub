@@ -162,7 +162,12 @@ function createFakeMux(): GatewayMuxClient & Emitter {
 const GATEWAY_URL = 'https://gateway.test.com';
 
 function createTestAction(overrides: Record<string, any> = {}) {
-  const state: Record<string, any> = { gatewayConnections: {}, gatewayFeed: {} };
+  const state: Record<string, any> = {
+    gatewayConnections: {},
+    gatewayFeed: {},
+    operations: {},
+    operationsByContext: {},
+  };
   const set = vi.fn((updater: any) => {
     if (typeof updater === 'function') Object.assign(state, updater(state));
     else Object.assign(state, updater);
@@ -343,7 +348,9 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
     });
 
     it('records mux lifecycle notices in gatewayFeed, attaching once per mux', () => {
-      const { action, mux, state } = createTestAction();
+      const { action, mux, state } = createTestAction({
+        refreshTopic: vi.fn().mockResolvedValue(undefined),
+      });
 
       action.connectToGateway({
         gatewayUrl: GATEWAY_URL,

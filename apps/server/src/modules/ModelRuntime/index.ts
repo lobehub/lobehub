@@ -7,6 +7,7 @@ import {
   mergeModelRuntimeHooks,
   ModelRuntime,
   type ModelRuntimeHooks,
+  setInlineImageNormalizer,
 } from '@lobechat/model-runtime';
 import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
@@ -40,6 +41,10 @@ import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh
 
 import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
+import { sharpInlineImageNormalizer } from './inlineImageNormalizer';
+
+// Server requests can re-encode oversized images instead of dropping them.
+setInlineImageNormalizer(sharpInlineImageNormalizer);
 
 export * from './trace';
 export type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';

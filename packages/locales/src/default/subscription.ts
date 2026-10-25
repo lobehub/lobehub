@@ -305,6 +305,11 @@ export default {
   'credits.topUp.limitedOffer': '🔥 Limited',
   'credits.topUp.maxAmountError': 'Single purchase amount cannot exceed ${{max}}',
   'credits.topUp.originalPriceFormat': 'Original ${{price}}',
+  'credits.topUp.payment.checkout': 'Choose on the Stripe payment page',
+  'credits.topUp.payment.continueToCheckout': 'Continue to Payment',
+  'credits.topUp.payment.otherMethod': 'Other Payment Methods',
+  'credits.topUp.payment.overLimit':
+    'Purchases over {{max}} are confirmed on the Stripe payment page',
   'credits.topUp.purchaseError': 'Purchase failed, please try again later',
   'credits.topUp.purchaseNow': 'Purchase Now',
   'credits.topUp.receipt.bonus': 'First top-up bonus',

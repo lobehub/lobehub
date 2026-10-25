@@ -561,6 +561,12 @@ export interface BuiltinServerRuntimeOutput {
   errorData?: DeviceUnavailableErrorData;
   state?: any;
   success: boolean;
+  /**
+   * The tool message this call already created for itself (e.g. a background
+   * sub-agent's placeholder, which anchors its thread). The agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
 }
 
 export interface BuiltinInterventionProps<Arguments = any> {

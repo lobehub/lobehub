@@ -8,22 +8,26 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 
+import { classifyRunFailure, QUOTA_RESET_MARGIN_MS } from '../recoveryPolicy';
 import { GoalReportStore } from '../reportStore';
 import type { GoalServiceContext } from './types';
 
 export const graph = async (ctx: GoalServiceContext, goalId: string) => {
   const graph = await ctx.requireGraph(goalId);
-  const [runHeartbeats, deliveredAt, acceptances, assignees, spend, report] = await Promise.all([
-    ctx.collectRunHeartbeats(graph),
-    ctx.collectDeliveredAt(graph),
-    ctx.collectAcceptances(graph),
-    ctx.collectAssignees(graph),
-    ctx.resolveSpend(graph),
-    new GoalReportStore(ctx.db, ctx.userId, ctx.workspaceId).state(graph),
-  ]);
+  const [runHeartbeats, deliveredAt, quotaRetryAt, acceptances, assignees, spend, report] =
+    await Promise.all([
+      ctx.collectRunHeartbeats(graph),
+      ctx.collectDeliveredAt(graph),
+      ctx.collectQuotaWaits(graph),
+      ctx.collectAcceptances(graph),
+      ctx.collectAssignees(graph),
+      ctx.resolveSpend(graph),
+      new GoalReportStore(ctx.db, ctx.userId, ctx.workspaceId).state(graph),
+    ]);
   // Numeric clauses read through the Goal's Widget subscriptions when bound, so
   // the page shows the same verdict the coordinator acts on.
   const metricCriteria = await ctx.evaluateMetricCriteria(graph);
@@ -33,6 +37,7 @@ export const graph = async (ctx: GoalServiceContext, goalId: string) => {
     assignees,
     deliveredAt,
     metricCriteria,
+    quotaRetryAt,
     report,
     runHeartbeats,
     spend,
@@ -178,6 +183,52 @@ export const collectDeliveredAt = async (
   }
 
   return Object.keys(delivered).length > 0 ? delivered : undefined;
+};
+
+/**
+ * When the coordinator retries each active task node a usage window refused.
+ *
+ * `waitForQuotaReset` holds such a Task `paused` and books its own wake for the
+ * reset, so the run behind it has ended and sends no heartbeat. A client judging
+ * liveness from heartbeats alone called that wait lost — a red failure badge on
+ * a Task the coordinator will resume on its own. This reads the same failure
+ * classification the coordinator does, so the page names the wait and its time.
+ */
+export const collectQuotaWaits = async (
+  ctx: GoalServiceContext,
+  graph: GoalGraphSnapshot,
+): Promise<Record<string, Date> | undefined> => {
+  const activeTasks = graph.nodes.filter(
+    (node): node is GoalGraphNode & { taskId: string } =>
+      node.kind === 'task' && node.status === 'active' && !!node.taskId,
+  );
+  if (activeTasks.length === 0) return undefined;
+
+  const paused = (await ctx.taskModel.findByIds(activeTasks.map((node) => node.taskId))).filter(
+    (task) => task.status === 'paused',
+  );
+  if (paused.length === 0) return undefined;
+
+  const nodeByTaskId = new Map(activeTasks.map((node) => [node.taskId, node.id]));
+  const operationModel = new AgentOperationModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const waits: Record<string, Date> = {};
+  // Paused active Tasks are rare, so the per-task read stays off the common poll;
+  // the cap keeps a goal with many held Tasks from bursting the pool on every poll.
+  await pMap(
+    paused,
+    async (task) => {
+      const [latest] = await ctx.taskTopicModel.findWithHandoff(task.id, 1);
+      if (!latest?.operationId) return;
+      const operation = await operationModel.findById(latest.operationId);
+      const failure = classifyRunFailure(operation?.error, task.error ?? '');
+      const nodeId = nodeByTaskId.get(task.id);
+      if (failure.kind !== 'quota_reset' || !nodeId) return;
+      waits[nodeId] = new Date(failure.resetsAt! + QUOTA_RESET_MARGIN_MS);
+    },
+    { concurrency: 5 },
+  );
+
+  return Object.keys(waits).length > 0 ? waits : undefined;
 };
 
 /**

@@ -78,6 +78,7 @@ import {
   collectAcceptances,
   collectAssignees,
   collectDeliveredAt,
+  collectQuotaWaits,
   collectRunHeartbeats,
   graph,
   listEvents,
@@ -197,6 +198,7 @@ export class GoalService {
       collectAcceptances: (...args) => self.collectAcceptances(...args),
       collectAssignees: (...args) => self.collectAssignees(...args),
       collectDeliveredAt: (...args) => self.collectDeliveredAt(...args),
+      collectQuotaWaits: (...args) => self.collectQuotaWaits(...args),
       collectRolloutGate: (...args) => self.collectRolloutGate(...args),
       collectRunHeartbeats: (...args) => self.collectRunHeartbeats(...args),
       consumeCompletedTask: (...args) => self.consumeCompletedTask(...args),
@@ -352,6 +354,9 @@ export class GoalService {
 
   private collectDeliveredAt = (...args: MethodArgs<typeof collectDeliveredAt>) =>
     collectDeliveredAt(this.context, ...args);
+
+  private collectQuotaWaits = (...args: MethodArgs<typeof collectQuotaWaits>) =>
+    collectQuotaWaits(this.context, ...args);
 
   private collectRunHeartbeats = (...args: MethodArgs<typeof collectRunHeartbeats>) =>
     collectRunHeartbeats(this.context, ...args);
