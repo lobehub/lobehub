@@ -125,7 +125,10 @@ const resourceRoute: RouteObject = {
 const memoryRoute: RouteObject = {
   children: [
     {
-      children: memoryChildren,
+      // The contexts page (entity list + page) paints no header of its own.
+      children: overlayRoutes(memoryChildren, {
+        contexts: withHandle({ mobileShellHeader: true }),
+      }),
       // Section nav sidebar (opened as a drawer on mobile).
       element: dynamicLayout(
         () => import('@/routes/(main)/memory/_layout'),

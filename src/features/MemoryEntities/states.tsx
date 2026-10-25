@@ -19,17 +19,26 @@ const styles = stylex.create({
     flexDirection: 'column',
     gap: '32px',
     justifyContent: 'center',
+    // A flex item grows to its widest line by default; let it shrink to a phone.
+    minWidth: 0,
     paddingBlock: '48px',
     paddingInline: '24px',
   },
-  intro: { display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '440px', textAlign: 'center' },
+  intro: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxWidth: '440px',
+    textAlign: 'center',
+  },
   title: { fontSize: '20px', fontWeight: 600, margin: 0 },
   desc: { color: cssVar.colorTextSecondary, fontSize: '14px', lineHeight: '22px', margin: 0 },
   analysis: { maxWidth: '320px', width: '100%' },
   kinds: {
     display: 'grid',
     gap: '8px',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    // `min()` lets a phone fall back to one column instead of overflowing.
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))',
     maxWidth: '600px',
     width: '100%',
   },
@@ -76,27 +85,27 @@ const styles = stylex.create({
 export const FirstRunState = memo(() => {
   const format = useEntityFormat();
   return (
-  <div {...stylex.props(styles.center)}>
-    <div {...stylex.props(styles.intro)}>
-      <h2 {...stylex.props(styles.title)}>{format.t('entity.firstRun.title')}</h2>
-      <p {...stylex.props(styles.desc)}>{format.t('entity.firstRun.desc')}</p>
+    <div {...stylex.props(styles.center)}>
+      <div {...stylex.props(styles.intro)}>
+        <h2 {...stylex.props(styles.title)}>{format.t('entity.firstRun.title')}</h2>
+        <p {...stylex.props(styles.desc)}>{format.t('entity.firstRun.desc')}</p>
+      </div>
+      <div {...stylex.props(styles.kinds)}>
+        {CONTEXT_KINDS.map((kind) => (
+          <div key={kind} {...stylex.props(styles.kind)}>
+            <KindIcon kind={kind} />
+            <span {...stylex.props(styles.kindText)}>
+              <span {...stylex.props(styles.kindLabel)}>{format.kind(kind)}</span>
+              <span {...stylex.props(styles.kindExample)}>{format.kindExample(kind)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div {...stylex.props(styles.analysis)}>
+        <MemoryAnalysis />
+      </div>
     </div>
-    <div {...stylex.props(styles.kinds)}>
-      {CONTEXT_KINDS.map((kind) => (
-        <div key={kind} {...stylex.props(styles.kind)}>
-          <KindIcon kind={kind} />
-          <span {...stylex.props(styles.kindText)}>
-            <span {...stylex.props(styles.kindLabel)}>{format.kind(kind)}</span>
-            <span {...stylex.props(styles.kindExample)}>{format.kindExample(kind)}</span>
-          </span>
-        </div>
-      ))}
-    </div>
-    <div {...stylex.props(styles.analysis)}>
-      <MemoryAnalysis />
-    </div>
-  </div>
-);
+  );
 });
 
 FirstRunState.displayName = 'FirstRunState';
@@ -104,17 +113,19 @@ FirstRunState.displayName = 'FirstRunState';
 export const ErrorState = memo<{ onRetry: () => void }>(({ onRetry }) => {
   const { t } = useTranslation('memory');
   return (
-  <div {...stylex.props(styles.center)}>
-    <Empty
-      description={t('entity.error.desc')}
-      icon={CloudOffIcon}
-      title={t('entity.error.title')}
-      action={
-        <Button type={'primary'} onClick={onRetry}>{t('entity.error.retry')}</Button>
-      }
-    />
-  </div>
-);
+    <div {...stylex.props(styles.center)}>
+      <Empty
+        description={t('entity.error.desc')}
+        icon={CloudOffIcon}
+        title={t('entity.error.title')}
+        action={
+          <Button type={'primary'} onClick={onRetry}>
+            {t('entity.error.retry')}
+          </Button>
+        }
+      />
+    </div>
+  );
 });
 
 ErrorState.displayName = 'ErrorState';
