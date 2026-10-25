@@ -19,9 +19,9 @@ import {
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
-import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type { WakeClassify } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import { createWakePolicySet } from '@/server/services/agentSignal/scenarios/botWake/policies';
+import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type {
   BotWakeConfig,
   WakeChannelState,
@@ -120,13 +120,13 @@ export interface BotWakeRecorderOptions {
   /** The bot owner's user id on this platform (`settings.userId`). */
   operatorUserId?: string;
   platform: string;
-  /** Raw provider settings (`botWake` is parsed from them). Overrides `botWakeConfig` rules. */
-  settings?: Record<string, unknown> | null;
   /**
    * Whether the `bot_wake` rollout flag is on for this bot's owner. Defaults to the runtime
    * feature flag; injectable for tests. Off means the recorder does nothing at all.
    */
   rollout?: () => Promise<boolean>;
+  /** Raw provider settings (`botWake` is parsed from them). Overrides `botWakeConfig` rules. */
+  settings?: Record<string, unknown> | null;
   /** Replaces the policy set built from `settings`. */
   shadowPolicies?: readonly WakePolicy[];
   state?: WakeStatePort;
@@ -140,6 +140,11 @@ export interface BotWakeRecorderOptions {
  */
 export interface BotWakeRecorder {
   /**
+   * The `bot_wake` rollout flag for this bot's owner. Callers that change behaviour on their own
+   * (follow-up wakes that may end in silence, the follow-up gate) must ask this first.
+   */
+  isRolledOut: () => Promise<boolean>;
+  /**
    * Evaluates the policies that the owner switched to `enforce`, with their real modes.
    *
    * Returns:
@@ -148,11 +153,6 @@ export interface BotWakeRecorder {
    *   Never throws: a failure is `undefined`.
    */
   judge: (observation: BotWakeObservation) => Promise<WakeDecision | undefined>;
-  /**
-   * The `bot_wake` rollout flag for this bot's owner. Callers that change behaviour on their own
-   * (follow-up wakes that may end in silence, the follow-up gate) must ask this first.
-   */
-  isRolledOut: () => Promise<boolean>;
   /** Fire-and-forget. Never throws and never rejects; a failed write is logged and dropped. */
   record: (observation: BotWakeObservation) => void;
 }

@@ -4,7 +4,6 @@ import { BotMessageRouter } from './index';
 import {
   makeProvider,
   mockFindEnabledByPlatform,
-  mockGetBotFeatureAccessState,
   mockGetList,
   mockHandleMention,
   mockHandleSubscribedMessage,
@@ -54,18 +53,6 @@ vi.mock('../platforms', async () => (await import('./testUtils')).platformsModul
 
 /** The recorder is fire-and-forget, so let its detached promise settle before asserting. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-const decisions = () =>
-  mockRecordSignalDecision.mock.calls.map(([, params]) => ({
-    entryPoint: params.signal.metadata?.entryPoint,
-    externalId: params.signal.externalId,
-    finalReason: params.decision.finalReason,
-    outcome: params.decision.outcome,
-    pipelineVersion: params.decision.pipelineVersion,
-    scopeKey: params.scopeKey,
-    toTag: params.decision.toTag,
-    verdicts: params.decision.verdicts,
-  }));
 
 const boot = async (settings: Record<string, unknown> = { dmPolicy: 'open' }) => {
   mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-1', settings })]);

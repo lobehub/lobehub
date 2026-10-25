@@ -1,5 +1,5 @@
-import type { BotNoReplyResult } from '@lobechat/types';
 import { botWakeNoReplyCounter } from '@lobechat/observability-otel/modules/bot-wake';
+import type { BotNoReplyResult } from '@lobechat/types';
 import { BOT_NO_REPLY_LABELS } from '@lobechat/types';
 import debug from 'debug';
 

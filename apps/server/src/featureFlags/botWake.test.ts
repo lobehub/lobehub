@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RuntimeConfigModule from '@/server/runtimeConfig';
+
 /**
  * The `bot_wake` flag through the real flag service: the merge of schema defaults, the published
  * global snapshot, the environment and a per-user override, as a bot owner's rollout will see it.
@@ -12,7 +14,7 @@ const published = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/runtimeConfig', async (importActual) => {
-  const actual = await importActual<typeof import('@/server/runtimeConfig')>();
+  const actual = await importActual<typeof RuntimeConfigModule>();
 
   class FakeRedisRuntimeConfigProvider {
     constructor(public domain: { key: string }) {}

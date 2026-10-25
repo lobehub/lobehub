@@ -14,10 +14,10 @@ const log = debug('lobe-server:bot-wake:rollout');
 export const BOT_WAKE_ROLLOUT_CACHE_MS = 10_000;
 
 export interface BotWakeRolloutProbeOptions {
-  /** Reads the flag for a user. Defaults to the runtime feature flags; injectable for tests. */
-  read?: (userId: string) => Promise<boolean | undefined>;
   /** Clock for the cache; injectable for tests. */
   now?: () => number;
+  /** Reads the flag for a user. Defaults to the runtime feature flags; injectable for tests. */
+  read?: (userId: string) => Promise<boolean | undefined>;
   ttlMs?: number;
 }
 
