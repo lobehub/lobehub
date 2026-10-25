@@ -5,15 +5,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { parseChangeRequestUrl } from '@/server/services/scm/changeRequestUrl';
-import {
-  bindHandLinkedChangeRequest,
-  unbindHandLinkedChangeRequest,
-} from '@/server/services/scm/handLink';
-import {
-  addPullRequestLink,
-  removePullRequestLink,
-  updateAcceptancePullRequests,
-} from '@/server/services/verify/acceptancePullRequests';
+import { linkHandPullRequest, unlinkHandPullRequest } from '@/server/services/scm/handLink';
 
 import { previewUrlSchema, recordPreviewUrl } from '../_helpers/acceptancePreviewUrl';
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
@@ -83,10 +75,7 @@ export const deliveryLinksRouter = router({
         });
       }
 
-      await updateAcceptancePullRequests(ctx.serverDB, acceptance.id, (links) =>
-        addPullRequestLink(links, parsed, input.title),
-      );
-      await bindHandLinkedChangeRequest(ctx.serverDB, acceptance, parsed);
+      await linkHandPullRequest(ctx.serverDB, acceptance, parsed, input.title);
       return parsed;
     }),
   unlinkPullRequest: acceptanceWriteProcedure
@@ -94,15 +83,12 @@ export const deliveryLinksRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
       const parsed = parseChangeRequestUrl(input.url);
-      const pullRequests = parsed
-        ? await updateAcceptancePullRequests(ctx.serverDB, acceptance.id, (links) =>
-            removePullRequestLink(links, parsed),
-          )
-        : null;
-      if (!pullRequests) {
+      const unlinked = parsed
+        ? await unlinkHandPullRequest(ctx.serverDB, acceptance, parsed)
+        : false;
+      if (!unlinked) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Linked pull request not found' });
       }
-      if (parsed) await unbindHandLinkedChangeRequest(ctx.serverDB, acceptance, parsed);
 
       return { success: true };
     }),

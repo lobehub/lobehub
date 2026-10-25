@@ -7,7 +7,12 @@ import { ScmChangeRequestModel } from '@/database/models/scm';
 import { acceptances, users, verifyRuns, workspaceMembers, workspaces } from '@/database/schemas';
 
 import { parseChangeRequestUrl } from '../changeRequestUrl';
-import { bindHandLinkedChangeRequest, unbindHandLinkedChangeRequest } from '../handLink';
+import {
+  bindHandLinkedChangeRequest,
+  catchUpHandLinkedChangeRequest,
+  linkHandPullRequest,
+  unlinkHandPullRequest,
+} from '../handLink';
 
 const mocks = vi.hoisted(() => ({ postComment: vi.fn(), updateComment: vi.fn() }));
 
@@ -87,14 +92,13 @@ const authorRow = (state: 'merged' | 'open', rowWorkspaceId: string | null = wor
 const statusOf = async (id: string) =>
   (await serverDB.select().from(acceptances).where(eq(acceptances.id, id)))[0].status;
 
-describe('bindHandLinkedChangeRequest', () => {
+describe('hand-linked pull requests', () => {
   it("accepts a teammate's delivery when its PR was merged before the link", async () => {
     const acceptance = await botAcceptance();
     const row = await authorRow('merged');
 
-    const bound = await bindHandLinkedChangeRequest(serverDB, acceptance, pr);
+    await linkHandPullRequest(serverDB, acceptance, pr);
 
-    expect(bound?.acceptanceId).toBe(acceptance.id);
     expect(await statusOf(acceptance.id)).toBe('accepted');
     const [run] = await serverDB
       .select()
@@ -111,13 +115,13 @@ describe('bindHandLinkedChangeRequest', () => {
     const acceptance = await botAcceptance();
     const row = await authorRow('open');
 
-    await bindHandLinkedChangeRequest(serverDB, acceptance, pr);
+    await linkHandPullRequest(serverDB, acceptance, pr);
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBe(
       acceptance.id,
     );
     expect(await statusOf(acceptance.id)).toBe('delivered');
 
-    await unbindHandLinkedChangeRequest(serverDB, acceptance, pr);
+    expect(await unlinkHandPullRequest(serverDB, acceptance, pr)).toBe(true);
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBeNull();
   });
 
@@ -126,12 +130,31 @@ describe('bindHandLinkedChangeRequest', () => {
     const row = await authorRow('open');
     const shouted = parseChangeRequestUrl('https://github.com/LobeHub/LobeHub/pull/21560')!;
 
-    await bindHandLinkedChangeRequest(serverDB, acceptance, shouted);
+    await linkHandPullRequest(serverDB, acceptance, shouted);
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBe(
       acceptance.id,
     );
 
-    await unbindHandLinkedChangeRequest(serverDB, acceptance, shouted);
+    expect(await unlinkHandPullRequest(serverDB, acceptance, shouted)).toBe(true);
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBeNull();
+  });
+
+  it('does not accept on a catch-up an unlink overtook', async () => {
+    // A link binds and commits; before its catch-up runs, an unlink removes
+    // the link and the binding. The stale catch-up must not accept.
+    const acceptance = await botAcceptance();
+    const row = await authorRow('merged');
+    const rowId = await bindHandLinkedChangeRequest(serverDB, acceptance, pr);
+    expect(rowId).toBe(row.id);
+    await serverDB
+      .update(acceptances)
+      .set({ metadata: { pullRequests: [{ ...pr, linkedAt: new Date().toISOString() }] } })
+      .where(eq(acceptances.id, acceptance.id));
+    expect(await unlinkHandPullRequest(serverDB, acceptance, pr)).toBe(true);
+
+    await catchUpHandLinkedChangeRequest(serverDB, acceptance.id, row.id);
+
+    expect(await statusOf(acceptance.id)).toBe('delivered');
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.acceptanceId).toBeNull();
   });
 
