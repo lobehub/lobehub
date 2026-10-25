@@ -1,0 +1,36 @@
+---
+title: 在 LobeHub 中使用 Cheaper Inference
+description: 在 LobeHub 中配置 Cheaper Inference，通过一个 OpenAI 兼容 API 使用多家实验室的模型进行对话。
+tags:
+  - LobeHub
+  - Cheaper Inference
+  - OpenAI 兼容
+  - API 密钥
+---
+
+# 在 LobeHub 中使用 Cheaper Inference
+
+[Cheaper Inference](https://cheaperinference.com) 是兼容 OpenAI 的网关，使用一个 API 密钥即可访问多家实验室的模型。每个模型的价格比其所属实验室的标价低 15–60%。当前模型与价格请查看[模型列表](https://cheaperinference.com/#models)。
+
+<Steps>
+  ### 步骤一：创建 API 密钥
+
+  - [注册](https://cheaperinference.com/signup) Cheaper Inference 账户。
+  - 在账户中创建 API 密钥。密钥以 `ci_live_` 开头。
+  - 复制并妥善保存密钥。详情请查看[官方文档](https://cheaperinference.com/docs)。
+
+  ### 步骤二：在 LobeHub 中配置 Cheaper Inference
+
+  - 打开 **应用设置 → AI 服务商**，找到 **Cheaper Inference** 并启用。
+  - 填入 API 密钥。如果自部署实例的管理员已配置服务端密钥，可以直接使用该配置，无需再填写个人密钥。
+  - 保留默认 API 基础地址 `https://api.cheaperinference.com/v1`；使用兼容代理时再修改。
+  - 执行连通性检查，然后为助手选择模型，发送一条简短消息。
+</Steps>
+
+## API 兼容性
+
+LobeHub 通过基础地址下的 OpenAI 兼容 API 发送请求。GPT-5.x 模型使用 Responses API（`/responses`），其他模型使用 Chat Completions API（`/chat/completions`）。自定义代理需要同时支持这两个路径。点击 **获取模型列表** 可加载当前密钥可用的对话模型。Cheaper Inference 仅提供对话模型，不提供 Embedding 或音频接口。
+
+## 自部署
+
+管理员可以在服务端设置 `CHEAPERINFERENCE_API_KEY`，以共享密钥启用 Cheaper Inference。`CHEAPERINFERENCE_PROXY_URL` 用于覆盖基础地址，`CHEAPERINFERENCE_MODEL_LIST` 用于自定义模型列表。详见 [Cheaper Inference 环境变量](/zh/docs/self-hosting/environment-variables/model-provider#cheaper-inference)。
