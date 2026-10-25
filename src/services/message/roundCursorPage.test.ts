@@ -131,6 +131,26 @@ describe('primeMessageListPage', () => {
     expect(isPartialHeadWindow(context)).toBe(false);
   });
 
+  it('keeps the partial marker when the replacing head read fails', async () => {
+    const context = nextContext();
+
+    primeMessageListPage(context, listPage('prefetched'));
+    await service.getMessageListPage(context);
+    expect(isPartialHeadWindow(context)).toBe(true);
+
+    query.mockRejectedValueOnce(new Error('offline'));
+    await expect(service.getMessageListPage(context)).rejects.toThrow('offline');
+
+    // The rows on screen are still the prefetch window: a resume must widen.
+    expect(isPartialHeadWindow(context)).toBe(true);
+
+    query.mockResolvedValueOnce(page('full'));
+    await service.getMessageListPage(context);
+
+    // Only a head read that actually landed drops the marker.
+    expect(isPartialHeadWindow(context)).toBe(false);
+  });
+
   it('falls back to a fresh read when the primed request failed', async () => {
     query.mockResolvedValueOnce(page('retry'));
     const context = nextContext();

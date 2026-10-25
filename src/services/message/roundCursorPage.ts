@@ -101,13 +101,17 @@ export const readMessagesByRoundCursor = async (
   params: RoundCursorReadParams,
   cursor: MessageRoundCursor | null,
 ): Promise<MessageListPage> => {
-  // The newest page is the head: reading it at the normal budget replaces any
-  // prefetch window the conversation was painting from.
-  if (cursor === null) markFullHeadWindow(params);
-
-  return toMessageListPage(
+  const page = toMessageListPage(
     await lambdaClient.message.getMessagesByCursor.query(toRoundCursorQueryInput(params, cursor)),
   );
+
+  // The newest page is the head: a normal-budget head read that LANDED replaces
+  // any prefetch window the conversation was painting from. Clear the marker
+  // only now — a pending or failed refresh leaves the prefetch rows in place, so
+  // the next resume still has to widen to get full history.
+  if (cursor === null) markFullHeadWindow(params);
+
+  return page;
 };
 
 /** The `getMessagesByCursor` input for one forward page, starting after `cursor`. */
