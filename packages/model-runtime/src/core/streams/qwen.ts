@@ -162,7 +162,23 @@ export const transformQwenStream = (
     typeof item.delta.reasoning_content === 'string' &&
     item.delta.reasoning_content !== ''
   ) {
-    return { data: item.delta.reasoning_content, id: chunk.id, type: 'reasoning' };
+    const reasoningChunk: StreamProtocolChunk = {
+      data: item.delta.reasoning_content,
+      id: chunk.id,
+      type: 'reasoning',
+    };
+
+    if (typeof item.delta.content === 'string' && item.delta.content !== '') {
+      const textChunk: StreamProtocolChunk = {
+        data: item.delta.content,
+        id: chunk.id,
+        type: 'text',
+      };
+
+      return appendUsageChunk([reasoningChunk, textChunk]);
+    }
+
+    return reasoningChunk;
   }
 
   if (typeof item.delta?.content === 'string') {
