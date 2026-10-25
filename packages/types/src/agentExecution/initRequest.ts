@@ -58,6 +58,8 @@ export interface AgentRunInitRequest {
   ephemeralUserMessage?: string;
   /** When set, the run may use ONLY these tools. */
   exclusivePluginIds?: string[];
+  /** The exact messages the caller supplied as history, instead of the topic's. */
+  existingMessageIds?: string[];
   /** Mime types of the raw bot/IM uploads — all discovery reads off them. */
   externalFileTypes?: string[];
   /** Response-API client function tools the caller injected. */
@@ -69,8 +71,23 @@ export interface AgentRunInitRequest {
   localDeviceId?: string;
   mentionedAgents?: RuntimeMentionedAgent[];
   parentMessageId?: string;
+  /**
+   * What the user typed this turn. Also the content of the user row when one was
+   * persisted, but a run from history has no row and still reads it.
+   */
+  prompt: string;
   requestedDeviceId?: string;
+  /**
+   * The topic the caller addressed, before the turn resolved or created one.
+   * History is read from it, so a turn that opened a new topic reads none.
+   */
+  requestedTopicId?: string;
   requestTrigger?: string;
+  /**
+   * The caller re-answers an existing turn (regenerate / continue). Unlike
+   * `resumeFromHistory`, a run that only suppresses its user row does not set it.
+   */
+  resume?: boolean;
   resumeApproval?: AgentRunApprovalDecision;
   /** The pending tool row a single approval resumes. */
   resumeApprovalPlugin?: MessagePluginItem;
@@ -93,4 +110,6 @@ export interface AgentRunInitRequest {
   /** The Task this run executes, when it runs inside the Task system. */
   taskId?: string;
   topicBoundDeviceId?: string | null;
+  /** The goal the user was viewing when they sent the turn. */
+  viewedGoal?: { goalId: string };
 }

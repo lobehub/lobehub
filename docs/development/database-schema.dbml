@@ -1196,6 +1196,205 @@ table verifications {
   }
 }
 
+table channel_audit {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  event text [not null]
+  target_id text [not null]
+  details jsonb [not null, default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (channel_id, event, created_at) [name: 'channel_audit_channel_event_idx']
+    (target_id, event, created_at) [name: 'channel_audit_target_event_idx']
+  }
+}
+
+table channel_jobs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  member_id uuid [not null]
+  message_id uuid [not null]
+  thread_id text
+  requester_member_id uuid [not null]
+  delivery_key text [not null, default: 'initial']
+  status text [not null, default: 'queued']
+  blocked_reason text
+  blocked_code text
+  claimed_at "timestamp with time zone"
+  topic_id text
+  operation_id text [unique]
+  manifest jsonb
+  execution_config jsonb
+  device_id varchar(64)
+  working_directory text
+  accepted_at "timestamp with time zone"
+  lease_owner text
+  lease_expires_at "timestamp with time zone"
+  writer_held boolean [not null, default: false]
+  isolated_at "timestamp with time zone"
+  draft text
+  publication_revoked boolean [not null, default: false]
+  published_message_id uuid
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (channel_id, id) [name: 'channel_jobs_scope_unique', unique]
+    (message_id, member_id, delivery_key) [name: 'channel_jobs_delivery_unique', unique]
+    (channel_id, status) [name: 'channel_jobs_channel_status_idx']
+    (member_id, requester_member_id, thread_id, claimed_at) [name: 'channel_jobs_continuation_idx']
+    (topic_id, published_message_id) [name: 'channel_jobs_topic_idx']
+    (member_id, status, created_at) [name: 'channel_jobs_member_queue_idx']
+    lease_expires_at [name: 'channel_jobs_lease_expires_idx']
+    member_id [name: 'channel_jobs_active_member_unique', unique]
+    (device_id, working_directory) [name: 'channel_jobs_active_directory_unique', unique]
+    
+    
+    
+    
+  }
+}
+
+table channel_member_grants {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  member_id uuid [not null]
+  device_owner_id text [not null]
+  device_id varchar(64) [not null]
+  working_directory text [not null]
+  requested_by_member_id uuid [not null]
+  status text [not null, default: 'pending']
+  decided_at "timestamp with time zone"
+  revoked_at "timestamp with time zone"
+  revoke_reason text
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    member_id [name: 'channel_member_grants_member_unique', unique]
+    (device_owner_id, status) [name: 'channel_member_grants_owner_status_idx']
+    
+    
+  }
+}
+
+table channel_members {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  actor_type text [not null]
+  user_id text
+  role text
+  last_read_sequence integer
+  agent_id text
+  name text
+  description text [not null, default: '']
+  config jsonb
+  metadata jsonb [default: `{}`]
+  active boolean [not null, default: true]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (channel_id, id) [name: 'channel_members_scope_unique', unique]
+    (channel_id, user_id) [name: 'channel_members_channel_user_unique', unique]
+    user_id [name: 'channel_members_user_id_idx']
+    agent_id [name: 'channel_members_agent_id_idx']
+    
+    
+    
+    
+    
+    
+    
+  }
+}
+
+table channel_message_files {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  message_id uuid [not null]
+  file_id text [not null]
+  sort_order integer [not null]
+
+  indexes {
+    (message_id, file_id) [name: 'channel_message_files_message_file_unique', unique]
+    file_id [name: 'channel_message_files_file_idx']
+  }
+}
+
+table channel_messages {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  channel_id text [not null]
+  thread_id text
+  sequence integer [not null]
+  content text [not null]
+  user_id text
+  agent_id text
+  mentions jsonb [not null, default: `[]`]
+  request_key text [not null]
+  reply_to_id uuid
+  routing_status text [not null]
+  routing_source text
+  routing_reason text
+  routing_attempt integer [not null, default: 0]
+  recipient_member_ids jsonb [not null, default: `[]`]
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (channel_id, id) [name: 'channel_messages_scope_unique', unique]
+    (channel_id, sequence) [name: 'channel_messages_sequence_unique', unique]
+    (channel_id, request_key) [name: 'channel_messages_request_key_unique', unique]
+    (channel_id, thread_id, sequence) [name: 'channel_messages_thread_sequence_idx']
+    (channel_id, thread_id, sequence) [name: 'channel_messages_request_sequence_idx']
+    (channel_id, id) [name: 'channel_messages_routing_pending_idx']
+    
+    
+    
+    
+  }
+}
+
+table channel_threads {
+  id text [pk, not null]
+  channel_id text [not null]
+  root_message_id uuid [not null]
+  root_sequence integer [not null]
+  follower_member_ids jsonb [not null, default: `[]`]
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (channel_id, id) [name: 'channel_threads_scope_unique', unique]
+    (channel_id, root_message_id) [name: 'channel_threads_root_unique', unique]
+    
+  }
+}
+
+table channels {
+  id text [pk, not null]
+  user_id text
+  workspace_id text
+  project_id text
+  agent_id text
+  title text [not null]
+  sequence integer [not null, default: 0]
+  archived boolean [not null, default: false]
+  visibility text [not null, default: 'private']
+  metadata jsonb [default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'channels_user_id_idx']
+    (agent_id, user_id, workspace_id) [name: 'channels_direct_unique', unique]
+    
+    project_id [name: 'channels_project_id_idx']
+    (workspace_id, visibility) [name: 'channels_workspace_visibility_idx']
+  }
+}
+
 table chat_groups {
   id text [pk, not null]
   title text
@@ -3625,7 +3824,10 @@ table signals {
   external_id text [not null]
   account_id uuid
   agent_id text
+  scope_key text
   payload jsonb [not null, default: `{}`]
+  payload_purged_at "timestamp with time zone"
+  metadata jsonb [not null, default: `{}`]
   status text [not null, default: 'pending']
   attempts integer [not null, default: 0]
   error text
@@ -3640,6 +3842,49 @@ table signals {
     (status, created_at) [name: 'signals_status_created_at_idx']
     (account_id, created_at) [name: 'signals_account_created_at_idx']
     user_id [name: 'signals_user_id_idx']
+    (user_id, scope_key, source, created_at) [name: 'signals_user_scope_source_created_at_idx']
+    created_at [name: 'signals_payload_unpurged_created_at_idx']
+  }
+}
+
+table signal_decision_labels {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  decision_id uuid [not null]
+  source text [not null]
+  label text [not null]
+  confidence real
+  actor text
+  metadata jsonb [not null, default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (decision_id, created_at) [name: 'signal_decision_labels_decision_created_at_idx']
+  }
+}
+
+table signal_decisions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  signal_id uuid [not null]
+  agent_id text
+  user_id text [not null]
+  workspace_id text
+  scope_key text [not null]
+  pipeline_version text [not null]
+  outcome text [not null]
+  final_reason text
+  to_tag text
+  verdicts jsonb [not null, default: `[]`]
+  llm_tracing_ids jsonb [not null, default: `[]`]
+  operation_id text
+  topic_id text
+  metadata jsonb [not null, default: `{}`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (signal_id, agent_id, pipeline_version) [name: 'signal_decisions_signal_agent_pipeline_unique', unique]
+    signal_id [name: 'signal_decisions_signal_id_idx']
+    (user_id, scope_key, created_at) [name: 'signal_decisions_user_scope_created_at_idx']
+    (agent_id, created_at) [name: 'signal_decisions_agent_created_at_idx']
   }
 }
 

@@ -36,6 +36,7 @@ import {
 } from '@/store/chat/utils/interventionSync';
 import { type StoreSetter } from '@/store/types';
 
+import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 import { bucketOfKey, createTranscriptLens } from './lens';
 import { type HeadRequestBoundary, mergeFetchedMessagesWithLocalState } from './mergeFetched';
 
@@ -402,15 +403,21 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
         .filter((message) => operationSelectors.isMessageCreating(message.id)(chat))
         .map((message) => message.id),
     );
-    const mergedMessages = isStreaming
-      ? reconcileStreamingInterventions(prevDbMessages, incoming)
-      : mergeFetchedMessagesWithLocalState(
-          incoming,
-          prevDbMessages,
-          activeVoiceMessageIds,
-          creatingMessageIds,
-          boundary,
-        );
+    // A poll ahead of the stream appends tool rows the stream has not
+    // delivered while keeping their local owner, whose tools[] has not caught
+    // up yet. Re-link them like every other bucket write does, or they render
+    // as orphans until the next refresh (see reconcileAssistantToolLinks).
+    const mergedMessages = reconcileAssistantToolLinks(
+      isStreaming
+        ? reconcileStreamingInterventions(prevDbMessages, incoming)
+        : mergeFetchedMessagesWithLocalState(
+            incoming,
+            prevDbMessages,
+            activeVoiceMessageIds,
+            creatingMessageIds,
+            boundary,
+          ),
+    );
     const dropped = isStreaming && mergedMessages === prevDbMessages;
 
     headResolutions.set(incoming, {

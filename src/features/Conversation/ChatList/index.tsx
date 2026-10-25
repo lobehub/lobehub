@@ -115,6 +115,12 @@ export interface ChatListProps {
    */
   onForwardPagingUnsupported?: () => void;
   /**
+   * Print the loaded transcript, without the app chrome, when the page prints.
+   * Opt in on the page's main conversation only: a side panel (thread portal,
+   * copilot, floating chat) must not replace what its host page prints.
+   */
+  printable?: boolean;
+  /**
    * Force showing welcome component even when messages exist
    */
   showWelcome?: boolean;
@@ -141,6 +147,7 @@ const ChatList = memo<ChatListProps>(
     itemContent,
     messageDeepLink,
     onForwardPagingUnsupported,
+    printable,
     showWelcome,
   }) => {
     // The chat store owns the transcript; this view keeps its sync mounted.
@@ -383,6 +390,7 @@ const ChatList = memo<ChatListProps>(
               itemContent={itemContent ?? defaultItemContent}
               messageDeepLink={resolvedMessageDeepLink}
               paging={paging}
+              printable={printable}
             />
           </BackgroundRunHintContext>
         </MessageActionProvider>

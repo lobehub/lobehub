@@ -68,4 +68,59 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     expect(result.current.markdownProps.animated).toBe(false);
     expect(result.current.markdownProps.enableStream).toBe(false);
   });
+
+  it('animates a message that has never been on screen', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ hasContent: true, id: 'fresh-1', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(true);
+  });
+
+  it('does not re-enter streaming after the text settled statically', () => {
+    mockTransitionMode = 'fadeIn';
+
+    // A transient block below makes this one non-last, then disappears again.
+    const { result, rerender } = renderHook(
+      ({ enableStream }) =>
+        useChatMarkdown({ enableStream, hasContent: true, id: 'settle-1', isGenerating: true }),
+      { initialProps: { enableStream: false } },
+    );
+    rerender({ enableStream: true });
+
+    expect(result.current.markdownProps.animated).toBe(false);
+    expect(result.current.markdownProps.enableStream).toBe(false);
+  });
+
+  it('does not replay the fade when a message whose text was shown remounts', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const first = renderHook(() =>
+      useChatMarkdown({ hasContent: true, id: 'remount-1', isGenerating: true }),
+    );
+    expect(first.result.current.markdownProps.animated).toBe(true);
+    first.unmount();
+
+    const second = renderHook(() =>
+      useChatMarkdown({ hasContent: true, id: 'remount-1', isGenerating: true }),
+    );
+
+    expect(second.result.current.markdownProps.animated).toBe(false);
+  });
+
+  it('still animates after a remount when no text had been shown yet', () => {
+    mockTransitionMode = 'fadeIn';
+
+    renderHook(() =>
+      useChatMarkdown({ hasContent: false, id: 'empty-1', isGenerating: true }),
+    ).unmount();
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ hasContent: true, id: 'empty-1', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(true);
+  });
 });

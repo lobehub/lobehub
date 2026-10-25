@@ -1,8 +1,8 @@
 'use client';
 
 import type { WidgetLevelFilter } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { ChevronLeftIcon, LayoutDashboardIcon } from 'lucide-react';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ChevronLeftIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
 import DashboardBoard from './Board';
 import DashboardActionsMenu from './DashboardActionsMenu';
+import DashboardAvatar from './DashboardAvatar';
 import { dashboardPageStyles as styles } from './pageStyles';
 
 interface DashboardBoardPageProps {
@@ -39,7 +40,7 @@ const BoardPageHeader = memo<DashboardBoardPageProps>(
               title={t('list.title')}
               onClick={() => navigate(backPath)}
             />
-            <Icon icon={LayoutDashboardIcon} size={16} />
+            {detail && <DashboardAvatar icon={detail.icon} size={20} title={detail.title} />}
             <Text ellipsis weight={500}>
               {detail?.title ?? ''}
             </Text>

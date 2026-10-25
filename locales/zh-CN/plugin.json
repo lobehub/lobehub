@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "平台缺陷",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "参数不匹配",
   "builtins.lobe-agent.apiName.vent.rejected": "未记录",
+  "builtins.lobe-agent.subAgent.backgroundHint": "完成后，结果会作为新消息发回本对话。",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "后台运行中",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} tokens",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} 个工具",
   "builtins.lobe-agent.subAgent.stopped": "未完成即中止",

@@ -34,6 +34,8 @@
   "otherScope.title": "This is in another space",
   "pluginSettings.desc": "Complete the following configuration to start using this skill",
   "pluginSettings.title": "{{name}} Skill Settings",
+  "requestBodyTooLarge.desc": "This request is too large for the model provider, often because the conversation contains many large images or files. Compact the context to summarize the history into text and try again. If the large files are in the message you just sent, edit it to remove some of them first.",
+  "requestBodyTooLarge.title": "Request Too Large",
   "response.400": "Sorry, the server does not understand your request. Please make sure your request parameters are correct.",
   "response.401": "Sorry, the server has rejected your request, possibly due to insufficient permissions or invalid authentication.",
   "response.403": "Sorry, the server has rejected your request. You do not have permission to access this content.",

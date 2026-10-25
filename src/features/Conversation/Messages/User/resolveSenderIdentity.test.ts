@@ -12,6 +12,20 @@ const viewer = {
 };
 
 describe('resolveSenderIdentity', () => {
+  // A background sub-agent's report is a user turn spoken by that agent.
+  it('speaks as an agent sender ahead of every other identity', () => {
+    expect(
+      resolveSenderIdentity({
+        ...viewer,
+        message: {
+          metadata: { botSender: { fullName: 'Bot user', id: 'u1', platform: 'discord' } },
+        },
+        sender: { avatar: null, fullName: 'Viewer', id: 'user-viewer', username: null },
+        subAgentSender: { avatar: '🪶', title: '诗人' },
+      }),
+    ).toEqual({ avatar: '🪶', isOwn: false, title: '诗人' });
+  });
+
   it('uses the sender profile for another member', () => {
     expect(
       resolveSenderIdentity({

@@ -80,6 +80,8 @@ export interface AgentRunOrigin {
   // --- Conversation node ---
   /** Effective message owner for this run (the group member when applicable). */
   agentId?: string;
+  /** Assistant row the run streams into: its spinner anchor and error sink. */
+  assistantMessageId?: string;
   /** Set when this run continues a durable human-intervention claim. */
   continuation?: InterventionContinuation;
   // --- Trigger ---

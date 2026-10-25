@@ -29,6 +29,7 @@ import { memo, type ReactNode, useState } from 'react';
 import type { CanvasView, CanvasViewContext } from '../element';
 import { formatValue } from '../format';
 import type { CanvasChildItem } from '../props';
+import { toTableColumns } from './tableColumns';
 
 const Slot = ({ slot }: Pick<CanvasViewContext, 'slot'>) => (
   <span data-lobe-canvas-slot="" ref={slot} />
@@ -104,7 +105,10 @@ const card = (context: CanvasViewContext): ReactNode => {
   return (
     <Block gap={12} padding={props.padding ?? 16} variant={props.variant ?? 'outlined'}>
       {props.title && <Text strong>{props.title}</Text>}
-      <Slot slot={context.slot} />
+      {/* Block is a flex column: slotted text and <strong> would each become a flex item */}
+      <div data-lobe-canvas-card-body="">
+        <span data-lobe-canvas-flow="" data-lobe-canvas-slot="" ref={context.slot} />
+      </div>
     </Block>
   );
 };
@@ -247,23 +251,18 @@ export const baseViews: Record<string, CanvasView> = {
     </Flexbox>
   ),
   'lobe-table': ({ props }) => {
-    const columns = (Array.isArray(props.columns) ? props.columns : []).map((column: any) => ({
-      align: column.align,
-      dataIndex: column.key,
-      key: column.key,
-      render: (value: unknown) => formatValue(value, column.format),
-      title: column.title,
-    }));
     const data = (Array.isArray(props.data) ? props.data : []).map((row: any, index: number) => ({
       __key: String(index),
       ...row,
     }));
+    const columns = toTableColumns(Array.isArray(props.columns) ? props.columns : [], data);
     return (
       <Table
         columns={columns}
         dataSource={data}
         pagination={false}
         rowKey={'__key'}
+        scroll={{ x: true }}
         size={'middle'}
         variant={'outlined'}
       />

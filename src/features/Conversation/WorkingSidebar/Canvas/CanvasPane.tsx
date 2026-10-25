@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import PortalMoreMenu from '@/features/Portal/components/PortalMoreMenu';
 
 import CanvasFrame from './CanvasFrame';
+import CanvasShareButton from './CanvasShareButton';
 import { useCanvasMoreMenu } from './useCanvasMoreMenu';
 import { useAwaitingCanvasSave, useCanvasTabView, useCanvasVersion } from './useCanvasVersion';
 import { usePendingCanvasUpdate } from './usePendingCanvasUpdate';
@@ -103,6 +104,7 @@ const CanvasPane = memo<CanvasPaneProps>(({ canvasId }) => {
         <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
           {data.title}
         </Text>
+        <CanvasShareButton data={data} onShared={() => mutate()} />
         <PortalMoreMenu config={moreMenu} outdent={'end'} />
       </Flexbox>
       {showPending && (

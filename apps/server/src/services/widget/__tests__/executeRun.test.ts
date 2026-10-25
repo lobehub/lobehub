@@ -75,6 +75,8 @@ describe('executeWidgetRun', () => {
       {},
       'run-1',
       expect.objectContaining({ status: 'succeeded', stderr: 'sent [REDACTED:GITHUB_TOKEN]' }),
+      // the transactional metric publisher `finishRun` folds into the same tx
+      expect.any(Function),
     );
   });
 

@@ -13,6 +13,7 @@ export * from './artifact';
 export * from './asyncTask';
 export * from './auth';
 export * from './brief';
+export * from './channel';
 export * from './chunk';
 export * from './conversation';
 export * from './creds';

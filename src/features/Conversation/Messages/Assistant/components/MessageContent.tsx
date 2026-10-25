@@ -14,7 +14,11 @@ import { useMarkdown } from '../useMarkdown';
 
 const MessageContent = memo<UIChatMessage>(
   ({ id, tools, content, chunksList, search, imageList, metadata, ...props }) => {
-    const { drawer, markdownProps } = useMarkdown(id, !!tools?.length);
+    const { drawer, markdownProps } = useMarkdown(
+      id,
+      !!tools?.length,
+      !!content && content !== LOADING_FLAT,
+    );
     // Use ConversationStore instead of ChatStore
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));

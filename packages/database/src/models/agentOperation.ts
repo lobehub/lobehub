@@ -147,8 +147,7 @@ export class AgentOperationModel {
 
   /**
    * Insert the initial row when an operation is created. Idempotent via
-   * `onConflictDoNothing` on the primary key so resumed operations don't
-   * blow up on the second createOperation call.
+   * the primary key; only an idle reservation with the same identity may be initialized.
    */
   async recordStart(params: RecordOperationStartParams): Promise<void> {
     const values: NewAgentOperation = {
@@ -172,7 +171,22 @@ export class AgentOperationModel {
       workspaceId: this.workspaceId ?? null,
     };
 
-    await this.db.insert(agentOperations).values(values).onConflictDoNothing();
+    // A trigger may reserve an idle operation before dispatch. Only the same execution
+    // identity may initialize it; duplicate starts never overwrite a running or terminal row.
+    await this.db
+      .insert(agentOperations)
+      .values(values)
+      .onConflictDoUpdate({
+        target: agentOperations.id,
+        set: values,
+        setWhere: and(
+          eq(agentOperations.status, 'idle'),
+          eq(agentOperations.userId, this.userId),
+          sql`${agentOperations.workspaceId} IS NOT DISTINCT FROM ${this.workspaceId ?? null}`,
+          sql`${agentOperations.topicId} IS NOT DISTINCT FROM ${params.topicId ?? null}`,
+          sql`${agentOperations.agentId} IS NOT DISTINCT FROM ${params.agentId ?? null}`,
+        ),
+      });
   }
 
   /**

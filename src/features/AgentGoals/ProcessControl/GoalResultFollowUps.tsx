@@ -89,7 +89,14 @@ export const useDecisionCopy = (graph: GoalGraphView) => {
   return (view: UserDecisionView) => {
     const { decision } = view;
     const kind = coordinatorGateKind(decision);
-    if (!kind) return { choice: view.choice, question: view.question };
+    const optionsOf = (labelOf: (id: string) => string | undefined) =>
+      (decision.options ?? []).map((option) => ({
+        ...(option.description ? { description: option.description } : {}),
+        id: option.id,
+        label: labelOf(option.id) ?? option.label,
+      }));
+    if (!kind)
+      return { choice: view.choice, options: optionsOf(() => undefined), question: view.question };
 
     const subjectId = graph.byId[decision.nodeId]?.gateSubjectId;
     const subject = subjectId ? graph.byId[subjectId]?.node.title : undefined;
@@ -101,6 +108,10 @@ export const useDecisionCopy = (graph: GoalGraphView) => {
     return {
       choice,
       detail: localizedCoordinatorReason(rawReason, t as any),
+      options: optionsOf((id) => {
+        const key = gateOptionLabelKey({ id }, kind);
+        return key ? t(key as any) : undefined;
+      }),
       question: subject
         ? `${t(gateTitleKey(kind) as any)} · ${subject}`
         : t(gateTitleKey(kind) as any),

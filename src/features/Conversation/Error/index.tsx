@@ -233,6 +233,7 @@ const getErrorAlertConfig = (
     case AgentRuntimeErrorType.ModelNotFound:
     case AgentRuntimeErrorType.QuotaLimitReached:
     case AgentRuntimeErrorType.ExceededContextWindow:
+    case AgentRuntimeErrorType.RequestBodyTooLarge:
     case AgentRuntimeErrorType.LocationNotSupportError: {
       return {
         type: 'secondary',
@@ -588,7 +589,24 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         }
 
         case AgentRuntimeErrorType.ExceededContextWindow: {
-          return <ExceededContextWindowError id={data.id} />;
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+            />
+          );
+        }
+
+        case AgentRuntimeErrorType.RequestBodyTooLarge: {
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+              reason={'requestBodyTooLarge'}
+            />
+          );
         }
 
         case AgentRuntimeErrorType.NoOpenAIAPIKey: {

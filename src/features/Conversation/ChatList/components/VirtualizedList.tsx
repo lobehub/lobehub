@@ -44,6 +44,7 @@ import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
 import HistoryPageError from './HistoryPageError';
 import HistoryPageSkeleton from './HistoryPageSkeleton';
+import PrintTranscript from './PrintTranscript';
 
 const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 
@@ -69,6 +70,8 @@ interface VirtualizedListProps {
   itemContent: (index: number, data: string) => ReactNode;
   messageDeepLink?: ResolvedMessageDeepLink;
   paging?: 'backward' | 'forward';
+  /** Print the loaded transcript, without the app chrome, when the page prints. */
+  printable?: boolean;
 }
 
 /**
@@ -85,6 +88,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     itemContent,
     messageDeepLink,
     paging,
+    printable,
   }) => {
     const isForward = paging === 'forward';
     const virtuaRef = useRef<VListHandle>(null);
@@ -584,6 +588,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
             onScrollToBottom={handleBackBottom}
           />
         </WideScreenContainer>
+        {printable && <PrintTranscript dataSource={dataSource} itemContent={itemContent} />}
       </div>
     );
   },

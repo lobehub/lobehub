@@ -24,6 +24,9 @@ describe('idGenerator', () => {
 
     const userId = idGenerator('user');
     expect(userId).toMatch(/^user_[\dA-Za-z]{12}$/);
+
+    expect(idGenerator('channels')).toMatch(/^chn_[\dA-Za-z]{12}$/);
+    expect(idGenerator('channelThreads')).toMatch(/^cht_[\dA-Za-z]{12}$/);
   });
 
   it('should generate an ID with custom size', () => {

@@ -1288,6 +1288,20 @@
       "when": 1792606514901,
       "tag": "0183_project_order_and_agent_signals",
       "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1792830037847,
+      "tag": "0184_channel_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1792857768178,
+      "tag": "0185_signal_decisions_and_retention",
+      "breakpoints": true
     }
   ],
   "version": "6"

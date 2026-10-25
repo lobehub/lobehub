@@ -1030,7 +1030,6 @@
   "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/WebpageFileItem.tsx",
   "src/features/ResourceManager/components/Explorer/MasonryView/MasonryItem/index.tsx",
   "src/features/ResourceManager/components/Explorer/MasonryView/Skeleton.tsx",
-  "src/features/ResourceManager/components/Explorer/MasonryView/index.tsx",
   "src/features/ResourceManager/components/Explorer/ToolBar/SourceFilter.tsx",
   "src/features/ResourceManager/components/FolderTree/index.tsx",
   "src/features/ResourceManager/components/LibraryHierarchy/TreeSkeleton.tsx",

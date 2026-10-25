@@ -2385,14 +2385,14 @@ export class ConversationLifecycleActionImpl {
   executeCompression = async (
     context: Record<string, any>,
     parentOperationId: string,
+    options?: { beforeMessageId?: string },
   ): Promise<void> => {
     const { agentId, topicId } = context;
     if (!topicId) return;
 
     const contextKey = messageMapKey(context as any);
     const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(this.#get()) || [];
-    const messageIds = getCompressionCandidateMessageIds(dbMessages);
-
+    const messageIds = getCompressionCandidateMessageIds(dbMessages, options);
     if (messageIds.length === 0) return;
 
     const tempId = 'tmp_compress_' + nanoid();
