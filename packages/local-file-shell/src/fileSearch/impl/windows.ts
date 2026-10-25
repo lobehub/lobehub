@@ -188,7 +188,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
 
       const files = stdout
         .trim()
-        .split('\r\n')
+        .split(/\r?\n/)
         .filter((line) => line.trim());
 
       logger.debug(`PowerShell found ${files.length} files`);
