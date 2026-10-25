@@ -1080,17 +1080,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     </Suspense>
                   </Flexbox>
                 )}
-                {reviewAvailable && showRightPanel && fits && activeTab === 'review' && (
-                  <Flexbox className={styles.pane}>
-                    <Review
-                      active
-                      composerTarget={composerTarget}
-                      deviceId={remoteDeviceId}
-                      showTree={showReviewTree}
-                      workingDirectory={workingDirectory}
-                      onToggleTree={() => setShowReviewTree((v) => !v)}
-                    />
-                  </Flexbox>
+                {/* Switching tabs unmounts Review to release its diff DOM (#18984), but
+                    collapsing the panel only hides it: remounting all diffs and the tree
+                    on every reopen stalls the open animation for ~200ms. */}
+                {reviewAvailable && activeTab === 'review' && (
+                  <Activity mode={showRightPanel && fits ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane}>
+                      <Review
+                        active={!!showRightPanel && fits}
+                        composerTarget={composerTarget}
+                        deviceId={remoteDeviceId}
+                        showTree={showReviewTree}
+                        workingDirectory={workingDirectory}
+                        onToggleTree={() => setShowReviewTree((v) => !v)}
+                      />
+                    </Flexbox>
+                  </Activity>
                 )}
                 {pullRequest && workingDirectory && (
                   <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>

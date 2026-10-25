@@ -696,6 +696,27 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(screen.queryByTestId('review')).not.toBeInTheDocument();
   });
 
+  it('keeps the active Review mounted while the panel is collapsed', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+    globalStore.status.workingSidebarTab = 'review';
+
+    const { rerender } = render(<AgentWorkingSidebar />);
+    const review = screen.getByTestId('review');
+    expect(renderedReview.current?.active).toBe(true);
+
+    globalStore.status.showRightPanel = false;
+    rerender(<AgentWorkingSidebar />);
+    expect(review).toBeInTheDocument();
+
+    globalStore.status.showRightPanel = true;
+    rerender(<AgentWorkingSidebar />);
+    expect(screen.getByTestId('review')).toBe(review);
+    expect(renderedReview.current?.active).toBe(true);
+  });
+
   it('opens Skills and Documents by default for a new workspace context', () => {
     localStorageState.openTabsByContext = {};
     globalStore.status.workingSidebarTab = 'overview';
