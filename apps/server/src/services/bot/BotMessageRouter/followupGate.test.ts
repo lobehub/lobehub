@@ -104,6 +104,18 @@ describe('follow-up gate', () => {
     expect(mockDefer).not.toHaveBeenCalled();
   });
 
+  it('submits a replayed batch under the platform ids the scheduler parked', async () => {
+    const scheduler = { submit: vi.fn(async () => 'release') };
+    const { gate } = setup({ scheduler });
+    const replay = { id: 'm1:replay:1710000000000:0', text: 'm1' } as never;
+
+    expect(await gate(base({ merged: replay, parked: [replay] }))).toBe('proceed');
+    expect(scheduler.submit).toHaveBeenCalledWith({
+      channelKey: 'discord:app:g:c1',
+      messages: [{ id: 'm1', threadId: 'discord:g:c1' }],
+    });
+  });
+
   it('fails open to the old behaviour when the scheduler or the parking store is unavailable', async () => {
     expect(
       await setup({ scheduler: { submit: vi.fn(async () => 'unavailable') } }).gate(base()),

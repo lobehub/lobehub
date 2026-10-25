@@ -5,6 +5,7 @@ import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botW
 import type { WakeScheduler } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
 
 import { deferBotMessages } from '../deferredMessages';
+import { getOriginMessageId } from '../mergeMessages';
 import type { BotWakeEntryPoint, BotWakeRecorder } from './wakeDecision';
 
 const log = debug('lobe-server:bot:followup-gate');
@@ -71,7 +72,11 @@ export const createFollowupGate = (deps: FollowupGateDeps) => {
     const { channelKey } = resolveChannelKeys(deps.platform, deps.applicationId, thread.id);
     const verdict = await deps.scheduler.submit({
       channelKey,
-      messages: parked.map((message) => ({ id: message.id, threadId: thread.id })),
+      // A replayed batch carries a fresh id; the scheduler parked the platform ids, so match on those.
+      messages: parked.map((message) => ({
+        id: getOriginMessageId(message),
+        threadId: thread.id,
+      })),
     });
     if (verdict !== 'hold') return 'proceed';
 
