@@ -224,7 +224,7 @@
   "compression.summary": "History summary",
   "confirmClearCurrentMessages": "You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.",
   "confirmRemoveChatGroupItemAlert": "This Group will be deleted. Group-specific assistants will also be deleted, while external assistants will not be affected.",
-  "confirmRemoveGroupItemAlert": "You are about to delete this category. After deletion, its agents will be moved to the default list. Please confirm your action.",
+  "confirmRemoveGroupItemAlert": "You are about to delete this group. After deletion, its agents will be moved to the default list. Please confirm your action.",
   "confirmRemoveGroupSuccess": "Group deleted successfully",
   "confirmRemoveSessionItemAlert": "You are about to delete this agent and its topics. They will be moved to the trash and can be restored within 30 days.",
   "confirmRemoveSessionSuccess": "Agent removed successfully",
