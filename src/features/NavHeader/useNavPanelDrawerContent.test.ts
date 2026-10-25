@@ -42,7 +42,10 @@ describe('useNavPanelDrawerContent', () => {
     expect(renderHook(() => useNavPanelDrawerContent()).result.current).toBeUndefined();
   });
 
-  it('never offers the desktop home sidebar, which mobile shows as its home page', () => {
+  // `useNavPanelDrawerContent` skips `home` on purpose (`navKey === 'home'`): the
+  // home route's registered sidebar is the agent list mobile already renders
+  // as the page itself.
+  it('skips the home route sidebar while serving other routes from the same registry', () => {
     mocks.navKey = 'home';
     registerNavPanelContent('home', Symbol('home-sidebar'), 'agent list');
     registerNavPanelContent('memory', Symbol('memory-sidebar'), 'memory sections');
