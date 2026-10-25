@@ -5,6 +5,7 @@ import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
 import {
   extractSettingsDefaults,
+  findOverLimitSettings,
   getChannelFormValues,
   isFieldReleased,
   mergeCredentialsForSave,
@@ -242,5 +243,83 @@ describe('isFieldReleased', () => {
     expect(isFieldReleased(field, {})).toBe(false);
     expect(isFieldReleased(field, { enableBotWake: undefined })).toBe(false);
     expect(isFieldReleased(field, { enableBotWake: 'yes' })).toBe(false);
+  });
+});
+
+describe('findOverLimitSettings', () => {
+  const listSchema: FieldSchema[] = [
+    {
+      key: 'settings',
+      label: 'Settings',
+      properties: [
+        {
+          key: 'allowChannels',
+          label: 'channel.allow',
+          maximum: 2,
+          type: 'array',
+          items: { key: 'item', label: '', type: 'object' },
+        },
+        {
+          key: 'group',
+          label: '',
+          properties: [
+            {
+              key: 'denyChannels',
+              label: 'channel.deny',
+              maximum: 2,
+              type: 'array',
+              items: { key: 'item', label: '', type: 'object' },
+            },
+          ],
+          type: 'object',
+        },
+        {
+          key: 'keywords',
+          label: 'channel.keywords',
+          type: 'array',
+          items: { key: 'item', label: '', type: 'string' },
+        },
+      ],
+      type: 'object',
+    },
+  ];
+
+  it('returns nothing while every list stays within its cap', () => {
+    expect(
+      findOverLimitSettings(listSchema, {
+        allowChannels: [{ id: '1' }, { id: '2' }],
+        denyChannels: [{ id: '3' }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('reports the field, the real entry count and the cap once a list overflows', () => {
+    expect(
+      findOverLimitSettings(listSchema, {
+        allowChannels: [{ id: '1' }, { id: '2' }, { id: '3' }],
+      }),
+    ).toEqual([{ count: 3, key: 'allowChannels', max: 2 }]);
+  });
+
+  it('reaches list fields nested in a settings group', () => {
+    expect(
+      findOverLimitSettings(listSchema, {
+        denyChannels: [{ id: '1' }, { id: '2' }, { id: '3' }],
+      }),
+    ).toEqual([{ count: 3, key: 'denyChannels', max: 2 }]);
+  });
+
+  it('ignores blank rows and lists whose schema declares no cap', () => {
+    expect(
+      findOverLimitSettings(listSchema, {
+        allowChannels: [{ id: '1' }, { id: '2' }, { id: '' }, { id: '   ' }],
+        keywords: ['a', 'b', 'c', 'd'],
+      }),
+    ).toEqual([]);
+  });
+
+  it('ignores values that are not lists at all', () => {
+    expect(findOverLimitSettings(listSchema, { allowChannels: '1,2,3' })).toEqual([]);
+    expect(findOverLimitSettings(undefined, { allowChannels: [{ id: '1' }] })).toEqual([]);
   });
 });

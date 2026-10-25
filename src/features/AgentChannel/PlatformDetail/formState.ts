@@ -150,6 +150,45 @@ export const mergeSettingsWithDefaults = (
   ...settings,
 });
 
+const isBlankListEntry = (entry: unknown) => {
+  if (typeof entry === 'string') return entry.trim() === '';
+  if (entry && typeof entry === 'object' && 'id' in entry)
+    return String((entry as { id?: unknown }).id ?? '').trim() === '';
+  return false;
+};
+
+/** Rows the editor opened but left empty never reach the runtime; count only real entries. */
+export const countListEntries = (value: unknown[]) =>
+  value.filter((entry) => !isBlankListEntry(entry)).length;
+
+/**
+ * Settings list fields whose value pushes past the schema's `maximum`.
+ *
+ * The list editor stops adding rows at the cap, but a hand-written config — or a list saved before
+ * the cap existed — can still arrive over it. The bot-wake parser rejects an over-cap list
+ * wholesale (`idList.max(...).catch([])`), which for an allowlist silently means "restrict
+ * nothing" while the form keeps showing every entry. The save path refuses such a value instead of
+ * persisting one the runtime cannot honour.
+ */
+export const findOverLimitSettings = (
+  schema: FieldSchema[] | undefined,
+  settings: Record<string, unknown> | undefined,
+): Array<{ count: number; key: string; max: number }> => {
+  const fields = schema?.find((field) => field.key === 'settings')?.properties ?? [];
+  // Settings groups render flat, so a list can sit either directly in `settings` or in a group.
+  const listFields = fields.flatMap((field) =>
+    field.type === 'object' && field.properties ? field.properties : [field],
+  );
+
+  return listFields.flatMap((field) => {
+    if (field.type !== 'array' || typeof field.maximum !== 'number') return [];
+    const value = settings?.[field.key];
+    if (!Array.isArray(value)) return [];
+    const count = countListEntries(value);
+    return count > field.maximum ? [{ count, key: field.key, max: field.maximum }] : [];
+  });
+};
+
 /**
  * Whether a field is released to the signed-in user. A field that names a `featureFlag` is shown
  * only when that flag is explicitly on; an unset flag, or flags that have not loaded yet, hide it.

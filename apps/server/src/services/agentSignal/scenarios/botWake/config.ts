@@ -26,7 +26,12 @@ export interface ResolvedWakeScheduler {
 /** Longest custom instruction handed to the classifier; longer text is cut, not rejected. */
 export const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
 
-const MAX_CHANNEL_LIST = 200;
+/**
+ * Hard cap on the bot-wake channel lists. The parser rejects an over-cap list wholesale and
+ * falls back to `[]`, so an over-cap allowlist stops restricting anything. The settings form
+ * reads the same number to stop an owner from building one (see `botWakeFields`).
+ */
+export const MAX_BOT_WAKE_CHANNEL_LIST = 200;
 
 // `.catch` on every field: one malformed value in a user-edited JSON blob falls back to its
 // default instead of discarding the rest of the owner's rules.
@@ -38,7 +43,7 @@ const idList = z
       .union([z.string(), z.number(), z.object({ id: z.union([z.string(), z.number()]) })])
       .transform((value) => String(typeof value === 'object' ? value.id : value).trim()),
   )
-  .max(MAX_CHANNEL_LIST)
+  .max(MAX_BOT_WAKE_CHANNEL_LIST)
   .transform((ids) => ids.filter(Boolean))
   .catch([]);
 const seconds = (fallback: number, min = 0) =>

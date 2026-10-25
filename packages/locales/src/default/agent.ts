@@ -467,6 +467,7 @@ export default {
   'channel.botWakeDenyChannelsEmpty': 'No channels blocked.',
   'channel.botWakeChannelIdLabel': 'Channel ID',
   'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
+  'channel.channelListLimit': 'Lists hold at most {{max}} entries — remove one first.',
   'channel.botWakeWindowSeconds': 'Follow-up window (seconds)',
   'channel.botWakeWindowSecondsHint':
     'After the bot speaks, plain messages in the same place within this time count as a follow-up to it.',

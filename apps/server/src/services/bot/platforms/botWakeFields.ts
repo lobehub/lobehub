@@ -1,6 +1,7 @@
 import {
   BOT_WAKE_SETTING_KEYS as KEY,
   DEFAULT_WAKE_RULES,
+  MAX_BOT_WAKE_CHANNEL_LIST,
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
   MIN_COLLECT_SECONDS,
   MIN_COOLDOWN_SECONDS,
@@ -25,6 +26,9 @@ const channelList = (key: string, label: string): FieldSchema => ({
   description: `${label}Hint`,
   featureFlag: FEATURE_FLAG,
   label,
+  // Matches the parser's own cap: an over-cap list is dropped wholesale, and for an allowlist
+  // that silently means "unrestricted". The form refuses to grow or save past this number.
+  maximum: MAX_BOT_WAKE_CHANNEL_LIST,
   type: 'array',
   visibleWhen: ENABLED,
   items: {

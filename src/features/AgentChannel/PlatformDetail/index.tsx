@@ -20,6 +20,7 @@ import { keepPendingConnectResult, toTestResult } from './actionResults';
 import Body from './Body';
 import Footer from './Footer';
 import {
+  findOverLimitSettings,
   getChannelFormValues,
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
@@ -298,6 +299,17 @@ const PlatformDetail = memo<PlatformDetailProps>(
           omitUndefinedValues(rawSettings),
         );
 
+        // An over-cap list is dropped wholesale by the bot-wake parser, and for an allowlist that
+        // silently turns "restricted" into "unrestricted". Refuse the save rather than persist a
+        // value the runtime cannot honour (the list editor stops growing at the same cap).
+        const overLimit = findOverLimitSettings(platformDef.schema, settings);
+        if (overLimit.length > 0) {
+          const max = Math.min(...overLimit.map((entry) => entry.max));
+          toast.error(t('channel.channelListLimit').replace('{{max}}', String(max)));
+          setSaving(false);
+          return;
+        }
+
         // Use explicit applicationId from form; fall back to deriving from botToken (Telegram)
         let applicationId = formAppId || '';
         if (!applicationId && (credentials as Record<string, string>).botToken) {
@@ -347,6 +359,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       updateBotProvider,
       connectCurrentBot,
       writeDisabled,
+      t,
     ]);
 
     const handleExternalAuth = useCallback(
