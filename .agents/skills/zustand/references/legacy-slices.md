@@ -45,7 +45,6 @@ export type BenchmarkAction = Pick<BenchmarkActionImpl, keyof BenchmarkActionImp
 ```
 
 - Keep the `(set, get, api)` constructor shape. Drop `#set` (and `setNamespace`) when the class never writes state; mark the param `_set` with `void _set`.
-- To move an action out of an oversized class (the 1200-line rule in `source-layout`), give it its own `XActionImpl` in the slice that owns its domain and register it with `flattenActions`; callers keep `get().action()`. Do not turn it into a module function that takes `get` plus the action's arguments, and do not leave it beside its old class when the domain differs. For example, `/compact`'s `executeCompression` left `agentRun/actions/entries/conversationLifecycle.ts` for `slices/compression/action.ts`, beside `slices/translate`.
 - Calls into another class go through `this.#get().otherAction()`. When the callee is not on the store type the class sees, widen `get` with a local augmentation type, e.g. `ChatGroupStoreWithInternal` in `src/store/agentGroup/slices/curd.ts`.
 
 ## Composition

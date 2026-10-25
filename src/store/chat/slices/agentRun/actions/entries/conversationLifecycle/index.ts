@@ -137,6 +137,7 @@ import {
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
+import { type ContextCompressionOptions, executeContextCompression } from './compression';
 
 /**
  * Extended params for sendMessage with context
@@ -496,7 +497,7 @@ export class ConversationLifecycleActionImpl {
         compressContext.topicId &&
         !hasRunningCompressionOperation(Object.values(this.#get().operations), compressContext)
       ) {
-        await this.#get().executeCompression(compressContext, '');
+        await this.executeCompression(compressContext, '');
       }
       return;
     }
@@ -2360,6 +2361,18 @@ export class ConversationLifecycleActionImpl {
       userMessageId: data.userMessageId,
     };
   };
+
+  /**
+   * Execute context compression for /compact command.
+   *
+   * @returns Whether the history was replaced by a summary.
+   */
+  executeCompression = async (
+    context: Record<string, any>,
+    parentOperationId: string,
+    options?: ContextCompressionOptions,
+  ): Promise<boolean> =>
+    executeContextCompression({ ...options, context, parentOperationId }, this.#get);
 }
 
 export type ConversationLifecycleAction = Pick<

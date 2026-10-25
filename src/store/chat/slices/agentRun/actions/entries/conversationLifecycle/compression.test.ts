@@ -7,7 +7,7 @@ import { messageService } from '@/services/message';
 import { agentSelectors } from '@/store/agent/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { useChatStore } from '../../store';
+import { useChatStore } from '../../../../../store';
 
 vi.mock('@/services/resourcePermission', () => ({
   resourcePermissionService: { getGeneralAccess: vi.fn() },
