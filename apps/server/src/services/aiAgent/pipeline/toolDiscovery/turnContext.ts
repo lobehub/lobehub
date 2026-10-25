@@ -1,5 +1,6 @@
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { AgentGroupConfig } from '@lobechat/context-engine';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
@@ -22,17 +23,20 @@ const log = debug('lobe-server:ai-agent-service');
 
 /**
  * Turn-scoped builtin tools to append to the candidate plugin ids: the IM
- * message tool for bot conversations, and multimodal understanding when this
- * turn or its history carries media the model cannot read itself.
+ * message tool for bot conversations, the task tool for a project coordinator
+ * (it delegates by creating and assigning tasks), and multimodal understanding
+ * when this turn or its history carries media the model cannot read itself.
  */
 export const resolveTurnScopedPluginIds = async (params: {
   attachedFileTypes: string[];
   externalFileTypes?: string[];
   isBotConversation: boolean;
+  isProjectCoordinator?: boolean;
   loadHistoryMessages: ToolDiscoveryInput['loadHistoryMessages'];
   modelMediaCapabilities: Pick<ModelAbilities, 'audio' | 'video' | 'vision'>;
 }): Promise<string[]> => {
-  const { isBotConversation, loadHistoryMessages, modelMediaCapabilities } = params;
+  const { isBotConversation, isProjectCoordinator, loadHistoryMessages, modelMediaCapabilities } =
+    params;
   const externalFileTypes = params.externalFileTypes ?? [];
   const inputFileTypes = [...externalFileTypes, ...params.attachedFileTypes];
   const inputMediaAvailability = getMediaAvailabilityFromFileTypes(inputFileTypes);
@@ -63,6 +67,7 @@ export const resolveTurnScopedPluginIds = async (params: {
 
   return [
     ...(isBotConversation ? [MessageToolIdentifier] : []),
+    ...(isProjectCoordinator ? [TaskIdentifier] : []),
     ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
   ];
 };

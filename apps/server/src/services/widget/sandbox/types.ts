@@ -7,19 +7,48 @@ export const WIDGET_SANDBOX_DEFAULT_TIMEOUT_MS = 30_000;
 export const WIDGET_SANDBOX_REQUEST_OVERHEAD_MS = 60_000;
 
 /**
- * What the execution belongs to, for provider-side attribution, quotas and
- * log correlation. Never used for authorization — the caller already decided.
+ * Whose account the execution runs on: Market authenticates, rate limits and
+ * bills it as this user (or as the workspace's organization). The caller has
+ * already decided the run is allowed.
+ */
+export interface WidgetSandboxActor {
+  userId: string;
+  workspaceId?: string | null;
+}
+
+/**
+ * What the execution belongs to, for provider-side attribution and log
+ * correlation. Never used for authorization — the caller already decided.
  */
 export interface WidgetSandboxSubject {
   id: string;
   kind: 'widget';
 }
 
+/**
+ * A credential header the provider's egress proxy sets on requests to `host`
+ * (overwriting whatever the script sent). The secret is referenced, never
+ * carried: the provider resolves `secretRef` against the actor's credentials,
+ * so it never enters the sandbox nor passes through this server.
+ */
+export interface WidgetSandboxEgressInject {
+  header: string;
+  /** Exact hostname or `*.domain`; must be covered by `network.allow`. */
+  host: string;
+  /** Literal prepended to the secret, e.g. `Bearer `. */
+  prefix?: string;
+  secretRef: { field?: string; key: string };
+}
+
 export interface WidgetSandboxRunRequest {
+  actor: WidgetSandboxActor;
   /** Variables exposed to this execution only; a provider must never persist them. */
   env: Record<string, string>;
-  /** Hostnames the script may reach; an empty list means no network at all. */
-  network: { allow: string[] };
+  /**
+   * Hostnames the script may reach (an empty list means no network at all),
+   * plus the credential headers added on the way out.
+   */
+  network: { allow: string[]; inject?: WidgetSandboxEgressInject[] };
   runtime: WidgetRuntime;
   script: string;
   subject: WidgetSandboxSubject;
@@ -36,10 +65,9 @@ export interface WidgetSandboxRunResult {
 }
 
 /**
- * Executes one widget script in isolation. Provider-agnostic on purpose: the
- * execution layer is moving to the lobehub-market service (a one-shot,
- * Cloudflare-backed run endpoint), so callers depend only on this contract
- * and the implementation is picked by `WIDGET_SANDBOX_PROVIDER`.
+ * Executes one widget script in isolation. The only implementation forwards to
+ * Market's one-shot run endpoint, which runs it on the widget sandbox Worker
+ * (lobehub-biz/widget-sandbox); callers depend only on this contract.
  *
  * A script that runs and exits non-zero, or times out, is a normal result —
  * judging it is the caller's job. Implementations throw `WidgetSandboxError`

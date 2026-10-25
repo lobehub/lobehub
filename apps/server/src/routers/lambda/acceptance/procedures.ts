@@ -5,6 +5,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
@@ -15,6 +16,9 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AcceptanceService } from '@/server/services/verify';
 
 import { canManageAcceptance } from '../_helpers/acceptanceWriteScope';
+
+export const ACCEPTANCE_DECISION_FORBIDDEN =
+  'Only the creator or a workspace member with edit access can change this acceptance';
 
 /** Reads addressed purely by acceptance id — visibility is checked in the handler. */
 export const publicAcceptanceProcedure = publicProcedure.use(serverDatabase);
@@ -61,10 +65,19 @@ export const resolveAcceptanceForWrite = async (
     ? await ctx.serverDB.query.acceptances.findFirst({ where: eq(acceptances.id, id) })
     : undefined;
 
-  // An unauthorized caller gets the same answer as a missing row: the existence
-  // of someone else's delivery is not ours to disclose.
-  if (!acceptance || !(await canManageAcceptance(ctx, acceptance))) {
+  if (!acceptance) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+  }
+
+  if (!(await canManageAcceptance(ctx, acceptance))) {
+    // A caller who cannot even read it gets the same answer as a missing row:
+    // the existence of someone else's delivery is not ours to disclose. A
+    // teammate already looking at it, though, is told why — "not found" about
+    // a page they have open reads as a broken link, not as a missing right.
+    if (!(await canReadAcceptance(ctx, acceptance))) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+    }
+    throw new TRPCError({ code: 'FORBIDDEN', message: ACCEPTANCE_DECISION_FORBIDDEN });
   }
 
   return {
@@ -76,6 +89,50 @@ export const resolveAcceptanceForWrite = async (
       { actorUserId: ctx.userId },
     ),
   };
+};
+
+/**
+ * Resolve an acceptance for a REJECT, which reaches one step further than
+ * {@link resolveAcceptanceForWrite}: besides everyone who may manage it, a
+ * reader a decider granted reject access to may send it back.
+ *
+ * `delegated` marks that second case. The acting user is still the one whose
+ * decision is recorded, but the repair belongs to the owner — the agent that
+ * wrote the delivery, in the owner's conversation — so the caller dispatches it
+ * as the owner rather than as a visitor who can reach neither.
+ */
+export const resolveAcceptanceForReject = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string },
+  id: string,
+): Promise<{ acceptance: AcceptanceItem; delegated: boolean; service: AcceptanceService }> => {
+  try {
+    return { ...(await resolveAcceptanceForWrite(ctx, id)), delegated: false };
+  } catch (error) {
+    // FORBIDDEN is only raised for a caller who can read the row; anything
+    // else (missing, unreadable) stays the answer it was.
+    if (!(error instanceof TRPCError) || error.code !== 'FORBIDDEN') throw error;
+    const acceptance = await ctx.serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, id),
+    });
+    const granted =
+      acceptance &&
+      (await new AcceptanceCommentModel(ctx.serverDB).hasAccessGrant(
+        acceptance.id,
+        ctx.userId,
+        'collaborate',
+      ));
+    if (!acceptance || !granted) throw error;
+    return {
+      acceptance,
+      delegated: true,
+      service: new AcceptanceService(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+        { actorUserId: ctx.userId },
+      ),
+    };
+  }
 };
 
 export const canReadAcceptance = async (

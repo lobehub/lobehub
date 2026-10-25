@@ -1,6 +1,6 @@
 import type { DeviceListItem } from '@lobechat/types';
 
-import { LocalStorageQueryProjectionStorage } from '@/libs/queryProjectionStorage';
+import { AppLocalStorage } from '@/libs/replica';
 import { defineReplica, REPLICA_INDEX_KEY, type ReplicaStorage } from '@/libs/replica';
 
 /** The store reads every device of the active scope, so the list has one entry. */
@@ -31,7 +31,7 @@ export const toPersistedDevice = (device: DeviceListItem): DeviceListItem => ({
  * narrowed. The engine's own index row passes through untouched.
  */
 const createDeviceListStorage = (namespace: string): ReplicaStorage<DeviceListItem[]> => {
-  const storage = new LocalStorageQueryProjectionStorage<DeviceListItem[]>({ namespace });
+  const storage = new AppLocalStorage<DeviceListItem[]>({ namespace });
 
   return {
     get: storage.get,

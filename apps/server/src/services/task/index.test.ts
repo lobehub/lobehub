@@ -2426,6 +2426,129 @@ describe('TaskService', () => {
       );
     });
 
+    it('arms the run-count window on a column-only schedule write (T-634)', async () => {
+      // Column-only write: schedule columns move without a status, the row
+      // keeps `backlog` — exactly the path that used to leave `armedAt = null`
+      // and let a grace-window occurrence burn a one-shot maxExecutions quota.
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
+      mockTaskModel.findById.mockResolvedValue({
+        automationMode: 'heartbeat',
+        context: { origin: { topicId: 'tpc_1' } },
+        id: 'task_001',
+        schedulePattern: null,
+        status: 'backlog',
+      });
+      mockTaskModel.updateWithLog.mockResolvedValue({ id: 'task_001' });
+
+      await new TaskService(db, userId, 'ws-1').updateTaskWithAssigneeLock(
+        'task_001',
+        { automationMode: 'schedule', schedulePattern: '0 9 * * *' },
+        { userId },
+      );
+
+      // The stamp rides in the SAME updateWithLog write as the schedule
+      // columns, decided under the row lock — no separate unlocked
+      // read/merge/write may follow (P2: atomicity).
+      expect(mockTaskModel.updateContext).not.toHaveBeenCalled();
+      const [, written] = mockTaskModel.updateWithLog.mock.calls[0]!;
+      expect((written as any).automationMode).toBe('schedule');
+      expect((written as any).schedulePattern).toBe('0 9 * * *');
+      expect((written as any).context).toMatchObject({
+        origin: { topicId: 'tpc_1' },
+        scheduler: { scheduleStartedAt: expect.any(String) },
+      });
+    });
+
+    it('does not arm a column-only write when the resulting task is not dispatchable', async () => {
+      // Heartbeat tasks are armed through the lifecycle re-arm path, not the
+      // cron window; a schedule write that leaves no pattern is inert too.
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
+      mockTaskModel.findById.mockResolvedValue({
+        automationMode: 'schedule',
+        context: null,
+        id: 'task_001',
+        schedulePattern: '0 9 * * *',
+        status: 'backlog',
+      });
+      mockTaskModel.updateWithLog.mockResolvedValue({ id: 'task_001' });
+
+      const service = new TaskService(db, userId, 'ws-1');
+
+      await service.updateTaskWithAssigneeLock(
+        'task_001',
+        { automationMode: 'heartbeat', schedulePattern: null },
+        { userId },
+      );
+      expect(mockTaskModel.updateWithLog).toHaveBeenLastCalledWith(
+        'task_001',
+        expect.not.objectContaining({ context: expect.anything() }),
+        { userId },
+        {},
+      );
+
+      // No schedule columns in the patch: the arming probe must not even lock.
+      const locksBefore = mockTaskModel.lockForUpdate.mock.calls.length;
+      await service.updateTaskWithAssigneeLock('task_001', { priority: 3 }, { userId });
+      expect(mockTaskModel.lockForUpdate.mock.calls.length).toBe(locksBefore);
+    });
+
+    it('does not stamp a window when the write explicitly clears automationMode (P2)', async () => {
+      // Explicit `null` clears the mode. Under the old `??` derivation the
+      // probe saw the locked row's `schedule` and stamped a window for a row
+      // this very write disables; a later re-enable would preserve that stale
+      // stamp and replay an occurrence from the disabled interval.
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
+      mockTaskModel.findById.mockResolvedValue({
+        automationMode: 'schedule',
+        context: null,
+        id: 'task_001',
+        schedulePattern: '0 9 * * *',
+        status: 'backlog',
+      });
+      mockTaskModel.updateWithLog.mockResolvedValue({ id: 'task_001' });
+
+      await new TaskService(db, userId, 'ws-1').updateTaskWithAssigneeLock(
+        'task_001',
+        { automationMode: null },
+        { userId },
+      );
+
+      expect(mockTaskModel.updateWithLog).toHaveBeenLastCalledWith(
+        'task_001',
+        expect.not.objectContaining({ context: expect.anything() }),
+        { userId },
+        {},
+      );
+    });
+
+    it('does not stamp a window when the write explicitly clears schedulePattern (P2)', async () => {
+      // Pattern-only clear on an unstamped row: the resulting row has no cron
+      // pattern, so it is inert and must stay unstamped — the probe must not
+      // resurrect the locked row's old pattern.
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
+      mockTaskModel.findById.mockResolvedValue({
+        automationMode: 'schedule',
+        context: null,
+        id: 'task_001',
+        schedulePattern: '0 9 * * *',
+        status: 'backlog',
+      });
+      mockTaskModel.updateWithLog.mockResolvedValue({ id: 'task_001' });
+
+      await new TaskService(db, userId, 'ws-1').updateTaskWithAssigneeLock(
+        'task_001',
+        { schedulePattern: null },
+        { userId },
+      );
+
+      expect(mockTaskModel.updateWithLog).toHaveBeenLastCalledWith(
+        'task_001',
+        expect.not.objectContaining({ context: expect.anything() }),
+        { userId },
+        {},
+      );
+    });
+
     it('renders assignment logs as activities with both sides resolved', async () => {
       mockTaskModel.resolve.mockResolvedValue({
         createdAt: null,

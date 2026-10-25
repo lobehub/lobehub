@@ -449,6 +449,20 @@ export class AcceptanceModel {
     };
   };
 
+  /**
+   * File an ungrouped acceptance under a project. Never moves one already
+   * grouped: the `project_id IS NULL` guard lets a filing that landed in the
+   * meantime — by hand, or by another round — win. Resolves whether it wrote.
+   */
+  fillProject = async (id: string, projectId: string): Promise<boolean> => {
+    const rows = await this.db
+      .update(acceptances)
+      .set({ projectId })
+      .where(and(eq(acceptances.id, id), isNull(acceptances.projectId), this.ownership()))
+      .returning({ id: acceptances.id });
+    return rows.length > 0;
+  };
+
   update = async (
     id: string,
     value: Partial<

@@ -3,6 +3,7 @@ import { unstable_batchedUpdates } from 'react-dom';
 import { useAgentStore } from '@/store/agent';
 import { agentDocumentActions } from '@/store/agentDocument';
 import { useAgentGroupStore } from '@/store/agentGroup';
+import { useAgentQuotaStore } from '@/store/agentQuota';
 import { useChatStore } from '@/store/chat';
 import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDiscoverStore } from '@/store/discover';
@@ -33,6 +34,7 @@ interface ResetableStoreApi {
 
 const resetableStores: ResetableStoreApi[] = [
   useAgentGroupStore,
+  useAgentQuotaStore,
   useAgentStore,
   useChatStore,
   useDiscoverStore,

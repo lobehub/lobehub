@@ -83,6 +83,7 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Profile,
       WorkspaceSettingsTabs.Appearance,
       WorkspaceSettingsTabs.Hotkey,
+      WorkspaceSettingsTabs.ChatPreference,
       WorkspaceSettingsTabs.Messenger,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
@@ -105,6 +106,38 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsGroupKey.System,
       WorkspaceSettingsGroupKey.Developer,
     ]);
+  });
+
+  it('groups devices, subscription accounts and environments under Resources', () => {
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
+    const keys = result.current.map((group) => group.key);
+    const resourceGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.Resource,
+    );
+    const generalGroup = result.current.find(
+      (group) => group.key === WorkspaceSettingsGroupKey.General,
+    );
+
+    expect(keys.indexOf(WorkspaceSettingsGroupKey.Resource)).toBe(
+      keys.indexOf(WorkspaceSettingsGroupKey.General) + 1,
+    );
+    expect(resourceGroup?.items.map((item) => item.key)).toEqual([
+      WorkspaceSettingsTabs.Devices,
+      WorkspaceSettingsTabs.SubscriptionAccounts,
+      WorkspaceSettingsTabs.Environments,
+    ]);
+    expect(generalGroup?.items.map((item) => item.key)).not.toContain(
+      WorkspaceSettingsTabs.Devices,
+    );
+  });
+
+  // Accounts are shared capacity every agent routes onto, so managing them is
+  // an admin task like the other workspace infrastructure.
+  it('hides Subscription Accounts below Admin', () => {
+    mocks.canManageWorkspace = false;
+
+    expect(getItemKeys()).not.toContain(WorkspaceSettingsTabs.SubscriptionAccounts);
+    expect(getItemKeys()).toContain(WorkspaceSettingsTabs.Devices);
   });
 
   it('hides OAuth Apps by default', () => {

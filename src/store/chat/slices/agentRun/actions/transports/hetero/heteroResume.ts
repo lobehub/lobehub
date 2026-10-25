@@ -1,3 +1,5 @@
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { ChatTopicMetadata } from '@lobechat/types';
 
 import {
@@ -116,4 +118,20 @@ export const resolveHeteroResume = (
   }
 
   return resolveBinding(savedSessionId, metadata?.heteroSessionBindingKey);
+};
+
+/** Session errors a fresh (non-resumed) CLI session recovers from. */
+export const isRecoverableResumeError = (
+  error: unknown,
+): error is HeterogeneousAgentSessionError & {
+  code:
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound;
+} => {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+
+  return (
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch ||
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound
+  );
 };

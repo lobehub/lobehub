@@ -48,6 +48,7 @@ export class AgentModel {
   // **************** List *************** //
 
   rank = this.withContext(list.rank);
+  queryAgencyRoutingByIds = this.withContext(list.queryAgencyRoutingByIds);
   queryBoundToDevice = this.withContext(list.queryBoundToDevice);
   queryAgents = this.withContext(list.queryAgents);
   countAgents = this.withContext(list.countAgents);

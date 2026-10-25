@@ -31,15 +31,19 @@ import {
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import { openRenameModal } from '@/components/RenameModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
 
-import { acceptanceListPath } from '../Viewer/routes';
+import {
+  acceptanceListPath,
+  acceptanceOverviewPath,
+  useAcceptanceRouteBase,
+} from '../Viewer/routes';
 import { getAcceptanceStatusActions } from '../Viewer/statusActions';
 import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
@@ -125,7 +129,8 @@ const AcceptanceRow = memo<{
   onToggleSelect?: (shift: boolean) => void;
 }>(({ active, item, onChanged, onToggleSelect, selectable, selected, showProject }) => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
+  const routeBase = useAcceptanceRouteBase();
   const [mutating, setMutating] = useState(false);
 
   const glyph = glyphOf(item.status as AcceptanceStatus);
@@ -218,7 +223,7 @@ const AcceptanceRow = memo<{
         setMutating(true);
         try {
           const summary = await verifyService.mergeAcceptance(item.id, targetId);
-          if (active) navigate(`/acceptance/${targetId}`, { replace: true });
+          if (active) navigate(acceptanceOverviewPath(targetId, routeBase), { replace: true });
           await Promise.all([
             onChanged(),
             useVerifyStore.getState().refreshAcceptanceBundle(targetId),
@@ -244,7 +249,7 @@ const AcceptanceRow = memo<{
         setMutating(true);
         try {
           await verifyService.deleteAcceptance(item.id, purge);
-          if (active) navigate(acceptanceListPath(), { replace: true });
+          if (active) navigate(acceptanceListPath(routeBase), { replace: true });
           await onChanged();
           toast.success(t('acceptance.workspace.deleteSuccess'));
         } finally {
@@ -399,7 +404,7 @@ const AcceptanceRow = memo<{
           onToggleSelect(e.shiftKey);
           return;
         }
-        navigate(`/acceptance/${item.id}`);
+        navigate(acceptanceOverviewPath(item.id, routeBase));
       }}
     />
   );

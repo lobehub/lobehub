@@ -42,6 +42,11 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'POST /api/v1/notifications/{id}/archive': 'archive',
   'POST /api/v1/signals/source-events': 'emit',
   'POST /api/v1/signals/trigger': 'trigger',
+  // Starting a run is a verb; the `{method} {path}` rule would call it `createRuns`.
+  'POST /api/v1/tasks/{id}/runs': 'run',
+  // Chat-group roster edits read as verbs, not `createMembers` / `deleteMembers`.
+  'DELETE /api/v1/chat-groups/{id}/members': 'removeMembers',
+  'POST /api/v1/chat-groups/{id}/members': 'addMembers',
   // IM channel: `send` / `sync` / `markRead` read like a messaging client;
   // push tokens are keyed by device, so PUT/DELETE are register/unregister.
   'DELETE /api/v1/push-tokens/{deviceId}': 'unregister',

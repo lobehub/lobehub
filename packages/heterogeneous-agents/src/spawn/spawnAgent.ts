@@ -26,6 +26,7 @@ import {
 } from './codexShellEnv';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
+import { getHeterogeneousAgentPresetEnv } from './presetEnv';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 export interface SpawnAgentOptions {
@@ -481,7 +482,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
-    ...(options.agentType === 'codebuddy' ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' } : {}),
+    ...getHeterogeneousAgentPresetEnv(options.agentType),
     ...options.env,
   };
   // Codex builds each shell command's env from `[shell_environment_policy]`,

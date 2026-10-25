@@ -200,7 +200,7 @@ describe('GET /session', () => {
         status: 'delivered',
         title: 'Billing redesign',
       },
-      can: { comment: true, decide: true, moderate: true },
+      can: { comment: true, decide: true, moderate: true, reject: true },
       expiresAt: new Date(2_000_000_000 * 1000).toISOString(),
       user: { id: ownerId, name: 'Olivia Owner' },
     });
@@ -209,7 +209,7 @@ describe('GET /session', () => {
 
   it('lets a public-link visitor comment but not decide', async () => {
     const body = await (await call(visitorId, '/session')).json();
-    expect(body.can).toEqual({ comment: true, decide: false, moderate: false });
+    expect(body.can).toEqual({ comment: true, decide: false, moderate: false, reject: false });
     expect(body.user).toMatchObject({ id: visitorId, name: 'vic' });
   });
 });
@@ -355,6 +355,58 @@ describe('POST /decision', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: 'accepted' });
+  });
+
+  it('lets a visitor granted reject access send it back as the owner, but not accept', async () => {
+    await serverDB.insert(acceptanceComments).values({
+      acceptanceId,
+      authorUserId: visitorId,
+      clientId: randomUUID(),
+      content: 'the pay button still overlaps',
+      kind: 'access_request',
+      metadata: {
+        accessRequest: { decidedByUserId: ownerId, permission: 'collaborate', status: 'granted' },
+      },
+    });
+
+    const session = await (await call(visitorId, '/session')).json();
+    expect(session.can).toMatchObject({ decide: false, reject: true });
+
+    const accept = await call(visitorId, '/decision', {
+      json: { verdict: 'accept' },
+      method: 'POST',
+    });
+    expect(accept.status).toBe(403);
+
+    const res = await call(visitorId, '/decision', {
+      json: { note: 'still overlaps', verdict: 'send_back' },
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ dispatched: false, status: 'rejected' });
+    // The repair runs the owner's agent, so it is dispatched as the owner.
+    expect(mocks.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ownerId }),
+      expect.anything(),
+      expect.objectContaining({ id: acceptanceId }),
+      'still overlaps',
+    );
+  });
+
+  it('stops honouring a grant once it is revoked', async () => {
+    await serverDB.insert(acceptanceComments).values({
+      acceptanceId,
+      authorUserId: visitorId,
+      clientId: randomUUID(),
+      content: '',
+      kind: 'access_request',
+      metadata: { accessRequest: { permission: 'collaborate', status: 'revoked' } },
+    });
+    const res = await call(visitorId, '/decision', {
+      json: { verdict: 'send_back' },
+      method: 'POST',
+    });
+    expect(res.status).toBe(403);
   });
 
   it('sends a round back and says whether the agent was started', async () => {

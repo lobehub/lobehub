@@ -38,20 +38,12 @@ import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNo
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { applyMessagePatch } from './messagePatch';
-
-// `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
-// cancel and a deferred-tool park. These must NOT mark the topic unread, and
-// must take the non-success branch in `onSessionComplete` so the run clears
-// back to 'active' rather than persisting as an unread completion.
-const NON_COMPLETION_RUNTIME_END_REASONS = new Set(['interrupted', 'waiting_for_async_tool']);
-
-/**
- * Whether an `agent_runtime_end` event represents a clean completion (vs. a
- * cancel / park). A clean completion is the only ending that should surface an
- * unread badge.
- */
-export const isCompletedRuntimeEnd = (reason?: string | null): boolean =>
-  !NON_COMPLETION_RUNTIME_END_REASONS.has(reason ?? '');
+import {
+  findTerminalAssistantError,
+  isCompletedRuntimeEnd,
+  resolveRuntimeEndStatus,
+} from './runtimeEndReason';
+import { applyStepMetrics } from './stepMetrics';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -1068,12 +1060,9 @@ export const createGatewayEventHandler = (
           });
         }
 
-        // The server's stepIndex is the authoritative step counter — mirror it
-        // onto the operation so step-based UI (OpStatusTray) stays correct
-        // even across page-refresh reconnects.
-        if (typeof event.stepIndex === 'number') {
-          get().updateOperationMetadata(operationId, { stepCount: event.stepIndex + 1 });
-        }
+        // `stepIndex` is the execution counter; `llmCalls` is the user-facing metric.
+        const update = get().updateOperationMetadata;
+        applyStepMetrics(update, operationId, event.stepIndex, (event.data as any)?.llmCalls);
 
         // Server attaches the canonical UIChatMessage[] snapshot at every
         // step boundary (agent-runtime #15152). Use it as Source of Truth
@@ -1245,6 +1234,8 @@ export const createGatewayEventHandler = (
           break;
         }
 
+        applyStepMetrics(get().updateOperationMetadata, operationId, undefined, data?.llmCalls);
+
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
@@ -1370,15 +1361,24 @@ export const createGatewayEventHandler = (
           //   • completed → completeRun completes the op, marks the topic unread,
           //     drains the input queue, then afterRunComplete fires the desktop
           //     notification (skipped if a queued follow-up was scheduled).
+          //   • failed → completeRun lands the op in `failed`; afterRunComplete
+          //     fires the failure notification.
           //   • cancelled → completeRun only completes the op (no unread badge,
           //     no queue drain, no notification) — same as the old inline path.
           if (runtimeType === 'gateway' && runLifecycle) {
-            const status = isCompletedRuntimeEnd(data?.reason) ? 'completed' : 'cancelled';
+            const status = resolveRuntimeEndStatus(data?.reason);
             const { requeued } = await runLifecycle.completeRun({
               ...lifecycleEventBase,
               status,
             });
-            if (!requeued && status === 'completed') {
+            if (status === 'failed') {
+              // The failed row's content is the loading placeholder: announce the error.
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                notification: { error: findTerminalAssistantError(terminalMessages) },
+                status,
+              });
+            } else if (!requeued && status === 'completed') {
               // Notification body, resolved most-authoritative first:
               //
               // 1. the terminal snapshot's final assistant text — server-
@@ -1465,15 +1465,10 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
-          // An errored run is a FAILED run, not a completed one — failed runs
-          // receive no unread badge, no queue drain, and no notification.
-          // For gateway, drive the terminal disposition through the
-          // shared lifecycle so the op lands in `failed` (no unread badge, no queue
-          // drain, no notification). hetero never forwards `error` to this handler
-          // (its executor routes errors through persistTerminalError), but keep the
-          // legacy completeOperation for any other caller for safety.
+          // Failed run: no unread badge or queue drain. hetero never forwards `error`.
+          const failedEvent = { ...lifecycleEventBase, status: 'failed' as const };
           if (runtimeType === 'gateway' && runLifecycle) {
-            await runLifecycle.completeRun({ ...lifecycleEventBase, status: 'failed' });
+            await runLifecycle.completeRun(failedEvent);
           } else {
             get().completeOperation(operationId);
           }
@@ -1516,6 +1511,11 @@ export const createGatewayEventHandler = (
             },
             dispatchContext,
           );
+
+          // Notify after the error shows; this event ends the session (end is dropped).
+          const notification = { error: messageError };
+          if (runtimeType === 'gateway')
+            await runLifecycle?.afterRunComplete({ ...failedEvent, notification });
         });
         break;
       }

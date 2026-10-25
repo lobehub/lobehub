@@ -1,5 +1,5 @@
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
+import { isRecord } from '../utils/object';
 
 import { refineErrorCode } from './refine';
 import { getErrorCodeSpec } from './specs';
@@ -225,9 +225,21 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     (typeof (error as { type: unknown }).type === 'string' ||
       typeof (error as { type: unknown }).type === 'number')
   ) {
-    const formatted = error as ChatMessageError;
+    const { _responseBody: responseBody, ...formatted } = error as ChatMessageError & {
+      _responseBody?: unknown;
+    };
     const message = extractErrorMessage(formatted);
-    return enrichWithSpec({ ...formatted, ...(message ? { message } : {}) });
+    // Error hooks attach display fields such as `traceId` through `_responseBody`, including on
+    // a typed provider stream error that fails a router's last channel mid-stream.
+    const body =
+      isRecord(responseBody) && responseBody !== formatted.body
+        ? { ...(isRecord(formatted.body) ? formatted.body : {}), ...responseBody }
+        : formatted.body;
+    return enrichWithSpec({
+      ...formatted,
+      ...(body === undefined ? {} : { body }),
+      ...(message ? { message } : {}),
+    });
   }
 
   if (error instanceof Error) {

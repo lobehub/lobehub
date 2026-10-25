@@ -35,6 +35,7 @@ function expected(): Array<
     ['getKnowledgeItemStatusesByIds', 'query', 12],
     ['getKnowledgeItems', 'query', 12],
     ['getReadableUrl', 'query', 12],
+    ['homeItems', 'query', 12],
     ['publishFileToWorkspace', 'mutation', 13],
     ['recentFiles', 'query', 12],
     ['recentPages', 'query', 12],

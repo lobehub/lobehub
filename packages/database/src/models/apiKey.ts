@@ -1,6 +1,6 @@
 import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@lobechat/utils/apiKey';
-import { hashApiKey } from '@lobechat/utils/server';
-import { and, desc, eq, getTableColumns } from 'drizzle-orm';
+import { getApiKeyHashes, hashApiKey } from '@lobechat/utils/server';
+import { and, desc, eq, getTableColumns, inArray } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -14,9 +14,13 @@ export class ApiKeyModel {
     if (!validateApiKeyFormat(key)) {
       return null;
     }
-    const keyHash = hashApiKey(key);
+    const keyHashes = getApiKeyHashes(key);
 
-    const [row] = await db.select().from(apiKeys).where(eq(apiKeys.keyHash, keyHash)).limit(1);
+    const [row] = await db
+      .select()
+      .from(apiKeys)
+      .where(inArray(apiKeys.keyHash, keyHashes))
+      .limit(1);
     return row;
   };
 
@@ -169,11 +173,11 @@ export class ApiKeyModel {
   findByKey = async (key: string) => {
     if (!validateApiKeyFormat(key)) return null;
 
-    const keyHash = hashApiKey(key);
+    const keyHashes = getApiKeyHashes(key);
     const [row] = await this.db
       .select()
       .from(apiKeys)
-      .where(and(eq(apiKeys.keyHash, keyHash), this.manageable()))
+      .where(and(inArray(apiKeys.keyHash, keyHashes), this.manageable()))
       .limit(1);
     return row;
   };

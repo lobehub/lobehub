@@ -4,15 +4,16 @@ import { Accordion, type AccordionItemType, Flexbox, Tag, Text } from '@lobehub/
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Lifecycle from '@/features/Portal/GoalMetric/Lifecycle';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import GoalAcceptanceCriteria from '../GoalAcceptanceCriteria';
-import Activity from './Activity';
-import Deliverables from './Deliverables';
-import Findings from './Findings';
+import { buildDecisionRows } from './decisionList';
+import Decisions from './Decisions';
+import DeliveryTabs from './DeliveryTabs';
 import Frontier from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
 import GoalResultTabs from './GoalResultTabs';
@@ -23,6 +24,13 @@ import {
   useFrontierActions,
   useGoalNodeSelect,
 } from './useGoalProcessActions';
+
+// One left edge for headings and their content, so a section's rows line up
+// under its title instead of sitting on an indent.
+const SECTION_STYLES = {
+  panel: { paddingInline: 0 },
+  trigger: { paddingBlock: 8, paddingInline: 0 },
+};
 
 /**
  * The process-control band of the goal detail page: what can move now
@@ -78,6 +86,7 @@ const ProcessControl = memo<ProcessControlProps>(
     // the incoming structure instead of reading as an empty goal — the graph
     // poll fills them in as nodes land.
     const planning = isGoalPlanning(graph);
+    const decisionCount = buildDecisionRows(graph.decisions).length;
     // Presence of the acceptance block (not a non-empty list) keeps the section
     // mounted: removing the last criterion must leave the add control reachable,
     // while legacy prose-only goals (no acceptance config at all) show nothing.
@@ -116,18 +125,15 @@ const ProcessControl = memo<ProcessControlProps>(
 
         {map}
 
-        <Accordion
-          defaultValue={['deliverables', 'findings', 'activity']}
-          gap={16}
-          indicatorPlacement="inline"
-          // One left edge for headings and their content, so a section's rows
-          // line up under its title instead of sitting on an indent.
-          items={
-            [
-              // The structured acceptance standard the terminal goal acceptance is
-              // gated on. Collapsed by default — reference material, like the task
-              // detail's 交付验收 section. Prose-only legacy goals have none.
-              !!acceptanceConfig && {
+        {/* The structured acceptance standard the terminal goal acceptance is
+            gated on. Collapsed by default — reference material, like the task
+            detail's 交付验收 section. Prose-only legacy goals have none. */}
+        {!!acceptanceConfig && (
+          <Accordion
+            indicatorPlacement="inline"
+            styles={SECTION_STYLES}
+            items={[
+              {
                 children: <GoalAcceptanceCriteria criteriaIds={criteriaIds} goalId={goalId} />,
                 key: 'acceptance',
                 title: (
@@ -142,52 +148,52 @@ const ProcessControl = memo<ProcessControlProps>(
                   </Flexbox>
                 ),
               },
-              // Between the standard and the conclusions on purpose: 验收标准 says
-              // what counts as done, 交付物 what was produced, 结论 what the goal now
-              // believes about it. Findings routinely cite these artifacts.
-              {
-                children: <Deliverables graph={graph} />,
-                key: 'deliverables',
+            ]}
+          />
+        )}
+
+        {/* 验收标准 says what counts as done, 交付物 what was produced, 结论 what the
+            goal now believes about it — the last two share one tabbed block. */}
+        <DeliveryTabs graph={graph} onSelect={select} />
+
+        <Accordion
+          defaultValue={['decisions', 'activity']}
+          gap={16}
+          indicatorPlacement="inline"
+          styles={SECTION_STYLES}
+          items={
+            [
+              // Where a person stepped into the run — kept apart from the
+              // results above, which are what the run produced on its own.
+              decisionCount > 0 && {
+                children: <Decisions graph={graph} onSelect={select} />,
+                key: 'decisions',
                 title: (
                   <Flexbox horizontal align={'center'} gap={8}>
                     <Text fontSize={14} weight={600}>
-                      {t('goalProcess.deliverables.title')}
+                      {t('goalProcess.decisions.title')}
                     </Text>
-                    {graph.artifacts.length > 0 && (
-                      <Tag size={'small'}>{graph.artifacts.length}</Tag>
-                    )}
+                    <Tag size={'small'}>{decisionCount}</Tag>
                   </Flexbox>
                 ),
               },
               {
-                children: <Findings graph={graph} onSelect={select} />,
-                key: 'findings',
-                title: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text fontSize={14} weight={600}>
-                      {t('goalProcess.findings.title')}
-                    </Text>
-                    {graph.findings.length > 0 && <Tag size={'small'}>{graph.findings.length}</Tag>}
-                  </Flexbox>
+                // The timeline carries who decided what (a person's gate answer
+                // reads as their own line), not just what the tasks did. It
+                // lands on the shared `select` so a timeline click also moves
+                // the map's highlight, as the list it replaced did.
+                children: (
+                  <Lifecycle goalId={goalId} graph={graph} stickyDays={false} onSelect={select} />
                 ),
-              },
-              {
-                children: <Activity graph={graph} onSelect={select} />,
                 key: 'activity',
                 title: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text fontSize={14} weight={600}>
-                      {t('goalProcess.activity.title')}
-                    </Text>
-                  </Flexbox>
+                  <Text fontSize={14} weight={600}>
+                    {t('goalProcess.activity.title')}
+                  </Text>
                 ),
               },
             ].filter(Boolean) as AccordionItemType[]
           }
-          styles={{
-            panel: { paddingInline: 0 },
-            trigger: { paddingBlock: 8, paddingInline: 0 },
-          }}
         />
       </Flexbox>
     );

@@ -1,149 +1,53 @@
+import { DEFAULT_AVATAR } from '@lobechat/const';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import React, { memo, useMemo, useState } from 'react';
-import { shallow } from 'zustand/shallow';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ModelTag } from '@/components/LobeIcons';
-import { DEFAULT_AVATAR } from '@/const/meta';
-import { INBOX_SESSION_ID } from '@/const/session';
-import { isDesktop } from '@/const/version';
+import { useAgentStore } from '@/store/agent';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { useGlobalStore } from '@/store/global';
-import { useSessionStore } from '@/store/session';
-import { sessionHelpers } from '@/store/session/helpers';
-import { sessionMetaSelectors, sessionSelectors } from '@/store/session/selectors';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
-import { type LobeGroupSession } from '@/types/session';
 
 import ListItem from '../../ListItem';
-import { openCreateGroupModal } from '../../Modals/CreateGroupModal';
 import Actions from './Actions';
 
-interface SessionItemProps {
-  id: string;
-}
-
-const SessionItem = memo<SessionItemProps>(({ id }) => {
+const AgentItem = ({ item, groupId }: { item: SidebarAgentItem; groupId?: string | null }) => {
+  const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
-
-  const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
-
-  const [active] = useSessionStore((s) => [s.activeId === id]);
-  const [loading] = useChatStore((s) => [
-    operationSelectors.isAgentRuntimeVisiblyRunning(s) && id === s.activeAgentId,
-  ]);
-
-  const [pin, title, avatar, avatarBackground, updateAt, members, model, group, sessionType] =
-    useSessionStore((s) => {
-      const session = sessionSelectors.getSessionById(id)(s);
-      const meta = session.meta;
-
-      return [
-        sessionHelpers.getSessionPinned(session),
-        sessionMetaSelectors.getTitle(meta),
-        sessionMetaSelectors.getAvatar(meta),
-        meta.backgroundColor,
-        session?.updatedAt,
-        (session as LobeGroupSession).members,
-        session.type === 'agent' ? (session as any).model : undefined,
-        session?.group,
-        session.type,
-      ];
-    });
-
-  // Only hide the model tag for the inbox session itself (Lobe AI)
-  const showModel = sessionType === 'agent' && model && id !== INBOX_SESSION_ID;
-
-  const handleDoubleClick = () => {
-    if (isDesktop) {
-      openAgentInNewWindow(id);
-    }
-  };
-
-  const handleDragStart = (e: React.DragEvent) => {
-    // Set drag data to identify the session being dragged
-    e.dataTransfer.setData('text/plain', id);
-  };
-
-  const handleDragEnd = (e: React.DragEvent) => {
-    // If drag ends without being dropped in a valid target, open in new window
-    if (isDesktop && e.dataTransfer.dropEffect === 'none') {
-      openAgentInNewWindow(id);
-    }
-  };
-
-  const actions = useMemo(
-    () => (
-      <Actions
-        group={group}
-        id={id}
-        openCreateGroupModal={() => openCreateGroupModal(id)}
-        parentType={sessionType}
-        setOpen={setOpen}
-      />
-    ),
-    [group, id],
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
+  const loading = useChatStore(
+    item.type === 'group'
+      ? operationSelectors.isGroupVisiblyRunning(item.id)
+      : operationSelectors.isAgentVisiblyRunning(item.id),
   );
-
-  const addon = useMemo(
-    () =>
-      !showModel ? undefined : (
-        <Flexbox horizontal gap={4} style={{ flexWrap: 'wrap' }}>
-          <ModelTag model={model} />
-        </Flexbox>
-      ),
-    [showModel, model],
-  );
-
-  const currentUser = useUserStore((s) => ({
-    avatar: userProfileSelectors.userAvatar(s),
-    name: userProfileSelectors.displayUserName(s) || userProfileSelectors.nickName(s) || 'You',
-  }));
-
-  const sessionAvatar: string | { avatar: string; background?: string }[] =
-    sessionType === 'group'
-      ? [
-          {
-            avatar: currentUser.avatar || DEFAULT_AVATAR,
-            background: undefined,
-          },
-          ...(members?.map((member) => ({
-            avatar: member.avatar || DEFAULT_AVATAR,
-            background: member.backgroundColor || undefined,
-          })) || []),
-        ]
-      : avatar;
-
   return (
     <ListItem
-      actions={actions}
-      active={active}
-      addon={addon}
-      avatar={sessionAvatar as any} // Fix: Bypass complex intersection type ReactNode & avatar type
-      avatarBackground={avatarBackground}
-      date={updateAt?.valueOf()}
-      draggable={isDesktop}
-      key={id}
+      actions={<Actions groupId={groupId} item={item} setOpen={setOpen} />}
+      active={item.type === 'group' ? activeGroupId === item.id : activeAgentId === item.id}
+      avatar={item.avatar || DEFAULT_AVATAR}
+      avatarBackground={item.backgroundColor || undefined}
+      date={item.updatedAt?.valueOf()}
+      key={item.id}
       loading={loading}
-      pin={pin}
+      pin={item.pinned}
       showAction={open}
-      title={title}
-      type={sessionType}
+      title={agentDisplayName(item, t(item.type === 'group' ? 'untitledGroup' : 'untitledAgent'))}
+      type={item.type}
+      addon={
+        item.type === 'agent' && item.model ? (
+          <Flexbox horizontal gap={4} style={{ flexWrap: 'wrap' }}>
+            <ModelTag model={item.model} />
+          </Flexbox>
+        ) : undefined
+      }
       styles={{
-        container: {
-          gap: 12,
-        },
-        content: {
-          gap: 6,
-          maskImage: `linear-gradient(90deg, #000 90%, transparent)`,
-        },
+        container: { gap: 12 },
+        content: { gap: 6, maskImage: 'linear-gradient(90deg, black 90%, transparent)' },
       }}
-      onDoubleClick={handleDoubleClick}
-      onDragEnd={handleDragEnd}
-      onDragStart={handleDragStart}
     />
   );
-}, shallow);
-
-export default SessionItem;
+};
+export default AgentItem;

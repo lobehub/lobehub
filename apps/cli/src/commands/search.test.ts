@@ -43,6 +43,7 @@ describe('search command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -88,13 +89,29 @@ describe('search command', () => {
   });
 
   it('should output JSON when --json flag is used', async () => {
-    const results = [{ id: '1', title: 'Test', type: 'agent' }];
+    vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+    vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
+    const results = [
+      { id: 'agt_1', title: 'Test', type: 'agent' },
+      { agentId: 'agt_1', id: 'tpc_1', title: 'Chat', type: 'topic' },
+      { id: 'x', type: 'unknown' },
+    ];
     mockTrpcClient.search.query.query.mockResolvedValue(results);
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'search', '-q', 'test', '--json']);
 
-    expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(results, null, 2));
+    expect(consoleSpy).toHaveBeenCalledWith(
+      JSON.stringify(
+        [
+          { ...results[0], url: 'https://app.lobehub.com/agent/agt_1' },
+          { ...results[1], url: 'https://app.lobehub.com/agent/agt_1/tpc_1' },
+          results[2],
+        ],
+        null,
+        2,
+      ),
+    );
   });
 
   it('should show message when no results found', async () => {

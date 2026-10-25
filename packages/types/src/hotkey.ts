@@ -4,6 +4,7 @@ export type HotkeyId =
   | 'deleteAndRegenerateMessage'
   | 'deleteLastMessage'
   | 'editMessage'
+  | 'findInTopic'
   | 'navigateToChat'
   | 'nextTab'
   | 'openChatSettings'

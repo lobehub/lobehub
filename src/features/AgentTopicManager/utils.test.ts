@@ -4,6 +4,7 @@ import {
   buildBotChannelOptions,
   getBotPlatformName,
   getProjectFilterLabel,
+  getProjectInfo,
   getProjectLabel,
   matchesBotChannel,
   matchesGroup,
@@ -37,6 +38,7 @@ describe('AgentTopicManager utils', () => {
     expect(matchesGroup(topic, ['/repo-fix'])).toBe(false);
     expect(getProjectFilterLabel(topic)).toBe('repo');
     expect(getProjectLabel(topic)).toBe('repo/repo-fix · fix');
+    expect(getProjectInfo(topic)).toEqual({ branch: 'fix', path: 'repo/repo-fix' });
   });
 
   it('matches bot channel filters by metadata.bot.platform', () => {

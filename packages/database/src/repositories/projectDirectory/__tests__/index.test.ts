@@ -201,27 +201,118 @@ describe('ProjectDirectoryRepository.bind', () => {
     expect(topic.projectId).toBeNull();
   });
 
-  it('files explicit conversations and rolls back mismatched selections', async () => {
+  it('files matching conversations and reports the ones it skips', async () => {
+    await db.insert(projects).values({
+      coordinatorAgentId: 'repo-coordinator',
+      id: 'another-project',
+      identifier: 'ANO',
+      name: 'Another project',
+      userId,
+    });
     await db.insert(topics).values([
+      { id: 'matching', agentId: 'repo-agent', userId, metadata: { workingDirectory: base.path } },
+      { id: 'other-path', agentId: 'repo-agent', userId, metadata: { workingDirectory: '/other' } },
       {
-        id: 'matching',
+        id: 'filed-elsewhere',
         agentId: 'repo-agent',
+        projectId: 'another-project',
         userId,
         metadata: { workingDirectory: base.path },
       },
       {
-        id: 'other-path',
+        id: 'busy',
         agentId: 'repo-agent',
+        status: 'running',
         userId,
-        metadata: { workingDirectory: '/other' },
+        metadata: { workingDirectory: base.path },
       },
     ]);
-    await expect(
-      repo.bind({ ...base, agentId: 'repo-agent', topicIds: ['matching', 'other-path'] }),
-    ).rejects.toThrow('different directory');
-    expect(await directoryModel.list()).toEqual([]);
-    const directory = await repo.bind({ ...base, agentId: 'repo-agent', topicIds: ['matching'] });
-    expect(await directoryModel.listTopics(directory.id)).toHaveLength(1);
+    const directory = await repo.bind({
+      ...base,
+      agentId: 'repo-agent',
+      topicIds: ['matching', 'other-path', 'filed-elsewhere', 'busy', 'missing'],
+    });
+    expect(directory.skippedTopics).toEqual(
+      expect.arrayContaining([
+        { id: 'other-path', reason: 'differentLocation' },
+        { id: 'filed-elsewhere', reason: 'otherProject' },
+        { id: 'busy', reason: 'running' },
+        { id: 'missing', reason: 'notFound' },
+      ]),
+    );
+    expect(directory.skippedTopics).toHaveLength(4);
+    expect((await directoryModel.listTopics(directory.id)).map((t) => t.id)).toEqual(['matching']);
+  });
+
+  it('files every workspace member’s conversations in a shared agent’s directory', async () => {
+    const workspaceId = 'bind-topic-ws';
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Bind topic workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    await db.insert(agents).values([
+      { id: 'ws-bind-coordinator', userId, workspaceId },
+      { id: 'ws-shared-agent', userId, workspaceId },
+    ]);
+    await db.insert(projects).values({
+      coordinatorAgentId: 'ws-bind-coordinator',
+      id: 'ws-bind-project',
+      identifier: 'WSB',
+      name: 'Workspace bind project',
+      userId: otherUserId,
+      workspaceId,
+    });
+    await db.insert(devices).values({
+      deviceId: 'ws-bind-device',
+      identitySource: 'fallback',
+      platform: 'linux',
+      userId,
+      visibility: 'public',
+      workspaceId,
+    });
+    // One conversation per member in the same directory of a shared agent.
+    await db.insert(topics).values([
+      {
+        id: 'creator-topic',
+        agentId: 'ws-shared-agent',
+        metadata: { boundDeviceId: 'ws-bind-device', workingDirectory: '/ws/repo' },
+        userId,
+        workspaceId,
+      },
+      {
+        id: 'member-topic',
+        agentId: 'ws-shared-agent',
+        metadata: { workingDirectory: '/ws/repo' },
+        userId: otherUserId,
+        workspaceId,
+      },
+      // A share visitor's conversation is hidden from members and must not be filed.
+      {
+        id: 'visitor-topic',
+        agentId: 'ws-shared-agent',
+        metadata: { workingDirectory: '/ws/repo' },
+        senderId: userId,
+        userId,
+        workspaceId,
+      },
+    ]);
+    const memberRepo = new ProjectDirectoryRepository(db, otherUserId, workspaceId);
+    const directory = await memberRepo.bind({
+      agentId: 'ws-shared-agent',
+      deviceId: 'ws-bind-device',
+      name: 'Repo',
+      path: '/ws/repo',
+      projectId: 'ws-bind-project',
+      topicIds: ['creator-topic', 'member-topic', 'visitor-topic'],
+    });
+    expect(directory.skippedTopics).toEqual([{ id: 'visitor-topic', reason: 'notFound' }]);
+    const filed = await db.select().from(topics).where(eq(topics.projectId, 'ws-bind-project'));
+    expect(filed.map((t) => [t.id, t.userId]).sort()).toEqual([
+      ['creator-topic', userId],
+      ['member-topic', otherUserId],
+    ]);
   });
 });
 
@@ -300,6 +391,64 @@ describe('ProjectDirectoryRepository.associateTopic', () => {
       workingDirectory: base.path,
       workingDirectoryConfig: { path: base.path },
     });
+  });
+});
+
+describe('ProjectDirectoryRepository.associateTopic in a workspace', () => {
+  it('lets a member file a shared topic they did not create', async () => {
+    const workspaceId = 'associate-topic-ws';
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Associate topic workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    await db.insert(agents).values({ id: 'ws-assoc-coordinator', userId, workspaceId });
+    await db.insert(projects).values({
+      coordinatorAgentId: 'ws-assoc-coordinator',
+      id: 'ws-assoc-project',
+      identifier: 'WSA',
+      name: 'Workspace associate project',
+      userId: otherUserId,
+      workspaceId,
+    });
+    await db.insert(topics).values({ id: 'ws-assoc-topic', userId, workspaceId });
+    await new ProjectDirectoryRepository(db, otherUserId, workspaceId).associateTopic(
+      'ws-assoc-project',
+      'ws-assoc-topic',
+    );
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'ws-assoc-topic'));
+    expect(topic).toMatchObject({ projectId: 'ws-assoc-project', userId });
+  });
+
+  it('does not file a share visitor’s topic', async () => {
+    const workspaceId = 'associate-visitor-ws';
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Associate visitor workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    await db.insert(agents).values({ id: 'ws-visitor-coordinator', userId, workspaceId });
+    await db.insert(projects).values({
+      coordinatorAgentId: 'ws-visitor-coordinator',
+      id: 'ws-visitor-project',
+      identifier: 'WSV',
+      name: 'Workspace visitor project',
+      userId: otherUserId,
+      workspaceId,
+    });
+    await db
+      .insert(topics)
+      .values({ id: 'ws-visitor-topic', senderId: userId, userId, workspaceId });
+    await expect(
+      new ProjectDirectoryRepository(db, otherUserId, workspaceId).associateTopic(
+        'ws-visitor-project',
+        'ws-visitor-topic',
+      ),
+    ).rejects.toThrow('not found');
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'ws-visitor-topic'));
+    expect(topic.projectId).toBeNull();
   });
 });
 

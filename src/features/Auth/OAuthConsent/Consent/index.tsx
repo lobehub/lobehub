@@ -27,7 +27,7 @@ function getScopeDescription(scope: string, t: any): string {
   return t(`consent.scope.${scope.replace(':', '-')}`, scope);
 }
 
-const BUILTIN_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile', 'lobehub-market']);
+const BUILTIN_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile', 'lobehub-market', 'toby']);
 
 const ConsentClient = memo<ClientProps>(
   ({ acceptanceReview, uid, clientId, scopes, clientMetadata }) => {

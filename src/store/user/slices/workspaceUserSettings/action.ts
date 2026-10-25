@@ -10,6 +10,7 @@ import {
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createReplicaSlice, type ReplicaLens } from '@/libs/replica';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
+import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -193,6 +194,25 @@ export class WorkspaceUserSettingsActionImpl {
     };
   };
 
+  /**
+   * Seed the active workspace's persisted preference before a route commits, so
+   * pre-paint reads that depend on it (the topic sidebar's "only mine" filter)
+   * ask for the same list the mounted sidebar will. Call from a route loader,
+   * bounded by a timeout. Resolves whether the active workspace's preference
+   * is known afterwards — always in personal mode, which has no row.
+   */
+  preHydrateWorkspaceUserPreference = async (): Promise<boolean> => {
+    const workspaceId = getActiveWorkspaceId();
+    if (!workspaceId) return true;
+
+    const replica = this.#replica();
+    const scope = getWorkspaceUserPreferenceResource().scope.get();
+    // The slot may still hold the previous identity's bucket; drop it first.
+    replica.ensureScope(scope);
+    await replica.hydrate({ workspaceId }, scope);
+    return this.#get().workspaceUserPreferenceWorkspaceId === workspaceId;
+  };
+
   updateWorkspaceUserPreference = async (
     patch: Partial<WorkspaceUserPreference>,
   ): Promise<void> => {
@@ -242,6 +262,10 @@ export class WorkspaceUserSettingsActionImpl {
       () => workspaceUserSettingsService.updatePreference(patch),
       { revalidate: true },
     );
+    // The caller's per-agent device override changes where an agent routes for
+    // them, which the sidebar presence dots cache per agent. (Personal mode
+    // has no overrides, so the early return above needs no refresh.)
+    if (patch.agentDeviceOverrides) void refreshAgentDeviceBindings();
   };
 }
 

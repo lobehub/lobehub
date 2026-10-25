@@ -2,6 +2,7 @@
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
   VERIFICATION_ERRORED_ERROR,
+  VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -658,6 +659,80 @@ describe('driveTaskFromVerify', () => {
     expect(deliverArg.reason).toBe('error');
     expect(deliverArg.errorMessage).not.toBe('Delivery did not pass verification.');
     expect(deliverArg.errorMessage.toLowerCase()).toContain('internal error');
+  });
+
+  /**
+   * Regression: a verifier refused with "Budget exceeded" paused the Goal Task
+   * with the generic errored string, which the coordinator recovers with a new
+   * builder attempt. Every attempt re-uploaded the same evidence into the same
+   * refused verifier, spending credits round after round with nothing judged.
+   */
+  it('errored on a credit refusal → pauses with the out-of-credits reason, not the retryable one', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Report is published',
+        required: true,
+        status: 'errored',
+        toulmin: {
+          limitation:
+            'Verifier failed before submitting a verdict: Budget exceeded (InsufficientBudgetForModel)',
+        },
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_OUT_OF_CREDITS_ERROR,
+    });
+    expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_ERRORED_ERROR,
+    });
+    expect(deliverMock.mock.calls[0][0].errorMessage).toContain('out of credits');
+  });
+
+  it('errored: an optional check refused for credits does not hide a retryable required error', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        required: true,
+        status: 'errored',
+        toulmin: { limitation: 'Verifier failed before submitting a verdict: socket hang up' },
+      },
+      {
+        required: false,
+        status: 'errored',
+        toulmin: {
+          limitation:
+            'Verifier failed before submitting a verdict: Free plan limit (FreePlanLimit)',
+        },
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_ERRORED_ERROR,
+    });
+  });
+
+  it('errored for another reason → keeps the retryable errored reason', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        required: true,
+        status: 'errored',
+        toulmin: { limitation: 'Verifier failed before submitting a verdict: socket hang up' },
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_ERRORED_ERROR,
+    });
   });
 
   it('skips when the run has not terminally settled (verifying/repairing)', async () => {

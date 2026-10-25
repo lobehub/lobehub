@@ -153,7 +153,7 @@ src/store/session
 
 ## SessionStore 的实现
 
-在 LobeHub 中，SessionStore 被设计为管理会话状态和逻辑的核心模块。它由多个 Slices 组成，每个 Slice 管理一部分相关的状态和逻辑。下面是一个简化的 SessionStore 的实现示例：
+旧 SessionStore 保留会话选择、界面状态和兼容动作，各个 Slice 负责相关的一组行为。下面用简化示例说明如何将动作类组合进 store：
 
 ### store.ts
 
@@ -193,32 +193,41 @@ export const useSessionStore = createWithEqualityFn<SessionStore>()(
 );
 ```
 
-在这个 `store.ts` 文件中，我们创建了一个 `useSessionStore` 钩子，它使用 `zustand` 库来创建一个全局状态管理器。我们通过共享的 `flattenActions` 工具函数，将 initialState 和每个 Slice 的动作合并，以创建完整的 SessionStore。这里没有使用 `persist` 中间件：SessionStore 的数据通过 SWR 从服务端获取，而不是持久化到本地存储。
+在这个 `store.ts` 文件中，我们创建了一个 `useSessionStore` 钩子，它使用 `zustand` 库来创建一个全局状态管理器。我们通过共享的 `flattenActions` 工具函数，将 initialState 和每个 Slice 的动作合并，以创建完整的 SessionStore。旧 SessionStore 管理会话选择和界面状态。Agent 与侧边栏列表由 [HomeStore 中基于 replica 的 Agent 列表](https://github.com/lobehub/lobehub/blob/canary/src/store/home/slices/agentList/action.ts)负责加载和缓存。
 
 ### slices/session/action.ts
 
-```ts
-import { type SWRResponse } from 'swr';
+下面的动作切片展示现有的 `switchSession` 动作：检查当前 Agent ID，然后通过带调试标签的状态写入更新 `activeAgentId`。
 
+```ts
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
+import { setNamespace } from '@/utils/storeDebug';
 
-export interface SessionAction {
-  /**
-   * A custom hook that uses SWR to fetch sessions data.
-   */
-  useFetchSessions: () => SWRResponse<any>;
-}
+const n = setNamespace('session');
 
 type Setter = StoreSetter<SessionStore>;
-export const createSessionSlice = (set: Setter, get: () => SessionStore): SessionAction => ({
-  useFetchSessions: () => {
-    // ...初始化会话的逻辑
-  },
-  // ...其他动作的实现
-});
+export const createSessionSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
+  new SessionActionImpl(set, get, _api);
+
+export class SessionActionImpl {
+  readonly #get: () => SessionStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => SessionStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  switchSession = (sessionId: string): void => {
+    if (this.#get().activeAgentId === sessionId) return;
+
+    this.#set({ activeAgentId: sessionId }, false, n(`activeSession/${sessionId}`));
+  };
+}
+
+export type SessionAction = Pick<SessionActionImpl, keyof SessionActionImpl>;
 ```
 
-在 `action.ts` 文件中，我们定义了一个 `SessionAction` 接口来描述会话相关的动作，并且实现了一个 `useFetchSessions` 函数来创建这些动作。然后，我们将这些动作与初始状态合并，以形成会话相关的 Slice。
-
-通过这种结构分层和模块化的方法，我们可以确保 LobeHub 的 SessionStore 是清晰、可维护的，同时也便于扩展和测试。
+`createSessionSlice` 返回动作类实例，`flattenActions` 将它的公开方法暴露到旧 store 上，`SessionAction` 则由这些方法推导。列表加载和持久化由对应的列表资源负责；这个选择动作只更新界面状态。

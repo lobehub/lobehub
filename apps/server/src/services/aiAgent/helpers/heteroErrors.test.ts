@@ -64,6 +64,20 @@ describe('JSON device-gateway dispatch errors', () => {
     },
   );
 
+  it('explains the gateway TIMEOUT body as a device response timeout', () => {
+    // A 504 run dispatch answers this body; it used to become the headline verbatim.
+    const raw = '{"error":"TIMEOUT","success":false}';
+
+    expect(humanizeHeteroDispatchError(raw)).toBe(
+      humanizeHeteroDispatchError('DEVICE_RESPONSE_TIMEOUT'),
+    );
+    expect(humanizeHeteroDispatchError(raw)).toContain('offline or asleep');
+    expect(resolveHeteroDispatchErrorType(raw)).toBe(ChatErrorType.DeviceResponseTimeout);
+    expect(resolveHeteroDispatchErrorType('DEVICE_RESPONSE_TIMEOUT (HTTP 504)')).toBe(
+      ChatErrorType.DeviceResponseTimeout,
+    );
+  });
+
   it.each([
     '{"error":"UNKNOWN_DEVICE_ERROR","success":false}',
     '{"error":{"code":"DEVICE_NOT_FOUND"}}',

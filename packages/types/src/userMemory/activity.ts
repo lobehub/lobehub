@@ -1,3 +1,4 @@
+import type { UserMemoryActivity } from './layers';
 import type { BaseListItem, BaseListParams, BaseListResult } from './shared';
 
 export type ActivityListSort = 'capturedAt' | 'startsAt';
@@ -7,7 +8,10 @@ export interface ActivityListParams extends BaseListParams {
   status?: string[];
 }
 
-export interface ActivityListItem extends BaseListItem {
+export interface ActivityListItem
+  extends
+    BaseListItem,
+    Pick<UserMemoryActivity, 'associatedLocations' | 'associatedObjects' | 'associatedSubjects'> {
   endsAt: Date | null;
   narrative: string | null;
   notes: string | null;

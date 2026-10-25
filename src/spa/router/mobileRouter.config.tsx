@@ -14,8 +14,10 @@ import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
+import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
+import { agentGroupAccessLoader } from '@/spa/router/resourceAccessLoader';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -25,10 +27,27 @@ const mobileChatElement = dynamicElement(
   { preloadId: 'mobile-agent' },
 );
 
+// Mobile owns its home layout; it has no persistent desktop Home outside the outlet.
+const mobileHomeRoute: RouteObject = {
+  children: [
+    {
+      element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home', {
+        preloadId: 'mobile-home',
+      }),
+      index: true,
+    },
+  ],
+  element: dynamicLayout(
+    () => import('@/routes/(mobile)/(home)/_layout'),
+    'Mobile > Home > Layout',
+    { preloadId: 'mobile-home' },
+  ),
+  handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+};
+
 /**
  * Children shared between `/` and `/:workspaceSlug` for mobile. Mobile only
- * mirrors the subset of routes it actually supports — settings / me / default
- * home stay personal-only.
+ * mirrors the subset of routes it actually supports — settings / me stay personal-only.
  */
 export const sharedMainAreaChildren: RouteObject[] = [
   // Chat routes
@@ -71,6 +90,40 @@ export const sharedMainAreaChildren: RouteObject[] = [
       },
     ],
     path: 'agent',
+  },
+
+  {
+    path: 'group',
+    children: [
+      { index: true, element: redirectElement('..') },
+      {
+        path: ':gid',
+        loader: agentGroupAccessLoader,
+        element: dynamicLayout(
+          () => import('@/routes/(mobile)/group/_layout'),
+          'Mobile > Group > Layout',
+          { preloadId: 'mobile-group' },
+        ),
+        handle: { meta: groupRouteMeta },
+        errorElement: <ErrorBoundary />,
+        children: [
+          {
+            index: true,
+            element: dynamicElement(
+              () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/group')),
+              'Mobile > Group',
+            ),
+          },
+          {
+            path: ':topicId',
+            element: dynamicElement(
+              () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/group')),
+              'Mobile > Group > Topic',
+            ),
+          },
+        ],
+      },
+    ],
   },
 
   // Discover routes with nested structure
@@ -445,31 +498,13 @@ export const mobileRoutes: RouteObject[] = [
       },
 
       // Default route - home page
-      {
-        children: [
-          {
-            element: dynamicElement(() => import('@/routes/(mobile)/(home)/'), 'Mobile > Home', {
-              preloadId: 'mobile-home',
-            }),
-            index: true,
-          },
-        ],
-        element: dynamicLayout(
-          () => import('@/routes/(mobile)/(home)/_layout'),
-          'Mobile > Home > Layout',
-          { preloadId: 'mobile-home' },
-        ),
-      },
+      mobileHomeRoute,
 
       // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.
       // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
       {
         children: [
-          // Workspace home — handled by the persistent home layout (mirrors
-          // how `/` index is empty); rendering here would duplicate Home.
-          {
-            index: true,
-          },
+          mobileHomeRoute,
           ...sharedMainAreaChildren,
           // Workspace settings — `/:slug/settings/*`. Mobile reuses the mobile
           // settings chrome (header + content wrapper) for now; a dedicated
@@ -506,6 +541,13 @@ export const mobileRoutes: RouteObject[] = [
                   'Mobile > Workspace > Settings > Hotkey',
                 ),
                 path: 'hotkey',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/chat-preference'),
+                  'Mobile > Workspace > Settings > Chat Preference',
+                ),
+                path: 'chat-preference',
               },
               {
                 element: dynamicElement(
@@ -730,5 +772,43 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: acceptanceRouteMeta },
     path: '/acceptance/:acceptanceId/check/:checkId',
+  },
+  // Workspace-scoped report links (`/:workspaceSlug/acceptance/...`) are what
+  // in-app navigation produces inside a workspace; mirror them like desktop.
+  {
+    children: [
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/acceptance/[acceptanceId]'),
+              'Mobile > Workspace > AcceptanceReport',
+            ),
+            errorElement: <ErrorBoundary />,
+            handle: { meta: acceptanceRouteMeta },
+            path: 'acceptance/:acceptanceId',
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/acceptance/[acceptanceId]'),
+              'Mobile > Workspace > AcceptanceCheck',
+            ),
+            errorElement: <ErrorBoundary />,
+            handle: { meta: acceptanceRouteMeta },
+            path: 'acceptance/:acceptanceId/check/:checkId',
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/[workspaceSlug]/_layout'),
+          'Mobile > Workspace > Acceptance Layout',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: ':workspaceSlug',
+      },
+    ],
+    element: dynamicLayout(
+      () => import('@/routes/(main)/acceptance/_layout'),
+      'Mobile > Acceptance Layout',
+    ),
   },
 ];

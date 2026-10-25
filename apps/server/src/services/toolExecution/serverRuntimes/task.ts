@@ -24,7 +24,6 @@ import {
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
 
-import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
 import { AgentModel } from '@/database/models/agent';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { TaskModel } from '@/database/models/task';
@@ -35,9 +34,9 @@ import { appEnv } from '@/envs/app';
 import { formatPgError, unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
-import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
+import { createTaskAssigneeHelpers } from './taskAssignees';
 import { type ServerRuntimeRegistration } from './types';
 
 export interface TaskRuntimeDeps {
@@ -52,6 +51,8 @@ export interface TaskRuntimeDeps {
   // back to this session. All optional — a task can be created
   // outside an agent turn (e.g. via the API).
   operationId?: string;
+  // Project the run belongs to: tasks it creates land there by default.
+  projectId?: string;
   // Resolves the base URL for task deep-links: app origin + optional `/{slug}`
   // workspace prefix. Provided by the factory (which owns db / userId / the
   // resolved workspaceId); when absent (unit tests) links fall back to the bare
@@ -86,7 +87,6 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   } = deps;
   // Models are read through `deps` (not destructured) so callers can swap them
   // in lazily — e.g. after async workspace resolution in the runtime factory.
-  const agentModel = () => deps.agentModel;
   const taskModel = () => deps.taskModel;
   const taskService = () => deps.taskService;
   const taskCaller = () => deps.taskCaller;
@@ -99,63 +99,8 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   const taskLinkBaseUrl = async (): Promise<string> =>
     (await deps.resolveLinkBaseUrl?.()) ?? appEnv.APP_URL.replace(/\/$/, '');
 
-  const resolveAssigneeAgent = async (assigneeAgentId?: string | null) => {
-    if (!assigneeAgentId) return { success: true } as const;
-
-    const exists = await agentModel().existsById(assigneeAgentId);
-    if (exists) return { success: true } as const;
-
-    return {
-      content: `Assignee agent not found: ${assigneeAgentId}`,
-      success: false,
-    } as const;
-  };
-
-  // Human-readable label for a member assignee in tool output: "Alice (usr_1)".
-  // Falls back to the bare id when no db is wired (unit tests) or lookup fails.
-  const resolveMemberLabel = async (assigneeUserId: string): Promise<string> => {
-    if (!deps.db) return assigneeUserId;
-    try {
-      const [user] = await UserModel.getDisplayInfoByIds(deps.db, [assigneeUserId]);
-      const name = user?.fullName?.trim() || user?.username?.trim();
-      return name ? `${name} (${assigneeUserId})` : assigneeUserId;
-    } catch {
-      return assigneeUserId;
-    }
-  };
-
-  // Assignment ping (Linear-style), mirroring `task.create` in the router: the
-  // runtime calls TaskService directly (to persist `context.origin`), so the
-  // router's notify hook never fires for tool-created tasks. Delivered after
-  // the response as best-effort work — the `@/business` slot defaults to a
-  // no-op, and a rejecting implementation must not become an unhandled
-  // rejection. Silent for self-assignment; the assignee lock already
-  // guarantees the member can open the task (private tasks cannot be assigned
-  // to anyone but their creator).
-  const notifyMemberAssigned = (task: {
-    assigneeUserId: string | null;
-    id: string;
-    identifier: string;
-    name: string | null;
-  }) => {
-    const { assigneeUserId } = task;
-    if (!assigneeUserId || !deps.userId || assigneeUserId === deps.userId) return;
-    const params = {
-      actorUserId: deps.userId,
-      assigneeUserId,
-      taskId: task.id,
-      taskIdentifier: task.identifier,
-      taskName: task.name,
-      workspaceId: deps.workspaceId,
-    };
-    after(async () => {
-      try {
-        await notifyTaskAssigned(params);
-      } catch (error) {
-        console.error('[task-runtime] Failed to send assignment notification', error);
-      }
-    });
-  };
+  const { notifyMemberAssigned, resolveAssigneeAgent, resolveMemberLabel } =
+    createTaskAssigneeHelpers(deps);
 
   type CreateTaskArgs = {
     instruction: string;
@@ -193,15 +138,18 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     // Pre-resolve parent identifier so we can surface a tool-friendly error
     // and label, and pass the resolved id straight through to the service.
     let parentTaskId: string | undefined;
+    let projectId = deps.projectId;
     if (args.parentIdentifier) {
       const parent = await taskModel().resolve(args.parentIdentifier);
       if (!parent)
         return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
       parentTaskId = parent.id;
       parentLabel = parent.identifier;
+      // A subtask follows its parent's project, which the service enforces.
+      projectId = parent.projectId ?? undefined;
     }
 
-    const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
+    const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, projectId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
     // Capture where this task was spawned from so the lifecycle can later
@@ -234,6 +182,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         name: args.name,
         parentTaskId,
         priority: args.priority,
+        projectId: parentTaskId ? undefined : projectId,
         sortOrder: args.sortOrder,
       });
     } catch (error) {
@@ -417,7 +366,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         changes.push(`name → "${args.name}"`);
       }
       if (args.assigneeAgentId !== undefined) {
-        const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
+        const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, task.projectId);
         if (!assigneeResult.success) return assigneeResult;
 
         updateData.assigneeAgentId = args.assigneeAgentId;
@@ -990,6 +939,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
       agentId,
       assistantMessageId,
       operationId,
+      projectId: context.projectId,
       rootOperationId: context.rootOperationId ?? operationId,
       resolveLinkBaseUrl,
       scope,

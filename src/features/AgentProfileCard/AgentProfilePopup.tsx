@@ -1,6 +1,6 @@
 'use client';
 
-import { agentDisplayName, type AgentItem } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import {
   ActionIcon,
   createStaticStyles,
@@ -14,7 +14,6 @@ import { SkillsIcon } from '@lobehub/ui/icons';
 import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { ModelIcon } from '@/components/LobeIcons';
 import { ArticleSkeleton } from '@/components/Skeleton';
@@ -22,14 +21,16 @@ import ModelSelect from '@/features/ModelSelect';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { agentProfileKeys } from '@/libs/swr/keys';
-import { agentService } from '@/services/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentProfileCard from '.';
 import { resolveAgentRuntimeLabel } from './runtime';
+import {
+  type AgentProfilePreview as AgentPreview,
+  useAgentProfileDetail,
+} from './useAgentProfileDetail';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
@@ -58,19 +59,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
 }));
-
-type AgentPreview = Pick<
-  AgentItem,
-  'avatar' | 'backgroundColor' | 'description' | 'model' | 'name' | 'provider' | 'title'
->;
-
-interface FetchedAgent extends Partial<AgentPreview> {
-  agencyConfig?: { heterogeneousProvider?: { type?: string | null } | null } | null;
-  files?: unknown[];
-  id?: string;
-  knowledgeBases?: unknown[];
-  plugins?: string[];
-}
 
 interface AgentProfilePopupProps extends PropsWithChildren {
   /** Prefilled data for instant render; fetched data overrides once loaded. */
@@ -101,11 +89,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
     const listEntry = useHomeStore(homeAgentListSelectors.getAgentById(agentId));
 
-    const { data: fetched, isLoading } = useSWR(
-      open && canConfigure ? agentProfileKeys.detail(agentId) : null,
-      () => agentService.getAgentConfigById(agentId) as Promise<FetchedAgent | null>,
-      { revalidateOnFocus: false },
-    );
+    const { detail: fetched, isLoading } = useAgentProfileDetail(agentId, open && !!canConfigure);
 
     const runtimeLabel = resolveAgentRuntimeLabel({
       fetchedType: fetched?.agencyConfig?.heterogeneousProvider?.type,

@@ -77,6 +77,19 @@ describe('normalizeChatMessageError', () => {
     expect(result.body).toMatchObject({ ...providerBody, traceId: 'trace-1' });
   });
 
+  it('keeps hook display fields on a typed stream error payload', () => {
+    const providerBody = { code: 500, message: 'Internal error', provider: 'lobehub' };
+    const result = normalizeChatMessageError({
+      _responseBody: { traceId: 'trace-1' },
+      body: providerBody,
+      message: 'Internal error',
+      type: 'ProviderBizError',
+    });
+
+    expect(result.body).toEqual({ ...providerBody, traceId: 'trace-1' });
+    expect(result).not.toHaveProperty('_responseBody');
+  });
+
   it('keeps hook display fields on a plain Error', () => {
     const error = Object.assign(new TypeError('terminated'), {
       _responseBody: { traceId: 'trace-1' },

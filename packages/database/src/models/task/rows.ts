@@ -300,6 +300,67 @@ export const updateStatusIfCurrent = async (
   return task ?? null;
 };
 
+/** `context.completion.requestedByOperationId` — the run a deferred completion waits for. */
+const completionRequest = sql`${tasks.context} -> 'completion' ->> 'requestedByOperationId'`;
+const withoutCompletionRequest = sql`jsonb_set(${tasks.context}, '{completion,requestedByOperationId}', 'null'::jsonb)`;
+
+/**
+ * Completes a running task whose deferred completion `operationId` still holds,
+ * consuming the request in the same write. Returns null when the request was
+ * withdrawn (or the task left `running`) first.
+ */
+export const completeIfCompletionRequested = async (
+  ctx: TaskModelContext,
+  id: string,
+  operationId: string,
+): Promise<TaskItem | null> => {
+  const [task] = await ctx.db
+    .update(tasks)
+    .set({
+      completedAt: new Date(),
+      context: withoutCompletionRequest,
+      error: null,
+      status: 'completed',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tasks.id, id),
+        eq(tasks.status, 'running'),
+        sql`${completionRequest} = ${operationId}`,
+        taskOwnership(ctx),
+      ),
+    )
+    .returning();
+
+  return task ?? null;
+};
+
+/**
+ * Withdraws a running task's deferred completion by `operationId`. Returns
+ * false when the run already consumed it (or the task left `running`).
+ */
+export const withdrawCompletionRequest = async (
+  ctx: TaskModelContext,
+  id: string,
+  operationId: string,
+): Promise<boolean> => {
+  const updated = await ctx.db
+    .update(tasks)
+    .set({ context: withoutCompletionRequest, updatedAt: new Date() })
+    .where(
+      and(
+        eq(tasks.id, id),
+        eq(tasks.status, 'running'),
+        sql`${completionRequest} = ${operationId}`,
+        taskOwnership(ctx),
+      ),
+    )
+    .returning({ id: tasks.id });
+
+  return updated.length > 0;
+};
+
 export const batchUpdateStatus = async (
   ctx: TaskModelContext,
   ids: string[],

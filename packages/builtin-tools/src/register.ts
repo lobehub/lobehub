@@ -29,6 +29,7 @@ import {
   BrowserManifest,
   BrowserRenders,
 } from '@lobechat/builtin-tool-browser/client';
+import { CanvasInspectors, CanvasManifest } from '@lobechat/builtin-tool-canvas/client';
 import {
   ClaudeCodeApiName,
   ClaudeCodeIdentifier,
@@ -367,6 +368,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+    [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,

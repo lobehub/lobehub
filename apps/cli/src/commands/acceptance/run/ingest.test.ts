@@ -331,7 +331,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       hint: 'LOBEHUB_WORKSPACE_ID=workspace-target',
       target: 'workspace-target',
     },
-    { current: 'workspace-current', hint: 'lh workspace use --personal', target: null },
+    { current: 'workspace-current', hint: 'LOBEHUB_WORKSPACE_ID=personal', target: null },
   ])(
     'rejects scope $current → $target before any remote writes',
     async ({ current, target, hint }) => {

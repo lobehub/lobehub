@@ -116,10 +116,14 @@ vi.mock('@/server/services/file', () => ({
   }),
 }));
 
-// Topic creation canonicalizes agent/session through the DB; the guard under
+// Creation canonicalizes agent/session through the DB; the guard under
 // test runs after that step, so short-circuit it.
 vi.mock('../_helpers/resolveContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  resolveContext: vi.fn(async (input: { agentId?: string; topicId?: string }) => ({
+    ...input,
+    sessionId: 'session-1',
+  })),
   resolveContextWithAgentId: vi.fn(async (input: { agentId?: string }) => ({
     agentId: input.agentId,
     sessionId: 'session-1',

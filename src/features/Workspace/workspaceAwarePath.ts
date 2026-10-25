@@ -1,5 +1,7 @@
 import type { NavigateOptions } from 'react-router';
 
+import { parseRootSegment, WORKSPACE_MIRRORED_ROOT_SEGMENTS } from './rootSegments';
+
 export interface WorkspaceAwareNavigateOptions extends NavigateOptions {
   /** When true, navigate to the literal `to` path without applying the workspace prefix. */
   escape?: boolean;
@@ -42,6 +44,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'audit-log',
   'billing',
   'budget',
+  // Personal chat-assist preferences, reachable by every member.
+  'chat-preference',
   'connector',
   'credential',
   // Legacy alias for `credential` — the routers keep a redirect, so prefixed
@@ -49,6 +53,7 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'creds',
   'credits',
   'devices',
+  'drive',
   'environments',
   'general',
   'hotkey',
@@ -70,37 +75,12 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   // deep-links still land on `/:slug/settings/statistics`.
   'stats',
   'storage',
+  'subscription-accounts',
   'teams',
   'usage',
 ]);
 
 const SETTINGS_PREFIX_REGEX = /^\/settings\/([^/?#]+)/;
-const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
-
-const WORKSPACE_MIRRORED_FIRST_SEGMENTS = new Set([
-  'agent',
-  'agents',
-  'community',
-  'eval',
-  // Top-level goal detail lives beside task/tasks in the shared main area.
-  'goal',
-  'group',
-  'image',
-  'memory',
-  'page',
-  'project',
-  'projects',
-  'resource',
-  'settings',
-  'task',
-  'tasks',
-  'video',
-]);
-
-const parseFirstSegment = (pathname: string): string | null => {
-  const match = pathname.match(FIRST_SEGMENT_REGEX);
-  return match ? match[1] : null;
-};
 
 /**
  * Returns `true` for `/settings/<tab>` where `<tab>` is NOT in
@@ -136,8 +116,8 @@ export const buildWorkspaceAwarePath = (
   if (isPersonalSettingsPath(to)) return to;
   if (to === `/${activeSlug}` || to.startsWith(`/${activeSlug}/`)) return to;
 
-  const firstSegment = parseFirstSegment(to);
-  if (firstSegment && !WORKSPACE_MIRRORED_FIRST_SEGMENTS.has(firstSegment)) return to;
+  const firstSegment = parseRootSegment(to);
+  if (firstSegment && !WORKSPACE_MIRRORED_ROOT_SEGMENTS.has(firstSegment)) return to;
 
   return `/${activeSlug}${to}`;
 };

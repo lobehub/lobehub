@@ -50,7 +50,7 @@ export function registerModelCommand(program: Command) {
     .option('--enabled', 'Only show enabled models')
     .option(
       '--type <type>',
-      'Filter by model type (chat|embedding|tts|asr|image|video|text2music|realtime)',
+      'Filter by model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
     )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
@@ -148,7 +148,7 @@ export function registerModelCommand(program: Command) {
     .option('--display-name <name>', 'Display name')
     .option(
       '--type <type>',
-      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime)',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
       'chat',
     )
     .action(
@@ -174,7 +174,10 @@ export function registerModelCommand(program: Command) {
     .description('Update model info')
     .requiredOption('--provider <providerId>', 'Provider ID')
     .option('--display-name <name>', 'Display name')
-    .option('--type <type>', 'Model type (chat|embedding|tts|asr|image|video|text2music|realtime)')
+    .option(
+      '--type <type>',
+      'Model type (chat|embedding|tts|asr|image|video|text2music|realtime|decision)',
+    )
     .action(
       async (id: string, options: { displayName?: string; provider: string; type?: string }) => {
         if (!options.displayName && !options.type) {

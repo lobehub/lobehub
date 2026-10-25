@@ -31,6 +31,7 @@ import {
 import {
   getReviewSummaryState,
   GIT_REVIEW_MAX_PERSISTED_BYTES,
+  gitLinkedPRKey,
   gitLinkedPRResource,
   gitPullRequestActivityResource,
   gitPullRequestDetailResource,
@@ -613,6 +614,28 @@ describe('Review / PR tab replicas', () => {
 
       expect(gitService.getLinkedPullRequest).not.toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
+    });
+  });
+
+  describe('linked PR key', () => {
+    it('shares the composer row when a topic has no recorded PR, and splits it when it has one', () => {
+      const composer = { branch: 'feat/x', deviceId: 'device-1', path: '/repo' };
+
+      expect(gitLinkedPRKey({ ...composer, pullRequestNumber: undefined })).toBe(
+        gitLinkedPRKey(composer),
+      );
+      // A topic that recorded PR #7 asks `gh` about that PR, not "the PR of
+      // this branch": its answer must not land on the composer's row.
+      expect(gitLinkedPRKey({ ...composer, pullRequestNumber: 7 })).not.toBe(
+        gitLinkedPRKey(composer),
+      );
+      expect(gitLinkedPRResource.syncKey!({ ...composer, pullRequestNumber: 7 })).toEqual([
+        'device:gitLinkedPR',
+        'device-1',
+        '/repo',
+        'feat/x',
+        7,
+      ]);
     });
   });
 });

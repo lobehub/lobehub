@@ -132,6 +132,8 @@ export interface GlobalServerConfig {
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
+  /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */
+  deviceGatewayConfigured?: boolean;
   /**
    * Public Device Gateway base URL (`DEVICE_GATEWAY_PUBLIC_URL`). Absent when not
    * configured; clients then keep the address they manage themselves.
@@ -183,15 +185,6 @@ export interface GlobalServerConfig {
    * Undefined means "not configured": the default (64) applies.
    */
   toolNameMaxLength?: number;
-  /**
-   * How the widget sandbox encodes the manifest's network allowlist
-   * (`WIDGET_SANDBOX_NETWORK_FORMAT`): `allowlist` when the Worker restricts
-   * egress to the declared hosts, `boolean` — or absent, the deployed
-   * Worker's only format — when the sandbox only gets an on/off switch and
-   * cannot enforce hosts. The publish review reads this to disclose
-   * unrestricted egress instead of presenting the allowlist as enforced.
-   */
-  widgetSandboxNetworkFormat?: 'allowlist' | 'boolean';
 }
 
 export interface GlobalBillboardItemLocaleFields {

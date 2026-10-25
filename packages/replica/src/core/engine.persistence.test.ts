@@ -683,3 +683,48 @@ describe('useSync pins the entry it shows', () => {
     expect(Object.keys(store.getState().lists)).toEqual(['c']);
   });
 });
+
+describe('entity patches of unloaded rows', () => {
+  it('writes a `null` the entity adapter maps to as a value, and drops the row only on `undefined`', async () => {
+    resetScope();
+    const storage = createStorage();
+    const setup = () => {
+      const resource = defineReplica<ListParams, Item[] | null>({
+        key: ({ id }) => id,
+        name: 'list',
+        query: ({ q }) => ({ q }),
+        scope,
+        storage: storage.storage,
+        version: 1,
+      });
+      const host = createHost<Item[] | null>();
+      const engine = createReplicaEngine(resource, {
+        // `null` is a real value of this resource: "cleared", not "gone".
+        entity: {
+          has: (data, id) => !!data?.some((entry) => entry.id === id),
+          map: (data, id, fn) => {
+            if (!data?.some((entry) => entry.id === id)) return data;
+            const next = data.map((entry) => (entry.id === id ? fn(entry) : entry));
+            if (next.includes(undefined)) return id === 'gone' ? undefined : null;
+            return next as Item[];
+          },
+        },
+        port: host.port,
+      });
+      return engine;
+    };
+    const first = setup();
+    first.replace({ id: 'a' }, [item('cleared')]);
+    first.replace({ id: 'b' }, [item('gone')]);
+    await flush();
+
+    // A fresh session holds neither entry in memory, so both go through storage.
+    const engine = setup();
+    await engine.removeEntity('cleared');
+    await engine.removeEntity('gone');
+    await flush();
+
+    expect(storage.rows.get(`${SCOPE}|a?{}`)?.data).toBeNull();
+    expect(storage.rows.has(`${SCOPE}|b?{}`)).toBe(false);
+  });
+});

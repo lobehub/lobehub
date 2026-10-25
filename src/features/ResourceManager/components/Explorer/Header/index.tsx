@@ -13,7 +13,6 @@ import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selec
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
-import { FilesTabs } from '@/types/files';
 
 import AddButton from '../../Header/AddButton';
 import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
@@ -21,6 +20,7 @@ import SortDropdown from '../ToolBar/SortDropdown';
 import SourceFilter from '../ToolBar/SourceFilter';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
+import DriveCategoryTabs from './DriveCategoryTabs';
 import SearchInput from './SearchInput';
 
 /**
@@ -60,7 +60,7 @@ const Header = memo(() => {
   const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
   const batchTransferActions = useFileBatchTransferActions(selectCount);
 
-  // If no libraryId, show category name or "Resource" for All
+  // Outside a library the explorer is the drive: its header switches file types
   const leftContent = hasSelected ? (
     <Flexbox horizontal align={'center'} gap={8} style={{ marginLeft: 0 }}>
       {libraryId ? (
@@ -163,10 +163,8 @@ const Header = memo(() => {
       />
     </Flexbox>
   ) : !libraryId ? (
-    <Flexbox style={{ marginLeft: 8 }}>
-      {category === FilesTabs.All
-        ? t('resource', { ns: 'file' })
-        : t(`tab.${category as FilesTabs}` as any, { ns: 'file' })}
+    <Flexbox style={{ marginLeft: 4 }}>
+      <DriveCategoryTabs />
     </Flexbox>
   ) : (
     <Flexbox horizontal align={'center'} gap={4} style={{ marginLeft: 8 }}>

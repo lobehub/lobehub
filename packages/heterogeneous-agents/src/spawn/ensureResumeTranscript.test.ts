@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   ensureClaudeCodeResumeTranscript,
+  findClaudeCodeTranscriptPath,
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
 
@@ -90,6 +91,25 @@ describe('ensureClaudeCodeResumeTranscript', () => {
     expect(res.written).toBe(false);
     expect(res.reason).toBe('exists');
     expect(await readFile(p, 'utf8')).toContain('"original":true');
+  });
+
+  it('finds the live transcript created under another cwd instead of rebuilding', async () => {
+    const worktree = path.join(home, 'wt-feature');
+    await mkdir(worktree);
+    const p = (await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId: SESSION_ID }))!;
+    await mkdir(path.dirname(p), { recursive: true });
+    await writeFile(p, '{"type":"user","original":true}\n', 'utf8');
+
+    const res = await ensureClaudeCodeResumeTranscript({
+      cwd: worktree,
+      home,
+      messages,
+      sessionId: SESSION_ID,
+    });
+    expect(res).toEqual({ path: p, reason: 'exists', written: false });
+    expect(await findClaudeCodeTranscriptPath({ cwd: worktree, home, sessionId: SESSION_ID })).toBe(
+      p,
+    );
   });
 
   it('no-ops (does not write) when there are no messages', async () => {

@@ -133,7 +133,8 @@ export const decide = async (c: ReviewContext) => {
   if (body.error) return body.error;
   const { note, verdict } = body.data;
   const { acceptance, can } = c.get('access');
-  if (!can.decide) return reviewError(c, 403, 'FORBIDDEN', 'Not allowed to decide this acceptance');
+  if (!(verdict === 'accept' ? can.decide : can.reject))
+    return reviewError(c, 403, 'FORBIDDEN', 'Not allowed to decide this acceptance');
 
   const open = verdict === 'accept' ? ['delivered'] : ['delivered', 'errored'];
   if (!open.includes(acceptance.status))

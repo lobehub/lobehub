@@ -7,7 +7,9 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
+import { GoalTopicHandoffService } from '@/server/services/goal/topicHandoff';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
@@ -48,22 +50,34 @@ export const updateRouter = router({
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
-      const { agentId, ...restValue } = input.value;
-      if (agentId) await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId }]);
-
-      // If agentId is provided, resolve to sessionId
-      let resolvedSessionId = restValue.sessionId;
-      if (agentId && !resolvedSessionId) {
-        const resolved = await resolveContext(
-          { agentId },
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId ?? undefined,
-        );
-        resolvedSessionId = resolved.sessionId ?? undefined;
-      }
-
-      return ctx.topicModel.update(input.id, { ...restValue, sessionId: resolvedSessionId });
+      const { agentId, sessionId, ...restValue } = input.value;
+      if (!agentId && !sessionId) return ctx.topicModel.update(input.id, restValue);
+      const resolved = await resolveContext(
+        { agentId, sessionId },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+      return ctx.topicModel.update(input.id, {
+        ...restValue,
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
+      });
+    }),
+  /**
+   * Clear the unread mark only while the topic is still unread — see
+   * `TopicModel.markRead`. Returns the cleared row, or `null` when the status
+   * had already moved on. Same co-editing rules as `updateTopic`.
+   */
+  markTopicRead: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      const [cleared] = await ctx.topicModel.markRead(input.id);
+      return cleared ?? null;
     }),
   /**
    * Switch the topic's pinned model and its effort pin atomically — see
@@ -125,8 +139,22 @@ export const updateRouter = router({
       // `assertCreatorTopicTargets` for why this guard sits at the RPC
       // boundary rather than in the model defaults.
       await assertCreatorTopicTargets(guardCtx(ctx), input.topicIds);
-
-      return ctx.topicRepo.batchMoveToAgent(input.topicIds, input.targetAgentId);
+      // A goal supervised from a moved topic follows it to the target agent;
+      // left on the previous agent it would keep dispatching there. The move
+      // and every handoff commit together, so a failed handoff never leaves a
+      // topic moved without its goal. Moving first locks the topic rows, and
+      // the goals bound to them are locked and checked after it.
+      const workspaceId = ctx.workspaceId ?? undefined;
+      return ctx.serverDB.transaction(async (tx) => {
+        await new TopicRepository(tx, ctx.userId, workspaceId).batchMoveToAgent(
+          input.topicIds,
+          input.targetAgentId,
+        );
+        const goalHandoff = new GoalTopicHandoffService(tx, ctx.userId, workspaceId);
+        const goals = await goalHandoff.lockFollowing(input.topicIds, input.targetAgentId);
+        for (const goal of goals) assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        return { movedGoalIds: await goalHandoff.handOver(goals, input.targetAgentId) };
+      });
     }),
   cancelRateLimitContinuation: topicProcedure
     .use(withScopedPermission('topic:update'))

@@ -1,4 +1,5 @@
 import { HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR } from '@lobechat/heterogeneous-agents';
+import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   executeToolCall: vi.fn(),
   finalizeHeteroDispatchError: vi.fn(),
   publishAgentRuntimeInit: vi.fn(),
+  readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
@@ -60,7 +62,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mocks.dispatchAgentRun,
     executeToolCall: mocks.executeToolCall,
-    readDeviceSystemInfo: vi.fn(),
+    readDeviceSystemInfo: mocks.readDeviceSystemInfo,
   },
 }));
 
@@ -491,6 +493,68 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       heteroType: 'claude-code',
     });
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
+  });
+
+  it('spawns in the source repo and names the active worktree in the context', async () => {
+    // The agent created this worktree last turn and may have removed it since:
+    // spawning in it failed every later turn with working_directory_not_found.
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/repo-wt-21058' },
+      path: '/repo',
+      repoType: 'github' as const,
+    };
+    const { deps, topicModel } = createDeps();
+    topicModel.findById.mockResolvedValue({
+      metadata: { boundDeviceId: 'dev-1', workingDirectory: '/repo', workingDirectoryConfig },
+    });
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(dispatched.cwd).toBe('/repo');
+    expect(dispatched.systemContext).toContain('/repo-wt-21058');
+    // The worktree stays on the topic as the selected one; only the spawn cwd moved.
+    expect(deps.bindTopicWorkingDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ config: workingDirectoryConfig }),
+    );
+  });
+
+  it('settles a dispatch timeout as a device timeout, even when the device is now offline', async () => {
+    // Whether the run started is unknowable after a timeout: the device may
+    // have received it before dropping. Asking the device now must not turn
+    // "may still be starting" into "never started".
+    const raw = JSON.stringify({ error: 'TIMEOUT', success: false, timeSinceHeartbeatMs: 70_000 });
+    mocks.dispatchAgentRun.mockResolvedValueOnce({ error: raw, success: false });
+    mocks.readDeviceSystemInfo.mockResolvedValue({ ok: false, reason: 'DEVICE_OFFLINE' });
+    const { deps } = createDeps();
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
+      deps,
+      expect.objectContaining({
+        detail: raw,
+        errorType: ChatErrorType.DeviceResponseTimeout,
+        message: humanizeHeteroDispatchError('DEVICE_RESPONSE_TIMEOUT'),
+      }),
+    );
+    expect(mocks.readDeviceSystemInfo).not.toHaveBeenCalled();
   });
 
   it('never routes a device-only provider to the cloud sandbox', async () => {

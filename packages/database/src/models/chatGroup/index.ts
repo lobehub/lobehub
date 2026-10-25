@@ -515,6 +515,19 @@ export class ChatGroupModel {
     });
   }
 
+  async getGroupAgentsByGroupIds(groupIds: string[]): Promise<ChatGroupAgentItem[]> {
+    if (groupIds.length === 0) return [];
+
+    return this.db.query.chatGroupsAgents.findMany({
+      orderBy: [chatGroupsAgents.order, chatGroupsAgents.createdAt, chatGroupsAgents.agentId],
+      where: and(
+        inArray(chatGroupsAgents.chatGroupId, groupIds),
+        this.agentsOwnership(),
+        this.memberAgentVisibleExists(),
+      ),
+    });
+  }
+
   /**
    * Read-only roster of a group's **enabled** agents joined with their agent meta
    * (title/description) and membership role, ordered by member order.

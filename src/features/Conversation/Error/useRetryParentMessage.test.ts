@@ -68,4 +68,17 @@ describe('useRetryParentMessage', () => {
     expect(result.current.disabled).toBe(true);
     expect(storeMock.regenerateUserMessage).not.toHaveBeenCalled();
   });
+
+  it('should retry the supplied parent when the id is a nested group block', async () => {
+    storeMock.displayMessages = [];
+    const { result } = renderHook(() => useRetryParentMessage('group-child-block', 'group-parent'));
+
+    await act(async () => {
+      await result.current.retryParentMessage();
+    });
+
+    expect(result.current.disabled).toBe(false);
+    expect(result.current.parentId).toBe('group-parent');
+    expect(storeMock.regenerateUserMessage).toHaveBeenCalledWith('group-parent');
+  });
 });

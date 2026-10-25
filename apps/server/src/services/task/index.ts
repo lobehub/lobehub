@@ -17,6 +17,7 @@ import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { writeKeepingArchivedIdle } from './archiveGuard';
+import { armScheduleOnColumnWrite } from './armScheduleOnColumnWrite';
 import { armScheduleOnCreate } from './armScheduleOnCreate';
 import type { TaskServiceDeps } from './deps';
 import { TaskDetailService } from './detail';
@@ -133,7 +134,7 @@ export class TaskService {
     }
 
     if (createData.projectId) {
-      const project = await this.projectModel.findManageableById(createData.projectId);
+      const project = await this.projectModel.findById(createData.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
 
@@ -674,14 +675,45 @@ export class TaskService {
     options: Parameters<TaskModel['updateWithLog']>[3] = {},
   ): Promise<TaskItem | null> {
     return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
-      writeKeepingArchivedIdle(db, (tx) =>
-        new TaskModel(tx, this.userId, this.workspaceId).updateWithLog(
-          taskId,
-          data,
-          actor,
-          options,
-        ),
-      ),
+      writeKeepingArchivedIdle(db, async (tx) => {
+        const model = new TaskModel(tx, this.userId, this.workspaceId);
+        // A schedule write that carries schedule columns but no status must arm
+        // the run-count window in the SAME write that makes the schedule
+        // dispatchable (vent T-634). The stamp is decided against the row as it
+        // exists right before this update, read under the same row lock the
+        // write itself uses, so a concurrent dispatcher can never observe a
+        // "pattern set, window unstamped" row and replay a grace-window
+        // occurrence. A status transition stamps inside `updateStatus` instead,
+        // so the arming is skipped there to avoid double-stamping.
+        if (
+          !data.status &&
+          (data.automationMode !== undefined || data.schedulePattern !== undefined)
+        ) {
+          await model.lockForUpdate(taskId);
+          const current = await model.findById(taskId);
+          if (current) {
+            // `context` is a whole-column replace: when the caller ships their
+            // own pocket it is the base, otherwise the row as locked. The
+            // schedule columns must NOT use `??`: the tRPC and REST schemas
+            // use an explicit `null` to clear a field, and `??` would swap
+            // that clear for the locked row's old value — the probe would
+            // stamp a window for a row the write is about to disable, and a
+            // later re-enable would preserve that stale stamp and replay an
+            // occurrence from the disabled interval. Only `undefined` means
+            // "not part of this patch".
+            const arming = armScheduleOnColumnWrite({
+              automationMode:
+                data.automationMode !== undefined ? data.automationMode : current.automationMode,
+              context: data.context ?? current.context,
+              schedulePattern:
+                data.schedulePattern !== undefined ? data.schedulePattern : current.schedulePattern,
+              status: current.status,
+            });
+            if (arming.context) data.context = arming.context;
+          }
+        }
+        return model.updateWithLog(taskId, data, actor, options);
+      }),
     );
   }
 

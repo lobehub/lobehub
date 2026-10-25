@@ -1,6 +1,10 @@
 import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import type { UserSettings } from '@lobechat/types';
-import { UserPreferenceSchema, UserSettingsSchema } from '@lobechat/types';
+import {
+  PERSONAL_SYSTEM_AGENT_KEYS,
+  UserPreferenceSchema,
+  UserSettingsSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -31,6 +35,30 @@ export const settingsRouter = router({
   updatePreference: userProcedure.input(UserPreferenceSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updatePreference(input);
   }),
+  /**
+   * Personal chat-assist preferences (follow-up chips, input completion). They
+   * act on the caller's own chat surface, so — unlike the rest of
+   * `systemAgent` — no workspace permission gates them, and they patch only
+   * their own entry instead of rewriting the whole column.
+   */
+  updatePersonalSystemAgent: userProcedure
+    .input(
+      z
+        .object({
+          key: z.enum(PERSONAL_SYSTEM_AGENT_KEYS),
+          value: z
+            .object({
+              enabled: z.boolean().optional(),
+              model: z.string().trim().min(1).max(256).optional(),
+              provider: z.string().trim().min(1).max(256).optional(),
+            })
+            .strict(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.userModel.mergeSystemAgentItemSetting(input.key, input.value);
+    }),
   updateSettings: userProcedure.input(UserSettingsSchema).mutation(async ({ ctx, input }) => {
     const { keyVaults, ...res } = input as Partial<UserSettings>;
     // presence, not truthiness: `keyVaults: null` is an explicit credential clear

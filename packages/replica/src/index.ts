@@ -5,5 +5,8 @@ export * from './core/entityAdapters';
 export * from './core/keys';
 export * from './core/paging';
 export * from './core/reducer';
+export * from './core/settle';
+export * from './core/storedKeys';
 export type * from './core/types';
 export * from './core/writeQueue';
+export * from './storage';

@@ -123,6 +123,7 @@ export interface SendMessageServerParams {
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];
+    onlyMine?: boolean;
   };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
@@ -213,6 +214,7 @@ export const AiSendMessageServerSchema = z.object({
       excludeStatuses: z.array(z.string()).optional(),
       excludeTriggers: z.array(z.string()).optional(),
       includeTriggers: z.array(z.string()).optional(),
+      onlyMine: z.boolean().optional(),
     })
     .optional(),
   topicPageSize: z.number().int().min(1).max(100).optional(),

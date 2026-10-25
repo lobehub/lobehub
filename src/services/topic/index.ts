@@ -116,6 +116,7 @@ export class TopicService {
       groupId: params.groupId,
       includeTriggers: params.includeTriggers,
       isInbox: params.isInbox,
+      onlyMine: params.onlyMine,
       pageSize: params.pageSize,
       sortBy: params.sortBy,
       triggers: params.triggers,
@@ -168,11 +169,17 @@ export class TopicService {
     return result.data.hasFiles;
   };
 
-  searchTopics = (keywords: string, agentId?: string, groupId?: string): Promise<ChatTopic[]> => {
+  searchTopics = (
+    keywords: string,
+    agentId?: string,
+    groupId?: string,
+    onlyMine?: boolean,
+  ): Promise<ChatTopic[]> => {
     return lambdaClient.topic.searchTopics.query({
       agentId,
       groupId,
       keywords,
+      onlyMine: onlyMine || undefined,
     }) as any;
   };
 
@@ -193,6 +200,11 @@ export class TopicService {
 
   updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
+  };
+
+  /** `unread` → `active` only while the topic is still unread; `null` when it was not. */
+  markTopicRead = (id: string) => {
+    return lambdaClient.topic.markTopicRead.mutate({ id });
   };
 
   settleRunningOperation = (

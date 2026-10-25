@@ -60,6 +60,18 @@ export const defaultClients: ClientMetadata[] = [
   },
   {
     application_type: 'native',
+    client_id: 'toby',
+    client_name: 'toby',
+    grant_types: ['authorization_code', 'refresh_token'],
+    post_logout_redirect_uris: [],
+    // Universal-link callback: iOS only hands it to the app listed in the AASA webcredentials,
+    // so another app cannot impersonate toby the way it could with a custom scheme.
+    redirect_uris: desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/toby')),
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  },
+  {
+    application_type: 'native',
     client_id: 'lobehub-cli',
     client_name: 'LobeHub CLI',
     grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'],

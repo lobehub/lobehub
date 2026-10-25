@@ -2,13 +2,17 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  DocsPageSectionKey,
+  DocsPageSectionView,
   GlobalState,
   ModelDetailPanelExpandedKey,
+  ProjectListSortBy,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
 } from '../initialState';
 import {
+  DEFAULT_DOCS_PAGE_SECTION_VIEW,
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
   INITIAL_STATUS,
   MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
@@ -91,6 +95,15 @@ const collapsedTopicGroupKeys =
   (mode: TopicGroupMode) =>
   (s: GlobalState): string[] | undefined =>
     s.status.collapsedTopicGroupKeysByMode?.[mode];
+
+const docsPageSectionView =
+  (section: DocsPageSectionKey) =>
+  (s: GlobalState): DocsPageSectionView => {
+    const stored = s.status.docsPageSectionViews?.[section];
+    return stored
+      ? { ...DEFAULT_DOCS_PAGE_SECTION_VIEW, ...stored }
+      : DEFAULT_DOCS_PAGE_SECTION_VIEW;
+  };
 
 const projectTopicSubGroupMode =
   (groupId: string) =>
@@ -204,7 +217,6 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   SIDEBAR_SPACER_ID,
   'image',
   'community',
-  'pages',
   'memory',
 ];
 
@@ -446,6 +458,8 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   foldersFirst: true,
   order: 'asc',
 };
+const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
+  s.status.projectListSortBy ?? 'manual';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
@@ -497,6 +511,7 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
+  projectListSortBy,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
@@ -506,6 +521,7 @@ export const systemStatusSelectors = {
   disabledModelProvidersSortType,
   disabledModelsSortType,
   expandInputActionbar,
+  docsPageSectionView,
   filePanelWidth,
   getAgentSystemRoleExpanded,
   groupAgentBuilderPanelWidth,

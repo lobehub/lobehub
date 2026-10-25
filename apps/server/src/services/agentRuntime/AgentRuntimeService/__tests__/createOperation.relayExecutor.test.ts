@@ -300,11 +300,15 @@ describe('AgentRuntimeService', () => {
         }),
       );
 
-      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith('test-operation-1', {
-        agentConfig: mockParams.agentConfig,
-        modelRuntimeConfig: mockParams.modelRuntimeConfig,
-        userId: mockParams.userId,
-      });
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        {
+          agentConfig: mockParams.agentConfig,
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          userId: mockParams.userId,
+        },
+        expect.any(Object),
+      );
 
       expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith({
         operationId: 'test-operation-1',
@@ -314,6 +318,37 @@ describe('AgentRuntimeService', () => {
         priority: 'high',
         delay: 50,
       });
+    });
+
+    // Other clients of the user learn which conversation a run belongs to only
+    // from the gateway hub's `op_lifecycle`, which carries the init meta.
+    it('sends the run routing facts with the gateway init', async () => {
+      await service.createOperation({
+        ...mockParams,
+        appContext: {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          scope: 'main',
+          taskId: 'task_1',
+          threadId: 'thd_1',
+          topicId: 'tpc_1',
+        },
+        parentOperationId: 'op_parent',
+      } as any);
+
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.any(Object),
+        {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          parentOperationId: 'op_parent',
+          scope: 'main',
+          taskId: 'task_1',
+          threadId: 'thd_1',
+          topicId: 'tpc_1',
+        },
+      );
     });
 
     it('freezes the builder editing target on the run origin', async () => {
@@ -493,6 +528,7 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({ modelRuntimeConfig: { model: 'gpt-4' } }),
+        expect.any(Object),
       );
     });
 

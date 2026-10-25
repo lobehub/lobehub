@@ -22,6 +22,7 @@ import { auvRuntime } from './auv';
 import { briefRuntime } from './brief';
 import { browserRuntime } from './browser';
 import { calculatorRuntime } from './calculator';
+import { canvasRuntime } from './canvas';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { dashboardRuntime } from './dashboard';
@@ -89,6 +90,7 @@ registerRuntimes([
   taskRuntime,
   userInteractionRuntime,
   credsRuntime,
+  canvasRuntime,
   dashboardRuntime,
   groupAgentBuilderRuntime,
   groupManagementRuntime,

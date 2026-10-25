@@ -94,6 +94,7 @@ export class HomeRepository {
         description: agents.description,
         id: agents.id,
         name: agents.name,
+        model: agents.model,
         pinned: agents.pinned,
         slug: agents.slug,
         title: agents.title,
@@ -290,6 +291,7 @@ export class HomeRepository {
       description: string | null;
       id: string;
       name: string | null;
+      model: string | null;
       pinned: boolean | null;
       sessionGroupId: string | null;
       slug: string | null;
@@ -350,6 +352,7 @@ export class HomeRepository {
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
           name: a.name,
+          model: a.model,
           pinned: a.pinned ?? false,
           slug: a.slug,
           title: meta.title,
@@ -410,19 +413,23 @@ export class HomeRepository {
 
     for (const item of allItems) {
       const { groupId, isPrivate, ...sidebarItem } = item;
-      const cleanedItem = cleanObject(sidebarItem) as SidebarAgentItem;
+      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
+      const categoryId = groupId && validGroupIds.has(groupId) ? groupId : null;
+      const cleanedItem = {
+        ...cleanObject(sidebarItem),
+        groupId: categoryId,
+      } as SidebarAgentItem;
 
       if (item.pinned) {
         (isPrivate ? privatePinned : pinned).push(cleanedItem);
         continue;
       }
 
-      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
-      if (groupId && validGroupIds.has(groupId)) {
+      if (categoryId) {
         const bucket = isPrivate ? privateGroupedMap : groupedMap;
-        const existing = bucket.get(groupId) || [];
+        const existing = bucket.get(categoryId) || [];
         existing.push(cleanedItem);
-        bucket.set(groupId, existing);
+        bucket.set(categoryId, existing);
       } else if (isPrivate) {
         privateUngrouped.push(cleanedItem);
       } else {

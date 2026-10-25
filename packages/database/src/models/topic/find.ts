@@ -211,8 +211,13 @@ export const queryByKeyword = async (
   ctx: TopicModelContext,
   keyword: string,
   scope?: string | null | TopicKeywordScope,
+  { onlyMine }: { onlyMine?: boolean } = {},
 ): Promise<TopicItem[]> => {
   if (!keyword.trim()) return [];
+
+  // Mirrors the list's workspace "only mine" filter, so a search never brings
+  // back the other members' topics the list is hiding.
+  const onlyMineCondition = onlyMine ? eq(topics.userId, ctx.userId) : undefined;
 
   // Backward compatibility: a bare string / null second argument is treated
   // as the legacy `containerId` (sessionId or groupId).
@@ -251,6 +256,7 @@ export const queryByKeyword = async (
           ctx.ownership(),
           ctx.notShareVisitor(),
           scopeCondition,
+          onlyMineCondition,
           topicCandidateIds
             ? inJsonStringArray(topics.id, topicCandidateIds)
             : sql`${topics.title} @@@ ${bm25Query}`,
@@ -272,6 +278,7 @@ export const queryByKeyword = async (
           ctx.ownership(),
           ctx.notShareVisitor(),
           scopeCondition,
+          onlyMineCondition,
         ),
       )
       .groupBy(messages.topicId),

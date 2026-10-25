@@ -206,7 +206,28 @@ describe('buildGoalGraphView', () => {
 
     expect(view.byId.w1.isStale).toBe(true);
     expect(view.frontier[0]).toMatchObject({ kind: 'stale', rank: 0 });
-    expect(view.needsYou).toBe(1);
+    // It leads the list, but the coordinator restarts it on its own.
+    expect(view.needsYou).toBe(0);
+  });
+
+  it('reads a task held for a usage window as waiting for quota, not stalled', () => {
+    // The coordinator holds a refused Task until the reset and wakes itself up
+    // then. Its run has ended, so the heartbeat outlives the lease — read as a
+    // stall, the page put a failure badge and "needs you" on a Task that
+    // resumes by itself.
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+        quotaRetryAt: { w1: at(180) },
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1).toMatchObject({ isStale: false, quotaRetryAt: at(180) });
+    expect(isRunningNode(view.byId.w1)).toBe(false);
+    expect(view.frontier[0]).toMatchObject({ kind: 'quota', rank: 1 });
+    expect(view.needsYou).toBe(0);
   });
 
   it('reads a delivered task as verifying, not lost, while the judgment settles', () => {

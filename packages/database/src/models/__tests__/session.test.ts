@@ -3,7 +3,6 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { SessionItem } from '../../schemas';
 import {
   agents,
   agentsToSessions,
@@ -70,123 +69,6 @@ describe('SessionModel', () => {
       const result2 = await sessionModel.query({ current: 1, pageSize: 1 });
       expect(result2).toHaveLength(1);
       expect(result2[0].id).toBe('2');
-    });
-  });
-
-  describe('queryWithGroups', () => {
-    it('should return sessions grouped by group', async () => {
-      // Create test data
-      await serverDB.transaction(async (trx) => {
-        await trx.insert(users).values([{ id: '456' }]);
-        await trx.insert(sessionGroups).values([
-          { userId, name: 'Group 1', id: 'group1' },
-          { userId, name: 'Group 2', id: 'group2' },
-        ]);
-        await trx.insert(sessions).values([
-          { id: '1', userId, groupId: 'group1' },
-          { id: '2', userId, groupId: 'group1' },
-          { id: '23', userId, groupId: 'group1', pinned: true },
-          { id: '3', userId, groupId: 'group2' },
-          { id: '4', userId },
-          { id: '5', userId, pinned: true },
-          { id: '7', userId: '456' },
-        ]);
-      });
-
-      // Call the queryWithGroups method
-      const result = await sessionModel.queryWithGroups();
-
-      // Assert results
-      expect(result.sessions).toHaveLength(6);
-      expect(result.sessionGroups).toHaveLength(2);
-      expect(result.sessionGroups[0].id).toBe('group1');
-      expect(result.sessionGroups[0].name).toBe('Group 1');
-
-      expect(result.sessionGroups[1].id).toBe('group2');
-    });
-
-    it('should return empty groups if no sessions', async () => {
-      // Call the queryWithGroups method
-      const result = await sessionModel.queryWithGroups();
-
-      // Assert results
-      expect(result.sessions).toHaveLength(0);
-      expect(result.sessionGroups).toHaveLength(0);
-    });
-
-    it('should map group sessions with members correctly', async () => {
-      // Create a group session with multiple agents
-      await serverDB.transaction(async (trx) => {
-        // Create a group session
-        await trx.insert(sessions).values({
-          id: 'group-session-1',
-          userId,
-          type: 'group',
-          title: 'Test Group',
-          description: 'A test group session',
-          avatar: 'group-avatar',
-          backgroundColor: 'blue',
-        });
-
-        // Create agents
-        await trx.insert(agents).values([
-          { id: 'agent-1', userId, title: 'Agent 1', model: 'gpt-4' },
-          { id: 'agent-2', userId, title: 'Agent 2', model: 'gpt-3.5-turbo' },
-          { id: 'agent-3', userId, title: 'Agent 3', model: 'claude-2' },
-        ]);
-
-        // Link agents to the group session
-        await trx.insert(agentsToSessions).values([
-          { sessionId: 'group-session-1', agentId: 'agent-1', userId },
-          { sessionId: 'group-session-1', agentId: 'agent-2', userId },
-          { sessionId: 'group-session-1', agentId: 'agent-3', userId },
-        ]);
-      });
-
-      const result = await sessionModel.queryWithGroups();
-
-      // Verify group session mapping
-      expect(result.sessions).toHaveLength(1);
-      const groupSession = result.sessions[0] as any;
-
-      expect(groupSession.type).toBe('group');
-      expect(groupSession.meta).toEqual({
-        avatar: 'group-avatar',
-        backgroundColor: 'blue',
-        description: 'A test group session',
-        tags: undefined,
-        title: 'Test Group',
-      });
-
-      // Verify members are mapped correctly
-      expect(groupSession.members).toHaveLength(3);
-      expect(groupSession.members[0]).toMatchObject({
-        agentId: 'agent-1',
-        chatGroupId: 'group-session-1',
-        enabled: true,
-        order: 0,
-        role: 'participant',
-        title: 'Agent 1',
-        model: 'gpt-4',
-      });
-      expect(groupSession.members[1]).toMatchObject({
-        agentId: 'agent-2',
-        chatGroupId: 'group-session-1',
-        enabled: true,
-        order: 1,
-        role: 'participant',
-        title: 'Agent 2',
-        model: 'gpt-3.5-turbo',
-      });
-      expect(groupSession.members[2]).toMatchObject({
-        agentId: 'agent-3',
-        chatGroupId: 'group-session-1',
-        enabled: true,
-        order: 2,
-        role: 'participant',
-        title: 'Agent 3',
-        model: 'claude-2',
-      });
     });
   });
 
@@ -338,42 +220,6 @@ describe('SessionModel', () => {
     });
   });
 
-  describe('duplicate', () => {
-    it('should duplicate a session', async () => {
-      // Create a user and a session
-      await serverDB.transaction(async (trx) => {
-        await trx
-          .insert(sessions)
-          .values({ id: '1', userId, type: 'agent', title: 'Original Session', pinned: true });
-        await trx.insert(agents).values({ id: 'agent-1', userId, model: 'gpt-3.5-turbo' });
-        await trx.insert(agentsToSessions).values({ agentId: 'agent-1', sessionId: '1', userId });
-      });
-
-      // Call the duplicate method
-      const result = (await sessionModel.duplicate('1', 'Duplicated Session')) as SessionItem;
-
-      // Assert results
-      expect(result.id).not.toBe('1');
-      expect(result.userId).toBe(userId);
-      expect(result.type).toBe('agent');
-
-      const session = await sessionModel.findByIdOrSlug(result.id);
-
-      expect(session).toBeDefined();
-      expect(session?.title).toEqual('Duplicated Session');
-      expect(session?.pinned).toBe(true);
-      expect(session?.agent?.model).toEqual('gpt-3.5-turbo');
-    });
-
-    it('should return undefined if session does not exist', async () => {
-      // Call the duplicate method with a non-existent session ID
-      const result = await sessionModel.duplicate('non-existent-id');
-
-      // Assert results
-      expect(result).toBeUndefined();
-    });
-  });
-
   describe('update', () => {
     it('should update a session', async () => {
       // Create a test session
@@ -408,47 +254,6 @@ describe('SessionModel', () => {
       });
 
       expect(updatedSessions).toHaveLength(0);
-    });
-  });
-
-  describe('isSoleShellOfAgent', () => {
-    beforeEach(async () => {
-      await serverDB.insert(sessions).values([
-        { id: 's1', userId },
-        { id: 's2', userId },
-      ]);
-      await serverDB.insert(agents).values([
-        { id: 'a1', userId },
-        { id: 'a2', userId },
-      ]);
-    });
-
-    it("is true for the agent's one and only shell", async () => {
-      await serverDB.insert(agentsToSessions).values([{ agentId: 'a1', sessionId: 's1', userId }]);
-
-      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(true);
-    });
-
-    it('is false when the agent is linked to another session too', async () => {
-      await serverDB.insert(agentsToSessions).values([
-        { agentId: 'a1', sessionId: 's1', userId },
-        { agentId: 'a1', sessionId: 's2', userId },
-      ]);
-
-      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(false);
-    });
-
-    it('is false when the session also holds another agent', async () => {
-      await serverDB.insert(agentsToSessions).values([
-        { agentId: 'a1', sessionId: 's1', userId },
-        { agentId: 'a2', sessionId: 's1', userId },
-      ]);
-
-      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(false);
-    });
-
-    it('is false when the session is not linked to the agent at all', async () => {
-      expect(await sessionModel.isSoleShellOfAgent('s1', 'a1')).toBe(false);
     });
   });
 

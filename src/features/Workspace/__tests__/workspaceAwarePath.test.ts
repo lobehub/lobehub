@@ -40,6 +40,13 @@ describe('buildWorkspaceAwarePath', () => {
   // Regression: `/goal/:goalId` is mirrored under `/:workspaceSlug`, but the
   // prefix allowlist missed it — a copied workspace goal link (a goal with no
   // agent, e.g. a project goal) opened in the personal scope.
+  it('keeps acceptance reports inside the active workspace', () => {
+    expect(buildWorkspaceAwarePath('/acceptance', 'acme')).toBe('/acme/acceptance');
+    expect(buildWorkspaceAwarePath('/acceptance/acc_1/check/chk_1', 'acme')).toBe(
+      '/acme/acceptance/acc_1/check/chk_1',
+    );
+  });
+
   it('prefixes top-level goal paths', () => {
     expect(buildWorkspaceAwarePath('/goal/goal_1', 'acme')).toBe('/acme/goal/goal_1');
     expect(buildWorkspaceAwarePath('/goal', 'acme')).toBe('/acme/goal');

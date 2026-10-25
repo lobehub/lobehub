@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import {
   agentOperations,
+  agents,
+  chatGroups,
+  chatGroupsAgents,
   messages,
   pushLiveActivities,
   pushTokens,
@@ -13,13 +16,18 @@ import {
   workspaces,
 } from '@/database/schemas';
 
+import { ImSendRequestSchema } from '../../types/im.type';
 import { ImRestService } from '../im.service';
 
-const { execAgentMock } = vi.hoisted(() => ({ execAgentMock: vi.fn() }));
+const { execAgentMock, execGroupAgentMock } = vi.hoisted(() => ({
+  execAgentMock: vi.fn(),
+  execGroupAgentMock: vi.fn(),
+}));
 
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: class {
     execAgent = execAgentMock;
+    execGroupAgent = execGroupAgentMock;
   },
 }));
 
@@ -28,6 +36,10 @@ const USER = 'im-user';
 const OTHER = 'im-other';
 const TOPIC = 'tpc_im';
 const AGENT = 'agt_im';
+const GROUP = 'grp_im';
+const SUPERVISOR = 'agt_im_supervisor';
+const MEMBER = 'agt_im_member';
+const GROUP_TOPIC = 'tpc_im_group';
 
 const service = new ImRestService(db, USER);
 
@@ -63,13 +75,37 @@ const insertRun = (id: string, status: string, createdAt: string) =>
     userId: USER,
   });
 
+const insertGroup = async ({ supervisor = true }: { supervisor?: boolean } = {}) => {
+  await db.insert(agents).values([
+    { id: SUPERVISOR, userId: USER, virtual: true },
+    { id: MEMBER, userId: USER },
+    { id: AGENT, userId: USER },
+  ]);
+  await db.insert(chatGroups).values({ id: GROUP, title: 'crew', userId: USER });
+  await db
+    .insert(chatGroupsAgents)
+    .values([
+      ...(supervisor
+        ? [{ agentId: SUPERVISOR, chatGroupId: GROUP, role: 'supervisor', userId: USER }]
+        : []),
+      { agentId: MEMBER, chatGroupId: GROUP, role: 'participant', userId: USER },
+    ]);
+  await db
+    .insert(topics)
+    .values({ groupId: GROUP, id: GROUP_TOPIC, title: 'crew chat', userId: USER });
+};
+
 beforeEach(async () => {
   execAgentMock.mockReset();
+  execGroupAgentMock.mockReset();
   await db.delete(pushLiveActivities);
   await db.delete(pushTokens);
   await db.delete(agentOperations);
   await db.delete(messages);
   await db.delete(topics);
+  await db.delete(chatGroupsAgents);
+  await db.delete(chatGroups);
+  await db.delete(agents);
   await db.delete(workspaces);
   await db.delete(users);
   await db.insert(users).values([{ id: USER }, { id: OTHER }]);
@@ -272,6 +308,62 @@ describe('ImRestService.sync — whole-message delivery', () => {
     expect(again.state).toBe(during.state);
   });
 
+  it('carries the writing agent on each message and withholds the whole group turn', async () => {
+    await insertGroup();
+    const inGroup = { groupId: GROUP, topicId: GROUP_TOPIC };
+    await insertMessage('msg_u1', 'user', 'plan the trip', '2026-10-04T10:00:00.000100Z', {
+      ...inGroup,
+      agentId: SUPERVISOR,
+    });
+    await insertMessage('msg_sup', 'assistant', 'asking the crew', '2026-10-04T10:00:00.000300Z', {
+      ...inGroup,
+      agentId: SUPERVISOR,
+    });
+    await insertMessage('msg_mem', 'assistant', 'flights are boo', '2026-10-04T10:00:00.000400Z', {
+      ...inGroup,
+      agentId: MEMBER,
+    });
+    // The supervisor parks on the member call; the member runs as its child.
+    await db.insert(agentOperations).values([
+      {
+        createdAt: atUs('2026-10-04T10:00:00.000200Z') as unknown as Date,
+        id: 'op_sup',
+        status: 'waiting_for_async_tool',
+        topicId: GROUP_TOPIC,
+        userId: USER,
+      },
+      {
+        createdAt: atUs('2026-10-04T10:00:00.000350Z') as unknown as Date,
+        id: 'op_mem',
+        parentOperationId: 'op_sup',
+        status: 'running',
+        topicId: GROUP_TOPIC,
+        userId: USER,
+      },
+    ]);
+
+    const working = await service.sync(GROUP_TOPIC, {});
+    expect(working.typing).toBe(true);
+    expect(working.readUpTo?.messageId).toBe('msg_u1');
+    expect(working.messages).toEqual([
+      expect.objectContaining({ agentId: null, id: 'msg_u1', role: 'user' }),
+    ]);
+
+    await db
+      .update(messages)
+      .set({ content: 'flights are booked' })
+      .where(eq(messages.id, 'msg_mem'));
+    await db.update(agentOperations).set({ status: 'done' });
+
+    const landed = await service.sync(GROUP_TOPIC, { cursor: working.cursor });
+    expect(landed.typing).toBe(false);
+    expect(landed.messages.map((m) => [m.id, m.agentId, m.content])).toEqual([
+      ['msg_sup', SUPERVISOR, 'asking the crew'],
+      ['msg_mem', MEMBER, 'flights are booked'],
+    ]);
+    expect(landed.unread).toBe(2);
+  });
+
   it('refuses another user’s conversation', async () => {
     await expect(new ImRestService(db, OTHER).sync(TOPIC, {})).rejects.toMatchObject({
       name: 'NotFoundError',
@@ -428,12 +520,139 @@ describe('ImRestService.send', () => {
         trigger: 'chat',
       }),
     );
+    expect(execGroupAgentMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       accepted: true,
       operationId: 'op_1',
       topicId: TOPIC,
-      userMessage: { content: 'hello', id: 'msg_client0001', role: 'user' },
+      userMessage: { agentId: null, content: 'hello', id: 'msg_client0001', role: 'user' },
     });
+  });
+
+  it('requires an agentId or a groupId', () => {
+    expect(ImSendRequestSchema.safeParse({ content: 'hi' }).success).toBe(false);
+    expect(ImSendRequestSchema.safeParse({ agentId: AGENT, content: 'hi' }).success).toBe(true);
+    expect(ImSendRequestSchema.safeParse({ content: 'hi', groupId: GROUP }).success).toBe(true);
+  });
+
+  it('runs a group send through the group supervisor in a new group topic', async () => {
+    await insertGroup();
+    execGroupAgentMock.mockImplementation(async () => {
+      await insertMessage('msg_client0003', 'user', 'plan it', '2026-10-04T10:00:01Z', {
+        agentId: SUPERVISOR,
+        groupId: GROUP,
+        topicId: GROUP_TOPIC,
+      });
+      return {
+        isCreateNewTopic: true,
+        operationId: 'op_group',
+        success: true,
+        topicId: GROUP_TOPIC,
+        userMessageId: 'msg_client0003',
+      };
+    });
+
+    const result = await service.send({
+      clientMessageId: 'msg_client0003',
+      content: 'plan it',
+      groupId: GROUP,
+    });
+
+    expect(execAgentMock).not.toHaveBeenCalled();
+    expect(execGroupAgentMock).toHaveBeenCalledWith({
+      agentId: SUPERVISOR,
+      clientIds: { userMessageId: 'msg_client0003' },
+      groupId: GROUP,
+      interactiveStart: true,
+      message: 'plan it',
+      topicId: undefined,
+    });
+    expect(result).toEqual({
+      accepted: true,
+      operationId: 'op_group',
+      topicId: GROUP_TOPIC,
+      userMessage: expect.objectContaining({ agentId: null, id: 'msg_client0003', role: 'user' }),
+    });
+
+    // A retry of the same group send is answered from the stored turn.
+    await insertMessage('msg_client0003_reply', 'assistant', '...', '2026-10-04T10:00:01.5Z', {
+      agentId: SUPERVISOR,
+      topicId: GROUP_TOPIC,
+    });
+    const retry = await service.send({
+      clientMessageId: 'msg_client0003',
+      content: 'plan it',
+      groupId: GROUP,
+    });
+    expect(retry).toMatchObject({ accepted: false, operationId: null, topicId: GROUP_TOPIC });
+    expect(execGroupAgentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a member agentId with the group and still runs the supervisor', async () => {
+    await insertGroup();
+    execGroupAgentMock.mockImplementation(async () => {
+      await insertMessage('msg_client0004', 'user', 'hey crew', '2026-10-04T10:00:01Z', {
+        topicId: GROUP_TOPIC,
+      });
+      return {
+        operationId: 'op_g',
+        success: true,
+        topicId: GROUP_TOPIC,
+        userMessageId: 'msg_client0004',
+      };
+    });
+
+    await service.send({
+      agentId: MEMBER,
+      clientMessageId: 'msg_client0004',
+      content: 'hey crew',
+      groupId: GROUP,
+      topicId: GROUP_TOPIC,
+    });
+
+    expect(execGroupAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: SUPERVISOR, groupId: GROUP, topicId: GROUP_TOPIC }),
+    );
+  });
+
+  it('refuses an agentId that is not a member of the group', async () => {
+    await insertGroup();
+
+    await expect(
+      service.send({ agentId: AGENT, content: 'hi', groupId: GROUP }),
+    ).rejects.toMatchObject({
+      message: 'agentId is not a member of this group',
+      name: 'ConflictError',
+    });
+    expect(execGroupAgentMock).not.toHaveBeenCalled();
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a group with no supervisor instead of picking a member', async () => {
+    await insertGroup({ supervisor: false });
+
+    await expect(service.send({ content: 'hi', groupId: GROUP })).rejects.toMatchObject({
+      name: 'ConflictError',
+    });
+    expect(execGroupAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a conversation that belongs to another group or to a 1:1 chat', async () => {
+    await insertGroup();
+
+    await expect(
+      service.send({ content: 'hi', groupId: GROUP, topicId: TOPIC }),
+    ).rejects.toMatchObject({ name: 'ConflictError' });
+    expect(execGroupAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a group the caller cannot see', async () => {
+    await insertGroup();
+
+    await expect(
+      new ImRestService(db, OTHER).send({ content: 'hi', groupId: GROUP }),
+    ).rejects.toMatchObject({ name: 'NotFoundError' });
+    expect(execGroupAgentMock).not.toHaveBeenCalled();
   });
 
   it('is idempotent on clientMessageId: a retry does not start a second run', async () => {

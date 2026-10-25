@@ -142,6 +142,25 @@ describe('AcceptanceModel', () => {
     expect((await model.findById(acceptance.id))?.projectId).toBeNull();
   });
 
+  it('fills a project only on an ungrouped acceptance it owns', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const first = await projectModel.create({ identifier: 'FILA', name: 'First' });
+    const second = await projectModel.create({ identifier: 'FILB', name: 'Second' });
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('topic', topicId);
+
+    // Another user's model cannot file it.
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).fillProject(acceptance.id, first.id),
+    ).toBe(false);
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+
+    expect(await model.fillProject(acceptance.id, first.id)).toBe(true);
+    // Once grouped, a later fill leaves it where it is.
+    expect(await model.fillProject(acceptance.id, second.id)).toBe(false);
+    expect((await model.findById(acceptance.id))?.projectId).toBe(first.id);
+  });
+
   it('keeps the first standalone display title and backfills one when initially absent', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const subjectId = 'standalone-external-delivery';

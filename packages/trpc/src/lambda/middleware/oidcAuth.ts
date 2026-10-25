@@ -1,20 +1,22 @@
-import { TRPCError } from '@trpc/server';
-
 import { trpc } from '../init';
+import { authorizeHeteroOperationEvidence } from './heteroOperationEvidence';
 
 export const oidcAuth = trpc.middleware(async (opts) => {
-  const { ctx, next } = opts;
+  const { ctx, next, path } = opts;
 
   // Check OIDC authentication
   if (ctx.oidcAuth) {
-    // hetero-operation tokens are long-lived (4h) and scoped exclusively to
-    // heteroIngest / heteroFinish.  Reject them here so a leaked sandbox JWT
-    // cannot be replayed against any other authed route.
+    // hetero-operation tokens are long-lived (4h) and scoped to heteroIngest /
+    // heteroFinish, plus a Task run's own acceptance evidence. Reject them on
+    // every other route so a leaked sandbox JWT cannot be replayed against it.
     if (ctx.oidcAuth.purpose === 'hetero-operation') {
-      throw new TRPCError({
-        code: 'UNAUTHORIZED',
-        message: 'hetero-operation tokens are not accepted on this endpoint',
+      const scope = await authorizeHeteroOperationEvidence({
+        oidcAuth: ctx.oidcAuth,
+        path,
+        workspaceId: ctx.workspaceId,
       });
+
+      return next({ ctx: { ...scope, oidcAuth: ctx.oidcAuth } });
     }
 
     return next({

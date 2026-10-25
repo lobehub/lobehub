@@ -5,10 +5,13 @@ import { WidgetModel } from '@/database/models/widget';
 import type { WidgetRow, WidgetRunRow, WidgetVersionRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { GoalSubscriptionService } from '../goal/subscriptions';
 import {
   ForbiddenWidgetCredentialsError,
   MissingWidgetEnvError,
+  type ResolvedWidgetEnv,
   resolveWidgetEnv,
+  type ResolveWidgetEnvOptions,
   type WidgetCredentialScope,
 } from './credentials';
 import { recordWidgetMetrics } from './metrics';
@@ -25,15 +28,24 @@ export type ResolveWidgetEnv = (
   db: LobeChatDatabase,
   scope: WidgetCredentialScope,
   requirements: NonNullable<WidgetVersionRow['manifest']>['env'],
-) => Promise<Record<string, string>>;
+  options: Pick<ResolveWidgetEnvOptions, 'networkAllow'>,
+) => Promise<ResolvedWidgetEnv>;
 
 export interface ExecuteWidgetRunDeps {
   resolveEnv?: ResolveWidgetEnv;
   runner: WidgetSandboxRunner;
 }
 
+/**
+ * A failure inside the run's metric publication. Only this is answered by
+ * recording the run as failed: any other `finishRun` failure is the worker
+ * dying mid-completion, and the run must stay `running` so its lease expires
+ * and recovery resumes it.
+ */
+class MetricPublicationError extends Error {}
+
 export interface ExecuteWidgetRunParams {
-  run: Pick<WidgetRunRow, 'id' | 'trigger'>;
+  run: Pick<WidgetRunRow, 'id' | 'trigger'> & Partial<Pick<WidgetRunRow, 'startedAt'>>;
   version: Pick<
     WidgetVersionRow,
     'manifest' | 'outputType' | 'publishedByUserId' | 'runtime' | 'script' | 'userId'
@@ -66,13 +78,15 @@ const runInSandbox = async (
 ): Promise<RunOutcome> => {
   const manifest = version.manifest ?? undefined;
   const resolveEnv = deps.resolveEnv ?? resolveWidgetEnv;
+  const allow = manifest?.network?.allow ?? [];
 
   let env: Record<string, string>;
+  let inject: ResolvedWidgetEnv['inject'];
   try {
     // Secrets go to whoever wrote the script: the publisher of a live
     // version, the author of a draft.
     const authorUserId = version.publishedByUserId ?? version.userId;
-    env = await resolveEnv(
+    ({ env, inject } = await resolveEnv(
       db,
       {
         agentId: widget.agentId,
@@ -82,7 +96,8 @@ const runInSandbox = async (
         workspaceId: widget.workspaceId,
       },
       manifest?.env,
-    );
+      { networkAllow: allow },
+    ));
   } catch (error) {
     if (error instanceof MissingWidgetEnvError) {
       return { env: {}, error: { code: 'MISSING_ENV', message: error.message }, status: 'failed' };
@@ -106,8 +121,10 @@ const runInSandbox = async (
 
   try {
     const result = await deps.runner.run({
+      // The widget's owner (or its workspace) pays for and is rate limited on the run.
+      actor: { userId: widget.userId, workspaceId: widget.workspaceId },
       env,
-      network: { allow: manifest?.network?.allow ?? [] },
+      network: { allow, ...(inject.length > 0 ? { inject } : {}) },
       runtime: version.runtime,
       script: version.script,
       subject: { id: widget.id, kind: 'widget' },
@@ -163,7 +180,8 @@ const runInSandbox = async (
  *    script's author may not read with `CREDENTIALS_FORBIDDEN`, both before
  *    any sandbox call;
  * 2. execute the version's script on the sandbox with the manifest's network
- *    allowlist;
+ *    allowlist, plus the credential headers the egress proxy adds for LobeHub
+ *    Market connectors (whose env variables only hold placeholders);
  * 3. redact injected secrets (and well-known token shapes) from stdout / stderr
  *    before anything is parsed or persisted, then truncate the streams;
  * 4. judge the result — timeout → `timeout`; non-zero exit → `NON_ZERO_EXIT`;
@@ -186,36 +204,60 @@ export const executeWidgetRun = async (
   const outcome = await runInSandbox(db, params, deps);
 
   const finishedAt = new Date();
-  const finished = await WidgetModel.finishRun(db, run.id, {
-    durationMs: outcome.durationMs ?? null,
-    error: outcome.error ?? null,
-    exitCode: outcome.exitCode ?? null,
-    finishedAt,
-    output: outcome.output ?? null,
-    status: outcome.status,
-    stderr: outcome.stderr ? sanitizeStream(outcome.stderr, outcome.env) : null,
-    stdout: outcome.stdout ? sanitizeStream(outcome.stdout, outcome.env) : null,
-  });
+  let finished: Awaited<ReturnType<typeof WidgetModel.finishRun>>;
+  try {
+    finished = await WidgetModel.finishRun(
+      db,
+      run.id,
+      {
+        expectedStartedAt: run.startedAt,
+        durationMs: outcome.durationMs ?? null,
+        error: outcome.error ?? null,
+        exitCode: outcome.exitCode ?? null,
+        finishedAt,
+        output: outcome.output ?? null,
+        status: outcome.status,
+        stderr: outcome.stderr ? sanitizeStream(outcome.stderr, outcome.env) : null,
+        stdout: outcome.stdout ? sanitizeStream(outcome.stdout, outcome.env) : null,
+      },
+      async (tx) => {
+        if (!outcome.output) return;
+        const transactionalDB = tx as unknown as LobeChatDatabase;
+        try {
+          const { primaryMetricId } = await recordWidgetMetrics(transactionalDB, widget, {
+            manifest: version.manifest,
+            observedAt: finishedAt,
+            output: outcome.output,
+            runId: run.id,
+          });
+          if (primaryMetricId)
+            await WidgetModel.linkMetric(transactionalDB, widget.id, primaryMetricId, run.id);
+        } catch (cause) {
+          throw new MetricPublicationError('Widget metric publication failed', { cause });
+        }
+      },
+    );
+  } catch (error) {
+    if (!(error instanceof MetricPublicationError)) throw error;
+    console.error('[widget:executeRun] atomic metric publication failed', error);
+    // The failed transaction left no points or success. Persist the collection
+    // failure in existing history; consumers can handle it without guessing.
+    finished = await WidgetModel.finishRun(db, run.id, {
+      status: 'failed',
+      finishedAt,
+      expectedStartedAt: run.startedAt,
+      error: {
+        code: 'METRIC_PUBLICATION_FAILED',
+        message: 'Widget metric publication failed; check source semantics and storage',
+      },
+    });
+  }
 
-  // Same "current run" rule as the snapshot: a stale run (old version, or
-  // started before the snapshot's run) finishing late must not become the
-  // newest trend point nor move `widgets.metric_id`.
-  if (finished?.folded && outcome.status === 'succeeded' && outcome.output) {
-    try {
-      const { primaryMetricId } = await recordWidgetMetrics(db, widget, {
-        manifest: version.manifest,
-        observedAt: finishedAt,
-        output: outcome.output,
-        runId: run.id,
-      });
-      if (primaryMetricId && primaryMetricId !== widget.metricId) {
-        // A newer run may have taken the snapshot while this one recorded metrics.
-        await WidgetModel.linkMetric(db, widget.id, primaryMetricId, run.id);
-      }
-    } catch (error) {
-      // The run itself succeeded; a trend write failure must not flip it.
-      console.error('[widget:executeRun] failed to record metrics widget=%s', widget.id, error);
-    }
+  if (finished && finished.run.trigger !== 'preview') {
+    // A completion is only a hint. The durable scanner also runs on wait/sweep.
+    await GoalSubscriptionService.forWidget(db, widget.id).catch((error) => {
+      console.error('[widget:executeRun] subscription scan failed', error);
+    });
   }
 
   log('run=%s widget=%s status=%s', run.id, widget.id, outcome.status);

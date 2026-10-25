@@ -59,6 +59,7 @@ bun.lockb
 
 # Build outputs
 dist/
+public/canvas-runtime/
 public/_spa/
 public/_spa-auth/
 public/_spa-share/

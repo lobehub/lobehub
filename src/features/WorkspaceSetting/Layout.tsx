@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useMatch } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
+import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
 import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
@@ -19,9 +20,11 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.Appearance,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Budget,
+  WorkspaceSettingsTabs.ChatPreference,
   WorkspaceSettingsTabs.Creds,
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
+  WorkspaceSettingsTabs.Drive,
   WorkspaceSettingsTabs.Environments,
   WorkspaceSettingsTabs.General,
   WorkspaceSettingsTabs.Hotkey,
@@ -36,15 +39,20 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.ServiceModel,
   WorkspaceSettingsTabs.Stats,
   WorkspaceSettingsTabs.Storage,
+  WorkspaceSettingsTabs.SubscriptionAccounts,
   WorkspaceSettingsTabs.Teams,
   WorkspaceSettingsTabs.Usage,
 ]);
 
 /**
  * Tabs whose content spans the full pane instead of the centered 1024 column —
- * card grids that add columns as the pane widens (Devices).
+ * card grids that add columns as the pane widens (Devices), and the
+ * subscription account list, whose usage columns need the room.
  */
-const FULL_WIDTH_TABS = new Set<string>([WorkspaceSettingsTabs.Devices]);
+const FULL_WIDTH_TABS = new Set<string>([
+  WorkspaceSettingsTabs.Devices,
+  WorkspaceSettingsTabs.SubscriptionAccounts,
+]);
 
 const outletContainerStyle: CSSProperties = { overflow: 'hidden', position: 'relative' };
 
@@ -80,6 +88,8 @@ const WorkspaceSettingsContentLayout: FC = memo(() => {
   const categories = useWorkspaceSettingCategory();
   const match = useMatch('/:workspaceSlug/settings/:tab/*');
   const activeTab = match?.params.tab;
+  // Settings-search results deep-link to `#anchor` rows on these pages.
+  useSettingsAnchorScroll();
   // The Profile nav item is labelled with the user's name (like the personal
   // sidebar); the page header keeps the generic title instead.
   const title =

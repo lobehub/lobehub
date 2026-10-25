@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveAgentTopicGroupMode } from './topicGroupMode';
+import { resolveAgentTopicGroupMode, resolveProjectTopicGroupMode } from './topicGroupMode';
 
 describe('resolveAgentTopicGroupMode', () => {
   it('defaults Claude Code agents to project grouping', () => {
@@ -106,4 +106,15 @@ describe('resolveAgentTopicGroupMode', () => {
       ).toBe('byTime');
     },
   );
+});
+
+describe('resolveProjectTopicGroupMode', () => {
+  /** @example a stale byProject must not turn a project's own list into one bucket. */
+  it('normalizes byProject to byAgent', () => {
+    expect(resolveProjectTopicGroupMode('byProject')).toBe('byAgent');
+  });
+
+  it.each(['byStatus', 'byTime', 'byAgent', 'byDevice', 'flat'] as const)('keeps %s', (mode) => {
+    expect(resolveProjectTopicGroupMode(mode)).toBe(mode);
+  });
 });

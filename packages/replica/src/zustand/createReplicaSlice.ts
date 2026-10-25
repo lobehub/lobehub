@@ -120,6 +120,13 @@ export interface ReplicaEffects<TParams, TFetched> {
    * keep of it there (a linked list row). Never touch the view on screen.
    */
   onPurge?: (params: TParams, context: ReplicaSettleContext) => void;
+  /**
+   * Every successful response, including one the guards discard (cleared or
+   * removed entry, superseded query, off-scope) and one `prepareHead` drops.
+   * Use it for per-request bookkeeping that must be released even when the
+   * response is never folded. Not called for errors.
+   */
+  onSettled?: (data: TFetched, params: TParams, context: ReplicaSettleContext) => void;
 }
 
 export interface ReplicaFetchOptions {
@@ -525,8 +532,14 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
       request.removalGeneration !== removalGeneration(scope, key) ||
       request.seq <= (retiredThrough.get(request.requestId) ?? 0) ||
       !isActiveQuery(request)
-    )
+    ) {
+      if (!('error' in outcome)) {
+        // A discarded success still settles the request; release any
+        // per-request bookkeeping even though it is never folded.
+        effects?.onSettled?.(outcome.data, params, { key, scope, source: request.source });
+      }
       return dropped;
+    }
 
     if ('error' in outcome) {
       // Forwarded even off-scope: the captured `key`/`scope` lets a consumer
@@ -536,6 +549,10 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
       effects?.onError?.(outcome.error, params, { isActive, key, scope });
       return { ...dropped, current: true };
     }
+
+    // Every successful response releases per-request bookkeeping, including
+    // one that ends up off-scope or is dropped by `prepareHead` below.
+    effects?.onSettled?.(outcome.data, params, { key, scope, source: request.source });
 
     if (!isActive) {
       // Off-scope: never fold a value into the scope on screen. A terminal

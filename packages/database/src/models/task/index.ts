@@ -80,15 +80,16 @@ export class TaskModel {
     }
 
     // A prefix is derived from placement, never accepted as a creation field.
+    // Anyone who can see a project may file work in it; project settings stay
+    // with its creator. A project without its own identifier keeps the scope's
+    // default prefix.
     let identifierPrefix = DEFAULT_TASK_IDENTIFIER_PREFIX;
     if (createData.projectId) {
-      const project = await new ProjectModel(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).findManageableById(createData.projectId);
+      const project = await new ProjectModel(this.db, this.userId, this.workspaceId).findById(
+        createData.projectId,
+      );
       if (!project) throw new Error('Project not found');
-      identifierPrefix = project.identifier;
+      identifierPrefix = project.identifier ?? DEFAULT_TASK_IDENTIFIER_PREFIX;
     }
 
     return rows.insertWithNextSeq(this.ctx, createData, identifierPrefix, options.maxRetries ?? 5);
@@ -271,6 +272,14 @@ export class TaskModel {
     extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
     return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
+  }
+
+  async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
+    return rows.completeIfCompletionRequested(this.ctx, id, operationId);
+  }
+
+  async withdrawCompletionRequest(id: string, operationId: string): Promise<boolean> {
+    return rows.withdrawCompletionRequest(this.ctx, id, operationId);
   }
 
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {

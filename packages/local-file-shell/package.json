@@ -10,6 +10,7 @@
     "./file-search": "./src/fileSearch/index.ts",
     "./git": "./src/git/index.ts",
     "./logger": "./src/logger.ts",
+    "./read-image": "./src/file/readImage.ts",
     "./shell": "./src/shell/index.ts",
     "./types": "./src/types.ts"
   },

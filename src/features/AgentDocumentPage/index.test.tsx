@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,8 +35,10 @@ vi.mock('@/features/PageEditor', () => ({
 }));
 
 vi.mock('@/features/RightPanel', () => ({
-  default: ({ children }: { children?: ReactNode }) => (
-    <aside data-testid="right-panel">{children}</aside>
+  default: ({ children, expand }: { children?: ReactNode; expand?: boolean }) => (
+    <aside data-expand={String(expand)} data-testid="right-panel">
+      {children}
+    </aside>
   ),
 }));
 
@@ -47,7 +49,15 @@ const headerProps = vi.hoisted(() => ({
 vi.mock('./Header', () => ({
   default: (props: Record<string, unknown>) => {
     headerProps.current = props;
-    return <div data-document-id={props.documentId as string | undefined} data-testid="header" />;
+    return (
+      <div data-document-id={props.documentId as string | undefined} data-testid="header">
+        <button
+          data-testid="toggle-topic-panel"
+          type="button"
+          onClick={props.onToggleTopicPanel as () => void}
+        />
+      </div>
+    );
   },
 }));
 
@@ -98,7 +108,15 @@ const panelProps = vi.hoisted(() => ({
 vi.mock('@/features/FloatingChatPanel', () => ({
   default: (props: Record<string, unknown>) => {
     panelProps.current = props;
-    return <div data-testid="floating-chat-panel" />;
+    return (
+      <div data-testid="floating-chat-panel">
+        <button
+          data-testid="collapse-topic-panel"
+          type="button"
+          onClick={props.onCollapse as () => void}
+        />
+      </div>
+    );
   },
 }));
 
@@ -225,5 +243,31 @@ describe('AgentDocumentPage', () => {
       agentId: 'agent-from-url',
       documentId: 'docs_abc',
     });
+  });
+
+  /** @example The topic panel starts collapsed; the header opens it and the panel toolbar closes it. */
+  it('opens the topic panel from the header and collapses it from the panel toolbar', () => {
+    // ROOT CAUSE:
+    // The panel was pinned open with `expand` while the header toggle read and wrote
+    // the global `showRightPanel`, so a click only hid the button itself. The page now
+    // owns one visibility state: the header toggle opens it, the panel toolbar closes it.
+    render(<AgentDocumentPage documentId="docs_abc" />);
+
+    expect(screen.getByTestId('right-panel').dataset.expand).toBe('false');
+    expect(headerProps.current?.topicPanelExpand).toBe(false);
+
+    fireEvent.click(screen.getByTestId('toggle-topic-panel'));
+    expect(screen.getByTestId('right-panel').dataset.expand).toBe('true');
+    expect(headerProps.current?.topicPanelExpand).toBe(true);
+
+    fireEvent.click(screen.getByTestId('collapse-topic-panel'));
+    expect(screen.getByTestId('right-panel').dataset.expand).toBe('false');
+    expect(headerProps.current?.topicPanelExpand).toBe(false);
+  });
+
+  it('hides the topic panel toggle while the page has no topic panel', () => {
+    docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
+    render(<AgentDocumentPage documentId="docs_abc" />);
+    expect(headerProps.current?.topicPanelExpand).toBeUndefined();
   });
 });

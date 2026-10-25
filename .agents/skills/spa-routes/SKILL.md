@@ -103,7 +103,7 @@ Each feature should:
 | `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                               |
 | `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and Electron-only onboarding.         |
 
-Add or remove common routes only in `desktopRouter.shared.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
+Add or remove common routes only in `desktopRouter.shared.tsx`, or in a subtree module it imports (`taskWorkspaceRoutes.tsx`, `workspaceSettingsRoutes.tsx` for the padded `/:slug/settings/*` tabs) — the shared file is over the 1200-line limit, so large subtrees move out instead of growing it. Add any new subtree module to `readRouterSources` in `desktopRouter.sync.test.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
 
 ---
 

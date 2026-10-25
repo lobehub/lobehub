@@ -19,10 +19,12 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 
 const desktopNotificationMock = vi.hoisted(() => ({
   notifyDesktopAgentCompleted: vi.fn().mockResolvedValue(undefined),
+  notifyDesktopAgentFailed: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopAgentCompleted: desktopNotificationMock.notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed: desktopNotificationMock.notifyDesktopAgentFailed,
 }));
 
 // Force the desktop branch of afterRunComplete on (isDesktop is false in the
@@ -67,6 +69,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
+    updateOperationMetadata: vi.fn(),
     updateTopicStatus: vi.fn(async () => {}),
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
@@ -176,6 +179,10 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     // gateway/hetero reach completeRun with the op still `running`, so cancelled
     // must move it to terminal here. No markUnread, no failOperation, no signal.
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
+    // Settled as `completed`, yet nothing drains its queue: say so.
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith(OP, {
+      endedWithoutCompletion: true,
+    });
     expect(store.markTopicUnread).not.toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
     expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
@@ -375,6 +382,35 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
         completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
       ),
     ).resolves.toBeUndefined();
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.afterRunComplete — failed run notification', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const error = { message: 'boom', type: 'AgentRuntimeError' };
+
+  it('announces a failed run with its error instead of a completion', async () => {
+    const { get } = makeStore();
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification: { error }, status: 'failed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).toHaveBeenCalledWith(get, {
+      context: { agentId: 'a1', groupId: undefined, topicId: 't1', workspaceSlug: 'team' },
+      error,
+    });
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('stays silent for a failed run the transport did not ask to announce', async () => {
+    const { get } = makeStore();
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'error' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).not.toHaveBeenCalled();
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
   });
 });

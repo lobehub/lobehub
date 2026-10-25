@@ -32,6 +32,12 @@ export interface HeterogeneousAgentScheduleState {
   resetsAt?: number;
 }
 
+export interface HeterogeneousAgentWorkingDirectoryResetState {
+  /** Folder name of the source repo the conversation goes back to. */
+  name?: string;
+  onReset: () => Promise<void>;
+}
+
 export interface HeterogeneousAgentStatusGuideProps {
   agentType?: string;
   autoRetry?: HeterogeneousAgentAutoRetryState;
@@ -42,6 +48,11 @@ export interface HeterogeneousAgentStatusGuideProps {
   onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant?: HeterogeneousAgentStatusGuideVariant;
+  /**
+   * Present when the missing directory is a deleted worktree the conversation
+   * still records: drops it, falls back to the source repo and retries.
+   */
+  workingDirectoryReset?: HeterogeneousAgentWorkingDirectoryResetState;
 }
 
 export const SUPPORTED_HETEROGENEOUS_AGENT_TYPES = LOCAL_HETEROGENEOUS_AGENT_TYPES;
@@ -67,4 +78,5 @@ export interface HeterogeneousAgentGuideStateProps {
   onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant: HeterogeneousAgentStatusGuideVariant;
+  workingDirectoryReset?: HeterogeneousAgentWorkingDirectoryResetState;
 }

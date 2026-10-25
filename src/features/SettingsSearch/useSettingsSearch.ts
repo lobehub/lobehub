@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/constants';
-import { useCategory } from '@/features/Settings/hooks/useCategory';
 import { SettingsTabs } from '@/store/global/initialState';
 import {
   featureFlagsSelectors,
@@ -19,6 +18,7 @@ import { getPlatform } from '@/utils/platform';
 import {
   SETTINGS_SEARCH_ITEMS,
   type SettingsSearchContext,
+  type SettingsSearchTab,
   TAB_SEARCH_EN_KEYWORDS,
   TAB_SEARCH_KEYWORDS_KEYS,
 } from './items';
@@ -33,8 +33,44 @@ export interface SettingsSearchResult {
   icon?: IconProps['icon'];
   key: string;
   label: string;
-  tab: SettingsTabs;
+  tab: SettingsSearchTab;
   url: string;
+}
+
+export interface SettingsSearchCategoryGroup {
+  items: {
+    /** Navigation URL; derived from `key` via `getTabUrl` when omitted */
+    href?: string;
+    icon?: IconProps['icon'];
+    /** Search tab key: matches `SETTINGS_SEARCH_ITEMS[].tab` and the keyword tables */
+    key: SettingsSearchTab;
+    label: string;
+  }[];
+  key: string;
+  title: string;
+}
+
+/**
+ * Which settings surface the search runs on. The personal sidebar indexes
+ * everything its pages render; the workspace sidebar narrows item-level
+ * entries to tabs whose pages are the personal ones (same anchors).
+ */
+export interface SettingsSearchScope {
+  /** Visible sidebar groups — tab entries and tab visibility come from here */
+  categoryGroups: SettingsSearchCategoryGroup[];
+  /**
+   * Tabs that also get item-level and catalog entries (provider names, IM
+   * channels, …). Defaults to every visible tab.
+   */
+  itemTabs?: ReadonlySet<SettingsSearchTab>;
+  /**
+   * Tabs that own their keywords in this scope: other tab and item entries drop
+   * those keywords, so a setting that moved to its own tab here is not also
+   * found on the page that no longer renders it.
+   */
+  keywordOwnerTabs?: readonly SettingsSearchTab[];
+  /** Builtin provider detail URL; defaults to the personal provider page */
+  providerUrl?: (providerId: string) => string;
 }
 
 interface IndexedEntry extends SettingsSearchResult {
@@ -48,8 +84,10 @@ interface IndexedEntry extends SettingsSearchResult {
   pinyinBase: string[];
 }
 
-export const getTabUrl = (tab: SettingsTabs) =>
+export const getTabUrl = (tab: SettingsSearchTab) =>
   tab === SettingsTabs.Provider ? '/settings/provider/all' : `/settings/${tab}`;
+
+const getPersonalProviderUrl = (providerId: string) => `/settings/provider/${providerId}`;
 
 /** Split a localized comma-separated keyword string (supports CJK commas) */
 const splitKeywords = (text: string) =>
@@ -61,12 +99,14 @@ const splitKeywords = (text: string) =>
 /**
  * Search visible settings by the current-locale label text plus registered
  * keywords, fuzzy-matched via Fuse and pinyin-augmented for Han labels. Tab
- * entries derive from `useCategory` (inheriting its feature-flag / platform
- * gating and `href` overrides); item-level entries come from
- * `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not visible.
+ * entries derive from the scope's sidebar groups (inheriting their
+ * feature-flag / permission gating and `href` overrides); item-level entries
+ * come from `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not
+ * visible or not in `scope.itemTabs`.
  */
 export const useSettingsSearch = (
   query: string,
+  scope: SettingsSearchScope,
 ): {
   /**
    * True while the pinyin dict chunk is still loading for a Han-text index —
@@ -78,7 +118,12 @@ export const useSettingsSearch = (
   results: SettingsSearchResult[];
 } => {
   const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend', 'auth']);
-  const categoryGroups = useCategory();
+  const {
+    categoryGroups,
+    itemTabs,
+    keywordOwnerTabs,
+    providerUrl = getPersonalProviderUrl,
+  } = scope;
   const { hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
@@ -112,9 +157,25 @@ export const useSettingsSearch = (
     // Tab-level entries first so they rank above item-level matches.
     const entries: IndexedEntry[] = [];
     const visibleTabs = new Map<
-      SettingsTabs,
+      SettingsSearchTab,
       { groupTitle: string; icon?: IconProps['icon']; label: string; url: string }
     >();
+    // Tab info for item-level / catalog entries, honoring `itemTabs`
+    const getItemTab = (tab: SettingsSearchTab) =>
+      !itemTabs || itemTabs.has(tab) ? visibleTabs.get(tab) : undefined;
+
+    // English floor + localized enrichment (deduped: on en-US they overlap)
+    const getTabKeywords = (tab: SettingsSearchTab) => {
+      const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[tab];
+      return [
+        ...(TAB_SEARCH_EN_KEYWORDS[tab] ?? []),
+        ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+      ];
+    };
+    const ownerTabs = new Set(keywordOwnerTabs);
+    const ownedKeywords = new Set(keywordOwnerTabs?.flatMap(getTabKeywords));
+    const withoutOwnedKeywords = (tab: SettingsSearchTab, keywords: string[]) =>
+      ownerTabs.has(tab) ? keywords : keywords.filter((keyword) => !ownedKeywords.has(keyword));
 
     for (const group of categoryGroups) {
       for (const item of group.items) {
@@ -132,13 +193,10 @@ export const useSettingsSearch = (
           url,
         });
 
-        const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[item.key];
-        // English floor + localized enrichment (deduped: on en-US they overlap)
         const texts = Array.from(
           new Set([
             item.label.toLowerCase(),
-            ...(TAB_SEARCH_EN_KEYWORDS[item.key] ?? []),
-            ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+            ...withoutOwnedKeywords(item.key, getTabKeywords(item.key)),
           ]),
         );
 
@@ -156,14 +214,17 @@ export const useSettingsSearch = (
     }
 
     for (const def of SETTINGS_SEARCH_ITEMS) {
-      const tabInfo = visibleTabs.get(def.tab);
+      const tabInfo = getItemTab(def.tab);
       if (!tabInfo) continue;
       if (def.visible && !def.visible(ctx)) continue;
 
       const ns = def.ns ?? 'setting';
       const label = t(def.labelKey as never, { ns }) as string;
       const desc = def.descKey ? (t(def.descKey as never, { ns }) as string) : undefined;
-      const keywordTexts = (def.keywords ?? []).map((text) => text.toLowerCase());
+      const keywordTexts = withoutOwnedKeywords(
+        def.tab,
+        (def.keywords ?? []).map((text) => text.toLowerCase()),
+      );
 
       entries.push({
         anchor: def.anchor,
@@ -183,7 +244,7 @@ export const useSettingsSearch = (
     // renders so a search for the platform name deep-links to that row.
     // Those rows come from the business notification section, so they only
     // exist with business features on.
-    const notificationTab = visibleTabs.get(SettingsTabs.Notification);
+    const notificationTab = getItemTab(SettingsTabs.Notification);
     if (notificationTab && enableBusinessFeatures)
       for (const platform of SUPPORTED_MESSENGER_PLATFORMS) {
         entries.push({
@@ -204,7 +265,7 @@ export const useSettingsSearch = (
     // link, so these navigate to the tab itself. Availability ultimately
     // depends on the Market API, but this static catalog is what the page
     // renders from.
-    const connectorTab = visibleTabs.get(SettingsTabs.Connector);
+    const connectorTab = getItemTab(SettingsTabs.Connector);
     if (connectorTab)
       for (const connector of LOBEHUB_SKILL_PROVIDERS) {
         entries.push({
@@ -222,7 +283,7 @@ export const useSettingsSearch = (
     // Model providers rank last: builtin names/ids (e.g. "OpenAI") link straight
     // to the provider detail page. Custom providers need an async store fetch and
     // are intentionally not indexed.
-    const providerTab = visibleTabs.get(SettingsTabs.Provider);
+    const providerTab = getItemTab(SettingsTabs.Provider);
     if (providerTab)
       for (const provider of DEFAULT_MODEL_PROVIDER_LIST) {
         entries.push({
@@ -233,13 +294,16 @@ export const useSettingsSearch = (
           label: provider.name,
           pinyinBase: [],
           tab: SettingsTabs.Provider,
-          url: `/settings/provider/${provider.id}`,
+          url: providerUrl(provider.id),
         });
       }
 
     return entries;
   }, [
     categoryGroups,
+    itemTabs,
+    keywordOwnerTabs,
+    providerUrl,
     t,
     disableEmailPassword,
     enableBusinessFeatures,

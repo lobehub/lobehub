@@ -7,10 +7,16 @@ import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
+import { TASK_TEMPLATE_DAILY_RECOMMEND_REPLICA } from '@/features/RecommendTaskTemplates/const';
 import { analyticsClient } from '@/libs/analytics/client';
-import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
-import { mutate } from '@/libs/swr';
-import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
+import {
+  cacheScope,
+  createReplicaSlice,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+  revalidateReplica,
+} from '@/libs/replica';
+import { userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { type StoreSetter } from '@/store/types';
 import { type UserStore } from '@/store/user';
@@ -49,9 +55,6 @@ type UserStateReplica = ReplicaSlice<UserStore, Record<string, never>, UserIniti
 type Setter = StoreSetter<UserStore>;
 export const createCommonSlice = (set: Setter, get: () => UserStore, _api?: unknown) =>
   new CommonActionImpl(set, get, _api);
-
-export const isTaskTemplateRecommendationKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === taskTemplateKeys.listDailyRecommend.root;
 
 export class CommonActionImpl {
   readonly #get: () => UserStore;
@@ -184,7 +187,11 @@ export class CommonActionImpl {
       this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
     }
     await userService.updateInterests(interests);
-    void mutate(isTaskTemplateRecommendationKey).catch((error) => {
+    // Recommendations are ranked by interests, which stay out of their sync key.
+    void revalidateReplica({
+      name: TASK_TEMPLATE_DAILY_RECOMMEND_REPLICA,
+      scope: cacheScope,
+    }).catch((error) => {
       console.error('[taskTemplate:recommendationCache:invalidate]', error);
     });
     await this.#get().refreshUserState();

@@ -23,6 +23,7 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
     onTransfer,
     schedule,
     variant = 'inline',
+    workingDirectoryReset,
   }) => {
     const config = resolveHeterogeneousAgentGuideConfig({
       agentType,
@@ -38,6 +39,7 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
       onTransfer,
       schedule,
       variant,
+      workingDirectoryReset,
     };
 
     switch (error?.code) {

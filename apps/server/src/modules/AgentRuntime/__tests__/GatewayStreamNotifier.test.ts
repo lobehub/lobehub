@@ -3,37 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
-import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
+import { createMockInner } from '../testUtils';
+import type { PublishAgentRuntimeEndParams } from '../types';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
 vi.stubGlobal('fetch', mockFetch);
-
-function createMockInner(): IStreamEventManager & { calls: Record<string, any[][]> } {
-  const calls: Record<string, any[][]> = {};
-
-  const track = (name: string) => {
-    calls[name] = [];
-    return (...args: any[]) => {
-      calls[name].push(args);
-      return Promise.resolve(`${name}-result`);
-    };
-  };
-
-  return {
-    calls,
-    cleanupOperation: track('cleanupOperation') as any,
-    disconnect: track('disconnect') as any,
-    getActiveOperationsCount: track('getActiveOperationsCount') as any,
-    getStreamHistory: track('getStreamHistory') as any,
-    publishAgentRuntimeEnd: track('publishAgentRuntimeEnd') as any,
-    publishAgentRuntimeInit: track('publishAgentRuntimeInit') as any,
-    publishStreamChunk: track('publishStreamChunk') as any,
-    publishStreamEvent: track('publishStreamEvent') as any,
-    readEventsOnce: track('readEventsOnce') as any,
-    subscribeStreamEvents: track('subscribeStreamEvents') as any,
-  };
-}
 
 describe('GatewayStreamNotifier', () => {
   let inner: ReturnType<typeof createMockInner>;
@@ -825,59 +800,6 @@ describe('GatewayStreamNotifier', () => {
       });
       expect(body.event.data).not.toHaveProperty('finalState');
       expect(body.event.data).not.toHaveProperty('uiMessages');
-    });
-  });
-
-  // ─── Read/subscribe methods: must delegate directly to inner ───
-
-  describe('subscribeStreamEvents', () => {
-    it('delegates directly to inner', async () => {
-      const onEvents = vi.fn();
-      const signal = new AbortController().signal;
-
-      await notifier.subscribeStreamEvents('op-1', '0', onEvents, signal);
-
-      expect(inner.calls.subscribeStreamEvents).toHaveLength(1);
-      expect(inner.calls.subscribeStreamEvents[0]).toEqual(['op-1', '0', onEvents, signal]);
-    });
-
-    it('does not call gateway', async () => {
-      await notifier.subscribeStreamEvents('op-1', '0', vi.fn());
-
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getStreamHistory', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.getStreamHistory('op-1', 50);
-
-      expect(inner.calls.getStreamHistory).toHaveLength(1);
-      expect(inner.calls.getStreamHistory[0]).toEqual(['op-1', 50]);
-    });
-  });
-
-  describe('cleanupOperation', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.cleanupOperation('op-1');
-
-      expect(inner.calls.cleanupOperation).toHaveLength(1);
-    });
-  });
-
-  describe('getActiveOperationsCount', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.getActiveOperationsCount();
-
-      expect(inner.calls.getActiveOperationsCount).toHaveLength(1);
-    });
-  });
-
-  describe('disconnect', () => {
-    it('delegates directly to inner', async () => {
-      await notifier.disconnect();
-
-      expect(inner.calls.disconnect).toHaveLength(1);
     });
   });
 

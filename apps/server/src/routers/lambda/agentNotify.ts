@@ -347,6 +347,27 @@ export const agentNotifyRouter = router({
             stepIndex: 0,
           });
         } else {
+          // Refresh the durable liveness lease before publishing progress.
+          // Remote hetero providers (openclaw / hermes) report through
+          // `agentNotify.notify` rather than `heteroIngest`, so nothing else on
+          // this path bumps `agent_operations.updated_at` — the column the
+          // stale-operation sweep compares against the hetero window before it
+          // retires a *stateless* heterogeneous run (a remote run carries no
+          // coordinator state either). Without this refresh a remote agent that
+          // is actively streaming progress for over an hour is
+          // indistinguishable from a dead one: an unrelated opportunistic sweep
+          // retires it mid-run and every later callback is rejected as stale.
+          // Terminal notifications are excluded — they settle the row through
+          // CompletionLifecycle instead.
+          try {
+            await new AgentOperationModel(
+              ctx.serverDB,
+              ctx.userId,
+              ctx.workspaceId ?? undefined,
+            ).touchRunning(remoteOperationId);
+          } catch (err) {
+            log('notify: failed to refresh lease for operationId=%s: %O', remoteOperationId, err);
+          }
           // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
           await stream.publishStreamEvent(remoteOperationId, {
             data: { messageId: writtenMessageId },

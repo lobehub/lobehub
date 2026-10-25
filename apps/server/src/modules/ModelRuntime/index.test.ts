@@ -1159,13 +1159,8 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime'].baseURL).toBe('http://custom-comfyui:8188');
     });
 
-    it('Unknown Provider', async () => {
-      const jwtPayload = {};
-      const runtime = await initModelRuntimeWithUserPayload('unknown', jwtPayload);
-
-      // 根据实际实现，你可能需要检查是否返回了默认的 runtime 实例，或者是否抛出了异常
-      // 例如，如果默认使用 OpenAI:
-      expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+    it('Unknown Provider: requires user credentials', () => {
+      expect(() => initModelRuntimeWithUserPayload('unknown', {})).toThrow();
     });
   });
 });

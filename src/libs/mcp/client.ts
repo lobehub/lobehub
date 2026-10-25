@@ -19,6 +19,7 @@ import {
   type ToolCallResult,
 } from './types';
 import { createMCPError } from './types';
+import { getMCPErrorLogMetadata, getMCPLogOrigin } from './utils';
 
 const log = debug('lobe-mcp:client');
 // MCP tool call timeout (milliseconds), configurable via the environment variable MCP_TOOL_TIMEOUT, default is 60000
@@ -40,7 +41,7 @@ async function preCheckStdioCommand(params: {
   success: boolean;
 }> {
   return new Promise((resolve) => {
-    log('Pre-checking stdio command: %s with args: %O', params.command, params.args);
+    log('Pre-checking stdio command');
 
     // Do NOT spread the full process.env here: it would leak server-side secrets
     // (DATABASE_URL, KEY_VAULTS_SECRET, provider API keys, OAuth/JWT secrets, ...)
@@ -58,7 +59,6 @@ async function preCheckStdioCommand(params: {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = '';
     let stderr = '';
     let resolved = false;
 
@@ -81,22 +81,19 @@ async function preCheckStdioCommand(params: {
       }
     }, 5000);
 
-    // Collect stdout
-    child.stdout?.on('data', (data) => {
-      stdout += data.toString();
-    });
+    child.stdout?.resume();
 
     // Collect stderr - this is the critical part
     child.stderr?.on('data', (data) => {
       stderr += data.toString();
-      log('Captured stderr: %s', data.toString());
+      log('Captured stdio stderr output');
     });
 
     child.on('error', (error) => {
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
-        log('Process spawn error: %O', error);
+        console.error('MCP pre-check process spawn failed:', getMCPErrorLogMetadata(error));
         resolve({
           error: createMCPError('PROCESS_SPAWN_ERROR', 'Failed to start MCP service process', {
             originalError: error.message,
@@ -117,10 +114,13 @@ async function preCheckStdioCommand(params: {
         clearTimeout(timeout);
 
         if (code === 0) {
-          log('Pre-check successful, stdout: %s', stdout);
+          log('MCP pre-check completed successfully');
           resolve({ success: true });
         } else {
-          log('Pre-check failed with code: %d, stderr: %s', code, stderr);
+          console.error('MCP pre-check process exited:', {
+            exitCode: code,
+            signal,
+          });
           resolve({
             error: createMCPError('CONNECTION_FAILED', 'MCP service startup failed', {
               errorLog: stderr,
@@ -156,7 +156,7 @@ async function preCheckStdioCommand(params: {
       child.stdin?.write(initMessage);
       child.stdin?.end();
     } catch (writeError) {
-      log('Failed to write to stdin: %O', writeError);
+      console.error('Failed to write MCP pre-check request:', getMCPErrorLogMetadata(writeError));
     }
   });
 }
@@ -172,7 +172,10 @@ export class MCPClient {
 
     switch (params.type) {
       case 'http': {
-        log('Using HTTP transport with url: %s', params.url);
+        log('Using HTTP transport: %O', {
+          origin: getMCPLogOrigin(params.url),
+          type: params.type,
+        });
 
         // Build headers, including custom headers and authentication information
         const headers: Record<string, string> = { ...params.headers };
@@ -207,13 +210,13 @@ export class MCPClient {
           requestInit: { headers },
         });
 
-        log('HTTP transport created with headers: %O', Object.keys(headers));
+        log('HTTP transport created with %d header(s)', Object.keys(headers).length);
 
         break;
       }
 
       case 'stdio': {
-        log('Using Stdio transport with command: %s , args: %O', params.command, params.args);
+        log('Using stdio transport');
 
         this.transport = new StdioClientTransport({
           args: params.args,
@@ -234,7 +237,7 @@ export class MCPClient {
             params: { type: (params as any).type },
           },
         );
-        log('Error creating client: %O', err);
+        console.error('Failed to create MCP client:', getMCPErrorLogMetadata(err));
         throw err;
       }
     }
@@ -247,12 +250,12 @@ export class MCPClient {
       await this.mcp.connect(this.transport, { onprogress: options.onProgress });
       log('MCP connection initialized.');
     } catch (e) {
-      log('MCP connection failed:', e);
+      console.error('MCP connection failed:', getMCPErrorLogMetadata(e));
 
       if (this.params.type === 'http') {
-        const error = e as Error;
-        if (error.message.includes('401'))
-          throw createMCPError('AUTHORIZATION_ERROR', error.message);
+        // StreamableHTTPError carries the status in code, not necessarily in its message.
+        const error = e as Error & { code?: number };
+        if (error.code === 401) throw createMCPError('AUTHORIZATION_ERROR', error.message);
 
         throw e;
       }
@@ -268,7 +271,10 @@ export class MCPClient {
         });
 
         if (!preCheckResult.success && preCheckResult.error) {
-          log('Detailed error captured: %O', preCheckResult.error);
+          console.error(
+            'MCP stdio pre-check failed:',
+            getMCPErrorLogMetadata(preCheckResult.error),
+          );
           throw preCheckResult.error;
         }
       }
@@ -335,10 +341,10 @@ export class MCPClient {
     try {
       log('Listing tools...');
       const { tools } = await this.mcp.listTools();
-      log('Listed tools: %O', tools);
+      log('Listed %d MCP tool(s)', tools.length);
       return tools as McpTool[];
     } catch (e) {
-      console.error('Listed tools error: %O', e);
+      console.error('Failed to list MCP tools:', getMCPErrorLogMetadata(e));
 
       if (MCPClient.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
@@ -352,10 +358,10 @@ export class MCPClient {
     try {
       log('Listing resources...');
       const { resources } = await this.mcp.listResources();
-      log('Listed resources: %O', resources);
+      log('Listed %d MCP resource(s)', resources.length);
       return resources as McpResource[];
     } catch (e) {
-      log('Listed resources: %O', e);
+      console.error('Failed to list MCP resources:', getMCPErrorLogMetadata(e));
 
       if (MCPClient.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
@@ -369,10 +375,10 @@ export class MCPClient {
     try {
       log('Listing prompts...');
       const { prompts } = await this.mcp.listPrompts();
-      log('Listed prompts: %O', prompts);
+      log('Listed %d MCP prompt(s)', prompts.length);
       return prompts as McpPrompt[];
     } catch (e) {
-      log('Listed prompts: %O', e);
+      console.error('Failed to list MCP prompts:', getMCPErrorLogMetadata(e));
 
       if (MCPClient.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
@@ -383,8 +389,7 @@ export class MCPClient {
   }
 
   async listManifests() {
-    const capabilities = this.mcp.getServerCapabilities();
-    log('get capabilities: %O', capabilities);
+    log('Reading MCP server capabilities');
 
     const [tools, prompts, resources] = await Promise.all([
       this.listTools(),
@@ -400,18 +405,26 @@ export class MCPClient {
       version: this.mcp.getServerVersion()?.version?.replace('v', ''),
     };
 
-    log('Listed Manifest: %O', manifest);
+    log('Listed MCP manifest: %O', {
+      promptCount: prompts.length,
+      resourceCount: resources.length,
+      toolCount: tools.length,
+    });
 
     return manifest;
   }
 
   async callTool(toolName: string, args: any): Promise<ToolCallResult> {
-    log('Calling tool: %s with args: %O, timeout: %O', toolName, args, MCP_TOOL_TIMEOUT);
+    log('Calling MCP tool: %O', { timeout: MCP_TOOL_TIMEOUT, toolName });
     try {
       const result = await this.mcp.callTool({ arguments: args, name: toolName }, undefined, {
         timeout: MCP_TOOL_TIMEOUT,
       });
-      log('Tool call result: %O', result);
+      log('MCP tool call completed: %O', {
+        contentBlockCount: Array.isArray(result.content) ? result.content.length : 0,
+        isError: result.isError === true,
+        toolName,
+      });
       return result as ToolCallResult;
     } catch (e) {
       // The server rejects the request before executing the tool, so retrying

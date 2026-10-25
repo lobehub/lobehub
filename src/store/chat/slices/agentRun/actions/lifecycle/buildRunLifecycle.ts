@@ -9,7 +9,10 @@ import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/disp
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
-import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
+import {
+  notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed,
+} from '@/store/chat/utils/desktopNotification';
 import {
   hasCompletedAssistantText,
   isAudioOnlyFirstUserMessage,
@@ -19,7 +22,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { OperationStatus } from '../../../operation/types';
-import { AI_RUNTIME_OPERATION_TYPES } from '../../../operation/types';
+import { AI_RUNTIME_OPERATION_TYPES, isClientHeldQueuedMessage } from '../../../operation/types';
 import { topicSelectors } from '../../../topic/selectors';
 import { scheduleQueuedFollowUp } from './queuedFollowUp';
 import type {
@@ -281,8 +284,17 @@ export const buildRunLifecycle = (
     },
     afterRunComplete: async (event: RunCompleteEvent) => {
       if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
-      if (adapter.runScope === 'sub_agent' || resolveTerminalDisposition(event) !== 'success')
+      if (adapter.runScope === 'sub_agent') return;
+
+      const disposition = resolveTerminalDisposition(event);
+      if (disposition === 'failed' && event.notification) {
+        await notifyDesktopAgentFailed(get, {
+          context: { agentId, groupId, topicId, workspaceSlug },
+          error: event.notification.error,
+        });
         return;
+      }
+      if (disposition !== 'success') return;
 
       // A voice-only first message cannot be summarized at the post-persist seam:
       // its content is empty and the assistant row is still a loading placeholder.
@@ -443,7 +455,8 @@ export const buildRunLifecycle = (
       if (
         disposition === 'success' &&
         adapter.runScope !== 'sub_agent' &&
-        (get().queuedMessages?.[contextKey]?.length ?? 0) > 0
+        // The server delivers the follow-ups it holds itself.
+        get().queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage)
       ) {
         completeSuccess();
         emitComplete(operationId, runtimeStatus);
@@ -472,7 +485,12 @@ export const buildRunLifecycle = (
           // must be moved to terminal here. The client is exempt: its cancel
           // path already set the op to `cancelled` out of band, and
           // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          if (adapter.runtimeType !== 'client') {
+            get().completeOperation(operationId);
+            // A stop from elsewhere settles as `completed`; nothing drains the
+            // queue now, so the input must not wait for that hand-off.
+            get().updateOperationMetadata(operationId, { endedWithoutCompletion: true });
+          }
           break;
         }
         // `undefined`: unrecognized terminal status — fall through untouched.

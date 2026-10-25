@@ -1,6 +1,6 @@
 'use client';
 
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
@@ -28,12 +28,13 @@ import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
-import { useSessionStore } from '@/store/session';
-import { type LobeAgentSession } from '@/types/session';
-import { LobeSessionType } from '@/types/session';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 
 const AvailableAgentItem = memo<{
-  agent: LobeAgentSession;
+  agent: SidebarAgentItem;
   cx: any;
   isSelected: boolean;
   onToggle: (_agentId: string) => void;
@@ -43,11 +44,11 @@ const AvailableAgentItem = memo<{
   const ref = useRef<HTMLDivElement>(null);
   const isHovering = useHover(ref);
 
-  const _agentId = agent.config?.id;
-  const title = agentDisplayName(agent.meta, t('defaultSession', { ns: 'common' }));
-  const description = agent.meta?.description || '';
-  const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
-  const avatarBackground = agent.meta?.backgroundColor;
+  const _agentId = agent.id;
+  const title = agentDisplayName(agent, t('defaultSession', { ns: 'common' }));
+  const description = agent.description || '';
+  const avatar = typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR;
+  const avatarBackground = agent.backgroundColor || undefined;
 
   if (!_agentId) return null;
 
@@ -81,7 +82,7 @@ const AvailableAgentItem = memo<{
   );
 });
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css, cssVar, responsive }) => ({
   container: css`
     display: flex;
     flex-direction: row;
@@ -89,6 +90,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 500px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+
+    ${responsive.sm} {
+      flex-direction: column;
+      height: min(500px, calc(100dvh - 160px));
+    }
   `,
   description: css`
     font-size: 11px;
@@ -102,6 +108,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorFillTertiary};
+
+    ${responsive.sm} {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  `,
+  hostModelSelect: css`
+    ${responsive.sm} {
+      flex: 1;
+      min-width: 0;
+    }
   `,
   leftColumn: css`
     user-select: none;
@@ -112,6 +129,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: ${cssVar.paddingSM} 0;
     padding-inline: ${cssVar.paddingSM};
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    ${responsive.sm} {
+      min-height: 0;
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      border-inline-end: 0;
+    }
   `,
   listItem: css`
     cursor: pointer;
@@ -135,6 +158,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow-y: auto;
     flex: 1;
     padding: ${cssVar.paddingSM};
+
+    ${responsive.sm} {
+      min-height: 0;
+    }
   `,
   selectedItem: css`
     opacity: 0.6;
@@ -220,15 +247,12 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
       },
     );
 
-    const agentSessions = useSessionStore((s) => {
-      const allSessions = s.sessions || [];
-      return allSessions.filter(
-        (session): session is LobeAgentSession =>
-          session.type === LobeSessionType.Agent && !session.config?.virtual,
-      );
-    });
-
-    const currentSessionId = useSessionStore((s) => s.activeId);
+    const isLogin = useUserStore(authSelectors.isLogin);
+    const useFetchAgentList = useHomeStore((s) => s.useFetchAgentList);
+    useFetchAgentList(open && isLogin);
+    const agents = useHomeStore((s) =>
+      homeAgentListSelectors.allAgents(s).filter((item) => item.type === 'agent'),
+    );
 
     const handleAgentToggle = (agentId: string) => {
       setSelectedAgents((prev) =>
@@ -256,23 +280,20 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const availableAgents = useMemo(() => {
       if (mode === 'create') {
         // When creating a new group, all agents are available
-        return agentSessions;
+        return agents;
       } else {
-        // When adding to existing group, filter out the current session and existing members
-        return agentSessions.filter(
-          (agent) =>
-            agent.id !== currentSessionId && !existingMembers.includes(agent.config?.id || ''),
-        );
+        // Existing members already belong to the group and cannot be selected again.
+        return agents.filter((agent) => !existingMembers.includes(agent.id || ''));
       }
-    }, [agentSessions, currentSessionId, mode, existingMembers]);
+    }, [agents, mode, existingMembers]);
 
     // Filter available agents based on search term
     const filteredAvailableAgents = useMemo(() => {
       if (!searchTerm.trim()) return availableAgents;
 
       return availableAgents.filter((agent) => {
-        const title = agentDisplayName(agent.meta) ?? '';
-        const description = agent.meta?.description || '';
+        const title = agentDisplayName(agent) ?? '';
+        const description = agent.description || '';
         const searchLower = searchTerm.toLowerCase();
 
         return (
@@ -285,13 +306,13 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const selectedAgentListItems = useMemo(() => {
       return selectedAgents
         .map((agentId) => {
-          const agent = agentSessions.find((session) => session.config.id === agentId);
+          const agent = agents.find((agent) => agent.id === agentId);
           if (!agent) return null;
 
-          const title = agentDisplayName(agent.meta, t('defaultSession', { ns: 'common' }));
-          const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
-          const avatarBackground = agent.meta?.backgroundColor;
-          const description = agent.meta?.description || '';
+          const title = agentDisplayName(agent, t('defaultSession', { ns: 'common' }));
+          const avatar = typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR;
+          const avatarBackground = agent.backgroundColor || undefined;
+          const description = agent.description || '';
 
           return {
             actions: (
@@ -312,7 +333,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
-    }, [selectedAgents, agentSessions, t, handleRemoveAgent]);
+    }, [selectedAgents, agents, t, handleRemoveAgent]);
 
     const handleReset = () => {
       setSelectedAgents(preSelectedAgents);
@@ -409,7 +430,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                 />
               ) : (
                 filteredAvailableAgents.map((agent) => {
-                  const agentId = agent.config?.id;
+                  const agentId = agent.id;
                   if (!agentId) return null;
 
                   return (
@@ -450,11 +471,15 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                   </Flexbox>
                   <Flexbox horizontal align="center" gap={12}>
                     <div
-                      className={cx(isHostRemoved && styles.modelSelectDisabled)}
                       style={{ opacity: isHostRemoved ? 0.6 : 1 }}
+                      className={cx(
+                        styles.hostModelSelect,
+                        isHostRemoved && styles.modelSelectDisabled,
+                      )}
                     >
                       <ModelSelect
                         requiredAbilities={['functionCall']}
+                        style={{ maxWidth: '100%', minWidth: 'min(200px, 100%)' }}
                         value={normalizedHostModelConfig}
                         onChange={handleHostModelChange}
                       />

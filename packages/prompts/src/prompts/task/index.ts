@@ -537,6 +537,12 @@ export interface TaskRunPromptWorkspaceNode {
  * up without re-discovering everything.
  */
 export interface TaskRunPromptGoalLoop {
+  /**
+   * Questions earlier rounds put to the owner, with what came back — their
+   * answer, or the notice that none arrived. Each round starts in a fresh
+   * conversation, so without this a round re-asked what the last one asked.
+   */
+  askedQuestions?: Array<{ answer?: string; questions: string[] }>;
   /** Feedback from the automatic Acceptance review of the previous delivery. */
   automaticReviewFeedback?: string;
   /** Checks that did not pass in the previous round, with the verifier's why/suggestion. */
@@ -835,6 +841,20 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
         taskLines.push(`    ${i + 1}. ${check.title}${check.why ? ` — ${check.why}` : ''}`);
       }
     }
+    if (goalLoop.askedQuestions && goalLoop.askedQuestions.length > 0) {
+      taskLines.push('  Questions earlier rounds already asked the owner, and what came back:');
+      for (const [i, asked] of goalLoop.askedQuestions.entries()) {
+        taskLines.push(`    ${i + 1}. ${asked.questions.join(' / ')}`);
+        const answer = asked.answer?.replaceAll(/\s+/g, ' ').trim();
+        taskLines.push(`       → ${answer || '(nothing came back)'}`);
+      }
+    }
+    // Each round is a fresh conversation, and a run waits on nobody: a round
+    // that asked, timed out and delivered "awaiting your confirmation" failed
+    // Acceptance, and the next round asked the same thing again.
+    taskLines.push(
+      "  Do not ask the owner again about anything an earlier round already asked or that the owner's feedback answers: treat those answers as final. If an earlier question got no answer, do not ask it again or wait for one — go with the option you would recommend, state it in your delivery as an assumption the owner can overturn, and finish the work.",
+    );
     taskLines.push(
       '  To read a previous round in full, run: `lh task topic view ' +
         task.identifier +

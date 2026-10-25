@@ -106,11 +106,7 @@ class DiscordGatewayClient implements PlatformClient {
         this.bot = null;
       }
 
-      const adapter = createDiscordAdapter({
-        applicationId: this.config.applicationId,
-        botToken: this.config.credentials.botToken,
-        publicKey: this.config.credentials.publicKey,
-      });
+      const adapter = this.buildAdapter();
 
       const { Chat, ConsoleLogger } = await import('chat');
 
@@ -223,12 +219,26 @@ class DiscordGatewayClient implements PlatformClient {
 
   createAdapter(): Record<string, any> {
     return {
-      discord: createDiscordAdapter({
-        applicationId: this.config.applicationId,
-        botToken: this.config.credentials.botToken,
-        publicKey: this.config.credentials.publicKey,
-      }),
+      discord: this.buildAdapter(),
     };
+  }
+
+  /**
+   * `@chat-adapter/discord` falls back to `userName: "bot"` and never resolves
+   * the real bot name, while chat-sdk's `detectMention` treats `@<userName>`
+   * in the message text as a mention. Without an explicit name, any message
+   * containing a literal "@bot" counts as an @-mention of EVERY Discord bot in
+   * the thread. Real mentions are matched by the adapter through
+   * `data.mentions` / `<@applicationId>`, so the text fallback only needs a
+   * per-bot name that natural text never contains.
+   */
+  private buildAdapter(): DiscordAdapter {
+    return createDiscordAdapter({
+      applicationId: this.config.applicationId,
+      botToken: this.config.credentials.botToken,
+      publicKey: this.config.credentials.publicKey,
+      userName: `lobehub-discord-${this.config.applicationId}`,
+    });
   }
 
   /**

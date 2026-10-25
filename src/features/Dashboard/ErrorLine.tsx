@@ -38,7 +38,7 @@ export const ErrorLine = memo<{ detail?: ReactNode; summary: ReactNode }>(({ sum
     <Flexbox gap={4}>
       <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
         <Icon color={cssVar.colorError} icon={CircleAlertIcon} size={14} />
-        <Text fontSize={12} type={'secondary'}>
+        <Text fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
           {summary}
         </Text>
         {detail && (

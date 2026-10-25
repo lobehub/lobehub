@@ -48,6 +48,7 @@ const METHODS = [
   'collectAcceptances',
   'collectAssignees',
   'collectDeliveredAt',
+  'collectQuotaWaits',
   'collectRolloutGate',
   'collectRunHeartbeats',
   'consumeCompletedTask',

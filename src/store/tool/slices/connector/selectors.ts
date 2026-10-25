@@ -38,6 +38,21 @@ const connectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
 const customConnectors = (s: ToolStore): ConnectorWithTools[] =>
   (s.connectors ?? []).filter((c) => c.sourceType === 'custom');
 
+/** Remote marketplace OAuth MCPs also execute with server-held credentials. */
+const executableMcpConnectors = (s: ToolStore): ConnectorWithTools[] => {
+  // A late OAuth callback may connect after the user canceled installation.
+  // Marketplace tools enter the runtime only after the plugin install completes.
+  const installed = new Set((s.installedPlugins ?? []).map((plugin) => plugin.identifier));
+  return (s.connectors ?? []).filter(
+    (c) =>
+      c.sourceType === 'custom' ||
+      (c.sourceType === 'marketplace' &&
+        !!c.mcpServerUrl &&
+        c.status === 'connected' &&
+        installed.has(c.identifier)),
+  );
+};
+
 const notConnectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
   (s.connectors ?? []).filter((c) => c.status !== 'connected');
 
@@ -118,6 +133,7 @@ export const connectorSelectors = {
   isAgentConnectorsInit,
   connectorToolsGrouped,
   customConnectors,
+  executableMcpConnectors,
   connectorToolsGroupedByIdentifier:
     (identifier: string) =>
     (s: ToolStore): GroupedTools => {

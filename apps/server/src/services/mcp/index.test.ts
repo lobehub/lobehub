@@ -1,13 +1,16 @@
+import { inspect } from 'node:util';
+
 import type * as LobeConst from '@lobechat/const';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MCPClient } from '@/libs/mcp';
+import { MCPClient, type MCPClientParams } from '@/libs/mcp';
 
 import { MCPService } from './index';
 
 const environment = vi.hoisted(() => ({ isDesktop: false }));
+const debugLog = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<typeof LobeConst>()),
@@ -16,8 +19,60 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 
+vi.mock('debug', () => ({ default: () => debugLog }));
+
 // Mock 依赖
 vi.mock('@/libs/mcp');
+
+const sensitiveHttpParams = {
+  auth: {
+    accessToken: 'oauth-access-token-secret',
+    clientSecret: 'oauth-client-secret',
+    refreshToken: 'oauth-refresh-token-secret',
+    token: 'bearer-token-secret',
+    type: 'oauth2' as const,
+  },
+  headers: {
+    'Authorization': 'Bearer authorization-header-secret',
+    'Cookie': 'session=cookie-header-secret',
+    'X-Api-Key': 'custom-header-secret',
+  },
+  metadata: {
+    nested: {
+      auth: { token: 'nested-auth-secret' },
+      env: { PRIVATE_KEY: 'nested-env-secret' },
+      headers: { Cookie: 'nested-cookie-secret' },
+    },
+  },
+  name: 'remote-connector',
+  type: 'http' as const,
+  url: 'https://url-user:url-password@mcp.example.com/path-token-secret?api_key=url-query-secret#fragment-secret',
+} as unknown as MCPClientParams;
+
+const sensitiveValues = [
+  'oauth-access-token-secret',
+  'oauth-client-secret',
+  'oauth-refresh-token-secret',
+  'bearer-token-secret',
+  'authorization-header-secret',
+  'cookie-header-secret',
+  'custom-header-secret',
+  'nested-auth-secret',
+  'nested-env-secret',
+  'nested-cookie-secret',
+  'url-user',
+  'url-password',
+  'path-token-secret',
+  'url-query-secret',
+  'fragment-secret',
+  'remote-generated-secret',
+];
+
+const expectLogsToBeRedacted = (logOutput: string) => {
+  for (const sensitiveValue of sensitiveValues) {
+    expect(logOutput).not.toContain(sensitiveValue);
+  }
+};
 
 describe('MCPService stdio authorization', () => {
   const stdioParams = {
@@ -74,6 +129,114 @@ describe('MCPService stdio authorization', () => {
       }),
     ).resolves.toEqual([]);
     expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
+  });
+});
+
+describe('MCPService log redaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    environment.isDesktop = false;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    {
+      invoke: (service: MCPService) => service.listTools(sensitiveHttpParams),
+      operationName: 'listing tools',
+    },
+    {
+      invoke: (service: MCPService) => service.listResources(sensitiveHttpParams),
+      operationName: 'listing resources',
+    },
+    {
+      invoke: (service: MCPService) => service.listPrompts(sensitiveHttpParams),
+      operationName: 'listing prompts',
+    },
+    {
+      invoke: (service: MCPService) =>
+        service.callTool({
+          argsStr: '{}',
+          clientParams: sensitiveHttpParams,
+          toolName: 'read_records',
+        }),
+      operationName: 'calling tool "read_records"',
+    },
+  ])('redacts credentials when $operationName fails', async ({ invoke, operationName }) => {
+    const service = new MCPService();
+    const failure = new Error('Connection failed with remote-generated-secret');
+    const mockClient = {
+      callTool: vi.fn().mockRejectedValue(failure),
+      listPrompts: vi.fn().mockRejectedValue(failure),
+      listResources: vi.fn().mockRejectedValue(failure),
+      listTools: vi.fn().mockRejectedValue(failure),
+    };
+    vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(invoke(service)).rejects.toThrow(TRPCError);
+
+    const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+    expectLogsToBeRedacted(logOutput);
+    expect(logOutput).toContain(operationName);
+    expect(logOutput).toContain('attempt');
+    expect(logOutput).toContain('https://mcp.example.com');
+    expect(logOutput).toContain("type: 'http'");
+  });
+
+  it('redacts credentials from client initialization failures', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(MCPClient.prototype.initialize).mockRejectedValueOnce(
+      new Error('Initialization failed with remote-generated-secret'),
+    );
+
+    await expect(new MCPService().listRawTools(sensitiveHttpParams)).rejects.toThrow(TRPCError);
+
+    const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+    expectLogsToBeRedacted(logOutput);
+    expect(logOutput).toContain('https://mcp.example.com');
+    expect(logOutput).toContain("name: 'Error'");
+  });
+
+  it('redacts stdio environment variables from rejected server operations', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      new MCPService().listRawTools({
+        args: ['serve'],
+        command: 'local-mcp',
+        env: { PRIVATE_KEY: 'stdio-env-secret' },
+        name: 'local-connector',
+        type: 'stdio',
+      }),
+    ).rejects.toThrow(TRPCError);
+
+    const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+    expect(logOutput).not.toContain('stdio-env-secret');
+    expect(logOutput).toContain("type: 'stdio'");
+  });
+
+  it('does not log tool argument or result values', async () => {
+    const service = new MCPService();
+    const mockClient = {
+      callTool: vi.fn().mockResolvedValue({
+        content: [{ text: 'tool-result-secret', type: 'text' }],
+      }),
+    };
+    vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
+
+    await service.callTool({
+      argsStr: JSON.stringify({ apiKey: 'tool-argument-secret' }),
+      clientParams: sensitiveHttpParams,
+      toolName: 'read_records',
+    });
+
+    const logOutput = inspect(debugLog.mock.calls, { depth: null });
+    expect(logOutput).not.toContain('tool-argument-secret');
+    expect(logOutput).not.toContain('tool-result-secret');
+    expectLogsToBeRedacted(logOutput);
   });
 });
 

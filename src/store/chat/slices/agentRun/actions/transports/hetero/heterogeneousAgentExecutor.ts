@@ -90,9 +90,10 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
-import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
+import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
+import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
-import { getNativeHeteroSessionBindingKey } from './heteroResume';
+import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
@@ -102,6 +103,10 @@ import {
   shouldHydrateResumeReplay,
 } from './resumeReplay';
 import { buildLobeHubSessionEnv } from './sessionEnv';
+import {
+  createSubagentStoreDispatcher,
+  type SubagentStoreDispatcher,
+} from './subagentStoreDispatcher';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -215,21 +220,6 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
     toRawHeterogeneousAgentMessageError(error, agentType),
     agentType,
   );
-
-const isRecoverableResumeError = (
-  error: unknown,
-): error is HeterogeneousAgentSessionError & {
-  code:
-    | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
-    | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound;
-} => {
-  if (!error || typeof error !== 'object' || !('code' in error)) return false;
-
-  return (
-    error.code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch ||
-    error.code === HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound
-  );
-};
 
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
@@ -387,36 +377,6 @@ const subscribeBroadcasts = (
   };
 };
 
-/**
- * Thread-scoped in-memory dispatcher for a single subagent run. The
- * caller binds it to a per-spawn sub-operation whose
- * `OperationContext.threadId` + `scope: 'thread'` cause
- * `internal_dispatchMessage` to route every create/update into the
- * Thread's `messagesMap` bucket through the SAME context-resolution
- * path the main agent uses — no special-cased threadId override on the
- * dispatch boundary.
- *
- * Subagent streaming mirrors the main agent's gateway-handler flow:
- * DB writes are authoritative (see `persistSubagent*Chunk` +
- * `persistToolBatch`) and these dispatches feed the UI the same content
- * as tokens arrive, so the Thread view streams with the same cadence as
- * the main bubble. `fetchAndReplaceMessages` (main-topic scoped) never
- * refreshes the thread bucket, so without these dispatches the Thread
- * would only show stale DB state until the user re-navigates.
- */
-interface SubagentStoreDispatcher {
-  /** Push a new message into the thread bucket (user / assistant / tool). */
-  create: (msg: UIChatMessage) => void;
-  /** Atomically replace pluginState and advance its optimistic watermark. */
-  replacePluginState: (
-    id: string,
-    pluginState: Record<string, unknown>,
-    metadata: NonNullable<UIChatMessage['metadata']>,
-  ) => void;
-  /** Update a message already in the thread bucket by id. */
-  update: (id: string, value: Partial<UIChatMessage>) => void;
-}
-
 const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 const HETERO_TERMINAL_EVENT_GRACE_TIMEOUT_MS = 3_000;
 
@@ -527,6 +487,13 @@ export const executeHeterogeneousAgent = async (
   } = params;
   // Navigation can move to another workspace during the awaits below.
   const workspaceId = 'workspaceId' in params ? params.workspaceId : getActiveWorkspaceId();
+
+  /** Rows this executor creates; the write batcher persists them later. */
+  const createClientRow = (id: string, value: any, dispatchContext: { operationId: string }) =>
+    get().internal_dispatchMessage({ id, type: 'createMessage', value }, dispatchContext, {
+      creationOrigin: 'client',
+    });
+
   let outcome: HeterogeneousAgentExecutionOutcome | undefined;
   /** Set by `persistTerminalError`; surfaced on the outcome, see its doc. */
   let terminalErrorPersisted = false;
@@ -637,6 +604,7 @@ export const executeHeterogeneousAgent = async (
     messageError: ChatMessageError,
     options?: { clearContent?: boolean },
   ) => {
+    const firstTerminalError = !terminalErrorPersisted;
     terminalErrorPersisted = true;
     writeTopicStatus('failed');
     get().internal_toggleToolCallingStreaming(mainState.currentAssistantId, undefined);
@@ -681,6 +649,18 @@ export const executeHeterogeneousAgent = async (
       },
       { operationId },
     );
+
+    if (firstTerminalError && !isAborted()) {
+      await runLifecycle.afterRunComplete({
+        context,
+        notification: { error: messageError },
+        operationId,
+        runId: operationId,
+        runScope,
+        runtimeType: 'hetero',
+        status: 'failed',
+      });
+    }
   };
 
   let ipcRunSessionId: string | undefined;
@@ -989,6 +969,7 @@ export const executeHeterogeneousAgent = async (
       messageService as { batchMutate?: (operations: MessageBatchOperation[]) => Promise<any> }
     ).batchMutate,
     createMessage: messageService.createMessage,
+    onCreated: get().internal_confirmClientMessages,
     updateMessage: messageService.updateMessage,
     updateToolMessage: messageService.updateToolMessage,
   });
@@ -1208,28 +1189,8 @@ export const executeHeterogeneousAgent = async (
       parentOperationId: operationId,
       type: 'subagentThread',
     });
-    const dispatchCtx = { operationId: subOp.operationId };
     return {
-      stream: {
-        create(msg) {
-          get().internal_dispatchMessage(
-            { id: msg.id, type: 'createMessage', value: msg as any },
-            dispatchCtx,
-          );
-        },
-        replacePluginState(id, pluginState, metadata) {
-          get().internal_dispatchMessage(
-            { id, metadata, type: 'replaceMessagePluginState', value: pluginState },
-            dispatchCtx,
-          );
-        },
-        update(id, value) {
-          get().internal_dispatchMessage(
-            { id, type: 'updateMessage', value: value as any },
-            dispatchCtx,
-          );
-        },
-      },
+      stream: createSubagentStoreDispatcher(get, { operationId: subOp.operationId }),
       subOperationId: subOp.operationId,
     };
   };
@@ -1641,10 +1602,7 @@ export const executeHeterogeneousAgent = async (
           console.error('[HeterogeneousAgent] Failed to create step assistant:', err);
           pendingCreateLedger.add(intent.messageId, messageToCreate);
         });
-        get().internal_dispatchMessage(
-          { id: intent.messageId, type: 'createMessage', value: messageToCreate },
-          { operationId },
-        );
+        createClientRow(intent.messageId, messageToCreate, { operationId });
         // Associate so cancellation / cleanup tracks the new step's message.
         get().associateMessageWithOperation(intent.messageId, operationId);
         return;
@@ -1760,10 +1718,7 @@ export const executeHeterogeneousAgent = async (
           });
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           mainToolCallIds.add(x.payload.id);
-          get().internal_dispatchMessage(
-            { id: x.toolMessageId, type: 'createMessage', value: toolMsg },
-            { operationId },
-          );
+          createClientRow(x.toolMessageId, toolMsg, { operationId });
         }
 
         // Phase 3: backfill result_msg_id on assistant.tools[].
@@ -2006,7 +1961,7 @@ export const executeHeterogeneousAgent = async (
     // before; a quota-service failure must never block the run.
     const quotaAccountPlan = providerBindingActive
       ? { env: {}, externalAccountId: undefined }
-      : await resolveQuotaAccountSpawnPlan(context.agentId, adapterType);
+      : await resolveQuotaAccountSpawnPlan(context.agentId, adapterType, heterogeneousProvider.env);
 
     const sessionEnv = {
       // Tell the CLI which LobeHub conversation and workspace it runs inside.

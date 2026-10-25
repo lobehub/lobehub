@@ -28,7 +28,7 @@ export class SidebarUIActionImpl {
     this.#get = get;
   }
 
-  duplicateAgent = async (agentId: string, newTitle?: string): Promise<void> => {
+  duplicateAgent = async (agentId: string, newTitle?: string): Promise<string | undefined> => {
     const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const result = await agentService.duplicateAgent(agentId, newTitle);
@@ -46,9 +46,10 @@ export class SidebarUIActionImpl {
     // Switch to the new agent
     const agentStore = getAgentStoreState();
     agentStore.setActiveAgentId(result.agentId);
+    return result.agentId;
   };
 
-  duplicateAgentGroup = async (groupId: string, newTitle?: string): Promise<void> => {
+  duplicateAgentGroup = async (groupId: string, newTitle?: string): Promise<string | undefined> => {
     const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const result = await chatGroupService.duplicateGroup(groupId, newTitle);
@@ -66,6 +67,7 @@ export class SidebarUIActionImpl {
     // Switch to the new group (using supervisor agent id)
     const agentStore = getAgentStoreState();
     agentStore.setActiveAgentId(result.supervisorAgentId);
+    return result.groupId;
   };
 
   // Pinning is part of the SHARED sidebar arrangement in workspace mode — it

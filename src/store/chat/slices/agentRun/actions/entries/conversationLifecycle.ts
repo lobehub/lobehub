@@ -17,7 +17,6 @@ import type {
   MessageMetadata,
   SendMessageParams,
   SendMessageServerResponse,
-  UIChatMessage,
 } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
@@ -25,6 +24,7 @@ import {
   getWorkingDirSourcePath,
   RequestTrigger,
   resolveAgentAgencyConfig,
+  toComposerUserMessage,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui';
@@ -57,7 +57,6 @@ import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
-import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import {
@@ -66,7 +65,10 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
-import { getPendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
+import {
+  getPendingSandboxSelection,
+  toSandboxTopicMetadata,
+} from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import {
   dbMessageSelectors,
@@ -78,19 +80,26 @@ import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
+import {
+  findOrphanedQueueKey,
+  sendQueuedMessages,
+} from '@/store/chat/slices/agentRun/actions/lifecycle/queuedFollowUp';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
+import { buildQueuedFollowUpRequest } from '@/store/chat/slices/agentRun/actions/transports/gateway/execRequest';
+import {
+  canQueueOnServer,
+  findServerHeldQueueKey,
+  handOffQueuedMessage,
+  reclaimServerQueuedMessages,
+} from '@/store/chat/slices/agentRun/actions/transports/gateway/serverSteerQueue';
 import {
   getNativeHeteroSessionBindingKey,
   resolveHeteroResume,
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
-import type { QueuedFile } from '@/store/chat/slices/operation/types';
-import {
-  isQueueBlockingOperation,
-  mergeQueuedMessages,
-  reconstructUploadFilesFromQueue,
-} from '@/store/chat/slices/operation/types';
+import { isQueueBlockingOperation, snapshotQueuedFiles } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
+import { topicListFilterOf } from '@/store/chat/slices/topic/projection';
 import { resolveTopicHeteroPin } from '@/store/chat/slices/topic/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
@@ -111,7 +120,6 @@ import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { findProjectDirectory } from '@/store/projectWorkingDirectory';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
@@ -133,7 +141,9 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
+import { mergePartialPersistedMessages, resolveSendResponseMessages } from './persistedMessages';
 import { resolveExistingTopicForRun } from './resolveExistingTopic';
+import { resolveProjectDirectoryRun } from './resolveProjectDirectoryRun';
 
 /**
  * Extended params for sendMessage with context
@@ -218,46 +228,6 @@ const throwIfSendAborted = (signal?: AbortSignal) => {
     : new DOMException('Message send was cancelled', 'AbortError');
 };
 
-const attachSendTimeMetadataToUserMessage = (
-  messages: UIChatMessage[],
-  userMessageId: string,
-  metadata: MessageMetadata | undefined,
-): UIChatMessage[] => {
-  if (!metadata) return messages;
-
-  let changed = false;
-  const nextMessages = messages.map((message) => {
-    if (message.id !== userMessageId) return message;
-
-    changed = true;
-    return {
-      ...message,
-      metadata: {
-        ...(message.metadata ?? undefined),
-        ...metadata,
-      },
-    };
-  });
-
-  return changed ? nextMessages : messages;
-};
-
-const mergePartialPersistedMessages = (
-  currentMessages: UIChatMessage[],
-  persistedMessages: UIChatMessage[],
-  replacedMessageIds: string[],
-): UIChatMessage[] => {
-  const replacedIdSet = new Set(replacedMessageIds);
-  const persistedIdSet = new Set(persistedMessages.map((message) => message.id));
-
-  return [
-    ...currentMessages.filter(
-      (message) => !replacedIdSet.has(message.id) && !persistedIdSet.has(message.id),
-    ),
-    ...persistedMessages,
-  ];
-};
-
 export class ConversationLifecycleActionImpl {
   readonly #get: () => ChatStore;
 
@@ -267,29 +237,11 @@ export class ConversationLifecycleActionImpl {
     this.#get = get;
   }
 
-  /**
-   * Read the active topic-list filter from `topicDataMap` so it can be
-   * forwarded to `sendMessageInServer`. Without this, the server returns
-   * an unfiltered list which `internal_updateTopics` then writes back over
-   * the filtered sidebar — completed/cron topics reappear until the next
-   * SWR revalidation.
-   */
-  #getTopicFilter = (
-    agentId?: string,
-    groupId?: string,
-  ):
-    | { excludeStatuses?: string[]; excludeTriggers?: string[]; includeTriggers?: string[] }
-    | undefined => {
-    if (!agentId && !groupId) return undefined;
-    const data = this.#get().topicDataMap[topicMapKey({ agentId, groupId })];
-    if (!data) return undefined;
-    const { excludeStatuses, excludeTriggers } = data;
-    if (!excludeStatuses?.length && !excludeTriggers?.length) return undefined;
-    return {
-      ...(excludeStatuses?.length ? { excludeStatuses } : {}),
-      ...(excludeTriggers?.length ? { excludeTriggers } : {}),
-    };
-  };
+  /** The active topic-list filter, forwarded to `sendMessageInServer` (see `topicListFilterOf`). */
+  #getTopicFilter = (agentId?: string, groupId?: string) =>
+    agentId || groupId
+      ? topicListFilterOf(this.#get().topicDataMap[topicMapKey({ agentId, groupId })])
+      : undefined;
 
   /**
    * Land a thread the server created for this send: record it on the operation,
@@ -509,31 +461,15 @@ export class ConversationLifecycleActionImpl {
       pendingDirectory?.agentId === ownerAgentId
         ? pendingDirectory.projectWorkingDirectoryId
         : undefined;
-    const projectDirectoryId = boundTopic?.projectWorkingDirectoryId ?? stagedDirectoryId;
-    let stagedDirectory: { id: string; path: string; projectId: string } | undefined;
-    if (projectDirectoryId) {
-      // The sidebar's directory replica already holds the row; read it locally
-      // so the optimistic pair is not held behind a network round trip. The
-      // server re-validates the directory (environment link, enabled state,
-      // permission) when it starts the run. Only a cold replica pays for resolve.
-      const directory =
-        findProjectDirectory(projectDirectoryId) ??
-        (await projectWorkingDirectoryService.resolve(projectDirectoryId)).data;
-      if (stagedDirectoryId) stagedDirectory = directory;
-      if (stagedDirectory) consumePendingTopicRepos(ownerAgentId); // a cloud repo pick conflicts
-      if (!isGatewayMode)
-        throw new Error('Enable Gateway Mode to run in a project working directory');
-      if (
-        agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
-        agencyConfig.boundDeviceId !== directory.deviceId
-      )
-        throw new Error('Agent is fixed to another execution target');
-      agencyConfig = {
-        ...agencyConfig,
-        boundDeviceId: directory.deviceId,
-        executionTarget: 'device',
-      };
-    }
+    const projectRun = await resolveProjectDirectoryRun({
+      agencyConfig,
+      boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
+      isGatewayMode,
+      stagedDirectoryId,
+    });
+    ({ agencyConfig } = projectRun);
+    const { stagedDirectory } = projectRun;
+    if (stagedDirectory) consumePendingTopicRepos(ownerAgentId); // a cloud repo pick conflicts
 
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
@@ -795,88 +731,78 @@ export class ConversationLifecycleActionImpl {
       !runningQueueBlockingOp &&
       !onlyAddUserMessage &&
       operationSelectors.isQueueDrainPending(operationContext)(this.#get());
-    if (runningQueueBlockingOp || queueDrainPending) {
-      // Snapshot file previews so the tray can render thumbnails AND the
-      // resumed sendMessage can rebuild audioList/imageList/videoList — by the time
-      // we drain, chatUploadFileList has long been cleared.
-      const filesPreview: QueuedFile[] = (files ?? []).map((f) => ({
-        audioMetadata: f.audioMetadata,
-        id: f.id,
-        mimeType: f.file?.type ?? '',
-        name: f.file?.name ?? f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-      }));
-
+    /** Queue this send behind what holds `key`; on the server when the run can join it there. */
+    const queueThisSend = (key: string) => {
+      const queuedId = nanoid();
+      const queueOnServer =
+        !onlyAddUserMessage &&
+        canQueueOnServer(this.#get, key, {
+          context: operationContext,
+          isGatewayRun: runtimeType === 'gateway' && !directMentionRoute && !willCreateNewTopic,
+        });
       this.#get().enqueueMessage(
-        queueTargetKey,
+        key,
         {
-          id: nanoid(),
+          id: queuedId,
           content: message,
           editorData: editorData ?? undefined,
           files: fileIdList,
-          filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+          filesPreview: snapshotQueuedFiles(files),
           ...(forceRuntime ? { forceRuntime } : {}),
           interruptMode: 'soft',
           metadata: userMessageMetadata,
           createdAt: Date.now(),
+          ...(queueOnServer && { serverDelivery: 'appending' as const }),
         },
         runningQueueBlockingOp?.id,
       );
+      if (queueOnServer)
+        void handOffQueuedMessage(this.#get, key, operationContext, queuedId, () =>
+          buildQueuedFollowUpRequest(this.#get, {
+            context: operationContext,
+            contextSelections,
+            fileIds: fileIdList,
+            mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
+            message,
+            pageSelections,
+            selectedSkillIds: selectedSkills.map((skill) => skill.identifier),
+            selectedToolIds: selectedTools.map((tool) => tool.identifier),
+            trigger: requestTrigger,
+          }),
+        );
       notifyMessageAccepted();
-      return;
-    }
+    };
+    if (runningQueueBlockingOp || queueDrainPending) return void queueThisSend(queueTargetKey);
 
-    // Stop may already have moved the old operation to `cancelled`, so there is
-    // no live blocker left to drain follow-ups that were queued before Stop.
-    // Fold the new send into that FIFO and immediately restart the whole batch;
-    // otherwise the new message jumps ahead and the older queue drains after it.
-    const orphanedQueueKey = queueCandidateKeys.find((key) => {
-      if ((this.#get().queuedMessages[key]?.length ?? 0) === 0) return false;
-      return (this.#get().operationsByContext[key] || []).some((id) => {
-        const operation = this.#get().operations[id];
-        return operation?.status === 'cancelled' && operation.metadata.isAborting;
-      });
-    });
+    // Nothing runs: take server-queued follow-ups back; one still being delivered keeps its place.
+    await Promise.all(queueCandidateKeys.map((key) => reclaimServerQueuedMessages(this.#get, key)));
+    const heldKey = findServerHeldQueueKey(this.#get, queueCandidateKeys);
+    if (heldKey && !onlyAddUserMessage) return void queueThisSend(heldKey);
+
+    const orphanedQueueKey = findOrphanedQueueKey(
+      this.#get,
+      queueCandidateKeys,
+      willCreateNewTopic,
+    );
     if (orphanedQueueKey && !onlyAddUserMessage) {
-      const filesPreview: QueuedFile[] = (files ?? []).map((file) => ({
-        audioMetadata: file.audioMetadata,
-        id: file.id,
-        mimeType: file.file?.type ?? '',
-        name: file.file?.name ?? file.id,
-        url: file.fileUrl || file.base64Url || file.previewUrl || '',
-      }));
       this.#get().enqueueMessage(orphanedQueueKey, {
         content: message,
         createdAt: Date.now(),
         editorData: editorData ?? undefined,
         files: fileIdList,
-        filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+        filesPreview: snapshotQueuedFiles(files),
         ...(forceRuntime ? { forceRuntime } : {}),
         id: nanoid(),
         interruptMode: 'soft',
         metadata: userMessageMetadata,
       });
-      const merged = mergeQueuedMessages(this.#get().drainQueuedMessages(orphanedQueueKey));
+      const restarted = this.#get().drainQueuedMessages(orphanedQueueKey);
       notifyMessageAccepted();
 
       setTimeout(() => {
-        this.#get()
-          .sendMessage({
-            context: operationContext,
-            editorData: merged.editorData,
-            files:
-              merged.filesPreview.length > 0
-                ? reconstructUploadFilesFromQueue(merged.filesPreview)
-                : merged.files.length > 0
-                  ? (merged.files.map((id) => ({ id })) as any)
-                  : undefined,
-            ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
-            message: merged.content,
-            metadata: { ...merged.metadata, steer: true },
-          })
-          .catch((error: unknown) => {
-            console.error('[sendMessage] restarting queued content after Stop failed:', error);
-          });
+        sendQueuedMessages(this.#get, operationContext, restarted).catch((error: unknown) => {
+          console.error('[sendMessage] restarting queued content after Stop failed:', error);
+        });
       }, 0);
 
       return;
@@ -1367,12 +1293,7 @@ export class ConversationLifecycleActionImpl {
       willCreateNewTopic && operationContext.agentId
         ? getPendingSandboxSelection(operationContext.agentId)
         : undefined;
-    const sandboxInstanceMetadata: ChatTopicMetadata | undefined = pendingSandboxSelection
-      ? {
-          sandboxInstanceId: pendingSandboxSelection.instanceId,
-          sandboxMode: pendingSandboxSelection.mode,
-        }
-      : undefined;
+    const sandboxInstanceMetadata = toSandboxTopicMetadata(pendingSandboxSelection);
     /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
     const optimisticTopicMetadata =
       newTopicReasoningSnapshot || sandboxInstanceMetadata
@@ -1483,6 +1404,9 @@ export class ConversationLifecycleActionImpl {
           );
         }
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
+        // Adopting the minted topic consumed the staging; the topic never came
+        // to be, so the blank conversation still belongs to that directory.
+        if (stagedDirectory) this.#get().setPendingNewTopicDirectory(pendingDirectory);
       }
       this.#get().internal_dispatchTopic(
         { ...optimisticTopicScope, type: 'deleteTopic', id: optimisticTopic.id },
@@ -1937,6 +1861,9 @@ export class ConversationLifecycleActionImpl {
           // state while waiting for the first step_start event to replace
           // messages with the server's real IDs.
           tempMessageIds: [tempAssistantId],
+          // The server persists the user row here: build it from the metadata the
+          // optimistic row shows, the same object `sendMessageInServer` persists.
+          userMessage: toComposerUserMessage({ editorData, metadata: userMessageMetadata }),
         });
         const cancelledAfterPersistence = abortController.signal.aborted;
 
@@ -2190,25 +2117,23 @@ export class ConversationLifecycleActionImpl {
           finalMessageKey,
         );
       this.#get().moveVoiceMessages(operationContext, finalContext);
-      const persistedMessages = attachSendTimeMetadataToUserMessage(
-        data.messages,
-        data.userMessageId,
-        userMessageMetadata,
-      );
       data = {
         ...data,
-        messages: responseMeta.__isPartialMessages
-          ? mergePartialPersistedMessages(
-              this.#get().messagesMap[finalMessageKey] || [],
-              persistedMessages,
-              [tempId, tempAssistantId],
-            )
-          : persistedMessages,
+        messages: resolveSendResponseMessages({
+          currentMessages: this.#get().messagesMap[finalMessageKey] || [],
+          isPartial: !!responseMeta.__isPartialMessages,
+          messages: data.messages,
+          replacedMessageIds: [tempId, tempAssistantId],
+          userMessageId: data.userMessageId,
+          userMessageMetadata,
+        }),
       };
 
+      // The send response skips Work summaries; keep the ones earlier replies already carry.
       this.#get().replaceMessages(data.messages, {
         context: finalContext,
         action: 'sendMessage/serverResponse',
+        preserveWorks: true,
       });
 
       if (isCreateNewTopic && data.topicId) {
@@ -2460,14 +2385,14 @@ export class ConversationLifecycleActionImpl {
   executeCompression = async (
     context: Record<string, any>,
     parentOperationId: string,
+    options?: { beforeMessageId?: string },
   ): Promise<void> => {
     const { agentId, topicId } = context;
     if (!topicId) return;
 
     const contextKey = messageMapKey(context as any);
     const dbMessages = dbMessageSelectors.getDbMessagesByKey(contextKey)(this.#get()) || [];
-    const messageIds = getCompressionCandidateMessageIds(dbMessages);
-
+    const messageIds = getCompressionCandidateMessageIds(dbMessages, options);
     if (messageIds.length === 0) return;
 
     const tempId = 'tmp_compress_' + nanoid();
@@ -2478,18 +2403,15 @@ export class ConversationLifecycleActionImpl {
     });
 
     // Immediate UI feedback: render a pending compressed group from the first frame
-    this.#get().internal_dispatchMessage(
-      {
+    this.#get().internal_createClientMessage(
+      tempId,
+      createPendingCompressedGroup({
+        agentId,
+        groupId: context.groupId,
         id: tempId,
-        type: 'createMessage',
-        value: createPendingCompressedGroup({
-          agentId,
-          groupId: context.groupId,
-          id: tempId,
-          threadId: context.threadId,
-          topicId,
-        }) as any,
-      },
+        threadId: context.threadId,
+        topicId,
+      }) as any,
       { operationId },
     );
 

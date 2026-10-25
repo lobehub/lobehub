@@ -1,5 +1,5 @@
 import type { ExecAgentResult } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirSourcePath } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
@@ -61,6 +61,7 @@ export const dispatchToCliDevice = async (
     resumeSessionId,
     topic,
     topicRepos,
+    unansweredUserTurns,
   } = prepared;
   const { agentId: resolvedAgentId, operationId, topicId } = run;
 
@@ -127,7 +128,16 @@ export const dispatchToCliDevice = async (
     topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
     workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
   });
-  const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
+  // Local CLIs (Claude Code, Codex) key their sessions by cwd, so the spawn cwd
+  // stays on the SOURCE repo, mirroring the client's `conversationLifecycle`.
+  // The active worktree is a record the agent may already have deleted:
+  // spawning in it would lose the session, or fail the run outright once the
+  // directory is gone. The agent is told about it in the system context instead.
+  const deviceCwd = getWorkingDirSourcePath(deviceCwdConfig);
+  const worktreePath = deviceCwdConfig?.git?.activeWorktree;
+  const worktreeContext = worktreePath
+    ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
+    : {};
 
   // An unbound topic has no pinned cwd yet: the directory was only
   // recorded at agent level (`workingDirByDevice`) when no topic existed.
@@ -145,12 +155,15 @@ export const dispatchToCliDevice = async (
   // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
   // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
   const deviceSystemContext = buildRemoteDeviceHeteroContext({
+    ...worktreeContext,
     agentSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
+    unansweredUserTurns,
   });
   const deviceResumeFallbackSystemContext =
     resumeSessionId && conversationHistory
       ? buildRemoteDeviceHeteroContext({
+          ...worktreeContext,
           agentSystemContext,
           conversationHistory,
         })

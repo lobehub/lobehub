@@ -7,6 +7,18 @@ import type { SerializedHook } from '../hooks';
 export type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
+ * Runs after a topic's own run settles — not a child run (sub-agent, group
+ * member, `callAgent` target), not a park for approval, not a user stop. The
+ * topic is free for the next turn at that point, which is when work that was
+ * waiting on it (background sub-agent results) can be handed over. Scheduled
+ * after the response; the handler owns its errors.
+ */
+export type TopicRunSettledHandler = (params: {
+  operationId: string;
+  topicId: string;
+}) => Promise<void>;
+
+/**
  * Normalized terminal-completion input for {@link CompletionLifecycle.completeOperation}.
  *
  * This is the single typed shape every NON-in-process terminal path passes in —
@@ -37,6 +49,8 @@ export interface OperationCompletionInput {
    * in-process path's user turn.
    */
   goal?: unknown;
+  /** User-facing LLM-call count for the run (derived from `usage` when omitted). */
+  llmCalls?: number | null;
   /** Executed model — the verify gate keys off `op.model`, so hetero backfills it. */
   model?: string | null;
   operationId: string;

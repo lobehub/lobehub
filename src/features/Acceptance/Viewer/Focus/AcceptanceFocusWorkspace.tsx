@@ -2,15 +2,16 @@
 
 import { toast } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { openAddCheckModal } from '../Checks/AddCheckModal';
-import { acceptanceCheckPath, acceptanceOverviewPath } from '../routes';
+import { acceptanceCheckPath, acceptanceOverviewPath, useAcceptanceRouteBase } from '../routes';
 import { checksForTurn } from '../turnChecks';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useAcceptanceTurn } from '../useAcceptanceTurn';
@@ -19,12 +20,13 @@ import AcceptanceFocusReview from './AcceptanceFocusReview';
 
 const AcceptanceFocusWorkspace = () => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const query = searchParams.toString() ? `?${searchParams}` : '';
   const params = useParams<{ checkId?: string }>();
   const { acceptanceId } = useAcceptanceScope();
+  const routeBase = useAcceptanceRouteBase();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const { turn } = useAcceptanceTurn();
   const turnChecks = data ? checksForTurn(data, turn) : [];
@@ -62,12 +64,12 @@ const AcceptanceFocusWorkspace = () => {
       onBack={() =>
         (location.state as { fromCheckList?: boolean } | null)?.fromCheckList
           ? navigate(-1)
-          : navigate(acceptanceOverviewPath(acceptanceId) + query, { replace: true })
+          : navigate(acceptanceOverviewPath(acceptanceId, routeBase) + query, { replace: true })
       }
       // Stepping between checks replaces the entry in place, carrying the
       // "came from the list" flag so the back arrow still knows where to land.
       onSelectCheck={(id) =>
-        navigate(acceptanceCheckPath(acceptanceId, id) + query, {
+        navigate(acceptanceCheckPath(acceptanceId, id, routeBase) + query, {
           replace: true,
           state: location.state,
         })

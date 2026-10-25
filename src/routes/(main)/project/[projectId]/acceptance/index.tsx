@@ -1,1 +1,1 @@
-export { default } from '@/features/Projects/Acceptance';
+export { default } from '@/features/Projects/Acceptance/List';

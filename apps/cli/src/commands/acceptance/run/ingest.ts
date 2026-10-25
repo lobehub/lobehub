@@ -8,12 +8,13 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../../api/client';
-import { resolveWorkspaceId } from '../../../api/workspace';
+import { PERSONAL_SCOPE_ENV_VALUE, resolveWorkspaceId } from '../../../api/workspace';
 import { resolveServerUrl } from '../../../settings';
 import { ensureAcceptanceDirIgnoredFor } from '../../../utils/acceptanceDir';
 import { outputJson } from '../../../utils/format';
 import { log } from '../../../utils/logger';
 import { assertReportLanguage, ingestLanguageFields, languageSummary } from '../language';
+import { projectEnsureInput, resolveAcceptanceProject, warnIfFiledElsewhere } from '../project';
 import {
   deriveReportVerdict,
   type EvidenceType,
@@ -50,6 +51,7 @@ export interface IngestReportOptions {
   json?: boolean | string;
   open?: boolean;
   operation?: string;
+  project?: string;
   requirement?: string;
   source?: string;
   subject?: string;
@@ -246,6 +248,12 @@ export async function ingestReportAction(
       title,
     }),
   );
+  // The repository the report was written in names the project; a report in a
+  // scratch directory falls back to where the command runs.
+  const project = await resolveAcceptanceProject(client, {
+    flag: options.project,
+    startDirs: [dir, process.cwd()],
+  });
   if (options.dryRun) {
     const checked =
       language.status === 'enforced'
@@ -260,6 +268,7 @@ export async function ingestReportAction(
           dryRun: true,
           language: languageSummary(language),
           planItems: plan?.length ?? 0,
+          projectId: project?.id ?? null,
         },
         typeof options.json === 'string' ? options.json : undefined,
       );
@@ -284,6 +293,9 @@ export async function ingestReportAction(
         `Operation ${options.operation} already has a verification round; drop --acceptance/--subject.`,
       );
       process.exit(1);
+    }
+    if (options.project) {
+      log.warn('--project is ignored: a Task plan round is filed with its Task.');
     }
     return ingestIntoPlanRound(client, {
       authoredPlan: plan,
@@ -313,7 +325,7 @@ export async function ingestReportAction(
       const target = targetWorkspaceId ? `workspace "${targetWorkspaceId}"` : 'personal space';
       const hint = targetWorkspaceId
         ? `Set LOBEHUB_WORKSPACE_ID=${targetWorkspaceId} for this command and retry.`
-        : "Unset LOBEHUB_WORKSPACE_ID and run 'lh workspace use --personal', then retry.";
+        : `Set LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE} for this command and retry.`;
       throw new Error(
         `Acceptance "${acceptance.id}" belongs to ${target}, but the CLI is using ${current}. ${hint} No run was created.`,
       );
@@ -336,6 +348,7 @@ export async function ingestReportAction(
     };
   } else {
     acceptance = await client.acceptance.ensure.mutate({
+      ...projectEnsureInput(project),
       requirement,
       subjectId: subject!.ref.subjectId,
       subjectType: subject!.ref.subjectType,
@@ -368,6 +381,7 @@ export async function ingestReportAction(
     );
     process.exit(1);
   }
+  warnIfFiledElsewhere(project, acceptance);
   // The in-app conversation that ran this harness, if any (env-supplied).
   // Strictly the authoring conversation. `--operation` names the Agent Run
   // under test and is passed to `createRun` below — a different relation.
@@ -396,6 +410,20 @@ export async function ingestReportAction(
       '  Retry only failed evidence with its retryArgs, or publish a new round without --operation.',
     );
     process.exit(1);
+  }
+  // An acceptance named by id skips `ensure`, so apply its precedence here: a
+  // `--project` files an ungrouped acceptance, while the repository's default
+  // only fills a standalone one — a task or conversation defers to its own
+  // project, which the server files when the round attaches. Placed after
+  // every rejection guard so a round that publishes nothing writes nothing.
+  if (
+    requestedAcceptanceId &&
+    project &&
+    !acceptance.projectId &&
+    (project.source === 'flag' || acceptance.subjectType === 'standalone')
+  ) {
+    await client.acceptance.setProject.mutate({ id: acceptance.id, projectId: project.id });
+    acceptance = { ...acceptance, projectId: project.id };
   }
   const run = await client.verify.createRun.mutate({
     context,
@@ -671,6 +699,9 @@ export async function ingestReportAction(
       ? 'standalone'
       : `${subject!.ref.subjectType}:${subject!.ref.subjectId}`;
   console.log(`${pc.bold('acceptance')}: ${acceptanceId} ${pc.dim(`(${subjectLabel})`)}`);
+  if (project && acceptance.projectId === project.id) {
+    console.log(`${pc.bold('project')}: ${project.name}`);
+  }
   if (options.open || partial) {
     // The acceptance page is the only report page — an old /verify link only
     // redirects here. `?r=<roundIndex>` is this round's fixed snapshot.
@@ -698,6 +729,10 @@ export function withIngestReportOptions(cmd: Command): Command {
     .option(
       '--requirement <text>',
       'Acceptance requirement recorded when the aggregate is first created',
+    )
+    .option(
+      '--project <ref>',
+      "File an ungrouped acceptance under a project (id, slug or identifier such as LOBE), overriding the subject's own; otherwise the subject's project, then the one in .agents/acceptance/config.json",
     )
     .option('--open', 'Print the in-app URL to open the report')
     .option(
