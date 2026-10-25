@@ -31,6 +31,13 @@ vi.mock('react-router', async (importOriginal) => ({
   Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
 }));
 
+// The channel body reads released-behind flags from the server config store, which is a
+// context store: without a provider it throws while rendering.
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (s: { featureFlags: Record<string, unknown> }) => unknown) =>
+    selector({ featureFlags: {} }),
+}));
+
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
