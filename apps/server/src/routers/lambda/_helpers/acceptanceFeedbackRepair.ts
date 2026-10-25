@@ -3,12 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { buildAcceptanceRepairPrompt } from '@lobechat/prompts';
 import type { AcceptanceRepairRequest } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
+import { TaskModel } from '@/database/models/task';
+import { VerifyRunModel } from '@/database/models/verifyRun';
+import { agents, topics } from '@/database/schemas';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
@@ -16,10 +20,14 @@ import {
   findProjectReviewScope,
   resolveProjectReviewRole,
 } from '@/server/services/acceptanceReview/projectAccess';
-import type { AcceptanceService } from '@/server/services/verify';
-import { buildAcceptanceCheckUnion, buildCheckReviewOverlay } from '@/server/services/verify';
+import {
+  AcceptanceService,
+  buildAcceptanceCheckUnion,
+  buildCheckReviewOverlay,
+} from '@/server/services/verify';
 
 import { taskRouter } from '../task';
+import { createTaskExecutionRouter } from '../task/execution';
 import type { AcceptanceRepairDispatch } from './acceptanceRepairDispatch';
 import { dispatchAcceptanceRepair } from './acceptanceRepairDispatch';
 import { assertCanUseWorkspaceAgent } from './workspaceAgentGuard';
@@ -54,7 +62,11 @@ export async function readAcceptanceRepair(
     return { ...repair, state: 'finished' };
   }
   if (['error', 'interrupted', 'abandoned'].includes(operation.status)) {
-    return { ...repair, error: operation.completionReason ?? operation.status, state: 'failed' };
+    return {
+      ...repair,
+      error: operation.error?.message ?? operation.completionReason ?? operation.status,
+      state: 'failed',
+    };
   }
   return repair;
 }
@@ -145,7 +157,18 @@ export async function dispatchAcceptanceFeedbackRepair(
   if (refreshed && refreshed.state !== latest.metadata?.repair?.state) {
     await service.acceptanceModel.patchRepair(acceptance.id, refreshed.id, refreshed);
   }
-  const origin = await service.findRepairOrigin(acceptance.id);
+  let origin = await service.findRepairOrigin(acceptance.id);
+  if (origin?.topicId && acceptance.projectId) {
+    // Only a deleted source falls back. An existing but inaccessible source keeps its gates.
+    const topic = await ctx.serverDB.query.topics.findFirst({
+      where: eq(topics.id, origin.topicId),
+    });
+    const agentId = origin.agentId ?? topic?.agentId;
+    const agent = agentId
+      ? await ctx.serverDB.query.agents.findFirst({ where: eq(agents.id, agentId) })
+      : null;
+    if (!topic || topic.isDeleted || !agent || agent.isDeleted) origin = null;
+  }
   if (!origin?.topicId && !acceptance.projectId) return { dispatched: false, reason: 'no_origin' };
 
   const snapshot = await snapshotFeedback(ctx.serverDB, service, acceptance);
@@ -159,9 +182,11 @@ export async function dispatchAcceptanceFeedbackRepair(
   });
   if (!claim.claimed) return { dispatched: false, reason: 'in_progress' };
   let request = claim.request;
+  let started: Extract<AcceptanceRepairDispatch, { dispatched: true }> | undefined;
   const patch = async (value: Partial<AcceptanceRepairRequest>) => {
     request = { ...request, ...value };
-    await service.acceptanceModel.patchRepair(acceptance.id, request.id, value);
+    const updated = await service.acceptanceModel.patchRepair(acceptance.id, request.id, value);
+    if (!updated) throw new Error('The repair handoff is no longer available');
     notifyAcceptance(acceptance.id, 'session');
   };
   try {
@@ -171,8 +196,16 @@ export async function dispatchAcceptanceFeedbackRepair(
         service,
         acceptance,
         feedbackPrompt(request),
+        (operationId) =>
+          patch({
+            operationId,
+            topicId: origin!.topicId,
+            executionUserId: ctx.userId,
+            state: 'running',
+          }),
       );
       if (result.dispatched) {
+        started = result;
         await patch({
           agentId: result.agentId,
           operationId: result.operationId,
@@ -201,7 +234,18 @@ export async function dispatchAcceptanceFeedbackRepair(
         message: 'Project edit access is required to run its Agent',
       });
     }
+    const taskModel = new TaskModel(
+      ctx.serverDB,
+      actorCtx.userId,
+      acceptance.workspaceId ?? undefined,
+    );
+    let task = request.taskId
+      ? await taskModel.resolve(request.taskId)
+      : await taskModel.findByRepairRequest(request.id);
+    if (request.taskId && !task)
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Repair task is unavailable' });
     const agentId =
+      task?.assigneeAgentId ??
       request.agentId ??
       (await projectModel.resolveCoordinatorAgents([project]))[0].coordinatorAgentId;
     await assertCanUseWorkspaceAgent({
@@ -211,42 +255,57 @@ export async function dispatchAcceptanceFeedbackRepair(
       workspaceId: acceptance.workspaceId,
     });
     const caller = taskRouter.createCaller(projectCtx);
-    if (!request.taskId) {
-      const { data: task } = await caller.create({
+    if (!task) {
+      ({ data: task } = await caller.create({
         assigneeAgentId: agentId,
         config: {
-          verify: {
-            enabled: true,
-            requirement:
-              acceptance.requirement ??
-              'Repair the submitted website feedback and provide a verifiable preview.',
-          },
+          acceptanceRepair: { acceptanceId: acceptance.id, requestId: request.id },
         },
         instruction: `${buildAcceptanceRepairPrompt(acceptance.id, request.comment, { projectTask: true })}\n\n${feedbackPrompt(request)}`,
         name: `${project.name}: website review`,
         projectId: project.id,
         // Site feedback stays inside the project; the task never widens it to a public link.
         visibility: 'private',
-      });
-      // Persist the task before starting it: a failed kickoff retries this same task.
-      const delivery = await new AcceptanceModel(
-        ctx.serverDB,
-        actorCtx.userId,
-        acceptance.workspaceId ?? undefined,
-      ).findBySubject('task', task.id);
-      await patch({ agentId, deliveryAcceptanceId: delivery?.id, taskId: task.id });
+      }));
     }
-    if (request.deliveryAcceptanceId) {
-      await new AcceptanceModel(
-        ctx.serverDB,
-        actorCtx.userId,
-        acceptance.workspaceId ?? undefined,
-      ).patchMetadata(request.deliveryAcceptanceId, {
-        repairSource: { acceptanceId: acceptance.id, requestId: request.id },
-      });
-    }
-    const result = await caller.run({ id: request.taskId! });
+    // Link creation before any subsequent read; the request key also recovers a lost create response.
+    await patch({ agentId, taskId: task.id });
+    const deliveryService = new AcceptanceService(
+      ctx.serverDB,
+      actorCtx.userId,
+      acceptance.workspaceId ?? undefined,
+    );
+    const delivery = await deliveryService.ensureForSubject('task', task.id, {
+      config: { enabled: true },
+      requirement:
+        acceptance.requirement ??
+        'Repair the submitted website feedback and provide a verifiable preview.',
+      visibility: 'private',
+    });
+    // Retry may encounter a delivery created before this visibility invariant was applied.
+    await deliveryService.acceptanceModel.update(delivery.id, { visibility: 'private' });
+    await new VerifyRunModel(
+      ctx.serverDB,
+      actorCtx.userId,
+      acceptance.workspaceId ?? undefined,
+    ).setVisibilityByAcceptance(delivery.id, 'private');
+    await deliveryService.acceptanceModel.patchMetadata(delivery.id, {
+      repairSource: { acceptanceId: acceptance.id, requestId: request.id },
+    });
+    await patch({ deliveryAcceptanceId: delivery.id });
+    const result = await createTaskExecutionRouter((operationId) =>
+      patch({ operationId, executionUserId: actorCtx.userId, state: 'running' }),
+    )
+      .createCaller(projectCtx)
+      .run({ id: task.id });
     if (!result.operationId || !result.topicId) throw new Error('The task run did not start');
+    started = {
+      agentId,
+      dispatched: true,
+      operationId: result.operationId,
+      taskId: task.id,
+      topicId: result.topicId,
+    };
     await patch({
       agentId,
       operationId: result.operationId,
@@ -264,15 +323,7 @@ export async function dispatchAcceptanceFeedbackRepair(
   } catch (error) {
     console.error('[acceptance:repair]', error);
     // Once execution exists, a failed progress write must never make a retry start it twice.
-    if (request.operationId && request.topicId && request.agentId) {
-      return {
-        agentId: request.agentId,
-        dispatched: true,
-        operationId: request.operationId,
-        taskId: request.taskId,
-        topicId: request.topicId,
-      };
-    }
+    if (started) return started;
     const message = error instanceof Error ? error.message : String(error);
     await patch({ ...request, error: message, state: 'failed' });
     return {

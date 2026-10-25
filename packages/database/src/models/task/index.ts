@@ -7,7 +7,7 @@ import type {
   TaskVerifyConfig,
   WorkspaceData,
 } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
@@ -97,6 +97,22 @@ export class TaskModel {
 
   async findById(id: string): Promise<TaskItem | null> {
     return rows.findById(this.ctx, id);
+  }
+
+  /** Recover creation when a repair request lost its response before linking the Task. */
+  async findByRepairRequest(requestId: string): Promise<TaskItem | null> {
+    const [task] = await this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          taskOwnership(this.ctx),
+          eq(tasks.createdByUserId, this.userId),
+          sql`${tasks.config}->'acceptanceRepair'->>'requestId' = ${requestId}`,
+        ),
+      )
+      .limit(1);
+    return (task as TaskItem) ?? null;
   }
 
   async findByIds(ids: string[]): Promise<TaskItem[]> {

@@ -293,6 +293,7 @@ export const bundleRouter = router({
       const repair = storedRepair
         ? {
             commentIds: storedRepair.commentIds,
+            comment: storedRepair.comment,
             error: storedRepair.error,
             requestedAt: storedRepair.requestedAt,
             state: storedRepair.state,

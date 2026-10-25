@@ -326,7 +326,9 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
+    defaults?: Partial<
+      Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility'>
+    >,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {

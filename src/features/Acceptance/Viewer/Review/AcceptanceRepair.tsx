@@ -9,15 +9,23 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import { commentAnchorId } from '../Comments/anchor';
 import { acceptanceOverviewPath, useAcceptanceRouteBase } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import RejectFeedbackPreview from './RejectFeedbackPreview';
 import { repairPresentation } from './repairPresentation';
 
-const RepairRequestContent = ({ acceptanceId }: { acceptanceId: string }) => {
+const RepairRequestContent = ({
+  acceptanceId,
+  routeBase,
+}: {
+  acceptanceId: string;
+  routeBase: string;
+}) => {
   const { t } = useTranslation('verify');
   const { close } = useModalContext();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
+  const retry = data?.repair?.state === 'failed' ? data.repair : null;
   const [comment, setComment] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -25,7 +33,10 @@ const RepairRequestContent = ({ acceptanceId }: { acceptanceId: string }) => {
     setPending(true);
     setError(undefined);
     try {
-      const result = await verifyService.requestAcceptanceRepair(acceptanceId, comment.trim());
+      const result = await verifyService.requestAcceptanceRepair(
+        acceptanceId,
+        retry ? retry.comment : comment.trim(),
+      );
       await mutate();
       if (!result.dispatched && result.reason !== 'in_progress') {
         setError(t('acceptance.repair.startError'));
@@ -48,22 +59,40 @@ const RepairRequestContent = ({ acceptanceId }: { acceptanceId: string }) => {
             : 'acceptance.repair.description',
         )}
       </Text>
-      <RejectFeedbackPreview acceptanceId={acceptanceId} />
-      <TextArea
-        aria-label={t('acceptance.repair.instructions')}
-        autoSize={{ minRows: 3, maxRows: 6 }}
-        maxLength={2000}
-        placeholder={t('acceptance.repair.placeholder')}
-        value={comment}
-        onChange={(event) => setComment(event.target.value)}
-      />
+      {retry ? (
+        <Flexbox gap={8}>
+          <Text>{t('acceptance.repair.retryDescription', { count: retry.commentIds.length })}</Text>
+          {retry.comment && <Text>{retry.comment}</Text>}
+          {retry.commentIds.map((id, index) => (
+            <WorkspaceLink
+              key={id}
+              to={`${acceptanceOverviewPath(acceptanceId, routeBase)}#${commentAnchorId(id)}`}
+              onClick={close}
+            >
+              {t('acceptance.repair.submittedFeedback', { number: index + 1 })}
+            </WorkspaceLink>
+          ))}
+        </Flexbox>
+      ) : (
+        <RejectFeedbackPreview acceptanceId={acceptanceId} />
+      )}
+      {!retry && (
+        <TextArea
+          aria-label={t('acceptance.repair.instructions')}
+          autoSize={{ minRows: 3, maxRows: 6 }}
+          maxLength={2000}
+          placeholder={t('acceptance.repair.placeholder')}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+        />
+      )}
       {error && <Alert title={error} type={'error'} />}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={pending} onClick={close}>
           {t('acceptance.actions.cancel')}
         </Button>
         <Button loading={pending} type={'primary'} onClick={submit}>
-          {t('acceptance.repair.start')}
+          {t(retry ? 'acceptance.repair.retry' : 'acceptance.repair.start')}
         </Button>
       </Flexbox>
     </Flexbox>
@@ -126,7 +155,7 @@ export const AcceptanceRepair = () => {
           style={{ alignSelf: 'flex-start' }}
           onClick={() =>
             createModal({
-              content: <RepairRequestContent acceptanceId={acceptanceId} />,
+              content: <RepairRequestContent acceptanceId={acceptanceId} routeBase={routeBase} />,
               footer: null,
               title: t('acceptance.repair.start'),
               width: 'min(90vw, 520px)',

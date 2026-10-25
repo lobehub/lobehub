@@ -1108,4 +1108,7 @@ export default {
     'Verification passed. Waiting for an accessible repaired preview.',
   'acceptance.repair.ready':
     'The repaired delivery is ready for your review. Confirm the original feedback after checking it.',
+  'acceptance.repair.retryDescription':
+    'Retry the same submitted feedback and instructions ({{count}} comments and replies). Later feedback stays for the next handoff.',
+  'acceptance.repair.submittedFeedback': 'Submitted feedback {{number}}',
 };

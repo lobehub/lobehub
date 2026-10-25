@@ -19,15 +19,47 @@ import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as AcceptanceModelModule from '@/database/models/acceptance';
 import { ProjectReviewService } from '@/server/services/projectReview';
 
 import * as agentGuard from '../_helpers/workspaceAgentGuard';
 import { acceptanceRouter } from '../acceptance';
+import { taskRouter } from '../task';
 import { cleanupTestUser, createTestContext, createTestUser } from './integration/setup';
 
 let serverDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: () => serverDB }));
 const execAgent = vi.fn();
+const faults = vi.hoisted(() => ({
+  failRunningPatch: false,
+  failSubjectRead: false,
+  failAfterStart: false,
+}));
+vi.mock('@/database/models/acceptance', async (importOriginal) => {
+  const actual = await importOriginal<typeof AcceptanceModelModule>();
+  class AcceptanceModel extends actual.AcceptanceModel {
+    constructor(...args: ConstructorParameters<typeof actual.AcceptanceModel>) {
+      super(...args);
+      const patch = this.patchRepair;
+      this.patchRepair = async (id, requestId, value) => {
+        if (faults.failRunningPatch && value.state === 'running') {
+          faults.failRunningPatch = false;
+          throw new Error('progress write unavailable');
+        }
+        return patch(id, requestId, value);
+      };
+      const find = this.findBySubject;
+      this.findBySubject = async (type, id) => {
+        if (type === 'task' && faults.failSubjectRead) {
+          faults.failSubjectRead = false;
+          throw new Error('delivery read unavailable');
+        }
+        return find(type, id);
+      };
+    }
+  }
+  return { ...actual, AcceptanceModel };
+});
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function () {
     return { execAgent };
@@ -62,6 +94,7 @@ describe('acceptance repair handoff', () => {
         projectId,
         subjectId: randomUUID(),
         subjectType: 'site',
+        status: 'delivered',
         userId,
       })
       .returning();
@@ -77,22 +110,26 @@ describe('acceptance repair handoff', () => {
       })
       .returning();
     commentId = comment.id;
-    execAgent.mockImplementation(async () => {
-      const [topic] = await serverDB
-        .insert(topics)
-        .values({ userId, agentId, projectId })
-        .returning();
+    execAgent.mockImplementation(async (params) => {
+      const topic = params.appContext?.topicId
+        ? await serverDB.query.topics.findFirst({ where: eq(topics.id, params.appContext.topicId) })
+        : (await serverDB.insert(topics).values({ userId, agentId, projectId }).returning())[0];
       const operationId = randomUUID();
       await serverDB
         .insert(agentOperations)
-        .values({ id: operationId, userId, agentId, topicId: topic.id, status: 'running' });
-      return { operationId, success: true, topicId: topic.id };
+        .values({ id: operationId, userId, agentId, topicId: topic!.id, status: 'running' });
+      await params.onOperationCreated?.(operationId);
+      if (faults.failAfterStart) faults.failRunningPatch = true;
+      return { operationId, success: true, topicId: topic!.id };
     });
   });
 
   afterEach(async () => {
     vi.restoreAllMocks();
     execAgent.mockReset();
+    faults.failRunningPatch = false;
+    faults.failSubjectRead = false;
+    faults.failAfterStart = false;
     await cleanupTestUser(serverDB, outsiderId);
     await cleanupTestUser(serverDB, userId);
   });
@@ -310,5 +347,131 @@ describe('acceptance repair handoff', () => {
       0,
     );
     expect(execAgent).not.toHaveBeenCalled();
+  });
+
+  it('keeps a personal project repair delivery private from its first creation', async () => {
+    const caller = acceptanceRouter.createCaller(createTestContext(userId));
+    const result = await caller.requestRepair({ id: acceptanceId });
+    expect(result.dispatched).toBe(true);
+    const source = await serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, acceptanceId),
+    });
+    const deliveryId = source!.metadata!.repair!.deliveryAcceptanceId!;
+    const delivery = await serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, deliveryId),
+    });
+    expect(delivery?.visibility).toBe('private');
+    await expect(
+      acceptanceRouter.createCaller(createTestContext('')).getBundle({ id: deliveryId }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it.each(['site', 'standalone'] as const)(
+    'recovers a %s run when the final progress write fails after dispatch',
+    async (subjectType) => {
+      if (subjectType === 'standalone') {
+        const [topic] = await serverDB.insert(topics).values({ userId, agentId }).returning();
+        await serverDB
+          .update(acceptances)
+          .set({ subjectType })
+          .where(eq(acceptances.id, acceptanceId));
+        await serverDB.insert(verifyRuns).values({
+          acceptanceId,
+          userId,
+          roundIndex: 1,
+          status: 'passed',
+          metadata: { origin: { topicId: topic.id, agentId } },
+        });
+      }
+      faults.failAfterStart = true;
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      const result = await caller.requestRepair({ id: acceptanceId });
+      if (!result.dispatched) throw new Error('Expected a live run');
+      faults.failAfterStart = false;
+      await serverDB
+        .update(agentOperations)
+        .set({ status: 'done' })
+        .where(eq(agentOperations.id, result.operationId));
+      const bundle = await caller.getBundle({ id: acceptanceId });
+      expect(bundle.repair?.state).toBe('finished');
+      expect(execAgent).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('reuses the created Task when the following delivery lookup fails', async () => {
+    const original = taskRouter.createCaller;
+    vi.spyOn(taskRouter, 'createCaller').mockImplementation((...args) => {
+      const caller = original(...args);
+      return new Proxy(caller, {
+        get(target, key) {
+          if (key !== 'create') return Reflect.get(target, key);
+          return async (...input: Parameters<typeof caller.create>) => {
+            const result = await caller.create(...input);
+            faults.failSubjectRead = true;
+            return result;
+          };
+        },
+      });
+    });
+    const caller = acceptanceRouter.createCaller(createTestContext(userId));
+    expect(await caller.requestRepair({ id: acceptanceId })).toMatchObject({
+      dispatched: false,
+      reason: 'failed',
+    });
+    expect(faults.failSubjectRead).toBe(false);
+    vi.restoreAllMocks();
+    expect(await caller.requestRepair({ id: acceptanceId })).toMatchObject({ dispatched: true });
+    expect(await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId))).toHaveLength(
+      1,
+    );
+  });
+
+  it('returns the frozen requirements for retry while leaving later feedback out', async () => {
+    execAgent.mockRejectedValueOnce(new Error('offline'));
+    const caller = acceptanceRouter.createCaller(createTestContext(userId));
+    await caller.requestRepair({ id: acceptanceId, comment: 'Original instructions' });
+    await serverDB.insert(acceptanceComments).values({
+      acceptanceId,
+      authorUserId: userId,
+      clientId: randomUUID(),
+      content: 'Later request',
+    });
+    const bundle = await caller.getBundle({ id: acceptanceId });
+    expect(bundle.repair?.comment).toBe('Original instructions');
+    expect(bundle.repair?.commentIds).toEqual([commentId]);
+  });
+
+  it('falls back to the project when the original topic was deleted', async () => {
+    await serverDB
+      .update(acceptances)
+      .set({ subjectType: 'standalone' })
+      .where(eq(acceptances.id, acceptanceId));
+    await serverDB.insert(verifyRuns).values({
+      acceptanceId,
+      userId,
+      roundIndex: 1,
+      status: 'passed',
+      metadata: { origin: { topicId: 'tpc_deleted', agentId } },
+    });
+    const result = await acceptanceRouter
+      .createCaller(createTestContext(userId))
+      .requestRepair({ id: acceptanceId });
+    expect(result).toMatchObject({ dispatched: true });
+    if (result.dispatched) expect(result.taskId).toBeTruthy();
+  });
+
+  it('shows the persisted runtime error rather than a generic terminal marker', async () => {
+    const caller = acceptanceRouter.createCaller(createTestContext(userId));
+    const result = await caller.requestRepair({ id: acceptanceId });
+    if (!result.dispatched) throw new Error('Expected a live run');
+    await serverDB
+      .update(agentOperations)
+      .set({
+        status: 'error',
+        error: { message: 'Execution device is offline', type: 'DeviceOffline' },
+      })
+      .where(eq(agentOperations.id, result.operationId));
+    const bundle = await caller.getBundle({ id: acceptanceId });
+    expect(bundle.repair).toMatchObject({ state: 'failed', error: 'Execution device is offline' });
   });
 });

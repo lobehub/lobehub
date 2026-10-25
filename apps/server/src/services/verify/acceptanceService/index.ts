@@ -151,6 +151,7 @@ export class AcceptanceService {
       projectId?: string;
       requirement?: string;
       title?: string;
+      visibility?: AcceptanceItem['visibility'];
     },
   ): Promise<AcceptanceItem> => {
     const canonicalId = await assertSubjectExists(this.deps, subjectType, subjectId);
@@ -164,6 +165,7 @@ export class AcceptanceService {
       config: defaults?.config,
       projectId,
       requirement: defaults?.requirement,
+      ...(defaults?.visibility ? { visibility: defaults.visibility } : {}),
       ...(subjectType === 'standalone' && defaults?.title
         ? { metadata: { title: defaults.title } }
         : {}),

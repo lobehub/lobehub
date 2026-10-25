@@ -38,6 +38,8 @@ export interface RunTaskParams {
   extraPrompt?: string;
   /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
   maxSteps?: number;
+  /** Persist the dispatch owner's operation link before any execution starts. */
+  onOperationCreated?: (operationId: string) => Promise<void>;
   taskId: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
@@ -112,6 +114,7 @@ export class TaskRunnerService {
       deviceId,
       extraPrompt,
       maxSteps,
+      onOperationCreated,
       trigger = 'manual',
     } = params;
 
@@ -315,6 +318,7 @@ export class TaskRunnerService {
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 
       const result = await aiAgentService.execAgent({
+        ...(onOperationCreated ? { onOperationCreated } : {}),
         ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
         additionalPluginIds: pluginIds,
         ...(deviceId && { deviceId }),
