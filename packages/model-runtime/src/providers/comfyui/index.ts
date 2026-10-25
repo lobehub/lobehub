@@ -100,6 +100,7 @@ export class LobeComfyUI implements LobeRuntimeAI, AuthenticatedImageRuntime {
 
       const response = await fetch(`${appUrl}/webapi/create-image/comfyui`, {
         body: JSON.stringify({
+          comfyuiWorkflow: payload.comfyuiWorkflow,
           model: payload.model,
           options: this.options,
           params: payload.params,

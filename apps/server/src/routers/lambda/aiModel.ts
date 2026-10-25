@@ -4,6 +4,7 @@ import {
   AiModelReasoningConfigSchema,
   AiModelTypeSchema,
   CreateAiModelSchema,
+  getComfyUIWorkflowParameters,
   ToggleAiModelEnableSchema,
   UpdateAiModelSchema,
 } from 'model-bank';
@@ -118,6 +119,15 @@ export const aiModelRouter = router({
     .use(withScopedPermission('ai_model:create'))
     .input(CreateAiModelSchema)
     .mutation(async ({ input, ctx }) => {
+      if (input.config?.comfyuiWorkflow) {
+        if (input.providerId !== 'comfyui' || input.type !== 'image') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Imported workflows must be ComfyUI image models',
+          });
+        }
+        input.parameters = getComfyUIWorkflowParameters(input.config.comfyuiWorkflow);
+      }
       const existingModel = await ctx.aiModelModel.findByIdAndProvider(input.id, input.providerId);
       if (existingModel) {
         // A preference-only shell (just a saved reasoning config, hidden from
@@ -213,6 +223,36 @@ export const aiModelRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.value.config?.comfyuiWorkflow && input.providerId !== 'comfyui') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Imported workflows must be ComfyUI image models',
+        });
+      }
+      if (
+        input.providerId === 'comfyui' &&
+        (input.value.config?.comfyuiWorkflow ||
+          input.value.parameters !== undefined ||
+          input.value.type !== undefined)
+      ) {
+        const existing = await ctx.aiModelModel.findByIdAndProvider(input.id, input.providerId);
+        const workflow =
+          input.value.config?.comfyuiWorkflow ??
+          UpdateAiModelSchema.shape.config.parse(existing?.config ?? undefined)?.comfyuiWorkflow;
+        if (workflow) {
+          if (
+            !existing ||
+            existing.source !== 'custom' ||
+            (input.value.type ?? existing.type) !== 'image'
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Only custom ComfyUI image models can store imported workflows',
+            });
+          }
+          input.value.parameters = getComfyUIWorkflowParameters(workflow);
+        }
+      }
       return ctx.aiModelModel.update(input.id, input.providerId, input.value);
     }),
 

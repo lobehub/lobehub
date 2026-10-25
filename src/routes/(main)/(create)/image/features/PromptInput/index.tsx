@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { ModelIcon } from '@/components/LobeIcons';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
+import { ComfyUIParameters } from '@/features/GenerationInput/ComfyUIParameters';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
@@ -292,6 +293,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         isCreating={isCreating}
         isDarkMode={isDarkMode}
         value={value}
+        allowEmptyPrompt={
+          currentProvider === 'comfyui' && currentModel?.startsWith('comfyui/workflow-')
+        }
         header={
           isPromptBlocked ? (
             <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
@@ -381,6 +385,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                       <SeedNumberInput />
                     </Flexbox>
                   )}
+                  <ComfyUIParameters disabled={!canCreate} />
                   {(isSupportWatermark || isSupportPromptExtend || isSupportWebSearch) && (
                     <Divider style={{ marginBlock: 4 }} />
                   )}

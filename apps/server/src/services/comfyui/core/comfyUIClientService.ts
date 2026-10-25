@@ -5,8 +5,8 @@
  * Provides unified error handling and abstraction over SDK
  * Uses modular services for authentication, connection, and caching
  */
-import { type ComfyUIKeyVault } from '@lobechat/types';
-import { type PromptBuilder } from '@saintno/comfyui-sdk';
+import type { ComfyUIKeyVault } from '@lobechat/types';
+import type { ImageInfo, PromptBuilder } from '@saintno/comfyui-sdk';
 import { CallWrapper, ComfyApi } from '@saintno/comfyui-sdk';
 import debug from 'debug';
 
@@ -26,12 +26,7 @@ export interface WorkflowResult {
   // Raw output data from workflow execution, keyed by node ID
   _raw?: Record<string, any>;
   images?: {
-    images?: Array<{
-      data: string;
-      height?: number;
-      mimeType: string;
-      width?: number;
-    }>;
+    images?: ImageInfo[];
   };
 }
 
@@ -95,8 +90,12 @@ export class ComfyUIClientService {
   /**
    * Get the path for an image result
    */
-  getPathImage(imageInfo: any): string {
+  getPathImage(imageInfo: ImageInfo): string {
     return this.client.getPathImage(imageInfo);
+  }
+
+  dispose(): void {
+    this.client.destroy();
   }
 
   /**
@@ -151,7 +150,17 @@ export class ComfyUIClientService {
           log('⏳ Progress:', info);
           onProgress?.(info);
         })
-        .run();
+        .run()
+        .then((result) => {
+          if (result) resolve(result);
+          else
+            reject(
+              new ServicesError(
+                'ComfyUI workflow returned no result',
+                ServicesError.Reasons.EMPTY_RESULT,
+              ),
+            );
+        }, reject);
     });
   }
 

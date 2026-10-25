@@ -1,9 +1,11 @@
 import type { ModelUsage } from '@lobechat/types';
-import type { RuntimeImageGenParams } from 'model-bank';
+import type { ComfyUIWorkflow, RuntimeImageGenParams } from 'model-bank';
 
 import type { ModelPricingContext } from './pricing';
 
 export type CreateImagePayload = {
+  /** Server-resolved saved graph for the ComfyUI provider. */
+  comfyuiWorkflow?: ComfyUIWorkflow;
   model: string;
   params: RuntimeImageGenParams;
 };

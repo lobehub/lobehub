@@ -45,7 +45,8 @@ export class CreateImageActionImpl {
       throw new TypeError('parameters is not initialized');
     }
 
-    if (!parameters.prompt) {
+    const isSavedWorkflow = provider === 'comfyui' && model.startsWith('comfyui/workflow-');
+    if (!parameters.prompt && !isSavedWorkflow) {
       throw new TypeError('prompt is empty');
     }
 

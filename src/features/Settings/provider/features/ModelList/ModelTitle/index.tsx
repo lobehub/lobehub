@@ -10,7 +10,7 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
-import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
+import { CircleX, EllipsisVertical, ImportIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,6 +19,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 
+import { createComfyUIWorkflowModal } from '../ComfyUIWorkflowModal';
 import { createCreateNewModelModal } from '../CreateNewModelModal';
 import { ProviderSettingsContext } from '../ProviderSettingsContext';
 import Search from './Search';
@@ -103,7 +104,7 @@ const ModelTitle = memo<ModelFetcherProps>(
           </Flexbox>
           {isLoading ? (
             <Skeleton height={28} width={120} />
-          ) : isEmpty ? null : (
+          ) : isEmpty && provider !== 'comfyui' ? null : (
             <Flexbox horizontal align={'center'} gap={8}>
               {!mobile && (
                 <Search
@@ -114,6 +115,20 @@ const ModelTitle = memo<ModelFetcherProps>(
                 />
               )}
               <Flexbox horizontal gap={4}>
+                {provider === 'comfyui' && (
+                  <Tooltip title={canManageProvider ? undefined : reason}>
+                    <Button
+                      disabled={!canManageProvider}
+                      icon={ImportIcon}
+                      size={'small'}
+                      onClick={() => {
+                        if (canManageProvider) createComfyUIWorkflowModal();
+                      }}
+                    >
+                      {t('comfyui.workflow.import')}
+                    </Button>
+                  </Tooltip>
+                )}
                 {showModelFetcher && (
                   <Tooltip title={canManageProvider ? undefined : reason}>
                     <Button
@@ -150,7 +165,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                     </Button>
                   </Tooltip>
                 )}
-                {showAddNewModel && (
+                {showAddNewModel && provider !== 'comfyui' && (
                   <Tooltip title={canManageProvider ? undefined : reason}>
                     <Button
                       disabled={!canManageProvider}

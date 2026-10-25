@@ -1,4 +1,4 @@
-import { ComfyApi } from '@saintno/comfyui-sdk';
+import { CallWrapper, ComfyApi } from '@saintno/comfyui-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ComfyUIAuthService } from '@/server/services/comfyui/core/comfyUIAuthService';
@@ -234,9 +234,6 @@ describe('ComfyUIClientService', () => {
     });
 
     it('should execute workflow successfully', async () => {
-      // Import CallWrapper mock
-      const { CallWrapper } = await import('@saintno/comfyui-sdk');
-
       // Setup mock workflow
       const mockWorkflow = { id: 'test-workflow' };
       const mockResult = {
@@ -262,6 +259,7 @@ describe('ComfyUIClientService', () => {
       mockCallWrapper.run.mockImplementation(function () {
         const finishCallback = mockCallWrapper.onFinished.mock.calls[0][0];
         finishCallback(mockResult);
+        return Promise.resolve(mockResult);
       });
 
       // Execute
@@ -273,8 +271,6 @@ describe('ComfyUIClientService', () => {
     });
 
     it('should handle workflow execution failure', async () => {
-      const { CallWrapper } = await import('@saintno/comfyui-sdk');
-
       const mockWorkflow = { id: 'test' };
       const mockError = new Error('Workflow failed');
 
@@ -293,6 +289,7 @@ describe('ComfyUIClientService', () => {
       mockCallWrapper.run.mockImplementation(function () {
         const failCallback = mockCallWrapper.onFailed.mock.calls[0][0];
         failCallback(mockError);
+        return Promise.resolve(false);
       });
 
       // Execute and verify - executeWorkflow just passes through the error
@@ -300,8 +297,6 @@ describe('ComfyUIClientService', () => {
     });
 
     it('should call progress callback', async () => {
-      const { CallWrapper } = await import('@saintno/comfyui-sdk');
-
       const mockWorkflow = { id: 'test' };
       const mockProgress = { step: 1, total: 10 };
       const progressCallback = vi.fn();
@@ -324,6 +319,7 @@ describe('ComfyUIClientService', () => {
 
         const finishCb = mockCallWrapper.onFinished.mock.calls[0][0];
         finishCb({ images: { images: [] } });
+        return Promise.resolve({ images: { images: [] } });
       });
 
       // Execute
@@ -331,6 +327,41 @@ describe('ComfyUIClientService', () => {
 
       // Verify
       expect(progressCallback).toHaveBeenCalledWith(mockProgress);
+    });
+
+    it('rejects SDK enqueue errors even when no failure callback fires', async () => {
+      // Only passed through to the mocked SDK executor in this rejection test.
+      const workflow = {} as Parameters<ComfyUIClientService['executeWorkflow']>[0];
+      const wrapper = {
+        onFailed: vi.fn().mockReturnThis(),
+        onFinished: vi.fn().mockReturnThis(),
+        onProgress: vi.fn().mockReturnThis(),
+        run: vi.fn().mockRejectedValue(new Error('Prompt queue rejected workflow')),
+      };
+      vi.mocked(CallWrapper).mockImplementation(function () {
+        return wrapper as unknown as InstanceType<typeof CallWrapper>;
+      });
+      await expect(service.executeWorkflow(workflow)).rejects.toThrow(
+        'Prompt queue rejected workflow',
+      );
+    });
+
+    it('handles returned cached outputs without requiring a completion callback', async () => {
+      // Only passed through to the mocked SDK executor in this cache-result test.
+      const workflow = {} as Parameters<ComfyUIClientService['executeWorkflow']>[0];
+      const result = {
+        images: { images: [{ filename: 'cached.png', subfolder: '', type: 'output' }] },
+      };
+      const wrapper = {
+        onFailed: vi.fn().mockReturnThis(),
+        onFinished: vi.fn().mockReturnThis(),
+        onProgress: vi.fn().mockReturnThis(),
+        run: vi.fn().mockResolvedValue(result),
+      };
+      vi.mocked(CallWrapper).mockImplementation(function () {
+        return wrapper as unknown as InstanceType<typeof CallWrapper>;
+      });
+      await expect(service.executeWorkflow(workflow)).resolves.toEqual(result);
     });
   });
 

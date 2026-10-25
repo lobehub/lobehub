@@ -11,7 +11,7 @@ export const maxDuration = 300;
 const handler = async (req: Request, { jwtPayload }: { jwtPayload?: any }) => {
   try {
     const body = await req.json();
-    const { model, params, options } = body;
+    const { model, params, options, comfyuiWorkflow } = body;
 
     // Create tRPC caller with authentication context
     const createCaller = createCallerFactory(lambdaRouter);
@@ -23,6 +23,7 @@ const handler = async (req: Request, { jwtPayload }: { jwtPayload?: any }) => {
 
     // Call ComfyUI service through tRPC
     const result = await caller.comfyui.createImage({
+      comfyuiWorkflow,
       model,
       options,
       params,

@@ -6,6 +6,7 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
 interface GenerationPromptInputProps {
+  allowEmptyPrompt?: boolean;
   centerActions?: ReactNode;
   className?: string;
   disabled?: boolean;
@@ -35,6 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const GenerationPromptInput = memo<GenerationPromptInputProps>(
   ({
+    allowEmptyPrompt = false,
     centerActions,
     className,
     header,
@@ -58,7 +60,8 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
       if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
 
       e.preventDefault();
-      if (disabled || disableGenerate || isCreating || !value?.trim()) return;
+      if (disabled || disableGenerate || isCreating || (!allowEmptyPrompt && !value?.trim()))
+        return;
 
       await onGenerate();
     };
@@ -109,7 +112,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
               >
                 {rightActions}
                 <SendButton
-                  disabled={disabled || disableGenerate || !value}
+                  disabled={disabled || disableGenerate || (!allowEmptyPrompt && !value)}
                   loading={isCreating}
                   title={isCreating ? generatingLabel : generateLabel}
                   onClick={() => {
@@ -127,7 +130,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
                 <Flexbox horizontal align={'center'} gap={8}>
                   {rightActions}
                   <SendButton
-                    disabled={disabled || disableGenerate || !value}
+                    disabled={disabled || disableGenerate || (!allowEmptyPrompt && !value)}
                     loading={isCreating}
                     title={isCreating ? generatingLabel : generateLabel}
                     onClick={() => {
