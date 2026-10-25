@@ -64,6 +64,21 @@ describe('resolveReviewAccess', () => {
     expect(hasAccessGrant).toHaveBeenCalledWith('acc-1', 'visitor', 'collaborate');
   });
 
+  it('does not grant Send back on a site review through a collaboration grant', async () => {
+    commentAccess.mockResolvedValueOnce({
+      acceptance: { ...acceptance, subjectType: 'site' },
+      canApprove: true,
+      canComment: true,
+    });
+    canManage.mockResolvedValueOnce(false);
+    hasAccessGrant.mockResolvedValueOnce(true);
+    const { resolveReviewAccess } = await import('./access');
+
+    await expect(resolveReviewAccess(db, 'owner', 'acc-1')).resolves.toMatchObject({
+      can: { comment: true, decide: false, moderate: true, reject: false },
+    });
+  });
+
   it('reads an unreadable acceptance as none at all', async () => {
     commentAccess.mockRejectedValueOnce(new TRPCError({ code: 'NOT_FOUND' }));
     const { resolveReviewAccess } = await import('./access');

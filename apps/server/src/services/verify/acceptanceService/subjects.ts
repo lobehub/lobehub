@@ -84,7 +84,8 @@ export const findSubject = async (
       const goal = await goalOfGate(deps, subjectId);
       return goal ? { id: subjectId, title: goal.title } : null;
     }
-    case 'standalone': {
+    case 'standalone':
+    case 'site': {
       return null;
     }
   }

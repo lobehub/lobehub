@@ -28,10 +28,16 @@ export interface AcceptanceScopeCtx {
  * rule `getBundle` reports as `canReview`, so the page can never advertise an
  * action the mutation would refuse.
  */
+type ScopedAcceptance = Pick<AcceptanceItem, 'userId' | 'workspaceId'> & {
+  subjectType?: AcceptanceItem['subjectType'];
+};
+
 export async function canManageAcceptance(
   ctx: AcceptanceScopeCtx,
-  acceptance: Pick<AcceptanceItem, 'userId' | 'workspaceId'>,
+  acceptance: ScopedAcceptance,
 ): Promise<boolean> {
+  // A site's standing review is managed only through its site in project settings.
+  if (acceptance.subjectType === 'site') return false;
   if (ctx.userId && ctx.userId === acceptance.userId) return true;
   if (!ctx.userId || !acceptance.workspaceId) return false;
 
@@ -48,9 +54,10 @@ export async function canManageAcceptance(
  * ONE read — a 200-row sweep, or a participated page spanning many workspaces,
  * must not turn authorization into a chain of sequential queries.
  */
-export async function filterManageableAcceptances<
-  T extends Pick<AcceptanceItem, 'userId' | 'workspaceId'>,
->(ctx: AcceptanceScopeCtx, rows: T[]): Promise<T[]> {
+export async function filterManageableAcceptances<T extends ScopedAcceptance>(
+  ctx: AcceptanceScopeCtx,
+  rows: T[],
+): Promise<T[]> {
   if (!ctx.userId) return [];
   const userId = ctx.userId;
 
@@ -68,7 +75,8 @@ export async function filterManageableAcceptances<
 
   return rows.filter(
     (row) =>
-      row.userId === userId ||
-      (row.workspaceId ? isDeciderRole(roles.get(row.workspaceId)) : false),
+      row.subjectType !== 'site' &&
+      (row.userId === userId ||
+        (row.workspaceId ? isDeciderRole(roles.get(row.workspaceId)) : false)),
   );
 }

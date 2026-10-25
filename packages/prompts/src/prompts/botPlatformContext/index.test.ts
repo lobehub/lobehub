@@ -168,4 +168,29 @@ describe('formatBotPlatformContext', () => {
 
     expect(result).toMatchSnapshot();
   });
+  it('tells a followup wake it may stay silent, with the token and the reasons', () => {
+    const result = formatBotPlatformContext({
+      platformName: 'Discord',
+      supportsMarkdown: true,
+      wakeKind: 'followup',
+    });
+
+    expect(result).toContain('<optional_reply>');
+    expect(result).toContain('`NO_REPLY`');
+    expect(result).toContain('NO_REPLY:<reason>');
+    expect(result).toContain(
+      'not_addressed, off_topic, nothing_to_add, duplicate, already_handled',
+    );
+    // The reason the runtime assigns itself is not offered to the agent.
+    expect(result).not.toContain('empty_completion');
+  });
+
+  it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+
+    expect(formatBotPlatformContext({ ...base, wakeKind: 'mention' })).toBe(
+      formatBotPlatformContext(base),
+    );
+    expect(formatBotPlatformContext(base)).not.toContain('NO_REPLY');
+  });
 });

@@ -12,6 +12,8 @@ import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { ProjectKnowledgeBaseSettings } from '../KnowledgeBases';
 import { ProjectMemberSettings } from '../Members';
+import { MembersSettings } from '../Review/MembersSettings';
+import { SitesSettings } from '../Review/SitesSettings';
 import { useCanManageProject } from '../useCanManageProject';
 import { AdvancedSettings } from './AdvancedSettings';
 import { GeneralSettings } from './GeneralSettings';
@@ -45,7 +47,12 @@ export function ProjectDirectoriesPage() {
     {
       key: 'members',
       label: t('settings.members'),
-      render: () => <ProjectMemberSettings detail={detail} />,
+      render: () => (
+        <Flexbox gap={32}>
+          <ProjectMemberSettings detail={detail} />
+          <MembersSettings projectId={detail.project.id} />
+        </Flexbox>
+      ),
     },
     {
       key: 'knowledge',
@@ -61,6 +68,11 @@ export function ProjectDirectoriesPage() {
       key: 'directories',
       label: t('settings.workLocations'),
       render: () => <WorkingDirectorySettings projectId={detail.project.id} />,
+    },
+    {
+      key: 'sites',
+      label: t('review.sites.title'),
+      render: () => <SitesSettings projectId={detail.project.id} />,
     },
     // Destructive settings need edit permission, so the tab is hidden from viewers.
     ...(canManage

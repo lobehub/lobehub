@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid/non-secure';
 
 import { devices } from '../schemas/device';
 import { messengerAccountLinks } from '../schemas/messengerAccountLink';
+import { projectMembers } from '../schemas/projectReview';
 import { tasks } from '../schemas/task';
 import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers, workspaceTeamMembers } from '../schemas/workspace';
@@ -217,6 +218,10 @@ export class WorkspaceMemberModel {
         );
 
       await new ResourcePermissionModel(tx, workspaceId).removeMemberGrants(userId);
+
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.workspaceId, workspaceId), eq(projectMembers.userId, userId)));
 
       await tx
         .delete(workspaceTeamMembers)

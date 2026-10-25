@@ -230,8 +230,17 @@ export const acceptanceSubjectTypes = [
   'document',
   'standalone',
   'goal_gate',
+  'site',
 ] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the

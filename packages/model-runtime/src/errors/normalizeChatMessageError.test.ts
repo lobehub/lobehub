@@ -107,3 +107,70 @@ describe('normalizeChatMessageError', () => {
     });
   });
 });
+
+describe('platform admission 403s', () => {
+  const planGate =
+    'Model "gemini-4-argon" is available on paid plans only (model tier: pro). Current personal plan: free.';
+
+  it('classifies a plan-tier refusal as a user-side quota state, keeping its type', () => {
+    expect(
+      normalizeChatMessageError({
+        error: { message: 403 },
+        errorType: 403,
+        message: planGate,
+        provider: 'lobehub',
+      }),
+    ).toMatchObject({
+      attribution: 'user',
+      category: 'quota',
+      countAsFailure: false,
+      message: planGate,
+      retryable: false,
+      type: 403,
+    });
+  });
+
+  it('classifies a usage-security refusal by its reason, as stored and as thrown', () => {
+    const thrown = {
+      _responseBody: { provider: 'lobehub', reason: 'not_onboarded' },
+      error: { message: 403 },
+      errorType: 403,
+      message: 'Request blocked.',
+      provider: 'lobehub',
+    };
+    const stored = {
+      body: {
+        error: { message: 403 },
+        message: 'Request blocked.',
+        provider: 'lobehub',
+        reason: 'not_onboarded',
+      },
+      message: 'Request blocked.',
+      type: 403,
+    };
+
+    for (const error of [thrown, stored])
+      expect(normalizeChatMessageError(error)).toMatchObject({
+        attribution: 'user',
+        category: 'auth',
+        countAsFailure: false,
+        type: 403,
+      });
+  });
+
+  it('leaves a bare Forbidden that lost its explanation unclassified', () => {
+    const normalized = normalizeChatMessageError({
+      body: {
+        error: { message: 403 },
+        message: 'Forbidden',
+        model: 'gpt-6-astra',
+        provider: 'lobehub',
+      },
+      message: 'Forbidden',
+      type: 403,
+    });
+
+    expect(normalized.category).toBeUndefined();
+    expect(normalized.attribution).toBeUndefined();
+  });
+});

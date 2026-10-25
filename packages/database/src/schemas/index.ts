@@ -49,6 +49,7 @@ export * from './notification';
 export * from './oidc';
 export * from './project';
 export * from './projectEnvironment';
+export * from './projectReview';
 export * from './projectWork';
 export * from './pushToken';
 export * from './rag';

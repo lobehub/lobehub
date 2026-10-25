@@ -3267,6 +3267,44 @@ table project_environments {
   }
 }
 
+table project_members {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  workspace_id text [not null]
+  user_id text [not null]
+  added_by_user_id text
+  role text [not null, default: 'member']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, user_id) [name: 'project_members_project_user_unique', unique]
+    workspace_id [name: 'project_members_workspace_id_idx']
+    user_id [name: 'project_members_user_id_idx']
+  }
+}
+
+table project_sites {
+  id text [pk, not null]
+  project_id text [not null]
+  workspace_id text
+  created_by_user_id text
+  name varchar(255) [not null]
+  origins text[] [not null]
+  acceptance_id uuid
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    project_id [name: 'project_sites_project_id_idx']
+    workspace_id [name: 'project_sites_workspace_id_idx']
+
+
+  }
+}
+
 table project_works {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   project_id text [not null]

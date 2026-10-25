@@ -21,12 +21,13 @@ export async function resolveReviewAccess(
     const decide = await canManageAcceptance({ serverDB: db, userId }, access.acceptance);
     // Granted reject access sends the delivery back; accepting stays a decider's.
     const reject =
-      decide ||
-      (await new AcceptanceCommentModel(db).hasAccessGrant(
-        access.acceptance.id,
-        userId,
-        'collaborate',
-      ));
+      access.acceptance.subjectType !== 'site' &&
+      (decide ||
+        (await new AcceptanceCommentModel(db).hasAccessGrant(
+          access.acceptance.id,
+          userId,
+          'collaborate',
+        )));
     return {
       acceptance: access.acceptance,
       can: { comment: access.canComment, decide, moderate: access.canApprove, reject },

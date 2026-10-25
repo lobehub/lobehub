@@ -44,6 +44,11 @@ export type IFeatureFlagsState = {
    * protocol-v2 payloads; independent from `enableGatewayMux`.
    */
   enableGatewayMuxMobile: boolean | undefined;
+  /**
+   * Rollout gate for the bot-wake pipeline (`bot_wake`), evaluated for the bot's owner. Read only
+   * by the server; it is part of the state because the two flag types must not drift apart.
+   */
+  enableBotWake: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   /**
    * Rollout gate for relaying LLM calls of device-only model providers to the

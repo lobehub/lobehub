@@ -90,6 +90,15 @@ describe('canManageAcceptance', () => {
     );
     expect(getMember).not.toHaveBeenCalled();
   });
+
+  it('keeps a site review read-only even for its creator', async () => {
+    await expect(
+      canManageAcceptance(
+        { serverDB: db, userId: 'me' },
+        { ...row('me', 'ws_a'), subjectType: 'site' },
+      ),
+    ).resolves.toBe(false);
+  });
 });
 
 describe('filterManageableAcceptances', () => {
@@ -106,6 +115,8 @@ describe('filterManageableAcceptances', () => {
     const rows = [
       row('me', null),
       row('me', 'ws_member'),
+      { ...row('me', 'ws_owned'), subjectType: 'site' as const },
+      { ...row('teammate', 'ws_member'), subjectType: 'site' as const },
       row('teammate', 'ws_owned'),
       row('teammate', 'ws_admin'),
       row('teammate', 'ws_member'),

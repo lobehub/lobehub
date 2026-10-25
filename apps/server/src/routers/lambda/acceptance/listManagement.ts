@@ -18,6 +18,7 @@ import {
   purgeAcceptance,
 } from '@/server/services/verify';
 
+import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import {
   acceptanceStatusOverrideSchema,
   applyAcceptanceStatus,
@@ -27,7 +28,6 @@ import * as goalGate from '../_helpers/goalGateAcceptance';
 import {
   acceptanceProcedure,
   acceptanceWriteProcedure,
-  canReadAcceptance,
   resolveAcceptanceForWrite,
 } from './procedures';
 

@@ -1,0 +1,222 @@
+{
+  "description": "A recorded #general window. Every entry is one message with the channel state snapshot the recorder read from Redis at that moment, and what each policy decided. owner-rules: scope=all, window 300s, maxSilentWakes 3, owner presence 120s. classifier score is what the model returned at record time.",
+  "entries": [
+    {
+      "name": "colleague asks a question, nothing recent",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "anyone know how the rollout works?",
+        "ids": ["c1"],
+        "at": 1700000000000
+      },
+      "channel": { "silentWakes": 0 },
+      "classifier": { "addressedToBot": 0.12, "kind": "chitchat", "reason": "asks the room" },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["abstain", "no-owner-rule-opinion"],
+        "classifier": ["deny", 0.12]
+      }
+    },
+    {
+      "name": "same person replies to the bot right after it spoke",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "and what about staging?",
+        "ids": ["c1"],
+        "at": 1700000030000
+      },
+      "channel": {
+        "botLastSpokeAt": 1700000010000,
+        "followupUntil": 1700000310000,
+        "silentWakes": 0
+      },
+      "classifier": {
+        "addressedToBot": 0.93,
+        "kind": "request",
+        "reason": "continues the bot answer"
+      },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["allow", "inside-followup-window"],
+        "classifier": ["allow", 0.93]
+      }
+    },
+    {
+      "name": "the follow-up @s a teammate",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "<@222> can you check staging?",
+        "mentions": { "otherUserIds": ["222"] },
+        "ids": ["c1"],
+        "at": 1700000060000
+      },
+      "channel": {
+        "botLastSpokeAt": 1700000010000,
+        "followupUntil": 1700000310000,
+        "silentWakes": 0
+      },
+      "expected": {
+        "internal": ["deny", "mentions-someone-else"],
+        "owner": ["allow", "inside-followup-window"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "a thumbs up",
+      "signal": { "author": { "id": "u2" }, "message": "👍", "ids": ["c1"], "at": 1700000070000 },
+      "channel": {
+        "botLastSpokeAt": 1700000010000,
+        "followupUntil": 1700000310000,
+        "silentWakes": 0
+      },
+      "expected": {
+        "internal": ["deny", "empty-or-emoji-only"],
+        "owner": ["allow", "inside-followup-window"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "@everyone announcement",
+      "signal": {
+        "author": { "id": "u3" },
+        "message": "@everyone standup in 5",
+        "mentions": { "everyone": true },
+        "ids": ["c1"],
+        "at": 1700000080000
+      },
+      "channel": { "silentWakes": 0 },
+      "expected": {
+        "internal": ["deny", "broadcast-mention"],
+        "owner": ["abstain", "no-owner-rule-opinion"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "a role ping from the adapter's mentionRoleIds",
+      "signal": {
+        "author": { "id": "u3" },
+        "message": "<@&900> review please",
+        "mentions": { "roleIds": ["900"] },
+        "ids": ["c1"],
+        "at": 1700000090000
+      },
+      "channel": { "silentWakes": 0 },
+      "expected": {
+        "internal": ["deny", "role-only-mention"],
+        "owner": ["abstain", "no-owner-rule-opinion"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "another bot posts a deploy notice",
+      "signal": {
+        "author": { "id": "bot9", "isBot": true },
+        "message": "deploy finished",
+        "ids": ["c1"],
+        "at": 1700000100000
+      },
+      "channel": { "silentWakes": 0 },
+      "expected": {
+        "internal": ["deny", "bot-message"],
+        "owner": ["abstain", "no-owner-rule-opinion"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "the owner is talking, a colleague chimes in",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "I think we should wait until Monday",
+        "ids": ["c1"],
+        "at": 1700000130000
+      },
+      "channel": { "ownerLastSpokeAt": 1700000100000, "silentWakes": 0 },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["deny", "owner-present"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "the owner themself keeps going",
+      "signal": {
+        "author": { "id": "owner", "isOwner": true },
+        "message": "I'll take the staging check",
+        "ids": ["c1"],
+        "at": 1700000140000
+      },
+      "channel": { "ownerLastSpokeAt": 1700000130000, "silentWakes": 0 },
+      "classifier": { "addressedToBot": 0.3, "kind": "chitchat", "reason": "talking to the team" },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["abstain", "no-owner-rule-opinion"],
+        "classifier": ["deny", 0.3]
+      }
+    },
+    {
+      "name": "third silent wake in a row spends the budget",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "what about the rollback plan?",
+        "ids": ["c1"],
+        "at": 1700000200000
+      },
+      "channel": {
+        "botLastSpokeAt": 1700000010000,
+        "followupUntil": 1700000310000,
+        "silentWakes": 3
+      },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["deny", "budget-exhausted"],
+        "classifier": null
+      }
+    },
+    {
+      "name": "the bot spoke again, so the budget is fresh",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "what about the rollback plan?",
+        "ids": ["c1"],
+        "at": 1700000500000
+      },
+      "channel": {
+        "botLastSpokeAt": 1700000450000,
+        "followupUntil": 1700000750000,
+        "silentWakes": 0
+      },
+      "classifier": { "addressedToBot": 0.81, "kind": "request", "reason": "asks the bot" },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["allow", "inside-followup-window"],
+        "classifier": ["allow", 0.81]
+      }
+    },
+    {
+      "name": "the window lapsed an hour ago",
+      "signal": {
+        "author": { "id": "u1" },
+        "message": "hello again",
+        "ids": ["c1"],
+        "at": 1700004000000
+      },
+      "channel": {
+        "botLastSpokeAt": 1700000450000,
+        "followupUntil": 1700000750000,
+        "silentWakes": 0
+      },
+      "classifier": { "addressedToBot": 0.4, "kind": "chitchat", "reason": "greeting" },
+      "expected": {
+        "internal": ["abstain", "no-internal-rule-hit"],
+        "owner": ["abstain", "no-owner-rule-opinion"],
+        "classifier": ["deny", 0.4]
+      }
+    }
+  ],
+  "settings": {
+    "botWake": {
+      "enabled": true,
+      "rules": { "maxSilentWakes": 3, "ownerPresenceSeconds": 120, "windowSeconds": 300 }
+    }
+  }
+}

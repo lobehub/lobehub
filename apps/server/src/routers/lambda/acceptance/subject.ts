@@ -1,4 +1,4 @@
-import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import { creatableAcceptanceSubjectTypes } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -6,7 +6,7 @@ import { router } from '@/libs/trpc/lambda';
 
 import { acceptanceProcedure, acceptanceWriteProcedure } from './procedures';
 
-const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
+const subjectTypeSchema = z.enum(creatableAcceptanceSubjectTypes);
 
 export const subjectRouter = router({
   /** Get (or lazily create) the aggregate for a subject — the ingest entry point. */

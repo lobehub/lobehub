@@ -18,6 +18,17 @@ const normalizeFlowControlKeySegment = (value: string) => {
   return value.replaceAll(/[^\w.-]/g, '_');
 };
 
+/**
+ * The QStash flow-control key that serializes Agent Signal work for one `scopeKey`: one delivery
+ * at a time. Anything that must run one-at-a-time per scope (the bot-wake scheduler's delayed
+ * flush, per channel) shares this key shape so the serialization is one mechanism, not two.
+ */
+export const agentSignalScopeFlowControl = (scopeKey: string) => ({
+  // NOTICE: see `triggerRun` below for why only the flow-control segment is normalized.
+  key: `agent-signal.run.scope.${normalizeFlowControlKeySegment(scopeKey)}`,
+  parallelism: 1,
+});
+
 const getWorkflowUrl = (path: string): string => {
   const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
 
@@ -75,20 +86,17 @@ export class AgentSignalWorkflow {
 
     return workflowClient.trigger({
       body: payload,
-      flowControl: {
-        // NOTICE:
-        // Upstash QStash flow control keys reject `:` and other scope-key delimiters used by
-        // AgentSignal. We normalize only the flow-control segment here so runtime scope keys can
-        // keep their richer shape everywhere else.
-        // Source/context:
-        // - Local smoke trigger against real QStash returned:
-        //   `flowControlKey must be alphanumeric, hyphen, underscore, or period`
-        // - `payload.sourceEvent.scopeKey` commonly contains delimiters like `topic:...`
-        // Removal condition:
-        // - Safe to remove only if Upstash broadens flow-control key validation.
-        key: `agent-signal.run.scope.${normalizeFlowControlKeySegment(payload.sourceEvent.scopeKey)}`,
-        parallelism: 1,
-      },
+      // NOTICE:
+      // Upstash QStash flow control keys reject `:` and other scope-key delimiters used by
+      // AgentSignal. We normalize only the flow-control segment so runtime scope keys can
+      // keep their richer shape everywhere else.
+      // Source/context:
+      // - Local smoke trigger against real QStash returned:
+      //   `flowControlKey must be alphanumeric, hyphen, underscore, or period`
+      // - `payload.sourceEvent.scopeKey` commonly contains delimiters like `topic:...`
+      // Removal condition:
+      // - Safe to remove only if Upstash broadens flow-control key validation.
+      flowControl: agentSignalScopeFlowControl(payload.sourceEvent.scopeKey),
       headers: Object.fromEntries(traceHeaders.entries()),
       url,
     });

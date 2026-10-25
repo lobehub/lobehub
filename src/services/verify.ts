@@ -4,7 +4,7 @@ import type {
   AcceptanceCheckReviewAction,
   AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
-  AcceptanceSubjectType,
+  CreatableAcceptanceSubjectType,
   ReviewAdjudication,
   ReviewProposalEdit,
   VerifierType,
@@ -184,19 +184,19 @@ export class VerifyService {
     lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
 
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
-  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+  getAcceptanceBySubject = (subjectType: CreatableAcceptanceSubjectType, subjectId: string) =>
     lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
 
   /** Persist a subject's standing acceptance checklist (topic tray). */
   saveAcceptanceChecklist = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     checklist: AcceptanceChecklistItem[],
   ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
 
   /** Set/update a subject's acceptance goal (the one-sentence outcome). */
   saveAcceptanceGoal = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
@@ -237,7 +237,7 @@ export class VerifyService {
    * per-row state must ask about its own subjects instead.
    */
   listAcceptanceStatuses = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectIds: string[],
   ): Promise<Array<{ status: string; subjectId: string }>> =>
     lambdaClient.acceptance.listStatusesBySubjects.query({ subjectIds, subjectType });
