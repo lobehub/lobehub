@@ -54,7 +54,7 @@ const FeatureNav = memo(() => {
   if (items.length === 0) return null;
 
   return (
-    <nav aria-label={t('tab.home')}>
+    <nav aria-label={t('navPanel.shortcuts')}>
       <ScrollShadow
         hideScrollBar
         horizontal

@@ -6,7 +6,6 @@ import { memo } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useIsMobile } from '@/hooks/useIsMobile';
 
 import GoalAgentLabel from './GoalAgentLabel';
 import GoalItemMoreButton from './GoalItemMoreButton';
@@ -29,11 +28,25 @@ const styles = createStaticStyles(({ css }) => ({
     &[data-popup-open] {
       background: ${cssVar.colorFillQuaternary};
     }
+
+    /* A phone row wraps: the title takes the first line, agent / progress / menu
+       the second. Same breakpoint as GoalProgress. */
+    @media (width <= 767px) {
+      flex-wrap: wrap;
+      row-gap: 6px;
+    }
+  `,
+  title: css`
+    flex: 1;
+    min-width: 0;
+
+    @media (width <= 767px) {
+      flex-basis: 100%;
+    }
   `,
 }));
 
 export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, projectId }) => {
-  const isMobile = useIsMobile();
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
   const { goal } = item;
@@ -69,14 +82,12 @@ export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
         paddingBlock={10}
         paddingInline={12}
         role={'link'}
-        // A phone row wraps: the title takes the first line, agent / progress / menu the second.
-        style={isMobile ? { flexWrap: 'wrap', rowGap: 6 } : undefined}
         tabIndex={0}
         variant={'borderless'}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
       >
-        <Flexbox gap={4} style={{ flex: isMobile ? '1 1 100%' : 1, minWidth: 0 }}>
+        <Flexbox className={styles.title} gap={4}>
           <Flexbox horizontal align={'center'} gap={7}>
             <GoalStatusGlyph size={13} status={goal.status} />
             <Text ellipsis fontSize={15} weight={600}>

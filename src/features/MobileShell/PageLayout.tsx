@@ -69,7 +69,7 @@ const MobilePageLayout: FC<PropsWithChildren> = ({ children }) => {
           <NavHeader
             left={
               header.Title ? (
-                <Suspense fallback={staticTitle}>
+                <Suspense fallback={null}>
                   <header.Title />
                 </Suspense>
               ) : (
