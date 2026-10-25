@@ -28,6 +28,8 @@ const styles = stylex.create({
   },
   // The link is the 44px touch target; the pill inside stays light.
   link: {
+    // Rounded so the keyboard focus ring follows the pill.
+    borderRadius: 999,
     color: 'inherit',
     display: 'flex',
     flex: 'none',
