@@ -46,6 +46,11 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     min-height: 0;
   `,
+  bodyScrollable: css`
+    /* Rows past the card height scroll inside the card instead of being clipped. */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  `,
   card: css`
     overflow: hidden;
 
@@ -103,8 +108,6 @@ export interface WidgetCardProps {
   onOpen?: () => void;
   /** A manual refresh of this widget is in flight from this client. */
   runningLocally?: boolean;
-  /** Replaces the plain title, e.g. an inline input while editing a board. */
-  title?: ReactNode;
   /** Long-term trend from `metric_points`, when the host loaded it. */
   trend?: DashboardTrendSeries[];
   view?: WidgetView | null;
@@ -120,7 +123,7 @@ export interface WidgetCardProps {
  * the card says so instead of rendering an empty value.
  */
 const WidgetCard = memo<WidgetCardProps>(
-  ({ widget, trend, view, actions, handle, onOpen, runningLocally, className, title }) => {
+  ({ widget, trend, view, actions, handle, onOpen, runningLocally, className }) => {
     const { t } = useTranslation('dashboard');
     const health = getWidgetHealth(widget, { runningLocally });
     const updatedAt = getWidgetUpdatedAt(widget);
@@ -128,6 +131,10 @@ const WidgetCard = memo<WidgetCardProps>(
     const bodyState = getWidgetCardBody(health);
     // The running badge would repeat the spinning refresh button and the pulsing dot.
     const badges = health.badges.filter((badge) => badge !== 'running');
+
+    // Lists and tables are the only outputs taller than their card; the rest size to it.
+    const scrollable =
+      bodyState === 'output' && (output?.type === 'list' || output?.type === 'table');
 
     let body: ReactNode;
     if (bodyState === 'output' && output) {
@@ -172,11 +179,9 @@ const WidgetCard = memo<WidgetCardProps>(
       >
         <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
           {handle}
-          {title ?? (
-            <Text ellipsis className={styles.title} title={widget.title} weight={500}>
-              {widget.title}
-            </Text>
-          )}
+          <Text ellipsis className={styles.title} title={widget.title} weight={500}>
+            {widget.title}
+          </Text>
           <StatusBadges badges={badges} health={health} />
           {actions && (
             // Header actions must not open the drill-down.
@@ -191,7 +196,7 @@ const WidgetCard = memo<WidgetCardProps>(
             </Flexbox>
           )}
         </Flexbox>
-        <div className={styles.body}>{body}</div>
+        <div className={cx(styles.body, scrollable && styles.bodyScrollable)}>{body}</div>
         {updatedAt && (
           <Flexbox horizontal align={'center'} className={styles.footer} gap={6}>
             <HealthDot health={health} />
