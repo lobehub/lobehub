@@ -53,6 +53,7 @@ run commands.
 | \`lh doc\` | Document management (create, parse, organize) | \`references/doc\` |
 | \`lh kb\` | Knowledge base management (create, upload, organize) | \`references/kb\` |
 | \`lh file\` | File management | \`references/file\` |
+| \`lh artifact\` | Publish local HTML or Canvas, with persistent bindings and retry recovery | \`references/artifact\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
 | \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |
@@ -69,7 +70,7 @@ run commands.
 | \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh migrate\` | Account, usage, settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
 
 Covered by their own skills, so activate the skill instead of reading a reference here:
-\`lh task\` inside a task run (\`task\` skill), \`lh artifact\` (\`artifacts\` skill) and
+\`lh task\` inside a task run (\`task\` skill) and
 \`lh acceptance\` (\`acceptance\` skill).
 
 # Workspace scope

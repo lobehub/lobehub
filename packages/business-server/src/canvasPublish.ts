@@ -6,6 +6,7 @@ export interface PublishCanvasSiteParams {
   canvasId: string;
   db: LobeChatDatabase;
   deploymentId?: string;
+  requestedSlug?: string;
   title: string;
   userId: string;
   workspaceId?: string;
@@ -13,6 +14,7 @@ export interface PublishCanvasSiteParams {
 
 export interface PublishCanvasSiteResult {
   deploymentId: string;
+  subdomainLabel?: string | null;
   url: string;
 }
 

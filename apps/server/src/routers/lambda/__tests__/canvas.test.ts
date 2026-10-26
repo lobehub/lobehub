@@ -35,6 +35,7 @@ vi.mock('@/business/server/canvasPublish', () => ({
 }));
 
 const committed = vi.hoisted(() => ({ calls: 0 }));
+const storedManifests = vi.hoisted(() => new Map<string, any>());
 const snapshots = vi.hoisted(() => ({
   read: vi.fn(async (key: string, owner: string) => ({
     entry: 'index.html',
@@ -49,36 +50,51 @@ const snapshots = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock('@/server/services/canvas', () => ({
-  createCanvasStorageService: (_db: unknown, ownerId: string) => ({
-    commit: async () => {
-      committed.calls += 1;
-      return {
-        manifest: {},
-        metadata: {
+vi.mock('@/server/services/canvas', async () => {
+  const { createHash } = await import('node:crypto');
+  const { validateCanvasProject } = await import('@lobechat/canvas');
+  return {
+    createCanvasStorageService: (_db: unknown, ownerId: string) => ({
+      commit: async (canvasId: string, files: any[]) => {
+        const validation = validateCanvasProject(files);
+        if (!validation.ok) return validation;
+        committed.calls += 1;
+        const hash = createHash('sha256').update(files[0].content).digest('hex');
+        const manifestKey = `canvas/${ownerId}/${canvasId}/manifests/${hash}.json`;
+        storedManifests.set(manifestKey, {
           entry: 'index.html',
-          fileCount: 1,
-          manifestKey: `canvas/${ownerId}/cvs_new/manifests/m.json`,
+          files: { 'index.html': { hash } },
+        });
+        return {
+          manifest: {},
+          metadata: {
+            entry: 'index.html',
+            fileCount: 1,
+            manifestKey,
+            runtimeMajor: 1,
+            totalSize: 40,
+          },
+          ok: true,
+        };
+      },
+      ownerId,
+      readSnapshot: (key: string) => snapshots.read(key, ownerId),
+      readFile: async () => ({
+        bytes: new TextEncoder().encode('<html><head></head><body>hi</body></html>'),
+        contentType: 'text/html; charset=utf-8',
+      }),
+      readManifest: async (key: string) =>
+        storedManifests.get(key) ?? {
+          entry: 'index.html',
+          files: {
+            'index.html': { contentType: 'text/html; charset=utf-8', hash: 'h1', size: 40 },
+          },
           runtimeMajor: 1,
-          totalSize: 40,
+          schemaVersion: 1,
         },
-        ok: true,
-      };
-    },
-    ownerId,
-    readSnapshot: (key: string) => snapshots.read(key, ownerId),
-    readFile: async () => ({
-      bytes: new TextEncoder().encode('<html><head></head><body>hi</body></html>'),
-      contentType: 'text/html; charset=utf-8',
     }),
-    readManifest: async () => ({
-      entry: 'index.html',
-      files: { 'index.html': { contentType: 'text/html; charset=utf-8', hash: 'h1', size: 40 } },
-      runtimeMajor: 1,
-      schemaVersion: 1,
-    }),
-  }),
-}));
+  };
+});
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) => opts.next({ ctx: { ...opts.ctx, serverDB } }),
@@ -99,6 +115,7 @@ beforeEach(async () => {
   vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');
   publishing.enabled = true;
   committed.calls = 0;
+  storedManifests.clear();
   publishing.publish.mockClear();
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: 'stranger' }]);
@@ -207,7 +224,7 @@ describe('canvasRouter.publish', () => {
     const first = await caller().publish({ canvasId: 'cvs_1' });
     await caller().publish({ canvasId: 'cvs_1' });
 
-    expect(first).toEqual({ publishedVersion: 2, url: 'https://cost.lobehub.sites' });
+    expect(first).toMatchObject({ publishedVersion: 2, url: 'https://cost.lobehub.sites' });
     expect(publishing.publish.mock.calls[0][0]).toMatchObject({
       canvasId: 'cvs_1',
       deploymentId: undefined,
@@ -243,6 +260,95 @@ describe('canvasRouter.publish', () => {
     expect(publishing.publish).not.toHaveBeenCalled();
     expect((await caller().getVersion({ canvasId: 'cvs_1' }))?.canPublish).toBe(false);
   });
+
+  it('publishes the requested saved version after a newer one was registered', async () => {
+    const result = await caller().publish({ canvasId: 'cvs_1', version: 1 });
+    expect(result).toMatchObject({ deploymentId: 'dep_1', publishedVersion: 1 });
+    expect((await caller().getVersion({ canvasId: 'cvs_1' }))?.publishedVersion).toBe(1);
+  });
+
+  it('forwards requestedSlug to the publication host', async () => {
+    await caller().publish({ canvasId: 'cvs_1', requestedSlug: 'Sales Report' });
+    expect(publishing.publish.mock.calls[0][0].requestedSlug).toBe('Sales Report');
+  });
+
+  it('does not change the canonical publication when targeting a deployment for one run', async () => {
+    await caller().publish({ canvasId: 'cvs_1' });
+    publishing.publish.mockResolvedValueOnce({
+      deploymentId: 'dep_once',
+      url: 'https://once.test',
+    });
+    await caller().publish({ canvasId: 'cvs_1', deploymentId: 'dep_once', version: 1 });
+    expect(publishing.publish.mock.calls.at(-1)?.[0].deploymentId).toBe('dep_once');
+    expect(await caller().getVersion({ canvasId: 'cvs_1' })).toMatchObject({
+      publishedUrl: 'https://cost.lobehub.sites',
+      publishedVersion: 2,
+    });
+  });
+});
+
+describe('canvasRouter.save', () => {
+  const input = {
+    expectedVersion: 0,
+    html: '<h1>Local report</h1>',
+    requestId: '12345678-1234-4234-8234-123456789abc',
+    title: 'Local report',
+  };
+
+  it('saves an independent Canvas and recovers the same version after a lost response', async () => {
+    const first = await caller().save(input);
+    const replay = await caller().save(input);
+    expect(replay).toEqual(first);
+    expect(first).toMatchObject({ canvasId: expect.stringMatching(/^cvs_/), version: 1 });
+    expect(await caller().getVersion({ canvasId: first.canvasId })).toMatchObject({
+      title: input.title,
+      version: 1,
+      workId: first.workId,
+    });
+    expect(await new WorkModel(serverDB, userId).listVersions(first.workId)).toHaveLength(1);
+    expect(committed.calls).toBe(1);
+  });
+
+  it('keeps previous versions and recovers the original operation after a later save', async () => {
+    const first = await caller().save(input);
+    const second = await caller().save({
+      ...input,
+      canvasId: first.canvasId,
+      expectedVersion: 1,
+      html: '<h1>New snapshot</h1>',
+      requestId: '22345678-1234-4234-8234-123456789abc',
+    });
+    expect(second.version).toBe(2);
+    expect(await caller().save(input)).toEqual(first);
+    expect((await caller().getVersion({ canvasId: first.canvasId }))?.version).toBe(2);
+    await expect(
+      caller().save({ ...input, html: '<h1>Different input</h1>' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    await expect(
+      caller().save({
+        ...input,
+        canvasId: first.canvasId,
+        requestId: '32345678-1234-4234-8234-123456789abc',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('rejects invalid content before storage or registration', async () => {
+    await expect(
+      caller().save({ ...input, html: '<img src="https://private.test/image.png">' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(committed.calls).toBe(0);
+  });
+
+  it('does not allow saving over an invisible or missing canvas', async () => {
+    await expect(
+      caller('stranger').save({ ...input, canvasId: 'cvs_1', expectedVersion: 2 }),
+    ).rejects.toThrow();
+    await expect(caller().save({ ...input, canvasId: 'missing' })).rejects.toThrow();
+    expect(committed.calls).toBe(0);
+  });
 });
 
 describe('canvasRouter.runAgentTool', () => {
@@ -264,7 +370,7 @@ describe('canvasRouter.runAgentTool', () => {
     expect(result.output.success).toBe(true);
     expect(result.intent).toMatchObject({
       canvas: {
-        metadata: { manifestKey: `canvas/${userId}/cvs_new/manifests/m.json` },
+        metadata: { manifestKey: expect.stringContaining(`canvas/${userId}/cvs_`) },
         title: 'Cost',
       },
       type: 'canvas',

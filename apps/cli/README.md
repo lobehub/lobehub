@@ -2,6 +2,50 @@
 
 LobeHub command-line interface.
 
+## Publish local artifacts
+
+```bash
+# Publish ordinary HTML and its referenced local resources
+lh artifact publish ./page.html --root . --json
+
+# Read the Canvas component and generation rules
+lh artifact guide canvas
+
+# Publish a self-contained Canvas HTML file
+lh artifact publish ./report.html --type canvas --json
+
+# The binding remembers the type; subsequent publishes update the same artifact
+lh artifact publish ./report.html --json
+
+# Create a separate Canvas and bind future publishes to it
+lh artifact publish ./report.html --new --json
+```
+
+Bindings and pending operations live in the project's `.lobehub/artifacts.json`.
+Retry the same command with unchanged input after a failed Canvas save or publish;
+the CLI resumes that operation without creating another Canvas or saved version.
+Restore the original input before retrying if you edited it during recovery.
+An explicit validation or version-conflict rejection releases the pending save,
+so you can correct the file or inspect the latest version before trying again.
+If publication explicitly rejects a slug, correct `--slug` and retry with the same
+content and target; the CLI reuses the saved Canvas and version.
+Canvas bindings are scoped to the authenticated account, server and workspace.
+
+Canvas input is a single HTML file with inline styles, scripts and data, subject
+to the Canvas guide's validation and size limits. Publication saves a version in
+LobeHub and returns a public URL; it requires a server with Canvas publishing and
+a compatible runtime. JSON errors retain any saved Canvas ID and version.
+
+`--slug <name>` requests the readable prefix for a new deployment. Market adds an
+eight-character suffix; both HTML and Canvas use the same rule. Existing deployments
+retain their address when updated, including older records without a stored label.
+JSON `publicUrl` is the direct hosting URL; `shareUrl` is the LobeHub product share
+page, and `subdomainLabel` is the actual assigned label when the server returns it.
+
+`--deployment <id>` overrides the deployment for this run without changing the
+canonical binding. `--new` and `--deployment` cannot be combined. Changing an
+existing artifact's content type requires `--new`.
+
 ## Acceptance skill
 
 The acceptance skill is maintained in [lobehub/acceptance](https://github.com/lobehub/acceptance).
