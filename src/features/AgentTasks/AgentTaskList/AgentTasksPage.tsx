@@ -40,6 +40,7 @@ import {
   getCompletedWithin,
   getVisibleTaskStatuses,
   normalizeTaskListViewOptions,
+  toStoredTaskListViewOptions,
 } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
@@ -329,7 +330,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         groupBy: normalized.groupBy === 'automationMode' ? 'status' : normalized.groupBy,
         subGroupBy: normalized.subGroupBy === 'automationMode' ? 'none' : normalized.subGroupBy,
       };
-      updateSystemStatus({ taskListViewOptions: next }, 'updateTaskListViewOptions');
+      updateSystemStatus(
+        { taskListViewOptions: toStoredTaskListViewOptions(next) },
+        'updateTaskListViewOptions',
+      );
     },
     [updateSystemStatus, viewOptions],
   );

@@ -142,6 +142,19 @@ const normalizeCompletedTasks = (next: StoredTaskListViewOptions): TaskCompleted
   return DEFAULT_TASK_LIST_VIEW_OPTIONS.completedTasks;
 };
 
+/**
+ * The shape to persist. Keeps writing the legacy `hideCompleted` beside
+ * `completedTasks` so a build that predates the select (e.g. after a
+ * rollback) still follows the latest choice; a windowed choice reads as
+ * "shown" there, the closest it can express.
+ */
+export const toStoredTaskListViewOptions = <T extends Pick<TaskListViewOptions, 'completedTasks'>>(
+  options: T,
+): T & { hideCompleted: boolean } => ({
+  ...options,
+  hideCompleted: options.completedTasks === 'none',
+});
+
 export const normalizeTaskListViewOptions = (
   value?: StoredTaskListViewOptions | null,
 ): TaskListViewOptions => {

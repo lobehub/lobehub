@@ -13,6 +13,7 @@ import {
   HIDDEN_WHEN_COMPLETED_STATUSES,
   isTaskHiddenByCompletedFilter,
   normalizeTaskListViewOptions,
+  toStoredTaskListViewOptions,
 } from './listViewOptions';
 
 const task = (id: string, overrides: Partial<TaskListItem> = {}): TaskListItem =>
@@ -260,6 +261,22 @@ describe('completedTasks', () => {
     expect(normalizeTaskListViewOptions({ completedTasks: 'year' as never }).completedTasks).toBe(
       'none',
     );
+  });
+});
+
+describe('toStoredTaskListViewOptions', () => {
+  it('keeps the legacy hideCompleted in step for builds that only read it', () => {
+    const stored = (completedTasks: TaskListViewOptions['completedTasks']) =>
+      toStoredTaskListViewOptions({ ...DEFAULT_TASK_LIST_VIEW_OPTIONS, completedTasks });
+
+    expect(stored('none').hideCompleted).toBe(true);
+    expect(stored('all').hideCompleted).toBe(false);
+    expect(stored('week').hideCompleted).toBe(false);
+  });
+
+  it('round-trips through normalization to the same choice', () => {
+    const options = { ...DEFAULT_TASK_LIST_VIEW_OPTIONS, completedTasks: 'month' as const };
+    expect(normalizeTaskListViewOptions(toStoredTaskListViewOptions(options))).toEqual(options);
   });
 });
 
