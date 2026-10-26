@@ -19,8 +19,9 @@ interface ConnectorRowRef {
   userId?: string | null;
 }
 
-export const isWorkspaceConnectorAdmin = (ctx: Pick<ConnectorManageCtx, 'workspaceRole'>) =>
-  ctx.workspaceRole === 'owner' || ctx.workspaceRole === 'admin';
+export const isWorkspaceConnectorAdmin = (
+  ctx: Pick<ConnectorManageCtx, 'workspaceId' | 'workspaceRole'>,
+) => ctx.workspaceRole === 'owner' || ctx.workspaceRole === 'admin';
 
 export const getConnectorMemberManage = (
   ctx: ConnectorManageCtx,
