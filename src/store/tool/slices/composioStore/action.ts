@@ -459,21 +459,29 @@ export class ComposioStoreActionImpl {
     });
   };
 
-  removeComposioConnection = async (identifier: string): Promise<void> => {
-    const { composioServers } = this.#get();
-    const server = composioServers.find((s) => s.identifier === identifier);
-    const scope = cacheScope.get();
-
-    // Drop the row locally first so the delete shows at once. Recording the
-    // removal also cancels a pending add of the same identifier: the row was
-    // created but never echoed, so leaving it in `added` would re-append it the
-    // moment a response clears `removed`, resurrecting the deleted row for the
-    // rest of the session.
+  /**
+   * Drop a connection from the local list after it was removed on the server
+   * by another path (e.g. uninstalling it from the connector detail panel), so
+   * its row stops showing as connected. Recording the removal also cancels a
+   * pending add of the same identifier: the row was created but never echoed,
+   * so leaving it in `added` would re-append it the moment a response clears
+   * `removed`, resurrecting the deleted row for the rest of the session.
+   */
+  forgetComposioConnection = (identifier: string): void => {
     this.setComposioServerError(identifier, undefined);
     this.#localIntent().added.delete(identifier);
     this.#localIntent().removed.add(identifier);
     this.#servers.remove(identifier);
     this.#markLocalWrite();
+  };
+
+  removeComposioConnection = async (identifier: string): Promise<void> => {
+    const { composioServers } = this.#get();
+    const server = composioServers.find((s) => s.identifier === identifier);
+    const scope = cacheScope.get();
+
+    // Drop the row locally first so the delete shows at once.
+    this.forgetComposioConnection(identifier);
 
     if (server) {
       try {

@@ -68,6 +68,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const resetConnectorPermissions = useToolStore((s) => s.resetConnectorPermissions);
     const disconnectConnector = useToolStore((s) => s.disconnectConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
+    const forgetComposioConnection = useToolStore((s) => s.forgetComposioConnection);
     const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
     const uninstallMCPPlugin = useToolStore((s) => s.uninstallMCPPlugin);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -174,6 +175,10 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               await uninstallMCPPlugin(connector.identifier);
             }
             await deleteConnector(connectorId);
+            // The Composio list does not watch these writes; without this the
+            // uninstalled row keeps showing as connected until a reload.
+            if (getComposioAppByIdentifier(connector.identifier))
+              forgetComposioConnection(connector.identifier);
             onDelete?.();
           } catch (error) {
             notifyRemoveError(error);

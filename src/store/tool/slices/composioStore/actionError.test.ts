@@ -218,4 +218,15 @@ describe('composio connection errors', () => {
     expect(useToolStore.getState().composioServers).toEqual([]);
     expect(errorOf('gmail')).toBeUndefined();
   });
+
+  it('drops a connection removed elsewhere (detail-panel uninstall) from the list', async () => {
+    await loadGmail('ACTIVE');
+    act(() => useToolStore.getState().setComposioServerError('gmail', { action: 'connect' }));
+
+    act(() => useToolStore.getState().forgetComposioConnection('gmail'));
+
+    expect(useToolStore.getState().composioServers).toEqual([]);
+    expect(errorOf('gmail')).toBeUndefined();
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
+  });
 });
