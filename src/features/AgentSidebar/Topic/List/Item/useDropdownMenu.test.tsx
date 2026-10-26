@@ -242,6 +242,45 @@ describe('useTopicItemDropdownMenu', () => {
     },
   );
 
+  it.each([
+    ['/project/project-1/topic/topic-1', true],
+    ['/project/project-1/topic/topic-other', false],
+  ])(
+    'after archiving a Project row at %s, navigates home only for the current Topic',
+    async (pathname, shouldNavigate) => {
+      scopeFixture.enabled = true;
+      locationFixture.pathname = pathname;
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+      );
+
+      await result.current.toggleCompleted();
+
+      expect(completeMock).toHaveBeenCalledWith('topic-1');
+      expect(refreshProjectMock).toHaveBeenCalledOnce();
+      if (shouldNavigate) expect(navigateMock).toHaveBeenCalledWith('/project/project-1');
+      else expect(navigateMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('stays on the Topic the user opened while the archive was in flight', async () => {
+    scopeFixture.enabled = true;
+    locationFixture.pathname = '/project/project-1/topic/topic-1';
+    let finishArchive!: () => void;
+    completeMock.mockReturnValueOnce(new Promise<void>((resolve) => (finishArchive = resolve)));
+    const { rerender, result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    );
+
+    const archiving = result.current.toggleCompleted();
+    locationFixture.pathname = '/project/project-1/topic/topic-other';
+    rerender();
+    finishArchive();
+    await archiving;
+
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it('copies the row Agent link even when another Agent is active', async () => {
     scopeFixture.enabled = true;
     const writeText = vi.fn();
