@@ -26,15 +26,16 @@ const CONTENT_CLASS_NAME = 'nav-item-content';
 const styles = createStaticStyles(({ css }) => ({
   container: css`
     /* Width the title fades out under: one small action icon (24px) plus spacing.
-       Each extra icon adds its 24px plus the 2px gap. Focus guards an open menu
-       inserts beside its trigger are not icons, so they are not counted. */
+       Each extra icon adds its 24px plus the 2px gap. The focus guards and the
+       aria-owns portal marker an open menu inserts beside its trigger are not
+       icons, so they are not counted. */
     --nav-item-actions-inset: 28px;
 
     user-select: none;
     overflow: hidden;
     min-width: 32px;
 
-    &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard]))) {
+    &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns]))) {
       --nav-item-actions-inset: 54px;
     }
 
