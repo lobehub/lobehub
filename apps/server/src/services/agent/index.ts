@@ -1,7 +1,7 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_AGENT_CONFIG, DEFAULT_MODEL } from '@lobechat/const';
+import { DEFAULT_MODEL } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentItem,
@@ -9,7 +9,6 @@ import {
   type LobeAgentChatConfig,
   type LobeAgentConfig,
 } from '@lobechat/types';
-import { cleanObject, merge } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type PartialDeep } from 'type-fest';
@@ -21,6 +20,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { mergeAgentDefaultConfig } from '@/database/utils/agentConfig';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '@/database/utils/inboxAgent';
 import { getRedisConfig } from '@/envs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
@@ -352,20 +352,11 @@ export class AgentService {
   ): LobeAgentConfig | null {
     if (!agent) return null;
 
-    // Merge configs in order: DEFAULT -> server -> [user] -> agent
-    const serverDefaultAgentConfig = getServerDefaultAgentConfig();
-    const baseConfig = merge(DEFAULT_AGENT_CONFIG, serverDefaultAgentConfig);
-
-    // Skip the personal default layer for workspace-scoped agents (see above).
-    if (this.workspaceId) {
-      return merge(baseConfig, cleanObject(agent));
-    }
-
-    const userDefaultAgentConfig =
-      (defaultAgentConfig as { config?: PartialDeep<LobeAgentConfig> })?.config || {};
-    const withUserConfig = merge(baseConfig, userDefaultAgentConfig);
-
-    return merge(withUserConfig, cleanObject(agent));
+    return mergeAgentDefaultConfig(agent, {
+      serverDefault: getServerDefaultAgentConfig(),
+      userDefault: defaultAgentConfig,
+      workspaceId: this.workspaceId,
+    });
   }
 
   /**

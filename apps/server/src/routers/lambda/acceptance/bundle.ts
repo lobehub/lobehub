@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ScmChangeRequestModel } from '@/database/models/scm';
@@ -23,8 +24,9 @@ import {
 } from '@/server/services/verify';
 import { listAcceptancePullRequests } from '@/server/services/verify/acceptancePullRequests';
 
+import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import { canManageAcceptance } from '../_helpers/acceptanceWriteScope';
-import { canReadAcceptance, publicAcceptanceProcedure } from './procedures';
+import { publicAcceptanceProcedure } from './procedures';
 
 /** Cap on concurrent evidence/attachment file lookups while building one bundle. */
 const FILE_META_RESOLVE_CONCURRENCY = 5;
@@ -57,7 +59,10 @@ export const bundleRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
-      const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
+      const isOwner =
+        acceptance.subjectType !== 'site' &&
+        Boolean(ctx.userId) &&
+        ctx.userId === acceptance.userId;
       if (!isOwner && !(await canReadAcceptance(ctx, acceptance))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
@@ -65,6 +70,17 @@ export const bundleRouter = router({
       // The one rule the write path enforces — same helper, so the page can
       // never advertise an action the mutation would refuse.
       const canReview = await canManageAcceptance(ctx, acceptance);
+      // A reader a decider granted edit-collaboration to may send the delivery
+      // back — the same widening `resolveAcceptanceForReject` applies to the
+      // write — and talk to the agent bound to it. The owner holds both already.
+      const collaborationGranted =
+        !isOwner &&
+        Boolean(ctx.userId) &&
+        (await new AcceptanceCommentModel(ctx.serverDB).hasAccessGrant(
+          acceptance.id,
+          ctx.userId!,
+          'collaborate',
+        ));
 
       // Sub-reads (rounds / results / evidence) are ownership-scoped models, so
       // read them AS the aggregate's owner — same pattern as the evidence file
@@ -225,6 +241,28 @@ export const bundleRouter = router({
       // The authoring conversation (agent + topic), resolved for the header —
       // owner-only, same redaction rule as `run.metadata.origin`.
       const origin = isOwner ? await ownerService.resolveOrigin(runs) : null;
+      // A grantee's reject runs the owner's agent, so they need to know whether
+      // there is one to run — as a yes/no, never the private topic it names.
+      // A collaborator's reject and messages run the owner's agent, so they need
+      // to know there is one, and how to show it — the agent's face and the
+      // topic's title, never the private ids behind them.
+      const collaboratorOrigin = collaborationGranted
+        ? await ownerService.resolveOrigin(runs)
+        : null;
+      const repairDispatchAvailable = isOwner
+        ? Boolean(origin?.topic)
+        : Boolean(collaboratorOrigin?.topic);
+      const collaboration =
+        collaboratorOrigin?.topic && collaboratorOrigin.agent
+          ? {
+              agent: {
+                avatar: collaboratorOrigin.agent.avatar,
+                backgroundColor: collaboratorOrigin.agent.backgroundColor,
+                title: collaboratorOrigin.agent.title,
+              },
+              topicTitle: collaboratorOrigin.topic.title,
+            }
+          : null;
 
       const currentRoundIndex = runs.at(-1)?.roundIndex ?? 0;
       const resultsById = new Map(results.map((result) => [result.id, result]));
@@ -291,6 +329,8 @@ export const bundleRouter = router({
           })),
         })),
         acceptance,
+        canCollaborate: collaborationGranted,
+        canReject: canReview || collaborationGranted,
         canReview,
         isOwner,
         checks: checks.map((check) => {
@@ -336,8 +376,10 @@ export const bundleRouter = router({
                 : userReview,
           };
         }),
+        collaboration,
         latestReport,
         origin,
+        repairDispatchAvailable,
         rounds,
         subject,
       };

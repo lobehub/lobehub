@@ -245,7 +245,11 @@ describe('workspace command', () => {
 
       expect(mockGetTrpcClient).toHaveBeenCalledWith('ws_1');
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify({ id: 'ws_1', name: 'Acme', slug: 'acme' }, null, 2),
+        JSON.stringify(
+          { id: 'ws_1', name: 'Acme', slug: 'acme', url: 'https://app.lobehub.com/acme' },
+          null,
+          2,
+        ),
       );
     });
 

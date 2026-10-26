@@ -22,6 +22,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
   const {
     agentId,
     applicationId,
+    botWakeEnabled,
     bridge,
     charLimit,
     client,
@@ -29,7 +30,9 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     detectReplyLocale,
     displayToolCalls,
     dmSettings,
+    gateFollowup,
     isMessageMonitoringAllowed,
+    observe,
     operatorUserId,
     passGatesOrNotify,
     platform,
@@ -60,7 +63,9 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
   // `onSubscribedMessage` (subscribed sub-threads).
   const dmCatchAllEnabled = dmSettings.policy !== 'disabled';
   const keywordCatchAllEnabled = watchKeywordEntries.length > 0;
-  if (dmCatchAllEnabled || keywordCatchAllEnabled) {
+  // A bot-wake bot also listens to channel chatter nobody addressed to it: its policies judge
+  // those messages (shadow by default), so they must reach this handler.
+  if (dmCatchAllEnabled || keywordCatchAllEnabled || botWakeEnabled) {
     bot.onNewMessage(/./, async (thread, message, context?: MessageContext) => {
       if (message.author.isBot === true) return;
 
@@ -85,12 +90,23 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       // If neither path applies, return so the regex doesn't act as a
       // channel-wide hijack. DMs still need the dmCatchAllEnabled gate
       // because a DM message can arrive while DM policy is disabled.
-      if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) return;
+      if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) {
+        // Observation only. Gated like every other passive listening path.
+        if (
+          botWakeEnabled &&
+          !isDM &&
+          (await isMessageMonitoringAllowed(`onNewMessage (${platform} bot-wake)`, thread.id))
+        ) {
+          observe('catchAll', message, thread, 'skip', 'not-addressed');
+        }
+        return;
+      }
 
       if (matchesWatchKeyword) {
         if (
           !(await isMessageMonitoringAllowed(`onNewMessage (${platform} catch-all)`, thread.id))
         ) {
+          observe('catchAll', message, thread, 'skip', 'monitoring-not-allowed');
           return;
         }
         log(
@@ -113,6 +129,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           `onNewMessage (${platform} catch-all)`,
         ))
       ) {
+        observe('catchAll', message, thread, 'skip', 'access-gate-rejected');
         return;
       }
 
@@ -155,6 +172,19 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           );
         }
 
+        // Last check before a keyword wake runs: enforced policies, then the scheduler. Before
+        // the thread below is opened, so a parked message does not leave an empty thread behind.
+        if (
+          (await gateFollowup({
+            entryPoint: 'catchAll',
+            merged,
+            parked: [...(context?.skipped ?? []), message],
+            thread,
+          })) === 'stop'
+        ) {
+          return;
+        }
+
         // Discord (and any platform that prefers thread isolation) opts
         // into spawning a sub-thread for the reply via this hook. The
         // chat-sdk Discord adapter only auto-creates a thread on
@@ -186,6 +216,13 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           }
         }
       }
+      observe(
+        'catchAll',
+        merged,
+        thread,
+        'wake',
+        matchesWatchKeyword ? 'watch-keyword' : 'direct-message',
+      );
       void emitAgentSignalSourceEvent(
         {
           payload: {

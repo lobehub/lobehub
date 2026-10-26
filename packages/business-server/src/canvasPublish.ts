@@ -18,6 +18,9 @@ export interface PublishCanvasSiteResult {
 
 export const isCanvasPublishEnabled = () => false;
 
+export const getCanvasPublishRuntimeUrl = async (_major: number): Promise<string | undefined> =>
+  undefined;
+
 export const publishCanvasSite = async (
   _params: PublishCanvasSiteParams,
 ): Promise<PublishCanvasSiteResult> => {

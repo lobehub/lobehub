@@ -2,6 +2,7 @@ export * from './project/changes';
 export * from './project/limits';
 export * from './project/manifest';
 export * from './project/path';
+export type * from './project/snapshot';
 export * from './schema/components';
 export * from './schema/reference';
 export type * from './schema/types';

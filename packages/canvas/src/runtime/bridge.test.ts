@@ -10,21 +10,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('initializes standalone previews without secure-context UUID support', () => {
+it('initializes without secure-context UUID support or an HTTP runtime fallback', () => {
   vi.stubGlobal('crypto', { randomUUID: undefined });
-  expect(() => installCanvasBridge('/runtime.js')).not.toThrow();
-  expect(document.querySelector('script')?.src).toContain('/runtime.js');
+  expect(() => installCanvasBridge()).not.toThrow();
+  expect(document.querySelector('script')).toBeNull();
 });
 
 it('keeps a BFCache preview alive and disposes only on a final pagehide', () => {
   const disposed = vi.fn();
   window.addEventListener('lobe-canvas-dispose', disposed, { once: true });
-  installCanvasBridge('/runtime.js');
+  installCanvasBridge();
   const cached = new PageTransitionEvent('pagehide');
   Object.defineProperty(cached, 'persisted', { value: true });
   window.dispatchEvent(cached);
   expect(disposed).not.toHaveBeenCalled();
-  expect(document.querySelector('script')).not.toBeNull();
   window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
   expect(disposed).toHaveBeenCalledOnce();
   expect(document.querySelector('script')).toBeNull();

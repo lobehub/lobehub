@@ -4,7 +4,7 @@ import { FluentEmoji, Result, Text } from '@lobehub/ui';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { resultStyles } from '../resultStyles';
+import resultStyles from '../resultStyles.module.css';
 
 const DeviceSuccess = memo(() => {
   const { t } = useTranslation('oauth');

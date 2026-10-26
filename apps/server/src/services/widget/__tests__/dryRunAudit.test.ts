@@ -5,9 +5,11 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { UserModel } from '@/database/models/user';
 import { WidgetModel } from '@/database/models/widget';
 
 import { createWidgetDryRunAudit } from '../dryRunAudit';
+import { WidgetService } from '../index';
 
 const userId = 'dry-run-audit-user';
 const otherUserId = 'dry-run-audit-other';
@@ -61,5 +63,41 @@ describe('createWidgetDryRunAudit', () => {
   it('fails closed for a version the run user cannot read', async () => {
     const foreign = await draftOf(otherUserId, null);
     expect(await createWidgetDryRunAudit(db, userId)(foreign)).toBe(true);
+  });
+
+  it('stops asking once the creator granted that access, and only for that access', async () => {
+    const githubManifest = {
+      env: [{ connector: 'github', name: 'GITHUB_TOKEN' }],
+      network: { allow: ['api.github.com'] },
+    };
+    const approved = await draftOf(userId, githubManifest);
+    const grant = await new WidgetService(db, userId).grantDryRunAccess(
+      approved.widgetId,
+      approved.versionId,
+    );
+    expect(grant).toMatchObject({
+      connectors: ['github'],
+      hosts: ['api.github.com'],
+      workspaceId: null,
+    });
+
+    const audit = createWidgetDryRunAudit(db, userId);
+    // Another widget asking for the same access runs unattended…
+    expect(await audit(await draftOf(userId, githubManifest))).toBe(false);
+    // …but one more host asks again.
+    const wider = await draftOf(userId, {
+      ...githubManifest,
+      network: { allow: ['api.github.com', 'evil.example'] },
+    });
+    expect(await audit(wider)).toBe(true);
+  });
+
+  it('refuses a grant from someone who cannot author the widget', async () => {
+    const foreign = await draftOf(otherUserId, { network: { allow: ['api.github.com'] } });
+    await expect(
+      new WidgetService(db, userId).grantDryRunAccess(foreign.widgetId, foreign.versionId),
+    ).rejects.toThrow();
+    const settings = await new UserModel(db, userId).getUserSettings();
+    expect(settings?.tool).toBeFalsy();
   });
 });

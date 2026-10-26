@@ -76,7 +76,8 @@ export const defineCanvasElement = (
           this.#value = Number(this.#value);
         }
         this.#checked = this.#readChecked();
-        this.replaceChildren();
+        // Keep business nodes in the document until the React slot adopts them.
+        if (spec.children !== 'content') this.replaceChildren();
         for (const source of sources) this.#loadSource(source);
       }
       getHosts().register(this, () => view(this.#context()));

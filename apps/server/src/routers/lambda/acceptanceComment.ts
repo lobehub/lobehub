@@ -1,4 +1,6 @@
 import type {
+  AcceptanceAccessRequest,
+  AcceptanceAccessRequestStatus,
   AcceptanceAttachment,
   AcceptanceCommentAuthor,
   AcceptanceCommentItem,
@@ -34,6 +36,7 @@ import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { createEvidenceFileResolver } from '@/server/services/verify/evidenceFiles';
 
 import { resolveAcceptanceCommentAccess } from './_helpers/acceptanceCommentAccess';
+import { canManageAcceptance } from './_helpers/acceptanceWriteScope';
 
 const rectSchema = z.object({
   height: z.number().min(0).max(1),
@@ -279,6 +282,7 @@ const enrich = async (
   return rows
     .filter((row) => row.kind !== 'reaction')
     .map((row) => ({
+      accessRequest: row.kind === 'access_request' ? (row.metadata?.accessRequest ?? null) : null,
       acceptanceId: row.acceptanceId,
       anchorType: row.anchorType,
       attachments: (row.attachments ?? []).flatMap((item) => {
@@ -444,6 +448,19 @@ const assertReferencesBelongToAcceptance = async (
 const VISITOR_COMMENT_WINDOW_MS = 60_000;
 const VISITOR_COMMENTS_PER_WINDOW = 10;
 
+/**
+ * Which answers a decider may give from which state. A grant is taken back,
+ * never declined after the fact; a closed request is asked again, not reopened.
+ */
+const ACCESS_TRANSITIONS: Record<
+  'decline' | 'grant' | 'revoke',
+  { from: AcceptanceAccessRequestStatus; to: AcceptanceAccessRequestStatus }
+> = {
+  decline: { from: 'pending', to: 'declined' },
+  grant: { from: 'pending', to: 'granted' },
+  revoke: { from: 'granted', to: 'revoked' },
+};
+
 export const acceptanceCommentRouter = router({
   create: writeProcedure.input(createSchema).mutation(async ({ ctx, input }) => {
     const access = await resolveAcceptanceCommentAccess(
@@ -529,6 +546,152 @@ export const acceptanceCommentRouter = router({
   }),
 
   /**
+   * Ask the acceptance's deciders for edit-collaboration: the right to send the
+   * delivery back, and to talk to the agent bound to it. Open to anyone who may
+   * remark here — a visitor on a public link included — because nothing moves
+   * until a decider says yes, and a remark alone never reaches the agent.
+   *
+   * It lands as a discussion turn the deciders answer in place. One standing
+   * request per person: a pending or granted one is handed back rather than
+   * duplicated, and a declined or revoked one may be asked again.
+   */
+  requestAccess: writeProcedure
+    .input(
+      z.object({
+        acceptanceId: z.string().min(1),
+        clientId: z.string().trim().min(1).max(255),
+        content: z.string().trim().max(2000).optional(),
+        contextRunId: z.string().uuid().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const access = await resolveAcceptanceCommentAccess(
+        ctx.serverDB,
+        ctx.userId,
+        input.acceptanceId,
+      );
+      if (!access.canComment)
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Read-only access' });
+      // A gate's revision is the goal's own call, carried out by its main Agent.
+      if (access.acceptance.subjectType === 'goal_gate')
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'A goal gate cannot hand out reject access',
+        });
+      // The owner already holds everything a grant hands out. A workspace
+      // member who may decide still cannot talk to the owner's agent, so they
+      // may ask like anyone else.
+      if (access.isOwner)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'You already own this acceptance',
+        });
+      await assertReferencesBelongToAcceptance(ctx.serverDB, access.acceptance.id, {
+        runId: input.contextRunId,
+      });
+
+      const enrichScope = {
+        canModerate: access.canApprove,
+        ownerUserId: access.acceptance.userId,
+        userId: ctx.userId,
+        visibility: access.acceptance.visibility,
+        workspaceId: access.acceptance.workspaceId,
+      };
+      const accessRequest: AcceptanceAccessRequest = {
+        permission: 'collaborate',
+        status: 'pending',
+      };
+      try {
+        // A pending or granted request already standing comes back as the
+        // duplicate — decided inside the write's own transaction, so two
+        // submissions at once still leave a single standing request.
+        const { comment, isDuplicate } = await ctx.acceptanceCommentModel.create({
+          acceptanceId: access.acceptance.id,
+          authorUserId: ctx.userId,
+          clientId: input.clientId,
+          content: input.content ?? '',
+          contextRunId: input.contextRunId,
+          kind: 'access_request',
+          metadata: { accessRequest },
+          rateLimit: access.canApprove
+            ? undefined
+            : {
+                max: VISITOR_COMMENTS_PER_WINDOW,
+                since: new Date(Date.now() - VISITOR_COMMENT_WINDOW_MS),
+              },
+          workspaceId: access.acceptance.workspaceId,
+        });
+        const [item] = await enrich(ctx.serverDB, [comment], enrichScope);
+        if (!isDuplicate) notifyAcceptance(access.acceptance.id, 'comments', ctx.userId);
+        return { data: item, success: true };
+      } catch (error) {
+        if (error instanceof Error && error.message === ACCEPTANCE_COMMENT_RATE_LIMITED)
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: 'Too many comments on this acceptance, try again in a minute',
+          });
+        throw error;
+      }
+    }),
+
+  /**
+   * A decider's answer to an access request: grant it, decline it, or take a
+   * grant back. Deciding who may send a delivery back is itself a decision on
+   * it, so it takes the same right the reject does.
+   */
+  answerAccessRequest: writeProcedure
+    .input(
+      z.object({
+        decision: z.enum(['decline', 'grant', 'revoke']),
+        id: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { access, comment } = await requireComment(ctx, input.id);
+      if (comment.kind !== 'access_request' || comment.deletedAt)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Access request not found' });
+      if (!(await canManageAcceptance(ctx, access.acceptance)))
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator or a workspace member with edit access can answer this',
+        });
+
+      const transition = ACCESS_TRANSITIONS[input.decision];
+      const current = comment.metadata?.accessRequest;
+      if (current?.status !== transition.from)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `This request is already ${current?.status ?? 'closed'}`,
+        });
+
+      const row = await ctx.acceptanceCommentModel.answerAccessRequest(
+        comment.id,
+        transition.from,
+        {
+          ...current,
+          decidedAt: new Date().toISOString(),
+          decidedByUserId: ctx.userId,
+          status: transition.to,
+        },
+      );
+      if (!row)
+        throw new TRPCError({ code: 'CONFLICT', message: 'This request was answered meanwhile' });
+
+      const [item] = await enrich(ctx.serverDB, [row], {
+        canModerate: access.canApprove,
+        ownerUserId: access.acceptance.userId,
+        userId: ctx.userId,
+        visibility: access.acceptance.visibility,
+        workspaceId: access.acceptance.workspaceId,
+      });
+      // The requester's page holds its decision controls in the bundle, so it
+      // has to hear about this as a session change, not only a new remark.
+      notifyAcceptance(comment.acceptanceId, 'comments', ctx.userId);
+      notifyAcceptance(comment.acceptanceId, 'session', ctx.userId);
+      return { data: item, success: true };
+    }),
+
+  /**
    * Take a remark down. Its author always may; the acceptance's reviewers may
    * take down anyone's, because the discussion is open to whoever holds the
    * link and the author of an unwanted remark is exactly who will not remove
@@ -549,6 +712,9 @@ export const acceptanceCommentRouter = router({
         own ? { authorUserId: ctx.userId } : { moderator: true },
       );
       notifyAcceptance(comment.acceptanceId, 'comments', ctx.userId);
+      // Withdrawing an access request gives back whatever it was granted.
+      if (comment.kind === 'access_request')
+        notifyAcceptance(comment.acceptanceId, 'session', ctx.userId);
       return { data: { deleted: result !== false }, success: true };
     }),
 
@@ -568,7 +734,12 @@ export const acceptanceCommentRouter = router({
         visibility: access.acceptance.visibility,
         workspaceId: access.acceptance.workspaceId,
       });
-      return { canApprove: access.canApprove, canComment: access.canComment, items };
+      return {
+        canApprove: access.canApprove,
+        canComment: access.canComment,
+        canManageAccess: await canManageAcceptance(ctx, access.acceptance),
+        items,
+      };
     }),
 
   /**

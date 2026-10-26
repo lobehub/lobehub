@@ -455,6 +455,14 @@ const splitByInitial = (
 // entry-set chunking. Requires preserveEntrySignatures: 'allow-extension'.
 export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => {
   const groups: Group[] = [
+    // The canvas runtime's own modules carry page-level CSS (base.css styles
+    // body). App chunks also reuse modules the runtime pulls in, so without a
+    // chunk of its own that CSS would ride along and restyle the App's body.
+    {
+      name: 'canvas-runtime',
+      priority: 4,
+      test: /[\\/]packages[\\/]canvas-runtime[\\/]src[\\/]/,
+    },
     {
       name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
       priority: 3,

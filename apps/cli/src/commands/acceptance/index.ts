@@ -11,6 +11,7 @@ import { getTrpcClient } from '../../api/client';
 import { resolveServerUrl } from '../../settings';
 import { outputJson, printTable, timeAgo, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { collectCommentFeedback } from './commentFeedback';
 import { attachCriterionCommands } from './criterion';
 import { attachAcceptanceFlowCommands } from './flow';
@@ -22,6 +23,7 @@ import {
   unsetLanguageWarning,
 } from './language';
 import { attachPlanCommands } from './plan';
+import { projectEnsureInput, resolveAcceptanceProject, warnIfFiledElsewhere } from './project';
 import { attachRubricCommands } from './rubric';
 import { attachAcceptanceRunCommands } from './run';
 import type { ReviewAnnotationRegion } from './utils';
@@ -144,12 +146,17 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       'Reuse or create for task/topic/document/standalone; omit for a new standalone acceptance',
     )
     .option(
+      '--project <ref>',
+      "File under a project (id, slug or identifier such as LOBE), overriding the subject's own; otherwise the subject's project, then the one in .agents/acceptance/config.json",
+    )
+    .option(
       '--json [fields]',
-      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, requirement, status, subject)',
+      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, projectId, requirement, status, subject)',
     )
     .action(
       async (options: {
         json?: boolean | string;
+        project?: string;
         requirement: string;
         subject?: string;
         title?: string;
@@ -174,7 +181,17 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           { path: '--requirement', text: requirement },
           { path: '--title', text: title },
         ]);
-        const result = await client.acceptance.ensure.mutate({ ...subject, requirement, title });
+        const project = await resolveAcceptanceProject(client, {
+          flag: options.project,
+          startDirs: [process.cwd()],
+        });
+        const result = await client.acceptance.ensure.mutate({
+          ...subject,
+          ...projectEnsureInput(project),
+          requirement,
+          title,
+        });
+        warnIfFiledElsewhere(project, result);
         const acceptanceUrl = new URL(
           `/acceptance/${encodeURIComponent(result.id)}`,
           resolveServerUrl(),
@@ -185,6 +202,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             {
               acceptanceId: result.id,
               acceptanceUrl,
+              projectId: result.projectId,
               requirement: result.requirement,
               status: result.status,
               subject: { subjectId: result.subjectId, subjectType: result.subjectType },
@@ -195,6 +213,9 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         }
 
         console.log(`${pc.bold('acceptance')}: ${result.id} (${result.status})`);
+        if (project && result.projectId === project.id) {
+          console.log(`${pc.bold('project')}: ${project.name}`);
+        }
         console.log(`${pc.bold('open acceptance')}: ${acceptanceUrl}`);
         console.log(
           pc.dim(
@@ -226,7 +247,12 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const items = await client.acceptance.list.query();
 
       if (options.json !== undefined) {
-        outputJson(items, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.acceptance(item.id),
+          ),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       if (items.length === 0) {
@@ -255,7 +281,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const bundle = await client.acceptance.getBundle.query({ id });
 
       if (options.json !== undefined) {
-        outputJson(bundle, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(bundle, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
 
@@ -554,7 +583,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const client = await getTrpcClient();
       const result = await client.acceptance.setPreviewUrl.mutate({ id, url });
       if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       console.log(`${pc.green('✓')} r${result.roundIndex} preview: ${result.previewUrl}`);
@@ -596,7 +628,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           url,
         });
         if (options.json !== undefined) {
-          outputJson(linked, typeof options.json === 'string' ? options.json : undefined);
+          outputJson(
+            withUrl(linked, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+            typeof options.json === 'string' ? options.json : undefined,
+          );
           return;
         }
         console.log(
@@ -616,7 +651,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const result = await client.acceptance.accept.mutate({ comment: options.comment, id });
 
       if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       console.log(`${pc.green('✓')} Delivery accepted (${result.id})`);
@@ -633,7 +671,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const result = await client.acceptance.reject.mutate({ comment: options.comment, id });
 
       if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       console.log(`${pc.red('✗')} Delivery rejected (${result.id}) — next round re-opens it`);

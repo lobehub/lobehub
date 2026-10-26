@@ -1,5 +1,7 @@
 export const acceptanceContentLayout = {
-  maxWidth: 920,
+  // GitHub's PR page width: the discussion keeps a full-width feed beside a
+  // fixed aside that sits on the container's right edge.
+  maxWidth: 1280,
   paddingInline: 24,
 } as const;
 

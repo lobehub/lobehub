@@ -210,6 +210,7 @@ export const discoverTools = async (
         candidateIds: [...agentPlugins],
         exclusivePluginIds,
         isGoalTurn,
+        projectId: appContext?.projectId,
         requestedDeviceId,
         resolvedAgentId,
         shareGate,
@@ -319,10 +320,15 @@ export const discoverTools = async (
 
     await throwIfExecutionAborted('tool discovery');
 
-    // 5e. Create tools using Server AgentToolsEngine
+    // 5e. Create tools using Server AgentToolsEngine. Project knowledge counts:
+    // every agent in a project searches it, even with none of its own.
+    const projectScope = await toolReads.projectScope;
     hasEnabledKnowledgeBases =
-      agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
-      false;
+      projectScope.hasKnowledgeBases ||
+      (agentConfig.knowledgeBases?.some(
+        (kb: { enabled?: boolean | null }) => kb.enabled === true,
+      ) ??
+        false);
 
     hasAgentDocuments = await toolReads.agentDocuments;
     const hasOversizedFiles = await toolReads.oversizedFiles;
@@ -346,14 +352,17 @@ export const discoverTools = async (
       builtinModels.find((item) => item.id === model && item.providerId === provider)?.abilities ??
       builtinModels.find((item) => item.id === model)?.abilities;
     agentPlugins = [
-      ...agentPlugins,
-      ...(await resolveTurnScopedPluginIds({
-        attachedFileTypes: await toolReads.attachedFileTypes,
-        externalFileTypes: rawExternalFileTypes,
-        isBotConversation,
-        loadHistoryMessages,
-        modelMediaCapabilities,
-      })),
+      ...new Set([
+        ...agentPlugins,
+        ...(await resolveTurnScopedPluginIds({
+          attachedFileTypes: await toolReads.attachedFileTypes,
+          externalFileTypes: rawExternalFileTypes,
+          isBotConversation,
+          isProjectCoordinator: projectScope.isCoordinator,
+          loadHistoryMessages,
+          modelMediaCapabilities,
+        })),
+      ]),
     ];
     if (exclusivePluginIds) {
       agentPlugins = agentPlugins.filter((id) => exclusivePluginIds.includes(id));

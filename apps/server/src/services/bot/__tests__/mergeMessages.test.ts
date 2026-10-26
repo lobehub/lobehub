@@ -1,7 +1,12 @@
 import { Message } from 'chat';
 import { describe, expect, it } from 'vitest';
 
-import { buildReplayMessages, getSourceMessages, mergeBotMessages } from '../mergeMessages';
+import {
+  buildReplayMessages,
+  getOriginMessageId,
+  getSourceMessages,
+  mergeBotMessages,
+} from '../mergeMessages';
 
 const makeMessage = (id: string, text: string, raw: unknown, attachments: unknown[] = []) =>
   new Message({
@@ -46,6 +51,15 @@ describe('mergeBotMessages', () => {
 describe('buildReplayMessages', () => {
   it('returns an empty list for no entries', () => {
     expect(buildReplayMessages([])).toEqual([]);
+  });
+
+  it('reports the platform id behind a replay id', () => {
+    const original = makeMessage('10', 'hi', { item: 'text' });
+    const [replay] = buildReplayMessages([original.toJSON()]);
+
+    expect(replay.id).toMatch(/^10:replay:\d+:0$/);
+    expect(getOriginMessageId(replay)).toBe('10');
+    expect(getOriginMessageId(original)).toBe('10');
   });
 
   it('keeps each original raw through the SDK JSON round-trip before merging', () => {

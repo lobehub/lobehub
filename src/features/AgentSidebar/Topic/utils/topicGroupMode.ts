@@ -38,7 +38,8 @@ export const resolveAgentTopicGroupMode = ({
     : getDefaultTopicGroupModeByAgentType(globalMode, agentType);
 
   // "by agent" and "by device" are only offered in project-scoped lists. When
-  // they leak into the global preference (set from a project sidebar), a single
+  // they sit in the global preference (set from a project sidebar before
+  // projects kept their own), a single
   // agent's own topics would render as one pointless self-named bucket — keep
   // the previous default grouping. Project-scoped lists resolve through
   // `resolveProjectTopicGroupMode` instead.
@@ -46,10 +47,9 @@ export const resolveAgentTopicGroupMode = ({
 };
 
 /**
- * Project-scoped lists already belong to one project, so "by project" is not
- * offered there. It can still arrive through the shared global preference
- * (picked in a group sidebar); fall back to the default grouping instead of
- * rendering every topic under a single project bucket.
+ * Project-scoped lists read their own preference (default: by agent). They
+ * already belong to one project, so "by project" is not offered there; a stale
+ * value falls back to grouping by agent instead of one project-wide bucket.
  */
-export const resolveProjectTopicGroupMode = (globalMode: TopicGroupMode): TopicGroupMode =>
-  globalMode === 'byProject' ? 'byTime' : globalMode;
+export const resolveProjectTopicGroupMode = (projectMode: TopicGroupMode): TopicGroupMode =>
+  projectMode === 'byProject' ? 'byAgent' : projectMode;

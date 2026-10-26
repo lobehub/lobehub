@@ -165,6 +165,50 @@ export class MessagePluginStore extends MessageScope {
   };
 
   /**
+   * The newest calls to one tool API across several topics, oldest first, with
+   * the tool message's text — where a CLI adapter records the call's result.
+   * Lets a later run read what earlier runs of the same Task asked and got
+   * back, e.g. the owner's answers to `askUserQuestion`.
+   */
+  listToolCallsInTopics = async (params: {
+    apiName: string;
+    limit?: number;
+    topicIds: string[];
+  }): Promise<
+    Array<{ arguments?: string; content?: string; createdAt: Date; topicId: string | null }>
+  > => {
+    if (params.topicIds.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        arguments: messagePlugins.arguments,
+        content: messages.content,
+        createdAt: messages.createdAt,
+        id: messages.id,
+        topicId: messages.topicId,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          inArray(messages.topicId, params.topicIds),
+          eq(messagePlugins.apiName, params.apiName),
+          this.ownership(),
+          this.pluginsOwnership(),
+        ),
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(params.limit ?? 20);
+
+    return rows.reverse().map((row) => ({
+      arguments: row.arguments ?? undefined,
+      content: row.content ?? undefined,
+      createdAt: row.createdAt,
+      topicId: row.topicId,
+    }));
+  };
+
+  /**
    * The `state` of the most recent call to one tool API in a topic that
    * produced any — a failed or aborted call leaves no state. Lets a tool read
    * back what an earlier call in the same conversation produced, e.g. the group

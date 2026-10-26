@@ -27,7 +27,11 @@ import {
 } from '../_helpers/acceptanceRepairDispatch';
 import { settleGoalSignOff } from '../_helpers/acceptanceStatus';
 import * as goalGate from '../_helpers/goalGateAcceptance';
-import { acceptanceWriteProcedure, resolveAcceptanceForWrite } from './procedures';
+import {
+  acceptanceWriteProcedure,
+  resolveAcceptanceForReject,
+  resolveAcceptanceForWrite,
+} from './procedures';
 import { reviewAnnotationsSchema } from './schemas';
 
 export const reviewRouter = router({
@@ -328,6 +332,11 @@ export const reviewRouter = router({
    * outcome rides on `repairDispatch` so every surface (UI, CLI, external
    * callers) reports the same thing. Without one the caller hands the repair
    * prompt over itself.
+   *
+   * A reader a decider granted reject access to may call this too. Their
+   * decision is recorded as theirs, but the repair is dispatched as the owner:
+   * it runs the owner's agent in the owner's conversation, which the grantee
+   * could never reach themselves — that reach is exactly what was granted.
    */
   reject: acceptanceWriteProcedure
     .input(
@@ -346,7 +355,7 @@ export const reviewRouter = router({
         ctx,
         input,
       }): Promise<AcceptanceItem & { repairDispatch: AcceptanceRepairDispatch }> => {
-        const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+        const { acceptance, delegated, service } = await resolveAcceptanceForReject(ctx, input.id);
 
         const comment = input.comment || undefined;
         const rejected = await goalGate.withGoalGateAnswer(
@@ -369,7 +378,9 @@ export const reviewRouter = router({
         }
 
         const repairDispatch = await dispatchAcceptanceRepair(
-          ctx,
+          delegated
+            ? { ...ctx, userId: acceptance.userId, workspaceId: acceptance.workspaceId }
+            : ctx,
           service,
           acceptance,
           input.comment || undefined,

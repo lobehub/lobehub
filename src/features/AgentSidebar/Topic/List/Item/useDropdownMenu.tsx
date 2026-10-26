@@ -32,7 +32,7 @@ import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
-import { getProjectConversationPath } from '@/features/Projects/Layout/navigation';
+import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -42,6 +42,7 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
@@ -72,7 +73,7 @@ export const useTopicItemDropdownMenu = ({
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceId = useActiveWorkspaceId();
   const { pathname } = useActiveLocation();
-  const routeTopicId = pathname.match(/\/project\/[^/]+\/conversation\/([^/]+)\/?$/)?.[1];
+  const routeTopicId = pathname.match(/\/project\/[^/]+\/topic\/([^/]+)\/?$/)?.[1];
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
@@ -83,6 +84,14 @@ export const useTopicItemDropdownMenu = ({
   const { scope, refresh } = useScopedTopics();
   const fallbackAgentId = useAgentStore((s) => s.activeAgentId);
   const activeAgentId = scopedTopic?.agentId ?? fallbackAgentId;
+  // Project rows carry their agent's provider type, since a cold project visit
+  // never loads each row agent's config into the store.
+  const isHeterogeneous = useAgentStore(
+    (s) =>
+      !!scopedTopic?.agentHeterogeneousProviderType ||
+      (!!activeAgentId &&
+        !!agentSelectors.getAgentConfigById(activeAgentId)(s)?.agencyConfig?.heterogeneousProvider),
+  );
   const addTab = useElectronStore((s) => s.addTab);
   const appOrigin = useAppOrigin();
   const enableTopicBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
@@ -107,6 +116,13 @@ export const useTopicItemDropdownMenu = ({
   ]);
 
   const isCompleted = status === 'completed';
+  const toggleCompleted = useCallback(async () => {
+    if (!id) return;
+    if (isCompleted) await unmarkTopicCompleted(id);
+    else await markTopicCompleted(id);
+    if (scope) await refresh();
+  }, [id, isCompleted, markTopicCompleted, unmarkTopicCompleted, scope, refresh]);
+
   const handleOpenShareModal = useCallback(() => {
     if (!id) return;
 
@@ -124,11 +140,7 @@ export const useTopicItemDropdownMenu = ({
         label:
           completionLabel ??
           (isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted')),
-        onClick: async () => {
-          if (isCompleted) await unmarkTopicCompleted(id);
-          else await markTopicCompleted(id);
-          if (scope) await refresh();
-        },
+        onClick: toggleCompleted,
         sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
       },
       {
@@ -275,7 +287,7 @@ export const useTopicItemDropdownMenu = ({
               t('duplicateTitle', { ns: 'chat', title }),
             );
             await refresh();
-            navigate(getProjectConversationPath(scope.projectId, newId));
+            navigate(getProjectTopicPath(scope.projectId, newId));
             toast.success(t('duplicateSuccess', { ns: 'topic' }));
           } finally {
             loadingToast.close();
@@ -376,8 +388,7 @@ export const useTopicItemDropdownMenu = ({
     autoRenameTopicTitle,
     duplicateTopic,
     favoriteTopic,
-    markTopicCompleted,
-    unmarkTopicCompleted,
+    toggleCompleted,
     removeTopic,
     updateTopicTitle,
     openTopicInNewWindow,
@@ -387,5 +398,9 @@ export const useTopicItemDropdownMenu = ({
     t,
     handleOpenShareModal,
   ]);
-  return { dropdownMenu };
+  // Heterogeneous agents (Claude Code / Codex) run task-like topics that get
+  // archived once done, so their sidebar rows surface archive as a one-click action.
+  const canInlineArchive = !!id && canEditTopic && isHeterogeneous;
+
+  return { canInlineArchive, dropdownMenu, isCompleted, toggleCompleted };
 };

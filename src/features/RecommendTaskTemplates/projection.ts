@@ -4,7 +4,7 @@ import type {
   TaskTemplateConnectorSource,
 } from '@lobechat/const';
 
-import type { LocalStorageQueryProjectionStorage } from '@/libs/queryProjectionStorage';
+import type { AppLocalStorage } from '@/libs/replica';
 import { cacheScope, defineReplica, replicaKeys } from '@/libs/replica';
 
 import { TASK_TEMPLATE_DAILY_RECOMMEND_REPLICA } from './const';
@@ -113,8 +113,7 @@ export const peekDailyRecommendations = (
   scope: string,
 ): unknown[] | undefined => {
   if (!cacheScope.canHydrate?.()) return undefined;
-  const storage = dailyRecommendResource.storage as
-    LocalStorageQueryProjectionStorage<TaskTemplate[]> | undefined;
+  const storage = dailyRecommendResource.storage as AppLocalStorage<TaskTemplate[]> | undefined;
   const data = storage?.getSync?.({
     queryKey: dailyRecommendResource.storageKey(params),
     scope,

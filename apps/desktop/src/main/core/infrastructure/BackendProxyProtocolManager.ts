@@ -211,7 +211,7 @@ export class BackendProxyProtocolManager {
     return async (request) => {
       const url = new URL(request.url);
       if (!isBackendPath(url.pathname)) return null;
-      if (!isSandboxedBackendRequestAllowed(url.pathname, request.headers.get('origin')))
+      if (!isSandboxedBackendRequestAllowed(request.headers.get('origin')))
         return new Response('Forbidden', { status: 403 });
 
       const session = electronSession.defaultSession;

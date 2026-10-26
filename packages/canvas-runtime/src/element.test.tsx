@@ -52,6 +52,24 @@ const mount = async (html: string) => {
 };
 
 describe('canvas elements', () => {
+  it('keeps business DOM addressable while component rendering is pending', async () => {
+    const main = document.createElement('main');
+    main.innerHTML = '<lobe-card><button id="project-action">Run</button></lobe-card>';
+    const button = main.querySelector('button')!;
+    const listener = vi.fn();
+    button.addEventListener('click', listener);
+
+    await act(async () => {
+      document.body.append(main);
+      expect(document.getElementById('project-action')).toBe(button);
+    });
+
+    expect(main.querySelectorAll('#project-action')).toHaveLength(1);
+    expect(document.getElementById('project-action')).toBe(button);
+    button.click();
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
   it('renders every element through one shared React root and keeps light-DOM children', async () => {
     const main = await mount(
       '<lobe-card title="Cost"><p>Body <lobe-tag color="green">ok</lobe-tag></p></lobe-card><lobe-tag>second</lobe-tag>',

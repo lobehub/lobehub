@@ -47,7 +47,6 @@ import type {
 import {
   buildHeteroExecStdinPayload,
   buildHeterogeneousPrompt,
-  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
   stripInheritedRunIdentity,
 } from '@lobechat/heterogeneous-agents/protocol';
 import {
@@ -147,6 +146,7 @@ import {
   HeteroInflightRunRegistry,
 } from '@/modules/heterogeneousAgent/inflightRunRegistry';
 import { fetchKimiCodeQuota } from '@/modules/heterogeneousAgent/kimiCodeQuota';
+import { buildLhHeteroExecEnv } from '@/modules/heterogeneousAgent/lhHeteroExecEnv';
 import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
@@ -4075,6 +4075,8 @@ export default class HeterogeneousAgentCtr {
    * eager accepted ack would strand the server operation without a producer.
    */
   spawnLhHeteroExec(params: {
+    /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
+    accountEnv?: Record<string, string>;
     agentId?: string;
     agentType: string;
     assistantMessageId?: string;
@@ -4102,20 +4104,16 @@ export default class HeterogeneousAgentCtr {
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
-      assistantMessageId,
       args: extraArgs,
       cwd,
       imageList,
-      jwt,
       operationId,
       onChildSpawned,
       prompt,
       resumeFallbackSystemContext,
       resumeSessionId,
-      serverUrl,
       systemContext,
       topicId,
-      workspaceId,
     } = params;
     const workDir = cwd ?? process.cwd();
     // Let the embedded CLI classify a stale project path and finish the
@@ -4170,25 +4168,10 @@ export default class HeterogeneousAgentCtr {
       });
     }
 
-    // Never inherit the launcher's run identity (or JWT file) for a dispatched run.
-    const childEnv = stripInheritedRunIdentity(process.env);
-
-    const env = {
-      ...withEmbeddedCliEnv(childEnv),
-      ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
-      ELECTRON_RUN_AS_NODE: '1',
-      [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
-      ...(params.agentId ? { LOBEHUB_AGENT_ID: params.agentId } : {}),
-      LOBEHUB_JWT: jwt,
-      LOBEHUB_OPERATION_ID: operationId,
-      LOBEHUB_TOPIC_ID: topicId,
-      ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
-      LOBEHUB_SERVER: serverUrl,
-      // Same reason `runHeteroTask` injects this for notify: without it the
-      // CLI's heteroIngest/heteroFinish fall back to personal scope and the
-      // workspace topic 404s (empty assistant, topic stuck `running`).
-      ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
-    };
+    const env = buildLhHeteroExecEnv({
+      ...params,
+      proxyEnv: buildProxyEnv(this.app.storeManager.get('networkProxy')),
+    });
 
     logger.info('spawnLhHeteroExec: type=%s op=%s topic=%s', agentType, operationId, topicId);
 

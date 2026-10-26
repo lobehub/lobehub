@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import AccessRequestEntry from '../Comments/AccessRequestEntry';
 import CommentContent from '../Comments/CommentContent';
 import { buildDiscussionTimeline } from '../Comments/discussionTimeline';
 import { styles } from '../Comments/styles';
@@ -127,6 +128,15 @@ const ReadDiscussion = () => {
             />
           );
         }
+        if (entry.kind === 'accessRequest')
+          return (
+            <AccessRequestEntry
+              at={entry.at}
+              canManage={false}
+              key={entry.request.id}
+              request={entry.request}
+            />
+          );
         // A circled note reads as its thread; the picture it points at stays on
         // the check section of this report.
         if (entry.kind === 'region')

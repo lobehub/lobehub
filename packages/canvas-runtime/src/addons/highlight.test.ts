@@ -1,11 +1,12 @@
 import { CANVAS_CODE_LANGUAGES } from '@lobechat/canvas';
+import { isSupportedLanguage } from '@pierre/highlights';
 import { describe, expect, it } from 'vitest';
 
-import { CODE_GRAMMARS, highlightCode } from './highlight';
+import { highlightCode } from './highlight';
 
 describe('highlight add-on', () => {
-  it('bundles a grammar for every language the component reference promises', () => {
-    expect(Object.keys(CODE_GRAMMARS).sort()).toEqual([...CANVAS_CODE_LANGUAGES].sort());
+  it('supports every language the component reference promises', () => {
+    expect(CANVAS_CODE_LANGUAGES.filter((lang) => !isSupportedLanguage(lang))).toEqual([]);
   });
 
   it('colors code with theme variables and accepts common aliases', async () => {
@@ -19,7 +20,7 @@ describe('highlight add-on', () => {
   it('shows an unknown language as escaped plain text', async () => {
     const html = await highlightCode('a < b', 'brainfudge');
 
-    expect(html).toContain('a &#x3C; b');
+    expect(html).toContain('a &lt; b');
     expect(html).not.toMatch(/<span style="color:\s?var\(--lobe-color-success/);
   });
 });

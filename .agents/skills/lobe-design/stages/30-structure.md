@@ -29,14 +29,16 @@
 
 ## 只加载（只读和本次改动相关的条目）
 
-- [components.md](../references/components.md)：C-01 原子层从 `@lobehub/ui` 取用（硬性规则）· **C-11 分层边界：原子层取用，组合层自建** · C-02 按需求查 · C-03 易混组件 · C-04 对话界面组合顺序 · C-05 库里没有的组件 · C-06 其他命名空间 · C-07 控制台套件 · C-08 控制台按场景选组件 · C-09 `TitleWithTips` · C-10 `BarList`
+- [components.md](../references/components.md)：C-01 原子层从 `@lobehub/ui` 取用（web 硬性规则；RN 用项目组件库）· **C-11 分层边界：原子层取用，组合层自建** · C-02 按需求查 · C-03 易混组件 · C-04 对话界面组合顺序 · C-05 库里没有的组件 · C-06 其他命名空间 · C-07 控制台套件 · C-08 控制台按场景选组件 · C-09 `TitleWithTips` · C-10 `BarList` · C-18 按环境分组的凭证 · C-19 滚动边缘 · C-20 移动端悬浮框架（仅 mobile）
 - [ecosystem.md](../references/ecosystem.md)：E-01 图表 · E-03 模型徽标 · E-04 emoji · E-05 流式 markdown · E-06 边界
 - [design.md](../references/design.md)：D-01 cssVar 是唯一事实源（写法层面） · D-06 复用现成表面工艺 · D-07 品牌气质走主题（**定制色板 / 换品牌主色** → lobe-ui [`tuning-color-palettes`](https://github.com/lobehub/lobe-ui/tree/master/.agents/skills/tuning-color-palettes)，本机已安装则按名调用）
 - [craft.md](../references/craft.md)：K-10 编码陷阱
 
 ## 硬性前提（由 `scripts/lint-lobe.mjs` 机械校验，规则 id 见括号）
 
-**这些约束只覆盖原子层**（按钮、输入、表格、弹层这类不可再分的零件）。业务组合件按 C-11 自建，不受下面这些条目的限制——但仍要遵守「取值走 cssVar」。
+**平台作用域：以下 1–3 条是 web / desktop 的写法。** mobile（React Native）项目的原子层取自项目组件库（`components.md` 记录的那一套，如 `@lobehub/ui-rn`）与 `react-native` 原语，样式用 `StyleSheet` / 项目主题的 `useTheme()` token；`lint-lobe.mjs` 按 `product.md` 的平台自动跳过这些 web 规则。
+
+**这些约束只覆盖原子层**（按钮、输入、表格、弹层这类不可再分的零件）。业务组合件按 C-11 自建，不受下面这些条目的限制——但仍要遵守「取值走主题 token」（web：`cssVar`；RN：`useTheme()`）。
 
 1. 组件从 `@lobehub/ui` 导入，表单从 `@lobehub/ui/form`、请求驱动的表格从 `@lobehub/ui/pro-table` 导入；应用里不用 `antd` / `antd-style`（`LOBE-ANTD-IMPORT`、`LOBE-FORM-ENTRY`）；操作结果提示用 `toast`；图标用 `lucide-react` + `Icon`（`LOBE-ANT-ICONS`）。
 2. 样式只写 `createStaticStyles` + `cssVar`（从 `@lobehub/ui` 导入），不用 `createStyles`（`LOBE-CREATE-STYLES`）。css 模板里注释只用 `/* */`（`LOBE-CSS-LINE-COMMENT`）。
@@ -86,7 +88,7 @@ import '@lobehub/ui/style.css';
 4. 每个短文本、图标、按钮都按语义选组件，易混组件按 C-03 区分。
 5. 卡片、表面、加载形用现成组件，不手写底色和边框。
 6. 同类需求不引入第二个依赖（例如第二个图表库、远程抓 SVG 徽标）。
-7. **分层判断过一遍（C-11）**：原子层和皮肤层没有被重写；业务组合件没有硬套库里不贴合的通用组件。自建的组合件内部只用原子层和皮肤层，取值仍走 `cssVar`。
+7. **分层判断过一遍（C-11）**：原子层和皮肤层没有被重写；业务组合件没有硬套库里不贴合的通用组件。自建的组合件内部只用原子层和皮肤层，取值仍走主题 token（web：`cssVar`；RN：`useTheme()`）。
 
 ## 症状 → 规则
 
@@ -104,6 +106,9 @@ import '@lobehub/ui/style.css';
 | 图标按钮、开关或下拉在读屏里没有名字，或名字读两遍 | C-12 |
 | 确认按钮是英文 OK 或「确定」；请求还没完成弹窗就关了，失败落在弹窗外 | C-15 |
 | 对象属性画成只读键值卡，改一个值要另开编辑弹窗；重置后控件仍显示旧值 | C-17 |
+| 按环境配置的 token / 密钥平铺成一张表，env 只是其中一列，看不出哪个凭证属于哪个环境 | C-18 |
+| 滚动边缘的模糊吃进正文，或用黑色渐变、硬切；半透明盖在文字上 | C-19 |
+| 移动端上下两条实底栏把内容框住 | C-20 |
 | 想要命令面板，却找不到组件或自己重写了一个 | C-05 |
 | 面板里的卡片或代码块高度为 0，列不再滚动 | K-10 |
 | 厂商徽标是灰色插头，或换成了别的品牌 | E-03 |

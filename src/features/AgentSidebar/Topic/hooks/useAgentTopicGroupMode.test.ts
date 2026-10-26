@@ -7,7 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentTopicGroupMode } from './useAgentTopicGroupMode';
 
 const scopeMock = vi.hoisted(() => ({ scope: null as null | { projectId: string } }));
-const preferenceMock = vi.hoisted(() => ({ globalMode: 'byTime' as string }));
+const preferenceMock = vi.hoisted(() => ({
+  globalMode: 'byTime' as string,
+  projectMode: 'byAgent' as string,
+  updatePreference: vi.fn(),
+}));
 const agentMock = vi.hoisted(() => ({ agentMode: undefined as string | undefined }));
 
 vi.mock('../TopicListScope', () => ({
@@ -15,11 +19,13 @@ vi.mock('../TopicListScope', () => ({
 }));
 
 vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({ updatePreference: vi.fn() }),
+  useUserStore: (selector: (state: unknown) => unknown) =>
+    selector({ updatePreference: preferenceMock.updatePreference }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: {
+    projectTopicGroupMode: () => preferenceMock.projectMode,
     topicGroupMode: () => preferenceMock.globalMode,
   },
 }));
@@ -40,22 +46,39 @@ describe('useAgentTopicGroupMode', () => {
   beforeEach(() => {
     scopeMock.scope = null;
     preferenceMock.globalMode = 'byTime';
+    preferenceMock.projectMode = 'byAgent';
+    preferenceMock.updatePreference.mockClear();
     agentMock.agentMode = undefined;
   });
 
-  /** @example byProject saved from a group sidebar must not reach a project's own topic list. */
-  it('resolves a stored byProject to byTime inside a project-scoped list', () => {
+  it('groups a project-scoped list by agent unless the project preference says otherwise', () => {
     scopeMock.scope = { projectId: 'prj-1' };
-    preferenceMock.globalMode = 'byProject';
+    // The single-agent preference no longer leaks into a project.
+    preferenceMock.globalMode = 'byStatus';
 
-    const { result } = renderHook(() => useAgentTopicGroupMode());
+    const { result, rerender } = renderHook(() => useAgentTopicGroupMode());
+    expect(result.current.topicGroupMode).toBe('byAgent');
 
-    expect(result.current.topicGroupMode).toBe('byTime');
+    preferenceMock.projectMode = 'byDevice';
+    rerender();
+    expect(result.current.topicGroupMode).toBe('byDevice');
   });
 
-  it('keeps the global byAgent mode inside a project-scoped list', () => {
+  it('saves a project-scoped pick to the project preference only', async () => {
     scopeMock.scope = { projectId: 'prj-1' };
-    preferenceMock.globalMode = 'byAgent';
+
+    const { result } = renderHook(() => useAgentTopicGroupMode());
+    await result.current.updateTopicGroupMode('byStatus');
+
+    expect(preferenceMock.updatePreference).toHaveBeenCalledWith({
+      projectTopicGroupMode: 'byStatus',
+    });
+  });
+
+  /** @example a stale byProject must not reach a project's own topic list. */
+  it('resolves a stored byProject to byAgent inside a project-scoped list', () => {
+    scopeMock.scope = { projectId: 'prj-1' };
+    preferenceMock.projectMode = 'byProject';
 
     const { result } = renderHook(() => useAgentTopicGroupMode());
 

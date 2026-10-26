@@ -27,6 +27,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -64,6 +65,8 @@ interface TaskPageHeaderVisibilityParams {
   agentId?: string;
   isEmptyHero: boolean;
   isMobile: boolean;
+  /** The mobile bundle, whose header already leads back to the scope. */
+  mobileSurface?: boolean;
   projectId?: string;
 }
 
@@ -71,6 +74,7 @@ export const getTaskPageHeaderVisibility = ({
   agentId,
   isEmptyHero,
   isMobile,
+  mobileSurface = false,
   projectId,
 }: TaskPageHeaderVisibilityParams) => {
   // The global page's own crumb is the `tasks` tab, so the breadcrumb only
@@ -79,7 +83,10 @@ export const getTaskPageHeaderVisibility = ({
   const isGlobalEmpty = !isScoped && isEmptyHero;
 
   return {
-    showBreadcrumb: isScoped,
+    // The mobile header only fits the tabs; its back button and the agent /
+    // project drawer already lead to the scope the breadcrumb names. A narrow
+    // desktop window has neither, so it keeps the breadcrumb.
+    showBreadcrumb: isScoped && !mobileSurface,
     showTaskAgentPanelToggle: !isGlobalEmpty && shouldRenderTaskAgentPanelToggle(isMobile),
     showViewOptions: !isGlobalEmpty,
   };
@@ -403,6 +410,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
       isOrdinaryCollection,
     }),
     isMobile,
+    mobileSurface: isMobileSurface(),
     projectId,
   });
 

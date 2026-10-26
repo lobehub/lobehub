@@ -415,6 +415,43 @@ export async function refreshMainStateFromDb(
   if (spineId) state.main.lastSpineMessageId = spineId;
 }
 
+/** Spine assistants walked back from the tip; a run's tools sit a hop or two behind it. */
+const MAX_SIGNAL_ANCHOR_HOPS = 50;
+
+/**
+ * Recover `lastToolMsgIdEver` — the anchor a signal turn (a background task's
+ * wake-up) parents off — on a replica that never reduced this run's tool
+ * batches. Without it the signal turn falls back onto the toolless spine reply,
+ * and the read side, which only collects signal turns under tools, renders it
+ * as a separate top-level reply.
+ *
+ * Walks the spine from its tip back through main-thread assistants and takes
+ * the last tool of the first one that called any. Stopping at the first
+ * non-assistant (the run's user message) keeps a previous run's tools out.
+ */
+export async function recoverLastToolMessageFromDb(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  state: OperationState,
+): Promise<void> {
+  if (state.main.lastToolMsgIdEver) return;
+
+  const threadId = state.threadId ?? null;
+  let messageId: string | null | undefined = state.main.lastSpineMessageId;
+  for (let hop = 0; messageId && hop < MAX_SIGNAL_ANCHOR_HOPS; hop++) {
+    const message = await deps.messageModel.findById(messageId);
+    if (message?.role !== 'assistant' || (message.threadId ?? null) !== threadId) return;
+
+    const toolMessageId = ((message.tools ?? []) as ChatToolPayload[])
+      .map((tool) => tool.result_msg_id ?? state.toolMsgIdByCallId.get(tool.id))
+      .findLast(Boolean);
+    if (toolMessageId) {
+      state.main.lastToolMsgIdEver = toolMessageId;
+      return;
+    }
+    messageId = message.parentId;
+  }
+}
+
 /**
  * Rebuild the in-flight subagent runs (`state.main.subagents`) from DB.
  *

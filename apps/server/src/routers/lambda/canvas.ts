@@ -3,26 +3,21 @@ import type { BuiltinServerRuntimeOutput, WorkRegistrationIntent } from '@lobech
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { isCanvasPublishEnabled, publishCanvasSite } from '@/business/server/canvasPublish';
+import {
+  getCanvasPublishRuntimeUrl,
+  isCanvasPublishEnabled,
+  publishCanvasSite,
+} from '@/business/server/canvasPublish';
 import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { WorkModel } from '@/database/models/work';
-import { appEnv } from '@/envs/app';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService } from '@/server/services/canvas';
 import { createCanvasAgentRuntime } from '@/server/services/canvas/agentRuntime';
-import {
-  buildCanvasPublishBundle,
-  resolveCanvasPublicRuntimeUrl,
-} from '@/server/services/canvas/publish';
-import {
-  buildCanvasPreviewUrl,
-  resolveCanvasRuntimeUrl,
-} from '@/server/services/canvas/runtimeUrl';
-import { signCanvasPreviewToken } from '@/server/services/canvas/serve';
+import { buildCanvasPublishBundle } from '@/server/services/canvas/publish';
 
 const canvasProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -34,6 +29,24 @@ const canvasProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 });
 
 export const canvasRouter = router({
+  getProject: canvasProcedure
+    .input(z.object({ canvasId: z.string(), version: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const current = await ctx.workModel.findCanvas(input.canvasId);
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND' });
+      const version =
+        input.version === current.version.version
+          ? current.version
+          : await ctx.workModel.findCanvasVersion(current.work.id, input.version);
+      const canvas = version?.metadata?.canvas;
+      if (!canvas) throw new TRPCError({ code: 'NOT_FOUND' });
+      return createCanvasStorageService(
+        ctx.serverDB,
+        current.work.userId,
+        ctx.workspaceId,
+      ).readSnapshot(canvas.manifestKey);
+    }),
+
   getVersion: canvasProcedure
     .input(z.object({ canvasId: z.string(), version: z.number().int().positive().optional() }))
     .query(async ({ ctx, input }) => {
@@ -47,12 +60,6 @@ export const canvasRouter = router({
       const canvas = version?.metadata?.canvas;
       if (!version || !canvas) return null;
 
-      const token = signCanvasPreviewToken({
-        manifestKey: canvas.manifestKey,
-        userId: current.work.userId,
-        workspaceId: ctx.workspaceId,
-      });
-
       return {
         canPublish: isCanvasPublishEnabled() && current.work.userId === ctx.userId,
         canvasId: input.canvasId,
@@ -60,10 +67,8 @@ export const canvasRouter = router({
         description: version.description ?? current.work.description,
         latestVersion: current.version.version,
         metadata: canvas,
-        previewUrl: buildCanvasPreviewUrl(token, canvas.entry),
         publishedUrl: current.work.url,
         publishedVersion: current.work.metadata?.canvasPublish?.publishedVersion ?? null,
-        runtimeUrl: resolveCanvasRuntimeUrl(canvas.runtimeMajor),
         title: version.title ?? current.work.title,
         version: version.version,
         workId: current.work.id,
@@ -86,14 +91,17 @@ export const canvasRouter = router({
       if (!current || !canvas) throw new TRPCError({ code: 'NOT_FOUND' });
       if (current.work.userId !== ctx.userId) throw new TRPCError({ code: 'FORBIDDEN' });
 
-      const runtimeUrl = resolveCanvasPublicRuntimeUrl(canvas.runtimeMajor, {
-        appUrl: appEnv.APP_URL,
-        baseUrl: process.env.CANVAS_RUNTIME_BASE_URL,
+      const runtimeUrl = await getCanvasPublishRuntimeUrl(canvas.runtimeMajor).catch((cause) => {
+        throw new TRPCError({
+          cause,
+          code: 'PRECONDITION_FAILED',
+          message: 'The publication host has no compatible Canvas runtime',
+        });
       });
       if (!runtimeUrl) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: 'Publishing needs APP_URL or an absolute CANVAS_RUNTIME_BASE_URL',
+          message: 'The publication host has no compatible Canvas runtime',
         });
       }
 

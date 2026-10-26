@@ -44,6 +44,11 @@ export type IFeatureFlagsState = {
    * protocol-v2 payloads; independent from `enableGatewayMux`.
    */
   enableGatewayMuxMobile: boolean | undefined;
+  /**
+   * Rollout gate for the bot-wake pipeline (`bot_wake`), evaluated for the bot's owner. Read only
+   * by the server; it is part of the state because the two flag types must not drift apart.
+   */
+  enableBotWake: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   /**
    * Rollout gate for relaying LLM calls of device-only model providers to the
@@ -185,15 +190,6 @@ export interface GlobalServerConfig {
    * Undefined means "not configured": the default (64) applies.
    */
   toolNameMaxLength?: number;
-  /**
-   * How the widget sandbox encodes the manifest's network allowlist
-   * (`WIDGET_SANDBOX_NETWORK_FORMAT`): `allowlist` when the Worker restricts
-   * egress to the declared hosts, `boolean` — or absent, the deployed
-   * Worker's only format — when the sandbox only gets an on/off switch and
-   * cannot enforce hosts. The publish review reads this to disclose
-   * unrestricted egress instead of presenting the allowlist as enforced.
-   */
-  widgetSandboxNetworkFormat?: 'allowlist' | 'boolean';
 }
 
 export interface GlobalBillboardItemLocaleFields {

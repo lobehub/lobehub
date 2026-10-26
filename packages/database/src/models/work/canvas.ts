@@ -7,7 +7,9 @@ import type {
 } from '@lobechat/types';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
+import { agents } from '../../schemas/agent';
 import { works, workVersions } from '../../schemas/work';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import { type WorkContext, workOwnership } from './context';
 import { createDisplayWorkAdapter } from './displayWork';
 import { registerWorkVersion } from './writes';
@@ -22,10 +24,21 @@ export const registerCanvasWork = async (
   params: RegisterCanvasWorkParams,
 ): Promise<WorkItem> => {
   const [existing] = await ctx.db
-    .select({ id: works.id })
+    .select({ id: works.id, visibility: works.visibility })
     .from(works)
     .where(canvasResource(ctx, params.canvasId))
     .limit(1);
+
+  // Inherit only at creation; later edits keep the canvas's own permissions.
+  let visibility = existing?.visibility ?? params.visibility;
+  if (!visibility && ctx.workspaceId && params.agentId) {
+    const [agent] = await ctx.db
+      .select({ visibility: agents.visibility })
+      .from(agents)
+      .where(and(eq(agents.id, params.agentId), buildWorkspaceWhere(ctx, agents)))
+      .limit(1);
+    visibility = agent?.visibility;
+  }
 
   return registerWorkVersion(
     ctx,
@@ -34,7 +47,7 @@ export const registerCanvasWork = async (
       resourceType: 'canvas',
       type: 'canvas',
       userId: ctx.userId,
-      visibility: params.visibility ?? 'private',
+      visibility: visibility ?? 'private',
     },
     {
       agentId: params.agentId,

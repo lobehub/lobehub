@@ -5,7 +5,15 @@ import { useTranslation } from 'react-i18next';
 
 const CONFIRM_BODY_MAX_HEIGHT = 'min(52vh, 360px)';
 
-const PublishConfirmContent = ({ details, note }: { details?: ReactNode; note?: ReactNode }) => {
+const PublishConfirmContent = ({
+  details,
+  note,
+  privacy,
+}: {
+  details?: ReactNode;
+  note?: ReactNode;
+  privacy?: ReactNode;
+}) => {
   const { t } = useTranslation('chat');
 
   return (
@@ -16,7 +24,7 @@ const PublishConfirmContent = ({ details, note }: { details?: ReactNode; note?: 
       viewportProps={{ style: { height: 'auto', maxHeight: CONFIRM_BODY_MAX_HEIGHT } }}
     >
       <Flexbox gap={8} style={{ paddingBlock: 12, paddingInline: 16 }}>
-        <Text>{t('workingPanel.localFile.publish.privacy')}</Text>
+        <Text>{privacy ?? t('workingPanel.localFile.publish.privacy')}</Text>
         {details}
         {note && <Text type={'secondary'}>{note}</Text>}
       </Flexbox>
@@ -54,16 +62,27 @@ export interface PublishConfirmOptions {
   note?: ReactNode;
   okText: string;
   onOk: () => void;
+  /** Replaces the default "anyone with the link" paragraph. */
+  privacy?: ReactNode;
+  /** Replaces the default publish-confirmation title. */
+  title?: ReactNode;
 }
 
-export const openPublishConfirm = ({ details, note, okText, onOk }: PublishConfirmOptions) => {
+export const openPublishConfirm = ({
+  details,
+  note,
+  okText,
+  onOk,
+  privacy,
+  title,
+}: PublishConfirmOptions) => {
   createModal({
-    content: <PublishConfirmContent details={details} note={note} />,
+    content: <PublishConfirmContent details={details} note={note} privacy={privacy} />,
     footer: <PublishConfirmFooter okText={okText} onOk={onOk} />,
     styles: {
       content: { minHeight: 0, overflow: 'hidden', padding: 0 },
     },
-    title: t('workingPanel.localFile.publish.confirmTitle', { ns: 'chat' }),
+    title: title ?? t('workingPanel.localFile.publish.confirmTitle', { ns: 'chat' }),
     width: 420,
   });
 };

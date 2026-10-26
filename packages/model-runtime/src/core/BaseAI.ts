@@ -15,6 +15,7 @@ import type {
   CreateVideoResult,
   DecisionOptions,
   DecisionPayload,
+  DecisionQuestions,
   DecisionResponse,
   Embeddings,
   EmbeddingsOptions,
@@ -49,7 +50,10 @@ export interface LobeRuntimeAI {
    * Answer typed questions with probabilities through a decision model.
    * Only implemented by providers that serve decision models.
    */
-  decide?: (payload: DecisionPayload, options?: DecisionOptions) => Promise<DecisionResponse>;
+  decide?: <Q extends DecisionQuestions>(
+    payload: DecisionPayload<Q>,
+    options?: DecisionOptions,
+  ) => Promise<DecisionResponse<Q>>;
 
   embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
 

@@ -42,7 +42,13 @@ const SwitcherRow = memo<SwitcherRowProps>(({ active, item, onSelect, privateLab
     variant={'borderless'}
     onClick={() => onSelect(item.id)}
   >
-    <Avatar avatar={item.avatar} background={item.background} shape={'square'} size={28} />
+    <Avatar
+      avatar={item.avatar}
+      background={item.background}
+      shape={'square'}
+      size={24}
+      title={item.title}
+    />
     <Text
       ellipsis
       color={active ? cssVar.colorText : cssVar.colorTextSecondary}

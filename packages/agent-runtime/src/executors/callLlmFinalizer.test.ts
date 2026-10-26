@@ -677,6 +677,22 @@ describe('callLlmFinalizer', () => {
     consoleError.mockRestore();
   });
 
+  it('counts provider attempts even when a successful response omits usage', async () => {
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      attempts: 2,
+      events: [],
+      host: createHost(),
+      model: 'gpt-4',
+      output: createOutput({ usage: undefined }),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.usage.llm.apiCalls).toBe(2);
+  });
+
   it('does not publish early visible output end when the host disables it', async () => {
     const stream = createStreamSink();
 

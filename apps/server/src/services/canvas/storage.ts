@@ -6,6 +6,7 @@ import {
   type CanvasIssue,
   type CanvasManifest,
   type CanvasProjectFile,
+  type CanvasProjectSnapshot,
   getCanvasContentType,
   isCanvasTextPath,
   normalizeCanvasPath,
@@ -101,6 +102,26 @@ export class CanvasStorageService {
       bytes: await this.deps.store.read(this.blobKey(entry.hash)),
       contentType: entry.contentType,
     };
+  }
+
+  async readSnapshot(key: string): Promise<CanvasProjectSnapshot> {
+    const manifest = await this.readManifest(key);
+    const files = await pMap(
+      Object.keys(manifest.files),
+      async (path) => {
+        const file = await this.readFile(manifest, path);
+        if (!file) throw new Error(`Canvas file ${path} is missing`);
+        const text = isCanvasTextPath(path);
+        return {
+          content: text ? decoder.decode(file.bytes) : Buffer.from(file.bytes).toString('base64'),
+          contentType: file.contentType,
+          encoding: text ? ('utf8' as const) : ('base64' as const),
+          path,
+        };
+      },
+      { concurrency: BLOB_READ_CONCURRENCY },
+    );
+    return { entry: manifest.entry, files };
   }
 
   async loadProject(manifest: CanvasManifest): Promise<Map<string, CanvasCommitFile>> {

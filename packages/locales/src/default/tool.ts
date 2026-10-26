@@ -153,6 +153,9 @@ export default {
   'credsInput.notice.workspace':
     "Saved encrypted to this workspace's credentials. The values go directly to storage and are never shown to the AI.",
   'credsInput.placeholder': 'Enter {{field}}',
+  'credsInput.proseConfirm': 'Save anyway',
+  'credsInput.proseWarning':
+    'The value for “{{fields}}” looks like a sentence rather than a secret (it contains CJK text or a whole phrase). If it was pasted by mistake, fix it before saving; otherwise confirm with “Save anyway”.',
   'credsInput.saveFailed': "Couldn't save the credential. Please try again.",
   'credsInput.skip': 'Skip',
   'credsInput.submit': 'Save',

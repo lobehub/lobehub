@@ -210,6 +210,103 @@ describe('pending approval message polling', () => {
     expect(messageService.getMessages).toHaveBeenCalledTimes(requests);
   });
 
+  it('binds a tool row the poll appends during a continuation to its stale local assistant', async () => {
+    // Regression: after an Ask is answered the poll keeps running for the whole
+    // continuation. A poll that is ahead of the stream appended the new tool row
+    // while keeping the local, still-empty continuation assistant, so the tool
+    // rendered as an orphan (and the next assistant as a detached turn) until a
+    // page refresh.
+    await mountPolling();
+    const ask = {
+      apiName: 'askUserQuestion',
+      arguments: '{}',
+      id: 'call-1',
+      identifier: 'lobe-agent',
+      type: 'builtin',
+    };
+    const activate = {
+      apiName: 'activateTools',
+      arguments: '{}',
+      id: 'call-2',
+      identifier: 'lobe-activator',
+      type: 'builtin',
+    };
+    const owner: UIChatMessage = {
+      content: 'Which one?',
+      createdAt: 0,
+      id: 'owner',
+      role: 'assistant',
+      tools: [ask],
+      updatedAt: 0,
+    } as UIChatMessage;
+    const answered: UIChatMessage = {
+      ...pending,
+      parentId: 'owner',
+      plugin: ask,
+      pluginIntervention: { status: 'approved' },
+    } as UIChatMessage;
+    const continuation: UIChatMessage = {
+      content: '',
+      createdAt: 2,
+      id: 'continuation',
+      parentId: 'question',
+      role: 'assistant',
+      updatedAt: 2,
+    };
+    const activated: UIChatMessage = {
+      content: 'ok',
+      createdAt: 3,
+      id: 'activated',
+      parentId: 'continuation',
+      plugin: activate,
+      role: 'tool',
+      tool_call_id: 'call-2',
+      updatedAt: 3,
+    } as UIChatMessage;
+    const next: UIChatMessage = {
+      content: '',
+      createdAt: 4,
+      id: 'next',
+      parentId: 'activated',
+      role: 'assistant',
+      updatedAt: 4,
+    };
+    await act(async () => {
+      useChatStore.getState().replaceMessages([owner, answered, continuation], { context });
+    });
+
+    vi.spyOn(operationSelectors, 'isAgentRuntimeRunningByContext').mockReturnValue(() => true);
+    vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+      id: context.topicId,
+      status: 'running',
+      metadata: { runningOperation: { assistantMessageId: 'continuation', operationId: 'resume' } },
+    } as Awaited<ReturnType<typeof topicService.getTopicDetail>>);
+    vi.mocked(messageService.getMessages).mockResolvedValue([
+      owner,
+      answered,
+      { ...continuation, tools: [activate], updatedAt: 3 } as UIChatMessage,
+      activated,
+      next,
+    ]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(rows().map((m) => m.id)).toEqual([
+      'owner',
+      'question',
+      'continuation',
+      'activated',
+      'next',
+    ]);
+    expect(
+      rows()
+        .find((m) => m.id === 'continuation')
+        ?.tools?.map((t) => t.id),
+    ).toEqual(['call-2']);
+    expect(useChatStore.getState().messagesMap[key].map((m) => m.role)).toEqual(['assistantGroup']);
+  });
+
   it('follows a slow remote continuation after the Ask closes without focus or remount', async () => {
     seedPending();
     const cache = new Map();

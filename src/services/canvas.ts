@@ -10,6 +10,9 @@ export type CanvasVersionSummary = Awaited<
 >[number];
 
 class CanvasService {
+  getProject = (canvasId: string, version: number) =>
+    lambdaClient.canvas.getProject.query({ canvasId, version });
+
   getVersion = (canvasId: string, version?: number) =>
     lambdaClient.canvas.getVersion.query({ canvasId, version });
 

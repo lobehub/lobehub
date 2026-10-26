@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canCommentOnAcceptanceEvidence,
+  canRejectAcceptanceOnly,
   canReviewAcceptance,
   canViewAcceptanceHistory,
   isReadOnlyAcceptanceDecider,
+  needsCollaborationRequest,
   resolveAcceptanceHistoryNavigation,
 } from './visibility';
 
@@ -70,5 +72,47 @@ describe('isReadOnlyAcceptanceDecider', () => {
   it('shows nothing to a viewer or link visitor who cannot weigh in', () => {
     expect(isReadOnlyAcceptanceDecider({ canReview: false }, false)).toBe(false);
     expect(isReadOnlyAcceptanceDecider(undefined, true)).toBe(false);
+  });
+});
+
+describe('canRejectAcceptanceOnly', () => {
+  it('turns on reject for a reviewer a decider granted reject access to', () => {
+    expect(canRejectAcceptanceOnly({ canReject: true, canReview: false })).toBe(true);
+  });
+
+  it('leaves a decider on the full bar', () => {
+    expect(canRejectAcceptanceOnly({ canReject: true, canReview: true })).toBe(false);
+  });
+
+  it('grants nothing without the grant, or before the bundle loads', () => {
+    expect(canRejectAcceptanceOnly({ canReject: false, canReview: false })).toBe(false);
+    expect(canRejectAcceptanceOnly(undefined)).toBe(false);
+  });
+});
+
+describe('needsCollaborationRequest', () => {
+  it('asks a plain reviewer to request collaboration', () => {
+    expect(
+      needsCollaborationRequest({ canCollaborate: false, canReview: false, isOwner: false }),
+    ).toBe(true);
+  });
+
+  it('does not ask a workspace owner/admin who can already decide the delivery', () => {
+    expect(
+      needsCollaborationRequest({ canCollaborate: false, canReview: true, isOwner: false }),
+    ).toBe(false);
+  });
+
+  it('does not ask the creator or a viewer who was already granted collaboration', () => {
+    expect(
+      needsCollaborationRequest({ canCollaborate: false, canReview: true, isOwner: true }),
+    ).toBe(false);
+    expect(
+      needsCollaborationRequest({ canCollaborate: true, canReview: false, isOwner: false }),
+    ).toBe(false);
+  });
+
+  it('shows nothing before the bundle loads', () => {
+    expect(needsCollaborationRequest(undefined)).toBe(false);
   });
 });

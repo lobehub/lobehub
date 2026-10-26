@@ -12,6 +12,7 @@
  * A few, like `billing`, exist only there.
  */
 export const WORKSPACE_MIRRORED_ROOT_SEGMENTS: ReadonlySet<string> = new Set([
+  'acceptance',
   'agent',
   'agents',
   'billing',
@@ -53,7 +54,6 @@ export const RESERVED_ROOT_SEGMENTS: ReadonlySet<string> = new Set([
   ...WORKSPACE_MIRRORED_ROOT_SEGMENTS,
   ...OFF_TABLE_ROOT_SEGMENTS,
   // Personal-only roots in the SPA route table.
-  'acceptance',
   'apps',
   'desktop-onboarding',
   'me',

@@ -5,7 +5,6 @@ import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMo
 import { type CanvasVersionDetail } from '@/services/canvas';
 import { useChatStore } from '@/store/chat';
 
-import { useCanvasPublishItems } from './useCanvasPublishItems';
 import { type CanvasTabView, useCanvasVersions } from './useCanvasVersion';
 
 export const useCanvasMoreMenu = (
@@ -16,21 +15,15 @@ export const useCanvasMoreMenu = (
   const { t } = useTranslation('portal');
   const { data: versions } = useCanvasVersions(view.canvasId);
   const openCanvas = useChatStore((s) => s.openCanvas);
-  const publishItems = useCanvasPublishItems(data, refresh);
 
   if (!data) return;
 
-  const extraItems: DropdownItem[] = [
-    ...publishItems,
-    {
-      key: 'open-in-tab',
-      label: t('canvas.menu.openInTab'),
-      onClick: () => window.open(data.previewUrl, '_blank', 'noopener,noreferrer'),
-    },
-  ];
+  // Sharing is the toolbar's own button; the `…` menu only carries the
+  // utility actions and the version history.
+  const extraItems: DropdownItem[] = [];
 
   if (versions && versions.length > 1) {
-    extraItems.unshift({
+    extraItems.push({
       children: versions.map((item) => ({
         key: `v${item.version}`,
         label: t('canvas.menu.versionItem', {

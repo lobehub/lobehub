@@ -163,13 +163,14 @@ export interface ContextFactProviders {
   /** Builtin tool identifiers the user uninstalled in the current scope. */
   listUninstalledBuiltinIds?: () => Promise<Iterable<string> | undefined>;
   /**
-   * Whether this run's cloud sandbox keeps its working directory, and which
-   * subdirectory it works in. Resolved by the host because it depends on a
+   * Whether this run's cloud sandbox keeps its working directory — a folder on
+   * the drive (`drive`) or an environment directory (`persistent`) — and
+   * which folder it works in. Resolved by the host because it depends on a
    * signed entitlement the browser cannot see; absent means the sandbox is
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+    { cwd?: string; mode: 'drive' | 'ephemeral' | 'persistent'; workingDir?: string } | undefined
   >;
 }
 

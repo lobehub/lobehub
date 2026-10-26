@@ -2,11 +2,37 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
-import { getAuthInfo } from '../../api/http';
-import { streamAgentEvents } from '../../utils/agentStream';
+import { AGENT_RUN_EXIT_CODES } from '../../utils/agentRunOutcome';
 import { resolveLocalDeviceId } from '../../utils/device';
 import { outputJson } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { followAgentRun } from '../agent/followRun';
+import { pollAgentRunStatus, RUN_POLL_INTERVAL_MS } from '../agent/runStatus';
+import { resolveUrlBuilder, resourcePath } from '../resourceUrl';
+
+type LifecycleClient = Awaited<ReturnType<typeof getTrpcClient>>;
+
+/**
+ * Follow a task run, degrading to status polling whenever the live stream cannot
+ * be used — a gateway that is unreachable, or a server predating the CLI's agent
+ * event journal (the CLI ships independently of the server). Without this the
+ * task would exit 3 having printed nothing.
+ */
+const followTaskRun = async (
+  client: LifecycleClient,
+  operationId: string,
+  options: { json?: boolean; verbose?: boolean },
+) => {
+  try {
+    return await followAgentRun(operationId, { json: options.json, verbose: options.verbose });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    log.warn(
+      `Live stream unavailable (${reason}). Polling run status every ${RUN_POLL_INTERVAL_MS / 1000}s…`,
+    );
+    return pollAgentRunStatus(client, operationId, { json: options.json });
+  }
+};
 
 export function registerLifecycleCommands(task: Command) {
   // ── start ──────────────────────────────────────────────
@@ -73,16 +99,16 @@ export function registerLifecycleCommands(task: Command) {
           return;
         }
 
-        const { serverUrl, headers } = await getAuthInfo();
-        const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(result.operationId)}`;
-
-        const outcome = await streamAgentEvents(streamUrl, headers, {
+        const outcome = await followTaskRun(client, result.operationId, {
           json: options.json,
           verbose: options.verbose,
         });
         // The stream helper reports an `error` event as a failed outcome rather
         // than exiting; keep this command's contract of failing on it.
-        if (outcome?.kind === 'failed') process.exit(1);
+        if (outcome.kind !== 'completed') {
+          process.exitCode = AGENT_RUN_EXIT_CODES[outcome.kind];
+          return;
+        }
 
         // Send heartbeat after completion
         try {
@@ -179,7 +205,9 @@ export function registerLifecycleCommands(task: Command) {
 
           const operationId = result.operationId;
           if (!shouldFollow && options.json) {
+            const toUrl = await resolveUrlBuilder(client);
             outputJson({
+              taskUrl: toUrl(resourcePath.task({ identifier: result.taskIdentifier })),
               autoStarted: result.autoStarted,
               operationId,
               status: result.status,
@@ -201,16 +229,16 @@ export function registerLifecycleCommands(task: Command) {
             return;
           }
 
-          // Connect to SSE stream and wait for completion
-          const { serverUrl, headers } = await getAuthInfo();
-          const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
-
-          const outcome = await streamAgentEvents(streamUrl, headers, {
+          // Connect to the gateway WebSocket and wait for completion
+          const outcome = await followTaskRun(client, operationId, {
             json: options.json,
             verbose: options.verbose,
           });
           // A failed run stops the sequence, as the stream helper used to exit on it.
-          if (outcome?.kind === 'failed') process.exit(1);
+          if (outcome.kind !== 'completed') {
+            process.exitCode = AGENT_RUN_EXIT_CODES[outcome.kind];
+            return;
+          }
 
           // Update heartbeat after each topic
           try {

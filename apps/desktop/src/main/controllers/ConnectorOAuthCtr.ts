@@ -1,35 +1,34 @@
 import path from 'node:path';
 
 import { OFFICIAL_CLOUD_URL, OFFICIAL_URL } from '@lobechat/const/url';
+import type {
+  ConnectorOAuthIpc,
+  ConnectorOAuthRequest,
+  ConnectorOAuthResult,
+} from '@lobechat/electron-client-ipc/types';
 import { BrowserWindow } from 'electron';
 
 import { preloadDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
-import { CONNECTOR_OAUTH_RESULT_CHANNEL, type ConnectorOAuthResult } from '~common/connectorOAuth';
+import { CONNECTOR_OAUTH_RESULT_CHANNEL } from '~common/connectorOAuth';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:ConnectorOAuthCtr');
 
-interface AuthorizationRequest {
-  authorizationUrl: string;
-  connectorId: string;
-  requestId?: string;
-}
-
 interface PendingAuthorization {
   cancel: () => void;
   canceled: boolean;
 }
 
-export default class ConnectorOAuthCtr extends ControllerModule {
+export default class ConnectorOAuthCtr extends ControllerModule implements ConnectorOAuthIpc {
   static override readonly groupName = 'connectorOAuth';
 
   #pendingAuthorizations = new Map<string, PendingAuthorization>();
 
   @IpcMethod()
-  async authorize(params: AuthorizationRequest): Promise<ConnectorOAuthResult> {
+  async authorize(params: ConnectorOAuthRequest): Promise<ConnectorOAuthResult> {
     const pending: PendingAuthorization = {
       cancel: () => {
         pending.canceled = true;
@@ -50,7 +49,7 @@ export default class ConnectorOAuthCtr extends ControllerModule {
   }
 
   async #authorizeWindow(
-    params: AuthorizationRequest,
+    params: ConnectorOAuthRequest,
     pending: PendingAuthorization,
   ): Promise<ConnectorOAuthResult> {
     const authorizationUrl = new URL(params.authorizationUrl);

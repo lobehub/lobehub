@@ -1,0 +1,14 @@
+{
+  "name": "rn-demo",
+  "private": true,
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@lobehub/ui": "^2.0.0",
+    "@lobehub/ui-rn": "workspace:*",
+    "@react-navigation/native": "^7.0.0",
+    "expo": "~52.0.0",
+    "expo-router": "~4.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.0"
+  }
+}

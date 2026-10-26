@@ -4,9 +4,9 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { GoalRepository } from '@/database/repositories/goal';
 import { agents, tasks } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
@@ -66,7 +66,7 @@ const pinsModel = (config: unknown, model?: Partial<ModelConfig>) => {
  */
 export class GoalAssignmentService {
   private agentModel: AgentModel;
-  private goalModel: GoalModel;
+  private goalModel: GoalRepository;
   private graphModel: GoalGraphModel;
   private taskModel: TaskModel;
 
@@ -76,7 +76,7 @@ export class GoalAssignmentService {
     private workspaceId?: string,
   ) {
     this.agentModel = new AgentModel(db, userId, workspaceId);
-    this.goalModel = new GoalModel(db, userId, workspaceId);
+    this.goalModel = new GoalRepository(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
   }
@@ -189,12 +189,14 @@ export class GoalAssignmentService {
   ): Promise<GoalItem> => {
     if (modelConfig) {
       // The owner never changes, so the availability check needs no lock.
-      const owner = await new GoalModel(this.db, this.userId, this.workspaceId).findById(goalId);
+      const owner = await new GoalRepository(this.db, this.userId, this.workspaceId).findById(
+        goalId,
+      );
       if (!owner) throw goalNotFound();
       await assertGoalModelRunnable(this.db, owner, slot, modelConfig);
     }
     return this.db.transaction(async (tx) => {
-      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const model = new GoalRepository(tx, this.userId, this.workspaceId);
       const current = await model.lockById(goalId);
       if (!current) throw goalNotFound();
       // Reads inside the transaction go through it, not around it.
@@ -291,7 +293,7 @@ export class GoalAssignmentService {
    */
   handOver = (
     goalId: string,
-    write: (model: GoalModel, current: GoalItem) => Promise<GoalItem | undefined>,
+    write: (model: GoalRepository, current: GoalItem) => Promise<GoalItem | undefined>,
     /**
      * Moves the goal's Tasks along with the handoff, under the same lock, so a
      * Task-model write or a coordinator claim cannot land between the handoff
@@ -304,7 +306,7 @@ export class GoalAssignmentService {
     ) => Promise<string[]>,
   ): Promise<{ goal: GoalItem; movedTaskIds: string[]; previous: GoalItem }> =>
     this.db.transaction(async (tx) => {
-      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const model = new GoalRepository(tx, this.userId, this.workspaceId);
       const previous = await model.lockById(goalId);
       if (!previous) throw goalNotFound();
       const updated = await write(model, previous);
@@ -493,7 +495,7 @@ export class GoalAssignmentService {
    */
   syncBoundTask = (goalId: string, taskId: string) =>
     this.db.transaction(async (tx) => {
-      const current = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goalId);
+      const current = await new GoalRepository(tx, this.userId, this.workspaceId).lockById(goalId);
       if (!current) return;
       const scoped = new GoalAssignmentService(tx, this.userId, this.workspaceId);
       const task = await scoped.taskModelFor(current).findById(taskId);

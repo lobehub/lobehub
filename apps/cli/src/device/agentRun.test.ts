@@ -16,8 +16,17 @@ const { saveTaskMock, getTaskMock, removeTaskMock } = vi.hoisted(() => ({
   removeTaskMock: vi.fn(),
   saveTaskMock: vi.fn(),
 }));
+const { identityMock, hasLoginMock } = vi.hoisted(() => ({
+  hasLoginMock: vi.fn(),
+  identityMock: vi.fn(),
+}));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+// The device's own Claude Code login, read for account routing.
+vi.mock('@lobechat/heterogeneous-agents/quota-sampler', () => ({
+  hasClaudeCodeLogin: hasLoginMock,
+  readClaudeCodeIdentity: identityMock,
+}));
 vi.mock('../daemon/taskRegistry', () => ({
   getTask: getTaskMock,
   removeTask: removeTaskMock,
@@ -399,5 +408,45 @@ describe('spawnHeteroAgentRun', () => {
     child.emit('exit', 0, null);
 
     expect(removeTaskMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('spawnHeteroAgentRun Claude Code account routing', () => {
+  beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue(asDirectory);
+    identityMock.mockResolvedValue({ externalAccountId: 'acc-default' });
+    hasLoginMock.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    spawnMock.mockReset();
+  });
+
+  it('rejects a run pinned to an account this device is not signed in to', async () => {
+    const result = await spawnHeteroAgentRun({
+      ...baseParams,
+      claudeAccountRouting: {
+        candidates: [{ externalAccountId: 'acc-other', name: 'other@example.com' }],
+        mode: 'pinned',
+      },
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toContain('other@example.com');
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('runs a run pinned to the account this device is signed in to', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const pending = spawnHeteroAgentRun({
+      ...baseParams,
+      claudeAccountRouting: { candidates: [{ externalAccountId: 'acc-default' }], mode: 'pinned' },
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled());
+    child.emit('spawn');
+
+    expect(await pending).toEqual({ status: 'accepted' });
   });
 });

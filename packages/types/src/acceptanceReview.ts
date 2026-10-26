@@ -105,7 +105,8 @@ export interface ReviewSession {
     title: string;
     url: string;
   };
-  can: { comment: boolean; decide: boolean; moderate: boolean };
+  /** `reject` without `decide`: a decider granted this reviewer reject access. */
+  can: { comment: boolean; decide: boolean; moderate: boolean; reject: boolean };
   expiresAt: string;
   user: ReviewUser;
 }

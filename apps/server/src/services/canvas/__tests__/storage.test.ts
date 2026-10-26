@@ -45,6 +45,29 @@ describe('isOwnCanvasManifestKey', () => {
 });
 
 describe('CanvasStorageService', () => {
+  it('returns complete text and binary snapshots while refusing a foreign manifest', async () => {
+    const { store } = createMemoryStore();
+    const service = new CanvasStorageService({ db: serverDB, store, userId });
+    const result = await service.commit('cvs_snapshot', [
+      { content: page('<img src="a.png">'), path: 'index.html' },
+      { content: new Uint8Array([0, 127, 255]), path: 'a.png' },
+    ]);
+    if (!result.ok) throw new Error('commit failed');
+    const snapshot = await service.readSnapshot(result.metadata.manifestKey);
+    expect(snapshot.entry).toBe('index.html');
+    expect(snapshot.files.find((file) => file.path === 'index.html')).toMatchObject({
+      content: page('<img src="a.png">'),
+      encoding: 'utf8',
+    });
+    expect(snapshot.files.find((file) => file.path === 'a.png')).toMatchObject({
+      content: Buffer.from([0, 127, 255]).toString('base64'),
+      encoding: 'base64',
+    });
+    await expect(
+      service.readSnapshot('canvas/another-user/cvs_snapshot/manifests/a.json'),
+    ).rejects.toThrow(/owned/);
+  });
+
   it('stores a project as content-addressed blobs plus a manifest and counts it toward usage', async () => {
     const { store } = createMemoryStore();
     const service = new CanvasStorageService({ db: serverDB, store, userId });

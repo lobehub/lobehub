@@ -45,6 +45,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface LeftPanelProps {
+  /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
+  fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
   selectedIdentifier?: string;
@@ -52,7 +54,7 @@ interface LeftPanelProps {
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
+  ({ fullWidth, onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
     const { t } = useTranslation('setting');
     const [showAddConnector, setShowAddConnector] = useState(false);
 
@@ -64,7 +66,10 @@ const LeftPanel = memo<LeftPanelProps>(
 
     return (
       <>
-        <div className={styles.root}>
+        <div
+          className={styles.root}
+          style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
+        >
           <div className={styles.header}>
             <Text strong style={{ fontSize: 14 }}>
               {isConnectorView

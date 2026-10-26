@@ -22,6 +22,8 @@ import { useTaskStore } from '@/store/task';
 interface AssigneeAgentSelectorProps {
   /** Offer the "unassigned" option; off where an owner is required. */
   allowUnassigned?: boolean;
+  /** Stretch the trigger to the container width, e.g. as a form field. */
+  block?: boolean;
   children: ReactNode;
   currentAgentId?: string | null;
   disabled?: boolean;
@@ -87,6 +89,7 @@ const blockedContentStyle: CSSProperties = { display: 'contents', pointerEvents:
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
   ({
     allowUnassigned = true,
+    block,
     children,
     currentAgentId,
     disabled,
@@ -294,6 +297,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     };
 
     const blocked = disabled || !canEditTask;
+    const baseTriggerStyle = block ? { ...triggerStyle, display: 'flex' } : triggerStyle;
     const trigger = blocked ? (
       <Tooltip
         title={
@@ -301,14 +305,14 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
         }
       >
         <div
-          style={{ ...triggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
+          style={{ ...baseTriggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
           onClick={(event) => event.stopPropagation()}
         >
           <span style={blockedContentStyle}>{children}</span>
         </div>
       </Tooltip>
     ) : (
-      <div style={triggerStyle} onClick={(event) => event.stopPropagation()}>
+      <div style={baseTriggerStyle} onClick={(event) => event.stopPropagation()}>
         {children}
       </div>
     );

@@ -109,9 +109,9 @@ describe('resolveAgentTopicGroupMode', () => {
 });
 
 describe('resolveProjectTopicGroupMode', () => {
-  /** @example byProject picked in a group sidebar must not turn a project's own list into one bucket. */
-  it('normalizes byProject to byTime', () => {
-    expect(resolveProjectTopicGroupMode('byProject')).toBe('byTime');
+  /** @example a stale byProject must not turn a project's own list into one bucket. */
+  it('normalizes byProject to byAgent', () => {
+    expect(resolveProjectTopicGroupMode('byProject')).toBe('byAgent');
   });
 
   it.each(['byStatus', 'byTime', 'byAgent', 'byDevice', 'flat'] as const)('keeps %s', (mode) => {

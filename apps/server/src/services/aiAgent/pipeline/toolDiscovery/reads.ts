@@ -17,6 +17,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
+import { readProjectToolScope } from './projectScope';
 import type { ToolDiscoveryDeps } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -46,6 +47,8 @@ export interface ToolReadsContext {
   candidateIds: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
+  /** Project the run belongs to (`appContext.projectId`). */
+  projectId?: string;
   requestedDeviceId?: string;
   resolvedAgentId: string;
   shareGate: ExecRunContext['shareGate'];
@@ -458,6 +461,7 @@ export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =
     devicePool: started(readDevicePool(deps, ctx)),
     installedPlugins,
     lobehubSkillManifests: started(readLobehubSkillManifests(deps, ctx)),
+    projectScope: started(readProjectToolScope(deps, ctx)), // degrades to no project
   };
 };
 

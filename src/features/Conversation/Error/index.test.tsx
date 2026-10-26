@@ -16,6 +16,7 @@ const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
 const shareContextMock = vi.hoisted(() => ({ topicShareId: '' }));
+const transcriptSourceMock = vi.hoisted(() => ({ value: 'chat' as 'chat' | 'static' }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
 const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
 const cancelHeteroContinuationMock = vi.hoisted(() => vi.fn());
@@ -34,6 +35,7 @@ const createTopicForwardModalMock = vi.hoisted(() => vi.fn());
 const commitWorkingDirectoryMock = vi.hoisted(() => vi.fn());
 // Stands in for whatever card a downstream build installs into the business slot.
 const businessSlot = vi.hoisted(() => ({ render: false }));
+const resourceAccessMock = vi.hoisted(() => ({ canUseResource: true }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
 const businessErrorContentMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -147,6 +149,10 @@ vi.mock('@/features/Conversation/MessageForward/TopicForwardModal', () => ({
   createTopicForwardModal: createTopicForwardModalMock,
 }));
 
+vi.mock('@/features/Conversation/hooks/useConversationResourceAccess', () => ({
+  useConversationResourceAccess: () => resourceAccessMock,
+}));
+
 vi.mock('@/hooks/useProviderName', () => ({
   useProviderName: () => 'Mock Provider',
 }));
@@ -182,6 +188,7 @@ vi.mock('@/features/Conversation/store', () => ({
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
       context: { ...conversationContextMock, ...shareContextMock },
+      transcriptSource: transcriptSourceMock.value,
       cancelHeteroContinuation: cancelHeteroContinuationMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
@@ -202,6 +209,12 @@ const ErrorMessageWithContent = ({ data }: { data: any }) => {
   return <ErrorMessageExtra data={data} error={error} />;
 };
 
+// Highlighter renders the JSON as token spans once its engine has loaded, so match the whole block.
+const getErrorDetails = (pattern: RegExp) =>
+  screen.getByText(
+    (_, element) => element?.tagName === 'PRE' && pattern.test(element.textContent ?? ''),
+  );
+
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
     dynamicComponentPropsMock.mockClear();
@@ -209,8 +222,10 @@ describe('ErrorMessageExtra', () => {
     detectHeterogeneousAgentCommandMock.mockResolvedValue({ available: true });
     missingTranslationKeys.clear();
     businessSlot.render = false;
+    resourceAccessMock.canUseResource = true;
     serverConfigMock.enableBusinessFeatures = false;
     shareContextMock.topicShareId = '';
+    transcriptSourceMock.value = 'chat';
     businessErrorContentMock.mockReturnValue({
       errorType: undefined,
       hideMessage: false,
@@ -263,6 +278,23 @@ describe('ErrorMessageExtra', () => {
           data={{
             error: { body: { provider: 'openai' }, type: 'ProviderBizError' } as any,
             id: 'msg-orphan-block',
+          }}
+        />,
+      );
+
+      expect(screen.queryByText('card-retry')).toBeNull();
+    });
+
+    it('offers no retry on a static transcript, which nothing could regenerate', () => {
+      transcriptSourceMock.value = 'static';
+      displayMessageMock.set('msg-static', { parentId: 'user-1' });
+
+      render(
+        <ErrorMessageExtra
+          error={{ message: 'provider exploded' }}
+          data={{
+            error: { body: { provider: 'openai' }, type: 'ProviderBizError' } as any,
+            id: 'msg-static',
           }}
         />,
       );
@@ -489,6 +521,64 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('dynamic')).toBeInTheDocument();
+  });
+
+  it('offers context compaction for an oversized request body', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'msg-request-too-large',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith({
+      canCompact: true,
+      id: 'msg-request-too-large',
+      reason: 'requestBodyTooLarge',
+    });
+  });
+
+  it('withholds context compaction from members who can only view the conversation', () => {
+    resourceAccessMock.canUseResource = false;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'msg-request-too-large',
+        }}
+      />,
+    );
+
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ canCompact: false, reason: 'requestBodyTooLarge' }),
+    );
+  });
+
+  it('lets context compaction retry the group parent when the error is a nested block', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        retryScopeId="group-parent"
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'group-child-block',
+        }}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith({
+      canCompact: true,
+      id: 'group-child-block',
+      parentId: 'group-parent',
+      reason: 'requestBodyTooLarge',
+    });
   });
 
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
@@ -818,7 +908,7 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('Raw runtime error')).toBeInTheDocument();
-    expect(screen.getByText(/"detail": "raw detail"/)).toBeInTheDocument();
+    expect(getErrorDetails(/"detail": "raw detail"/)).toBeInTheDocument();
   });
 
   it('shows a JSON gateway detail as an object instead of a twice-escaped string', () => {
@@ -838,7 +928,7 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('response.DeviceResponseTimeout')).toBeInTheDocument();
-    const details = screen.getByText(/"error": "TIMEOUT"/).textContent ?? '';
+    const details = getErrorDetails(/"error": "TIMEOUT"/).textContent ?? '';
     expect(details).not.toContain('\\"');
     expect(details).not.toContain('"message"');
   });
@@ -858,10 +948,8 @@ describe('ErrorMessageExtra', () => {
       />,
     );
 
-    expect(screen.getByText(/"detail": "\{\\"error\\":\\"TIMEOUT\\""/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/"message": "The device did not answer in time\."/),
-    ).toBeInTheDocument();
+    expect(getErrorDetails(/"detail": "\{\\"error\\":\\"TIMEOUT\\""/)).toBeInTheDocument();
+    expect(getErrorDetails(/"message": "The device did not answer in time\."/)).toBeInTheDocument();
   });
 
   it('shows the localized empty-completion message while retaining the raw error in details', () => {
@@ -881,7 +969,7 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('response.ModelEmptyCompletion')).toBeInTheDocument();
     expect(
-      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+      getErrorDetails(/"message": "The model provider returned an empty completion\."/),
     ).toBeInTheDocument();
   });
 
@@ -907,7 +995,7 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('This request cost 5.98M credits.')).toBeInTheDocument();
     expect(
-      screen.getByText(/"message": "The model provider returned an empty completion\."/),
+      getErrorDetails(/"message": "The model provider returned an empty completion\."/),
     ).toBeInTheDocument();
   });
 

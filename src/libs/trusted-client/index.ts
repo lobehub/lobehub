@@ -5,6 +5,7 @@ import {
   type TrustedClientPayload,
 } from '@lobehub/market-sdk';
 
+import type { SandboxRunLimits } from '@/business/server/sandboxRun';
 import { appEnv } from '@/envs/app';
 
 export interface TrustedClientUserInfo {
@@ -19,6 +20,13 @@ export interface TrustedClientUserInfo {
    * thing the execution plane must not let a caller choose for itself.
    */
   sandboxOperation?: { operationId: string; topicId: string };
+  /**
+   * One-shot sandbox run entitlement (per-account concurrency) for this
+   * principal, resolved by `resolveSandboxRunLimits`. Absent means the
+   * execution plane's default; like `sandboxStorage`, it rides the signed token
+   * because a caller must not choose it for itself.
+   */
+  sandboxRun?: SandboxRunLimits | null;
   sandboxStorage?: SandboxStorageClaim | null;
   userId: string;
   /**
@@ -94,6 +102,7 @@ export const generateTrustedClientToken = (userInfo: TrustedClientUserInfo): str
       ...payload,
       ...(userInfo.sandboxStorage && { sandboxStorage: userInfo.sandboxStorage }),
       ...(userInfo.sandboxOperation && { sandboxOperation: userInfo.sandboxOperation }),
+      ...(userInfo.sandboxRun && { sandboxRun: userInfo.sandboxRun }),
     };
 
     return createTrustedClientToken(signedPayload, MARKET_TRUSTED_CLIENT_SECRET);

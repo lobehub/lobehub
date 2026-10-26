@@ -604,8 +604,10 @@ export default eslint(
           {
             message:
               'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            // `hooks/useAgentModelSelection` reaches the store only through the
+            // editor-free `store/apiContext`; Home model switches share its path.
             regex:
-              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+              '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
           },
         ],
       }),

@@ -53,6 +53,9 @@ export async function runWidget(c: Context) {
     if (result.skipped) return c.json({ skipped: result.skipped, success: true });
 
     return c.json({
+      // Acknowledged either way: a deferred run stays reserved and the tick's
+      // stale sweep resumes it once its lease expires.
+      ...(result.deferred && { deferred: true }),
       ...(result.resumed && { resumed: true }),
       runId: result.run?.id,
       status: result.run?.status,

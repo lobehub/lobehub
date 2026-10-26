@@ -85,7 +85,7 @@ export class LobehubSkillStoreActionImpl {
    */
   readonly #providerTools;
   /**
-   * The user's connected providers — a `@lobechat/replica` list, so the
+   * The user's connected providers — a `local-replica` list, so the
    * persisted row paints before the network answers and a connect / revoke shows
    * on the row at once.
    */

@@ -51,7 +51,10 @@ export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export type AcceptanceSubjectType = 'task' | 'topic' | 'document' | 'standalone' | 'goal_gate';
+export type AcceptanceSubjectType =
+  'task' | 'topic' | 'document' | 'standalone' | 'goal_gate' | 'site';
+
+export type CreatableAcceptanceSubjectType = Exclude<AcceptanceSubjectType, 'site'>;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the

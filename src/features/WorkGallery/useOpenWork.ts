@@ -2,10 +2,10 @@ import type { WorkSummaryItem } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { openCanvasModal } from '@/features/CanvasModal/loader';
 import { openDocumentModal } from '@/features/DocumentModal/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { canvasService } from '@/services/canvas';
 
 /**
  * Open a Work summary item at its canonical target (document modal, external
@@ -22,11 +22,7 @@ export const useOpenWork = () => {
 
       switch (openTarget.kind) {
         case 'canvas': {
-          void canvasService
-            .getVersion(openTarget.canvasId, openTarget.version)
-            .then(
-              (detail) => detail && window.open(detail.previewUrl, '_blank', 'noopener,noreferrer'),
-            );
+          void openCanvasModal(openTarget.canvasId, openTarget.version);
           return;
         }
         case 'document': {

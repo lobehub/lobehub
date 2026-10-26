@@ -243,7 +243,7 @@ describe('active conversation projection', () => {
     );
     const coordinate = resolveActiveConversationCoordinate({
       params: { projectId: 'prj_1', topicId: 'tpc_1' },
-      url: '/project/prj_1/conversation/tpc_1?thread=thread-new',
+      url: '/project/prj_1/topic/tpc_1?thread=thread-new',
     });
 
     projectActiveConversationCoordinate(coordinate);
@@ -274,7 +274,7 @@ describe('active conversation projection', () => {
     );
     const coordinate = resolveActiveConversationCoordinate({
       params: { projectId: 'prj_1', topicId: 'tpc_1' },
-      url: '/project/prj_1/conversation/tpc_1',
+      url: '/project/prj_1/topic/tpc_1',
     });
 
     projectActiveConversationCoordinate(coordinate);
@@ -289,7 +289,7 @@ describe('active conversation projection', () => {
   it('keeps the active agent on a project conversation route without a topic id', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: { projectId: 'prj_1' },
-      url: '/project/prj_1/conversation',
+      url: '/project/prj_1/topic',
     });
 
     projectActiveConversationCoordinate(coordinate);

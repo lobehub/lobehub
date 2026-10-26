@@ -39,8 +39,11 @@ export const projects = pgTable(
       .$defaultFn(() => idGenerator('projects'))
       .notNull(),
     slug: varchar('slug', { length: 100 }).$defaultFn(() => randomSlug(3)),
-    /** Human-readable task prefix within the project scope, for example LOBE. */
-    identifier: varchar('identifier', { length: 6 }).notNull(),
+    /**
+     * Optional task prefix for this project, for example ACE. Left empty, the
+     * project's tasks keep the default prefix of their scope.
+     */
+    identifier: varchar('identifier', { length: 6 }),
     name: varchar('name', { length: 255 }).notNull(),
     description: text('description'),
     avatar: text('avatar'),
@@ -56,6 +59,13 @@ export const projects = pgTable(
     }),
 
     status: text('status').$type<ProjectStatus>().notNull().default('backlog'),
+    /**
+     * Position in the workspace's (or personal scope's) shared manual project
+     * order, ascending. Null until the list is first reordered, so new
+     * projects sort first without a backfill. The chosen sort mode (manual /
+     * created / updated) is a client-local view setting.
+     */
+    sortOrder: integer('sort_order'),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -93,6 +103,8 @@ export const projects = pgTable(
       .where(sql`${t.workspaceId} IS NOT NULL`),
     index('projects_user_id_idx').on(t.userId),
     index('projects_workspace_id_idx').on(t.workspaceId),
+    index('projects_user_id_sort_order_idx').on(t.userId, t.sortOrder),
+    index('projects_workspace_id_sort_order_idx').on(t.workspaceId, t.sortOrder),
     index('projects_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     index('projects_status_updated_at_idx').on(t.status, t.updatedAt),
     index('projects_coordinator_agent_id_idx').on(t.coordinatorAgentId),

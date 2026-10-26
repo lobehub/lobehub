@@ -133,6 +133,8 @@ export const queryRouter = router({
         groupId: z.string().nullish(),
         includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
+        /** Only topics the caller created — the workspace "only mine" filter. */
+        onlyMine: z.boolean().optional(),
         pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullish(),
         /**
@@ -399,6 +401,8 @@ export const queryRouter = router({
         agentId: z.string().optional(),
         groupId: z.string().nullish(),
         keywords: z.string(),
+        /** Only topics the caller created — the workspace "only mine" filter. */
+        onlyMine: z.boolean().optional(),
         sessionId: z.string().nullish(),
       }),
     )
@@ -412,11 +416,13 @@ export const queryRouter = router({
 
       await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
 
-      const byAgent = ctx.topicModel.queryByKeyword(input.keywords, {
+      const searchOptions = { onlyMine: input.onlyMine };
+      const scope = {
         agentId: resolved.agentId ?? undefined,
         containerId: resolved.sessionId,
         groupId: input.groupId,
-      });
+      };
+      const byAgent = ctx.topicModel.queryByKeyword(input.keywords, scope, searchOptions);
       if (!resolved.agentId || !resolved.sessionId || input.groupId) return byAgent;
 
       // Legacy topics can still lack agentId before the existing on-read
@@ -424,7 +430,11 @@ export const queryRouter = router({
       // only unassigned legacy rows may supplement the canonical Agent result.
       const [current, legacy] = await Promise.all([
         byAgent,
-        ctx.topicModel.queryByKeyword(input.keywords, { containerId: resolved.sessionId }),
+        ctx.topicModel.queryByKeyword(
+          input.keywords,
+          { containerId: resolved.sessionId },
+          searchOptions,
+        ),
       ]);
       return [
         ...new Map(

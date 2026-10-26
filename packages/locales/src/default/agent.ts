@@ -824,6 +824,7 @@ export default {
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
   'share.visitor.profile.works.open': 'Open work',
+  'share.visitor.profile.works.type.canvas': 'Canvas',
   'share.visitor.profile.works.type.document': 'Document',
   'share.visitor.profile.works.type.task': 'Task',
   'share.visitor.profile.works.type.file': 'File',

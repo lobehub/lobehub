@@ -1,4 +1,8 @@
-import type { AcceptanceCommentList, CreateAcceptanceCommentInput } from '@lobechat/types';
+import type {
+  AcceptanceAccessDecision,
+  AcceptanceCommentList,
+  CreateAcceptanceCommentInput,
+} from '@lobechat/types';
 import { useCallback, useMemo } from 'react';
 
 import { acceptanceCommentService } from '@/services/acceptanceComment';
@@ -42,6 +46,21 @@ export const useAcceptanceComments = (acceptanceId: string | undefined) => {
     },
     [mutate],
   );
+  const requestAccess = useCallback(
+    async (input: { clientId: string; content?: string; contextRunId?: string }) => {
+      if (!acceptanceId) return;
+      await acceptanceCommentService.requestAccess({ ...input, acceptanceId });
+      await mutate();
+    },
+    [acceptanceId, mutate],
+  );
+  const answerAccessRequest = useCallback(
+    async (id: string, decision: AcceptanceAccessDecision) => {
+      await acceptanceCommentService.answerAccessRequest(id, decision);
+      await mutate();
+    },
+    [mutate],
+  );
   /**
    * Optimistic on purpose: a chip that waits for a round trip before it fills
    * in makes the click feel broken, and the write is a single idempotent row.
@@ -73,9 +92,11 @@ export const useAcceptanceComments = (acceptanceId: string | undefined) => {
   );
 
   return {
+    answerAccessRequest,
     approvals,
     canApprove: data.canApprove,
     canComment: data.canComment,
+    canManageAccess: Boolean(data.canManageAccess),
     /**
      * A failed read is not a permission answer. Without this the page falls
      * back to `canComment: false` and tells the owner to sign in, which is
@@ -88,6 +109,7 @@ export const useAcceptanceComments = (acceptanceId: string | undefined) => {
     participants,
     react,
     remove,
+    requestAccess,
     setResolved,
     threads,
   };

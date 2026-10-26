@@ -1,7 +1,7 @@
 import type { CanvasRuntimeBundle } from './types';
 
 // Serialized into preview HTML: keep this function self-contained.
-export function installCanvasBridge(fallbackRuntimeUrl: string) {
+export function installCanvasBridge() {
   const host = window.parent;
   const instanceId = `${Date.now()}-${Math.random()}`;
   const urls = new Set<string>();
@@ -179,11 +179,4 @@ window.parent.postMessage({ source: 'lobe-canvas', type: 'runtime-loaded', insta
     },
     { once: true },
   );
-  if (host === window) {
-    // A private preview opened directly reuses the publication runtime.
-    const script = document.createElement('script');
-    script.defer = true;
-    script.src = fallbackRuntimeUrl;
-    append(script);
-  }
 }

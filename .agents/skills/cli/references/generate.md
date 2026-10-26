@@ -27,12 +27,13 @@ lh generate (alias: gen)
 
 ## `lh generate text <prompt>` / `lh gen text <prompt>`
 
-Generate text completion.
+Generate a complete text response. Incremental streaming is not supported; the agent
+gateway WebSocket handles agent operations, not this single-completion endpoint.
 
 **Source**: `apps/cli/src/commands/generate/text.ts`
 
 ```bash
-lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--stream] [--json] [--pipe]
+lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--json] [--pipe]
 ```
 
 ```bash
@@ -46,7 +47,6 @@ echo "context" | lh gen text "summarize" --pipe
 | `-s, --system <prompt>`     | System prompt                      | -                    |
 | `--temperature <n>`         | Temperature (0-2)                  | -                    |
 | `--max-tokens <n>`          | Maximum output tokens              | -                    |
-| `--stream`                  | Enable streaming output            | `false`              |
 | `--json`                    | Output full JSON response          | `false`              |
 | `--pipe`                    | Read additional context from stdin | `false`              |
 
@@ -57,6 +57,36 @@ When `--pipe` is used, reads stdin and prepends it to the prompt. Useful for pip
 ```bash
 cat README.md | lh gen text "summarize this" --pipe
 ```
+
+---
+
+## `lh generate json <prompt>` / `lh gen json <prompt>`
+
+Generate a JSON object with structured output.
+
+**Source**: `apps/cli/src/commands/generate/json.ts`
+
+```bash
+lh gen json <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--schema <json|path>] [--schema-name <name>] [--strict] [--pipe]
+```
+
+| Option                      | Description                                        | Default              |
+| --------------------------- | -------------------------------------------------- | -------------------- |
+| `-m, --model <model>`       | Model ID                                           | `openai/gpt-4o-mini` |
+| `-p, --provider <provider>` | Provider name                                      | -                    |
+| `-s, --system <prompt>`     | System prompt                                      | -                    |
+| `--schema <json\|path>`     | JSON Schema, inline or from a file (required)      | -                    |
+| `--schema-name <name>`      | Schema name sent to the model                      | `response`           |
+| `--strict`                  | Require the model to adhere strictly to the schema | `false`              |
+| `--pipe`                    | Read additional context from stdin                 | `false`              |
+
+The command calls the `aiChat.outputJSON` mutation rather than `/webapi/chat`, so the server owns
+provider-specific handling (`json_schema` support, the tool-calling fallback, Responses API routing), and
+prints the parsed object pretty-printed. It is a single request: `--stream`, `--temperature` and
+`--max-tokens` are not accepted options, and passing them fails as an unknown option. A reply the server
+cannot parse into the schema exits with code 1. The server keeps only `type`, `properties`, `required`,
+`additionalProperties` and `$defs`; schemas using other root keywords (`allOf`, `minProperties`, ...) are
+rejected up front.
 
 ---
 

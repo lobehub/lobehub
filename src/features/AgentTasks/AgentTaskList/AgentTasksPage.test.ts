@@ -261,6 +261,32 @@ describe('AgentTasksPage', () => {
       });
     });
 
+    it('drops the scoped breadcrumb on the mobile surface, where back and the drawer lead to the scope', () => {
+      expect(
+        getTaskPageHeaderVisibility({
+          agentId: 'agent-1',
+          isEmptyHero: false,
+          isMobile: true,
+          mobileSurface: true,
+        }).showBreadcrumb,
+      ).toBe(false);
+      expect(
+        getTaskPageHeaderVisibility({
+          isEmptyHero: false,
+          isMobile: true,
+          mobileSurface: true,
+          projectId: 'p-1',
+        }).showBreadcrumb,
+      ).toBe(false);
+    });
+
+    it('keeps the scoped breadcrumb in a narrow desktop window, which has no mobile back button', () => {
+      expect(
+        getTaskPageHeaderVisibility({ agentId: 'agent-1', isEmptyHero: false, isMobile: true })
+          .showBreadcrumb,
+      ).toBe(true);
+    });
+
     it('keeps the breadcrumb for a project scope and drops it for the global list', () => {
       expect(
         getTaskPageHeaderVisibility({ isEmptyHero: false, isMobile: false, projectId: 'p-1' }),

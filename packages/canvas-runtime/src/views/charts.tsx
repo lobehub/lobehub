@@ -5,6 +5,7 @@ import {
   DonutChart,
   FunnelChart,
   Heatmaps,
+  Legend,
   LineChart,
   RadarChart,
   ScatterChart,
@@ -13,11 +14,12 @@ import {
   SparkLineChart,
   Tracker,
 } from '@lobehub/charts';
-import { useTheme } from '@lobehub/ui';
+import { Flexbox, useTheme } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { CanvasView } from '../element';
 import { formatValue, heatmapLevel } from '../format';
+import { donutLegendCategories, showsDonutTotal } from './donut';
 
 type Props = Record<string, any>;
 
@@ -77,16 +79,24 @@ const Scatter = memo<{ props: Props }>(({ props }) => (
   />
 ));
 
-const Donut = memo<{ props: Props }>(({ props }) => (
-  <DonutChart
-    category={props.category}
-    colors={usePaletteColors(props.colors)}
-    data={asArray(props.data)}
-    index={props.index}
-    valueFormatter={(value: number) => formatValue(value, props['value-format'], props.unit)}
-    variant={props.variant ?? 'donut'}
-  />
-));
+const Donut = memo<{ props: Props }>(({ props }) => {
+  const colors = usePaletteColors(props.colors);
+  const data = asArray(props.data);
+  return (
+    <Flexbox align={'center'} gap={12}>
+      <DonutChart
+        category={props.category}
+        colors={colors}
+        data={data}
+        index={props.index}
+        showLabel={showsDonutTotal(props)}
+        valueFormatter={(value: number) => formatValue(value, props['value-format'], props.unit)}
+        variant={props.variant ?? 'donut'}
+      />
+      <Legend categories={donutLegendCategories(data, props.index)} colors={colors} />
+    </Flexbox>
+  );
+});
 
 const Spark = memo<{ props: Props }>(({ props }) => {
   const colors = usePaletteColors(props.colors);

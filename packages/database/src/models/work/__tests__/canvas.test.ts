@@ -1,10 +1,13 @@
 // @vitest-environment node
 import type { RegisterCanvasWorkParams } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { agents, topics, workspaces } from '../../../schemas';
 import { WorkModel } from '..';
 import {
   agentId,
+  agentId2,
   cleanupWorkTestData,
   seedWorkTestData,
   serverDB,
@@ -39,6 +42,84 @@ const params = (overrides: Partial<RegisterCanvasWorkParams> = {}): RegisterCanv
 });
 
 describe('WorkModel · canvas', () => {
+  describe('workspace visibility', () => {
+    const workspaceId = 'canvas-visibility-workspace';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Canvas workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.update(agents).set({ workspaceId }).where(eq(agents.id, agentId));
+      await serverDB.update(topics).set({ workspaceId }).where(eq(topics.id, topicId));
+    });
+
+    it.each(['public', 'private'] as const)(
+      'inherits the creating agent’s %s visibility for teammate reads and galleries',
+      async (visibility) => {
+        await serverDB.update(agents).set({ visibility }).where(eq(agents.id, agentId));
+        const owner = new WorkModel(serverDB, userId, workspaceId);
+        const teammate = new WorkModel(serverDB, userId2, workspaceId);
+
+        const work = await owner.registerCanvas(params());
+
+        expect((await owner.findCanvas('cvs_cost'))?.work.id).toBe(work.id);
+        expect((await teammate.findCanvas('cvs_cost'))?.work.id).toBe(
+          visibility === 'public' ? work.id : undefined,
+        );
+        const gallery = await teammate.listByWorkspace({ includeFileWorks: true });
+        expect(gallery.items.map((item) => item.id)).toEqual(
+          visibility === 'public' ? [work.id] : [],
+        );
+        const summaries = await teammate.listSummariesByRootOperations({
+          includeFileWorks: true,
+          rootOperationIds: ['op-canvas-1'],
+        });
+        expect(summaries['op-canvas-1'].map((item) => item.id)).toEqual(
+          visibility === 'public' ? [work.id] : [],
+        );
+      },
+    );
+
+    it.each(['public', 'private'] as const)(
+      'keeps an existing %s canvas’s visibility when the agent changes',
+      async (visibility) => {
+        const owner = new WorkModel(serverDB, userId, workspaceId);
+        const work = await owner.registerCanvas(params({ visibility }));
+        await serverDB
+          .update(agents)
+          .set({ visibility: visibility === 'public' ? 'private' : 'public' })
+          .where(eq(agents.id, agentId));
+
+        await owner.registerCanvas(
+          params({ toolCallId: 'call-canvas-update', toolName: 'updateCanvas' }),
+        );
+
+        const teammate = new WorkModel(serverDB, userId2, workspaceId);
+        expect((await teammate.findCanvas('cvs_cost'))?.work.id).toBe(
+          visibility === 'public' ? work.id : undefined,
+        );
+        expect((await owner.findCanvas('cvs_cost'))?.work.visibility).toBe(visibility);
+      },
+    );
+
+    it('keeps an explicitly private canvas private under a public agent', async () => {
+      const owner = new WorkModel(serverDB, userId, workspaceId);
+      await owner.registerCanvas(params({ visibility: 'private' }));
+
+      expect(await new WorkModel(serverDB, userId2, workspaceId).findCanvas('cvs_cost')).toBeNull();
+    });
+
+    it('does not inherit public visibility from an agent outside the workspace', async () => {
+      const owner = new WorkModel(serverDB, userId, workspaceId);
+      await owner.registerCanvas(params({ agentId: agentId2 }));
+
+      expect(await new WorkModel(serverDB, userId2, workspaceId).findCanvas('cvs_cost')).toBeNull();
+    });
+  });
+
   it('appends a version per registration of the same canvas id', async () => {
     const model = new WorkModel(serverDB, userId);
 

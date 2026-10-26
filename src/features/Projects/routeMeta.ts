@@ -23,6 +23,12 @@ export const projectDirectoriesRouteMeta = routeMeta({
   titleKey: 'project:settings.title',
 });
 
+export const projectHomeRouteMeta = routeMeta({
+  icon: FolderClosedIcon,
+  Skeleton: createSurfaceSkeleton('detail'),
+  titleKey: 'project:sections.home',
+});
+
 export const projectConversationRouteMeta = routeMeta({
   DynamicMeta: ProjectConversationDynamicMeta,
   icon: FolderClosedIcon,

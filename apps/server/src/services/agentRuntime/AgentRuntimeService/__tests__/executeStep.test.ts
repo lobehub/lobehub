@@ -478,7 +478,7 @@ describe('AgentRuntimeService', () => {
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith('test-operation-1', {
         type: 'step_start',
         stepIndex: 1,
-        data: {},
+        data: { llmCalls: 0 },
       });
 
       expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith('test-operation-1', {
@@ -486,6 +486,7 @@ describe('AgentRuntimeService', () => {
         stepIndex: 1,
         data: {
           stepIndex: 1,
+          llmCalls: 0,
           nextStepScheduled: false, // Published before nextStepScheduled is updated
         },
       });

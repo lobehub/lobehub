@@ -28,6 +28,7 @@ import { __resetOperationStatesForTesting, HeterogeneousPersistenceHandler } fro
 interface FakeMessage {
   content: string;
   id: string;
+  metadata?: Record<string, any>;
   parentId?: string | null;
   role: 'user' | 'assistant' | 'tool';
   seq: number;
@@ -76,6 +77,7 @@ const createHarness = () => {
       const msg: FakeMessage = {
         content: input.content ?? '',
         id: msgId,
+        metadata: input.metadata,
         parentId: input.parentId ?? null,
         role: input.role!,
         seq: seq++,
@@ -109,7 +111,7 @@ const createHarness = () => {
               m.topicId === topicId &&
               m.role !== 'tool' &&
               m.threadId === (threadId ?? null) &&
-              !(m as any).metadata?.signal,
+              !m.metadata?.signal,
           )
           .sort((a, b) => b.seq - a.seq)[0];
         return match?.id;
@@ -222,5 +224,119 @@ describe('HeterogeneousPersistenceHandler — chain anchor survives a regressed 
       (m) => m.role === 'assistant' && m.parentId === a1.id,
     );
     expect(a1AssistantChildren).toHaveLength(1);
+  });
+});
+
+/**
+ * Regression observed in a production topic: the main agent launched background subagents,
+ * ended its turn with a toolless "still running" reply, and CC woke the LLM
+ * minutes later when each subagent finished. Those wake-up turns are signal
+ * turns and must hang off a tool so the read side folds them into the run's
+ * AssistantGroup. The batch carrying them reached a replica that had never
+ * reduced this run's tool batches, so the in-memory `lastToolMsgIdEver` was
+ * empty and both turns fell back onto the toolless spine reply — rendering as
+ * two extra top-level replies.
+ */
+describe('HeterogeneousPersistenceHandler — signal turn anchor on a cold replica', () => {
+  beforeEach(() => __resetOperationStatesForTesting());
+  afterEach(() => __resetOperationStatesForTesting());
+
+  const textStep = (stepIndex: number, ccMsgId: string, content: string): AgentStreamEvent[] => [
+    buildEvent('stream_start', stepIndex, {
+      messageId: ccMsgId,
+      newStep: true,
+      provider: 'claude-code',
+    }),
+    buildEvent('stream_chunk', stepIndex, { chunkType: 'text', content }),
+  ];
+
+  const signalStep = (stepIndex: number, ccMsgId: string): AgentStreamEvent[] => [
+    buildEvent('stream_start', stepIndex, {
+      externalSignal: {
+        sourceToolCallId: 'tc-A',
+        sourceToolName: 'Agent',
+        type: 'task-completion',
+      },
+      messageId: ccMsgId,
+      newStep: true,
+      provider: 'claude-code',
+    }),
+    buildEvent('stream_chunk', stepIndex, { chunkType: 'text', content: 'subagent finished' }),
+  ];
+
+  const signalTurn = (messages: Map<string, FakeMessage>) =>
+    [...messages.values()].find((m) => m.role === 'assistant' && m.metadata?.signal);
+
+  it("anchors the wake-up turn onto the run's last tool, not the toolless spine reply", async () => {
+    const h = createHarness();
+
+    // Warm replica: launch the background task, then end the turn without tools.
+    await h.handler.ingest({
+      assistantMessageId: SEED,
+      events: [...stepBatch(1, 'cc-A', 'tc-A'), ...textStep(2, 'cc-B', 'still running')],
+      operationId: OP,
+      topicId: TOPIC,
+    });
+    __resetOperationStatesForTesting();
+
+    // Cold replica: the task finished and CC woke the LLM.
+    await h.handler.ingest({
+      assistantMessageId: SEED,
+      events: signalStep(3, 'cc-C'),
+      operationId: OP,
+      topicId: TOPIC,
+    });
+
+    const launchTool = [...h.messages.values()].find(
+      (m) => m.role === 'tool' && m.tool_call_id === 'tc-A',
+    );
+    expect(launchTool).toBeDefined();
+    expect(signalTurn(h.messages)?.parentId).toBe(launchTool!.id);
+  });
+
+  it("does not anchor onto a previous run's tool when this run has none", async () => {
+    const h = createHarness();
+    // Seat SEED behind an earlier run: prevAsst (with a tool) → user → SEED.
+    h.messages.set('prev-asst', {
+      content: '',
+      id: 'prev-asst',
+      parentId: null,
+      role: 'assistant',
+      seq: -3,
+      threadId: null,
+      tools: [{ id: 'tc-prev', result_msg_id: 'prev-tool' }],
+      topicId: TOPIC,
+    });
+    h.messages.set('prev-tool', {
+      content: '',
+      id: 'prev-tool',
+      parentId: 'prev-asst',
+      role: 'tool',
+      seq: -2,
+      threadId: null,
+      tool_call_id: 'tc-prev',
+      topicId: TOPIC,
+    });
+    h.messages.set('user-1', {
+      content: 'next question',
+      id: 'user-1',
+      parentId: 'prev-asst',
+      role: 'user',
+      seq: -1,
+      threadId: null,
+      topicId: TOPIC,
+    });
+    h.messages.set(SEED, { ...h.messages.get(SEED)!, parentId: 'user-1', threadId: null });
+    h.messages.delete(T1);
+
+    await h.handler.ingest({
+      assistantMessageId: SEED,
+      events: signalStep(1, 'cc-A'),
+      operationId: OP,
+      topicId: TOPIC,
+    });
+
+    // No tool in this run: fall back to the spine, never cross the user turn.
+    expect(signalTurn(h.messages)?.parentId).toBe(SEED);
   });
 });

@@ -1,6 +1,4 @@
 import { isDesktop } from '@lobechat/const';
-import type { ReplicaOptimisticToken } from '@lobechat/replica';
-import type { ReplicaSlice, ReplicaSyncSchedule } from '@lobechat/replica/zustand';
 import type {
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
@@ -12,6 +10,8 @@ import type {
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
+import type { ReplicaOptimisticToken } from 'local-replica';
+import type { ReplicaSlice, ReplicaSyncSchedule } from 'local-replica/zustand';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { mutate } from '@/libs/swr';
@@ -142,6 +142,8 @@ const useGitReviewReplica = <TParams, TStored>(
   toKey: (params: TParams) => string,
   params: TParams | null,
   schedule: GitReplicaSyncOptions<TStored>,
+  /** Params to sync; `null` pauses syncing while `params` still reads the stored row. */
+  syncParams: TParams | null = params,
 ) => {
   const key = params ? toKey(params) : undefined;
   const stored = useGitReviewStore((s) => (key ? selectMap(s)[key] : undefined));
@@ -151,12 +153,12 @@ const useGitReviewReplica = <TParams, TStored>(
   // unreachable device, missing `gh`) is not retried, like the SWR hooks these replaced.
   const { error, isHydrated, isValidating, revalidate } = pick(
     useGitReviewStore.getState().slices,
-  ).useSync(params, { ...schedule, shouldRetryOnError: false });
+  ).useSync(syncParams, { ...schedule, shouldRetryOnError: false });
 
   return {
     error,
     isConfirmed,
-    isLoading: !!params && stored === undefined && !error && (!isHydrated || isValidating),
+    isLoading: !!syncParams && stored === undefined && !error && (!isHydrated || isValidating),
     isValidating,
     mutate: revalidate,
     stored,
@@ -195,7 +197,7 @@ export const useReviewPatches = (
   deviceId?: string,
   active = true,
 ): GitReplicaReadResult<ReviewPatchesData> => {
-  const enabled = active && isEnabled(deviceId, dirPath);
+  const enabled = isEnabled(deviceId, dirPath);
   const params = useMemo(
     () => (enabled ? { baseRef, deviceId, mode, path: dirPath! } : null),
     [enabled, baseRef, deviceId, mode, dirPath],
@@ -213,6 +215,9 @@ export const useReviewPatches = (
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
     },
+    // Inactive callers (a collapsed Review panel) keep the last diff instead of
+    // dropping to undefined, so reopening does not re-render every file from empty.
+    active ? params : null,
   );
   return { ...rest, data: stored };
 };

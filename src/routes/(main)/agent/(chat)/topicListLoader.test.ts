@@ -24,6 +24,8 @@ const preHydrateAgentSlugMock = vi.hoisted(() =>
 );
 const preHydrateDeviceListMock = vi.hoisted(() => vi.fn(async () => true));
 const preHydrateVerifyRunsMock = vi.hoisted(() => vi.fn(async (_ids: string[]) => {}));
+const preHydrateWorkspacePreferenceMock = vi.hoisted(() => vi.fn(async () => true));
+
 const chatState = vi.hoisted(() => ({ dbMessagesMap: {} as Record<string, unknown[]> }));
 
 vi.mock('@lobechat/builtin-agents', () => ({
@@ -71,6 +73,12 @@ vi.mock('@/store/device', () => ({
   useDeviceStore: { getState: () => ({ preHydrateDeviceList: preHydrateDeviceListMock }) },
 }));
 
+vi.mock('@/store/user', () => ({
+  useUserStore: {
+    getState: () => ({ preHydrateWorkspaceUserPreference: preHydrateWorkspacePreferenceMock }),
+  },
+}));
+
 vi.mock('@/store/verify', () => ({
   useVerifyStore: { getState: () => ({ preHydrateVerifyRuns: preHydrateVerifyRunsMock }) },
 }));
@@ -89,6 +97,51 @@ describe('agent chat topic list loader', () => {
     preHydrateDeviceListMock.mockResolvedValue(true);
     getSidebarTopicListParamsMock.mockReset();
     getSidebarTopicListParamsMock.mockReturnValue({ agentId: 'agt_1', pageSize: 20 });
+    preHydrateWorkspacePreferenceMock.mockReset();
+    preHydrateWorkspacePreferenceMock.mockResolvedValue(true);
+  });
+
+  /** @example "Only mine" set on another device: no local copy, so the cached page may be unfiltered. */
+  it('skips the topic seed in a workspace whose preference is still unknown', async () => {
+    preHydrateWorkspacePreferenceMock.mockResolvedValue(false);
+
+    await agentChatTopicListLoader(loaderArgs('agt_1'));
+
+    expect(preHydrateTopicListMock).not.toHaveBeenCalled();
+  });
+
+  it('seeds the topic page once the workspace preference is known', async () => {
+    await agentChatTopicListLoader(loaderArgs('agt_1'));
+
+    expect(preHydrateTopicListMock).toHaveBeenCalledWith({ agentId: 'agt_1', pageSize: 20 });
+  });
+
+  /** @example The "only mine" filter lives there; deriving params first seeds the unfiltered page. */
+  it('reads the workspace preference before deriving the sidebar params', async () => {
+    const order: string[] = [];
+    preHydrateWorkspacePreferenceMock.mockImplementation(async () => {
+      order.push('preference');
+      return true;
+    });
+    getSidebarTopicListParamsMock.mockImplementation(() => {
+      order.push('params');
+      return { agentId: 'agt_1', pageSize: 20 };
+    });
+
+    await agentChatTopicListLoader(loaderArgs('agt_1'));
+
+    expect(order).toEqual(['preference', 'params']);
+  });
+
+  it('does not let a stalled workspace preference read block the route', async () => {
+    vi.useFakeTimers();
+    preHydrateWorkspacePreferenceMock.mockImplementation(() => new Promise(() => {}));
+
+    const settled = vi.fn();
+    void agentChatTopicListLoader(loaderArgs('agt_1')).then(settled);
+
+    await vi.advanceTimersByTimeAsync(PRE_PAINT_HYDRATE_TIMEOUT * 2);
+    expect(settled).toHaveBeenCalled();
   });
 
   afterEach(() => {

@@ -103,6 +103,8 @@ export interface WidgetCardProps {
   onOpen?: () => void;
   /** A manual refresh of this widget is in flight from this client. */
   runningLocally?: boolean;
+  /** Replaces the plain title, e.g. an inline input while editing a board. */
+  title?: ReactNode;
   /** Long-term trend from `metric_points`, when the host loaded it. */
   trend?: DashboardTrendSeries[];
   view?: WidgetView | null;
@@ -118,7 +120,7 @@ export interface WidgetCardProps {
  * the card says so instead of rendering an empty value.
  */
 const WidgetCard = memo<WidgetCardProps>(
-  ({ widget, trend, view, actions, handle, onOpen, runningLocally, className }) => {
+  ({ widget, trend, view, actions, handle, onOpen, runningLocally, className, title }) => {
     const { t } = useTranslation('dashboard');
     const health = getWidgetHealth(widget, { runningLocally });
     const updatedAt = getWidgetUpdatedAt(widget);
@@ -170,9 +172,11 @@ const WidgetCard = memo<WidgetCardProps>(
       >
         <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
           {handle}
-          <Text ellipsis className={styles.title} title={widget.title} weight={500}>
-            {widget.title}
-          </Text>
+          {title ?? (
+            <Text ellipsis className={styles.title} title={widget.title} weight={500}>
+              {widget.title}
+            </Text>
+          )}
           <StatusBadges badges={badges} health={health} />
           {actions && (
             // Header actions must not open the drill-down.

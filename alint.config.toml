@@ -61,6 +61,25 @@ lobehub = "./packages/alint/rules"
 "lobehub/no-mode-flags" = "warn"
 "lobehub/no-unguarded-response-field" = "error"
 
+# Web client data types: payload shapes are declared in @lobechat/types, not
+# inferred with Awaited<ReturnType<typeof someService.method>>.
+[[config.group]]
+files = [ "src/**/*.ts", "src/**/*.tsx" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/*.stories.tsx" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-inferred-service-types" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-inferred-service-types/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-inferred-service-types" = "warn"
+
 # Fixed product images and App-owned resource requests have different namespaces.
 [[config.group]]
 files = [ "src/**/*.{ts,tsx,css}", "packages/const/src/**/*.ts", "apps/*/app/**/*.{ts,tsx,css}", "apps/{share,workbench}/src/**/*.{ts,tsx,css}", "apps/desktop/vite.*.config.{ts,mts}", "scripts/**/*.{ts,mts}" ]

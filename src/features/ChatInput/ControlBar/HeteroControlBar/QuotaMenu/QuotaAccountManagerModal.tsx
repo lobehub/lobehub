@@ -35,6 +35,7 @@ import {
   type QuotaLatestReading,
   useAgentQuotaStore,
 } from '@/store/agentQuota';
+import { useElectronStore } from '@/store/electron';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -118,7 +119,17 @@ const AccountReadingsSync = memo<{ accountId: string }>(({ accountId }) => {
 
 AccountReadingsSync.displayName = 'AccountReadingsSync';
 
-const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
+interface QuotaAccountManagerProps {
+  agentId: string;
+  /**
+   * Bound execution device the agent runs on. A remote device's logins live
+   * on that machine, not on the desktop showing this modal, so local sign-in
+   * state says nothing about which accounts it can run there.
+   */
+  deviceId?: string;
+}
+
+const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId }) => {
   const { t } = useTranslation('chat');
   const [
     useFetchQuotaAccounts,
@@ -144,8 +155,12 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
   const scope = cacheScope.use();
   const { error: accountsError } = useFetchQuotaAccounts();
   useFetchQuotaBindings(agentId);
-  // Only the desktop runs Claude Code locally, so only it has logins to show.
-  useFetchClaudeLocalAccounts(isDesktop);
+  // Only the desktop runs Claude Code locally, so only it has logins to show —
+  // and only when this agent runs here: in-process, or through the gateway on
+  // this desktop's own device row, which spawns on the same logins.
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const managesLocalLogins = isDesktop && (!deviceId || deviceId === currentDeviceId);
+  useFetchClaudeLocalAccounts(managesLocalLogins);
   const localAccounts = useAgentQuotaStore((s) => s.claudeLocalAccounts);
   const loginPending = useAgentQuotaStore((s) => s.claudeLoginPending);
   // A hydrated empty list may be an outdated snapshot: only the server's answer
@@ -213,14 +228,16 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
   );
 
   /**
-   * Whether a run on this desktop can use the account. Unknown (web, or the
-   * logins not listed yet) counts as yes, so nothing is gated on a guess.
+   * Whether a run on this desktop can use the account. Unknown (web, a bound
+   * device, or the logins not listed yet) counts as yes, so nothing is gated
+   * on a guess.
    */
   const signedInHere = useCallback(
     (account: Account) =>
+      !managesLocalLogins ||
       !localAccounts ||
       localAccounts.some((l) => l.identity.externalAccountId === account.externalAccountId),
-    [localAccounts],
+    [localAccounts, managesLocalLogins],
   );
 
   const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
@@ -500,7 +517,7 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
             {t('heteroAgent.claudeQuota.manage.confirmSwitch')}
           </Button>
         </Flexbox>
-      ) : isDesktop ? (
+      ) : managesLocalLogins ? (
         <Flexbox
           horizontal
           align={'center'}
@@ -540,9 +557,12 @@ const QuotaAccountManager = memo<{ agentId: string }>(({ agentId }) => {
 QuotaAccountManager.displayName = 'QuotaAccountManager';
 
 /** Calling this opens the modal — `createModal` mounts immediately. */
-export const openQuotaAccountManagerModal = (agentId: string): ModalInstance =>
+export const openQuotaAccountManagerModal = (
+  agentId: string,
+  options: { deviceId?: string } = {},
+): ModalInstance =>
   createModal({
-    content: <QuotaAccountManager agentId={agentId} />,
+    content: <QuotaAccountManager agentId={agentId} deviceId={options.deviceId} />,
     footer: null,
     title: i18nT('heteroAgent.claudeQuota.manage.title', { ns: 'chat' }),
     width: 460,

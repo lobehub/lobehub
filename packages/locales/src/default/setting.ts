@@ -1110,6 +1110,10 @@ export default {
   'settingAgent.artwork.uploadFailed': 'Could not upload the image. Try again.',
   'settingAgent.backgroundColor.title': 'Background Color',
   'settingAgent.description.desc': 'A brief introduction to your agent, not for character setting',
+  'settingAgent.description.hint': 'Other agents read this when they look up who to hand work to.',
+  'settingAgent.description.inputPlaceholder':
+    'What it handles and when to use it, e.g. Reviews pull requests and runs the test suite',
+  'settingAgent.description.label': 'Description',
   'settingAgent.description.placeholder': 'Enter agent description',
   'settingAgent.description.title': 'Agent Description',
   'settingAgent.export.dialogTitle': 'Export Agent Profile',
@@ -3117,6 +3121,8 @@ When I am ___, I need ___
     'This invitation has expired. Ask the team owner to send a new one.',
   'workspace.invitePage.expiredTitle': 'Invitation Expired',
   'workspace.invitePage.expiresLabel': 'Expires',
+  'workspace.invitePage.driveCleanupInProgress':
+    'Your previous personal drive in this workspace is being cleaned up. Try again in a few minutes.',
   'workspace.invitePage.featureNotEnabledNotice':
     'Workspaces are in a limited beta and not open to new members right now. Please try again later, or ask the person who invited you to reach out to support.',
   'workspace.invitePage.goHome': 'Go Home',
@@ -3595,6 +3601,11 @@ When I am ___, I need ___
     '💡 You can skip ahead; the analysis keeps running in the background',
   'workspace.onboarding.flow.learnYourTeam.error':
     "Couldn't finish the team analysis. Retry or skip for now.",
+  'workspace.onboarding.flow.learnYourTeam.budget.title':
+    'Not enough workspace credits for the team analysis',
+  'workspace.onboarding.flow.learnYourTeam.budget.desc':
+    "The team analysis uses this workspace's credits, and the balance can't cover it. Top up or upgrade the plan, then retry, or skip the analysis and finish the setup.",
+  'workspace.onboarding.flow.learnYourTeam.budget.skip': 'Skip analysis',
   'workspace.onboarding.flow.learnYourTeam.progress.review':
     'Reading team data from connected apps',
   'workspace.onboarding.flow.learnYourTeam.progress.build':
@@ -4219,7 +4230,7 @@ When I am ___, I need ___
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
   'environments.desc':
-    'What a sandbox run needs around it: a repository, its setup, its variables. Each copy built from one keeps its own files between sessions.',
+    "How to set up a project: the repository to check out, the setup command, the variables. Pick one from the environment menu under the chat input, and the conversation's working directory — a temporary sandbox or a folder on your drive — is initialized from it once.",
   'environments.create': 'New environment',
   'environments.cancel': 'Cancel',
   'environments.createFailed': 'Could not create the environment',
@@ -4235,34 +4246,36 @@ When I am ___, I need ___
   'environments.remove': 'Delete environment',
   'environments.removeConfirmTitle': 'Delete environment {{name}}?',
   'environments.removeConfirmContent':
-    "Its specification, variables, its copy's folder and the saved snapshot go with it, and cannot be recovered.",
+    'Its specification and variables are deleted and cannot be recovered. Folders it initialized keep their files; copies built by an earlier version are removed with it.',
   'environments.storage.used': '{{used}} of {{total}}',
   'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
   'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
   'environments.storage.over':
     'Over the storage limit. Saving a file is refused until you delete something.',
   'environments.duplicateName': 'You already have an environment with this name',
+  'environments.inProject':
+    'A project still uses this environment — remove it from the project first',
   'environments.hasInstances': 'Remove its other copies first',
   'environments.loadFailed.title': 'Could not check your plan',
   'environments.loadFailed.desc':
     'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your environments.',
   'environments.loadFailed.retry': 'Try again',
-  'environments.unavailable.title': 'Persistent sandbox is not available here',
+  'environments.unavailable.title': 'Drive storage is not available here',
   'environments.unavailable.desc':
-    'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
-  'environments.upgrade.title': 'Upgrade to Pro to unlock sandbox environments',
+    'Drives are persistent cloud storage for sandbox runs, and this deployment does not provide them.',
+  'environments.upgrade.title': 'Upgrade to Pro to unlock drive storage',
   'environments.upgrade.desc':
-    'Give cloud-sandbox runs a persistent working directory. An environment describes what the sandbox needs — repositories, setup, variables — and its copies keep everything between sessions.',
+    'Give cloud-sandbox runs a drive that outlives them: conversations working in a drive folder keep their files after the sandbox is recycled.',
   'environments.upgrade.cta': 'Upgrade to Pro',
-  'environments.upgrade.benefits.environments.title': 'Sandbox setup written once',
+  'environments.upgrade.benefits.environments.title': 'A public drive and your own',
   'environments.upgrade.benefits.environments.desc':
-    'Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.',
+    'In a workspace every member shares the public drive, and each member also has a personal drive only they can reach.',
   'environments.upgrade.benefits.persist.title': 'Files survive the sandbox',
   'environments.upgrade.benefits.persist.desc':
-    'The working directory is kept when the sandbox is recycled; the next run continues where the last stopped.',
-  'environments.upgrade.benefits.instances.title': 'One copy per task',
+    'The folder is kept when the sandbox is recycled; the next run continues where the last one stopped.',
+  'environments.upgrade.benefits.instances.title': 'Folders initialized from code environments',
   'environments.upgrade.benefits.instances.desc':
-    'Parallel conversations each run in their own copy of the environment, so nothing overwrites anything else.',
+    'When creating a folder, pick a code environment to clone its repository and install what it needs.',
   'environments.github.refreshFailed':
     'Could not refresh GitHub repositories. Showing the previous list. Try again.',
   'environments.github.loadFailed': 'Could not load GitHub repositories. Try again.',
@@ -4284,7 +4297,7 @@ When I am ___, I need ___
   'environments.form.descriptionPlaceholder': 'What this environment is for',
   'environments.form.sources': 'Source code',
   'environments.form.sourcesHint':
-    'Cloned over HTTPS before anything else runs. Private repositories are not supported yet — a specification holds no credentials.',
+    'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',
   'environments.form.refDefault': 'Repository default branch',
   'environments.form.path': 'Folder',
@@ -4295,7 +4308,7 @@ When I am ___, I need ___
     'Runs once in the checkout, with network access, before the conversation starts.',
   'environments.form.env': 'Environment variables',
   'environments.form.envHint':
-    'Non-secret values only — these are stored as plain text and copied into every copy of this environment.',
+    'Non-secret values only — stored as plain text and exported while the repository is cloned and the setup command runs.',
   'environments.form.addEnv': 'New variable',
   'environments.form.envCount_one': '{{count}} variable',
   'environments.form.envCount_other': '{{count}} variables',
@@ -4321,6 +4334,10 @@ When I am ___, I need ___
   'environments.form.changeRepository': 'Change repository',
   'environments.form.disconnect': 'Disconnect',
   'environments.detail.tabs.overview': 'Overview',
+  'environments.detail.initializerDesc':
+    'Applied once to a working directory picked for a conversation: the repository is cloned there and the setup command runs.',
+  'environments.detail.noRepository': 'No repository',
+  'environments.detail.noSetup': 'No setup command',
   'environments.instances.copy': 'Duplicate copy',
   'environments.instances.copyTitle': 'Duplicate {{name}}',
   'environments.instances.copyFailed': 'Could not duplicate this copy',
@@ -4332,7 +4349,7 @@ When I am ___, I need ___
     'This copy is being built, so it cannot be duplicated until the build finishes',
   'environments.instances.title': 'Copies',
   'environments.instances.desc':
-    'A copy is a working copy of this environment, with its own folder and its own installed packages. Conversations run inside a copy, and several can run side by side without touching each other.',
+    'Folders on your drive initialized from this environment. Each keeps its own files and installed packages, so conversations in different folders never overwrite each other.',
   'environments.instances.empty': 'No copies yet',
   'environments.instances.emptyHint':
     'Create one, then pick it under "Working Directory" in the chat input.',
@@ -4406,10 +4423,11 @@ When I am ___, I need ___
   'environments.sessions.reason.build_failed': 'Build failed',
   'environments.sessions.reason.build_timeout': 'Build timed out',
   'environments.sessions.reason.build_gone': 'Build interrupted',
-  'environments.form.desc':
-    'What a copy is built from — where the code comes from and what makes it usable.',
+  'environments.form.desc': 'Where the code comes from and what makes it usable.',
   'environments.form.appliesOnBuild':
     'Applied when a copy is created. Existing copies keep the definition they were made with — a rebuild replays that one, so use a new copy to pick this up.',
+  'environments.form.appliesOnInit':
+    'Takes effect the next time the environment is applied to a working directory. Folders it was already applied to keep what they have.',
   'environments.refresh': 'Refresh',
   'environments.emptyPublished': 'Nothing published to this workspace yet',
   'environments.visibility.tabs.workspace': 'Workspace',
@@ -4421,7 +4439,7 @@ When I am ___, I need ___
   'environments.visibility.publicTag': 'Published',
   'environments.visibility.changeFailed': "Could not change this environment's visibility",
   'environments.visibility.readonlyHint':
-    'Published to this workspace by its creator: you can run in this environment, but only they can change what it builds.',
+    'Published to this workspace by its creator: you can initialize with this environment, but only they can change it.',
   'environments.files.browse': 'Browse files',
   'environments.files.back': 'Back',
   'environments.files.empty': 'This directory is empty',
@@ -4492,4 +4510,132 @@ When I am ___, I need ___
   'environments.files.openHint': 'Double-click a folder to open it, or a file to view it',
   'environments.files.unusedInstance':
     'Nothing here yet. The code appears once the copy is built or a conversation runs in it.',
+  'environments.files.folderNotEmpty':
+    'This folder already has files in it. Only a new or empty folder can be initialized from an environment.',
+  'environments.files.folderTaken': 'An environment directory with this name already exists.',
+  'environments.files.readOnly':
+    'Environment directories are read-only: only their own sessions write to them.',
+  'environments.files.notFound': 'That folder doesn’t exist.',
+  'tab.drive': 'Storage',
+  'drive.tabs.public': 'Public drive',
+  'drive.tabs.personal': 'Personal drive',
+  'drive.scope.public': 'Visible to all members',
+  'drive.scope.personal': 'Only you',
+  'drive.usage.title': 'Storage usage',
+  'drive.usage.poolTitle': 'Workspace storage pool',
+  'drive.usage.used': '{{used}} of {{total}} used',
+  'drive.usage.unmeasured': 'Not measured yet · {{total}} in total',
+  'drive.usage.unmeasuredShort': 'Not measured yet',
+  'drive.usage.remaining': '{{size}} left · {{percent}}% used',
+  'drive.usage.overBy': '{{size}} over the quota',
+  'drive.usage.others': 'Other members',
+  'drive.usage.refresh': 'Measure again',
+  'drive.usage.membersTitle': "Members' personal drives",
+  'drive.usage.membersHint': 'Usage only — contents stay private',
+  'drive.usage.memberUnmeasured': 'Not measured',
+  'drive.usage.showAllMembers': 'Show all {{count}} members',
+  'drive.usage.showFewerMembers': 'Show fewer',
+  'drive.usage.over':
+    'Storage is over quota. Free up space or upgrade before more files can be saved.',
+  'drive.usage.enableOverage': 'Turn on pay-as-you-go',
+  'drive.usage.overageModalTitle': 'Keep saving past the quota',
+  'drive.usage.overageAskAdmin': 'Ask a workspace admin to turn on pay-as-you-go to keep saving.',
+  'drive.usage.overBilled':
+    'Over the quota. Files keep saving, and the extra is billed as pay-as-you-go overage.',
+  'drive.retained.title': "Departed members' personal drives",
+  'drive.retained.hint':
+    'Kept for 30 days after a member leaves, then deleted automatically. They count toward the workspace pool until then. Only the amount is shown, never the files.',
+  'drive.retained.expiresIn': 'Deleted in {{count}} days',
+  'drive.retained.expiresToday': 'Deleted today',
+  'drive.retained.lastError': 'Last attempt failed: {{error}}',
+  'drive.retained.move': 'Move to public drive',
+  'drive.retained.moveConfirm.title': "Move {{name}}'s drive to the public drive?",
+  'drive.retained.moveConfirm.desc':
+    'Its files are moved into departed-members on the public drive, where every member can open them, and the personal drive is emptied. Only text files up to 1 MB can be moved; a drive holding anything else is left untouched.',
+  'drive.retained.moved': 'Moved to {{path}} on the public drive',
+  'drive.retained.delete': 'Delete',
+  'drive.retained.deleteConfirm.title': "Delete {{name}}'s personal drive?",
+  'drive.retained.deleteConfirm.desc': 'Everything on it is deleted and cannot be recovered.',
+  'drive.retained.deleted': 'Drive deleted',
+  'drive.usage.manage': 'Manage in Storage',
+  'drive.explorer.newFolder': 'New folder',
+  'drive.explorer.columns.name': 'Name',
+  'drive.explorer.columns.modified': 'Date modified',
+  'drive.explorer.columns.size': 'Size',
+  'drive.explorer.columns.kind': 'Kind',
+  'drive.explorer.kind.folder': 'Folder',
+  'drive.explorer.kind.gitRepository': 'Git repository',
+  'drive.explorer.kind.file': 'File',
+  'drive.explorer.kind.fileWithExtension': '{{extension}} file',
+  'drive.explorer.rename': 'Rename',
+  'drive.explorer.delete': 'Delete',
+  'drive.explorer.moreActions': 'More actions',
+  'drive.explorer.deleteTitle': 'Delete “{{name}}”?',
+  'drive.explorer.deleteFolderContent':
+    'The folder and everything in it are removed from the drive. Conversations working in it switch to a temporary sandbox.',
+  'drive.explorer.deleteFileContent': 'The file is removed from the drive.',
+  'drive.explorer.readOnly': 'Environment directories are read-only',
+  'drive.explorer.readOnlyHint':
+    'Only its own sandbox sessions write to an environment directory, so you can browse it here but not change it.',
+  'drive.explorer.empty': 'This folder is empty',
+  'drive.explorer.emptyRoot.public':
+    'No folders on the public drive yet. Create one to work in it with your team.',
+  'drive.explorer.emptyRoot.personal':
+    'Your drive is empty. Create a folder, then pick it as a conversation’s working folder.',
+  'drive.explorer.loadFailed': 'Could not load this folder.',
+  'drive.loadFailed': 'Could not load storage. Check your connection and try again.',
+  'environments.instances.needsDrive':
+    'Copies are folders on a drive, and this account has no drive yet.',
+  'environments.instances.openDriveSettings': 'Go to Storage settings',
+  'environments.instances.rebuildPersonalDesc':
+    '{{names}} is still on the public drive and is hidden. Private environments now keep their folders on your personal drive.',
+  'environments.instances.rebuildPersonal': 'Rebuild on personal drive',
+  'environments.instances.publishPublic': 'Initialize on the public drive',
+  'environments.instances.publishPublicDesc':
+    'Published to the workspace, but its folders are on your personal drive, where members cannot reach them. Members can run it once it has a folder on the public drive.',
+  'environments.instances.publishPublicFailed': 'Could not create a copy on the public drive',
+  'environments.instances.publishPublicStarted': 'Building a copy on the public drive',
+  'environments.instances.rebuildPersonalStarted': 'Building a new copy on your personal drive',
+  'environments.instances.rebuildPersonalFailed':
+    'Could not create the copy on your personal drive',
+  'environments.instances.rebuildPersonalRequired':
+    'This directory is on the public drive. Rebuild it on your personal drive first.',
+  'environments.instances.rebuildPersonalTag': 'Needs rebuild on personal drive',
+  'environments.instances.rebuildPersonalTagHint': 'Hidden on the public drive and no longer used.',
+  'subscriptionAccounts.actions.rename': 'Rename',
+  'subscriptionAccounts.actions.viewDetails': 'Details',
+  'subscriptionAccounts.activeRuns.empty': 'No agent is using this account right now.',
+  'subscriptionAccounts.activeRuns.loadFailed': "Couldn't load the agents using this account.",
+  'subscriptionAccounts.activeRuns.running': 'Running',
+  'subscriptionAccounts.activeRuns.title': 'Agents using it now',
+  'subscriptionAccounts.activeRuns.untitledAgent': 'Untitled agent',
+  'subscriptionAccounts.activeRuns.untitledTopic': 'Untitled topic',
+  'subscriptionAccounts.activeRuns.waiting': 'Waiting',
+  'subscriptionAccounts.filterEmpty': 'No account matches the filter.',
+  'subscriptionAccounts.searchPlaceholder': 'Search accounts…',
+  'subscriptionAccounts.usageTitle': 'Usage history',
+  'subscriptionAccounts.columns.account': 'Account',
+  'subscriptionAccounts.columns.plan': 'Plan',
+  'subscriptionAccounts.columns.quota': 'Quota',
+  'subscriptionAccounts.columns.rotation': 'Balancing',
+  'subscriptionAccounts.columns.status': 'Status',
+  'subscriptionAccounts.empty.desc':
+    'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
+  'subscriptionAccounts.empty.title': 'No subscription accounts yet',
+  'subscriptionAccounts.filter.all': 'All',
+  'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
+  'subscriptionAccounts.meter.session': '5-hour',
+  'subscriptionAccounts.meter.weekly': 'Weekly',
+  'subscriptionAccounts.refresh': 'Refresh',
+  'subscriptionAccounts.renamePlaceholder': 'Account name',
+  'subscriptionAccounts.rotationTooltip': 'Include in automatic balancing',
+  'subscriptionAccounts.status.available': 'Available · updated {{time}}',
+  'subscriptionAccounts.status.disabled': 'Out of rotation',
+  'subscriptionAccounts.status.exhausted': 'Used up · resets {{time}}',
+  'subscriptionAccounts.status.exhaustedNoReset': 'Used up',
+  'subscriptionAccounts.status.noData': 'No quota reported yet',
+  'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
+  'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
+  'tab.subscriptionAccounts': 'Subscription Accounts',
+  'workspaceSetting.group.resource': 'Resources',
 };

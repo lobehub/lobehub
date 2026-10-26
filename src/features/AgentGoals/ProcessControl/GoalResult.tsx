@@ -112,6 +112,7 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
           </div>
           <div {...anchorProps('criteria', t('goalProcess.result.criteria.title'))}>
             <GoalCriteriaResults
+              acceptanceId={data.acceptanceId}
               error={data.error}
               loading={data.isLoading}
               outcomes={data.outcomes}

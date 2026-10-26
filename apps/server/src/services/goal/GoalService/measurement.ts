@@ -8,8 +8,9 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
-import { GoalModel } from '@/database/models/goal';
 import { MetricModel } from '@/database/models/metric';
+import { GoalRepository } from '@/database/repositories/goal';
+import type { LobeChatDatabase } from '@/database/type';
 
 import {
   compareMetric,
@@ -18,6 +19,7 @@ import {
   needsMetricCriteria,
 } from '../decideNextMove';
 import { GoalManagerService } from '../manager';
+import { GoalSubscriptionService } from '../subscriptions';
 import { GoalSupervisorService } from '../supervisor';
 import { GoalWaitService } from '../wait';
 import type { GoalServiceContext } from './types';
@@ -238,7 +240,7 @@ const updateMetricCriteria = async (
   // their list from the same snapshot would otherwise race, resurrecting a
   // removed clause or dropping a newly declared one.
   await ctx.db.transaction(async (tx) => {
-    const model = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const goal = await model.lockById(goalId);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     const next = edit(goal.config?.acceptance?.metrics ?? []);
@@ -338,9 +340,11 @@ export const setAcceptanceCriteria = async (
 export const evaluateMetricCriteria = async (
   ctx: GoalServiceContext,
   graph: GoalGraphSnapshot,
+  /** Pass a transaction to hold the evidence locks until the caller commits. */
+  db: LobeChatDatabase = ctx.db,
 ): Promise<GoalMetricCriteriaState> => {
   const declared = graph.goal.config?.acceptance?.metrics ?? [];
-  const metricModel = new MetricModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const metricModel = new MetricModel(db, ctx.userId, ctx.workspaceId);
 
   // Two queries for the whole contract, not two per clause: this runs on
   // every terminal tick, and a goal carrying a large acceptance payload would
@@ -360,10 +364,22 @@ export const evaluateMetricCriteria = async (
     }),
   );
 
+  // A clause bound to a Widget subscription reads that subscription's accepted
+  // observation (fresh, provenance-checked); an unbound clause keeps reading the
+  // series' latest point.
+  const subscriptions = await new GoalSubscriptionService(db, ctx.userId, ctx.workspaceId).criteria(
+    graph.goal.id,
+    declared.map((criterion) => criterion.key),
+  );
   const criteria = declared.map((criterion) => {
     const op = criterion.op ?? 'gte';
     const seriesId = seriesByKey.get(criterion.key)?.id;
-    const point = seriesId ? latestByMetricId.get(seriesId) : undefined;
+    const subscription = subscriptions.get(criterion.key);
+    const point = subscription?.bound
+      ? subscription.point
+      : seriesId
+        ? latestByMetricId.get(seriesId)
+        : undefined;
     const value = point?.value ?? null;
     return {
       key: criterion.key,

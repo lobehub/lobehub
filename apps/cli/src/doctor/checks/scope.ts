@@ -1,3 +1,4 @@
+import { PERSONAL_SCOPE_ENV_VALUE } from '../../api/workspace';
 import { resolveIdentityFingerprint } from '../../auth/identity';
 import { loadActiveWorkspace, resolveServerUrl, saveActiveWorkspace } from '../../settings';
 import { redactUrlCredentials } from '../redact';
@@ -38,6 +39,15 @@ const workspaceScope: DoctorCheck = {
       serverUrl: redactUrlCredentials(serverUrl),
       storedWorkspaceId: stored?.workspaceId,
     };
+
+    if (fromEnv === PERSONAL_SCOPE_ENV_VALUE)
+      return {
+        detail: stored
+          ? `Personal scope: LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE} overrides the saved scope ${stored.workspaceId} for this run.`
+          : `Personal scope, from LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE}.`,
+        evidence,
+        status: 'ok',
+      };
 
     if (fromEnv) {
       if (stored && stored.workspaceId !== fromEnv)

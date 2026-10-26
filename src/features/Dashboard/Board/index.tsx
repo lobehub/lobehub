@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Empty, Flexbox, toast } from '@lobehub/ui';
-import { LayoutDashboardIcon } from 'lucide-react';
+import { Flexbox, toast } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +13,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { resolveLayouts, sortByPosition } from '../utils/layout';
 import { isUsableRunStatus } from '../utils/widgetHealth';
 import WidgetDetailDrawer from '../WidgetDetail';
+import BoardEmpty from './BoardEmpty';
 import BoardHeader from './BoardHeader';
 import BoardWidgetCard from './BoardWidgetCard';
 import LayoutEditor from './LayoutEditor';
@@ -89,16 +89,10 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
   return (
     <AsyncBoundary
       data={data}
+      empty={empty ?? <BoardEmpty title={detail?.title} />}
       error={error}
       isEmpty={responseItems.length === 0}
       isLoading={isLoading}
-      empty={
-        empty ?? (
-          <Center flex={1} padding={48}>
-            <Empty description={t('board.empty')} icon={LayoutDashboardIcon} />
-          </Center>
-        )
-      }
       onRetry={() => void mutate()}
     >
       {editing && canEditLayout ? (

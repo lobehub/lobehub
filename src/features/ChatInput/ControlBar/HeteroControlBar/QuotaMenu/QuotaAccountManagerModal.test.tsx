@@ -14,6 +14,7 @@ import {
   type QuotaAccount,
   type QuotaBinding,
 } from '@/store/agentQuota/projection';
+import { useElectronStore } from '@/store/electron';
 
 import QuotaAccountManager from './QuotaAccountManagerModal';
 import { isolateQuotaReplica } from './testUtils';
@@ -210,6 +211,7 @@ describe('QuotaAccountManager on the desktop', () => {
 
   afterEach(() => {
     desktop.value = false;
+    useElectronStore.setState({ gatewayDeviceInfo: undefined });
     vi.restoreAllMocks();
   });
 
@@ -220,6 +222,38 @@ describe('QuotaAccountManager on the desktop', () => {
     expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
     expect(radioFor('here@example.com').getAttribute('aria-disabled')).not.toBe('true');
     expect(screen.getAllByText('heteroAgent.claudeQuota.manage.notSignedIn')).toHaveLength(1);
+  });
+
+  it('does not judge a remote device’s accounts by this desktop’s logins', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+
+    // The device holds its own logins: `away` may well be signed in there.
+    await screen.findByText('away@example.com');
+    await waitFor(() =>
+      expect(radioFor('away@example.com').getAttribute('aria-disabled')).not.toBe('true'),
+    );
+    expect(heterogeneousAgentService.listClaudeCodeAccounts).not.toHaveBeenCalled();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.notSignedIn')).toBeNull();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.signIn')).toBeNull();
+    // Signing in here would not reach the device, so no local sign-in entry either.
+    expect(
+      screen.queryByRole('button', { name: /heteroAgent\.claudeQuota\.manage\.add/ }),
+    ).toBeNull();
+  });
+
+  it('keeps local login checks when bound to this desktop’s own device', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'this-desktop'} />);
+
+    // A gateway run on this device spawns on this desktop's logins.
+    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
+    expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
+    expect(heterogeneousAgentService.listClaudeCodeAccounts).toHaveBeenCalled();
   });
 
   it('lists only Claude Code accounts, never another coding agent’s', async () => {

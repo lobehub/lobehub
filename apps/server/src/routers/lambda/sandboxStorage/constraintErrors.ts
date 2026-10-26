@@ -71,14 +71,23 @@ export const rethrowDuplicateInstanceDirectory = (error: unknown): never => {
   throw error;
 };
 
+/** The restrict reference a project holds on an environment it uses. */
+const PROJECT_ENVIRONMENT_CONSTRAINT = 'project_environments_environment_id_environments_id_fk';
+
 /**
- * An environment with instances still on it. The reference is `restrict`
+ * An environment with instances still on it, or a project still using it. The reference is `restrict`
  * on purpose — deleting the specification out from under them would leave
  * directories and captured state nothing describes.
  */
 export const rethrowEnvironmentInUse = (error: unknown): never => {
   if (getPostgresErrorField(error, 'code') === '23503') {
-    throw new TRPCError({ cause: error, code: 'CONFLICT', message: 'ENVIRONMENT_HAS_INSTANCES' });
+    // Said apart, because what to do differs: a project link is removed from
+    // the project, while copies go with the environment on the drive route.
+    const message =
+      getPostgresErrorField(error, 'constraint') === PROJECT_ENVIRONMENT_CONSTRAINT
+        ? 'ENVIRONMENT_IN_PROJECT'
+        : 'ENVIRONMENT_HAS_INSTANCES';
+    throw new TRPCError({ cause: error, code: 'CONFLICT', message });
   }
 
   throw error;

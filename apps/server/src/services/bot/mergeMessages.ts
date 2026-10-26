@@ -62,6 +62,19 @@ export function getSourceMessages(message: Message): Message[] {
   return sources?.length ? sources : [message];
 }
 
+/** What {@link buildReplayMessages} appends to a replay's id. */
+const REPLAY_ID_SUFFIX = /:replay:\d+:\d+$/;
+
+/**
+ * The id a message carried before {@link buildReplayMessages} rewrote it.
+ *
+ * A replay gets a fresh id so the Chat SDK does not drop it as a duplicate, but the rest of the
+ * pipeline keys on the platform id — the wake scheduler releases a batch by the ids it parked, so
+ * it has to match the original id rather than the replay one.
+ */
+export const getOriginMessageId = (message: Message): string =>
+  message.id.replace(REPLAY_ID_SUFFIX, '');
+
 /**
  * Rebuild original messages from deferred payloads (oldest first).
  *

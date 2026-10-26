@@ -35,6 +35,8 @@ import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
+import { useDeepLinkBranchActivation } from './hooks/useDeepLinkBranchActivation';
+import { useDeepLinkHistoryBackfill } from './hooks/useDeepLinkHistoryBackfill';
 import { useForwardPagingFallback } from './hooks/useForwardPagingFallback';
 import { useInitialRevalidation } from './hooks/useInitialRevalidation';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
@@ -113,6 +115,12 @@ export interface ChatListProps {
    */
   onForwardPagingUnsupported?: () => void;
   /**
+   * Print the loaded transcript, without the app chrome, when the page prints.
+   * Opt in on the page's main conversation only: a side panel (thread portal,
+   * copilot, floating chat) must not replace what its host page prints.
+   */
+  printable?: boolean;
+  /**
    * Force showing welcome component even when messages exist
    */
   showWelcome?: boolean;
@@ -139,6 +147,7 @@ const ChatList = memo<ChatListProps>(
     itemContent,
     messageDeepLink,
     onForwardPagingUnsupported,
+    printable,
     showWelcome,
   }) => {
     // The chat store owns the transcript; this view keeps its sync mounted.
@@ -288,6 +297,22 @@ const ChatList = memo<ChatListProps>(
       [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
+    const dbMessages = useConversationStore(dataSelectors.dbMessages);
+    const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
+    const switchMessageBranch = useConversationStore((s) => s.switchMessageBranch);
+    const deepLinkTargetLoaded = useDeepLinkBranchActivation({
+      deepLink: messageDeepLink,
+      messages: dbMessages,
+      resolved: !!resolvedMessageDeepLink,
+      switchMessageBranch,
+    });
+    useDeepLinkHistoryBackfill({
+      deepLinkKey: messageDeepLink?.navigationKey,
+      loadedCount: dbMessages.length,
+      loadEarlierMessages,
+      ready: messagesInit && paging === 'backward',
+      resolved: !!resolvedMessageDeepLink || deepLinkTargetLoaded,
+    });
 
     // When topicId is null (new conversation), show welcome directly without waiting for fetch
     // because there's no server data to fetch - only local optimistic updates exist
@@ -365,6 +390,7 @@ const ChatList = memo<ChatListProps>(
               itemContent={itemContent ?? defaultItemContent}
               messageDeepLink={resolvedMessageDeepLink}
               paging={paging}
+              printable={printable}
             />
           </BackgroundRunHintContext>
         </MessageActionProvider>

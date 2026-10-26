@@ -3,8 +3,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkModel } from '@/database/models/work';
-import { users, workspaceMembers, workspaces } from '@/database/schemas';
-import { verifyCanvasPreviewToken } from '@/server/services/canvas/serve';
+import { agents, users, workspaceMembers, workspaces } from '@/database/schemas';
 
 import { canvasRouter } from '../canvas';
 
@@ -20,6 +19,9 @@ vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
 
 const publishing = vi.hoisted(() => ({
   enabled: true,
+  runtime: vi.fn(
+    async () => 'https://static.test/canvas-runtime/v1/' + 'a'.repeat(64) + '/canvas-runtime.js',
+  ),
   publish: vi.fn(async (_params: any) => ({
     deploymentId: 'dep_1',
     url: 'https://cost.lobehub.sites',
@@ -27,11 +29,25 @@ const publishing = vi.hoisted(() => ({
 }));
 
 vi.mock('@/business/server/canvasPublish', () => ({
+  getCanvasPublishRuntimeUrl: publishing.runtime,
   isCanvasPublishEnabled: () => publishing.enabled,
   publishCanvasSite: publishing.publish,
 }));
 
 const committed = vi.hoisted(() => ({ calls: 0 }));
+const snapshots = vi.hoisted(() => ({
+  read: vi.fn(async (key: string, owner: string) => ({
+    entry: 'index.html',
+    files: [
+      {
+        path: 'index.html',
+        content: `${owner}:${key}`,
+        contentType: 'text/html',
+        encoding: 'utf8',
+      },
+    ],
+  })),
+}));
 
 vi.mock('@/server/services/canvas', () => ({
   createCanvasStorageService: (_db: unknown, ownerId: string) => ({
@@ -50,6 +66,7 @@ vi.mock('@/server/services/canvas', () => ({
       };
     },
     ownerId,
+    readSnapshot: (key: string) => snapshots.read(key, ownerId),
     readFile: async () => ({
       bytes: new TextEncoder().encode('<html><head></head><body>hi</body></html>'),
       contentType: 'text/html; charset=utf-8',
@@ -100,7 +117,7 @@ beforeEach(async () => {
 });
 
 describe('canvasRouter.getVersion', () => {
-  it('returns the latest version with a signed preview URL for its manifest', async () => {
+  it('returns the latest version metadata', async () => {
     const result = await caller().getVersion({ canvasId: 'cvs_1' });
 
     expect(result).toMatchObject({
@@ -110,26 +127,18 @@ describe('canvasRouter.getVersion', () => {
       title: 'Cost report',
       version: 2,
     });
-    const token = result!.previewUrl.split('/')[2];
-    expect(verifyCanvasPreviewToken(token)).toMatchObject({
-      manifestKey: metadata('b').manifestKey,
-      userId,
-    });
-    expect(result!.runtimeUrl).toBe('/canvas-runtime/v1/canvas-runtime.js');
-    expect(result!.previewUrl).toBe(`/canvas-preview/${token}/index.html`);
   });
 
   it('returns a pinned version', async () => {
     const result = await caller().getVersion({ canvasId: 'cvs_1', version: 1 });
 
     expect(result).toMatchObject({ latestVersion: 2, version: 1 });
-    expect(verifyCanvasPreviewToken(result!.previewUrl.split('/')[2])?.manifestKey).toBe(
-      metadata('a').manifestKey,
-    );
+    expect(result!.metadata.manifestKey).toBe(metadata('a').manifestKey);
   });
 
-  it('signs a teammate preview with the owner so the owner-scoped manifest resolves', async () => {
+  it('loads a canvas created by a public agent for a teammate', async () => {
     const workspaceId = 'canvas-router-ws';
+    const agentId = 'canvas-router-public-agent';
     await serverDB
       .insert(workspaces)
       .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
@@ -137,29 +146,51 @@ describe('canvasRouter.getVersion', () => {
       { role: 'owner', userId, workspaceId },
       { role: 'editor', userId: 'stranger', workspaceId },
     ]);
+    await serverDB.insert(agents).values({
+      id: agentId,
+      userId,
+      visibility: 'public',
+      workspaceId,
+    });
     await new WorkModel(serverDB, userId, workspaceId).registerCanvas({
+      agentId,
       canvasId: 'cvs_ws',
       metadata: metadata('ws'),
       title: 'Shared',
       toolCallId: 'call-ws',
       toolIdentifier: 'lobe-canvas',
       toolName: 'createCanvas',
-      visibility: 'public',
     });
 
     const result = await canvasRouter
       .createCaller({ serverDB, userId: 'stranger', workspaceId } as any)
-      .getVersion({ canvasId: 'cvs_ws' });
+      .getProject({ canvasId: 'cvs_ws', version: 1 });
 
-    expect(verifyCanvasPreviewToken(result!.previewUrl.split('/')[2])).toMatchObject({
-      userId,
-      workspaceId,
-    });
+    expect(result.files[0].content).toBe(`${userId}:${metadata('ws').manifestKey}`);
   });
 
   it('returns null for another user or a missing version', async () => {
     expect(await caller('stranger').getVersion({ canvasId: 'cvs_1' })).toBeNull();
     expect(await caller().getVersion({ canvasId: 'cvs_1', version: 9 })).toBeNull();
+  });
+});
+
+describe('canvasRouter.getProject', () => {
+  it('returns the requested immutable snapshot through authenticated access', async () => {
+    const result = await caller().getProject({ canvasId: 'cvs_1', version: 1 });
+    expect(result).toMatchObject({
+      entry: 'index.html',
+      files: [{ content: `${userId}:${metadata('a').manifestKey}` }],
+    });
+  });
+
+  it('refuses another user and a version outside the canvas', async () => {
+    snapshots.read.mockClear();
+    await expect(
+      caller('stranger').getProject({ canvasId: 'cvs_1', version: 1 }),
+    ).rejects.toThrow();
+    await expect(caller().getProject({ canvasId: 'cvs_1', version: 99 })).rejects.toThrow();
+    expect(snapshots.read).not.toHaveBeenCalled();
   });
 });
 
@@ -184,7 +215,7 @@ describe('canvasRouter.publish', () => {
       userId,
     });
     expect(publishing.publish.mock.calls[0][0].bundle.html).toContain(
-      'https://cdn.test/canvas-runtime/v1/canvas-runtime.js',
+      'https://static.test/canvas-runtime/v1/' + 'a'.repeat(64) + '/canvas-runtime.js',
     );
     expect(publishing.publish.mock.calls[1][0].deploymentId).toBe('dep_1');
     expect(await caller().getVersion({ canvasId: 'cvs_1' })).toMatchObject({
@@ -192,6 +223,16 @@ describe('canvasRouter.publish', () => {
       publishedUrl: 'https://cost.lobehub.sites',
       publishedVersion: 2,
     });
+  });
+
+  it('reports an unavailable publication runtime without publishing or exposing the fetch error', async () => {
+    publishing.runtime.mockRejectedValueOnce(new Error('private upstream failure'));
+    await expect(caller().publish({ canvasId: 'cvs_1' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'The publication host has no compatible Canvas runtime',
+    });
+    expect(publishing.publish).not.toHaveBeenCalled();
+    expect((await caller().getVersion({ canvasId: 'cvs_1' }))?.publishedVersion).toBeNull();
   });
 
   it('refuses when publishing is unavailable or the canvas is not visible', async () => {

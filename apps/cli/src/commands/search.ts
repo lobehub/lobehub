@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getToolsTrpcClient, getTrpcClient } from '../api/client';
 import { outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, searchResultPath, withUrl, withUrls } from './resourceUrl';
 
 const SEARCH_TYPES = [
   'agent',
@@ -17,6 +18,8 @@ const SEARCH_TYPES = [
   'plugin',
   'communityAgent',
   'knowledgeBase',
+  'task',
+  'goal',
 ] as const;
 
 type SearchType = (typeof SEARCH_TYPES)[number];
@@ -51,7 +54,7 @@ export function registerSearchCommand(program: Command) {
     )
     .option(
       '-T, --time-range <range>',
-      'Time range filter (e.g. day, week, month, year, requires --web)',
+      'Time range filter (e.g. day, week, month, year, requires --web; for local history use `recall --since`)',
     )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
@@ -118,15 +121,30 @@ async function localSearch(
 
   const client = await getTrpcClient();
 
-  const input: { limitPerType?: number; query: string; type?: SearchType } = { query };
+  const input: { includeGoals?: boolean; limitPerType?: number; query: string; type?: SearchType } =
+    { query };
   if (options.type) input.type = options.type as SearchType;
+  // Goals are opt-in on untyped searches (the web command menu cannot render them yet).
+  else input.includeGoals = true;
   if (options.limit) input.limitPerType = Number.parseInt(options.limit, 10);
 
   const result = await client.search.query.query(input);
 
   if (options.json !== undefined) {
     const fields = typeof options.json === 'string' ? options.json : undefined;
-    outputJson(result, fields);
+    const toUrl = await resolveUrlBuilder(client);
+    const link = (items: any[]) => withUrls(items, toUrl, searchResultPath);
+    outputJson(
+      Array.isArray(result)
+        ? link(result)
+        : Object.fromEntries(
+            Object.entries(result as Record<string, unknown>).map(([type, items]) => [
+              type,
+              Array.isArray(items) ? link(items) : items,
+            ]),
+          ),
+      fields,
+    );
     return;
   }
 
@@ -306,7 +324,10 @@ async function localView(target: string, options: { json?: string | boolean }) {
 
   if (options.json !== undefined) {
     const fields = typeof options.json === 'string' ? options.json : undefined;
-    outputJson(result, fields);
+    outputJson(
+      withUrl(result, await resolveUrlBuilder(client), searchResultPath({ ...result, id, type })),
+      fields,
+    );
     return;
   }
 

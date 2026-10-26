@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildCanvasPublishBundle, resolveCanvasPublicRuntimeUrl } from '../publish';
 import type { CanvasStorageService } from '../storage';
@@ -54,16 +54,34 @@ describe('buildCanvasPublishBundle', () => {
 });
 
 describe('resolveCanvasPublicRuntimeUrl', () => {
-  it('needs an absolute runtime URL because published sites live on another origin', () => {
-    expect(resolveCanvasPublicRuntimeUrl(1, { appUrl: 'https://app.test/' })).toBe(
-      'https://app.test/canvas-runtime/v1/canvas-runtime.js',
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('pins a published page to the immutable runtime revision hosted by Market', async () => {
+    const revision = 'a'.repeat(64);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ major: 1, revision })),
     );
-    expect(
-      resolveCanvasPublicRuntimeUrl(1, {
-        appUrl: 'https://app.test',
-        baseUrl: 'https://cdn.test/rt/',
-      }),
-    ).toBe('https://cdn.test/rt/v1/canvas-runtime.js');
-    expect(resolveCanvasPublicRuntimeUrl(1, {})).toBeUndefined();
+    expect(await resolveCanvasPublicRuntimeUrl(1, 'https://static.test/canvas-runtime/')).toBe(
+      `https://static.test/canvas-runtime/v1/${revision}/canvas-runtime.js`,
+    );
+    expect(await resolveCanvasPublicRuntimeUrl(1)).toBeUndefined();
+  });
+
+  it('refuses a missing or incompatible runtime release before publishing a broken site', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('missing', { status: 404 })),
+    );
+    await expect(
+      resolveCanvasPublicRuntimeUrl(1, 'https://static.test/canvas-runtime'),
+    ).rejects.toThrow();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ major: 2, revision: '../bad' })),
+    );
+    await expect(
+      resolveCanvasPublicRuntimeUrl(1, 'https://static.test/canvas-runtime'),
+    ).rejects.toThrow();
   });
 });

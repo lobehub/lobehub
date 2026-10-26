@@ -1,12 +1,16 @@
+import { DEFAULT_SANDBOX_DRIVE, type SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { TRPCError } from '@trpc/server';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
+import { TopicModel } from '@/database/models/topic';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
-import { resolveSandboxStorageClaim } from '@/server/services/sandbox';
+import { createDriveAccess, resolveSandboxStorageClaim } from '@/server/services/sandbox';
 import { SandboxStorageFilesError } from '@/server/services/sandbox/storageFiles';
+
+import { driveSchema } from './schemas';
 
 /**
  * Statuses the execution plane uses deliberately, each carrying something the
@@ -16,7 +20,7 @@ import { SandboxStorageFilesError } from '@/server/services/sandbox/storageFiles
  * environment. Collapsing it into a generic upstream failure would replace the
  * only actionable message with one that suggests the product is broken.
  */
-const WORKSPACE_ERROR_CODES: Record<number, TRPCError['code']> = {
+export const WORKSPACE_ERROR_CODES: Record<number, TRPCError['code']> = {
   400: 'BAD_REQUEST',
   403: 'FORBIDDEN',
   404: 'NOT_FOUND',
@@ -42,14 +46,18 @@ export const mapStorageError = (error: unknown): never => {
 };
 
 /**
- * Resolves the caller's sandbox-storage claim: which directory on the volume
- * they are entitled to and how large it may be.
+ * Resolves the caller's sandbox-storage claim for the drive the call names:
+ * which directory on the volume they are entitled to and how large it may be.
  *
  * It reads `ctx.workspaceId`, but that is the TEAM workspace, and it is read
- * only to decide whose storage this is — a member inside a team gets the
- * team's shared directory, otherwise their personal one. The claim itself has
- * nothing to do with the team workspace, which is why neither this nor
- * anything built on it is named after one.
+ * only to decide whose storage this is — inside a team the public drive or
+ * the member's personal one, otherwise their personal account's. The claim
+ * itself has nothing to do with the team workspace, which is why neither this
+ * nor anything built on it is named after one.
+ *
+ * A call that names no drive but names a topic addresses the topic's: the
+ * working panel lists the conversation's own folder, and that folder is on
+ * the drive the conversation picked.
  *
  * The caller is always acting as themselves here — a signed-in user browsing
  * their own storage, not an agent run executing under someone else's identity
@@ -58,17 +66,38 @@ export const mapStorageError = (error: unknown): never => {
 export const storageClaimProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
+  const raw = (await opts.getRawInput()) as { drive?: unknown; topicId?: unknown } | undefined;
 
-  const claim = await resolveSandboxStorageClaim({
-    isShareVisitorRun: false,
+  let drive: SandboxDrive = workspaceId ? DEFAULT_SANDBOX_DRIVE : 'personal';
+  const named = driveSchema.safeParse(raw?.drive);
+  if (workspaceId && named.success && named.data) {
+    drive = named.data;
+  } else if (workspaceId && typeof raw?.topicId === 'string' && raw.topicId) {
+    // A lookup that fails leaves the call on the public drive, the default a
+    // topic without a drive of its own means anyway.
+    try {
+      const topic = await new TopicModel(ctx.serverDB, ctx.userId, workspaceId).findById(
+        raw.topicId,
+      );
+      if (topic?.metadata?.sandboxDrive === 'personal') drive = 'personal';
+    } catch {
+      /* keep the default */
+    }
+  }
+
+  const drives = createDriveAccess({
+    resolveClaim: resolveSandboxStorageClaim,
     serverDB: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
   });
+  const claim = await drives.claim(drive);
 
   return opts.next({
     ctx: {
       claim,
+      drive,
+      drives,
       marketService: new MarketService({
         userInfo: { sandboxStorage: claim, userId: ctx.userId, workspaceId },
       }),
@@ -130,3 +159,5 @@ export const instanceProcedure = environmentProcedure.use(async (opts) => {
     },
   });
 });
+
+export type SandboxStorageClient = ReturnType<MarketService['getSandboxStorageClient']>;

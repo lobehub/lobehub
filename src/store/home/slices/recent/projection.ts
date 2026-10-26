@@ -1,6 +1,7 @@
 import type { RecentItem } from '@lobechat/types';
 
 import { defineReplica } from '@/libs/replica';
+import type { fileService } from '@/services/file';
 
 export interface RecentListParams {
   limit: number;
@@ -21,86 +22,63 @@ export const recentListResource = defineReplica<RecentListParams, RecentItem[]>(
   version: 1,
 });
 
-export interface ResourceRecentParams {
-  /** Workspace visibility filter; personal mode sends none. */
-  visibility?: 'private' | 'public';
+export type DocsHomeTab = 'mine' | 'recent' | 'shared';
+
+export interface DocsHomeParams {
+  tab: DocsHomeTab;
 }
 
-/** One resource-home recents query per visibility; the cache scope already carries the workspace. */
-export const resourceRecentKey = ({ visibility }: ResourceRecentParams): string =>
-  visibility ?? 'all';
+/** Rows the Docs home list shows; it fetches one head page per tab. */
+export const DOCS_HOME_LIMIT = 50;
 
-/** What a resource-home "Recent files" card renders. */
-export interface RecentFileCard {
+/** One row of the Docs home list: a page or an uploaded file. */
+export interface DocsHomeRow {
   createdAt: Date | string;
-  fileType?: string;
-  id: string;
-  name: string;
-  url?: string;
-}
-
-/** What a resource-home "Recent pages" card renders. */
-export interface RecentPageCard {
   emoji?: string;
+  fileType: string;
   id: string;
+  kind: 'file' | 'page';
+  /** Knowledge bases the row is filed into; empty for standalone rows. */
+  knowledgeBaseIds: string[];
   name: string;
+  owner?: { avatar?: string | null; id: string; name: string } | null;
   updatedAt: Date | string;
+  userId?: string | null;
 }
 
-export const toRecentFileCard = ({
-  createdAt,
-  fileType,
-  id,
-  name,
-  url,
-}: RecentFileCard): RecentFileCard => ({ createdAt, fileType, id, name, url });
+type DocsHomeItem = Awaited<ReturnType<typeof fileService.getDocsHomeItems>>[number];
 
-export const toRecentPageCard = ({
-  id,
-  metadata,
-  name,
-  updatedAt,
-}: {
-  id: string;
-  metadata?: Record<string, any> | null;
-  name: string;
-  updatedAt: Date | string;
-}): RecentPageCard => {
-  const emoji = (metadata as { emoji?: unknown } | null | undefined)?.emoji;
-  return { emoji: typeof emoji === 'string' ? emoji : undefined, id, name, updatedAt };
+/** Server row → list row. Slim on purpose: the list persists to localStorage. */
+export const toDocsHomeRow = (item: DocsHomeItem): DocsHomeRow => {
+  const emoji = (item.metadata as { emoji?: unknown } | null | undefined)?.emoji;
+  const uploader = item.uploader;
+  return {
+    createdAt: item.createdAt,
+    emoji: typeof emoji === 'string' ? emoji : undefined,
+    fileType: item.fileType,
+    id: item.id,
+    knowledgeBaseIds: item.knowledgeBaseIds ?? [],
+    kind: item.sourceType === 'document' ? 'page' : 'file',
+    name: item.name,
+    owner: uploader
+      ? {
+          avatar: uploader.avatar,
+          id: uploader.id,
+          name: uploader.fullName || uploader.username || uploader.id.slice(0, 8),
+        }
+      : null,
+    updatedAt: item.updatedAt,
+    userId: item.userId,
+  };
 };
 
 /**
- * A URL that carries a query string (a presigned storage URL in local dev) is a
- * short-lived credential; the stable `/f/:id` proxy URL production returns has none.
+ * The Docs home list, one entry per tab. localStorage keeps the first frame
+ * instant; the cache scope already carries the workspace.
  */
-const isCredentialUrl = (url: string): boolean => {
-  try {
-    return new URL(url, 'http://localhost').search !== '';
-  } catch {
-    return true;
-  }
-};
-
-/** Persist file cards without credential-bearing URLs; the card falls back to its icon. */
-export const toPersistedRecentFiles = (cards: RecentFileCard[]): RecentFileCard[] =>
-  cards.map((card) => (card.url && isCredentialUrl(card.url) ? { ...card, url: undefined } : card));
-
-/**
- * Resource home "Recent files". Slim cards only (no chunk / embedding status),
- * localStorage so the section paints the last rows on the first frame.
- */
-export const recentFileListResource = defineReplica<ResourceRecentParams, RecentFileCard[]>({
-  key: resourceRecentKey,
-  name: 'resourceRecentFiles',
-  storage: 'localStorage',
-  version: 1,
-});
-
-/** Resource home "Recent pages": slim cards, never the page body. */
-export const recentPageListResource = defineReplica<ResourceRecentParams, RecentPageCard[]>({
-  key: resourceRecentKey,
-  name: 'resourceRecentPages',
+export const docsHomeListResource = defineReplica<DocsHomeParams, DocsHomeRow[]>({
+  key: ({ tab }) => tab,
+  name: 'docsHomeList',
   storage: 'localStorage',
   version: 1,
 });

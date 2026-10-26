@@ -90,6 +90,7 @@ describe('project directory queries', () => {
       id: legacy.id,
       instanceId: null,
       path: base.path,
+      runnable: false,
     });
     await expect(model.resolve(legacy.id)).rejects.toThrow('Link this directory');
     expect(await model.listTopics(legacy.id)).toEqual([]);
@@ -104,6 +105,33 @@ describe('project directory queries', () => {
       .where(eq(projectWorkingDirectories.id, directory.id));
     expect(await model.listTopics(directory.id)).toHaveLength(1);
     await expect(model.resolve(directory.id)).rejects.toThrow('read-only');
+  });
+
+  it('marks a directory runnable only while resolve would accept it', async () => {
+    const directory = await repo.bind(base);
+    const runnable = async () =>
+      (await model.list()).find((row) => row.id === directory.id)?.runnable;
+    expect(await runnable()).toBe(true);
+    await expect(model.resolve(directory.id)).resolves.toBeTruthy();
+
+    // A disabled project-environment link keeps the directory listed, but a
+    // start there would be refused, so the row is not runnable.
+    await db
+      .update(projectEnvironments)
+      .set({ enabled: false })
+      .where(eq(projectEnvironments.projectId, base.projectId));
+    expect(await runnable()).toBe(false);
+    await expect(model.resolve(directory.id)).rejects.toThrow('disabled');
+
+    await db
+      .update(projectEnvironments)
+      .set({ enabled: true })
+      .where(eq(projectEnvironments.projectId, base.projectId));
+    await db
+      .update(projectWorkingDirectories)
+      .set({ permission: 'readOnly' })
+      .where(eq(projectWorkingDirectories.id, directory.id));
+    expect(await runnable()).toBe(false);
   });
 
   it('does not expose another user’s directories', async () => {

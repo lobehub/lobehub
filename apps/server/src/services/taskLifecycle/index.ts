@@ -33,8 +33,10 @@ import {
   notifyScheduledTaskFailed,
 } from '@/business/server/task/notifyScheduledTaskResult';
 import { notifyTaskRunFailed } from '@/business/server/task/notifyTaskRunFailed';
+import { onTaskRunCompleted } from '@/business/server/task/onTaskRunCompleted';
 import { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
+import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -47,6 +49,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
+import { RUN_REPORT_LOOKBACK, selectEarlierRunReport } from './runReport';
 import {
   isTrivialAssistantContent,
   selectBriefPriority,
@@ -102,6 +105,7 @@ export interface TopicCompleteParams {
 export class TaskLifecycleService {
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
+  private messageModel: MessageModel;
   private systemAgentService: SystemAgentService;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
@@ -117,6 +121,7 @@ export class TaskLifecycleService {
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.briefModel = new BriefModel(db, userId, workspaceId);
+    this.messageModel = new MessageModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
     this.systemAgentService = new SystemAgentService(db, userId, workspaceId);
   }
@@ -155,23 +160,27 @@ export class TaskLifecycleService {
       if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'completed');
 
       // 2. Generate handoff summary + topic title (best-effort LLM synthesis).
+      //    It also says which output the run delivered: its earlier report when
+      //    the last message is only a trailing remark after it.
+      let runOutput = lastAssistantContent;
       if (topicId && lastAssistantContent) {
-        await this.generateHandoff(
-          taskId,
-          taskIdentifier,
-          topicId,
-          lastAssistantContent,
-          currentTask,
-        );
+        runOutput =
+          (await this.generateHandoff(
+            taskId,
+            taskIdentifier,
+            topicId,
+            lastAssistantContent,
+            currentTask,
+          )) ?? lastAssistantContent;
       }
 
-      // 2b. Persist the raw last message as the run card's result.
+      // 2b. Persist the run's output as the run card's result.
       //     Done independently of (and after) generateHandoff via a jsonb_set
       //     patch, so `handoff.content` is written even when the summary LLM in
       //     step 2 throws — otherwise a completed run would show no result.
-      if (topicId && lastAssistantContent) {
+      if (topicId && runOutput) {
         try {
-          await this.taskTopicModel.updateHandoffContent(taskId, topicId, lastAssistantContent);
+          await this.taskTopicModel.updateHandoffContent(taskId, topicId, runOutput);
         } catch (e) {
           console.warn('[TaskLifecycle] persisting run last message failed:', e);
         }
@@ -329,6 +338,29 @@ export class TaskLifecycleService {
             taskIdentifier,
             error,
           ),
+        );
+      }
+
+      // 7. Run-completed follow-up through the `@/business` slot (default impl
+      //    is a no-op), after the post-run transition above. Awaited so it
+      //    finishes inside this callback, which in production is a queued
+      //    workflow request; a failure is logged and never fails the lifecycle.
+      try {
+        await onTaskRunCompleted({
+          agentId: currentTask?.assigneeAgentId ?? undefined,
+          lastAssistantContent,
+          operationId: params.operationId,
+          taskId,
+          taskIdentifier,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      } catch (error) {
+        console.error(
+          '[TaskLifecycle] run-completed follow-up failed for task=%s (non-fatal):',
+          taskIdentifier,
+          error,
         );
       }
     } else if (reason === 'error') {
@@ -738,6 +770,10 @@ export class TaskLifecycleService {
   /**
    * Generate handoff summary and update topic title via LLM.
    * Writes to task_topics handoff fields + updates topic title.
+   *
+   * Returns the run's earlier report when the model judged the last message to
+   * be only a trailing remark after it, so the caller persists the report as
+   * the run's output. Returns undefined otherwise, or when synthesis failed.
    */
   private async generateHandoff(
     taskId: string,
@@ -745,14 +781,16 @@ export class TaskLifecycleService {
     topicId: string,
     lastAssistantContent: string,
     currentTask: any,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     try {
-      const [{ model, provider }, responseLanguage] = await Promise.all([
+      const [{ model, provider }, responseLanguage, earlierReport] = await Promise.all([
         (this.systemAgentService as any).getTaskModelConfig('topic'),
         this.systemAgentService.getUserLocale(),
+        this.findEarlierRunReport(topicId, lastAssistantContent),
       ]);
 
       const payload = chainTaskTopicHandoff({
+        earlierReport,
         lastAssistantContent,
         responseLanguage,
         taskInstruction: currentTask?.instruction || '',
@@ -781,7 +819,8 @@ export class TaskLifecycleService {
         },
       );
 
-      const handoff = result as {
+      const { finalIsTrailingRemark, ...handoff } = result as {
+        finalIsTrailingRemark?: boolean;
         keyFindings?: string[];
         nextAction?: string;
         summary?: string;
@@ -799,8 +838,29 @@ export class TaskLifecycleService {
       await this.taskTopicModel.updateHandoff(taskId, topicId, handoff);
 
       log('handoff generated for topic %s: title=%s', topicId, handoff.title);
+      if (earlierReport && finalIsTrailingRemark) return earlierReport;
     } catch (e) {
       console.warn('[TaskLifecycle] handoff generation failed:', e);
+    }
+  }
+
+  /**
+   * The run's earlier report, a candidate for its real output when its last
+   * message may only be a trailing remark. Best-effort: a failed read leaves
+   * the handoff to the last message alone.
+   */
+  private async findEarlierRunReport(
+    topicId: string,
+    lastAssistantContent: string,
+  ): Promise<string | undefined> {
+    try {
+      const replies = await this.messageModel.listLatestTurnAssistantContents({
+        limit: RUN_REPORT_LOOKBACK,
+        topicId,
+      });
+      return selectEarlierRunReport(replies, lastAssistantContent);
+    } catch (e) {
+      log('earlier run report lookup failed for topic %s (non-fatal): %O', topicId, e);
     }
   }
 

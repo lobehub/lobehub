@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { ModelProvider } from 'model-bank';
 import { Ollama } from 'ollama/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +10,8 @@ import * as debugStreamModule from '../../utils/debugStream';
 import { LobeOllamaAI, params } from './index';
 
 vi.mock('ollama/browser');
-vi.mock('@lobechat/utils', async () => {
-  const actual = await vi.importActual('@lobechat/utils');
+vi.mock('../../utils/imageToBase64', async () => {
+  const actual = await vi.importActual('../../utils/imageToBase64');
   return {
     ...actual,
     imageUrlToBase64: vi.fn(),

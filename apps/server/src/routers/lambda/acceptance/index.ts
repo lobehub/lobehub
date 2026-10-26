@@ -1,6 +1,7 @@
 import { mergeRouters } from '@/libs/trpc/lambda';
 
 import { bundleRouter } from './bundle';
+import { collaborationRouter } from './collaboration';
 import { deliveryLinksRouter } from './deliveryLinks';
 import { flowRouter } from './flow';
 import { listManagementRouter } from './listManagement';
@@ -15,5 +16,6 @@ export const acceptanceRouter = mergeRouters(
   deliveryLinksRouter,
   subjectRouter,
   bundleRouter,
+  collaborationRouter,
   listManagementRouter,
 );

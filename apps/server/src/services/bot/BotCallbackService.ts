@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
+import type {
+  BotNoReplyResult,
+  BotWakeKind,
+  ChatErrorBudgetContext,
+  ChatErrorHeterogeneousContext,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessengerPlatform } from '@/config/messenger';
@@ -19,6 +24,8 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
+import { detectNoReply } from './noReply';
+import { recordNoReplyLabel } from './noReplyLabel';
 import type {
   BotMessageAttachment,
   BotReplyLocale,
@@ -34,6 +41,7 @@ import {
   platformRegistry,
   resolveBotProviderConfig,
   shouldApplyReaction,
+  THINKING_REACTION_EMOJI,
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
@@ -43,6 +51,7 @@ import {
   renderStopped,
   splitMessage,
 } from './replyTemplate';
+import { recordWakeRunOutcome } from './wake/scheduler';
 
 const log = debug('lobe-server:bot:callback');
 
@@ -142,6 +151,8 @@ export interface BotCallbackBody {
   userId?: string;
   userMessageId?: string;
   userPrompt?: string;
+  /** `followup`: the agent may end in silence and feedback is shown only once it acts. */
+  wakeKind?: BotWakeKind;
   workspaceId?: string;
 }
 
@@ -188,6 +199,12 @@ export class BotCallbackService {
     const reactionMode = normalizeBotReactionMode(settings.reactionMode);
 
     if (type === 'step') {
+      // A follow-up wake held its feedback back; the agent going on to another step means it is
+      // acting, so show it now. (The placeholder message is not posted here: a callback cannot
+      // delete it again if the run still ends in silence, so the reply goes out as a new message.)
+      if (body.wakeKind === 'followup' && body.shouldContinue) {
+        await this.revealFollowupFeedback(body, messenger, client, platform, reactionMode);
+      }
       if (canEdit && progressMessageId && settings.displayToolCalls === true) {
         await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
       }
@@ -209,7 +226,7 @@ export class BotCallbackService {
       // Stop typing on the gateway
       this.stopGatewayTyping(connectionId, platformThreadId);
 
-      await this.handleCompletion(
+      const noReply = await this.handleCompletion(
         body,
         messenger,
         progressMessageId ?? '',
@@ -232,10 +249,22 @@ export class BotCallbackService {
       // In queue mode, the bridge handler's finally block skips this cleanup
       // to keep the thread marked active while the agent runs on the job queue.
       AgentBridgeService.clearActiveThread(platformThreadId);
-      this.summarizeTopicTitle(
-        { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
-        messenger,
+      // Bookkeeping for the bot-wake pipeline (follow-up window, silent-wake budget, scheduler).
+      // Best-effort and a no-op unless the bot has bot-wake enabled: it never affects delivery.
+      await this.recordWakeOutcome(
+        body,
+        settings,
+        platform,
+        !noReply && body.reason !== 'error' && body.reason !== 'interrupted',
       );
+      if (noReply) {
+        await this.labelNoReply(body, noReply, platform, workspaceId);
+      } else {
+        this.summarizeTopicTitle(
+          { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
+          messenger,
+        );
+      }
       // The topic is idle now — replay any follow-up the bridge parked while
       // this run was executing (WeChat "one image + one sentence" arrives as
       // two messages; the second used to fail the topic-start reservation).
@@ -247,6 +276,85 @@ export class BotCallbackService {
         body.operationId ?? randomUUID(),
       );
     }
+  }
+
+  /**
+   * Shows what a follow-up wake held back (see `wakeKind`): the thinking reaction and typing.
+   * Idempotent per run: the reaction is only placed while none is tracked for the message.
+   */
+  private async revealFollowupFeedback(
+    body: BotCallbackBody,
+    messenger: PlatformMessenger,
+    client: PlatformClient,
+    platform: string,
+    reactionMode: ReturnType<typeof normalizeBotReactionMode>,
+  ): Promise<void> {
+    const { applicationId, platformThreadId, userMessageId } = body;
+
+    if (userMessageId && shouldApplyReaction(reactionMode, 'thinking')) {
+      const tracked = await getReactionState(platform, applicationId, userMessageId);
+      if (!tracked) {
+        const reactionThreadId =
+          client.resolveReactionThreadId?.(platformThreadId, userMessageId) ?? platformThreadId;
+        try {
+          await client
+            .getMessenger(reactionThreadId)
+            .replaceReaction?.(userMessageId, null, THINKING_REACTION_EMOJI);
+          await saveReactionState(platform, applicationId, userMessageId, {
+            emoji: THINKING_REACTION_EMOJI,
+            reactionThreadId,
+          });
+        } catch (error) {
+          log('revealFollowupFeedback: reaction failed: %O', error);
+        }
+      }
+    }
+
+    try {
+      await messenger.triggerTyping?.();
+    } catch (error) {
+      log('revealFollowupFeedback: typing failed: %O', error);
+    }
+  }
+
+  private async recordWakeOutcome(
+    body: BotCallbackBody,
+    settings: Record<string, unknown> | null | undefined,
+    platform: string,
+    spoke: boolean,
+  ): Promise<void> {
+    try {
+      await recordWakeRunOutcome({
+        applicationId: body.applicationId,
+        platform,
+        platformThreadId: body.platformThreadId,
+        settings,
+        spoke,
+        wakeKind: body.wakeKind,
+      });
+    } catch (error) {
+      log('recordWakeOutcome failed: %O', error);
+    }
+  }
+
+  private async labelNoReply(
+    body: BotCallbackBody,
+    noReply: BotNoReplyResult,
+    platform: string,
+    workspaceId?: string | null,
+  ): Promise<void> {
+    if (!body.userId || !body.userMessageId) return;
+
+    await recordNoReplyLabel(this.db, {
+      applicationId: body.applicationId,
+      noReply,
+      operationId: body.operationId,
+      platform,
+      platformThreadId: body.platformThreadId,
+      userId: body.userId,
+      userMessageId: body.userMessageId,
+      workspaceId: body.workspaceId ?? workspaceId ?? undefined,
+    });
   }
 
   private async replayDeferredMessages(
@@ -483,7 +591,7 @@ export class BotCallbackService {
     strictDelivery = false,
     deliveredChunkCount = 0,
     onChunkDelivered?: (deliveredChunkCount: number) => Promise<void>,
-  ): Promise<void> {
+  ): Promise<BotNoReplyResult | undefined> {
     const {
       reason,
       lastAssistantContent,
@@ -538,6 +646,23 @@ export class BotCallbackService {
         log('handleCompletion: failed to send interrupted message: %O', error);
       }
       return;
+    }
+
+    // A follow-up wake the agent chose not to answer is a result, not a fault: nothing is posted,
+    // and neither the error log nor `strictDelivery`'s throw applies.
+    const noReply = detectNoReply({
+      content: lastAssistantContent,
+      hasAttachments: !!attachments?.length,
+      wakeKind: body.wakeKind,
+    });
+    if (noReply) {
+      log(
+        'handleCompletion: no_reply reason=%s, operationId=%s, thread=%s',
+        noReply.reason,
+        operationId,
+        body.platformThreadId,
+      );
+      return noReply;
     }
 
     // Skip only when there's nothing at all to send. An image/file-only reply

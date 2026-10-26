@@ -5,21 +5,34 @@ import {
   isCanvasTextPath,
 } from '@lobechat/canvas';
 import type { CanvasPublishBundle, CanvasPublishFile } from '@lobechat/types';
+import { z } from 'zod';
 
-import { CANVAS_RUNTIME_FILE } from './runtimeUrl';
-import { injectCanvasRuntime } from './serve';
 import type { CanvasStorageService } from './storage';
 
-const isAbsoluteUrl = (value: string) => /^https?:\/\//.test(value);
-
-export const resolveCanvasPublicRuntimeUrl = (
+export const resolveCanvasPublicRuntimeUrl = async (
   major: number,
-  env: { appUrl?: string; baseUrl?: string },
-): string | undefined => {
-  const base = env.baseUrl?.replace(/\/$/, '');
-  if (base && isAbsoluteUrl(base)) return `${base}/v${major}/${CANVAS_RUNTIME_FILE}`;
-  if (!env.appUrl || !isAbsoluteUrl(env.appUrl)) return;
-  return new URL(`${base ?? '/canvas-runtime'}/v${major}/${CANVAS_RUNTIME_FILE}`, env.appUrl).href;
+  baseUrl?: string,
+): Promise<string | undefined> => {
+  if (!baseUrl || !/^https?:\/\//.test(baseUrl)) return;
+  const base = `${baseUrl.replace(/\/+$/, '')}/v${major}`;
+  const response = await fetch(`${base}/manifest.json`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`Canvas runtime v${major} has not been published`);
+  const manifest = z
+    .object({ major: z.literal(major), revision: z.string().regex(/^[\da-f]{64}$/) })
+    .parse(await response.json());
+  return `${base}/${manifest.revision}/canvas-runtime.js`;
+};
+
+const injectCanvasRuntime = (html: string, runtimeUrl: string) => {
+  const injection = `<script defer src="${runtimeUrl}"></script>`;
+  const head = /<head(?:\s[^>]*)?>/i.exec(html);
+  if (!head)
+    return `<!doctype html><html><head><meta charset="utf-8">${injection}</head><body>${html}</body></html>`;
+  const at = head.index + head[0].length;
+  return html.slice(0, at) + injection + html.slice(at);
 };
 
 export const buildCanvasPublishBundle = async (
@@ -37,7 +50,7 @@ export const buildCanvasPublishBundle = async (
     if (!file) throw new Error(`Canvas file ${path} is missing`);
 
     if (getCanvasFileExtension(path) === 'html') {
-      const page = injectCanvasRuntime(decoder.decode(file.bytes), { runtimeUrl });
+      const page = injectCanvasRuntime(decoder.decode(file.bytes), runtimeUrl);
       if (path === entry) html = page;
       else
         files.push({

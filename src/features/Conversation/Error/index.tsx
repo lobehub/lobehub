@@ -233,6 +233,7 @@ const getErrorAlertConfig = (
     case AgentRuntimeErrorType.ModelNotFound:
     case AgentRuntimeErrorType.QuotaLimitReached:
     case AgentRuntimeErrorType.ExceededContextWindow:
+    case AgentRuntimeErrorType.RequestBodyTooLarge:
     case AgentRuntimeErrorType.LocationNotSupportError: {
       return {
         type: 'secondary',
@@ -331,6 +332,10 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const conversationAgentId = useConversationStore(contextSelectors.agentId);
     const conversationTopicId = useConversationStore(contextSelectors.topicId);
     const isSharedTopic = useConversationStore((s) => !!s.context?.topicShareId);
+    // A static transcript (a render gallery, a preview, a conversation read
+    // through a grant) is held, never synced: nothing behind it could take the
+    // delete-and-regenerate, so it must not offer one.
+    const isStaticTranscript = useConversationStore((s) => s.transcriptSource === 'static');
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
@@ -359,7 +364,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // to retrying this message on our own, but only advertise it when that can
     // actually run: a block that isn't a top-level displayMessage, or one with no
     // parent user turn, would delete itself and regenerate nothing.
-    const canRetry = canCreate && (!!onRegenerate || !!ownParentId);
+    const canRetry = !isStaticTranscript && canCreate && (!!onRegenerate || !!ownParentId);
 
     const handleRetryAgentMessage = useCallback(() => {
       if (!canRetry) return;
@@ -584,7 +589,24 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         }
 
         case AgentRuntimeErrorType.ExceededContextWindow: {
-          return <ExceededContextWindowError id={data.id} />;
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+            />
+          );
+        }
+
+        case AgentRuntimeErrorType.RequestBodyTooLarge: {
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+              reason={'requestBodyTooLarge'}
+            />
+          );
         }
 
         case AgentRuntimeErrorType.NoOpenAIAPIKey: {

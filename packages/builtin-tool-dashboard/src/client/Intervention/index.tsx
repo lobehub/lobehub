@@ -60,11 +60,12 @@ const RequestPublishIntervention = memo<BuiltinInterventionProps<RequestPublishP
 RequestPublishIntervention.displayName = 'DashboardRequestPublishIntervention';
 
 /**
- * Shown only for drafts that declare connector credentials or network hosts:
- * the user approves running exactly this script with that access.
+ * Shown only for drafts that declare connector credentials or network hosts
+ * no standing grant covers: the user approves running exactly this script
+ * with that access, and may stop being asked for the same access.
  */
 const DryRunWidgetIntervention = memo<BuiltinInterventionProps<DryRunWidgetParams>>(
-  ({ args, onApprovalBlockedChange, onArgsChange }) => {
+  ({ args, onApprovalBlockedChange, onArgsChange, registerRememberApproval }) => {
     const pinVersion = useCallback(
       (versionId: string) => onArgsChange?.({ ...args, versionId }),
       [args, onArgsChange],
@@ -75,6 +76,7 @@ const DryRunWidgetIntervention = memo<BuiltinInterventionProps<DryRunWidgetParam
     return (
       <DashboardFeatureGate>
         <WidgetDryRunReview
+          registerRememberApproval={registerRememberApproval}
           versionId={args.versionId}
           widgetId={args.widgetId}
           onApprovalBlockedChange={onApprovalBlockedChange}

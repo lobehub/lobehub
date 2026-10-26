@@ -62,7 +62,18 @@ export const reviewGoalDelivery = async (
     // draft, or one a CLI-driven verification was appended past — and its
     // result-less items would otherwise each read as missing evidence and turn a
     // passing delivery into a rejection.
-    const confirmed = runs.filter((round) => !isDraftVerifyRun(round));
+    //
+    // A round opened after the one under review belongs to a later attempt that
+    // has not delivered yet. Task rounds confirm their plan as they open, so it
+    // would plan every check with no results and mark this delivery's evidence as
+    // carried forward — a passing delivery rejected for "current evidence" it had
+    // just submitted. Judge the chain up to the round that settled.
+    const reviewedRoundIndex = runs.find((round) => round.id === run.id)?.roundIndex;
+    const confirmed = runs.filter(
+      (round) =>
+        !isDraftVerifyRun(round) &&
+        (reviewedRoundIndex == null || (round.roundIndex ?? 0) <= reviewedRoundIndex),
+    );
     // A result filed under an id its round never planned surfaces as a row of its
     // own, required by default. No later round plans it, so the builder is never
     // asked to re-answer it and it is never flagged as carried forward — its

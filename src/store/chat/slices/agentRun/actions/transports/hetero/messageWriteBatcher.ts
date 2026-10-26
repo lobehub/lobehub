@@ -58,6 +58,8 @@ const mergeMessageUpdateValue = (
 export const createMessageWriteBatcher = (deps: {
   batchMutate?: (operations: MessageBatchOperation[]) => Promise<any>;
   createMessage: typeof messageService.createMessage;
+  /** Ids of rows whose create the server acknowledged. */
+  onCreated?: (ids: string[]) => void;
   updateMessage: typeof messageService.updateMessage;
   updateToolMessage: typeof messageService.updateToolMessage;
 }) => {
@@ -75,9 +77,17 @@ export const createMessageWriteBatcher = (deps: {
     operation.onFailure?.(error);
   };
 
+  const reportCreated = (succeeded: QueuedMessageWriteOperation[]) => {
+    const ids = succeeded.flatMap((operation) =>
+      operation.type === 'createMessage' && operation.message.id ? [operation.message.id] : [],
+    );
+    if (ids.length > 0) deps.onCreated?.(ids);
+  };
+
   const runIndividual = async (operation: QueuedMessageWriteOperation) => {
     if (operation.type === 'createMessage') {
       await deps.createMessage(operation.message);
+      reportCreated([operation]);
       return;
     }
 
@@ -108,6 +118,7 @@ export const createMessageWriteBatcher = (deps: {
         for (const index of failedIndexes) {
           notifyFailure(batch[index], result);
         }
+        reportCreated(batch.filter((_, index) => !failedIndexes.has(index)));
         return;
       } catch (err) {
         console.error('[HeterogeneousAgent] Failed to flush message write batch:', err);
