@@ -8,15 +8,12 @@ import { memo, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
-import { DOCUMENT_HISTORY_QUERY_LIST_LIMIT } from '@/const/documentHistory';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useEventCallback } from '@/hooks/useEventCallback';
-import { useClientDataSWR } from '@/libs/swr';
 import type {
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
-  ListHistoryOutput,
 } from '@/server/routers/lambda/_schema/documentHistory';
 import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
@@ -95,16 +92,10 @@ const HistoryPanel = memo(() => {
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const compareInstanceRef = useRef<ModalInstance | null>(null);
 
-  const { data, isLoading } = useClientDataSWR<ListHistoryOutput>(
-    documentId ? ['page-editor-document-history', documentId, lastUpdatedTime] : null,
-    async () =>
-      documentService.listDocumentHistory({
-        documentId: documentId!,
-        includeCurrent: true,
-        limit: DOCUMENT_HISTORY_QUERY_LIST_LIMIT,
-      }),
-    { keepPreviousData: true },
-  );
+  // Painted from the document store's history replica; a save re-reads it
+  // while the last list stays on screen.
+  const useFetchDocumentHistory = useDocumentStore((s) => s.useFetchDocumentHistory);
+  const { data, isLoading } = useFetchDocumentHistory(documentId, lastUpdatedTime);
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const historyItemsById = useMemo<Record<string, DocumentHistoryListItem>>(() => {

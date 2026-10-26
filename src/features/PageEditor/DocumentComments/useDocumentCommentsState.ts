@@ -1,16 +1,12 @@
 'use client';
 
-import type {
-  DocumentCommentAnchorItem,
-  DocumentCommentThread,
-  DocumentCommentThreadPage,
-} from '@lobechat/types';
+import type { DocumentCommentAnchorItem, DocumentCommentThread } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { type RefObject, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { documentCommentService } from '@/services/documentComment';
+import { documentCommentActions } from '@/store/documentComment';
 
 import { useDocumentCommentAnchors } from './anchor/useDocumentCommentAnchors';
 import {
@@ -21,22 +17,11 @@ import {
   useDocumentCommentThreads,
   useOptimisticDocumentComment,
 } from './hooks';
-import type { DocumentCommentSubmitInput, DocumentCommentUpdateHandler } from './optimistic';
-import {
-  appendOptimisticThread,
-  removeOptimisticThread,
-  replaceOptimisticThread,
-  replaceThreadComment,
-  updateThreadReplyCount,
-} from './optimistic';
+import type { DocumentCommentSubmitInput } from './optimistic';
 import {
   type DocumentCommentFocusMissReason,
   useDocumentCommentDeepLink,
 } from './useDocumentCommentDeepLink';
-
-type PageMutator = (
-  pages: DocumentCommentThreadPage[] | undefined,
-) => DocumentCommentThreadPage[] | undefined;
 
 export interface DocumentCommentsStateOptions {
   documentId: string;
@@ -53,12 +38,11 @@ export interface DocumentCommentsStateOptions {
 }
 
 /**
- * Everything the two comment surfaces share: the paged thread caches, the
- * optimistic write-through handlers, the deep-link landing and the anchor
- * resolution. Anchored roots and document-level roots are paged separately
- * (see `listThreads`' `anchored` filter) because they render in different
- * places; a write goes to whichever cache the comment belongs in, and a patch
- * that could apply to either is applied to both.
+ * Everything the two comment surfaces share: the root feeds, the write
+ * handlers, the deep-link landing and the anchor resolution. Anchored roots
+ * and document-level roots are separate replica feeds (see `listThreads`'
+ * `anchored` filter) because they render in different places; the store
+ * routes each write to the feed the comment belongs in.
  */
 export const useDocumentCommentsState = ({
   documentId,
@@ -80,142 +64,22 @@ export const useDocumentCommentsState = ({
   const anchorList = useDocumentCommentAnchorList(enabledDocumentId);
   const createOptimistic = useOptimisticDocumentComment();
   const { clearFocus, focus, focusRoot, focusThread } = useDocumentCommentDeepLink(documentId);
-  const reloadSummary = summary.mutate;
   const reloadAnchored = anchoredThreads.reload;
-  const reloadDocument = documentThreads.reload;
-  const mutateAnchored = anchoredThreads.mutate;
-  const mutateDocument = documentThreads.mutate;
-  const mutateAnchors = anchorList.mutate;
 
-  const mutateBoth = useCallback(
-    (mutator: PageMutator) =>
-      Promise.all([
-        mutateAnchored(mutator, { revalidate: false }),
-        mutateDocument(mutator, { revalidate: false }),
-      ]),
-    [mutateAnchored, mutateDocument],
-  );
-  const reloadThreads = useCallback(
-    () => Promise.all([reloadAnchored(), reloadDocument()]),
-    [reloadAnchored, reloadDocument],
-  );
-  const refresh = useCallback(async () => {
-    await Promise.all([reloadThreads(), reloadSummary(), mutateAnchors()]);
-  }, [mutateAnchors, reloadSummary, reloadThreads]);
-  const updateSummaryTotal = useCallback(
-    (delta: number) =>
-      reloadSummary(
-        (current) =>
-          current ? { ...current, total: Math.max(0, current.total + delta) } : current,
-        { revalidate: false },
-      ),
-    [reloadSummary],
-  );
-  const updateReplyCount = useCallback(
-    (rootCommentId: string, delta: number) =>
-      mutateBoth((pages) => updateThreadReplyCount(pages, rootCommentId, delta)),
-    [mutateBoth],
+  const refresh = useCallback(
+    () => documentCommentActions.revalidateDocument(documentId),
+    [documentId],
   );
   const handleCreate = useCallback(
     async ({ clientId, content, editorData, selectionAnchor }: DocumentCommentSubmitInput) => {
-      // A root lives in exactly one of the two caches, decided by its anchor.
-      const mutateOwn = selectionAnchor ? mutateAnchored : mutateDocument;
-      const reloadOwn = selectionAnchor ? reloadAnchored : reloadDocument;
-      const optimisticComment = createOptimistic({
-        clientId,
-        content,
-        documentId,
-        editorData,
-        selectionAnchor,
+      const input = { clientId, content, documentId, editorData, selectionAnchor };
+      await documentCommentActions.createRootComment({
+        input,
+        optimisticComment: createOptimistic(input),
       });
-      await Promise.all([
-        mutateOwn((pages) => appendOptimisticThread(pages, optimisticComment), {
-          revalidate: false,
-        }),
-        updateSummaryTotal(1),
-      ]);
-
-      let created: Awaited<ReturnType<typeof documentCommentService.create>>;
-      try {
-        created = await documentCommentService.create({
-          clientId,
-          content,
-          documentId,
-          editorData,
-          selectionAnchor,
-        });
-        if (!created) throw new Error('Document comment creation returned no result');
-      } catch (error) {
-        await Promise.all([
-          mutateOwn((pages) => removeOptimisticThread(pages, clientId), { revalidate: false }),
-          updateSummaryTotal(-1),
-        ]);
-        throw error;
-      }
-
-      try {
-        await mutateOwn((pages) => replaceOptimisticThread(pages, created.comment), {
-          revalidate: false,
-        });
-      } catch (error) {
-        console.error('Failed to reconcile the created document comment', error);
-        void reloadOwn();
-      }
-      if (created.isDuplicate) void reloadSummary();
-      // The body paints from the document-wide anchor list, so the new root
-      // joins it here rather than waiting for the next revalidation.
-      const createdAnchor = created.comment.selectionAnchor;
-      if (createdAnchor) {
-        void mutateAnchors(
-          (current) =>
-            current && !current.items.some(({ id }) => id === created.comment.id)
-              ? {
-                  items: [
-                    ...current.items,
-                    { id: created.comment.id, selectionAnchor: createdAnchor },
-                  ],
-                }
-              : current,
-          { revalidate: false },
-        );
-      }
     },
-    [
-      createOptimistic,
-      documentId,
-      mutateAnchored,
-      mutateAnchors,
-      mutateDocument,
-      reloadAnchored,
-      reloadDocument,
-      reloadSummary,
-      updateSummaryTotal,
-    ],
+    [createOptimistic, documentId],
   );
-  const handleUpdate: DocumentCommentUpdateHandler = useCallback(
-    async (comment, value) => {
-      const optimisticComment = { ...comment, ...value, updatedAt: new Date() };
-      await mutateBoth((pages) => replaceThreadComment(pages, optimisticComment));
-
-      let updated: Awaited<ReturnType<typeof documentCommentService.update>>;
-      try {
-        updated = await documentCommentService.update({ ...value, id: comment.id });
-        if (!updated) throw new Error('Document comment update returned no result');
-      } catch (error) {
-        await mutateBoth((pages) => replaceThreadComment(pages, comment));
-        throw error;
-      }
-
-      try {
-        await mutateBoth((pages) => replaceThreadComment(pages, updated));
-      } catch (error) {
-        console.error('Failed to reconcile the updated document comment', error);
-        void reloadThreads();
-      }
-    },
-    [mutateBoth, reloadThreads],
-  );
-
   // Deep-link landing. Lists are oldest-first and a notification usually points at the
   // newest comment, so the target root is fetched by id and pinned above the list until it
   // shows up on a loaded page. NOT_FOUND, a non-root id, or a root from another document
@@ -244,7 +108,7 @@ export const useDocumentCommentsState = ({
   // root has no server row yet, and a pinned root may predate the last fetch.
   const anchorItems = useMemo(() => {
     const byId = new Map<string, DocumentCommentAnchorItem>();
-    for (const { id, selectionAnchor } of anchorList.data?.items ?? []) {
+    for (const { id, selectionAnchor } of anchorList?.items ?? []) {
       byId.set(id, { id, selectionAnchor });
     }
     const loaded = pinnedThread ? [pinnedThread, ...anchoredThreads.items] : anchoredThreads.items;
@@ -254,7 +118,7 @@ export const useDocumentCommentsState = ({
       }
     }
     return [...byId.values()];
-  }, [anchorList.data, pinnedThread, anchoredThreads.items]);
+  }, [anchorList, pinnedThread, anchoredThreads.items]);
   const anchors = useDocumentCommentAnchors(anchorItems, {
     hasGutter: panelAvailable,
     onPickUnloaded: focusThread,
@@ -288,41 +152,15 @@ export const useDocumentCommentsState = ({
     if (isFocusedRootMissing) handleFocusMissing();
     else if (isFocusedRootFailed) handleFocusFailed();
   }, [handleFocusFailed, handleFocusMissing, isFocusedRootFailed, isFocusedRootMissing]);
-  // The pinned root lives in its own detail entry, so the list handlers (which only patch
-  // the paginated caches) are mirrored into it; a post-delete 404 flows through
-  // `isNotFound` and is not a refresh failure.
-  const mutateFocusedRoot = focusedRoot.mutate;
+  // The pinned root lives in its own detail entry, which the store patches on
+  // every write; a refresh re-reads it too, and a post-delete 404 flows
+  // through `isNotFound` — it is not a refresh failure.
   const refreshPinned = useCallback(async () => {
-    await Promise.all([mutateFocusedRoot().catch(() => undefined), refresh()]);
-  }, [mutateFocusedRoot, refresh]);
-  const updatePinnedReplyCount = useCallback(
-    async (rootCommentId: string, delta: number) => {
-      await Promise.all([
-        updateReplyCount(rootCommentId, delta),
-        mutateFocusedRoot(
-          (current) =>
-            current && current.id === rootCommentId
-              ? { ...current, replyCount: Math.max(0, current.replyCount + delta) }
-              : current,
-          { revalidate: false },
-        ),
-      ]);
-    },
-    [mutateFocusedRoot, updateReplyCount],
-  );
-  const handlePinnedRootUpdate: DocumentCommentUpdateHandler = useCallback(
-    async (comment, value) => {
-      await handleUpdate(comment, value);
-      await mutateFocusedRoot(
-        (current) =>
-          current && current.id === comment.id
-            ? { ...current, ...value, updatedAt: new Date() }
-            : current,
-        { revalidate: false },
-      );
-    },
-    [handleUpdate, mutateFocusedRoot],
-  );
+    await Promise.all([
+      focusRootCommentId ? documentCommentActions.revalidateDetail(focusRootCommentId) : undefined,
+      refresh(),
+    ]);
+  }, [focusRootCommentId, refresh]);
 
   /** A thread belongs in the gutter when it has a run to sit beside. */
   const isGutterThread = useCallback(
@@ -371,9 +209,7 @@ export const useDocumentCommentsState = ({
     gutterEnabled,
     gutterThreads,
     handleCreate,
-    handlePinnedRootUpdate,
     handleReplyFocusMissing,
-    handleUpdate,
     hasMoreListThreads,
     isAnchoredInitialError: anchoredThreads.isInitialError,
     isAnchoredLoading: anchoredThreads.isLoadingInitial,
@@ -390,9 +226,6 @@ export const useDocumentCommentsState = ({
     refreshPinned,
     reloadAnchored,
     summary,
-    updatePinnedReplyCount,
-    updateReplyCount,
-    updateSummaryTotal,
     workspaceId,
   };
 };

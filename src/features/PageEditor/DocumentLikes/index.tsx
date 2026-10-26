@@ -17,9 +17,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import { useClientDataSWR } from '@/libs/swr';
-import { documentLikeKeys } from '@/libs/swr/keys';
 import { documentLikeService } from '@/services/documentLike';
+import {
+  documentCommentActions,
+  documentCommentSelectors,
+  useDocumentCommentStore,
+} from '@/store/documentComment';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -117,18 +120,22 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const useDocumentLikeSummary = (workspaceId: string | null, documentId?: string | null) =>
-  useClientDataSWR<DocumentLikeSummary>(
-    workspaceId && documentId ? documentLikeKeys.summary(workspaceId, documentId) : null,
-    () => documentLikeService.summary(documentId!),
-    { dedupingInterval: 30_000 },
-  );
+/**
+ * The like summary paints from its replica: a reload shows the last confirmed
+ * count and likers on the first frame, and the network confirms it.
+ */
+const useDocumentLikeSummary = (workspaceId: string | null, documentId?: string | null) => {
+  const enabledId = workspaceId ? documentId : undefined;
+  const { error, revalidate } = documentCommentActions.useFetchLikeSummary(enabledId);
+  const data = useDocumentCommentStore(documentCommentSelectors.likeSummary(enabledId));
+  return { data, error, isLoading: Boolean(enabledId) && !data && !error, revalidate };
+};
 
 const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
   const workspaceId = useActiveWorkspaceId();
   const user = useUserStore(userProfileSelectors.userProfile);
-  const { data, error, isLoading, mutate } = useDocumentLikeSummary(workspaceId, documentId);
+  const { data, error, isLoading, revalidate } = useDocumentLikeSummary(workspaceId, documentId);
   // Last user-intended liked state; null when the UI matches the server.
   const targetRef = useRef<boolean | null>(null);
   const inFlightRef = useRef(false);
@@ -150,7 +157,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
           : await documentLikeService.unlike(documentId);
       }
       targetRef.current = null;
-      if (summary) await mutate(summary, { revalidate: false });
+      if (summary) documentCommentActions.confirmLikeSummary(documentId, summary);
     } catch (toggleError) {
       console.error('Failed to toggle document like', toggleError);
       targetRef.current = null;
@@ -158,13 +165,13 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
       // Recover the truth from the server rather than guessing a rollback
       // point across coalesced toggles. The recovery fetch itself can fail
       // (e.g. an outage) — swallow it so drain() never rejects out of a void
-      // call; SWR revalidates again on the next focus/interval and corrects
+      // call; the replica revalidates again on the next focus and corrects
       // any stale optimistic state then.
-      await mutate().catch(() => undefined);
+      await documentCommentActions.refreshLikeSummary(documentId).catch(() => undefined);
     } finally {
       inFlightRef.current = false;
     }
-  }, [documentId, mutate, t]);
+  }, [documentId, t]);
 
   const toggle = useCallback(() => {
     if (!data) return;
@@ -172,33 +179,29 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
     const nextLiked = !(targetRef.current ?? data.liked);
     targetRef.current = nextLiked;
 
-    void mutate(
-      (previous) => {
-        if (!previous) return previous;
-        return nextLiked
-          ? {
-              liked: true,
-              likers: [
-                {
-                  avatar: user?.avatar ?? null,
-                  fullName: user?.fullName ?? null,
-                  id: user?.id ?? 'me',
-                  username: user?.username ?? null,
-                },
-                ...previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
-              ],
-              total: previous.total + 1,
-            }
-          : {
-              liked: false,
-              likers: previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
-              total: Math.max(0, previous.total - 1),
-            };
-      },
-      { revalidate: false },
+    documentCommentActions.applyLikeSummary(documentId, (previous) =>
+      nextLiked
+        ? {
+            liked: true,
+            likers: [
+              {
+                avatar: user?.avatar ?? null,
+                fullName: user?.fullName ?? null,
+                id: user?.id ?? 'me',
+                username: user?.username ?? null,
+              },
+              ...previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
+            ],
+            total: previous.total + 1,
+          }
+        : {
+            liked: false,
+            likers: previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
+            total: Math.max(0, previous.total - 1),
+          },
     );
     void drain();
-  }, [data, drain, mutate, user?.avatar, user?.fullName, user?.id, user?.username]);
+  }, [data, documentId, drain, user?.avatar, user?.fullName, user?.id, user?.username]);
 
   if (!workspaceId) return null;
 
@@ -210,7 +213,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   if (sectionState === 'error')
     return (
       <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
-        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+        <AsyncError error={error} variant={'inline'} onRetry={() => void revalidate()} />
       </Flexbox>
     );
 

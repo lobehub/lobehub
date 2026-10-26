@@ -8,6 +8,7 @@ import { useChatStore } from '@/store/chat';
 import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDiscoverStore } from '@/store/discover';
 import { useDocumentStore } from '@/store/document';
+import { documentCommentActions } from '@/store/documentComment';
 import { useEvalStore } from '@/store/eval';
 import { useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
@@ -56,6 +57,7 @@ const resetableStores: ResetableStoreApi[] = [
 
 const resetableActions: ResetableStore[] = [
   agentDocumentActions,
+  documentCommentActions,
   pageActions,
   projectFileActions,
   resourcePermissionActions,

@@ -48,9 +48,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
     focus,
     gutterThreads,
     handleCreate,
-    handlePinnedRootUpdate,
     handleReplyFocusMissing,
-    handleUpdate,
     hasMoreListThreads,
     isAnchoredInitialError,
     isAnchoredLoading,
@@ -65,9 +63,6 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
     refreshPinned,
     reloadAnchored,
     summary,
-    updatePinnedReplyCount,
-    updateReplyCount,
-    updateSummaryTotal,
   } = state;
   const isLoadingInitial = documentThreads.isLoadingInitial || isAnchoredLoading;
   const isHeaderLoading = isLoadingInitial || (summary.isLoading && !summary.data);
@@ -127,9 +122,6 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               replyCount={pinnedThreadInList.replyCount}
               root={pinnedThreadInList.root}
               onMutated={refreshPinned}
-              onReplyCountChange={updatePinnedReplyCount}
-              onRootUpdate={handlePinnedRootUpdate}
-              onSummaryChange={updateSummaryTotal}
               onFocusMissing={
                 listThreadOwnsFocusMiss(gutterShownIds, pinnedThreadInList.root.id)
                   ? handleReplyFocusMissing
@@ -146,9 +138,6 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
                 replyCount={replyCount}
                 root={root}
                 onMutated={refresh}
-                onReplyCountChange={updateReplyCount}
-                onRootUpdate={handleUpdate}
-                onSummaryChange={updateSummaryTotal}
                 onFocusMissing={
                   listThreadOwnsFocusMiss(gutterShownIds, root.id)
                     ? handleReplyFocusMissing
