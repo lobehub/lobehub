@@ -209,7 +209,7 @@ export class WorkspaceMemberModel {
     await this.db.transaction(async (tx) => {
       await tx
         .update(workspaceMembers)
-        .set({ deletedAt: new Date(), jobTitle: null, responsibilities: null })
+        .set({ deletedAt: new Date(), title: null, responsibilities: null })
         .where(
           and(
             eq(workspaceMembers.workspaceId, workspaceId),
@@ -279,11 +279,11 @@ export class WorkspaceMemberModel {
   updateMemberProfile = async (
     workspaceId: string,
     userId: string,
-    profile: { jobTitle?: string | null; responsibilities?: string | null },
+    profile: { title?: string | null; responsibilities?: string | null },
   ) => {
     const [result] = await this.db
       .update(workspaceMembers)
-      .set({ jobTitle: profile.jobTitle, responsibilities: profile.responsibilities })
+      .set({ title: profile.title, responsibilities: profile.responsibilities })
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),

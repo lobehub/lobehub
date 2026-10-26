@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "16066c52-0fe0-4071-8425-5119b33ada2e",
+  "id": "c5c00e30-513b-4e9c-a0b1-6b40e986f12b",
   "policies": {},
   "prevId": "7c8b5944-a341-485c-a9f6-514a3a55e780",
   "roles": {},
@@ -43552,8 +43552,8 @@
           "notNull": true,
           "default": "'member'"
         },
-        "job_title": {
-          "name": "job_title",
+        "title": {
+          "name": "title",
           "type": "text",
           "primaryKey": false,
           "notNull": false

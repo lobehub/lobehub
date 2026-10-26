@@ -66,7 +66,7 @@ export const workspaceMembers = pgTable(
     role: text('role').notNull().default('member'),
     // Workspace-scoped profile: the same person can hold a different title and
     // duties in each workspace. Lengths are enforced by the API, not the column.
-    jobTitle: text('job_title'),
+    title: text('title'),
     responsibilities: text('responsibilities'),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
