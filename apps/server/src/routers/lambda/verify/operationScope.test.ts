@@ -114,6 +114,21 @@ describe("verifyRouter with a run's operation token", () => {
     expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
   });
 
+  /** Regression: a token could dispute a check of another operation owned by the same principal. */
+  it("refuses to dispute another operation's round", async () => {
+    modelMocks.findRunByOperation.mockResolvedValueOnce(otherRun);
+
+    await expect(
+      createOperationCaller().disputeCheck({
+        checkItemId: 'item-1',
+        kind: 'invalid_criterion',
+        operationId: 'op_other',
+        reason: 'Out of scope',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+  });
+
   it('keeps the observation a plan-round ingest sends', async () => {
     modelMocks.findRunByOperation.mockResolvedValueOnce(ownRun);
     modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1', verifyRunId: 'run-own' });

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   documentFindByIds: vi.fn(),
   evidenceCreateMany: vi.fn(),
   evidenceListByRun: vi.fn(),
+  fileDispute: vi.fn(),
   fileFindById: vi.fn(),
   operationFindById: vi.fn(),
   resultUpsert: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock('@/database/models/verifyEvidence', () => ({
     };
   }),
 }));
+vi.mock('@/server/services/verify/dispute', () => ({ fileCheckDispute: mocks.fileDispute }));
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
     return { findByOperation: mocks.runFindByOperation };
@@ -516,6 +518,75 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(result).toEqual(
       expect.objectContaining({ error: 'UNBACKED_VISUAL_EVIDENCE', success: false }),
     );
-    expect(result.content).toContain('The server received only [content, type] for the rejected item');
+    expect(result.content).toContain(
+      'The server received only [content, type] for the rejected item',
+    );
+  });
+
+  describe('disputeCriterion', () => {
+    const runtime = () =>
+      acceptanceEvidenceRuntime.factory({
+        operationId: 'evidence-op',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+
+    it("files the dispute on the round that owns the plan, with the run's task", async () => {
+      mocks.operationFindById.mockImplementation(async (id) =>
+        id === 'evidence-op' ? { id, parentOperationId: 'parent-op' } : { id, taskId: 'task-1' },
+      );
+      mocks.fileDispute.mockResolvedValue({
+        dispute: { kind: 'invalid_criterion' },
+        message: 'Dispute upheld',
+        success: true,
+      });
+
+      const result = await runtime().disputeCriterion({
+        checkItemId: 'criterion-1',
+        kind: 'invalid_criterion',
+        reason: 'Out of scope',
+      });
+
+      expect(result).toMatchObject({ content: 'Dispute upheld', success: true });
+      expect(mocks.fileDispute).toHaveBeenCalledWith(
+        {},
+        'user-1',
+        expect.objectContaining({ runOperationId: 'parent-op', taskId: 'task-1' }),
+        'ws-1',
+      );
+    });
+
+    it('hands a refused dispute back as a readable answer', async () => {
+      mocks.fileDispute.mockResolvedValue({
+        error: 'ALREADY_RULED',
+        message: 'A panel already overruled it.',
+        success: false,
+      });
+
+      expect(
+        await runtime().disputeCriterion({
+          checkItemId: 'criterion-1',
+          kind: 'invalid_criterion',
+          reason: 'Again',
+        }),
+      ).toEqual({
+        content: 'A panel already overruled it.',
+        error: 'ALREADY_RULED',
+        success: false,
+      });
+    });
+
+    it('rejects an unknown kind before touching the round', async () => {
+      const result = await runtime().disputeCriterion({
+        checkItemId: 'criterion-1',
+        kind: 'too_hard' as never,
+        reason: 'It is hard',
+      });
+
+      expect(result).toMatchObject({ error: 'INVALID_ARGUMENTS', success: false });
+      expect(mocks.fileDispute).not.toHaveBeenCalled();
+    });
   });
 });

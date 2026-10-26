@@ -1,8 +1,10 @@
 import type {
   AcceptanceCriterionSummary,
+  DisputeAcceptanceCriterionParams,
   SubmitAcceptanceEvidenceParams,
 } from '@lobechat/builtin-tool-acceptance-evidence';
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
+import { VERIFY_DISPUTE_KINDS } from '@lobechat/const/verify';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
@@ -11,6 +13,7 @@ import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { fileCheckDispute } from '@/server/services/verify/dispute';
 import { evidenceTypeForStoredFile } from '@/server/services/verify/evidenceMedium';
 
 import type { ServerRuntimeRegistration } from './types';
@@ -292,6 +295,47 @@ class AcceptanceEvidenceExecutionRuntime {
       content: `Recorded ${params.evidence.length} evidence item(s) for "${item.title}".`,
       success: true,
     };
+  };
+
+  disputeCriterion = async (params: DisputeAcceptanceCriterionParams) => {
+    if (!this.operationId) return { error: 'NO_OPERATION', success: false };
+    if (
+      !params.checkItemId ||
+      !params.reason?.trim() ||
+      !(VERIFY_DISPUTE_KINDS as readonly string[]).includes(params.kind)
+    ) {
+      return {
+        content:
+          'A dispute needs a checkItemId, a kind (invalid_criterion or missed_evidence) and a reason.',
+        error: 'INVALID_ARGUMENTS',
+        success: false,
+      };
+    }
+
+    const runOperationId = await this.resolveRunOperationId();
+    if (!runOperationId) return { error: 'NO_OPERATION', success: false };
+    const operation = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findById(runOperationId);
+
+    const result = await fileCheckDispute(
+      this.db,
+      this.userId,
+      {
+        checkItemId: params.checkItemId,
+        evidenceIds: params.evidenceIds?.filter((id) => id?.trim()),
+        kind: params.kind,
+        reason: params.reason,
+        runOperationId,
+        taskId: operation?.taskId ?? undefined,
+      },
+      this.workspaceId,
+    );
+    return result.success
+      ? { content: result.message, dispute: result.dispute, success: true }
+      : { content: result.message, error: result.error, success: false };
   };
 }
 

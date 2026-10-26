@@ -14,7 +14,9 @@ import type { OIDCAuth } from '../context';
  *
  * The `verify.*` routes bind every read and write to `heteroOperationScope`,
  * and `submitCheckEvidence` takes evidence only: the verdict and the rest of
- * the result belong to the round's verifier. `upload.createS3PreSignedUrl`
+ * the result belong to the round's verifier. `verify.disputeCheck` files the
+ * builder's dispute of one check in that same scoped round; the ruling comes
+ * from the review panel, never from the token. `upload.createS3PreSignedUrl`
  * signs only a sized, reserved PUT under a content-addressed key.
  * `file.createFile` files what this token uploads as private acceptance
  * evidence, kept out of the creator's library, folders and knowledge bases, and
@@ -27,6 +29,7 @@ export const HETERO_OPERATION_EVIDENCE_PATHS: ReadonlySet<string> = new Set([
   'upload.abortS3Upload',
   'upload.createS3PreSignedUrl',
   'user.getUserState',
+  'verify.disputeCheck',
   'verify.getRun',
   'verify.getVerifyState',
   'verify.listResults',

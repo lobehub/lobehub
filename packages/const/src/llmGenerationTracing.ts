@@ -44,6 +44,7 @@ export const TRACING_SCENARIOS = {
   UnderstandingDetailedPersona: 'understanding_detailed_persona',
   Unknown: 'unknown',
   ReviewPredict: 'review_predict',
+  VerifyDisputeArbitration: 'verify_dispute_arbitration',
   VerifyJudge: 'verify_judge',
   VerifyPlanGen: 'verify_plan_gen',
   VerifyReport: 'verify_report',

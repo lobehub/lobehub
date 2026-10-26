@@ -1,5 +1,5 @@
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
-import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
+import { DEFAULT_MAX_REPAIR_ROUNDS, isCheckWaivedByDispute } from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
 import debug from 'debug';
 
@@ -271,9 +271,11 @@ export const maybeAutoRepair = async (
 
 // `errored` = the verifier couldn't run (infra), so there's no delivery fault to
 // repair — exclude it even though it carries no verdict.
+// A check waived by an upheld dispute is not a fault either: nothing to repair.
 const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
   !!r &&
   r.status !== 'errored' &&
+  !isCheckWaivedByDispute(r.metadata) &&
   (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
 
 const buildInstruction = (

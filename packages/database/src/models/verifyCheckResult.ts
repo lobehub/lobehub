@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { DISPUTE_SETTLED_RUN_STATUSES } from '@lobechat/const/verify';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { NewVerifyCheckResult, VerifyCheckResultItem } from '../schemas/verify';
-import { verifyCheckResults, verifyRuns } from '../schemas/verify';
+import { acceptances, verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -125,6 +126,58 @@ export class VerifyCheckResultModel {
       );
     }
 
+    return row;
+  };
+
+  /**
+   * Write a builder's dispute onto a result, but only while its round is still
+   * open (not settled, no human decision, Acceptance not accepted or closed), no
+   * ruling has been decided on it and no other arbitration holds it. Checked in
+   * the same statement as the write, so a round that settles while a panel is
+   * ruling refuses the late ruling. Only the `dispute` key is replaced, so
+   * metadata written by a concurrent verifier survives.
+   *
+   * A claim is the dispute's `arbitratingSince` timestamp. `holder` lets the
+   * claimant itself write the ruling; a claim older than `staleBefore` (an
+   * arbitration that died) no longer blocks anyone.
+   *
+   * @returns the updated row, or undefined when the guard refused the write.
+   */
+  writeDisputeIfOpen = async (
+    id: string,
+    dispute: Record<string, unknown>,
+    guard: { holder?: string; staleBefore: Date },
+  ): Promise<VerifyCheckResultItem | undefined> => {
+    const current = sql`${verifyCheckResults.metadata} -> 'dispute'`;
+    const claimedAt = sql`(${current} ->> 'arbitratingSince')`;
+    const [row] = await this.db
+      .update(verifyCheckResults)
+      .set({
+        metadata: sql`jsonb_set(coalesce(${verifyCheckResults.metadata}, '{}'::jsonb), '{dispute}', ${JSON.stringify(dispute)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(verifyCheckResults.id, id),
+          this.ownership(),
+          sql`not (coalesce(${current} ->> 'kind', '') = 'invalid_criterion' and coalesce(${current} -> 'arbitration' ->> 'outcome', '') in ('upheld', 'overruled'))`,
+          sql`exists (
+            select 1 from ${verifyRuns}
+            left join ${acceptances} on ${acceptances.id} = ${verifyRuns.acceptanceId}
+            where ${verifyRuns.id} = ${verifyCheckResults.verifyRunId}
+              and ${verifyRuns.userDecision} is null
+              and coalesce(${verifyRuns.status}, '') not in (${sql.join(
+                DISPUTE_SETTLED_RUN_STATUSES.map((status) => sql`${status}`),
+                sql`, `,
+              )})
+              and coalesce(${acceptances.status}, '') not in ('accepted', 'closed')
+          )`,
+          // COALESCE, never `IS NULL`, on an extracted jsonb value: see jsonbNullTest.
+          sql`(case when coalesce(${claimedAt}, '') = '' then true else ${claimedAt}::timestamptz < ${guard.staleBefore.toISOString()}::timestamptz end${
+            guard.holder ? sql` or coalesce(${claimedAt}, '') = ${guard.holder}` : sql``
+          })`,
+        ),
+      )
+      .returning();
     return row;
   };
 

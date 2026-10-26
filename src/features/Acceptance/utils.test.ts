@@ -91,6 +91,19 @@ describe('countResults', () => {
       ]),
     ).toEqual({ failed: 1, passed: 1, total: 3 });
   });
+
+  it('leaves a check waived by an upheld dispute out of the counts', () => {
+    expect(
+      countResults([
+        { status: 'passed', verdict: 'passed' } as any,
+        {
+          metadata: { dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' } },
+          status: 'failed',
+          verdict: 'failed',
+        } as any,
+      ]),
+    ).toEqual({ failed: 0, passed: 1, total: 1 });
+  });
 });
 
 describe('buildCheckRows', () => {

@@ -190,7 +190,9 @@ export async function completeSubAgentBridge(
       preserveUsage: true,
       result: {
         content: resultContent,
-        error: failed ? formatErrorForMetadata(finalState?.error ?? params.errorMessage) : undefined,
+        error: failed
+          ? formatErrorForMetadata(finalState?.error ?? params.errorMessage)
+          : undefined,
         state: {
           model: finalState?.modelRuntimeConfig?.model,
           status: failed ? 'error' : 'completed',

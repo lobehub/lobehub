@@ -30,6 +30,14 @@ const plan = [
   { id: 'keys', index: 2, required: true, title: 'Keys', verifierType: 'agent' },
 ] as never;
 
+/** An upheld `invalid_criterion` dispute, as `isCheckWaivedByDispute` reads it. */
+const waivedDispute = {
+  arbitration: { decidedAt: 'then', outcome: 'upheld' as const, votes: [] },
+  filedAt: 'then',
+  kind: 'invalid_criterion' as const,
+  reason: 'Out of scope',
+};
+
 describe('carryPassedResultsForward', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -118,6 +126,43 @@ describe('carryPassedResultsForward', () => {
     ).toEqual([]);
     expect(mocks.resultUpsert).not.toHaveBeenCalled();
   });
+
+  it('carries a waived check with its failed verdict and dispute intact', async () => {
+    mocks.resultListByRun.mockResolvedValue([
+      {
+        checkItemId: 'list',
+        id: 'old-list',
+        metadata: { dispute: waivedDispute },
+        status: 'failed',
+        verdict: 'failed',
+      },
+    ]);
+
+    const carried = await carryPassedResultsForward({} as never, 'user-1', {
+      excludeItemIds: ['reading'],
+      operationId: 'repair-op',
+      plan,
+      sourceRoundIndex: 2,
+      sourceRunId: 'run-2',
+      targetRunId: 'run-3',
+    });
+
+    expect(carried).toEqual(['list']);
+    expect(mocks.resultUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkItemId: 'list',
+        metadata: {
+          carriedFrom: { checkResultId: 'old-list', roundIndex: 2, verifyRunId: 'run-2' },
+          dispute: waivedDispute,
+        },
+        status: 'failed',
+        toulmin: expect.objectContaining({
+          limitation: expect.stringContaining('with its upheld dispute'),
+        }),
+        verdict: 'failed',
+      }),
+    );
+  });
 });
 
 describe('settledCarriedItemIds', () => {
@@ -148,5 +193,15 @@ describe('settledCarriedItemIds', () => {
         ],
       ),
     ).toEqual({ reopened: ['a'], settled: new Set() });
+  });
+
+  it('settles a carried waiver instead of judging the dismissed check again', () => {
+    const waived = { ...carried, dispute: waivedDispute };
+    expect(
+      settledCarriedItemIds(
+        [{ checkItemId: 'a', metadata: waived, status: 'failed' }],
+        [{ checkItemId: 'a', metadata: { carriedFromEvidenceId: 'e1' } }],
+      ),
+    ).toEqual({ reopened: [], settled: new Set(['a']) });
   });
 });

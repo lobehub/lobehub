@@ -64,9 +64,7 @@ const getVideoGenerationRoute = (value: unknown): VideoGenerationRoute | undefin
   };
 };
 
-type ChargeErrorBatch = NonNullable<
-  Awaited<ReturnType<typeof chargeBeforeGenerate>>['errorBatch']
->;
+type ChargeErrorBatch = NonNullable<Awaited<ReturnType<typeof chargeBeforeGenerate>>['errorBatch']>;
 
 /**
  * An error batch (insufficient budget, frozen workspace, …) links each generation to

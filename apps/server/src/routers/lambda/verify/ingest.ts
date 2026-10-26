@@ -1,4 +1,4 @@
-import { normalizeEvidenceMetadata } from '@lobechat/const/verify';
+import { normalizeEvidenceMetadata, VERIFY_DISPUTE_KINDS } from '@lobechat/const/verify';
 import type {
   VerifyCheckItem,
   VerifyCheckResultMetadata,
@@ -14,6 +14,7 @@ import type { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import type { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
 import { evidenceTypeForStoredFile, resolveLiveRoundForItem } from '@/server/services/verify';
+import { fileCheckDispute, MAX_DISPUTE_REASON_CHARS } from '@/server/services/verify/dispute';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
@@ -315,6 +316,46 @@ export const ingestRouter = router({
         : [];
 
       return { checkResult, evidence };
+    }),
+  /**
+   * A builder's dispute of one check in its Agent Run's round, the CLI twin of
+   * the `disputeCriterion` builtin tool. Lands on the live round like evidence
+   * does, so a dispute filed after a repair spawned reaches the round that
+   * will actually be judged. A rejected dispute is returned, not thrown: it is
+   * an answer the builder acts on, not a transport failure.
+   */
+  disputeCheck: verifyWriteProcedure
+    .input(
+      z.object({
+        checkItemId: z.string().min(1),
+        evidenceIds: z.array(z.string().min(1)).max(20).optional(),
+        kind: z.enum(VERIFY_DISPUTE_KINDS),
+        operationId: z.string().min(1),
+        reason: z.string().trim().min(1).max(MAX_DISPUTE_REASON_CHARS),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const namedRun = await resolveRunByOperation(ctx, input.operationId);
+      // An operation-scoped builder token may dispute only its own run.
+      assertOperationInScope(ctx, namedRun.operationId);
+      assertWorkspaceRowManageable(ctx, namedRun.userId, 'verify run');
+      const run = await resolveLiveRoundForItem(ctx, namedRun, input.checkItemId);
+      if (run.id !== namedRun.id) assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
+      const operation = run.operationId ? await ctx.operationModel.findById(run.operationId) : null;
+
+      return fileCheckDispute(
+        ctx.serverDB,
+        ctx.userId,
+        {
+          checkItemId: input.checkItemId,
+          evidenceIds: input.evidenceIds,
+          kind: input.kind,
+          reason: input.reason,
+          runOperationId: run.operationId ?? input.operationId,
+          taskId: operation?.taskId ?? undefined,
+        },
+        ctx.workspaceId ?? undefined,
+      );
     }),
   listEvidence: verifyProcedure
     .input(z.object({ checkResultId: z.string() }))

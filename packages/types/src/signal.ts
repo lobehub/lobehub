@@ -82,17 +82,17 @@ export interface SignalDecisionMetadata {
 
 /** What a label needs beyond `label`, `source` and `confidence`. No message content, as above. */
 export interface SignalDecisionLabelMetadata {
+  /**
+   * The signal that proved the label, when another event did — e.g. the later manual mention
+   * that shows a `missed_wake`. A signal's `external_id`, not its row id.
+   */
+  evidenceExternalId?: string;
   /** Scenario-specific extras that are not worth a typed field yet. */
   extra?: Record<string, unknown>;
   /** Short rationale from a judge model or a person. */
   rationale?: string;
   /** Machine-readable reason behind the label, e.g. a `BotNoReplyReason`. */
   reason?: string;
-  /**
-   * The signal that proved the label, when another event did — e.g. the later manual mention
-   * that shows a `missed_wake`. A signal's `external_id`, not its row id.
-   */
-  evidenceExternalId?: string;
   /** Where the label was applied: `reaction`, `button`, `admin`, `job`, … */
   surface?: string;
 }

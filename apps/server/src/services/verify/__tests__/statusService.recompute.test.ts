@@ -108,6 +108,39 @@ describe('VerifyStatusService.recompute — errored rollup', () => {
     expect(status).toBe('verifying');
   });
 
+  it('a required check waived by an upheld dispute no longer gates the round', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }, { id: 'c2' }]));
+    resultListByRun.mockResolvedValue([
+      { checkItemId: 'c1', status: 'passed', verdict: 'passed' },
+      {
+        checkItemId: 'c2',
+        metadata: {
+          dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' },
+        },
+        status: 'failed',
+        verdict: 'failed',
+      },
+    ]);
+
+    expect(await new VerifyStatusService(db, 'u1').recompute('op-1')).toBe('passed');
+  });
+
+  it('an overruled dispute leaves the failed check gating the round', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }]));
+    resultListByRun.mockResolvedValue([
+      {
+        checkItemId: 'c1',
+        metadata: {
+          dispute: { arbitration: { outcome: 'overruled' }, kind: 'invalid_criterion' },
+        },
+        status: 'failed',
+        verdict: 'failed',
+      },
+    ]);
+
+    expect(await new VerifyStatusService(db, 'u1').recompute('op-1')).toBe('failed');
+  });
+
   it('all passing required checks still roll up to `passed`', async () => {
     runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }]));
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'passed', verdict: 'passed' }]);

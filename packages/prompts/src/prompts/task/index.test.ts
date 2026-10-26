@@ -781,6 +781,27 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('Do not ask the owner again');
   });
 
+  it('offers a missed-evidence dispute next to rejection feedback and lists prior rulings', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          automaticReviewFeedback: 'The export button is not visible.',
+          disputeRulings: [
+            { outcome: 'upheld', title: 'Exports a PDF' },
+            { outcome: 'overruled', title: 'Shows totals' },
+          ],
+          round: 2,
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: 'Finish.', name: 'Report' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('dispute the criterion with kind `missed_evidence`');
+    expect(result).toContain('Exports a PDF — upheld. File the same `invalid_criterion` dispute');
+    expect(result).toContain('Shows totals — overruled. It stands; satisfy it.');
+  });
+
   it('omits the round budget suffix for uncapped goals', () => {
     const result = buildTaskRunPrompt(
       {

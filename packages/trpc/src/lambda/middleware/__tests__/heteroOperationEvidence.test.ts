@@ -35,6 +35,7 @@ const scopeOf = ({ ctx }: { ctx: any }) => ({
 const testRouter = trpc.router({
   verify: trpc.router({
     deleteRun: trpc.procedure.use(oidcAuth).mutation(scopeOf),
+    disputeCheck: trpc.procedure.use(oidcAuth).mutation(scopeOf),
     submitCheckEvidence: trpc.procedure.use(oidcAuth).mutation(scopeOf),
   }),
 });
@@ -78,6 +79,16 @@ describe('oidcAuth with a Task run operation token', () => {
     expect(resolvePrincipal).toHaveBeenCalledWith(
       expect.objectContaining({ capability: 'acceptance:evidence', operationId: 'op_task_run' }),
     );
+  });
+
+  /**
+   * Regression: a sandbox builder running `lh acceptance plan dispute` was
+   * rejected because the dispute route was missing from the allowlist.
+   */
+  it('lets the token dispute a check of its own round', async () => {
+    const caller = createCaller({ oidcAuth: operationToken() } as any);
+
+    await expect(caller.verify.disputeCheck()).resolves.toMatchObject({ scope: 'op_task_run' });
   });
 
   it('keeps rejecting the token on every other route', async () => {

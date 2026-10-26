@@ -76,6 +76,8 @@ const GIF_SHEET_CONCURRENCY = 2;
 export const REVIEW_PREDICT_CONCURRENCY = 4;
 
 export interface PredictReviewParams {
+  /** The builder's `missed_evidence` dispute of the previous rejection, if any. */
+  builderRebuttal?: string;
   /** The check result to re-judge. */
   checkResultId: string;
   /** Goal reviews also inspect original nonvisual evidence. */
@@ -244,6 +246,7 @@ export class VerifyReviewPredictorService {
       : undefined;
 
     const chain = chainVerifyReviewPrediction({
+      builderRebuttal: params.builderRebuttal,
       instruction,
       textEvidence,
       requirement: params.requirement ?? undefined,

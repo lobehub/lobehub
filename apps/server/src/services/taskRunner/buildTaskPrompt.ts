@@ -1,6 +1,11 @@
 import { UserInteractionApiName } from '@lobechat/builtin-tool-user-interaction';
 import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
-import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
+import type {
+  TaskItem,
+  TaskTopicHandoff,
+  VerifyCheckResultMetadata,
+  WorkspaceData,
+} from '@lobechat/types';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
@@ -199,13 +204,32 @@ const resolveGoalLoopContext = async (
       return inherited.sort((a, b) => b.round - a.round)[0];
     };
 
-    const failed = ((last.plan ?? []) as PlanItem[]).flatMap((item) => {
+    // A ruling binds the check, not the round it was filed in: the next attempt
+    // must know which checks it may stop chasing and which it lost a dispute on.
+    const rulings = new Map<string, 'overruled' | 'upheld'>();
+    for (const result of results) {
+      const outcome = (result.metadata as VerifyCheckResultMetadata | null)?.dispute?.arbitration
+        ?.outcome;
+      if (outcome !== 'overruled' && outcome !== 'upheld') continue;
+      const id = logicalByCheckItem.get(result.checkItemId) ?? result.checkItemId;
+      // Overruled is final, so it wins over an older upheld ruling.
+      if (rulings.get(id) !== 'overruled') rulings.set(id, outcome);
+    }
+
+    const plan = (last.plan ?? []) as PlanItem[];
+    const failed = plan.flatMap((item) => {
+      if (rulings.get(logicalId(item)) === 'upheld') return [];
       const r = judgedFor(logicalId(item))?.result;
       if (!r || (r.status !== 'failed' && r.verdict !== 'failed' && r.verdict !== 'uncertain'))
         return [];
       return [{ title: item.title, why: r.suggestion || r.toulmin?.reasoning || undefined }];
     });
     if (failed.length > 0) context.failedChecks = failed.slice(0, MAX_GOAL_FAILED_CHECKS);
+    const disputeRulings = plan.flatMap((item) => {
+      const outcome = rulings.get(logicalId(item));
+      return outcome ? [{ outcome, title: item.title }] : [];
+    });
+    if (disputeRulings.length > 0) context.disputeRulings = disputeRulings;
     return context;
   } catch {
     return context;

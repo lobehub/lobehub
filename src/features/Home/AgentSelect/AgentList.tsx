@@ -88,8 +88,7 @@ interface AgentListProps {
 }
 
 type ListRow =
-  | { key: string; kind: 'section'; label: string }
-  | { key: string; kind: 'agent'; row: AgentRow };
+  { key: string; kind: 'section'; label: string } | { key: string; kind: 'agent'; row: AgentRow };
 
 const toAgentRow = (row: AgentRow): ListRow => ({ key: row.id, kind: 'agent', row });
 const toSectionRow = (key: string, label: string): ListRow => ({ key, kind: 'section', label });
@@ -176,10 +175,10 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
           }}
           // virtua sizes itself on mount; remount when the filtered count changes
           // so a narrowed list never leaves stale rows undrawn.
+          virtual
           key={rows.length}
           listItemHeight={ROW_HEIGHT}
           style={{ height: listHeight }}
-          virtual
         >
           {rows.map((item) =>
             item.kind === 'section' ? (
@@ -203,11 +202,11 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
                 />
                 <Text
                   ellipsis
+                  style={{ flex: 1 }}
+                  weight={item.row.id === activeAgentId ? 600 : 500}
                   color={
                     item.row.id === activeAgentId ? cssVar.colorText : cssVar.colorTextSecondary
                   }
-                  style={{ flex: 1 }}
-                  weight={item.row.id === activeAgentId ? 600 : 500}
                 >
                   {item.row.title}
                 </Text>

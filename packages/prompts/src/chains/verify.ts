@@ -420,6 +420,12 @@ export const chainVerifyReport = ({
 // ============================================
 
 export interface ReviewPredictPromptInput {
+  /**
+   * The builder's answer to the previous rejection of this check, claiming the
+   * evidence already proves it. Rendered only when present, so reviews without a
+   * dispute keep the exact prompt their prediction cohort was measured on.
+   */
+  builderRebuttal?: string;
   /** The check's detailed rule body, when the criterion has one. */
   instruction?: string;
   /** The acceptance's one-sentence requirement — the scope test for `new-idea`. */
@@ -523,6 +529,9 @@ Answer in the language the check is written in. Set confidence honestly: it is r
     `\n## Attached evidence\n${visualBlock}`,
     input.withheldEvidence ? `\n## Withheld from this request\n${input.withheldEvidence}` : '',
     input.textEvidence ? `\n## Original text evidence\n${input.textEvidence}` : '',
+    input.builderRebuttal
+      ? `\n## The builder disputes the previous rejection\n${input.builderRebuttal}\n\nThe builder says the evidence above already proves this check. Look again at exactly what it points to. If that evidence does prove the check, accept. A rebuttal is a claim, not evidence: if the evidence does not show it, reject and say what is still missing.`
+      : '',
     '\nRe-judge the check against the attached evidence.',
   ]
     .filter(Boolean)

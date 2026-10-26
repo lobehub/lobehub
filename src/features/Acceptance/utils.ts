@@ -1,5 +1,6 @@
 import {
   HOLISTIC_CHECK_TITLE,
+  isCheckWaivedByDispute,
   normalizeVerifySurface,
   type VerifySurface,
 } from '@lobechat/const/verify';
@@ -192,11 +193,15 @@ export interface CheckCounts {
   total: number;
 }
 
-export const countResults = (results: VerifyCheckResultItem[] = []): CheckCounts => ({
-  failed: results.filter((r) => r.status === 'failed' || r.verdict === 'failed').length,
-  passed: results.filter((r) => r.status === 'passed' || r.verdict === 'passed').length,
-  total: results.length,
-});
+export const countResults = (results: VerifyCheckResultItem[] = []): CheckCounts => {
+  // A waived check no longer counts, matching the server's status and report rollups.
+  const counted = results.filter((r) => !isCheckWaivedByDispute(r.metadata));
+  return {
+    failed: counted.filter((r) => r.status === 'failed' || r.verdict === 'failed').length,
+    passed: counted.filter((r) => r.status === 'passed' || r.verdict === 'passed').length,
+    total: counted.length,
+  };
+};
 
 /** The subset of theme color tokens the verify card tint reads. */
 export interface VerifyTintTheme {
