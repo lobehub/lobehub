@@ -31,6 +31,41 @@ export const extractMentionedUserIds = (editorData: unknown): string[] => {
   return [...userIds];
 };
 
+const MARKDOWN_MENTION_TAG = /<mention\s[^>]*?(?<=\s)id\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi;
+// Code spans render literally, so a tag quoted inside one is not a mention.
+const MARKDOWN_CODE = /```[\s\S]*?(?:```|$)|`[^`\n]*`/g;
+
+/**
+ * Collect the member ids referenced by serialized `<mention name="…" id="…" />`
+ * tags in a markdown comment body. This is the form the comment editor writes
+ * for a mention, and the only way a markdown-only author (CLI, agent tools)
+ * can address a member.
+ */
+export const extractMarkdownMentionedUserIds = (content: unknown): string[] => {
+  if (typeof content !== 'string' || !content.includes('<mention')) return [];
+
+  const userIds = new Set<string>();
+  const prose = content.replaceAll(MARKDOWN_CODE, '');
+  for (const [, doubleQuoted, singleQuoted] of prose.matchAll(MARKDOWN_MENTION_TAG)) {
+    const userId = (doubleQuoted ?? singleQuoted).trim();
+    if (userId) userIds.add(userId);
+  }
+  return [...userIds];
+};
+
+/**
+ * Mention candidates of a comment revision. The rich-text snapshot is the
+ * source of truth when present (its markdown is derived from it); a
+ * markdown-only revision falls back to its serialized mention tags.
+ */
+export const extractCommentMentionedUserIds = (comment: {
+  content?: unknown;
+  editorData?: unknown;
+}): string[] =>
+  comment.editorData
+    ? extractMentionedUserIds(comment.editorData)
+    : extractMarkdownMentionedUserIds(comment.content);
+
 /**
  * Keep only the ids that are active members of the Workspace, preserving
  * order and dropping duplicates. Shared by the mention validator and by every
@@ -73,4 +108,21 @@ export const validateMentionedUserIds = async (
     db,
     scope.workspaceId,
     extractMentionedUserIds(editorData).filter((id) => id !== scope.actorUserId),
+  );
+
+/**
+ * Task-comment counterpart of `validateMentionedUserIds`: the revision may
+ * only carry markdown (see `extractCommentMentionedUserIds`), and
+ * `excludeUserId` is optional because an agent writing on a member's behalf
+ * may @mention that member.
+ */
+export const validateTaskCommentMentionedUserIds = async (
+  db: LobeChatDatabase,
+  scope: { excludeUserId?: string; workspaceId: string },
+  comment: { content?: unknown; editorData?: unknown },
+): Promise<string[]> =>
+  filterActiveWorkspaceMemberIds(
+    db,
+    scope.workspaceId,
+    extractCommentMentionedUserIds(comment).filter((id) => id !== scope.excludeUserId),
   );

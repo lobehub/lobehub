@@ -8,31 +8,37 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { assertAssigneeAgentBelongsToUser } from '@/server/services/task/patchValidation';
 import {
-  extractMentionedUserIds,
+  extractCommentMentionedUserIds,
   filterActiveWorkspaceMemberIds,
-  validateMentionedUserIds,
+  validateTaskCommentMentionedUserIds,
 } from '@/server/utils/commentMentions';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { resolveOrThrow, taskProcedureWrite } from './procedures';
 
 /**
- * Recipients of a new member comment on a task: the creator and the member
- * assignee as ambient `commented` pings, upgraded to `mentioned` when the
- * comment @mentions them. The actor never appears in the result.
+ * Recipients of a new comment on a task. A member comment pings the creator
+ * and the member assignee as ambient `commented` activity, upgraded to
+ * `mentioned` when the comment @mentions them, and never the member who wrote
+ * it. An agent-authored progress note only pings the members it explicitly
+ * @mentions — including the member the agent runs for, since the agent, not
+ * that member, wrote it.
  */
 function collectTaskCommentRecipients(params: {
   actorUserId: string;
+  isAgentAuthored: boolean;
   mentionedUserIds: string[];
   task: { assigneeUserId: string | null; createdByUserId: string };
 }): TaskCommentActivityRecipient[] {
-  const { actorUserId, mentionedUserIds, task } = params;
+  const { actorUserId, isAgentAuthored, mentionedUserIds, task } = params;
   const byUserId = new Map<string, TaskCommentActivityRecipient['kind']>();
-  for (const userId of [task.createdByUserId, task.assigneeUserId]) {
-    if (userId) byUserId.set(userId, 'commented');
+  if (!isAgentAuthored) {
+    for (const userId of [task.createdByUserId, task.assigneeUserId]) {
+      if (userId) byUserId.set(userId, 'commented');
+    }
   }
   for (const userId of mentionedUserIds) byUserId.set(userId, 'mentioned');
-  byUserId.delete(actorUserId);
+  if (!isAgentAuthored) byUserId.delete(actorUserId);
   return [...byUserId].map(([userId, kind]) => ({ kind, userId }));
 }
 
@@ -124,15 +130,18 @@ export const commentsRouter = router({
           input.authorAgentId,
         );
         // Resolve @mentions before the insert so an invalid editorData never
-        // leaves a comment behind that nobody was told about.
-        const mentionedUserIds =
-          ctx.workspaceId && !input.authorAgentId
-            ? await validateMentionedUserIds(
-                ctx.serverDB,
-                { actorUserId: ctx.userId, workspaceId: ctx.workspaceId },
-                input.editorData,
-              )
-            : [];
+        // leaves a comment behind that nobody was told about. Markdown-only
+        // comments (CLI, agent tools) mention through `<mention id="…" />`.
+        const mentionedUserIds = ctx.workspaceId
+          ? await validateTaskCommentMentionedUserIds(
+              ctx.serverDB,
+              {
+                excludeUserId: input.authorAgentId ? undefined : ctx.userId,
+                workspaceId: ctx.workspaceId,
+              },
+              input,
+            )
+          : [];
         const comment = await model.addComment({
           authorAgentId: input.authorAgentId,
           authorUserId: input.authorAgentId ? undefined : ctx.userId,
@@ -146,10 +155,11 @@ export const commentsRouter = router({
         // Member comment ping (Linear-style): the task creator and the member
         // assignee learn about new discussion; @mentioned members get the
         // stronger "mentioned" notification instead. Agent-authored progress
-        // notes stay silent — they are not a conversation between members.
-        if (ctx.workspaceId && !input.authorAgentId) {
+        // notes only reach the members they explicitly @mention.
+        if (ctx.workspaceId) {
           const recipients = collectTaskCommentRecipients({
             actorUserId: ctx.userId,
+            isAgentAuthored: Boolean(input.authorAgentId),
             mentionedUserIds,
             task,
           });
@@ -157,6 +167,7 @@ export const commentsRouter = router({
             notifyCommentActivityBestEffort(
               { serverDB: ctx.serverDB, taskModel: model, workspaceId: ctx.workspaceId },
               {
+                actorAgentId: input.authorAgentId,
                 actorUserId: ctx.userId,
                 commentId: comment.id,
                 recipients,
@@ -212,14 +223,16 @@ export const commentsRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
         }
         // Only members @mentioned for the first time by this edit are pinged;
-        // mentions kept from the previous revision were already notified.
+        // mentions kept from the previous revision were already notified. The
+        // edit carries no agent identity, so it is attributed to the member
+        // making it even when an agent wrote the original comment.
         let addedMentionUserIds: string[] = [];
-        if (workspaceId && !previous.authorAgentId && input.editorData !== undefined) {
-          const previousMentions = new Set(extractMentionedUserIds(previous.editorData));
-          const nextMentions = await validateMentionedUserIds(
+        if (workspaceId) {
+          const previousMentions = new Set(extractCommentMentionedUserIds(previous));
+          const nextMentions = await validateTaskCommentMentionedUserIds(
             ctx.serverDB,
-            { actorUserId: ctx.userId, workspaceId },
-            input.editorData,
+            { excludeUserId: ctx.userId, workspaceId },
+            input,
           );
           addedMentionUserIds = nextMentions.filter((id) => !previousMentions.has(id));
         }

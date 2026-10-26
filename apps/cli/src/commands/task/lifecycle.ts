@@ -255,7 +255,10 @@ export function registerLifecycleCommands(task: Command) {
   task
     .command('comment <id>')
     .description('Add a comment to a task')
-    .requiredOption('-m, --message <text>', 'Comment content')
+    .requiredOption(
+      '-m, --message <text>',
+      'Comment content (markdown). Mention a member with <mention name="Name" id="user_xxx" /> to notify them (ids from `lh workspace members`); a plain "@Name" is only text',
+    )
     .action(async (id: string, options: { message: string }) => {
       const client = await getTrpcClient();
       const topicId = process.env.LOBEHUB_TOPIC_ID?.trim() || undefined;
