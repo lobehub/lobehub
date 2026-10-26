@@ -5,7 +5,14 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { FileTextIcon, FolderOpenIcon, GlobeIcon, HardDriveIcon, UsersIcon } from 'lucide-react';
-import { type KeyboardEvent, memo, type MouseEvent, useMemo } from 'react';
+import {
+  Fragment,
+  type KeyboardEvent,
+  memo,
+  type MouseEvent,
+  type ReactNode,
+  useMemo,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -37,18 +44,33 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  link: {
-    cursor: 'pointer',
+  /**
+   * The Location cell's items carry 6px of inline padding for the hover fill;
+   * pulling the cell back by the same amount keeps their text on the column.
+   */
+  location: {
+    marginInlineStart: '-6px',
+  },
+  locationItem: {
     overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+
     minWidth: 0,
-    padding: 0,
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '6px',
+
+    whiteSpace: 'nowrap',
+  },
+  locationLink: {
+    cursor: 'pointer',
     borderWidth: 0,
     font: 'inherit',
     color: { 'default': 'inherit', ':hover': cssVar.colorText },
-    textDecoration: { 'default': 'none', ':hover': 'underline' },
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    backgroundColor: 'transparent',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
   },
   header: {
     display: 'grid',
@@ -122,28 +144,43 @@ interface LocationProps {
   row: DocsHomeRow;
 }
 
-interface LocationLinkProps {
+interface LocationItemProps {
+  icon?: ReactNode;
   label: string;
-  onNavigate: (path: string) => void;
-  path: string;
+  onNavigate?: (path: string) => void;
+  path?: string;
 }
 
-/** A location that opens its section without also opening the row. */
-const LocationLink = memo<LocationLinkProps>(({ label, onNavigate, path }) => (
-  <button
-    type={'button'}
-    {...stylex.props(styles.link)}
-    onKeyDown={(event: KeyboardEvent) => event.stopPropagation()}
-    onClick={(event: MouseEvent) => {
-      event.stopPropagation();
-      onNavigate(path);
-    }}
-  >
-    {label}
-  </button>
-));
+/**
+ * One place a row lives. With a `path` it is a button that opens that section
+ * (without also opening the row) and fills on hover; without one it is plain.
+ */
+const LocationItem = memo<LocationItemProps>(({ icon, label, onNavigate, path }) => {
+  const content = (
+    <>
+      {icon}
+      <span {...stylex.props(styles.cell)}>{label}</span>
+    </>
+  );
 
-LocationLink.displayName = 'DocsHomeLocationLink';
+  if (!path || !onNavigate) return <span {...stylex.props(styles.locationItem)}>{content}</span>;
+
+  return (
+    <button
+      type={'button'}
+      {...stylex.props(styles.locationItem, styles.locationLink)}
+      onKeyDown={(event: KeyboardEvent) => event.stopPropagation()}
+      onClick={(event: MouseEvent) => {
+        event.stopPropagation();
+        onNavigate(path);
+      }}
+    >
+      {content}
+    </button>
+  );
+});
+
+LocationItem.displayName = 'DocsHomeLocationItem';
 
 /**
  * Where the row lives: its knowledge bases, else the drive (files) or a page
@@ -157,46 +194,50 @@ const Location = memo<LocationProps>(({ libraryNames, myId, onNavigate, row }) =
     return name ? [{ id, name }] : [];
   });
 
+  let items: ReactNode;
   if (row.knowledgeBaseIds.length > 0) {
-    return (
-      <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.cell, styles.meta)}>
-        <LibIcon size={14} />
-        <span {...stylex.props(styles.cell)}>
-          {libraries.length > 0
-            ? libraries.map((library, index) => (
-                <span key={library.id}>
-                  {index > 0 && ', '}
-                  <LocationLink
-                    label={library.name}
-                    path={`${LIBRARY_INDEX_PATH}/${library.id}`}
-                    onNavigate={onNavigate}
-                  />
-                </span>
-              ))
-            : t('docs.section.library')}
-        </span>
-      </Flexbox>
+    items =
+      libraries.length > 0 ? (
+        libraries.map((library, index) => (
+          <Fragment key={library.id}>
+            {index > 0 && <span>,</span>}
+            <LocationItem
+              icon={index === 0 ? <LibIcon size={14} /> : undefined}
+              label={library.name}
+              path={`${LIBRARY_INDEX_PATH}/${library.id}`}
+              onNavigate={onNavigate}
+            />
+          </Fragment>
+        ))
+      ) : (
+        <LocationItem icon={<LibIcon size={14} />} label={t('docs.section.library')} />
+      );
+  } else if (row.kind === 'file') {
+    items = (
+      <LocationItem
+        icon={<Icon icon={HardDriveIcon} size={14} />}
+        label={t('docs.section.drive')}
+        path={DRIVE_PATH}
+        onNavigate={onNavigate}
+      />
+    );
+  } else {
+    const shared = row.userId && myId && row.userId !== myId;
+    items = (
+      <LocationItem
+        icon={<Icon icon={shared ? UsersIcon : FolderOpenIcon} size={14} />}
+        label={shared ? t('docs.shared.title') : t('docs.myDocs.title')}
+      />
     );
   }
-
-  if (row.kind === 'file') {
-    return (
-      <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.cell, styles.meta)}>
-        <Icon icon={HardDriveIcon} size={14} />
-        <LocationLink label={t('docs.section.drive')} path={DRIVE_PATH} onNavigate={onNavigate} />
-      </Flexbox>
-    );
-  }
-
-  const [icon, label] =
-    row.userId && myId && row.userId !== myId
-      ? [UsersIcon, t('docs.shared.title')]
-      : [FolderOpenIcon, t('docs.myDocs.title')];
 
   return (
-    <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.cell, styles.meta)}>
-      <Icon icon={icon} size={14} />
-      <span {...stylex.props(styles.cell)}>{label}</span>
+    <Flexbox
+      horizontal
+      align={'center'}
+      {...stylex.props(styles.cell, styles.meta, styles.location)}
+    >
+      {items}
     </Flexbox>
   );
 });
