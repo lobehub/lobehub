@@ -55,6 +55,13 @@ describe('extractMarkdownMentionedUserIds', () => {
     expect(extractMarkdownMentionedUserIds(undefined)).toEqual([]);
   });
 
+  it('accepts unquoted ids, as left by shell quoting of `lh task comment -m "…"`', () => {
+    // What the CLI receives for: -m "<mention name="Arvin" id="user_1" /> done"
+    expect(extractMarkdownMentionedUserIds('<mention name=Arvin id=user_1 /> done')).toEqual([
+      'user_1',
+    ]);
+  });
+
   it('accepts single-quoted ids and skips tags quoted in code', () => {
     const content = [
       "Hi <mention name='Arvin' id='user-1' />",

@@ -34,7 +34,16 @@ export const extractMentionedUserIds = (editorData: unknown): string[] => {
   return [...userIds];
 };
 
-const MARKDOWN_MENTION_TAG = /<mention\s[^>]*?(?<=\s)id\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi;
+const MARKDOWN_MENTION_TAG = /<mention(\s[^>]*)>/gi;
+// Same attribute forms the renderer accepts. Unquoted values matter: a shell
+// strips the inner quotes of `lh task comment -m "<mention id="…" />"`.
+const TAG_ATTRIBUTE = /([\w-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s/>]+)))?/g;
+
+const readMentionId = (attributes: string): string | undefined => {
+  for (const [, key, doubleQuoted, singleQuoted, unquoted] of attributes.matchAll(TAG_ATTRIBUTE)) {
+    if (key.toLowerCase() === 'id') return (doubleQuoted ?? singleQuoted ?? unquoted)?.trim();
+  }
+};
 
 /**
  * Collect the member ids referenced by serialized `<mention name="…" id="…" />`
@@ -51,8 +60,8 @@ export const extractMarkdownMentionedUserIds = (content: unknown): string[] => {
   visit(unified().use(remarkParse).parse(content), ['html', 'text'], (node) => {
     const { value } = node as { value?: unknown };
     if (typeof value !== 'string') return;
-    for (const [, doubleQuoted, singleQuoted] of value.matchAll(MARKDOWN_MENTION_TAG)) {
-      const userId = (doubleQuoted ?? singleQuoted).trim();
+    for (const [, attributes] of value.matchAll(MARKDOWN_MENTION_TAG)) {
+      const userId = readMentionId(attributes);
       if (userId) userIds.add(userId);
     }
   });
