@@ -129,19 +129,18 @@ const styles = createStaticStyles(({ css }) => ({
     overflow-y: auto;
     min-height: 0;
   `,
+  // Docked as a full-height right column (the agent's profile), not a
+  // floating card, so it reads as the conversation's side panel.
   overviewPanel: css`
     overflow: hidden;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
 
-    max-height: calc(100% - 32px);
-    margin: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
+    height: 100%;
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   overviewSlot: css`
     overflow: hidden;
@@ -934,13 +933,13 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - 32);
+  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget);
   const overviewPanel = (
     <OverviewSlot>
       <AnimatePresence initial={false}>
         {showWorkingOverview && overviewFits && (
           <m.div
-            animate={{ width: overviewWidth + 32 }}
+            animate={{ width: overviewWidth }}
             className={styles.overviewSlot}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}

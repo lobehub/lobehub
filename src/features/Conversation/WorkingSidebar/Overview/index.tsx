@@ -58,7 +58,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
-import AgentProfileSection from './AgentProfileSection';
+import AgentProfilePanel from './AgentProfilePanel';
 import DeviceStatusSection from './DeviceStatusSection';
 import {
   collectChangeStats,
@@ -444,11 +444,8 @@ const Overview = memo<OverviewProps>(
       )
     ) : null;
 
-    return (
-      <Flexbox className={styles.body}>
-        {/* The agent's identity comes first; workspace and Portal follow. */}
-        {agentId && <AgentProfileSection agentId={agentId} />}
-
+    const workspaceBody = (
+      <Flexbox>
         {hasWorkspace && (
           <>
             <OverviewHeader
@@ -558,6 +555,18 @@ const Overview = memo<OverviewProps>(
             />
           )}
         </Flexbox>
+      </Flexbox>
+    );
+
+    // With an agent, the panel opens as its profile and this overview becomes
+    // the profile's Workspace tab.
+    return (
+      <Flexbox className={styles.body}>
+        {agentId ? (
+          <AgentProfilePanel agentId={agentId} workspace={workspaceBody} />
+        ) : (
+          workspaceBody
+        )}
       </Flexbox>
     );
   },
