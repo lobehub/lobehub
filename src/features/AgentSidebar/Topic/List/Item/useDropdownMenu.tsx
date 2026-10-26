@@ -120,8 +120,20 @@ export const useTopicItemDropdownMenu = ({
     if (!id) return;
     if (isCompleted) await unmarkTopicCompleted(id);
     else await markTopicCompleted(id);
-    if (scope) await refresh();
-  }, [id, isCompleted, markTopicCompleted, unmarkTopicCompleted, scope, refresh]);
+    if (scope) {
+      if (!isCompleted && routeTopicId === id) navigate(`/project/${scope.projectId}`);
+      await refresh();
+    }
+  }, [
+    id,
+    isCompleted,
+    markTopicCompleted,
+    unmarkTopicCompleted,
+    scope,
+    routeTopicId,
+    navigate,
+    refresh,
+  ]);
 
   const handleOpenShareModal = useCallback(() => {
     if (!id) return;

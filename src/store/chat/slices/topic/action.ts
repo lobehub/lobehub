@@ -548,10 +548,9 @@ export class ChatTopicActionImpl {
   };
 
   markTopicCompleted = async (id: string): Promise<void> => {
-    await this.#get().internal_updateTopic(id, {
-      completedAt: new Date(),
-      status: 'completed',
-    });
+    await this.#get().internal_updateTopic(id, { completedAt: new Date(), status: 'completed' });
+    // Like deleting it, archiving the topic the user is on opens a new one.
+    if (this.#get().activeTopicId === id) this.#get().switchTopic(null);
   };
 
   unmarkTopicCompleted = async (id: string): Promise<void> => {
