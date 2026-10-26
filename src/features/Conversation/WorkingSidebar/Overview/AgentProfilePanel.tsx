@@ -26,7 +26,6 @@ const styles = stylex.create({
     paddingInline: '16px',
   },
   hero: {
-    alignItems: 'center',
     paddingBlockStart: '28px',
     paddingBlockEnd: '12px',
     paddingInline: '16px',
@@ -49,7 +48,6 @@ const styles = stylex.create({
     color: cssVar.colorTextQuaternary,
   },
   tabs: {
-    alignItems: 'center',
     paddingBlockEnd: '8px',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
@@ -80,7 +78,7 @@ const AgentProfilePanel = memo<AgentProfilePanelProps>(({ agentId, workspace }) 
 
   return (
     <Flexbox>
-      <Flexbox gap={8} {...stylex.props(styles.hero)}>
+      <Flexbox align={'center'} gap={8} {...stylex.props(styles.hero)}>
         <Avatar
           emojiScaleWithBackground
           avatar={meta.avatar || DEFAULT_AVATAR}
@@ -93,9 +91,11 @@ const AgentProfilePanel = memo<AgentProfilePanelProps>(({ agentId, workspace }) 
           {title}
         </Text>
       </Flexbox>
-      <Flexbox {...stylex.props(styles.tabs)}>
+      <Flexbox align={'center'} {...stylex.props(styles.tabs)}>
         <Segmented
           size={'small'}
+          // Segmented pins itself to the start; center it under the identity.
+          style={{ alignSelf: 'center' }}
           value={tab}
           options={[
             { label: t('workingPanel.profile.tabs.detail'), value: 'detail' },

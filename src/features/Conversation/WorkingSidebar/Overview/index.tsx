@@ -563,7 +563,7 @@ const Overview = memo<OverviewProps>(
     return (
       <Flexbox className={styles.body}>
         {agentId ? (
-          <AgentProfilePanel agentId={agentId} workspace={workspaceBody} />
+          <AgentProfilePanel agentId={agentId} key={agentId} workspace={workspaceBody} />
         ) : (
           workspaceBody
         )}
