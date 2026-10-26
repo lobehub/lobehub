@@ -1,6 +1,6 @@
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import type { LobeToolManifest } from '@lobechat/context-engine';
-import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
+import { FILE_PREVIEW_CHARS } from '@lobechat/prompts';
 import type { FrozenCredentialFacts } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import debug from 'debug';
@@ -14,6 +14,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { mayBeOversizedKnowledgeFile } from '@/server/services/file/resolveKnowledgeFileContents';
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
@@ -398,11 +399,9 @@ const readHasOversizedFiles = async (
   ctx: ToolReadsContext,
 ): Promise<boolean> => {
   const { agentConfig, attachedFileIds, topicId } = ctx;
-  const hasOversizedAgentFile = agentConfig.files?.some(
-    (file: { content?: string | null; enabled?: boolean | null; originalCharCount?: number }) =>
-      file.enabled === true &&
-      isOversizedFileContent(file.content?.length ?? 0, file.originalCharCount),
-  );
+  // An unparsed file is resolved on demand by the context builder, so its length is not
+  // known yet; `mayBeOversizedKnowledgeFile` keeps the tool available for that turn.
+  const hasOversizedAgentFile = agentConfig.files?.some(mayBeOversizedKnowledgeFile);
   if (hasOversizedAgentFile) return true;
   if (!topicId && !attachedFileIds?.length) return false;
 
