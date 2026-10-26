@@ -32,6 +32,7 @@ import { type AiProviderSourceType } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 
 import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewModelBadge';
+import RoutingBadge from './RoutingBadge';
 
 export const TAG_CLASSNAME = 'lobe-model-info-tags';
 
@@ -330,6 +331,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
             </Text>
           )}
           {nameSuffix}
+          <RoutingBadge id={id} />
           {newBadgeLabel ? (
             <NewModelBadgeCore label={newBadgeLabel} releasedAt={releasedAt} />
           ) : (

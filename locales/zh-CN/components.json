@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "该模型支持视频识别",
   "ModelSelect.featureTag.vision": "该模型支持视觉识别",
   "ModelSelect.removed": "该模型不在列表中，若取消选中将会自动移除",
+  "ModelSelect.routing": "路由",
+  "ModelSelect.routingTooltip": "路由组：多个渠道提供同一模型，每次请求交给率先响应的那个",
   "ModelSelect.staleModel.current": "当前配置",
   "ModelSelect.staleModel.notEnabled.action": "启用此模型",
   "ModelSelect.staleModel.notEnabled.actionFailed": "启用模型失败，请重试",

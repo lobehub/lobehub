@@ -39,6 +39,7 @@ import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import LongCatProvider from './longcat';
+import MagpieProvider from './magpie';
 import MetaProvider from './meta';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
@@ -231,6 +232,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OpenCodeCodingPlanProvider,
   StraicoProvider,
   LongCatProvider,
+  MagpieProvider,
   StreamLakeProvider,
   AntGroupProvider,
 ];
@@ -337,6 +339,7 @@ export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';
+export { default as MagpieProviderCard } from './magpie';
 export { default as MetaProviderCard } from './meta';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
