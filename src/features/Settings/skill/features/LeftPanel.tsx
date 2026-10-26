@@ -77,7 +77,7 @@ const LeftPanel = memo<LeftPanelProps>(
 
     const isConnectorView = viewMode === 'connector';
     // Adding a workspace connector follows the same member policy as editing one.
-    const { canManage: canAddConnector } = useConnectorManageable();
+    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
 
     return (
       <>
@@ -97,7 +97,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 // Connector view: single action to add a custom OAuth connector.
                 <Tooltip
                   title={
-                    canAddConnector
+                    canAddConnector || isPolicyPending
                       ? t('connector.add.title', {
                           defaultValue: 'Add Custom Connector',
                           ns: 'tool',

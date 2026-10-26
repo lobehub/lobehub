@@ -21,6 +21,11 @@ export interface ConnectorManageable {
    * creator and the workspace owner.
    */
   canManageCredentials: boolean;
+  /**
+   * The policy has not loaded yet: actions stay disabled without a permission
+   * hint, so a button is never clickable before we know the server allows it.
+   */
+  isPending: boolean;
   /** The workspace policy, not the row's creator, is what blocks the viewer. */
   restrictedByPolicy: boolean;
 }
@@ -28,14 +33,14 @@ export interface ConnectorManageable {
 /**
  * Client mirror of the server's connector manage gates
  * (`assertConnectorMaintainable` / `assertConnectorCredentialsManageable`).
- * Until the policy loads it assumes the default (members may maintain); the
- * server still enforces, and a rejected write shows its reason on the row.
+ * Actions are enabled only once the server-computed policy says they are
+ * allowed; a restricted viewer gets disabled controls with the reason on hover.
  */
 export const useConnectorManageable = (connector?: {
   agentId?: string | null;
   userId?: string | null;
 }): ConnectorManageable => {
-  const { data: policy } = useConnectorManagePolicy();
+  const { data: policy, error } = useConnectorManagePolicy();
   const isCreatorOrOwner = useResourceManageable(connector?.userId);
 
   // Agent-scoped rows belong to that agent's setup and keep the creator rule.
@@ -43,13 +48,25 @@ export const useConnectorManageable = (connector?: {
     return {
       canManage: isCreatorOrOwner,
       canManageCredentials: isCreatorOrOwner,
+      isPending: false,
       restrictedByPolicy: false,
     };
 
+  if (!policy && !error)
+    return {
+      canManage: false,
+      canManageCredentials: false,
+      isPending: true,
+      restrictedByPolicy: false,
+    };
+
+  // A failed policy read must not lock every connector: fall back to the
+  // default and let the server decide (a 403 refetches the policy).
   const canManage = policy?.canManage ?? true;
   return {
     canManage,
     canManageCredentials: canManage && isCreatorOrOwner,
+    isPending: false,
     restrictedByPolicy: !canManage,
   };
 };

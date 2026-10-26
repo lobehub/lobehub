@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
+import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
@@ -81,7 +82,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     // Members co-maintain shared connectors unless the workspace restricted it;
     // editing the stored credentials stays with the creator or a workspace
     // owner. The server enforces both, this keeps the UI honest about it.
-    const { canManage, canManageCredentials, restrictedByPolicy } =
+    const { canManage, canManageCredentials, isPending, restrictedByPolicy } =
       useConnectorManageable(connector);
     const creatorOnlyTooltip = t(
       'connector.manageOnlyCreator',
@@ -90,8 +91,9 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const deniedTooltip = restrictedByPolicy
       ? ts('tools.connectorFeedback.manageOnly')
       : creatorOnlyTooltip;
-    const manageTooltip = canManage ? undefined : deniedTooltip;
-    const credentialsTooltip = canManageCredentials ? undefined : deniedTooltip;
+    // While the policy loads the controls are disabled without a reason yet.
+    const manageTooltip = canManage || isPending ? undefined : deniedTooltip;
+    const credentialsTooltip = canManageCredentials || isPending ? undefined : deniedTooltip;
 
     // Deleting/uninstalling revokes the user's authorization; spell out the
     // consequence. For an agent-owned connector it ALSO unpins the tool from
@@ -107,16 +109,22 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             'This removes the connector and its authorization from your account. Any agent that uses it will need to be re-authorized afterwards.',
         });
 
+    // A 403 means the cached policy was stale: refetch it so the buttons turn
+    // disabled with their hover reason, rather than reporting a permission error
+    // for a button that looked usable. Returns whether it was such a rejection.
+    const settlePermissionRejection = useCallback((error: unknown) => {
+      const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
+      if (httpStatus !== 403) return false;
+      void refreshConnectorManagePolicy();
+      return true;
+    }, []);
+
     const notifyActionError = useCallback(
       (error: unknown) => {
-        const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
-        toast.error(
-          httpStatus === 403
-            ? deniedTooltip
-            : t('connector.actionFailed', 'Operation failed, please try again'),
-        );
+        if (settlePermissionRejection(error)) return;
+        toast.error(t('connector.actionFailed', 'Operation failed, please try again'));
       },
-      [deniedTooltip, t],
+      [settlePermissionRejection, t],
     );
 
     // A failed uninstall / delete / disconnect also stays in the panel: the toast
@@ -128,10 +136,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     }>();
     const notifyRemoveError = useCallback(
       (error: unknown) => {
+        if (settlePermissionRejection(error)) return;
         notifyActionError(error);
         setRemoveError({ connectorId, error: toConnectorActionError('remove', error) });
       },
-      [connectorId, notifyActionError],
+      [connectorId, notifyActionError, settlePermissionRejection],
     );
 
     // Custom connector sync uses the stored credentials (on desktop it reads them

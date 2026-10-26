@@ -70,7 +70,9 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const actionError = useToolStore(composioStoreSelectors.getServerError(serverType.identifier));
 
     // Without the row-level gate a member's click hits a 403 and looks dead.
-    const { canManage } = useConnectorManageGate(serverType.identifier);
+    const { access } = useConnectorManageGate(serverType.identifier);
+    const canManage = access === 'allowed';
+    const isRestricted = access === 'restricted';
 
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
@@ -280,7 +282,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         );
       }
 
-      if (!canManage && server?.status !== ComposioServerStatus.ACTIVE) {
+      if (isRestricted && server?.status !== ComposioServerStatus.ACTIVE) {
         return (
           <Flexbox horizontal align="center" gap={8}>
             <DisabledConnect size="middle" />
@@ -293,7 +295,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         return (
           <Tooltip title={!canCreate ? createReason : editReason}>
             <Button
-              disabled={!canCreate || !canEdit}
+              disabled={!canCreate || !canEdit || !canManage}
               icon={<Icon icon={SquareArrowOutUpRight} />}
               type="default"
               onClick={handleConnect}
@@ -332,7 +334,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
               },
             ]}
           >
-            <Tooltip title={canManage ? editReason : t('tools.connectorFeedback.manageOnly')}>
+            <Tooltip title={isRestricted ? t('tools.connectorFeedback.manageOnly') : editReason}>
               <LobeButton disabled={!canEdit || !canManage} icon={MoreHorizontalIcon} />
             </Tooltip>
           </DropdownMenu>
@@ -354,7 +356,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
               },
             ]}
           >
-            <Tooltip title={canManage ? editReason : t('tools.connectorFeedback.manageOnly')}>
+            <Tooltip title={isRestricted ? t('tools.connectorFeedback.manageOnly') : editReason}>
               <LobeButton disabled={!canEdit || !canManage} icon={MoreHorizontalIcon} />
             </Tooltip>
           </DropdownMenu>
@@ -366,7 +368,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
 
     const isConnected = server?.status === ComposioServerStatus.ACTIVE;
     const description = renderConnectorRowDescription({
-      askAdmin: !canManage && !isConnected,
+      askAdmin: isRestricted && !isConnected,
       error: actionError,
       name: serverType.label,
     });
@@ -399,14 +401,14 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
           </Tooltip>
         );
       }
-      if (!canManage) {
+      if (isRestricted) {
         return <DisabledConnect />;
       }
       if (isPending || isError) {
         return (
           <Tooltip title={!canCreate ? createReason : editReason}>
             <Button
-              disabled={!canCreate || !canEdit}
+              disabled={!canCreate || !canEdit || !canManage}
               icon={<Icon icon={SquareArrowOutUpRight} />}
               size="small"
               type="text"
@@ -420,7 +422,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       return (
         <Tooltip title={!canCreate ? createReason : editReason}>
           <Button
-            disabled={!canCreate || !canEdit}
+            disabled={!canCreate || !canEdit || !canManage}
             icon={<Icon icon={SquareArrowOutUpRight} />}
             size="small"
             type="text"

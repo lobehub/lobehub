@@ -109,7 +109,22 @@ describe('composio connection errors', () => {
     await waitFor(() => expect(useToolStore.getState().composioServers).toHaveLength(1));
   };
 
-  it('keeps a rejected connect on the row instead of swallowing it', async () => {
+  it('keeps a failed connect on the row instead of swallowing it', async () => {
+    mocks.createConnection.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
+    });
+
+    expect(errorOf('gmail')).toMatchObject({ action: 'connect', code: 'NETWORK' });
+    expect(mocks.refreshConnectorManagePolicy).not.toHaveBeenCalled();
+  });
+
+  it('turns a permission rejection into a policy refetch, not a red reason', async () => {
+    // The button only looked usable because the cached policy was stale; the
+    // refetched policy disables the row with its hover reason instead.
     mocks.createConnection.mockRejectedValue(forbidden());
 
     await act(async () => {
@@ -118,11 +133,12 @@ describe('composio connection errors', () => {
         .createComposioConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
     });
 
-    expect(errorOf('gmail')).toMatchObject({ action: 'connect', code: 'FORBIDDEN' });
+    expect(errorOf('gmail')).toBeUndefined();
+    expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(1);
   });
 
   it('does not show one scope’s failure on the same row of another scope', async () => {
-    mocks.createConnection.mockRejectedValue(forbidden());
+    mocks.createConnection.mockRejectedValue(new TypeError('Failed to fetch'));
 
     await act(async () => {
       await useToolStore
@@ -136,7 +152,7 @@ describe('composio connection errors', () => {
     expect(errorOf('gmail')).toBeUndefined();
 
     scope = workspaceScope;
-    expect(errorOf('gmail')).toMatchObject({ code: 'FORBIDDEN' });
+    expect(errorOf('gmail')).toMatchObject({ code: 'NETWORK' });
   });
 
   it('clears the previous failure when a new connect starts and succeeds', async () => {
@@ -166,33 +182,21 @@ describe('composio connection errors', () => {
     });
 
     expect(mocks.createConnection).not.toHaveBeenCalled();
-    expect(errorOf('gmail')).toMatchObject({ action: 'connect', code: 'FORBIDDEN' });
+    expect(errorOf('gmail')).toBeUndefined();
+    expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(1);
   });
 
-  it('refetches the connector policy after a permission rejection, not after other failures', async () => {
-    // A 403 means an admin restricted connectors after the page loaded.
-    mocks.createConnection.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    await act(async () => {
-      await useToolStore
-        .getState()
-        .createComposioConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
-    });
-    expect(mocks.refreshConnectorManagePolicy).not.toHaveBeenCalled();
+  it('puts the row back without a red reason when the delete is rejected for permission', async () => {
+    await loadGmail('ACTIVE');
+    mocks.deleteConnection.mockRejectedValue(forbidden());
 
-    mocks.createConnection.mockRejectedValueOnce(forbidden());
     await act(async () => {
-      await useToolStore
-        .getState()
-        .createComposioConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
+      await useToolStore.getState().removeComposioConnection('gmail');
     });
+
+    expect(useToolStore.getState().composioServers.map((s) => s.identifier)).toEqual(['gmail']);
+    expect(errorOf('gmail')).toBeUndefined();
     expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(1);
-
-    await loadGmail();
-    mocks.deleteConnection.mockRejectedValueOnce(forbidden());
-    await act(async () => {
-      await useToolStore.getState().reauthorizeComposioConnection('gmail');
-    });
-    expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(2);
   });
 
   it('puts the row back with the reason when the delete is rejected', async () => {

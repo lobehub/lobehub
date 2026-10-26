@@ -279,20 +279,20 @@ export class ComposioStoreActionImpl {
     } catch (error) {
       console.error('[Composio] Failed to create connection:', error);
 
+      const actionError = toConnectorActionError('connect', error);
+      // A permission rejection is not a failure to explain: the row switches to
+      // its disabled state once the refetched policy arrives.
+      const rejected = this.#settlePermissionRejection(actionError);
       this.#set(
         produce((draft: ComposioStoreState) => {
           draft.loadingComposioServerIds.delete(identifier);
           // Kept on the row, so the failure stays visible after any toast is gone.
-          if (cacheScope.get() === scope)
-            draft.composioServerErrors[identifier] = {
-              ...toConnectorActionError('connect', error),
-              scope,
-            };
+          if (cacheScope.get() === scope && !rejected)
+            draft.composioServerErrors[identifier] = { ...actionError, scope };
         }),
         false,
         n('createComposioConnection/error'),
       );
-      this.#refreshPolicyOnForbidden(error);
 
       return undefined;
     }
@@ -438,12 +438,9 @@ export class ComposioStoreActionImpl {
     } catch (error) {
       console.error('[Composio] Failed to clean up stale connection:', error);
       // A permission rejection here means minting a new link is rejected too:
-      // stop and keep the reason on the row instead of failing twice silently.
-      const actionError = toConnectorActionError('connect', error);
-      if (actionError.code === 'FORBIDDEN') {
-        if (cacheScope.get() === scope) this.setComposioServerError(identifier, actionError);
+      // stop, and let the refetched policy disable the row.
+      if (this.#settlePermissionRejection(toConnectorActionError('connect', error)))
         return undefined;
-      }
     }
 
     // Identity switched during the cleanup: minting now would create (and
@@ -501,24 +498,28 @@ export class ComposioStoreActionImpl {
           return list.some((s) => s.identifier === identifier) ? list : [...list, server];
         });
         this.#markLocalWrite();
-        this.setComposioServerError(identifier, toConnectorActionError('remove', error));
+        const actionError = toConnectorActionError('remove', error);
+        if (!this.#settlePermissionRejection(actionError))
+          this.setComposioServerError(identifier, actionError);
       }
     }
   };
 
-  /** Record (or clear, with `undefined`) the last failed write of a connection row. */
   /**
    * A 403 means the cached connector policy is stale (an admin restricted
-   * connectors after the page loaded): refetch it so rows switch to the gated
-   * state instead of offering a button that keeps failing.
+   * connectors after the page loaded). Refetch it so the row turns into the
+   * disabled state with its hover reason, instead of a red "only admins can
+   * change this" under a button that looked clickable. Returns whether the
+   * error was such a rejection.
    */
-  #refreshPolicyOnForbidden = (error: unknown): void => {
-    if (toConnectorActionError('connect', error).code === 'FORBIDDEN')
-      void refreshConnectorManagePolicy();
+  #settlePermissionRejection = (error: ConnectorActionError): boolean => {
+    if (error.code !== 'FORBIDDEN') return false;
+    void refreshConnectorManagePolicy();
+    return true;
   };
 
+  /** Record (or clear, with `undefined`) the last failed write of a connection row. */
   setComposioServerError = (identifier: string, error: ConnectorActionError | undefined): void => {
-    if (error?.code === 'FORBIDDEN') void refreshConnectorManagePolicy();
     if (!error && !this.#get().composioServerErrors[identifier]) return;
 
     this.#set(

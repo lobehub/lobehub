@@ -18,11 +18,13 @@ export const isSettledByConnection = (
  * `assertComposioRowManageable`: members co-maintain shared connectors unless a
  * workspace owner or admin restricted it, in which case the row stays visible
  * with a disabled Connect and an "Ask an admin" entry instead of a button that
- * fails with a 403.
+ * fails with a 403. While the policy loads (`pending`) controls stay disabled.
  */
-export const useConnectorManageGate = (identifier: string): { canManage: boolean } => {
+export const useConnectorManageGate = (
+  identifier: string,
+): { access: 'allowed' | 'pending' | 'restricted' } => {
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
-  const { canManage } = useConnectorManageable(connector);
+  const { canManage, isPending } = useConnectorManageable(connector);
 
-  return { canManage };
+  return { access: isPending ? 'pending' : canManage ? 'allowed' : 'restricted' };
 };

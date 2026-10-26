@@ -34,21 +34,22 @@ describe('useConnectorManageGate', () => {
   it('lets a member co-maintain a connection another member created by default', () => {
     mocks.connectors = [{ identifier: 'gmail', userId: 'arvin' }];
     mocks.policy = { canEditPolicy: false, canManage: true, memberManage: 'all_members' };
-    expect(gate()).toEqual({ canManage: true });
+    expect(gate()).toEqual({ access: 'allowed' });
   });
 
   it('gates a member out once admins restricted connector management', () => {
     mocks.connectors = [{ identifier: 'gmail', userId: 'me' }];
     mocks.policy = { canEditPolicy: false, canManage: false, memberManage: 'admins_only' };
-    expect(gate()).toEqual({ canManage: false });
+    expect(gate()).toEqual({ access: 'restricted' });
 
     // Not connected yet: Connect is gated too, the row itself stays.
     mocks.connectors = [];
-    expect(gate()).toEqual({ canManage: false });
+    expect(gate()).toEqual({ access: 'restricted' });
   });
 
-  it('keeps the normal flow while the policy is still loading', () => {
-    expect(gate()).toEqual({ canManage: true });
+  it('keeps Connect disabled, but not restricted, while the policy is loading', () => {
+    // Never clickable before the server says it is allowed.
+    expect(gate()).toEqual({ access: 'pending' });
   });
 });
 
