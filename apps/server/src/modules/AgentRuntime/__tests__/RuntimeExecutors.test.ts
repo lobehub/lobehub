@@ -53,6 +53,9 @@ const mockBuiltinModels = vi.hoisted(() => [
 
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
+  // ServerLLMTransport resolves the provider Responses API switch once per
+  // provider; `undefined` keeps every test on the model-runtime default.
+  resolveProviderResponseApiMode: vi.fn(async () => undefined),
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     // Emit a minimal non-empty completion so the call_llm empty-completion
     // guard doesn't treat the default mock as a "gave up" turn and
