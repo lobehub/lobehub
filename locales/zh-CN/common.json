@@ -516,6 +516,8 @@
   "taskDock.status.running": "进行中",
   "taskDock.status.success": "已完成",
   "taskDock.totalCount": "{{count}} 项",
+  "taskNav.all": "全部任务",
+  "taskNav.noProjects": "还没有项目",
   "taskTemplate.action.connect.button": "连接 {{provider}}",
   "taskTemplate.action.connect.error": "连接失败，请重试。",
   "taskTemplate.action.connect.popupBlocked": "连接弹出窗口被阻止。请在浏览器中允许弹出窗口以继续。",

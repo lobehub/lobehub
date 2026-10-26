@@ -24,11 +24,11 @@ describe('resolveRailNavPanelKey', () => {
     ['/agent/agent-1/goal/goal-1', null, 'agent'],
     ['/agent/agent-1/topics', null, 'agent'],
     ['/agent/agent-1/docs/doc-1', null, 'agent-docs'],
-    // Tasks, goals and the project index own the whole wrap (no list column).
-    ['/tasks', null, 'none'],
-    ['/goals', null, 'none'],
-    ['/lobe-team/task/task-1', 'lobe-team', 'none'],
-    ['/goal/goal-1', null, 'none'],
+    // Tasks and goals share the task scope list; the project index is full-page.
+    ['/tasks', null, 'tasks'],
+    ['/goals', null, 'tasks'],
+    ['/lobe-team/task/task-1', 'lobe-team', 'tasks'],
+    ['/goal/goal-1', null, 'tasks'],
     ['/projects', null, 'none'],
     // Everything else keeps its route-owned sidebar.
     ['/project/project-1', null, 'project'],

@@ -437,6 +437,8 @@ export default {
   'messageList.empty': 'No conversations yet',
   'messageList.newChat': 'New conversation',
   'messageList.running': 'Running…',
+  'taskNav.all': 'All tasks',
+  'taskNav.noProjects': 'No projects yet',
   'navPanel.agent': 'Agents',
   'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',

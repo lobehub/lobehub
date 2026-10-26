@@ -69,6 +69,7 @@ vi.mock('@/features/MessageList', async () => {
 });
 
 vi.mock('@/features/ContactList', () => ({ default: () => null }));
+vi.mock('@/features/TaskNav', () => ({ default: () => null }));
 
 describe('NavPanel', () => {
   beforeEach(() => {
@@ -235,24 +236,21 @@ describe('NavPanel', () => {
   });
 });
 
-// Tasks / goals / the project index own the whole wrap in the rail layout.
+// The project index owns the whole wrap in the rail layout.
 describe('NavPanel full-page routes', () => {
   beforeEach(() => {
     clearNavPanelRegistry();
   });
 
-  it.each(['/tasks', '/lobe-team/goal/goal-1', '/projects'])(
-    'renders no list column on %s',
-    (route) => {
-      pathname = route;
-      registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>);
+  it.each(['/projects', '/lobe-team/projects'])('renders no list column on %s', (route) => {
+    pathname = route;
+    registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>);
 
-      render(<NavPanel />);
+    render(<NavPanel />);
 
-      expect(screen.queryByTestId('nav-panel')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('nav-sidebar-skeleton')).not.toBeInTheDocument();
-    },
-  );
+    expect(screen.queryByTestId('nav-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('nav-sidebar-skeleton')).not.toBeInTheDocument();
+  });
 });
 
 describe('NavPanelShell', () => {

@@ -516,6 +516,8 @@
   "taskDock.status.running": "In progress",
   "taskDock.status.success": "All done",
   "taskDock.totalCount": "{{count}} items",
+  "taskNav.all": "All tasks",
+  "taskNav.noProjects": "No projects yet",
   "taskTemplate.action.connect.button": "Connect {{provider}}",
   "taskTemplate.action.connect.error": "Connection failed, please try again.",
   "taskTemplate.action.connect.popupBlocked": "Connection popup blocked. Allow popups in your browser to continue.",

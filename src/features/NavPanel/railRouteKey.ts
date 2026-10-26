@@ -9,6 +9,9 @@ export const NAV_PANEL_HIDDEN_KEY = 'none';
 /** The IM-style conversation list (agents + groups) behind the Messages tab. */
 export const NAV_PANEL_MESSAGES_KEY = 'home';
 
+/** The task scope list (all tasks, goals, projects) behind the Tasks tab. */
+export const NAV_PANEL_TASKS_KEY = 'tasks';
+
 /** The contacts list (agents + groups) behind the Contacts tab. */
 export const NAV_PANEL_CONTACTS_KEY = 'contacts';
 
@@ -32,14 +35,17 @@ const AGENT_SIDEBAR_PAGES = new Set(['goal', 'goals', 'task', 'tasks', 'topics']
 
 const GROUP_CONTACT_PAGES = new Set(['permission', 'profile']);
 
-const FULL_PAGE_ROOTS = new Set(['goal', 'goals', 'projects', 'task', 'tasks']);
+const TASK_ROOTS = new Set(['goal', 'goals', 'task', 'tasks']);
+
+const FULL_PAGE_ROOTS = new Set(['projects']);
 
 /**
  * Nav key for the rail layout (rail + list column + content). Builds on the
  * legacy `resolveNavPanelKey`, which the mobile drawer still uses unchanged:
  * - agent / group chats share the conversation list (`home`);
  * - agent / group profile and config pages move to the Contacts list;
- * - tasks, goals and the project index render without a list column.
+ * - tasks and goals share the task scope list (all tasks, goals, projects);
+ * - the project index renders without a list column.
  */
 export const resolveRailNavPanelKey = (
   pathname: string,
@@ -67,6 +73,7 @@ export const resolveRailNavPanelKey = (
 
   if (legacyKey === 'home') {
     if (rootSegment === 'agents') return NAV_PANEL_CONTACTS_KEY;
+    if (rootSegment && TASK_ROOTS.has(rootSegment)) return NAV_PANEL_TASKS_KEY;
     if (rootSegment && FULL_PAGE_ROOTS.has(rootSegment)) return NAV_PANEL_HIDDEN_KEY;
   }
 

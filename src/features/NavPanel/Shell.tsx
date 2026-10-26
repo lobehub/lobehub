@@ -2,6 +2,7 @@
 
 import ContactListPortal from '@/features/ContactList';
 import MessageListPortal from '@/features/MessageList';
+import TaskNavPortal from '@/features/TaskNav';
 
 import NavPanel from './index';
 
@@ -12,12 +13,14 @@ import NavPanel from './index';
 // for inactive tabs. Registering from the route layout leaves those tabs with
 // no `home` entry at all, so the panel is stuck on the loading skeleton.
 //
-// In the rail layout `home` is the Messages conversation list; Contacts is
-// shell-owned for the same reason (agent profile pages register no sidebar).
+// In the rail layout `home` is the Messages conversation list; Contacts and
+// the Tasks scope list are shell-owned for the same reason (their pages
+// register no sidebar of their own).
 const NavPanelShell = () => (
   <>
     <MessageListPortal />
     <ContactListPortal />
+    <TaskNavPortal />
     <NavPanel />
   </>
 );

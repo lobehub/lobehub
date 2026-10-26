@@ -1,14 +1,16 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-export const RAIL_ICON_SIZE = 18;
+// v6 spec: 48px rail, 13px glyph at 1.25 stroke inside a 26px hit area, 12px apart.
+export const RAIL_ICON_SIZE = { size: 13, strokeWidth: 1.25 };
+export const RAIL_GAP = 12;
 
 export const styles = stylex.create({
   badge: {
     pointerEvents: 'none',
     position: 'absolute',
-    insetBlockStart: '1px',
-    insetInlineEnd: '1px',
+    insetBlockStart: '-5px',
+    insetInlineEnd: '-6px',
     minWidth: '15px',
     height: '15px',
     paddingInline: '4px',
@@ -23,12 +25,6 @@ export const styles = stylex.create({
     textAlign: 'center',
     backgroundColor: cssVar.colorText,
   },
-  divider: {
-    width: '20px',
-    height: '1px',
-    marginBlock: '6px',
-    backgroundColor: cssVar.colorBorderSecondary,
-  },
   item: {
     cursor: 'pointer',
     position: 'relative',
@@ -36,8 +32,8 @@ export const styles = stylex.create({
     flex: 'none',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '34px',
-    height: '34px',
+    width: '26px',
+    height: '26px',
     borderRadius: cssVar.borderRadius,
     color: { default: cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: { default: null, ':hover': cssVar.colorFillTertiary },
@@ -52,7 +48,7 @@ export const styles = stylex.create({
     flex: 'none',
     alignItems: 'center',
     // Keep in sync with RAIL_WIDTH (./const): StyleX only compiles local literals.
-    width: '52px',
+    width: '48px',
     height: '100%',
     paddingBlock: '10px',
   },

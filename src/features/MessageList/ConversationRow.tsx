@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import { formatConversationTime } from './conversations';
-import NestedSlot from './NestedSlot';
 import { styles } from './style';
 
 export interface ConversationRowProps {
@@ -19,8 +18,6 @@ export interface ConversationRowProps {
   onMouseEnter?: () => void;
   preview?: string;
   running?: boolean;
-  /** Render the routed conversation's nested content (topics) under the row. */
-  showNested?: boolean;
   title: string;
   unread?: number;
   url: string;
@@ -35,7 +32,6 @@ const ConversationRow = memo<ConversationRowProps>(
     onMouseEnter,
     preview,
     running,
-    showNested = true,
     title,
     unread,
     url,
@@ -80,15 +76,10 @@ const ConversationRow = memo<ConversationRowProps>(
       </WorkspaceLink>
     );
 
-    return (
-      <div>
-        {contextMenuItems ? (
-          <ContextMenuTrigger items={contextMenuItems}>{row}</ContextMenuTrigger>
-        ) : (
-          row
-        )}
-        {active && showNested && <NestedSlot />}
-      </div>
+    return contextMenuItems ? (
+      <ContextMenuTrigger items={contextMenuItems}>{row}</ContextMenuTrigger>
+    ) : (
+      row
     );
   },
 );

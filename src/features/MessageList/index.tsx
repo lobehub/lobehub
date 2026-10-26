@@ -10,13 +10,12 @@ import Header from './Header';
 
 export { default as ConversationRow } from './ConversationRow';
 export { ListHeader } from './Header';
-export { ConversationNestedPortal } from './NestedSlot';
 export { AVATAR_SIZE } from './style';
 
 /**
  * Messages tab list column: the IM-style conversation list (Lobe AI, agents
  * and groups by latest activity). Owned by the shell so it stays mounted
- * across chats; the routed chat's topics render nested under its row.
+ * across chats. Each row opens its conversation as a channel.
  */
 const MessageListPortal = () => (
   <NavPanelPortal navKey={NAV_PANEL_MESSAGES_KEY}>

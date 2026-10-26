@@ -15,6 +15,7 @@ import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
+import HomeInboxRedirect from '@/features/MessageList/HomeInboxRedirect';
 import NavPanelShell from '@/features/NavPanel/Shell';
 import NavRail from '@/features/NavRail';
 import { wrapStyles } from '@/features/NavRail/wrapStyle';
@@ -25,8 +26,6 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import DesktopHome from '../home';
-import DesktopHomeLayout from '../home/_layout';
 import ClientLlmWaitResume from './ClientLlmWaitResume';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import GatewayMuxWarmup from './GatewayMuxWarmup';
@@ -64,9 +63,8 @@ const Layout: FC = () => {
             >
               <NavPanelShell />
               <DesktopLayoutContainer>
-                <DesktopHomeLayout>
-                  <DesktopHome />
-                </DesktopHomeLayout>
+                {/* The Messages tab replaces the home dashboard: `/` opens Lobe AI. */}
+                <HomeInboxRedirect />
                 <Suspense fallback={<RouteSegmentSkeleton />}>
                   <Outlet />
                 </Suspense>

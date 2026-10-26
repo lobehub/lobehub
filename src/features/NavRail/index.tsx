@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { cssVar, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -7,7 +8,7 @@ import {
   FolderKanbanIcon,
   LibraryBigIcon,
   ListTodoIcon,
-  MessagesSquareIcon,
+  MessageCircleIcon,
   Settings2Icon,
   UsersRoundIcon,
 } from 'lucide-react';
@@ -16,9 +17,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isDesktop } from '@/const/version';
+import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
 import User from '@/features/HomeSidebar/Header/components/User';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -27,7 +31,7 @@ import { isMacOS } from '@/utils/platform';
 import MoreMenu from './MoreMenu';
 import RailItem from './RailItem';
 import { resolveRailTab } from './railTab';
-import { styles } from './style';
+import { RAIL_GAP, styles } from './style';
 
 // macOS Electron shows the window vibrancy through the rail, like the old sidebar.
 const railBackground = {
@@ -52,27 +56,27 @@ const NavRail = memo(() => {
 
   const activeTab = resolveRailTab(pathname, activeWorkspaceSlug);
 
+  // Messages opens straight into the Lobe AI conversation, like an IM app's
+  // default channel; the conversation list sits in the list column.
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const messagesUrl = AGENT_CHAT_URL(resolveInboxAgentRouteId(inboxAgentId), false);
+
+  // Tab order follows the product IA: messages, contacts, docs, tasks, projects.
   const topItems = useMemo(
     () => [
-      { icon: MessagesSquareIcon, key: 'messages', title: t('tab.messages'), url: '/' },
+      { icon: MessageCircleIcon, key: 'messages', title: t('tab.messages'), url: messagesUrl },
+      { icon: UsersRoundIcon, key: 'contacts', title: t('tab.contacts'), url: '/agents' },
+      { icon: LibraryBigIcon, key: 'resource', title: t('tab.resource'), url: '/resource' },
       { icon: ListTodoIcon, key: 'tasks', title: t('tab.tasks'), url: '/tasks' },
       { icon: FolderKanbanIcon, key: 'projects', title: t('tab.projects'), url: '/projects' },
     ],
-    [t],
-  );
-
-  const libraryItems = useMemo(
-    () => [
-      { icon: UsersRoundIcon, key: 'contacts', title: t('tab.contacts'), url: '/agents' },
-      { icon: LibraryBigIcon, key: 'resource', title: t('tab.resource'), url: '/resource' },
-    ],
-    [t],
+    [messagesUrl, t],
   );
 
   return (
-    <Flexbox className={stylex.props(styles.rail).className} gap={8} style={railBackground}>
+    <Flexbox className={stylex.props(styles.rail).className} gap={12} style={railBackground}>
       <User lite />
-      <Flexbox align={'center'} gap={6} style={{ marginBlockStart: 6 }}>
+      <Flexbox align={'center'} gap={RAIL_GAP}>
         {topItems.map((item) => (
           <RailItem
             active={activeTab === item.key}
@@ -83,19 +87,9 @@ const NavRail = memo(() => {
             url={item.url}
           />
         ))}
-        <div {...stylex.props(styles.divider)} />
-        {libraryItems.map((item) => (
-          <RailItem
-            active={activeTab === item.key}
-            icon={item.icon}
-            key={item.key}
-            title={item.title}
-            url={item.url}
-          />
-        ))}
       </Flexbox>
       <div style={{ flex: 1 }} />
-      <Flexbox align={'center'} gap={6}>
+      <Flexbox align={'center'} gap={RAIL_GAP}>
         <MoreMenu active={activeTab === 'more'} />
         {showMarket && (
           <RailItem

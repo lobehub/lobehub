@@ -2,11 +2,11 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { UserRoundPlusIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { ChevronRightIcon, UserRoundPlusIcon } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -51,7 +51,6 @@ const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, ite
     <ConversationRow
       active={active}
       preview={item.description || undefined}
-      showNested={false}
       title={title}
       url={isGroup ? `/group/${item.id}/profile` : `/agent/${item.id}/profile`}
       avatar={
@@ -86,6 +85,9 @@ const Body = memo(() => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const activeRouteId = useActiveRouteId();
+  // Sections collapse independently; the choice lasts for the session.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const { agents, groups } = useMemo(() => {
     const unique = [...new Map(items.map((item) => [item.id, item])).values()];
@@ -108,11 +110,24 @@ const Body = memo(() => {
     <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
       {sections.map((section) => (
         <Flexbox gap={1} key={section.key}>
-          <div {...stylex.props(styles.sectionTitle)}>
+          <button
+            aria-expanded={!collapsed[section.key]}
+            type={'button'}
+            {...stylex.props(styles.sectionTitle)}
+            onClick={() => toggleSection(section.key)}
+          >
+            <Icon
+              icon={ChevronRightIcon}
+              size={12}
+              style={{
+                transform: collapsed[section.key] ? undefined : 'rotate(90deg)',
+                transition: 'transform 0.15s',
+              }}
+            />
             {section.title}
             <span {...stylex.props(styles.count)}>{section.items.length}</span>
-          </div>
-          {section.items.length === 0 ? (
+          </button>
+          {collapsed[section.key] ? null : section.items.length === 0 ? (
             <div {...stylex.props(styles.empty)}>{t('contacts.empty')}</div>
           ) : (
             section.items.map((item) => (

@@ -99,8 +99,8 @@ describe('NavigationBar tray broadcasts', () => {
     mocks.leftPanelWidth = 280;
     const expanded = render(<NavigationBar />);
 
-    // Spans the icon rail (52) plus the list column, minus the 12px gutter.
-    expect(expanded.container.querySelector('.root')).toHaveStyle({ width: '320px' });
+    // Spans the icon rail (48) plus the list column, minus the 12px gutter.
+    expect(expanded.container.querySelector('.root')).toHaveStyle({ width: '316px' });
   });
 
   it('follows the sidebar width without a transition while it is being resized', () => {

@@ -10,11 +10,6 @@ export const styles = stylex.create({
     fontSize: '12px',
     color: cssVar.colorTextQuaternary,
   },
-  nested: {
-    paddingBlockStart: '2px',
-    paddingBlockEnd: '6px',
-    paddingInlineStart: '30px',
-  },
   preview: {
     overflow: 'hidden',
     minWidth: 0,
