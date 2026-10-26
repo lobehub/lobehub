@@ -3,6 +3,7 @@
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { cx, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -31,6 +32,8 @@ import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import WorkspaceMentionNotifier from '@/features/Electron/WorkspaceMentionNotifier';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
+import NavRail from '@/features/NavRail';
+import { wrapStyles } from '@/features/NavRail/wrapStyle';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { usePlatform } from '@/hooks/usePlatform';
 import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
@@ -86,12 +89,15 @@ const Layout: FC = () => {
             height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
           >
-            <NavPanelShell />
-            <DesktopLayoutContainer>
-              <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
-                <TabHost />
-              </Flexbox>
-            </DesktopLayoutContainer>
+            <NavRail />
+            <Flexbox horizontal {...stylex.props(wrapStyles.wrap, wrapStyles.wrapDesktop)}>
+              <NavPanelShell />
+              <DesktopLayoutContainer>
+                <Flexbox height={'100%'} style={tabHostContainer} width={'100%'}>
+                  <TabHost />
+                </Flexbox>
+              </DesktopLayoutContainer>
+            </Flexbox>
           </Flexbox>
         </DndContextWrapper>
         <Suspense fallback={null}>

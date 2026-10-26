@@ -32,7 +32,7 @@ describe('readBootShellGeometry', () => {
     expect(readBootShellGeometry().navPanelWidth).toBe(400);
 
     setStatus({ leftPanelWidth: 10 });
-    expect(readBootShellGeometry().navPanelWidth).toBe(240);
+    expect(readBootShellGeometry().navPanelWidth).toBe(220);
   });
 
   it('falls back to the default width for an unusable persisted value', () => {

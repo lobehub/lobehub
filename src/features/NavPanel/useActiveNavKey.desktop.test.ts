@@ -21,7 +21,7 @@ describe('useActiveNavKey (desktop)', () => {
   it('keeps the panel of the tab on screen until the clicked tab is revealed', () => {
     useElectronStore.setState({
       activeTabId: 'topic',
-      tabs: [tab('home', '/'), tab('topic', '/agent/agt_a/tpc_a')],
+      tabs: [tab('home', '/'), tab('topic', '/resource/page/doc_a')],
     });
     useDisplayedTabStore.setState({ tabId: 'home' });
 
@@ -29,7 +29,7 @@ describe('useActiveNavKey (desktop)', () => {
     expect(result.current).toBe('home');
 
     act(() => useDisplayedTabStore.setState({ tabId: 'topic' }));
-    expect(result.current).toBe('agent');
+    expect(result.current).toBe('resource');
   });
 
   it('follows in-tab navigation of the displayed tab', () => {
@@ -37,9 +37,9 @@ describe('useActiveNavKey (desktop)', () => {
     useDisplayedTabStore.setState({ tabId: 'only' });
 
     const { result } = renderHook(() => useActiveNavKey());
-    act(() => useElectronStore.getState().reportTabLocation('only', '/agent/agt_a?thread=x'));
+    act(() => useElectronStore.getState().reportTabLocation('only', '/agents?label=x'));
 
-    expect(result.current).toBe('agent');
+    expect(result.current).toBe('contacts');
   });
 
   it('falls back to the active tab before any tab is displayed', () => {

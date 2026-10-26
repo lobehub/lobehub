@@ -1,18 +1,18 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { createStaticStyles, Flexbox, keyframes } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, keyframes } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { retainSkeleton } from '@/components/Skeleton/skeletonHandover';
 import { isDesktop } from '@/const/version';
-import {
-  getInnerCssVariables,
-  getOuterCssVariables,
-} from '@/features/DesktopLayoutContainer/cssVariables';
+import { getInnerCssVariables } from '@/features/DesktopLayoutContainer/cssVariables';
 import { styles as containerStyles } from '@/features/DesktopLayoutContainer/style';
+import { LIST_COLUMN_BACKGROUND, RAIL_WIDTH } from '@/features/NavRail/const';
+import { wrapStyles as layoutStyles } from '@/features/NavRail/wrapStyle';
 import { electronStylish } from '@/styles/electron';
 
 import { readBootShellGeometry } from './geometry';
@@ -137,29 +137,34 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
         height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
         width={'100%'}
       >
-        {showLeftPanel && (
-          <div
-            style={{
-              background: navPanelBackground,
-              flexShrink: 0,
-              height: '100%',
-              width: navPanelWidth,
-            }}
-          />
-        )}
+        {/* Mirrors the rail layout: icon rail + one rounded wrap (list + content). */}
+        <div
+          style={{
+            background: navPanelBackground,
+            flexShrink: 0,
+            height: '100%',
+            width: RAIL_WIDTH,
+          }}
+        />
         <Flexbox
-          className={containerStyles.outerContainer}
-          height={'100%'}
-          padding={8}
-          style={getOuterCssVariables({ expand: showLeftPanel })}
-          width={'100%'}
+          horizontal
+          style={getInnerCssVariables({ isDark })}
+          className={
+            stylex.props(layoutStyles.wrap, isDesktop && layoutStyles.wrapDesktop).className
+          }
         >
-          <Flexbox
-            className={containerStyles.innerContainer}
-            height={'100%'}
-            style={getInnerCssVariables({ isDark })}
-            width={'100%'}
-          >
+          {showLeftPanel && (
+            <div
+              style={{
+                background: LIST_COLUMN_BACKGROUND,
+                borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+                flexShrink: 0,
+                height: '100%',
+                width: navPanelWidth,
+              }}
+            />
+          )}
+          <Flexbox className={containerStyles.innerContainer} height={'100%'} width={'100%'}>
             <div className={styles.contentBrand}>
               <div className={styles.brand}>
                 <LobeHub size={40} type={'text'} />

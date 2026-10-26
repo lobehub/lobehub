@@ -43,6 +43,8 @@ vi.mock('@/features/Electron/titlebar/TabBar/TabCacheBridges', nullComponent);
 vi.mock('@/features/Electron/titlebar/TitleBar', nullComponent);
 vi.mock('@/features/HotkeyHelperPanel', nullComponent);
 vi.mock('@/features/NavPanel/Shell', nullComponent);
+vi.mock('@/features/NavRail', nullComponent);
+vi.mock('@/features/NavRail/wrapStyle', () => ({ wrapStyles: {} }));
 vi.mock('@/layout/GlobalProvider/CmdkLazy', nullComponent);
 vi.mock('./GatewayMuxWarmup', nullComponent);
 vi.mock('./ClientLlmWaitResume', nullComponent);

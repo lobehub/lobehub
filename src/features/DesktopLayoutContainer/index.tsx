@@ -3,19 +3,14 @@ import { type FC, type PropsWithChildren } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { useIsDark } from '@/hooks/useIsDark';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { getInnerCssVariables, getOuterCssVariables } from './cssVariables';
+import { getInnerCssVariables } from './cssVariables';
 import { LayoutContainerContext } from './LayoutContainerContext';
 import { styles } from './style';
 
 const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const isDarkMode = useIsDark();
-  const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
-
-  const outerCssVariables = useMemo(() => getOuterCssVariables({ expand }), [expand]);
 
   const innerCssVariables = useMemo(
     () => getInnerCssVariables({ isDark: isDarkMode }),
@@ -37,13 +32,7 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   }, [innerCssVariables]);
 
   return (
-    <Flexbox
-      className={styles.outerContainer}
-      height={'100%'}
-      padding={8}
-      style={outerCssVariables}
-      width={'100%'}
-    >
+    <Flexbox className={styles.outerContainer} height={'100%'} width={'100%'}>
       <Flexbox
         className={styles.innerContainer}
         height={'100%'}

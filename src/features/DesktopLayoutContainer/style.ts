@@ -1,33 +1,17 @@
 import { createStaticStyles } from '@lobehub/ui';
 
-import { isDesktop } from '@/const/version';
-
+// The rail wrap (`routes/(main)/_layout/style.ts`) owns the border, radius and
+// outer spacing; this container only fills the content column inside it.
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Inner container
   innerContainer: css`
     position: relative;
-
     overflow: hidden;
-
-    border: 1px solid var(--container-border-color, ${cssVar.colorBorder});
-    border-radius: var(--container-border-radius, ${cssVar.borderRadius});
-    border-end-end-radius: var(
-      --container-border-bottom-right-radius,
-      var(--container-border-radius, ${cssVar.borderRadius})
-    );
-
     background: ${cssVar.colorBgContainer};
   `,
 
-  // Outer container
   outerContainer: css`
     position: relative;
-
     overflow: hidden;
-
-    padding-block-start: var(--container-padding-top, 8px);
-    padding-inline-start: var(--container-padding-left, 8px);
-
-    background: ${isDesktop ? 'transparent' : cssVar.colorBgLayout};
+    min-width: 0;
   `,
 }));

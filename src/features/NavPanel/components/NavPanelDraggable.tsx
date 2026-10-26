@@ -1,22 +1,19 @@
 'use client';
 
-import { createStaticStyles, cssVar, DraggablePanel } from '@lobehub/ui';
+import { createStaticStyles, DraggablePanel } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { Activity, memo, Suspense, useMemo, useRef } from 'react';
 
 import NavPanelUpgradeEntry from '@/business/client/features/NavPanelUpgradeEntry';
-import { isDesktop } from '@/const/version';
-import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
-import Footer from '@/features/HomeSidebar/Footer';
 import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
 import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
+import { LIST_COLUMN_BACKGROUND } from '@/features/NavRail/const';
 import { useGlobalStore } from '@/store/global';
 import {
   NAV_PANEL_MAX_WIDTH,
   NAV_PANEL_MIN_WIDTH,
   systemStatusSelectors,
 } from '@/store/global/selectors';
-import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
 import { BACK_BUTTON_ID } from './BackButton';
@@ -39,7 +36,7 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     flex: 1;
 
-    min-width: 240px;
+    min-width: 220px;
     max-width: 100%;
     min-height: 0;
   `,
@@ -51,7 +48,7 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     flex-direction: column;
 
-    min-width: 240px;
+    min-width: 220px;
     max-width: 100%;
     min-height: 100%;
     max-height: 100%;
@@ -60,7 +57,8 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
     height: 100%;
     color: ${cssVar.colorTextSecondary};
-    background: ${isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout};
+    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
+    background: ${LIST_COLUMN_BACKGROUND};
 
     * {
       user-select: none;
@@ -128,13 +126,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
     defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
   }
 
-  const styles = useMemo(
-    () => ({
-      background: isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout,
-      zIndex: 11,
-    }),
-    [],
-  );
+  const styles = useMemo(() => ({ background: LIST_COLUMN_BACKGROUND, zIndex: 11 }), []);
 
   if (defaultWidthRef.current === 0) {
     const pendingWidth = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
@@ -181,9 +173,6 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       </div>
       <Suspense fallback={null}>
         <NavPanelUpgradeEntry />
-      </Suspense>
-      <Suspense>
-        <Footer />
       </Suspense>
     </DraggablePanel>
   );

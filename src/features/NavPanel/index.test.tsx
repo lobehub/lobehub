@@ -55,9 +55,20 @@ vi.mock('./components/NavPanelDraggable', () => ({
   },
 }));
 
-vi.mock('@/features/HomeSidebar/Content', () => ({
-  default: () => <div>Home sidebar</div>,
-}));
+// The shell registers the Messages list as the `home` entry and Contacts as
+// `contacts`; stub both so the shell test stays about registry wiring.
+vi.mock('@/features/MessageList', async () => {
+  const { NavPanelPortal } = await import('./NavPanelPortal');
+  return {
+    default: () => (
+      <NavPanelPortal navKey="home">
+        <div>Home sidebar</div>
+      </NavPanelPortal>
+    ),
+  };
+});
+
+vi.mock('@/features/ContactList', () => ({ default: () => null }));
 
 describe('NavPanel', () => {
   beforeEach(() => {
@@ -68,7 +79,7 @@ describe('NavPanel', () => {
   it.each([false, true])(
     'ignores unrelated registrations with active content present: %s',
     (registered) => {
-      pathname = '/tasks';
+      pathname = '/';
       const owner = Symbol('home');
       if (registered) registerNavPanelContent('home', owner, <div>Original</div>);
       render(<NavPanel />);
@@ -122,7 +133,7 @@ describe('NavPanel', () => {
   });
 
   it('uses the Home entry for routes without a dedicated navigation panel', async () => {
-    pathname = '/lobe-team/tasks';
+    pathname = '/lobe-team/dashboard';
 
     render(
       <>
@@ -224,13 +235,33 @@ describe('NavPanel', () => {
   });
 });
 
+// Tasks / goals / the project index own the whole wrap in the rail layout.
+describe('NavPanel full-page routes', () => {
+  beforeEach(() => {
+    clearNavPanelRegistry();
+  });
+
+  it.each(['/tasks', '/lobe-team/goal/goal-1', '/projects'])(
+    'renders no list column on %s',
+    (route) => {
+      pathname = route;
+      registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>);
+
+      render(<NavPanel />);
+
+      expect(screen.queryByTestId('nav-panel')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('nav-sidebar-skeleton')).not.toBeInTheDocument();
+    },
+  );
+});
+
 describe('NavPanelShell', () => {
   beforeEach(() => {
     clearNavPanelRegistry();
   });
 
   it('provides the Home entry on routes that never mount the Home layout', async () => {
-    pathname = '/tasks';
+    pathname = '/dashboard';
 
     render(<NavPanelShell />);
 

@@ -1,6 +1,7 @@
 'use client';
 
-import HomeNavPanelPortal from '@/features/HomeSidebar';
+import ContactListPortal from '@/features/ContactList';
+import MessageListPortal from '@/features/MessageList';
 
 import NavPanel from './index';
 
@@ -10,9 +11,13 @@ import NavPanel from './index';
 // Home layout only mounts inside a home tab — and `Activity` unmounts effects
 // for inactive tabs. Registering from the route layout leaves those tabs with
 // no `home` entry at all, so the panel is stuck on the loading skeleton.
+//
+// In the rail layout `home` is the Messages conversation list; Contacts is
+// shell-owned for the same reason (agent profile pages register no sidebar).
 const NavPanelShell = () => (
   <>
-    <HomeNavPanelPortal />
+    <MessageListPortal />
+    <ContactListPortal />
     <NavPanel />
   </>
 );

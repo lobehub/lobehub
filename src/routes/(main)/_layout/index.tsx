@@ -2,6 +2,7 @@
 
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { cx, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -15,6 +16,8 @@ import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
+import NavRail from '@/features/NavRail';
+import { wrapStyles } from '@/features/NavRail/wrapStyle';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -54,15 +57,21 @@ const Layout: FC = () => {
             height={showCloudPromotion ? `calc(100% - ${BANNER_HEIGHT}px)` : '100%'}
             width={'100%'}
           >
-            <NavPanelShell />
-            <DesktopLayoutContainer>
-              <DesktopHomeLayout>
-                <DesktopHome />
-              </DesktopHomeLayout>
-              <Suspense fallback={<RouteSegmentSkeleton />}>
-                <Outlet />
-              </Suspense>
-            </DesktopLayoutContainer>
+            <NavRail />
+            <Flexbox
+              horizontal
+              {...stylex.props(wrapStyles.wrap, isDesktop && wrapStyles.wrapDesktop)}
+            >
+              <NavPanelShell />
+              <DesktopLayoutContainer>
+                <DesktopHomeLayout>
+                  <DesktopHome />
+                </DesktopHomeLayout>
+                <Suspense fallback={<RouteSegmentSkeleton />}>
+                  <Outlet />
+                </Suspense>
+              </DesktopLayoutContainer>
+            </Flexbox>
           </Flexbox>
         </DndContextWrapper>
         <Suspense fallback={null}>

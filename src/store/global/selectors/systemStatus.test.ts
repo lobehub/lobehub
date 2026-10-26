@@ -118,7 +118,7 @@ describe('systemStatusSelectors', () => {
             status: { leftPanelWidth: 120 },
           }),
         ),
-      ).toBe(240);
+      ).toBe(220);
 
       expect(
         systemStatusSelectors.leftPanelWidth(
