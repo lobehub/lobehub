@@ -61,8 +61,8 @@ Update the installed skill:
 lh acceptance update
 ```
 
-Creating acceptances and publishing reports require authentication. Run `lh login`
-before using those commands.
+Publishing reports to LobeHub requires authentication (`lh login`). Without a
+login, acceptance runs locally — see [Local reports](#local-reports).
 
 This selects the same source as `npx skills add lobehub/acceptance --skill acceptance`.
 Changes merged into the default branch are available on the next install or
@@ -84,6 +84,31 @@ To select an existing version tag explicitly, use `lh acceptance update --skill-
 with `npx skills add`. A later `lh acceptance update` without `--skill-version`
 returns to the current default-branch source.
 
+## Local reports
+
+A machine that has never signed in renders acceptance reports locally instead
+of publishing them; `lh acceptance preflight --json` reports `"mode": "local"`.
+
+```bash
+lh acceptance run render .acceptances/<subject>/<round> --requirement "<business goal>"
+```
+
+This writes `report.html` beside the rounds: the acceptance page, offline — the
+checklist, evidence, before/after pairs, video chapters and round history,
+rendered from every round of that acceptance. Nothing is uploaded. The reader
+can accept or reject checks and circle regions on screenshots there; **Save
+reviews** downloads the decisions, and the next
+`lh acceptance feedback .acceptances/<subject>` (or `view`) files them as
+`reviews.json` and reports them like hosted feedback.
+
+Comments, mentions and shared links need LobeHub. After `lh login`,
+`lh acceptance publish .acceptances/<subject>` publishes the unpublished rounds
+in order into one acceptance and carries the standing review decisions over;
+running it again publishes only newer rounds.
+
+The page is built by `apps/workbench` (`bun run --cwd ../workbench build:report`);
+`bun run build` copies it to `dist/acceptance-report.html` when it exists.
+
 ## Local Development
 
 | Task                                       | Command                    |
@@ -93,7 +118,7 @@ returns to the current default-branch source.
 | Link `lh`/`lobe`/`lobehub` into your shell | `bun run cli:link`         |
 | Remove the global link                     | `bun run cli:unlink`       |
 
-- `bun run build` only generates `dist/index.js`.
+- `bun run build` generates `dist/index.js`, plus `dist/acceptance-report.html` when the local report page is built.
 - To make `lh` available in your shell, run `bun run cli:link`.
 - After linking, if your shell still cannot find `lh`, run `rehash` in `zsh`.
 
