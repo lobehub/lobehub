@@ -3,7 +3,6 @@
 import { OFFICIAL_URL } from '@lobechat/const';
 import { Block, Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
-  Avatar,
   Button,
   Input,
   Table,
@@ -47,6 +46,7 @@ import {
   updateCommunityWorkspaceProfile,
 } from '@/business/client/services/communityWorkspaceProfile';
 import EmojiPicker from '@/components/EmojiPicker';
+import UserAvatar from '@/components/UserAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
@@ -194,7 +194,7 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
 
           return (
             <Flexbox horizontal align="center" gap={12}>
-              <Avatar avatar={member.avatarUrl || undefined} size={36} title={name} />
+              <UserAvatar avatar={member.avatarUrl} name={name} size={36} />
               <Flexbox gap={2}>
                 {profileUrl ? (
                   <a

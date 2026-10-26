@@ -3,7 +3,6 @@
 import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
-  Avatar,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -25,6 +24,8 @@ import {
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import UserAvatar from '@/components/UserAvatar';
 
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import PanelSection from './PanelSection';
@@ -128,8 +129,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
               <Tag size={'small'}>{t('environments.visibility.publicTag')}</Tag>
             )}
             <Flexbox horizontal align={'center'} gap={6}>
-              {/* Name as the avatar value — see EnvironmentItem for why `title` alone does not reach the fallback text. */}
-              <Avatar avatar={environment.creator?.avatar || creator} size={16} title={creator} />
+              <UserAvatar avatar={environment.creator?.avatar} name={creator} size={16} />
               <Text fontSize={12} type={'secondary'}>
                 {creator}
               </Text>
