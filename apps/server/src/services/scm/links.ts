@@ -335,6 +335,9 @@ export const resolveChangeRequestLinks = async (
         .limit(1);
       if (boundRow) {
         links.acceptanceId = boundRow.id;
+        // Read before the row lock the model writes under, so it is only an
+        // echo of what the row carried — the model lets the row decide.
+        links.acceptanceSource = 'row-binding';
         pin ??= boundRow.workspaceId ?? null;
       }
     }
@@ -355,6 +358,9 @@ export const resolveChangeRequestLinks = async (
       .limit(1);
     if (row) {
       links.acceptanceId = row.id;
+      // This one is read under no lock of its own, so the model revalidates it
+      // against the hand link before writing it onto the row.
+      links.acceptanceSource = 'hand-link';
       pin ??= row.workspaceId ?? null;
     }
   }

@@ -378,7 +378,11 @@ describe('resolveChangeRequestLinks', () => {
       .values({ role: 'member', userId, workspaceId: workspace.id });
     const resolved = await resolveChangeRequestLinks(serverDB, { ...base, scope });
     // The acceptance only: a hand link does not hand over the subject's conversation.
-    expect(resolved).toEqual({ links: { acceptanceId }, workspaceId: workspace.id });
+    // It is flagged as hand-sourced so the model revalidates it before writing.
+    expect(resolved).toEqual({
+      links: { acceptanceId, acceptanceSource: 'hand-link' },
+      workspaceId: workspace.id,
+    });
 
     // Another PR number in the same repository is not linked.
     expect(await resolve({ ...base, number: 19_720, scope })).toEqual({});
@@ -440,11 +444,18 @@ describe('resolveChangeRequestLinks', () => {
     const scope = { kind: 'author', userId } as const;
     const resolved = await resolveChangeRequestLinks(serverDB, { ...base, scope });
 
-    expect(resolved).toEqual({ links: { acceptanceId }, workspaceId: workspace.id });
+    // The row's own binding, echoed: the model lets the locked row decide.
+    expect(resolved).toEqual({
+      links: { acceptanceId, acceptanceSource: 'row-binding' },
+      workspaceId: workspace.id,
+    });
 
     // With the binding gone the remaining link takes over again.
     await serverDB.update(scmChangeRequests).set({ acceptanceId: null });
-    expect(await resolve({ ...base, scope })).toEqual({ acceptanceId: laterId });
+    expect(await resolve({ ...base, scope })).toEqual({
+      acceptanceId: laterId,
+      acceptanceSource: 'hand-link',
+    });
   });
 
   it('returns nothing when no source matches', async () => {

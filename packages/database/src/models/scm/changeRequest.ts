@@ -9,10 +9,10 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, type SQL,sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
-import { scmChangeRequests, scmInstallations } from '../../schemas';
+import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 const ownedByScope = (scope: { userId: string; workspaceId?: string | null }) =>
@@ -435,13 +435,47 @@ export class ScmChangeRequestModel {
       const inherited = scopeMoved ? undefined : existing;
       const pick = <T>(incoming: T | null | undefined, stored: T | null | undefined): T | null =>
         (stale ? (stored ?? incoming) : (incoming ?? stored)) ?? null;
-      const linkValues = {
+      const linkValues: {
+        acceptanceId: string | SQL | null;
+        installationId: string | null;
+        taskId: string | null;
+        topicId: string | null;
+        workId: string | null;
+      } = {
         acceptanceId: pick(links.acceptanceId, inherited?.acceptanceId),
         installationId: links.installationId ?? existing?.installationId ?? null,
         taskId: pick(links.taskId, inherited?.taskId),
         topicId: pick(links.topicId, inherited?.topicId),
         workId: pick(links.workId, inherited?.workId),
       };
+
+      // Both link sources below are resolved before this transaction opens, so
+      // an unlink may have committed in between. Writing the acceptance anyway
+      // would put back a binding the user removed, and a later merge would
+      // accept a delivery from a pull request that no longer leads to it.
+      const stored = inherited?.acceptanceId ?? null;
+      if (!stale && links.acceptanceSource && links.acceptanceId) {
+        if (links.acceptanceSource === 'row-binding' && stored !== links.acceptanceId) {
+          // The resolver only echoed the binding the row carried. The locked
+          // row is the authority, and an unlink may have cleared it since.
+          linkValues.acceptanceId = stored;
+        } else if (stored !== links.acceptanceId) {
+          const handLinkHolds = sql`EXISTS (
+            SELECT 1 FROM ${acceptances} AS hand_link
+            WHERE hand_link.id = ${links.acceptanceId}::uuid
+              AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(
+                  COALESCE(hand_link.metadata -> 'pullRequests', '[]'::jsonb)
+                ) AS pr
+                WHERE pr ->> 'provider' = ${params.provider}
+                  AND pr ->> 'number' = ${String(params.number)}
+                  AND lower(pr ->> 'repoFullName') = ${params.repoFullName.toLowerCase()}
+              )
+          )`;
+          linkValues.acceptanceId = sql`CASE WHEN ${handLinkHolds} THEN ${links.acceptanceId}::uuid ELSE ${stored}::uuid END`;
+        }
+      }
       const ownerValues = scopeMoved
         ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
         : {};
