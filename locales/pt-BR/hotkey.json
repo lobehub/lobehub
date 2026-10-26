@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Mostrar/Ocultar Janela Principal",
   "editMessage.desc": "Entre no modo de edição segurando Alt e clicando duas vezes na mensagem",
   "editMessage.title": "Editar Mensagem",
+  "findInTopic.desc": "Pesquise todas as mensagens do tópico atual no painel direito",
+  "findInTopic.title": "Buscar no Tópico",
   "navigateToChat.desc": "Ir para a aba de Chat e entrar no Lobe AI",
   "navigateToChat.title": "Ir para o Chat Padrão",
   "nextTab.desc": "Alternar para a próxima aba no estilo do navegador no aplicativo Desktop; retorna para a primeira aba ao chegar ao final",

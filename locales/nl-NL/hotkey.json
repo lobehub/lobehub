@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Hoofdvenster Tonen/Verbergen",
   "editMessage.desc": "Ga naar bewerkmodus door Alt ingedrukt te houden en dubbel te klikken op het bericht",
   "editMessage.title": "Bericht Bewerken",
+  "findInTopic.desc": "Doorzoek elk bericht van het huidige onderwerp in het rechterpaneel",
+  "findInTopic.title": "Zoeken in Onderwerp",
   "navigateToChat.desc": "Schakel naar het tabblad Chat en open Lobe AI",
   "navigateToChat.title": "Schakel naar Standaardchat",
   "nextTab.desc": "Ga naar het volgende browserstijl-tabblad in de Desktop-app; keert terug naar het eerste tabblad aan het einde",

@@ -765,6 +765,7 @@
   "irag-1.0.description": "ERNIE iRAG 是一款圖像檢索增強生成模型，支援圖像搜尋、圖文檢索與內容生成任務。",
   "jamba-large.description": "我們最強大、最先進的模型，專為複雜企業任務設計，具備卓越效能。",
   "jamba-mini.description": "同級中最具效率的模型，在速度與品質之間取得平衡，佔用資源更少。",
+  "jev-1.14.0.description": "TypeSafe Jev 是一種 System One 決策模型，為類型化問題返回校準的概率，而非生成的文字。",
   "jina-deepsearch-v1.description": "DeepSearch 結合網頁搜尋、閱讀與推理，進行深入調查。它如同一位代理人，接收你的研究任務後，進行多輪廣泛搜尋，最終才產出答案。整個過程包含持續研究、推理與多角度問題解決，與僅依賴預訓練資料的標準 LLM 或一次性檢索的傳統 RAG 系統截然不同。",
   "kimi-k2-instruct.description": "Kimi K2 Instruct 是 Kimi 官方推出的推理模型，支援長上下文，適用於程式碼、問答等多種任務。",
   "kimi-k2-thinking.description": "kimi-k2-thinking 是 Moonshot AI 的思考模型，具有通用代理和推理能力。它擅長深度推理，能通過多步工具使用解決難題。",

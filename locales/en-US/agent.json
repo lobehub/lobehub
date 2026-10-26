@@ -78,6 +78,7 @@
   "channel.botWakeScopeNoneHint": "The bot never joins unprompted.",
   "channel.botWakeWindowSeconds": "Follow-up window (seconds)",
   "channel.botWakeWindowSecondsHint": "After the bot speaks, plain messages in the same place within this time count as a follow-up to it.",
+  "channel.channelListLimit": "Lists hold at most {{max}} entries — remove one first.",
   "channel.charLimit": "Character Limit",
   "channel.charLimitHint": "Maximum number of characters per message",
   "channel.comingSoon": "Coming Soon",

@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "Thông tin xác thực với khóa “{{key}}” đã tồn tại với một loại khác ({{type}}) và không thể thay thế từ đây. Bỏ qua và yêu cầu nó dưới một khóa khác.",
   "credsInput.notice.workspace": "Đã lưu được mã hóa vào thông tin xác thực của không gian làm việc này. Các giá trị được lưu trực tiếp vào bộ nhớ và không bao giờ được hiển thị cho AI.",
   "credsInput.placeholder": "Nhập {{field}}",
+  "credsInput.proseConfirm": "Vẫn lưu",
+  "credsInput.proseWarning": "Giá trị cho “{{fields}}” trông giống như một câu thay vì một bí mật (nó chứa văn bản CJK hoặc một cụm từ hoàn chỉnh). Nếu nó được dán nhầm, hãy sửa trước khi lưu; nếu không, hãy xác nhận bằng “Vẫn lưu”.",
   "credsInput.saveFailed": "Không thể lưu thông tin xác thực. Vui lòng thử lại.",
   "credsInput.skip": "Bỏ qua",
   "credsInput.submit": "Lưu",

@@ -78,6 +78,7 @@
   "channel.botWakeScopeNoneHint": "机器人不会主动插话。",
   "channel.botWakeWindowSeconds": "跟进窗口（秒）",
   "channel.botWakeWindowSecondsHint": "机器人发言后，这段时间内同一位置的普通消息会被视为对它的跟进。",
+  "channel.channelListLimit": "列表最多包含 {{max}} 个条目 — 请先移除一个。",
   "channel.charLimit": "字符限制",
   "channel.charLimitHint": "单条消息的最大字符数",
   "channel.comingSoon": "即将上线",

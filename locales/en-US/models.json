@@ -765,6 +765,7 @@
   "irag-1.0.description": "ERNIE iRAG is an image retrieval-augmented generation model for image search, image-text retrieval, and content generation.",
   "jamba-large.description": "Our most powerful, advanced model, designed for complex enterprise tasks with outstanding performance.",
   "jamba-mini.description": "The most efficient model in its class, balancing speed and quality with a smaller footprint.",
+  "jev-1.14.0.description": "TypeSafe Jev is a System One decision model that returns calibrated probabilities for typed questions instead of generated prose.",
   "jina-deepsearch-v1.description": "DeepSearch combines web search, reading, and reasoning for thorough investigations. Think of it as an agent that takes your research task, performs broad searches with multiple iterations, and only then produces an answer. The process involves continuous research, reasoning, and multi-angle problem solving, fundamentally different from standard LLMs that answer from pretraining data or traditional RAG systems that rely on one-shot surface search.",
   "kimi-k2-instruct.description": "Kimi K2 Instruct is Kimi’s official reasoning model with long context for code, QA, and more.",
   "kimi-k2-thinking.description": "kimi-k2-thinking is a Moonshot AI thinking model with general agentic and reasoning abilities. It excels at deep reasoning and can solve hard problems via multi-step tool use.",

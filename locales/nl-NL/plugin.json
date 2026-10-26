@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "Platformfout",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "Schema mismatch",
   "builtins.lobe-agent.apiName.vent.rejected": "Niet geregistreerd",
+  "builtins.lobe-agent.subAgent.backgroundHint": "Het resultaat wordt naar dit gesprek gestuurd zodra het klaar is.",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "Draait op de achtergrond",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} tokens",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} tools",
   "builtins.lobe-agent.subAgent.stopped": "Gestopt voordat het voltooid was",
