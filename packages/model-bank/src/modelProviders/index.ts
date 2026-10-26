@@ -252,8 +252,13 @@ export const isProviderDisableBrowserRequest = (id: string) => {
  * Providers that run on the user's own machine: requests leave from the device
  * unless `fetchOnClient` says otherwise (a desktop app or a deployment that
  * proxies them sets it to `false`).
+ *
+ * A gateway reachable from the server is not one of these: magpie may sit on
+ * the user's machine or on a host the deployment reaches, and only that
+ * deployment knows which. It follows `fetchOnClient` like any other provider,
+ * defaulting to the server.
  */
-const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'magpie', 'ollama', 'unsloth']);
+const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'ollama', 'unsloth']);
 
 export interface ProviderFetchOnClientConfig {
   /** The user's choice, else the deployment's override for the provider. */

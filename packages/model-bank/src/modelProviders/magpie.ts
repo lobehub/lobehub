@@ -1,6 +1,6 @@
 import type { ModelProviderCard } from '../types';
 
-// magpie is a local LLM gateway: every model the user has in magpie —
+// magpie is an LLM gateway: every model the user has in magpie —
 // subscriptions, API keys, local models, routing groups — is served there under
 // one id each, so this is one provider entry rather than one per vendor.
 //
@@ -10,13 +10,15 @@ import type { ModelProviderCard } from '../types';
 const Magpie: ModelProviderCard = {
   chatModels: [],
   description:
-    'magpie runs a local LLM gateway: every model and subscription you have there is served on one endpoint.',
+    'magpie is an LLM gateway: every model and subscription you have there is served on one endpoint.',
   enabled: true,
   id: 'magpie',
   name: 'magpie',
   settings: {
-    // The gateway only listens on loopback, so requests leave from the device
-    // that runs magpie rather than from a remote server.
+    // magpie may run on the user's machine or on a host the deployment reaches,
+    // so which side sends the request is the user's call. The switch is offered
+    // either way; requests default to the server like any other provider, and a
+    // local gateway the server cannot reach needs it turned on.
     defaultShowBrowserRequest: true,
     proxyUrl: {
       // A base URL the user gives is used as it stands, `/v1` included, so the
