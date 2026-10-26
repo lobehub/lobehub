@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { useForm } from '@lobehub/ui/form';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +12,12 @@ import type { SerializedPlatformDefinition } from '@/server/services/bot/platfor
 import agentZh from '../../../../locales/zh-CN/agent.json';
 import agentEn from '../../../../packages/locales/src/default/agent';
 import Body from './Body';
-import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
+import {
+  getChannelFormValues,
+  isWakeMasterReleased,
+  mergeSettingsWithDefaults,
+  withWakeMasterOn,
+} from './formState';
 import type { ChannelFormValues } from './index';
 
 const state = vi.hoisted(() => ({
@@ -58,7 +63,11 @@ const platformDef = {
 /** Mounts the form the way the channel page does: a saved bot, its settings merged with the defaults. */
 const Harness = ({ settings }: { settings?: Record<string, unknown> }) => {
   const form = useForm<ChannelFormValues>();
-  const saved = mergeSettingsWithDefaults(discordSchema, settings ?? {});
+  // The page switches the master on for a user the options are released to.
+  const saved = withWakeMasterOn(
+    mergeSettingsWithDefaults(discordSchema, settings ?? {}),
+    isWakeMasterReleased(discordSchema, state.featureFlags),
+  );
 
   useEffect(() => {
     form.setValues(
@@ -70,6 +79,7 @@ const Harness = ({ settings }: { settings?: Record<string, unknown> }) => {
   return (
     <Body
       hasConfig
+      activeTab="wake"
       currentConfig={{ applicationId: '1', credentials: {}, settings: saved }}
       form={form}
       platformDef={platformDef}
@@ -90,8 +100,8 @@ describe('channel settings form: bot-wake options', () => {
     // The form is up (an ordinary advanced setting renders) ...
     expect(screen.getByText(en['channel.watchKeywords'])).toBeInTheDocument();
     // ... and no bot-wake option leaks out.
-    expect(screen.queryByText(en['channel.botWakeEnabled'])).not.toBeInTheDocument();
     expect(screen.queryByText(en['channel.botWakeMode'])).not.toBeInTheDocument();
+    expect(screen.queryByText(en['channel.wake.intro'])).not.toBeInTheDocument();
   });
 
   it('also hides them while the flags are explicitly off', () => {
@@ -100,25 +110,17 @@ describe('channel settings form: bot-wake options', () => {
 
     render(<Harness />);
 
-    expect(screen.queryByText(en['channel.botWakeEnabled'])).not.toBeInTheDocument();
+    expect(screen.queryByText(en['channel.botWakeMode'])).not.toBeInTheDocument();
   });
 
-  it('shows only the master switch once released, and the rest after it is turned on', async () => {
+  it('has no master switch: the rules show straight away once released, the timings after batching is on', () => {
     state.copy = en;
     state.featureFlags = { enableBotWake: true };
 
     render(<Harness />);
 
-    expect(screen.getByText(en['channel.botWakeEnabled'])).toBeInTheDocument();
-    expect(screen.queryByText(en['channel.botWakeMode'])).not.toBeInTheDocument();
-    expect(screen.queryByText(en['channel.botWakeClassifierMode'])).not.toBeInTheDocument();
-    expect(screen.queryByText(en['channel.botWakeSchedulerMode'])).not.toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole('switch', { name: new RegExp(`^${en['channel.botWakeEnabled']}`) }),
-    );
-
-    await waitFor(() => expect(screen.getByText(en['channel.botWakeMode'])).toBeInTheDocument());
+    expect(screen.queryByText(en['channel.botWakeEnabled'])).not.toBeInTheDocument();
+    expect(screen.getByText(en['channel.botWakeMode'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeAllowChannels'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeClassifierMode'])).toBeInTheDocument();
@@ -126,6 +128,15 @@ describe('channel settings form: bot-wake options', () => {
     expect(screen.getByText(en['channel.botWakeSchedulerMode'])).toBeInTheDocument();
     // Batching timings stay out of the way until batching is on.
     expect(screen.queryByText(en['channel.botWakeCollectSeconds'])).not.toBeInTheDocument();
+  });
+
+  it('explains what the options do, since there is no switch to read', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness />);
+
+    expect(screen.getByText(en['channel.wake.intro'])).toBeInTheDocument();
   });
 
   it('opens straight onto the options for a bot that already has them on', () => {
@@ -145,7 +156,6 @@ describe('channel settings form: bot-wake options', () => {
 
     render(<Harness settings={{ botWakeEnabled: true }} />);
 
-    expect(screen.getByText('按规则判断未定向消息')).toBeInTheDocument();
     expect(screen.getByText('跟进窗口（秒）')).toBeInTheDocument();
     expect(screen.getByText('自定义说明')).toBeInTheDocument();
     expect(screen.queryByText('channel.botWakeMode')).not.toBeInTheDocument();

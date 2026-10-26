@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import PlatformDetail, { type ChannelFormValues } from '@/features/AgentChannel/PlatformDetail';
 import Body from '@/features/AgentChannel/PlatformDetail/Body';
-import SaveBar from '@/features/AgentChannel/PlatformDetail/SaveBar';
+import { FooterActions } from '@/features/AgentChannel/PlatformDetail/Footer';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
 import Header from './Header';
@@ -220,26 +220,51 @@ const currentConfig = {
 };
 
 const BodyHarness = ({
+  activeTab,
   disabled,
-  hasConfig = true,
 }: {
+  activeTab: 'advanced' | 'connect';
   disabled?: boolean;
-  hasConfig?: boolean;
 }) => {
   const form = useForm<ChannelFormValues>();
 
   return (
     <Body
-      currentConfig={hasConfig ? currentConfig : undefined}
+      hasConfig
+      activeTab={activeTab}
+      currentConfig={currentConfig}
       disabled={disabled}
       form={form}
-      hasConfig={hasConfig}
       platformDef={platformDef}
-      removeDisabled={disabled}
-      onDelete={vi.fn()}
     />
   );
 };
+
+const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
+  const form = useForm<ChannelFormValues>();
+
+  return (
+    <FooterActions
+      hasConfig
+      isDirty
+      connecting={false}
+      disabled={disabled}
+      form={form}
+      platformDef={platformDef}
+      saving={false}
+      testing={false}
+      writeDisabled={disabled}
+      onCopied={vi.fn()}
+      onDelete={vi.fn()}
+      onDiscard={vi.fn()}
+      onSave={vi.fn()}
+      onTestConnection={vi.fn()}
+    />
+  );
+};
+
+// A saved bot folds its credentials away; open them the way a person would.
+const openCredentials = () => fireEvent.click(screen.getByText('channel.credentials'));
 
 describe('Agent channel permission gates', () => {
   beforeEach(() => {
@@ -248,85 +273,44 @@ describe('Agent channel permission gates', () => {
   });
 
   it('renders channel credentials as read-only when editing is denied', () => {
-    render(<BodyHarness disabled />);
+    const { unmount } = render(<BodyHarness disabled activeTab="connect" />);
 
-    expect(screen.getByRole('textbox', { name: /^channel\.applicationId/ })).toBeDisabled();
+    openCredentials();
+    expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toBeDisabled();
     expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeDisabled();
+    unmount();
+
+    render(<BodyHarness disabled activeTab="advanced" />);
+
+    expect(screen.getByRole('textbox', { name: /^channel.charLimit/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
   });
 
-  it('opens every settings section for a saved bot', () => {
-    render(<BodyHarness />);
+  it('shows one tab at a time and keeps the others mounted', () => {
+    const { rerender } = render(<BodyHarness activeTab="advanced" />);
 
-    expect(screen.getByText('channel.section.replies.title')).toBeInTheDocument();
-    expect(screen.getByText('channel.section.account.title')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument();
-    expect(screen.getByText('channel.applicationIdHint')).toBeInTheDocument();
-  });
+    expect(screen.getByRole('textbox', { name: /^channel.charLimit/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: /^channel.applicationId/ }),
+    ).not.toBeInTheDocument();
+    // The hidden panel is still in the document, so its values survive a save.
+    expect(document.querySelector('#channel-panel-connect')).toHaveAttribute('hidden');
 
-  it('folds settings sections until the bot is first saved, leading with the credentials', async () => {
-    render(<BodyHarness hasConfig={false} />);
+    rerender(<BodyHarness activeTab="connect" />);
 
-    expect(screen.getByRole('textbox', { name: /^channel\.applicationId/ })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'channel.charLimit' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'channel.removeChannel' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /channel\.section\.replies\.title/ }));
-    await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument(),
-    );
+    openCredentials();
+    expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /^channel.charLimit/ })).not.toBeInTheDocument();
   });
 
   it('disables mutating channel actions when editing is denied', () => {
-    render(<BodyHarness disabled />);
-    expect(screen.getByRole('button', { name: 'channel.removeChannel' })).toBeDisabled();
+    render(<FooterHarness disabled />);
 
-    render(
-      <SaveBar
-        hasConfig
-        isDirty
-        writeDisabled
-        connecting={false}
-        saving={false}
-        onDiscard={vi.fn()}
-        onSave={vi.fn()}
-      />,
-    );
+    expect(screen.getByRole('button', { name: 'channel.removeChannel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'channel.testConnection' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.discard' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.save' })).toBeDisabled();
-  });
-
-  it('disables Test Connection for a read-only channel', async () => {
-    render(
-      <PlatformDetail
-        disabled
-        agentId="agent-id"
-        currentConfig={currentConfig}
-        platformDef={platformDef}
-      />,
-    );
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'channel.testConnection' })).toBeDisabled(),
-    );
-  });
-
-  it('labels the first save as connecting the bot', () => {
-    render(
-      <SaveBar
-        connecting={false}
-        hasConfig={false}
-        isDirty={false}
-        saving={false}
-        onDiscard={vi.fn()}
-        onSave={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: 'channel.saveAndConnect' })).toBeEnabled();
-    expect(screen.getByText('channel.saveBar.firstSave')).toBeInTheDocument();
   });
 
   it('discards form edits and restores the persisted configuration', async () => {
@@ -334,7 +318,10 @@ describe('Agent channel permission gates', () => {
       <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
     );
 
-    const applicationId = screen.getByRole('textbox', { name: /^channel\.applicationId/ });
+    // A saved bot opens on its first settings tab; the app ID lives on "connect".
+    fireEvent.click(screen.getByRole('tab', { name: 'channel.tab.connect' }));
+    openCredentials();
+    const applicationId = screen.getByRole('textbox', { name: /^channel.applicationId/ });
     await waitFor(() => expect(applicationId).toHaveValue('app-id'));
     expect(screen.queryByRole('button', { name: 'channel.discard' })).not.toBeInTheDocument();
 
@@ -346,9 +333,7 @@ describe('Agent channel permission gates', () => {
     );
     screen.getByRole('button', { name: 'channel.discard' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: /^channel\.applicationId/ })).toHaveValue(
-        'app-id',
-      ),
+      expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toHaveValue('app-id'),
     );
   }, 15_000);
 
@@ -359,7 +344,6 @@ describe('Agent channel permission gates', () => {
         agentId="agent-id"
         currentConfig={currentConfig}
         platformDef={platformDef}
-        runtimeStatus="connected"
       />,
     );
 
@@ -442,7 +426,7 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('switch')).toBeDisabled();
   });
 
-  it('renders the paid-feature alert with the platform name', () => {
+  it('renders the paid-feature alert with the platform name and top spacing', () => {
     render(
       <PlatformDetail
         agentId="agent-id"
@@ -462,6 +446,7 @@ describe('Agent channel permission gates', () => {
     const alert = screen.getByTestId('channel-paid-alert');
     expect(alert).toHaveTextContent('channel.paidFeature.notice.title:WeChat');
     expect(alert).toHaveTextContent('channel.paidFeature.notice.desc.personal:WeChat');
+    expect(alert).toHaveStyle({ marginBlockStart: '16px' });
   });
 
   it('renders personal upgrade guidance and navigates to personal plans', async () => {

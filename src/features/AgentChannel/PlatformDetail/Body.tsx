@@ -1,8 +1,8 @@
 'use client';
 
-import { Button, confirmModal } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
 import { Form, type FormInstance } from '@lobehub/ui/form';
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,26 +17,39 @@ import {
   platformCredentialExtrasMap,
   platformSettingsFieldExtrasMap,
 } from '../platform/registry';
+import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
-import { extractSettingsDefaults } from './formState';
+import { AccessSection } from './AccessSection';
+import type { ChannelTab } from './channelTabs';
+import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
-import { ApplicationIdField, getFields, SchemaField } from './SchemaField';
-import { groupSettingsFields, type SettingsSectionKey } from './sections';
-import { ACCOUNT_SECTION_ID } from './StatusAlerts';
-import WebhookUrlField from './WebhookUrlField';
+import { ApplicationIdField, SchemaField } from './SchemaField';
+import { getSchemaFields, groupSettingsFields, WAKE_KEY_PREFIX } from './settingsGroups';
 
-export { buildValidate } from './SchemaField';
-
-/** DOM anchors for sections other parts of the page link to. */
-const SECTION_ANCHORS: Partial<Record<SettingsSectionKey, string>> = {
-  account: ACCOUNT_SECTION_ID,
-};
+/**
+ * One tab's content. Every panel stays mounted and only the active one is
+ * visible, so a field on another tab keeps its value and is still validated
+ * and saved with the form.
+ */
+const Panel = ({
+  active,
+  children,
+  tab,
+}: {
+  active: boolean;
+  children: ReactNode;
+  tab: ChannelTab;
+}) => (
+  <div hidden={!active} id={`channel-panel-${tab}`} role="tabpanel">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>{children}</div>
+  </div>
+);
 
 // --------------- Body component ---------------
 
 interface BodyProps {
-  /** Rendered at the right of the Connection heading (e.g. Test Connection). */
-  connectionExtra?: ReactNode;
+  /** The tab shown; the others stay mounted but hidden. */
+  activeTab: ChannelTab;
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
@@ -50,243 +63,312 @@ interface BodyProps {
     applicationId: string;
     credentials: Record<string, string>;
   }) => Promise<boolean> | void;
-  /** Removes the saved channel; the Danger zone offers it only for a saved bot. */
-  onDelete?: () => void;
+  /** Saves and connects the bot; offered as a step of its own while setting one up. */
+  onSave?: () => void;
   onValuesChange?: (values: ChannelFormValues) => void;
   platformDef: SerializedPlatformDefinition;
   /** Name a quick-created bot app starts with (the agent's name). */
   quickSetupAppName?: string;
   /** Who a quick-created bot app is for (the agent id); a new scope starts a new scan. */
   quickSetupScope?: string;
-  /** Removing is unavailable (read-only, or a save / connect is in flight). */
-  removeDisabled?: boolean;
+  /** A save is running. */
+  saving?: boolean;
 }
 
-/**
- * A channel's configuration as settings sections: how the bot connects, who may
- * talk to it, which platform account is the operator's, how it replies and when
- * it wakes up, then the destructive actions. Until the bot is first saved the
- * settings sections start folded, so the page leads with the credentials.
- */
 const Body = memo<BodyProps>(
   ({
-    connectionExtra,
+    activeTab,
     platformDef,
     form,
     hasConfig,
     currentConfig,
     onAuthenticated,
-    onDelete,
+    onSave,
     onValuesChange,
     disabled,
     quickSetupAppName,
+    saving,
     quickSetupScope,
-    removeDisabled,
   }) => {
     const { t: _t } = useTranslation('agent');
-    const t = _t as (key: string, options?: Record<string, unknown>) => string;
+    const t = _t as (key: string) => string;
 
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
 
+    // Fields behind a rollout flag stay hidden until the user's flag is on (and
+    // while the flags have not loaded yet).
     const featureFlags = useServerConfigStore((s) => s.featureFlags) as
       Record<string, unknown> | undefined;
 
     const credentialFields = useMemo(
-      () => getFields(platformDef.schema, 'credentials', featureFlags),
+      () => getSchemaFields(platformDef.schema, 'credentials', featureFlags),
       [platformDef.schema, featureFlags],
     );
 
-    const settingsFields = useMemo(
-      () => getFields(platformDef.schema, 'settings', featureFlags),
+    const settingsGroups = useMemo(
+      () => groupSettingsFields(getSchemaFields(platformDef.schema, 'settings', featureFlags)),
       [platformDef.schema, featureFlags],
     );
 
-    const { connection: connectionSettings, sections } = useMemo(
-      () => groupSettingsFields(settingsFields),
-      [settingsFields],
+    // While a bot is being set up, its credentials are asked for in the setup
+    // step that produces them. A saved bot has no steps on screen, so they sit
+    // in the credentials group.
+    const inlineKeys = useMemo(
+      () => (hasConfig ? new Set<string>() : getInlineFieldKeys(platformDef.id)),
+      [hasConfig, platformDef.id],
     );
 
-    const handleResetSettings = useCallback(() => {
-      form.setValues({
-        settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
-      });
-      onValuesChange?.(form.getValues());
-    }, [form, onValuesChange, platformDef.schema]);
+    const renderStepField = (key: string) => {
+      if (key === 'applicationId') {
+        const field = platformDef.schema.find((section) => section.key === 'applicationId');
+        return field && <ApplicationIdField disabled={disabled} field={field} />;
+      }
+      if (key === 'extras') return CredentialExtras && <CredentialExtras disabled={disabled} />;
+      const field = credentialFields.find((item) => item.key === key);
+      return (
+        field && <SchemaField fullWidth disabled={disabled} field={field} parentKey="credentials" />
+      );
+    };
+
+    const groupCredentialFields = credentialFields.filter((field) => !inlineKeys.has(field.key));
+    const showExtras = !!CredentialExtras && !inlineKeys.has('extras');
+    const showApplicationId =
+      !inlineKeys.has('applicationId') &&
+      platformDef.schema.some((section) => section.key === 'applicationId');
+
+    const connectGroup = settingsGroups.find((group) => group.key === 'connect');
+
+    // Reset only what the section shows: access rules and reply style are
+    // deliberate choices, so a reset button on "Advanced" must not touch them.
+    const handleResetGroup = useCallback(
+      (fields: FieldSchema[]) => {
+        const defaults = extractSettingsDefaults(platformDef.schema);
+        const next = { ...form.getValues().settings };
+        for (const field of fields) next[field.key] = defaults[field.key] as {} | undefined;
+
+        form.setValues({ settings: next });
+        onValuesChange?.(form.getValues());
+      },
+      [form, onValuesChange, platformDef.schema],
+    );
 
     // A settings-field helper writes straight into the form, which does not
-    // fire the Form's `onValuesChange` — same reason `handleResetSettings`
+    // fire the Form's `onValuesChange` — same reason `handleResetGroup`
     // reports its own write. Without this the page never sees the change and
     // the unsaved-changes affordances stay hidden.
     const handleFieldExtrasFilled = useCallback(() => {
       onValuesChange?.(form.getValues());
     }, [form, onValuesChange]);
 
-    const renderSettingsField = (field: FieldSchema, index: number) => {
-      // Feature-gated fields (e.g. watch keywords) lock when the resolved
-      // access meta reports the feature as not allowed.
-      const featureLocked =
-        !!field.paidFeature && platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+    // A platform's helper that sits under one setting (e.g. Feishu's "fetch my
+    // Open ID" under the owner ID).
+    const renderExtras = (field?: FieldSchema, featureLocked = false) => {
+      if (!field) return null;
       const FieldExtras = platformSettingsFieldExtrasMap[`${platformDef.id}:${field.key}`];
+      if (!FieldExtras) return null;
+
       return (
-        <Fragment key={field.key}>
-          <SchemaField
-            disabled={disabled}
-            divider={index > 0}
-            featureLocked={featureLocked}
-            field={field}
-            parentKey="settings"
-          />
-          {FieldExtras && (
-            <FieldExtras
-              disabled={disabled || featureLocked}
-              platformId={platformDef.id}
-              savedValue={currentConfig?.settings?.[field.key]}
-              onFilled={handleFieldExtrasFilled}
-            />
-          )}
-        </Fragment>
+        <FieldExtras
+          disabled={disabled || featureLocked}
+          platformId={platformDef.id}
+          savedValue={currentConfig?.settings?.[field.key]}
+          onFilled={handleFieldExtrasFilled}
+        />
       );
     };
 
-    // Render top-level sections in schema order so each platform controls its
-    // own field ordering. LINE places `credentials` before `applicationId`
-    // because the operator must enter the channel access token before the
-    // "Fetch from LINE" button (rendered after applicationId) can auto-fill the
-    // destination user ID; Discord/Slack/QQ/Feishu place `applicationId` first
-    // as a primary identifier.
-    const credentialRows = platformDef.schema
-      .filter((section) => section.key === 'applicationId' || section.key === 'credentials')
-      .flatMap((section) => {
-        if (section.key === 'applicationId') return [{ field: section, key: 'applicationId' }];
-        return credentialFields.map((field) => ({ field, key: field.key }));
-      });
-
-    const showReset = !!hasConfig && settingsFields.length > 0;
-    const showRemove = hasConfig && !!onDelete;
-
     return (
-      <Form form={form} style={{ width: '100%' }} variant={'filled'}>
-        {!CustomCredentialBody && (
-          <QuickSetupSection
-            appName={quickSetupAppName || 'LobeHub'}
-            // Remount when the bot is saved or removed: the steps' open state is
-            // mount-only and should follow whether there is anything saved.
-            disabled={disabled}
-            form={form}
-            hasConfig={hasConfig}
-            key={hasConfig ? 'saved' : 'new'}
-            platformId={platformDef.id}
-            platformName={platformDef.name}
-            scope={quickSetupScope}
-            onAuthenticated={onAuthenticated}
-          />
-        )}
-
-        <Form.Group
-          collapsible={false}
-          desc={t('channel.section.connection.desc', { name: platformDef.name })}
-          extra={connectionExtra}
-          title={t('channel.section.connection.title')}
-          variant={'filled'}
-        >
+      <Form
+        form={form}
+        gap={24}
+        itemMinWidth={'max(34%, 240px)'}
+        style={{ maxWidth: 1024, padding: '8px 0 24px', width: '100%' }}
+        variant={'filled'}
+      >
+        <Panel active={activeTab === 'connect'} tab="connect">
           {CustomCredentialBody ? (
-            <CustomCredentialBody
-              currentConfig={currentConfig}
-              disabled={disabled}
-              hasConfig={hasConfig}
-              onAuthenticated={onAuthenticated}
-            />
+            <Form.Group title={t('channel.credentials')} variant={'filled'}>
+              <CustomCredentialBody
+                currentConfig={currentConfig}
+                disabled={disabled}
+                hasConfig={hasConfig}
+                onAuthenticated={onAuthenticated}
+              />
+            </Form.Group>
           ) : (
             <>
-              {credentialRows.map(({ field, key }, index) =>
-                key === 'applicationId' ? (
-                  <ApplicationIdField
-                    disabled={disabled}
-                    divider={index > 0}
-                    field={field}
-                    key="applicationId"
-                  />
-                ) : (
-                  <SchemaField
-                    disabled={disabled}
-                    divider={index > 0}
-                    field={field}
-                    key={key}
-                    parentKey="credentials"
-                  />
-                ),
-              )}
-              {/* Platform-specific helpers (e.g. LINE's "Fetch from LINE" button)
+              <QuickSetupSection
+                appName={quickSetupAppName || 'LobeHub'}
+                disabled={disabled}
+                form={form}
+                hasConfig={hasConfig}
+                platformId={platformDef.id}
+                renderField={inlineKeys.size > 0 ? renderStepField : undefined}
+                saving={saving}
+                scope={quickSetupScope}
+                onAuthenticated={onAuthenticated}
+                onSave={onSave}
+              />
+              {/* Credentials of a saved bot are masked and rarely edited, so they
+            fold away; a new bot has nothing else to do but fill them in. */}
+              {(groupCredentialFields.length > 0 || showApplicationId || showExtras) && (
+                <Form.Group
+                  collapsible={!!hasConfig || inlineKeys.size > 0}
+                  defaultActive={!hasConfig && inlineKeys.size === 0}
+                  desc={t('channel.group.credentialsDesc')}
+                  keyValue={`credentials-${platformDef.id}`}
+                  variant={'filled'}
+                  // The steps above ask for what is needed; what is left is optional.
+                  title={t(
+                    inlineKeys.size > 0
+                      ? 'channel.group.credentialsOptional'
+                      : 'channel.credentials',
+                  )}
+                >
+                  {/* Render top-level sections in schema order so each platform controls
+              its own field ordering. LINE places `credentials` before `applicationId`
+              because the operator must enter the channel access token before the
+              "Fetch from LINE" button (rendered after applicationId) can auto-fill
+              the destination user ID; Discord/Slack/QQ/Feishu place `applicationId`
+              first as a primary identifier. */}
+                  {platformDef.schema
+                    .filter(
+                      (section) =>
+                        (section.key === 'applicationId' && showApplicationId) ||
+                        section.key === 'credentials',
+                    )
+                    .map((section, sectionIndex) => {
+                      const needsDivider = sectionIndex > 0;
+                      if (section.key === 'applicationId') {
+                        return (
+                          <ApplicationIdField
+                            disabled={disabled}
+                            divider={needsDivider}
+                            field={section}
+                            key="applicationId"
+                          />
+                        );
+                      }
+                      return (
+                        <Fragment key="credentials">
+                          {groupCredentialFields.map((field, i) => (
+                            <SchemaField
+                              fullWidth
+                              disabled={disabled}
+                              divider={needsDivider || i !== 0}
+                              field={field}
+                              key={field.key}
+                              parentKey="credentials"
+                            />
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                  {/* Platform-specific helpers (e.g. LINE's "Fetch from LINE" button)
               render after the credential + applicationId block so the button
               sits next to the field it acts on. */}
-              {CredentialExtras && <CredentialExtras disabled={disabled} />}
+                  {showExtras && <CredentialExtras disabled={disabled} />}
+                </Form.Group>
+              )}
             </>
           )}
-          {connectionSettings.map((field) => renderSettingsField(field, 1))}
-          {hasConfig && <WebhookUrlField form={form} platformDef={platformDef} />}
-        </Form.Group>
-
-        {sections.map(({ fields, key }) => (
-          <Form.Group
-            collapsible={!hasConfig}
-            defaultActive={!!hasConfig}
-            desc={t(`channel.section.${key}.desc`, { defaultValue: '', name: platformDef.name })}
-            id={SECTION_ANCHORS[key]}
-            key={`${platformDef.id}:${key}:${hasConfig ? 'saved' : 'new'}`}
-            keyValue={`channel-section-${key}`}
-            title={t(`channel.section.${key}.title`)}
-            variant={'filled'}
-          >
-            {fields.map(renderSettingsField)}
-          </Form.Group>
-        ))}
-
-        {(showReset || showRemove) && (
-          <Form.Group
-            collapsible={false}
-            title={t('channel.section.danger.title')}
-            variant={'filled'}
-          >
-            {showReset && (
-              <Form.Field
-                desc={t('channel.dangerZone.resetDesc')}
-                label={t('channel.settingsResetDefault')}
-              >
-                <Button
+          {connectGroup && (
+            <Form.Group
+              collapsible={false}
+              keyValue={`settings-connect-${platformDef.id}`}
+              title={t('channel.group.connection')}
+              variant={'filled'}
+            >
+              {connectGroup.fields.map((field, index) => (
+                <SchemaField
                   disabled={disabled}
-                  icon={<RotateCcw size={14} />}
-                  onClick={() =>
-                    confirmModal({
-                      content: t('channel.dangerZone.resetConfirm'),
-                      okText: t('channel.settingsResetDefault'),
-                      title: t('channel.settingsResetDefault'),
-                      onOk: handleResetSettings,
-                    })
-                  }
-                >
-                  {t('channel.settingsResetDefault')}
-                </Button>
-              </Form.Field>
-            )}
-            {showRemove && (
-              <Form.Field
-                desc={t('channel.dangerZone.removeDesc', { name: platformDef.name })}
-                divider={showReset}
-                label={t('channel.removeChannel')}
+                  divider={index !== 0}
+                  field={field}
+                  key={field.key}
+                  parentKey="settings"
+                />
+              ))}
+            </Form.Group>
+          )}
+        </Panel>
+        {settingsGroups
+          .filter((group) => group.key !== 'connect')
+          .map((group) => (
+            <Panel active={activeTab === group.key} key={group.key} tab={group.key}>
+              {/* The intro explains the rules, so it shows only where they are released. */}
+              {group.key === 'wake' &&
+                group.fields.some((field) => field.key.startsWith(WAKE_KEY_PREFIX)) && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('channel.wake.intro')}
+                  </Text>
+                )}
+              {group.key === 'reply' && hasConfig && (
+                <Text fontSize={12} type={'secondary'}>
+                  {t('channel.reply.instant')}
+                </Text>
+              )}
+              <Form.Group
+                collapsible={false}
+                keyValue={`settings-${group.key}-${platformDef.id}`}
+                variant={'filled'}
               >
-                <Button
-                  danger
-                  disabled={removeDisabled}
-                  icon={<Trash2 size={14} />}
-                  onClick={onDelete}
-                >
-                  {t('channel.removeChannel')}
-                </Button>
-              </Form.Field>
-            )}
-          </Form.Group>
-        )}
+                {group.key === 'access' &&
+                group.fields.some((f) => f.key === 'dmPolicy' || f.key === 'groupPolicy') ? (
+                  <AccessSection
+                    disabled={disabled}
+                    fields={group.fields}
+                    form={form}
+                    userIdExtras={renderExtras(group.fields.find((f) => f.key === 'userId'))}
+                    onValuesChange={onValuesChange}
+                  />
+                ) : (
+                  group.fields
+                    // The master switch is always on for the people who see these options.
+                    .filter((field) => field.key !== WAKE_MASTER_KEY)
+                    .map((field, index) => {
+                      // Feature-gated fields (e.g. watch keywords) lock when the
+                      // resolved access meta reports the feature as not allowed.
+                      const featureLocked =
+                        !!field.paidFeature &&
+                        platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+                      return (
+                        <Fragment key={field.key}>
+                          <SchemaField
+                            disabled={disabled}
+                            divider={index !== 0}
+                            featureLocked={featureLocked}
+                            field={field}
+                            parentKey="settings"
+                          />
+                          {renderExtras(field, featureLocked)}
+                        </Fragment>
+                      );
+                    })
+                )}
+                {group.key === 'advanced' && (
+                  <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
+                    <Button
+                      disabled={disabled}
+                      icon={<RotateCcw size={14} />}
+                      size="small"
+                      type="text"
+                      onClick={() =>
+                        confirmModal({
+                          content: t('channel.settingsResetConfirm'),
+                          okText: t('channel.settingsResetDefault'),
+                          title: t('channel.settingsResetDefault'),
+                          onOk: () => handleResetGroup(group.fields),
+                        })
+                      }
+                    >
+                      {t('channel.settingsResetDefault')}
+                    </Button>
+                  </Flexbox>
+                )}
+              </Form.Group>
+            </Panel>
+          ))}
       </Form>
     );
   },

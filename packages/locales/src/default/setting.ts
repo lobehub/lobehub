@@ -3647,11 +3647,11 @@ When I am ___, I need ___
     'Connect a bot your team owns to {{name}}. Everyone in the group can @{{name}} to hand off work — nobody has to link an account.',
   'workspace.onboarding.flow.channels.quote': "Add me to your team's group chats,",
   'workspace.onboarding.flow.channels.highlight': 'and anyone can hand me work.',
-  'workspace.onboarding.flow.channels.showMore': 'More channels ({{count}})',
+  'workspace.onboarding.flow.channels.showMore': 'More IM bots ({{count}})',
   'workspace.onboarding.flow.channels.showLess': 'Show less',
-  'workspace.onboarding.flow.channels.more': 'You can change channels anytime in Agent → Channels.',
+  'workspace.onboarding.flow.channels.more': 'You can change IM bots anytime in Agent → IM Bots.',
   'workspace.onboarding.flow.channels.connect.back': 'Back to list',
-  'workspace.onboarding.flow.channels.connect.category': 'Bot channel',
+  'workspace.onboarding.flow.channels.connect.category': 'IM Bot',
   'workspace.onboarding.flow.channels.connect.description':
     "Use your own {{platform}} app to bring {{name}} into your team's chats as a bot.",
   'workspace.onboarding.flow.channels.connect.guide': 'Setup guide',
@@ -3668,7 +3668,7 @@ When I am ___, I need ___
   'workspace.onboarding.flow.channels.connect.attempt': 'Attempt {{count}}',
   'workspace.onboarding.flow.channels.connect.connectedTitle': '{{name}} connected',
   'workspace.onboarding.flow.channels.connect.connectedDesc':
-    'Members can now @{{name}} in your group to hand off work. Change it anytime in Agent → Channels.',
+    'Members can now @{{name}} in your group to hand off work. Change it anytime in Agent → IM Bots.',
   'workspace.onboarding.flow.channels.connect.edit': 'Edit credentials',
   'workspace.onboarding.flow.channels.connect.failedTitle': "Couldn't connect {{name}}",
   'workspace.onboarding.flow.channels.connect.errorCode': 'Error code: {{code}}',

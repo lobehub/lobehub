@@ -390,7 +390,6 @@
   "src/features/AgentChannel/platform/wechat/ConnectedInfo.tsx",
   "src/features/AgentChannel/platform/wechat/QrCodeAuth.tsx",
   "src/features/AgentChannel/quickSetup/FeishuQuickCreate.tsx",
-  "src/features/AgentChannel/quickSetup/SetupGuide.tsx",
   "src/features/AgentDocumentPage/RightPanel/index.tsx",
   "src/features/AgentDocumentReader/index.tsx",
   "src/features/AgentDocumentsExplorer/DocumentExplorerToolbar.tsx",
