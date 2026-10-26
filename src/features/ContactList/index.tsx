@@ -2,11 +2,21 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionRoot,
+  AccordionTrigger,
+  ActionIcon,
+  DropdownMenu,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronRightIcon, UserRoundPlusIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { UserRoundPlusIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -85,9 +95,6 @@ const Body = memo(() => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const activeRouteId = useActiveRouteId();
-  // Sections collapse independently; the choice lasts for the session.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const toggleSection = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const { agents, groups } = useMemo(() => {
     const unique = [...new Map(items.map((item) => [item.id, item])).values()];
@@ -106,36 +113,43 @@ const Body = memo(() => {
     { items: agents, key: 'agents', title: t('navPanel.agent') },
   ];
 
+  // The standard sidebar accordion (same as the home sidebar sections), so
+  // each section collapses independently with the shared header styling.
   return (
-    <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
-      {sections.map((section) => (
-        <Flexbox gap={1} key={section.key}>
-          <button
-            aria-expanded={!collapsed[section.key]}
-            type={'button'}
-            {...stylex.props(styles.sectionTitle)}
-            onClick={() => toggleSection(section.key)}
-          >
-            <Icon
-              icon={ChevronRightIcon}
-              size={12}
-              style={{
-                transform: collapsed[section.key] ? undefined : 'rotate(90deg)',
-                transition: 'transform 0.15s',
-              }}
-            />
-            {section.title}
-            <span {...stylex.props(styles.count)}>{section.items.length}</span>
-          </button>
-          {collapsed[section.key] ? null : section.items.length === 0 ? (
-            <div {...stylex.props(styles.empty)}>{t('contacts.empty')}</div>
-          ) : (
-            section.items.map((item) => (
-              <Contact active={item.id === activeRouteId} item={item} key={item.id} />
-            ))
-          )}
-        </Flexbox>
-      ))}
+    <Flexbox paddingBlock={'4px 12px'} paddingInline={4}>
+      <AccordionRoot
+        defaultValue={sections.map((section) => section.key)}
+        indicatorPlacement={'inline'}
+        style={{ gap: 8 }}
+      >
+        {sections.map((section) => (
+          <AccordionItem key={section.key} value={section.key}>
+            <AccordionHeader>
+              <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+                <Flexbox horizontal align={'center'} gap={4}>
+                  <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                    {section.title}
+                  </Text>
+                  <Text fontSize={11} type={'secondary'}>
+                    {section.items.length}
+                  </Text>
+                </Flexbox>
+              </AccordionTrigger>
+            </AccordionHeader>
+            <AccordionPanel>
+              <Flexbox gap={1} paddingBlock={1} paddingInline={2}>
+                {section.items.length === 0 ? (
+                  <div {...stylex.props(styles.empty)}>{t('contacts.empty')}</div>
+                ) : (
+                  section.items.map((item) => (
+                    <Contact active={item.id === activeRouteId} item={item} key={item.id} />
+                  ))
+                )}
+              </Flexbox>
+            </AccordionPanel>
+          </AccordionItem>
+        ))}
+      </AccordionRoot>
     </Flexbox>
   );
 });
