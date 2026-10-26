@@ -19,10 +19,13 @@ describe('project route metas', () => {
 
   // Regression: the project acceptance section reused `acceptanceRouteMeta`,
   // whose DynamicMeta cannot read an `:acceptanceId` here, so every project
-  // acceptance tab was persisted with the generic fallback title.
-  it('gives the project acceptance section its own static title and no runner', () => {
+  // acceptance tab was persisted with the generic fallback title. Its own runner
+  // only adds the project avatar (see ProjectDynamicMeta.test.ts), and loads lazily.
+  it('gives the project acceptance section its own static title', () => {
     expect(projectAcceptanceRouteMeta.titleKey).toBe('project:sections.acceptance');
     expect(projectAcceptanceRouteMeta.icon).toBeDefined();
-    expect(projectAcceptanceRouteMeta.DynamicMeta).toBeUndefined();
+    expect(
+      (projectAcceptanceRouteMeta.DynamicMeta as unknown as { $$typeof: symbol }).$$typeof,
+    ).toBe(Symbol.for('react.lazy'));
   });
 });

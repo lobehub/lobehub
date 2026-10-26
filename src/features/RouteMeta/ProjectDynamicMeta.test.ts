@@ -5,7 +5,11 @@ import { useChatStore } from '@/store/chat';
 import { type ProjectDetail, useProjectStore } from '@/store/project';
 import type { ChatTopic } from '@/types/topic';
 
-import { useProjectConversationTitle, useProjectTabAvatar } from './ProjectDynamicMeta';
+import {
+  ProjectSectionDynamicMeta,
+  useProjectConversationTitle,
+  useProjectTabAvatar,
+} from './ProjectDynamicMeta';
 
 vi.mock('./workspaceScope', () => ({
   matchesRouteWorkspace: () => true,
@@ -90,5 +94,25 @@ describe('useProjectTabAvatar', () => {
     const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
 
     expect(result.current).toEqual({ avatar: undefined, avatarSeed: undefined });
+  });
+});
+
+describe('ProjectSectionDynamicMeta', () => {
+  afterEach(() => {
+    useProjectStore.setState({ projectDetailMap: {} });
+  });
+
+  it('publishes the project avatar but no title, so the static section label stays', () => {
+    seedStores();
+    const onResolve = vi.fn();
+
+    renderHook(() => ProjectSectionDynamicMeta({ onResolve, params: { projectId: 'prj_1' } }));
+
+    expect(onResolve).toHaveBeenLastCalledWith({
+      avatar: null,
+      avatarSeed: 'Alpha',
+      backgroundColor: undefined,
+      title: undefined,
+    });
   });
 });
