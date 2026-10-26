@@ -4,6 +4,7 @@ import { type Generation, type GenerationBatch } from '@/types/generation';
 
 // Import functions for testing
 import {
+  buildDownloadFileName,
   DEFAULT_MAX_ITEM_WIDTH,
   getAspectRatio,
   getImageDimensions,
@@ -596,5 +597,53 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
     // min(205, 400) = 205
     const result = getThumbnailMaxWidth(mockGen);
     expect(result).toBe(205);
+  });
+});
+
+describe('buildDownloadFileName', () => {
+  // Built from local components so the formatted timestamp does not depend on the
+  // timezone the suite happens to run in.
+  const createdAt = new Date(2026, 7, 12, 18, 31, 27);
+
+  // Regression: in production the asset url is a file proxy url that carries no
+  // extension, and the name used to gain a bare trailing dot. Browsers rewrite that
+  // dot and then read the text after the last remaining one as the extension, so a
+  // prompt containing a period arrived without a usable extension at all.
+  it('omits the extension when the asset url carries none', () => {
+    const result = buildDownloadFileName(
+      'Mr. Smith in a paper cup.',
+      createdAt,
+      'https://app.example.com/f/file_abc123',
+    );
+
+    expect(result).toBe('Mr._Smith_in_a_paper_cup._2026-08-12_18-31-27');
+  });
+
+  it('keeps the extension when the asset url carries one', () => {
+    const result = buildDownloadFileName(
+      'a running noodle photo',
+      createdAt,
+      'generations/images/abc_1024x768_raw.png',
+    );
+
+    expect(result).toBe('a_running_noodle_photo_2026-08-12_18-31-27.png');
+  });
+
+  it('truncates the prompt to 30 characters and trims the cut edge', () => {
+    const result = buildDownloadFileName('abc def ghi jkl mno pqr stu v xyz', createdAt, '');
+
+    expect(result).toBe('abc_def_ghi_jkl_mno_pqr_stu_v_2026-08-12_18-31-27');
+  });
+
+  it('strips characters that are not valid in a file name', () => {
+    const result = buildDownloadFileName('a/b:c"d<e>f|g?h*i%j', createdAt, '');
+
+    expect(result).toBe('abcdefghij_2026-08-12_18-31-27');
+  });
+
+  it('falls back to Untitled when the prompt has no usable characters', () => {
+    const result = buildDownloadFileName('   ', createdAt, '');
+
+    expect(result).toBe('Untitled_2026-08-12_18-31-27');
   });
 });

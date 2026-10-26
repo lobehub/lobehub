@@ -1,4 +1,31 @@
+import dayjs from 'dayjs';
+
 import { type Generation, type GenerationBatch } from '@/types/generation';
+import { inferFileExtensionFromImageUrl } from '@/utils/url';
+
+/**
+ * Build the download file name for a generation: a truncated, filesystem-safe
+ * prompt followed by the creation timestamp.
+ *
+ * The extension is omitted when it cannot be inferred. In production the asset URL
+ * is an extensionless file proxy URL, so appending the separator anyway would leave
+ * the name ending in a bare dot — which browsers rewrite, and which then makes a
+ * period inside the prompt look like the extension separator. `downloadFile`
+ * resolves the real extension from the response instead.
+ */
+export const buildDownloadFileName = (
+  prompt: string,
+  createdAt: Date,
+  assetUrl: string,
+): string => {
+  const timestamp = dayjs(createdAt).format('YYYY-MM-DD_HH-mm-ss');
+  const baseName = prompt.slice(0, 30).trim();
+  const sanitizedBaseName = baseName.replaceAll(/["%*/:<>?\\|]/g, '').replaceAll(/\s+/g, '_');
+  const safePrompt = sanitizedBaseName || 'Untitled';
+  const extension = inferFileExtensionFromImageUrl(assetUrl);
+
+  return extension ? `${safePrompt}_${timestamp}.${extension}` : `${safePrompt}_${timestamp}`;
+};
 
 // Default maximum width for image items
 export const DEFAULT_MAX_ITEM_WIDTH = 256;
