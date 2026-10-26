@@ -1,5 +1,8 @@
 import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import { visit } from 'unist-util-visit';
 
 import { workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -32,8 +35,6 @@ export const extractMentionedUserIds = (editorData: unknown): string[] => {
 };
 
 const MARKDOWN_MENTION_TAG = /<mention\s[^>]*?(?<=\s)id\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi;
-// Code spans render literally, so a tag quoted inside one is not a mention.
-const MARKDOWN_CODE = /```[\s\S]*?(?:```|$)|`[^`\n]*`/g;
 
 /**
  * Collect the member ids referenced by serialized `<mention name="…" id="…" />`
@@ -45,11 +46,16 @@ export const extractMarkdownMentionedUserIds = (content: unknown): string[] => {
   if (typeof content !== 'string' || !content.includes('<mention')) return [];
 
   const userIds = new Set<string>();
-  const prose = content.replaceAll(MARKDOWN_CODE, '');
-  for (const [, doubleQuoted, singleQuoted] of prose.matchAll(MARKDOWN_MENTION_TAG)) {
-    const userId = (doubleQuoted ?? singleQuoted).trim();
-    if (userId) userIds.add(userId);
-  }
+  // Only raw HTML and prose can hold a mention; any code context (fenced,
+  // indented, inline) renders literally, so the parsed tree skips it.
+  visit(unified().use(remarkParse).parse(content), ['html', 'text'], (node) => {
+    const { value } = node as { value?: unknown };
+    if (typeof value !== 'string') return;
+    for (const [, doubleQuoted, singleQuoted] of value.matchAll(MARKDOWN_MENTION_TAG)) {
+      const userId = (doubleQuoted ?? singleQuoted).trim();
+      if (userId) userIds.add(userId);
+    }
+  });
   return [...userIds];
 };
 

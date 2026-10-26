@@ -38,5 +38,6 @@ CommentMention.displayName = 'TaskCommentMention';
 
 export const commentMarkdownProps = {
   components: { [MENTION_TAG]: CommentMention },
-  remarkPlugins: [createRemarkSelfClosingTagPlugin(MENTION_TAG)],
+  // Inline code stays literal, matching the server: a quoted tag is not a mention.
+  remarkPlugins: [createRemarkSelfClosingTagPlugin(MENTION_TAG, { inlineCode: false })],
 } satisfies Partial<MarkdownProps>;

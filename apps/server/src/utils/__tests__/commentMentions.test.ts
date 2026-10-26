@@ -62,6 +62,11 @@ describe('extractMarkdownMentionedUserIds', () => {
       '```',
       '<mention name="Y" id="user-3" />',
       '```',
+      '~~~',
+      '<mention name="Z" id="user-4" />',
+      '~~~',
+      '',
+      '    <mention name="W" id="user-5" />',
     ].join('\n');
 
     expect(extractMarkdownMentionedUserIds(content)).toEqual(['user-1']);
