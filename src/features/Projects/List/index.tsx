@@ -275,7 +275,8 @@ const ProjectListPage = memo(() => {
           <SearchBar
             allowClear
             placeholder={t('list.searchPlaceholder')}
-            style={{ flex: 1, maxWidth: 280, minWidth: 0 }}
+            // Natural width as before on wide screens; only shrinks when the row is tight.
+            style={{ flex: '0 1 auto', maxWidth: 280, minWidth: 0 }}
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
