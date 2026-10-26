@@ -253,7 +253,7 @@ export const isProviderDisableBrowserRequest = (id: string) => {
  * unless `fetchOnClient` says otherwise (a desktop app or a deployment that
  * proxies them sets it to `false`).
  */
-const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'ollama', 'unsloth']);
+const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'magpie', 'ollama', 'unsloth']);
 
 export interface ProviderFetchOnClientConfig {
   /** The user's choice, else the deployment's override for the provider. */

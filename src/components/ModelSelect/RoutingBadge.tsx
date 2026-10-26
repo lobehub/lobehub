@@ -6,10 +6,11 @@ import { isRoutingGroupId } from './isRoutingGroupId';
 
 interface RoutingBadgeProps {
   /**
-   * The model's id: `group/<id>` or `auto/<model>` for a routing group, the
-   * provider's id for a model only one provider serves.
+   * The model's id, `group/<id>` or `auto/<model>` for a magpie routing group.
    */
   id: string;
+  /** The provider the row belongs to, which decides whether the id means that. */
+  provider?: string;
 }
 
 /**
@@ -17,10 +18,10 @@ interface RoutingBadgeProps {
  * filled tag rather than wording in the name, since a name reads as one model
  * and a group is a pool of them.
  */
-export const RoutingBadge = memo<RoutingBadgeProps>(({ id }) => {
+export const RoutingBadge = memo<RoutingBadgeProps>(({ id, provider }) => {
   const { t } = useTranslation('components');
 
-  if (!isRoutingGroupId(id)) return null;
+  if (!isRoutingGroupId(id, provider)) return null;
 
   return (
     <Tooltip title={t('ModelSelect.routingTooltip')}>

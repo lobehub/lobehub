@@ -119,7 +119,12 @@ const fromMagpie = (model: MagpieModelCard): Partial<ChatModelCard> => {
     ? model.modalities.input.includes('image')
     : undefined;
 
+  // A model thinks when magpie says so, or when it kept reasoning levels for it.
+  // Its `false` is the user switching reasoning off, which must survive rather
+  // than fall back to model-bank's answer.
   const levels = model.reasoning_levels ?? model.supported_reasoning_levels?.map((l) => l.effort);
+  const thinks =
+    model.reasoning === undefined ? (levels?.length ? true : undefined) : model.reasoning;
 
   return {
     // A routing group's `magpie_label` ends in `· routing group` and a model two
@@ -130,7 +135,7 @@ const fromMagpie = (model: MagpieModelCard): Partial<ChatModelCard> => {
     ...(contextWindow ? { contextWindowTokens: contextWindow } : {}),
     ...(model.max_output_tokens ? { maxOutput: model.max_output_tokens } : {}),
     ...(takesImages === undefined ? {} : { vision: takesImages }),
-    ...(model.reasoning === undefined && !levels?.length ? {} : { reasoning: true }),
+    ...(thinks === undefined ? {} : { reasoning: thinks }),
   };
 };
 
@@ -179,11 +184,22 @@ const fetchMagpieModels = async (client: OpenAI): Promise<ChatModelCard[]> => {
     };
   });
 
-  // magpie lists a model by its bare id as well when the user asks for it, the
-  // `provider/model` row above reaching it. One row per id.
+  // magpie lists a model by its bare id too when the user asks for it, next to
+  // its `provider/model` row. The bare row names the same model, so the
+  // prefixed one is kept and the alias dropped. Two providers serving one model
+  // stay apart: their ids both carry a prefix.
+  const byName = new Set<string>();
+  for (const card of prepared) {
+    if (card.id.includes('/')) byName.add(card.id.slice(card.id.lastIndexOf('/') + 1));
+  }
+
   const seen = new Set<string>();
   const unique = prepared.filter((card) => {
     if (seen.has(card.id)) return false;
+
+    // A bare id, when a prefixed row already names that model.
+    if (!card.id.includes('/') && byName.has(card.id)) return false;
+
     seen.add(card.id);
     return true;
   });

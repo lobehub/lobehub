@@ -19,7 +19,9 @@ const Magpie: ModelProviderCard = {
     // that runs magpie rather than from a remote server.
     defaultShowBrowserRequest: true,
     proxyUrl: {
-      placeholder: 'http://127.0.0.1:3425',
+      // A base URL the user gives is used as it stands, `/v1` included, so the
+      // placeholder has to carry it.
+      placeholder: 'http://127.0.0.1:3425/v1',
     },
     sdkType: 'openai',
     showModelFetcher: true,

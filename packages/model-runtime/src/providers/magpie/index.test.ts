@@ -158,6 +158,21 @@ describe('the model list magpie serves', () => {
     expect(cards[0].reasoning).toBe(true);
   });
 
+  it('keeps the user switching reasoning off, rather than model-bank’s answer', async () => {
+    const cards = await load([
+      // model-bank says kimi-k3 thinks; the user turned it off in magpie.
+      model({ id: 'moonshot/kimi-k3', reasoning: false }),
+    ]);
+
+    expect(cards[0].reasoning).toBe(false);
+  });
+
+  it('leaves reasoning to model-bank and the id when magpie says nothing', async () => {
+    const cards = await load([model({ id: 'somelab/experimental-llm-v0' })]);
+
+    expect(cards[0].reasoning).toBe(false);
+  });
+
   it('reads tool calls from model-bank, which is the only one that says', async () => {
     const cards = await load([model({ context_length: 1_000_000, id: 'moonshot/kimi-k3' })]);
 
@@ -211,13 +226,31 @@ describe('the model list magpie serves', () => {
     expect(cards[0].displayName).toBe('GPT-5.6 Sol');
   });
 
-  it('lists a model once though magpie lists its bare id too', async () => {
+  it('lists a model once though magpie repeats its row', async () => {
     const cards = await load([
       model({ display_name: 'GPT-5.6 Sol', id: 'openai/gpt-5.6-sol' }),
       model({ display_name: 'GPT-5.6 Sol', id: 'openai/gpt-5.6-sol' }),
     ]);
 
     expect(cards).toHaveLength(1);
+  });
+
+  it('drops the bare id magpie lists beside the model it names', async () => {
+    const cards = await load([
+      model({ display_name: 'GPT-5.6 Sol', id: 'openai/gpt-5.6-sol' }),
+      model({ display_name: 'GPT-5.6 Sol', id: 'gpt-5.6-sol' }),
+    ]);
+
+    expect(cards.map((c) => c.id)).toEqual(['openai/gpt-5.6-sol']);
+  });
+
+  it('keeps two providers serving one model apart, both ids carrying a prefix', async () => {
+    const cards = await load([
+      model({ display_name: 'GPT-5.6 Sol', id: 'openai/gpt-5.6-sol' }),
+      model({ display_name: 'GPT-5.6 Sol', id: 'cpa/gpt-5.6-sol' }),
+    ]);
+
+    expect(cards.map((c) => c.id)).toEqual(['openai/gpt-5.6-sol', 'cpa/gpt-5.6-sol']);
   });
 
   it('asks the gateway for its list once', async () => {

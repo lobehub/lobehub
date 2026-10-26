@@ -256,7 +256,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
-              <RoutingBadge id={id} />
+              <RoutingBadge id={id} provider={activeAiProvider} />
               <Flexbox horizontal align={'center'} gap={8}>
                 <ModelInfoTags
                   placement={'top'}
@@ -291,7 +291,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
-              <RoutingBadge id={id} />
+              <RoutingBadge id={id} provider={activeAiProvider} />
               {ModelIdTag}
               {NewTag}
               {Actions && Actions()}
