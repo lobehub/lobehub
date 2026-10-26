@@ -34,7 +34,8 @@ export const extractMentionedUserIds = (editorData: unknown): string[] => {
   return [...userIds];
 };
 
-const MARKDOWN_MENTION_TAG = /<mention(\s[^>]*)>/gi;
+// Self-closing only, like the renderer: `<mention id="…">` never renders as one.
+const MARKDOWN_MENTION_TAG = /<mention(\s[^>]*)\/>/gi;
 // Same attribute forms the renderer accepts. Unquoted values matter: a shell
 // strips the inner quotes of `lh task comment -m "<mention id="…" />"`.
 const TAG_ATTRIBUTE = /([\w-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s/>]+)))?/g;

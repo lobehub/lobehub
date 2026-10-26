@@ -52,6 +52,7 @@ describe('extractMarkdownMentionedUserIds', () => {
     expect(extractMarkdownMentionedUserIds('@Arvin please review')).toEqual([]);
     expect(extractMarkdownMentionedUserIds('<mention name="Arvin" />')).toEqual([]);
     expect(extractMarkdownMentionedUserIds('<mention name="A" data-id="user-1" />')).toEqual([]);
+    expect(extractMarkdownMentionedUserIds('<mention name="A" id="user-1">')).toEqual([]);
     expect(extractMarkdownMentionedUserIds(undefined)).toEqual([]);
   });
 
