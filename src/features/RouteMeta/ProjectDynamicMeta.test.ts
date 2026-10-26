@@ -68,7 +68,8 @@ describe('useProjectTabAvatar', () => {
 
     const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
 
-    expect(result.current).toEqual({ avatar: undefined, avatarSeed: 'Alpha' });
+    // `null`, not `undefined`: the project has loaded, so a cached logo is stale.
+    expect(result.current).toEqual({ avatar: null, avatarSeed: 'Alpha' });
   });
 
   it("passes the project's own logo through", () => {

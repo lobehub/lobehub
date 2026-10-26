@@ -62,6 +62,19 @@ describe('resolveTab', () => {
     expect(live.meta.avatarSeed).toBe('Alpha');
   });
 
+  it('active tab: a live null avatar hides the cached one', () => {
+    const resolved = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { avatar: 'logo.png', avatarSeed: 'Alpha' }),
+      true,
+      t,
+      { avatar: null, avatarSeed: 'Alpha' },
+      '/agent/abc',
+    );
+    expect(resolved.meta.avatar).toBeUndefined();
+    expect(resolved.meta.avatarSeed).toBe('Alpha');
+  });
+
   it('active tab: live dynamic meta overlays the snapshot', () => {
     const resolved = resolveTab(
       fixtureRoutes,

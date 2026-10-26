@@ -82,6 +82,14 @@ describe('guardedMergeCache', () => {
     expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Fix login · Alpha' });
   });
 
+  it('drops a cached avatar the entity has confirmed it no longer has', () => {
+    const merged = guardedMergeCache(
+      { avatar: 'logo.png', avatarSeed: 'Alpha', title: 'Alpha' },
+      { avatar: null, avatarSeed: 'Alpha' },
+    );
+    expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Alpha' });
+  });
+
   it('returns prev when next is undefined', () => {
     const prev = { title: 'Old' };
     expect(guardedMergeCache(prev, undefined)).toBe(prev);

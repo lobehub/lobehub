@@ -9,7 +9,8 @@ import { usePublishDynamicRouteMeta } from './usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from './workspaceScope';
 
 interface ProjectIdentity {
-  avatar?: string;
+  /** `null` once the project has loaded without a logo. */
+  avatar?: string | null;
   name?: string;
 }
 
@@ -21,7 +22,9 @@ const useProjectIdentity = (params: RouteMetaParams): ProjectIdentity => {
     return detail?.project;
   });
 
-  return { avatar: project?.avatar || undefined, name: project?.name || undefined };
+  if (!project) return {};
+
+  return { avatar: project.avatar || null, name: project.name || undefined };
 };
 
 export const useProjectConversationTitle = (params: RouteMetaParams): string | undefined => {
