@@ -13,7 +13,6 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import ProjectComposer from './ProjectComposer';
-import ProjectDashboard from './ProjectDashboard';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -71,7 +70,7 @@ const ProjectWorkspace = memo(() => {
             </Flexbox>
             <ProjectComposer detail={detail} key={detail.project.id} />
           </Flexbox>
-          <ProjectDashboard detail={detail} projectId={detail.project.id} />
+          {/* The overview dashboard (./ProjectDashboard) is hidden until its replacement is designed */}
         </Flexbox>
       </div>
     </Flexbox>
