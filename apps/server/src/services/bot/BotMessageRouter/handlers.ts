@@ -685,7 +685,9 @@ export function registerHandlers(
       (await gateFollowup({
         entryPoint: 'onSubscribedMessage',
         merged,
-        // Already judged by `initiate`: do not judge again.
+        // Already judged by `initiate`: do not judge again. A message that says the bot's name is
+        // addressed to it: it does not wait for the scheduler's collect window.
+        immediate: initiation?.reason === 'named-in-text',
         initiated: !!initiation,
         parked: [...(context?.skipped ?? []), message],
         thread,

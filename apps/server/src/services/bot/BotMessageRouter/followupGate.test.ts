@@ -51,6 +51,32 @@ describe('follow-up gate', () => {
     expect(observe).not.toHaveBeenCalled();
   });
 
+  it('lets a wake that is addressed to the bot straight through: no collect window, no parking', async () => {
+    const submit = vi.fn(async () => 'hold' as const);
+    const { gate, observe } = setup({ scheduler: { submit } });
+
+    expect(await gate(base({ initiated: true, immediate: true }))).toBe('proceed');
+    expect(submit).not.toHaveBeenCalled();
+    expect(mockDefer).not.toHaveBeenCalled();
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it('still schedules an initiated wake that is only chatter in the window', async () => {
+    const submit = vi.fn(async () => 'hold' as const);
+    const { gate, observe } = setup({ scheduler: { submit } });
+
+    expect(await gate(base({ initiated: true }))).toBe('stop');
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(observe).toHaveBeenCalledWith(
+      'onSubscribedMessage',
+      expect.anything(),
+      expect.anything(),
+      'defer',
+      'scheduled',
+      true,
+    );
+  });
+
   it('proceeds when nothing enforces and there is no scheduler (the default)', async () => {
     const { gate, observe } = setup();
 
