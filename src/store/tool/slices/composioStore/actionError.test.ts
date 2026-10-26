@@ -22,6 +22,7 @@ import { composioServersResource } from './projection';
 import { composioStoreSelectors } from './selectors';
 
 const mocks = vi.hoisted(() => ({
+  refreshConnectorManagePolicy: vi.fn(),
   createConnection: vi.fn(),
   deleteConnection: vi.fn(),
   getComposioPlugins: vi.fn(),
@@ -41,6 +42,10 @@ vi.mock('@/libs/trpc/client', () => ({
     },
   },
   toolsClient: { composio: { listActions: { query: mocks.listActions } } },
+}));
+
+vi.mock('@/services/connectorManagePolicy', () => ({
+  refreshConnectorManagePolicy: mocks.refreshConnectorManagePolicy,
 }));
 
 const MutateBridge = () => {
@@ -162,6 +167,32 @@ describe('composio connection errors', () => {
 
     expect(mocks.createConnection).not.toHaveBeenCalled();
     expect(errorOf('gmail')).toMatchObject({ action: 'connect', code: 'FORBIDDEN' });
+  });
+
+  it('refetches the connector policy after a permission rejection, not after other failures', async () => {
+    // A 403 means an admin restricted connectors after the page loaded.
+    mocks.createConnection.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
+    });
+    expect(mocks.refreshConnectorManagePolicy).not.toHaveBeenCalled();
+
+    mocks.createConnection.mockRejectedValueOnce(forbidden());
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'GMAIL', identifier: 'gmail', label: 'Gmail' });
+    });
+    expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(1);
+
+    await loadGmail();
+    mocks.deleteConnection.mockRejectedValueOnce(forbidden());
+    await act(async () => {
+      await useToolStore.getState().reauthorizeComposioConnection('gmail');
+    });
+    expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(2);
   });
 
   it('puts the row back with the reason when the delete is rejected', async () => {

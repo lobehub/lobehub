@@ -25,7 +25,6 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { refreshConnectorManagePolicy } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
@@ -375,13 +374,6 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // A connection that became active (also through a later list revalidation,
     // e.g. after a slow OAuth) settles any earlier connect failure. A failed
     // remove leaves the row active on purpose, so its reason stays.
-    // A 403 means the cached policy is stale (an admin restricted connectors
-    // after this page loaded): refetch it so the row switches to the gated state.
-    const isForbidden = actionError?.code === 'FORBIDDEN';
-    useEffect(() => {
-      if (isForbidden) void refreshConnectorManagePolicy();
-    }, [isForbidden]);
-
     const hasStaleConnectError = isSettledByConnection(isConnected, actionError);
     useEffect(() => {
       if (hasStaleConnectError) setServerError(serverType.identifier, undefined);

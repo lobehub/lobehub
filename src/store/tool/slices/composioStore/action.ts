@@ -10,6 +10,7 @@ import {
   type ReplicaSyncResult,
 } from '@/libs/replica';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { type StoreSetter } from '@/store/types';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 import { setNamespace } from '@/utils/storeDebug';
@@ -291,6 +292,7 @@ export class ComposioStoreActionImpl {
         false,
         n('createComposioConnection/error'),
       );
+      this.#refreshPolicyOnForbidden(error);
 
       return undefined;
     }
@@ -497,7 +499,18 @@ export class ComposioStoreActionImpl {
   };
 
   /** Record (or clear, with `undefined`) the last failed write of a connection row. */
+  /**
+   * A 403 means the cached connector policy is stale (an admin restricted
+   * connectors after the page loaded): refetch it so rows switch to the gated
+   * state instead of offering a button that keeps failing.
+   */
+  #refreshPolicyOnForbidden = (error: unknown): void => {
+    if (toConnectorActionError('connect', error).code === 'FORBIDDEN')
+      void refreshConnectorManagePolicy();
+  };
+
   setComposioServerError = (identifier: string, error: ConnectorActionError | undefined): void => {
+    if (error?.code === 'FORBIDDEN') void refreshConnectorManagePolicy();
     if (!error && !this.#get().composioServerErrors[identifier]) return;
 
     this.#set(

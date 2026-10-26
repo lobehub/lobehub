@@ -7,10 +7,8 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  updateConnectorManagePolicy,
-  useConnectorManagePolicy,
-} from '@/hooks/useConnectorManagePolicy';
+import { useConnectorManagePolicy } from '@/hooks/useConnectorManagePolicy';
+import { updateConnectorManagePolicy } from '@/services/connectorManagePolicy';
 
 const styles = stylex.create({
   root: {
