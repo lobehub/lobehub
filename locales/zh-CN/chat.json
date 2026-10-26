@@ -3421,6 +3421,7 @@
   "workingPanel.overview.ports.revoked": "已停止共享",
   "workingPanel.overview.ports.title": "端口",
   "workingPanel.overview.ports.unavailable": "暂时无法读取这台设备的端口",
+  "workingPanel.overview.profile.view": "查看资料",
   "workingPanel.overview.subagents": "子代理",
   "workingPanel.overview.subtopics": "子话题",
   "workingPanel.overview.sync.ahead_one": "领先 {{count}} 个提交",

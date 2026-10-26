@@ -16,6 +16,8 @@ export interface ConversationRowProps {
   avatar: ReactNode;
   contextMenuItems?: ComponentProps<typeof ContextMenuTrigger>['items'];
   onMouseEnter?: () => void;
+  /** Pinned rows keep a tinted background, like WeChat's 置顶. */
+  pinned?: boolean;
   preview?: string;
   running?: boolean;
   title: string;
@@ -30,6 +32,7 @@ const ConversationRow = memo<ConversationRowProps>(
     avatar,
     contextMenuItems,
     onMouseEnter,
+    pinned,
     preview,
     running,
     title,
@@ -42,12 +45,17 @@ const ConversationRow = memo<ConversationRowProps>(
       <WorkspaceLink
         aria-current={active ? 'page' : undefined}
         aria-label={title}
-        {...stylex.props(styles.row, active && styles.rowActive)}
+        {...stylex.props(styles.row, pinned && styles.rowPinned, active && styles.rowActive)}
         to={url}
         onMouseEnter={onMouseEnter}
       >
-        {avatar}
-        <Flexbox flex={1} style={{ minWidth: 0 }}>
+        <span {...stylex.props(styles.avatar)}>
+          {avatar}
+          {!!unread && unread > 0 && (
+            <span {...stylex.props(styles.unread)}>{unread > 99 ? '99+' : unread}</span>
+          )}
+        </span>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8}>
             <span {...stylex.props(styles.title)}>{title}</span>
             {activeAt && (
@@ -67,9 +75,6 @@ const ConversationRow = memo<ConversationRowProps>(
               </Flexbox>
             ) : (
               <span {...stylex.props(styles.preview)}>{preview || ' '}</span>
-            )}
-            {!!unread && unread > 0 && (
-              <span {...stylex.props(styles.unread)}>{unread > 99 ? '99+' : unread}</span>
             )}
           </Flexbox>
         </Flexbox>

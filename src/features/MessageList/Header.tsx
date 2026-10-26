@@ -1,13 +1,14 @@
 'use client';
 
-import { ActionIcon, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
-import { SearchIcon, SquarePenIcon } from 'lucide-react';
+import { ActionIcon, DropdownMenu, Flexbox, SearchBar, Text } from '@lobehub/ui';
+import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
-import { useGlobalStore } from '@/store/global';
+
+import { useMessageSearch } from './SearchContext';
 
 interface ListHeaderProps {
   actions?: ReactNode;
@@ -37,32 +38,37 @@ ListHeader.displayName = 'ListHeader';
 
 const Header = memo(() => {
   const { t } = useTranslation('common');
-  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const { query, setQuery } = useMessageSearch();
   const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
   const createItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
 
+  // WeChat-style header: a search box that filters the list, and one "+" entry.
   return (
-    <ListHeader
-      title={t('tab.messages')}
-      actions={
-        <>
-          <ActionIcon
-            icon={SearchIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('tab.search')}
-            onClick={() => toggleCommandMenu(true)}
-          />
-          <DropdownMenu items={createItems}>
-            <ActionIcon
-              icon={SquarePenIcon}
-              loading={isLoading}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              title={t('messageList.newChat')}
-            />
-          </DropdownMenu>
-        </>
-      }
-    />
+    <Flexbox
+      horizontal
+      align={'center'}
+      gap={6}
+      paddingBlock={'12px 8px'}
+      paddingInline={'10px 8px'}
+    >
+      <SearchBar
+        allowClear
+        placeholder={t('messageList.search')}
+        size={'small'}
+        style={{ flex: 1 }}
+        value={query}
+        variant={'filled'}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <DropdownMenu items={createItems}>
+        <ActionIcon
+          icon={PlusIcon}
+          loading={isLoading}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={t('messageList.newChat')}
+        />
+      </DropdownMenu>
+    </Flexbox>
   );
 });
 

@@ -7,6 +7,7 @@ import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 
 import Body from './Body';
 import Header from './Header';
+import { MessageSearchProvider } from './SearchContext';
 
 export { default as ConversationRow } from './ConversationRow';
 export { ListHeader } from './Header';
@@ -20,7 +21,9 @@ export { AVATAR_SIZE } from './style';
 const MessageListPortal = () => (
   <NavPanelPortal navKey={NAV_PANEL_MESSAGES_KEY}>
     <AgentModalProvider>
-      <SideBarLayout body={<Body />} header={<Header />} />
+      <MessageSearchProvider>
+        <SideBarLayout body={<Body />} header={<Header />} />
+      </MessageSearchProvider>
     </AgentModalProvider>
   </NavPanelPortal>
 );

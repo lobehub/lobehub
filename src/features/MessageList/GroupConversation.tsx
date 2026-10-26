@@ -41,6 +41,7 @@ const GroupConversation = memo<GroupConversationProps>(({ active, conversation }
       active={active}
       activeAt={activeAt}
       contextMenuItems={contextMenuItems}
+      pinned={!!pinned}
       preview={preview}
       title={title}
       unread={item.unreadCount}

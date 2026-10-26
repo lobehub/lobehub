@@ -3598,6 +3598,7 @@ export default {
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
   'workingPanel.overview.emptyTitle': 'Ready to work',
+  'workingPanel.overview.profile.view': 'View profile',
   'workingPanel.overview.deviceError': 'Could not load the device status',
   'workingPanel.overview.environmentError': 'Could not load the repository status',
   'workingPanel.overview.execution.device': 'Connected device',

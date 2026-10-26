@@ -1,7 +1,11 @@
 import type { RecentItem, SidebarAgentItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildConversationSections, formatConversationTime } from './conversations';
+import {
+  buildConversationEntries,
+  buildConversationSections,
+  formatConversationTime,
+} from './conversations';
 
 const agent = (id: string, updatedAt: string, extra: Partial<SidebarAgentItem> = {}) =>
   ({
@@ -70,5 +74,42 @@ describe('formatConversationTime', () => {
     [new Date(2025, 0, 2), '2025/1/2'],
   ])('formats %s as %s', (date, expected) => {
     expect(formatConversationTime(date, now)).toBe(expected);
+  });
+});
+
+describe('buildConversationEntries', () => {
+  const sections = buildConversationSections(
+    [
+      agent('a', '2026-10-05', { title: 'Alpha' }),
+      agent('b', '2026-10-01', { title: 'Beta' }),
+      agent('p', '2026-09-01', { pinned: true, title: 'Pinned' }),
+    ],
+    undefined,
+  );
+  const ids = (entries: ReturnType<typeof buildConversationEntries>) =>
+    entries.map((e) => (e.type === 'inbox' ? 'inbox' : e.item.id));
+
+  it('places Lobe AI by its own activity instead of pinning it on top', () => {
+    expect(
+      ids(
+        buildConversationEntries(sections, { activeAt: new Date('2026-10-03'), title: 'Lobe AI' }),
+      ),
+    ).toEqual(['p', 'a', 'inbox', 'b']);
+  });
+
+  it('puts Lobe AI last until its activity is known', () => {
+    expect(ids(buildConversationEntries(sections, { title: 'Lobe AI' }))).toEqual([
+      'p',
+      'a',
+      'b',
+      'inbox',
+    ]);
+  });
+
+  it('filters every row, Lobe AI included, by title', () => {
+    expect(ids(buildConversationEntries(sections, { title: 'Lobe AI' }, 'bet'))).toEqual(['b']);
+    expect(ids(buildConversationEntries(sections, { title: 'Lobe AI' }, 'lobe'))).toEqual([
+      'inbox',
+    ]);
   });
 });

@@ -68,6 +68,38 @@ export const buildConversationSections = (
   };
 };
 
+export type ConversationEntry =
+  { activeAt: Date; type: 'inbox' } | (Conversation & { type: 'item' });
+
+/**
+ * One IM list like WeChat's: pinned rows first, then everything else by latest
+ * activity. Lobe AI is an ordinary row placed by its own activity, not pinned
+ * to the top; a title filter narrows the whole list.
+ */
+export const buildConversationEntries = (
+  { pinned, recent }: ConversationSections,
+  inbox: { activeAt?: Date; title: string } | undefined,
+  query = '',
+): ConversationEntry[] => {
+  const keyword = query.trim().toLowerCase();
+  const matches = (title: string | null | undefined) =>
+    !keyword || (title ?? '').toLowerCase().includes(keyword);
+
+  const items = (list: Conversation[]): ConversationEntry[] =>
+    list
+      .filter((c) => matches(c.item.title ?? c.item.name))
+      .map((c) => ({ ...c, type: 'item' as const }));
+
+  const rest = items(recent);
+  if (inbox && matches(inbox.title)) {
+    const activeAt = inbox.activeAt ?? new Date(0);
+    const index = rest.findIndex((entry) => entry.activeAt.getTime() < activeAt.getTime());
+    rest.splice(index === -1 ? rest.length : index, 0, { activeAt, type: 'inbox' });
+  }
+
+  return [...items(pinned), ...rest];
+};
+
 /** IM-style timestamp: time today, weekday this week, date otherwise. */
 export const formatConversationTime = (date: Date, now: Date = new Date()): string => {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

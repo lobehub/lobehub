@@ -58,6 +58,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
+import AgentProfileSection from './AgentProfileSection';
 import DeviceStatusSection from './DeviceStatusSection';
 import {
   collectChangeStats,
@@ -445,6 +446,9 @@ const Overview = memo<OverviewProps>(
 
     return (
       <Flexbox className={styles.body}>
+        {/* The agent's identity comes first; workspace and Portal follow. */}
+        {agentId && <AgentProfileSection agentId={agentId} />}
+
         {hasWorkspace && (
           <>
             <OverviewHeader

@@ -1,9 +1,10 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-// v6 spec: 48px rail, 13px glyph at 1.25 stroke inside a 26px hit area, 12px apart.
-export const RAIL_ICON_SIZE = { size: 13, strokeWidth: 1.25 };
-export const RAIL_GAP = 12;
+// 48px rail; review settled the glyph between 13px (too small) and 18px (too
+// large): 16px at 1.5 stroke inside a 30px hit area, 10px apart.
+export const RAIL_ICON_SIZE = { size: 16, strokeWidth: 1.5 };
+export const RAIL_GAP = 10;
 
 export const styles = stylex.create({
   badge: {
@@ -32,8 +33,8 @@ export const styles = stylex.create({
     flex: 'none',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '26px',
-    height: '26px',
+    width: '30px',
+    height: '30px',
     borderRadius: cssVar.borderRadius,
     color: { default: cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: { default: null, ':hover': cssVar.colorFillTertiary },
