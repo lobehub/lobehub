@@ -508,7 +508,6 @@ export default {
   'channel.botWakeCooldownSecondsHint':
     'Quiet time after a run before the next one may start. At least 60.',
   'channel.settings': 'Advanced Settings',
-  'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',
   'channel.signingSecret': 'Signing Secret',
   'channel.signingSecretHint': 'Used to verify webhook requests.',
@@ -537,8 +536,6 @@ export default {
   'channel.userId': 'Your Platform User ID',
   'channel.userIdHint':
     'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
-  'channel.userIdMissingDesc':
-    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in under Advanced Settings.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
@@ -942,4 +939,35 @@ export default {
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
   'share.settings.profile.upToDate': 'Visitors see the saved content.',
+  'channel.quickSetup.guideDesc':
+    'Create the bot in {{name}}, then paste its credentials under Connection.',
+  'channel.detailDesc':
+    'Connect a {{name}} bot so {{agent}} can receive and reply to messages in {{name}}.',
+  'channel.detailDescAgentFallback': 'this agent',
+  'channel.section.connection.title': 'Connection',
+  'channel.section.connection.desc': 'Credentials the bot uses to sign in to {{name}}.',
+  'channel.section.access.title': 'Access',
+  'channel.section.access.desc': 'Who can talk to the bot, and where it responds.',
+  'channel.section.account.title': 'Your account',
+  'channel.section.account.desc':
+    'Which {{name}} account is yours. The agent uses it to reach you and to approve pairing requests.',
+  'channel.section.replies.title': 'Replies',
+  'channel.section.replies.desc':
+    'How the bot handles messages that arrive together, and what its replies include.',
+  'channel.section.wake.title': 'Wake-up',
+  'channel.section.wake.desc': 'When the bot steps in without an @mention.',
+  'channel.section.other.title': 'Other',
+  'channel.section.danger.title': 'Danger zone',
+  'channel.dangerZone.resetDesc':
+    'Restore every setting except the credentials to its default. Takes effect after you save.',
+  'channel.dangerZone.removeDesc':
+    "Delete this channel's credentials and settings, and disconnect the bot from {{name}}. This cannot be undone.",
+  'channel.dangerZone.resetConfirm':
+    'Reset every setting except the credentials to its default? Takes effect after you save.',
+  'channel.saveBar.unsaved': 'You have unsaved changes',
+  'channel.saveBar.firstSave': 'The bot connects as soon as you save.',
+  'channel.saveAndConnect': 'Save and Connect',
+  'channel.userIdMissingAction': 'Add User ID',
+  'channel.userIdMissingHint':
+    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in under Your account.",
 } as const;

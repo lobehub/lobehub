@@ -1,8 +1,17 @@
 'use client';
 
-import { Alert, Button, confirmModal, createStaticStyles, Flexbox, toast } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  responsive,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { useForm } from '@lobehub/ui/form';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,9 +25,9 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
+import { getPlatformIcon } from '../const';
 import { keepPendingConnectResult, toTestResult } from './actionResults';
 import Body from './Body';
-import Footer from './Footer';
 import {
   findOverLimitSettings,
   getChannelFormValues,
@@ -27,16 +36,47 @@ import {
   shouldAdoptIncomingConfig,
 } from './formState';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
+import SaveBar from './SaveBar';
+import StatusAlerts from './StatusAlerts';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     display: flex;
     flex-direction: column;
+    gap: 24px;
     align-items: center;
 
     width: 100%;
-    padding-block: 16px 24px;
+    max-width: 1072px;
+    margin-inline: auto;
+    padding-block: 24px 32px;
     padding-inline: 24px;
+
+    ${responsive.sm} {
+      padding-inline: 16px;
+    }
+
+    /* Let a long section description wrap instead of pushing past the card. */
+    & .lobe-form-form__group-title,
+    & .lobe-form-form__group-title > div {
+      flex-shrink: 1;
+      min-width: 0;
+    }
+  `,
+  intro: css`
+    width: 100%;
+  `,
+  introIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 40px;
+    height: 40px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillTertiary};
   `,
   main: css`
     position: relative;
@@ -340,7 +380,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
         setIsDirty(false);
         setSaveResult({ type: 'success' });
-        setTimeout(() => setSaveResult(undefined), 3000);
+        toast.success(t('channel.saved'));
         setSaving(false);
 
         // Auto-connect bot after save
@@ -436,6 +476,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       confirmModal({
         content: t('channel.deleteConfirmDesc'),
         okButtonProps: { danger: true },
+        okText: t('channel.removeChannel'),
         onOk: async () => {
           try {
             await deleteBotProvider(currentConfig.id, agentId);
@@ -491,6 +532,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
     const handleFormValuesChange = useCallback(() => setIsDirty(true), []);
 
+    const PlatformIcon = getPlatformIcon(platformDef.id) ?? getPlatformIcon(platformDef.name);
+
     const handlePaidFeatureUpgrade = useCallback(() => {
       navigate('/settings/plans');
     }, [navigate]);
@@ -499,10 +542,28 @@ const PlatformDetail = memo<PlatformDetailProps>(
       <ChannelPostSaveContext value={postSaveRegistry}>
         <main className={styles.main}>
           <div className={styles.content}>
+            <Flexbox horizontal align={'center'} className={styles.intro} gap={12}>
+              {PlatformIcon && (
+                <div className={styles.introIcon}>
+                  <PlatformIcon size={24} />
+                </div>
+              )}
+              <Flexbox gap={2} style={{ minWidth: 0 }}>
+                <Text as={'h1'} fontSize={20} style={{ margin: 0 }} weight={600}>
+                  {platformDef.name}
+                </Text>
+                <Text type={'secondary'}>
+                  {t('channel.detailDesc', {
+                    agent: agentName || t('channel.detailDescAgentFallback'),
+                    name: platformDef.name,
+                  })}
+                </Text>
+              </Flexbox>
+            </Flexbox>
             {paidFeatureBlocked && (
               <Alert
                 showIcon
-                style={{ marginBlockStart: 16, maxWidth: 1024, width: '100%' }}
+                style={{ width: '100%' }}
                 type={paidFeatureMode === 'notice' ? 'warning' : 'info'}
                 description={t(`channel.paidFeature.${paidFeatureMode}.desc.${paidFeatureScope}`, {
                   name: platformDef.name,
@@ -526,6 +587,15 @@ const PlatformDetail = memo<PlatformDetailProps>(
                 }
               />
             )}
+            <StatusAlerts
+              connectResult={connectResult}
+              currentConfig={currentConfig}
+              form={form}
+              hasConfig={!!currentConfig}
+              platformDef={platformDef}
+              saveResult={saveResult}
+              testResult={testResult}
+            />
             <Body
               currentConfig={currentConfig}
               disabled={writeDisabled}
@@ -534,30 +604,34 @@ const PlatformDetail = memo<PlatformDetailProps>(
               platformDef={platformDef}
               quickSetupAppName={agentName}
               quickSetupScope={agentId}
+              removeDisabled={readOnly || saving || connecting}
+              connectionExtra={
+                currentConfig ? (
+                  <Button
+                    disabled={writeDisabled || saving || connecting}
+                    icon={<RefreshCw size={14} />}
+                    loading={testing}
+                    size={'small'}
+                    onClick={handleTestConnection}
+                  >
+                    {t('channel.testConnection')}
+                  </Button>
+                ) : undefined
+              }
               onAuthenticated={handleExternalAuth}
+              onDelete={handleDelete}
               onValuesChange={handleFormValuesChange}
             />
-            <Footer
-              connectResult={connectResult}
-              connecting={connecting}
-              currentConfig={currentConfig}
-              disabled={readOnly}
-              form={form}
-              hasConfig={!!currentConfig}
-              isDirty={isDirty}
-              platformDef={platformDef}
-              saveResult={saveResult}
-              saving={saving}
-              testResult={testResult}
-              testing={testing}
-              writeDisabled={writeDisabled}
-              onCopied={() => toast.success(t('channel.copied'))}
-              onDelete={handleDelete}
-              onDiscard={handleDiscard}
-              onSave={handleSave}
-              onTestConnection={handleTestConnection}
-            />
           </div>
+          <SaveBar
+            connecting={connecting}
+            hasConfig={!!currentConfig}
+            isDirty={isDirty}
+            saving={saving}
+            writeDisabled={writeDisabled}
+            onDiscard={handleDiscard}
+            onSave={handleSave}
+          />
         </main>
       </ChannelPostSaveContext>
     );
