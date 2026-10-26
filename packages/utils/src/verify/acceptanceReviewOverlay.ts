@@ -2,11 +2,19 @@ import type {
   AcceptanceAttachment,
   AcceptanceCheckReviewAction,
   AcceptanceReviewAnnotation,
+  VerifyCheckDecisionDetail,
 } from '@lobechat/types';
 
-import type { VerifyCheckResultItem } from '@/database/schemas/verify';
+import type { AcceptanceCheckRow } from './acceptanceCheckUnion';
 
-import type { AcceptanceCheckRow } from './checkUnion';
+/** The fields of a result row the overlay reads: the decision stamped on it. */
+export interface ReviewOverlayResult {
+  completedAt: Date | null;
+  createdAt: Date;
+  id: string;
+  userDecision: string | null;
+  userDecisionDetail: VerifyCheckDecisionDetail | null;
+}
 
 // ============================================
 // User review overlay — the per-check human verdict layered onto the union.
@@ -67,7 +75,7 @@ export interface AcceptanceCheckReviewOverlay {
  */
 export const buildCheckReviewOverlay = (
   check: Pick<AcceptanceCheckRow, 'timeline'> & Partial<Pick<AcceptanceCheckRow, 'planItem'>>,
-  resultsById: Map<string, VerifyCheckResultItem>,
+  resultsById: Map<string, ReviewOverlayResult>,
   currentRoundIndex: number,
 ): AcceptanceCheckReviewOverlay => {
   const reviews: AcceptanceCheckReviewEvent[] = [];

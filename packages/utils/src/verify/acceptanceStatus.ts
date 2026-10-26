@@ -1,7 +1,5 @@
 import type { AcceptanceStatus } from '@lobechat/types';
 
-import type { VerifyRunItem } from '@/database/schemas/verify';
-
 // ============================================
 // Status rollup — the aggregate's user-facing lifecycle state, derived from the
 // current (highest) round. `accepted` is terminal and user-owned: recompute
@@ -9,7 +7,10 @@ import type { VerifyRunItem } from '@/database/schemas/verify';
 // ============================================
 
 /** Derive the aggregate status from the current round's pipeline state. */
-export const statusFromRound = (run: VerifyRunItem, hasReport: boolean): AcceptanceStatus => {
+export const statusFromRound = (
+  run: { status: string | null },
+  hasReport: boolean,
+): AcceptanceStatus => {
   switch (run.status) {
     case 'planned': {
       return 'planned';

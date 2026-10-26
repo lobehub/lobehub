@@ -1,11 +1,11 @@
 import type { VerifyCheckItem } from '@lobechat/types';
+import { buildCheckReviewOverlay } from '@lobechat/utils/verify/acceptanceReviewOverlay';
 
 import type { VerifyCheckResultItem, VerifyRunItem } from '@/database/schemas/verify';
 
 import { findUnresolvedSupersedes } from '../acceptanceMerge';
 import { buildAcceptanceCheckUnion } from './checkUnion';
 import type { AcceptanceServiceDeps } from './deps';
-import { buildCheckReviewOverlay } from './reviewOverlay';
 
 /** A run chained onto an acceptance, with anything the author should fix. */
 export type AttachedRun = VerifyRunItem & {
