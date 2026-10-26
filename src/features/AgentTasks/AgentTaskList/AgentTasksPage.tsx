@@ -153,10 +153,13 @@ export const clampCollectionPage = (page: number, total: number): number =>
  * - every fetched row renders. With `showSubTasks: false` `TaskList` folds a
  *   child away whenever its parent shares the page, which would leave the page
  *   sparse while `total` still counts the hidden rows. Nesting (when enabled)
- *   still tucks a child under a parent that is on the same page.
+ *   still tucks a child under a parent that is on the same page. Likewise the
+ *   `completedTasks` cut is applied server-side before pagination; repeating it
+ *   on the page with the browser clock could drop rows `total` still counts.
  * Grouping stays client-side — it only arranges the rows of the current page.
  */
 const PAGINATED_COLLECTION_VIEW = {
+  completedTasks: 'all',
   orderBy: 'updatedAt',
   orderDirection: 'asc',
   showSubTasks: true,
@@ -167,7 +170,6 @@ export const getScheduledTaskViewOptions = (
 ): TaskListViewOptions => ({
   ...viewOptions,
   ...PAGINATED_COLLECTION_VIEW,
-  completedTasks: 'all',
   groupBy: 'automationMode',
 });
 
