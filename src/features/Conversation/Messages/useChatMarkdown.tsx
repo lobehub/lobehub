@@ -1,5 +1,6 @@
 'use client';
 
+import { LOADING_FLAT } from '@lobechat/const';
 import { type MarkdownProps } from '@lobehub/ui';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
@@ -24,18 +25,19 @@ const remarkPlugins = assistantMarkdownElements
   .filter(Boolean);
 
 /**
- * Message ids whose text has already been on screen. The stream renderer fades
- * every character in from zero on mount, so a remount — the group re-partitions,
- * or a stream patch and a snapshot refresh disagree about the block's shape —
- * must not replay that fade over text the user has already read.
+ * Length of the text each message id has already shown. The stream renderer
+ * fades every character in from zero on mount, so a remount — the group
+ * re-partitions, or a stream patch and a snapshot refresh disagree about the
+ * block's shape — must not replay that fade over text the user has already
+ * read. Text that keeps growing after the remount still streams.
  */
-const shownTextIds = new Set<string>();
+const shownTextLengths = new Map<string, number>();
 
 interface UseChatMarkdownOptions {
   citations?: MarkdownProps['citations'];
+  /** The message text; a loading placeholder counts as no text. */
+  content?: string;
   enableStream?: boolean;
-  /** Whether the message has text to show yet; loading placeholders do not count. */
-  hasContent?: boolean;
   id: string;
   isGenerating: boolean;
 }
@@ -45,20 +47,24 @@ export const useChatMarkdown = ({
   isGenerating,
   citations,
   enableStream: enableStreamOption = true,
-  hasContent = false,
+  content,
 }: UseChatMarkdownOptions): {
   drawer: ReactNode;
   markdownProps: Partial<MarkdownProps>;
 } => {
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
-  // Once text has settled (rendered statically, or shown by an earlier mount),
-  // it never re-enters streaming: switching back remounts the stream renderer.
-  const [settled, setSettled] = useState(() => shownTextIds.has(id));
-  if (!settled && hasContent && !enableStreamOption) setSettled(true);
+  const textLength = content && content !== LOADING_FLAT ? content.length : 0;
+  // Text that has settled (rendered statically, or shown by an earlier mount)
+  // does not re-enter streaming until it grows: switching back remounts the
+  // stream renderer, which replays the fade over everything already shown.
+  const [settledLength, setSettledLength] = useState(() => shownTextLengths.get(id));
+  if (textLength > 0 && !enableStreamOption && settledLength !== textLength)
+    setSettledLength(textLength);
   useEffect(() => {
-    if (hasContent) shownTextIds.add(id);
-  }, [hasContent, id]);
+    if (textLength > 0) shownTextLengths.set(id, textLength);
+  }, [id, textLength]);
 
+  const settled = settledLength !== undefined && textLength <= settledLength;
   const enableStream = enableStreamOption && !settled;
   const animated = enableStream && transitionMode === 'fadeIn' && isGenerating;
 

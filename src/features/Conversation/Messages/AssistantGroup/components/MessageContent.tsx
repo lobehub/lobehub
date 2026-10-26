@@ -58,11 +58,7 @@ const MessageContent = memo<MessageContentProps>(
     // Once a tool call exists below this block's text, the text is already
     // finalized — skip the streaming/fade-in animation so settled content above
     // a tool doesn't keep re-animating.
-    const { drawer, markdownProps } = useMarkdown(
-      id,
-      disableStreaming || hasTools,
-      !!content && content !== LOADING_FLAT,
-    );
+    const { drawer, markdownProps } = useMarkdown(id, disableStreaming || hasTools, content);
 
     if (!content && !hasTools) return <ContentLoading id={id} startTime={createdAt} />;
 

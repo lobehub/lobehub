@@ -45,7 +45,7 @@ vi.mock('../../../store', () => ({
   useConversationStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
-type UseMarkdownArgs = [id: string, disableStreaming?: boolean, hasContent?: boolean];
+type UseMarkdownArgs = [id: string, disableStreaming?: boolean, content?: string];
 
 const useMarkdownMock = vi.fn((..._args: UseMarkdownArgs) => ({}));
 
@@ -80,7 +80,7 @@ describe('MessageContent', () => {
   it('disables markdown streaming when the block already has tools below the text', () => {
     render(<MessageContent hasToolsOverride contentOverride="lead sentence" id="block-1" />);
 
-    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', true, true);
+    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', true, 'lead sentence');
   });
 
   it('keeps markdown streaming enabled when the block has no tools and is not disabled', () => {
@@ -88,7 +88,7 @@ describe('MessageContent', () => {
       <MessageContent contentOverride="lead sentence" hasToolsOverride={false} id="block-1" />,
     );
 
-    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', false, true);
+    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', false, 'lead sentence');
   });
 
   it('disables markdown streaming when disableStreaming is set even without tools', () => {
@@ -101,7 +101,7 @@ describe('MessageContent', () => {
       />,
     );
 
-    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', true, true);
+    expect(useMarkdownMock).toHaveBeenCalledWith('block-1', true, 'lead sentence');
   });
 
   it('renders multimodal image parts instead of the raw serialized JSON', () => {
