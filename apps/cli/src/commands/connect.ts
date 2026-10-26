@@ -1139,6 +1139,7 @@ function bindGatewayClientHandlers(
             agentType: request.agentType,
             assistantMessageId: request.assistantMessageId,
             args: request.args,
+            claudeAccountRouting: request.claudeAccountRouting,
             cwd: request.cwd,
             imageList: request.imageList,
             jwt: request.jwt,

@@ -229,6 +229,65 @@ describe('AgentQuotaService.selectForAgent', () => {
   });
 });
 
+describe('AgentQuotaService.planDeviceRouting', () => {
+  const now = Date.parse('2026-07-02T00:00:00Z');
+  const weekly = (utilization: number) => ({
+    capturedAt: now - 60_000,
+    limitType: 'weekly_all',
+    resetsAt: now + 3 * 24 * HOUR,
+    scopeKey: '',
+    utilization,
+  });
+
+  it('sends a pin as the only candidate, and the pool best-first otherwise', async () => {
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([{ id: 'agent-d', slug: 'agent-d', title: 'D', userId }]);
+    const busy = await service.ingestSnapshot({
+      identity: { email: 'busy@example.com', externalAccountId: 'busy-acc' },
+      provider: 'claude-code',
+      readings: [weekly(80)],
+    });
+    const free = await service.ingestSnapshot({
+      identity: { email: 'free@example.com', externalAccountId: 'free-acc' },
+      provider: 'claude-code',
+      readings: [weekly(10)],
+    });
+    const spent = await service.ingestSnapshot({
+      identity: { externalAccountId: 'spent-acc' },
+      provider: 'claude-code',
+      readings: [weekly(100)],
+    });
+
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toBeNull();
+
+    for (const account of [busy, free, spent])
+      await bindings.upsert({
+        accountId: account.id,
+        agentId: 'agent-d',
+        role: QuotaBindingRole.pool,
+      });
+
+    // An exhausted account is not a candidate; the rest go most headroom first.
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toEqual({
+      candidates: [
+        { externalAccountId: 'free-acc', name: 'free@example.com' },
+        { externalAccountId: 'busy-acc', name: 'busy@example.com' },
+      ],
+      mode: 'balanced',
+    });
+
+    await bindings.upsert({
+      accountId: busy.id,
+      agentId: 'agent-d',
+      role: QuotaBindingRole.pinned,
+    });
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toEqual({
+      candidates: [{ externalAccountId: 'busy-acc', name: 'busy@example.com' }],
+      mode: 'pinned',
+    });
+  });
+});
+
 describe('AgentQuotaService.listLatestReadings', () => {
   const now = Date.parse('2026-07-02T00:00:00Z');
   const weeklyReading = {
