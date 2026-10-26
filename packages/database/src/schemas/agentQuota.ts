@@ -47,6 +47,16 @@ export const agentProviderAccounts = pgTable(
       .notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    // Visibility WITHIN a workspace (same contract as devices / agents):
+    //   - 'public'  → every member sees the subscription and agents can draw on it.
+    //   - 'private' → only `userId` sees it; other members' account lists and
+    //     pickers never surface it. Hiding a subscription is an explicit opt-in,
+    //     so the default keeps today's shared behaviour. Ignored for personal
+    //     rows (`workspace_id IS NULL`). Filtered via `buildWorkspaceWhere`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
     provider: text('provider').notNull(),
 
     // ── Identity (populated from provider once observed) ──────────────────────
@@ -83,6 +93,11 @@ export const agentProviderAccounts = pgTable(
   (t) => [
     index('agent_provider_accounts_user_id_idx').on(t.userId),
     index('agent_provider_accounts_workspace_id_idx').on(t.workspaceId),
+    index('agent_provider_accounts_workspace_visibility_idx').on(
+      t.workspaceId,
+      t.visibility,
+      t.userId,
+    ),
     index('agent_provider_accounts_token_expires_at_idx').on(t.tokenExpiresAt),
     /** One row per real external account per user (personal mode). */
     uniqueIndex('agent_provider_accounts_identity_unique')
@@ -148,6 +163,52 @@ export const agentAccountBindings = pgTable(
 
 export type NewAgentAccountBinding = typeof agentAccountBindings.$inferInsert;
 export type AgentAccountBindingItem = typeof agentAccountBindings.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// agent_account_device_pins — per-device "switch account" lock
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Account rows are shared across devices, but a login lives on one machine, so
+ * a pin has to be chosen per device: pinning an account signed in on device A
+ * must not make the same agent fail on device B. The pool (`agent_account_bindings`)
+ * stays agent-wide; a device without a pin here balances across it.
+ */
+export const agentAccountDevicePins = pgTable(
+  'agent_account_device_pins',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+
+    agentId: text('agent_id')
+      .references(() => agents.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    deviceId: uuid('device_id')
+      .references(() => devices.id, { onDelete: 'cascade' })
+      .notNull(),
+    accountId: uuid('account_id')
+      .references(() => agentProviderAccounts.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    ...timestamps,
+  },
+  (t) => [
+    /** At most one pinned account per agent on each device. */
+    uniqueIndex('agent_account_device_pins_agent_device_unique').on(t.agentId, t.deviceId),
+    index('agent_account_device_pins_device_id_idx').on(t.deviceId),
+    index('agent_account_device_pins_account_id_idx').on(t.accountId),
+    index('agent_account_device_pins_user_id_idx').on(t.userId),
+    index('agent_account_device_pins_workspace_id_idx').on(t.workspaceId),
+  ],
+);
+
+export type NewAgentAccountDevicePin = typeof agentAccountDevicePins.$inferInsert;
+export type AgentAccountDevicePinItem = typeof agentAccountDevicePins.$inferSelect;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // agent_quota_snapshots — append-only provider observation (the instrument)
