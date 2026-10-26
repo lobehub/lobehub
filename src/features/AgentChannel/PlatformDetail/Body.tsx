@@ -24,7 +24,15 @@ import type { ChannelTab } from './channelTabs';
 import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
 import { ApplicationIdField, SchemaField } from './SchemaField';
-import { getSchemaFields, groupSettingsFields, WAKE_KEY_PREFIX } from './settingsGroups';
+import {
+  getSchemaFields,
+  groupSettingsFields,
+  groupWakeFields,
+  WAKE_KEY_PREFIX,
+} from './settingsGroups';
+
+/** The wake blocks that say, under their title, what they are for. */
+const WAKE_SECTIONS_WITH_DESC = new Set(['channels', 'judgement', 'pace']);
 
 /**
  * One tab's content. Every panel stays mounted and only the active one is
@@ -178,6 +186,31 @@ const Body = memo<BodyProps>(
       );
     };
 
+    // The fields of one settings block. The master switch is always on for the people who see the
+    // wake options, so it is not shown.
+    const renderSettingsFields = (fields: FieldSchema[]) =>
+      fields
+        .filter((field) => field.key !== WAKE_MASTER_KEY)
+        .map((field, index) => {
+          // Feature-gated fields (e.g. watch keywords) lock when the resolved access meta
+          // reports the feature as not allowed.
+          const featureLocked =
+            !!field.paidFeature &&
+            platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+          return (
+            <Fragment key={field.key}>
+              <SchemaField
+                disabled={disabled}
+                divider={index !== 0}
+                featureLocked={featureLocked}
+                field={field}
+                parentKey="settings"
+              />
+              {renderExtras(field, featureLocked)}
+            </Fragment>
+          );
+        });
+
     return (
       <Form
         form={form}
@@ -308,65 +341,65 @@ const Body = memo<BodyProps>(
                   {t('channel.reply.instant')}
                 </Text>
               )}
-              <Form.Group
-                collapsible={false}
-                keyValue={`settings-${group.key}-${platformDef.id}`}
-                variant={'filled'}
-              >
-                {group.key === 'access' &&
-                group.fields.some((f) => f.key === 'dmPolicy' || f.key === 'groupPolicy') ? (
-                  <AccessSection
-                    disabled={disabled}
-                    fields={group.fields}
-                    form={form}
-                    userIdExtras={renderExtras(group.fields.find((f) => f.key === 'userId'))}
-                    onValuesChange={onValuesChange}
-                  />
-                ) : (
-                  group.fields
-                    // The master switch is always on for the people who see these options.
-                    .filter((field) => field.key !== WAKE_MASTER_KEY)
-                    .map((field, index) => {
-                      // Feature-gated fields (e.g. watch keywords) lock when the
-                      // resolved access meta reports the feature as not allowed.
-                      const featureLocked =
-                        !!field.paidFeature &&
-                        platformDef.access?.features?.[field.paidFeature]?.allowed === false;
-                      return (
-                        <Fragment key={field.key}>
-                          <SchemaField
-                            disabled={disabled}
-                            divider={index !== 0}
-                            featureLocked={featureLocked}
-                            field={field}
-                            parentKey="settings"
-                          />
-                          {renderExtras(field, featureLocked)}
-                        </Fragment>
-                      );
-                    })
-                )}
-                {group.key === 'advanced' && (
-                  <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
-                    <Button
+              {group.key === 'wake' ? (
+                // Keywords, channels, pace and judgement each get a block of their own, so a long
+                // list of options reads as four decisions.
+                groupWakeFields(group.fields).map((section) => (
+                  <Form.Group
+                    collapsible={false}
+                    key={section.key}
+                    keyValue={`settings-wake-${section.key}-${platformDef.id}`}
+                    title={t(`channel.wake.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      WAKE_SECTIONS_WITH_DESC.has(section.key)
+                        ? t(`channel.wake.section.${section.key}Desc`)
+                        : undefined
+                    }
+                  >
+                    {renderSettingsFields(section.fields)}
+                  </Form.Group>
+                ))
+              ) : (
+                <Form.Group
+                  collapsible={false}
+                  keyValue={`settings-${group.key}-${platformDef.id}`}
+                  variant={'filled'}
+                >
+                  {group.key === 'access' &&
+                  group.fields.some((f) => f.key === 'dmPolicy' || f.key === 'groupPolicy') ? (
+                    <AccessSection
                       disabled={disabled}
-                      icon={<RotateCcw size={14} />}
-                      size="small"
-                      type="text"
-                      onClick={() =>
-                        confirmModal({
-                          content: t('channel.settingsResetConfirm'),
-                          okText: t('channel.settingsResetDefault'),
-                          title: t('channel.settingsResetDefault'),
-                          onOk: () => handleResetGroup(group.fields),
-                        })
-                      }
-                    >
-                      {t('channel.settingsResetDefault')}
-                    </Button>
-                  </Flexbox>
-                )}
-              </Form.Group>
+                      fields={group.fields}
+                      form={form}
+                      userIdExtras={renderExtras(group.fields.find((f) => f.key === 'userId'))}
+                      onValuesChange={onValuesChange}
+                    />
+                  ) : (
+                    renderSettingsFields(group.fields)
+                  )}
+                  {group.key === 'advanced' && (
+                    <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
+                      <Button
+                        disabled={disabled}
+                        icon={<RotateCcw size={14} />}
+                        size="small"
+                        type="text"
+                        onClick={() =>
+                          confirmModal({
+                            content: t('channel.settingsResetConfirm'),
+                            okText: t('channel.settingsResetDefault'),
+                            title: t('channel.settingsResetDefault'),
+                            onOk: () => handleResetGroup(group.fields),
+                          })
+                        }
+                      >
+                        {t('channel.settingsResetDefault')}
+                      </Button>
+                    </Flexbox>
+                  )}
+                </Form.Group>
+              )}
             </Panel>
           ))}
       </Form>

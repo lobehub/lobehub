@@ -96,6 +96,11 @@ export interface FieldSchema {
   properties?: FieldSchema[];
   required?: boolean;
   /**
+   * Visible lines for a multi-line `string` field. Setting it renders a text area instead of a
+   * one-line input; `maximum` is then its character limit.
+   */
+  rows?: number;
+  /**
    * i18n key for an extra `?` tooltip rendered next to the field label. Use
    * for "how to find this value" guidance that's too long for the inline
    * `description` (e.g. platform-specific UI paths for fetching User IDs).
@@ -103,7 +108,7 @@ export interface FieldSchema {
   tooltip?: string;
   /**
    * Field type, maps to UI component:
-   * - 'string' → Input
+   * - 'string' → Input (a text area when `rows` is set)
    * - 'password' → Password input
    * - 'number' / 'integer' → NumberInput
    * - 'boolean' → Switch

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOT_WAKE_SETTING_KEYS,
   DEFAULT_WAKE_RULES,
+  MAX_CUSTOM_INSTRUCTIONS_LENGTH,
   MIN_COLLECT_SECONDS,
   MIN_COOLDOWN_SECONDS,
   parseBotWakeSettings,
@@ -34,6 +35,24 @@ describe('bot-wake settings fields', () => {
     expect(botWakeFields.map((field) => field.key).sort()).toEqual(
       Object.values(BOT_WAKE_SETTING_KEYS).sort(),
     );
+  });
+
+  it('offer no mode to pick: with the switch on, rules and classifier always enforce', () => {
+    const keys = botWakeFields.map((field) => field.key);
+
+    expect(keys).not.toContain('botWakeMode');
+    expect(keys).not.toContain('botWakeClassifierMode');
+    expect(botWakeFields.filter((field) => field.enum?.includes('shadow'))).toEqual([]);
+  });
+
+  it('give the custom instructions a text area with room for a real prompt', () => {
+    const field = botWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.customInstructions)!;
+
+    expect(field.rows).toBeGreaterThanOrEqual(8);
+    expect(field.maximum).toBe(MAX_CUSTOM_INSTRUCTIONS_LENGTH);
+    expect(field.type).toBe('string');
+    // Only that one field is multi-line.
+    expect(botWakeFields.filter((f) => f.rows).map((f) => f.key)).toEqual([field.key]);
   });
 
   it('are shown by the Discord form', () => {
@@ -78,14 +97,14 @@ describe('bot-wake settings fields', () => {
     // The save and load paths merge every schema default into the settings, so this is the shape a
     // bot configured with a nested `botWake` object really has at runtime.
     const settings = mergeWithDefaults(discordSchema, {
-      botWake: { classifier: { mode: 'enforce' }, enabled: true, rules: { scope: 'bot-threads' } },
+      botWake: { classifier: { threshold: 0.8 }, enabled: true, rules: { scope: 'bot-threads' } },
     });
 
     expect(settings[BOT_WAKE_SETTING_KEYS.enabled]).toBe(false);
 
     const parsed = parseBotWakeSettings(settings);
     expect(parsed.config.enabled).toBe(true);
-    expect(parsed.rules.classifier.mode).toBe('enforce');
+    expect(parsed.rules.classifier.threshold).toBe(0.8);
     expect(parsed.rules.scope).toBe('bot-threads');
   });
 
@@ -94,8 +113,8 @@ describe('bot-wake settings fields', () => {
 
     const parsed = parseBotWakeSettings(settings);
     expect(parsed.config.enabled).toBe(true);
-    expect(parsed.ruleMode).toBe('shadow');
-    expect(parsed.rules.classifier.mode).toBe('shadow');
+    expect(parsed.ruleMode).toBe('enforce');
+    expect(parsed.rules.classifier.mode).toBe('enforce');
   });
 
   it('leave a bot that saved the form untouched exactly as it was before: off, with the stock rules', () => {
@@ -110,6 +129,7 @@ describe('bot-wake settings fields', () => {
     expect(parsed.config.enabled).toBe(false);
     expect(parsed.rules).toEqual({ ...DEFAULT_WAKE_RULES, customInstructions: undefined });
     expect(parsed.scheduler.mode).toBe('off');
-    expect(parsed.ruleMode).toBe('shadow');
+    // Off is the master switch; once it is on, everything enforces.
+    expect(parsed.ruleMode).toBe('enforce');
   });
 });

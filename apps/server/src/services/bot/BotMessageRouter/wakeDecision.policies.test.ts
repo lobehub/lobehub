@@ -132,6 +132,41 @@ describe('bot-wake recorder policy set', () => {
     expect(classify).toHaveBeenCalledTimes(1);
   });
 
+  it('never lets the classifier veto a watch-keyword wake: a keyword exists to wake the bot unaddressed', async () => {
+    const lowScore: WakeClassify = vi.fn(async () => ({
+      addressedToBot: 0,
+      kind: 'other',
+      reason: 'not for the bot',
+    }));
+    const recorder = make({ botWake: { enabled: true } }, fakeState(), { classify: lowScore });
+
+    const decision = await recorder.judge(
+      observation(
+        { outcome: 'wake', reason: 'watch-keyword' },
+        { text: 'we have a bug in checkout' },
+      ),
+    );
+
+    // The rules still judge it (they enforce by default); the classifier is not asked at all.
+    expect(decision).toBeDefined();
+    expect(decision!.verdict).not.toBe('deny');
+    expect(lowScore).not.toHaveBeenCalled();
+  });
+
+  it('still lets an enforcing owner rule veto a watch-keyword wake', async () => {
+    const recorder = make(
+      { botWake: { enabled: true, rules: { denyChannels: ['c1'] } } },
+      fakeState(),
+      { classify },
+    );
+
+    const decision = await recorder.judge(
+      observation({ outcome: 'wake', reason: 'watch-keyword', threadId: 'discord:g1:c1' }),
+    );
+
+    expect(decision).toMatchObject({ decidedBy: 'bot-wake:owner-rules', verdict: 'deny' });
+  });
+
   it('keeps a bot whose form was saved with bot-wake off to the router verdict alone', async () => {
     const state = fakeState();
     make({ botWakeEnabled: false, botWakeMode: 'shadow', botWakeScope: 'all' }, state).record(
@@ -308,8 +343,10 @@ describe('bot-wake recorder policy set', () => {
 describe('bot-wake recorder judge (enforcement)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('is silent while everything shadows (the default)', async () => {
-    const recorder = make({ botWake: { enabled: true } });
+  it('is silent when an operator override has everything shadowing', async () => {
+    const recorder = make({
+      botWake: { classifier: { mode: 'shadow' }, enabled: true, mode: 'shadow' },
+    });
 
     expect(await recorder.judge(observation({ outcome: 'wake' }))).toBeUndefined();
     expect(classify).not.toHaveBeenCalled();
@@ -331,11 +368,13 @@ describe('bot-wake recorder judge (enforcement)', () => {
     });
   });
 
-  it('lets an enforcing classifier block a low score, but a shadow one only scores', async () => {
-    const enforcing = await make({
+  it('does not ask the classifier about a keyword wake, however it is set', async () => {
+    const decision = await make({
       botWake: { classifier: { mode: 'enforce' }, enabled: true },
     }).judge(observation({ outcome: 'wake', reason: 'watch-keyword' }));
-    expect(enforcing).toMatchObject({ decidedBy: 'bot-wake:classifier', verdict: 'deny' });
+
+    expect(decision?.verdict).not.toBe('deny');
+    expect(classify).not.toHaveBeenCalled();
   });
 
   it('fails open when the policies throw', async () => {

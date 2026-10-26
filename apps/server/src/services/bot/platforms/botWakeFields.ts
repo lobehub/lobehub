@@ -14,11 +14,8 @@ const FEATURE_FLAG = 'enableBotWake';
 
 const ENABLED = { field: KEY.enabled, value: true };
 
-const modeOptions = (prefix: string) => ({
-  enum: ['off', 'shadow', 'enforce'],
-  enumDescriptions: [`${prefix}OffHint`, `${prefix}ShadowHint`, `${prefix}EnforceHint`],
-  enumLabels: [`${prefix}Off`, `${prefix}Shadow`, `${prefix}Enforce`],
-});
+/** Visible lines of the custom-instructions text area. */
+const CUSTOM_INSTRUCTIONS_ROWS = 10;
 
 const channelList = (key: string, label: string): FieldSchema => ({
   key,
@@ -48,8 +45,9 @@ const channelList = (key: string, label: string): FieldSchema => ({
 });
 
 /**
- * Options for letting the bot join a conversation nobody addressed to it, and for the policies,
- * classifier and scheduler that decide whether it should. Appended to a platform's `settings`
+ * Options for letting the bot join a conversation nobody addressed to it, and for the rules,
+ * classifier and scheduler that decide whether it should. With the master switch on they all
+ * enforce: there is no "record only" or "off" to pick. Appended to a platform's `settings`
  * group; the form renders them flat, so each is a top-level key (see `BOT_WAKE_SETTING_KEYS`).
  *
  * Everything but the master switch stays hidden until `botWakeEnabled` is on, the scheduler's
@@ -64,16 +62,6 @@ export const botWakeFields: FieldSchema[] = [
     featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeEnabled',
     type: 'boolean',
-  },
-  {
-    key: KEY.mode,
-    default: 'shadow',
-    description: 'channel.botWakeModeHint',
-    featureFlag: FEATURE_FLAG,
-    label: 'channel.botWakeMode',
-    type: 'string',
-    visibleWhen: ENABLED,
-    ...modeOptions('channel.botWakeMode'),
   },
   {
     key: KEY.scope,
@@ -131,16 +119,6 @@ export const botWakeFields: FieldSchema[] = [
     visibleWhen: ENABLED,
   },
   {
-    key: KEY.classifierMode,
-    default: DEFAULT_WAKE_RULES.classifier.mode,
-    description: 'channel.botWakeClassifierModeHint',
-    featureFlag: FEATURE_FLAG,
-    label: 'channel.botWakeClassifierMode',
-    type: 'string',
-    visibleWhen: ENABLED,
-    ...modeOptions('channel.botWakeClassifierMode'),
-  },
-  {
     key: KEY.classifierThreshold,
     default: DEFAULT_WAKE_RULES.classifier.threshold,
     description: 'channel.botWakeClassifierThresholdHint',
@@ -159,6 +137,8 @@ export const botWakeFields: FieldSchema[] = [
     placeholder: 'channel.botWakeCustomInstructionsPlaceholder',
     type: 'string',
     visibleWhen: ENABLED,
+    // A prompt, not a label: the form gives it a text area instead of a one-line input.
+    rows: CUSTOM_INSTRUCTIONS_ROWS,
     // Longer text is cut by the runtime, not rejected.
     maximum: MAX_CUSTOM_INSTRUCTIONS_LENGTH,
   },

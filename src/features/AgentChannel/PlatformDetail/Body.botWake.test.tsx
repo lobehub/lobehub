@@ -38,6 +38,9 @@ vi.mock('@/store/serverConfig', () => ({
 
 vi.mock('@/components/FormInput', () => ({
   FormInput: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  FormTextArea: (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+    <textarea {...props} />
+  ),
   FormPassword: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
 }));
 
@@ -100,7 +103,7 @@ describe('channel settings form: bot-wake options', () => {
     // The form is up (an ordinary advanced setting renders) ...
     expect(screen.getByText(en['channel.watchKeywords'])).toBeInTheDocument();
     // ... and no bot-wake option leaks out.
-    expect(screen.queryByText(en['channel.botWakeMode'])).not.toBeInTheDocument();
+    expect(screen.queryByText(en['channel.botWakeScope'])).not.toBeInTheDocument();
     expect(screen.queryByText(en['channel.wake.intro'])).not.toBeInTheDocument();
   });
 
@@ -110,7 +113,7 @@ describe('channel settings form: bot-wake options', () => {
 
     render(<Harness />);
 
-    expect(screen.queryByText(en['channel.botWakeMode'])).not.toBeInTheDocument();
+    expect(screen.queryByText(en['channel.botWakeScope'])).not.toBeInTheDocument();
   });
 
   it('has no master switch: the rules show straight away once released, the timings after batching is on', () => {
@@ -120,10 +123,8 @@ describe('channel settings form: bot-wake options', () => {
     render(<Harness />);
 
     expect(screen.queryByText(en['channel.botWakeEnabled'])).not.toBeInTheDocument();
-    expect(screen.getByText(en['channel.botWakeMode'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeAllowChannels'])).toBeInTheDocument();
-    expect(screen.getByText(en['channel.botWakeClassifierMode'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeCustomInstructions'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeSchedulerMode'])).toBeInTheDocument();
     // Batching timings stay out of the way until batching is on.
@@ -145,7 +146,7 @@ describe('channel settings form: bot-wake options', () => {
 
     render(<Harness settings={{ botWakeEnabled: true, botWakeSchedulerMode: 'enforce' }} />);
 
-    expect(screen.getByText(en['channel.botWakeMode'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeCollectSeconds'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeCooldownSeconds'])).toBeInTheDocument();
   });
@@ -158,6 +159,77 @@ describe('channel settings form: bot-wake options', () => {
 
     expect(screen.getByText('跟进窗口（秒）')).toBeInTheDocument();
     expect(screen.getByText('自定义说明')).toBeInTheDocument();
-    expect(screen.queryByText('channel.botWakeMode')).not.toBeInTheDocument();
+    expect(screen.queryByText('channel.botWakeScope')).not.toBeInTheDocument();
+  });
+
+  it('offers no "Rules" or "Addressed-to-bot check" mode to pick: they always enforce', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness settings={{ botWakeEnabled: true }} />);
+
+    expect(screen.queryByText('Rules')).not.toBeInTheDocument();
+    expect(screen.queryByText('Addressed-to-bot check')).not.toBeInTheDocument();
+    expect(screen.queryByText('Record only')).not.toBeInTheDocument();
+  });
+
+  it('groups the options into keywords, channels, pace and judgement, each under its own title', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness settings={{ botWakeEnabled: true }} />);
+
+    const titles = ['keywords', 'channels', 'pace', 'judgement'].map((key) =>
+      screen.getByText(en[`channel.wake.section.${key}`]),
+    );
+    // Titles come in page order.
+    for (let i = 1; i < titles.length; i++) {
+      expect(
+        titles[i - 1].compareDocumentPosition(titles[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    // Each option sits in its own section: the list of channels after the "Channels" title and
+    // before "Pace", the follow-up window after "Pace".
+    const position = (node: HTMLElement) => (a: HTMLElement) =>
+      node.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING;
+    const channelsTitle = screen.getByText(en['channel.wake.section.channels']);
+    const paceTitle = screen.getByText(en['channel.wake.section.pace']);
+    expect(
+      position(channelsTitle)(screen.getByText(en['channel.botWakeAllowChannels'])),
+    ).toBeTruthy();
+    expect(position(screen.getByText(en['channel.botWakeAllowChannels']))(paceTitle)).toBeTruthy();
+    expect(position(paceTitle)(screen.getByText(en['channel.botWakeWindowSeconds']))).toBeTruthy();
+  });
+
+  it('gives the custom instructions a text area of their own, large enough to write a prompt', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    const { container } = render(<Harness settings={{ botWakeEnabled: true }} />);
+
+    const area = container.querySelector('textarea')!;
+    expect(area).toBeInTheDocument();
+    expect(Number(area.getAttribute('rows'))).toBeGreaterThanOrEqual(8);
+    expect(Number(area.getAttribute('maxlength'))).toBeGreaterThanOrEqual(2000);
+    // The only multi-line field: the others stay single-line.
+    expect(container.querySelectorAll('textarea')).toHaveLength(1);
+  });
+
+  it('shows the saved instructions in the text area', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    const { container } = render(
+      <Harness
+        settings={{
+          botWakeCustomInstructions: 'Only answer billing questions.\nNever joke.',
+          botWakeEnabled: true,
+        }}
+      />,
+    );
+
+    expect(container.querySelector('textarea')).toHaveValue(
+      'Only answer billing questions.\nNever joke.',
+    );
   });
 });

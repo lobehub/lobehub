@@ -583,7 +583,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       const observedAt = Date.now();
       try {
         if (!(await rolledOut())) return;
-        if (!enabled || !policies.some((policy) => policy.mode === 'enforce')) return;
+
+        // The classifier answers "is this talking to the bot?", which is the wrong question for a
+        // keyword wake: the keyword is there to wake the bot without anyone addressing it. Only
+        // the rules (scope, lists, budget, owner presence) may veto one; the classifier's score
+        // for it is still recorded by `record()`.
+        const vetoPolicies = policies.filter((policy) => policy.id !== CLASSIFIER_POLICY_ID);
+        if (!enabled || !vetoPolicies.some((policy) => policy.mode === 'enforce')) return;
 
         const signal = signalFor(observation, observedAt);
         const [channel, conversation] = await Promise.all([
@@ -592,7 +598,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         ]);
 
         return await aggregateWakeVerdictsAsync(
-          policies,
+          vetoPolicies,
           signal,
           buildSnapshot(observation, signal, channel, conversation),
         );

@@ -122,7 +122,7 @@ describe('BotMessageRouter follow-up scheduling', () => {
       expect(mocks.defer).not.toHaveBeenCalled();
     });
 
-    it('runs it straight away with bot-wake enabled in shadow and no scheduler', async () => {
+    it('runs it straight away with bot-wake enabled and no scheduler', async () => {
       await boot(keywordSettings({ enabled: true }));
 
       await subscribed()(thread(), message());
@@ -131,9 +131,14 @@ describe('BotMessageRouter follow-up scheduling', () => {
       expect(mocks.defer).not.toHaveBeenCalled();
     });
 
-    it('does not let shadow policies silence a wake they would deny', async () => {
+    it('does not let shadow policies silence a wake they would deny (an operator override)', async () => {
       await boot(
-        keywordSettings({ enabled: true, rules: { denyChannels: ['chat-1'], scope: 'none' } }),
+        keywordSettings({
+          classifier: { mode: 'shadow' },
+          enabled: true,
+          mode: 'shadow',
+          rules: { denyChannels: ['chat-1'], scope: 'none' },
+        }),
       );
 
       await subscribed()(thread(), message());

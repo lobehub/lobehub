@@ -5,7 +5,7 @@ import type { BotWakeConfig, WakePolicyMode, WakeRules, WakeSchedulerConfig } fr
 
 export const DEFAULT_WAKE_RULES: WakeRules = {
   allowChannels: [],
-  classifier: { mode: 'shadow', threshold: 0.5 },
+  classifier: { mode: 'enforce', threshold: 0.5 },
   denyChannels: [],
   maxSilentWakes: 3,
   ownerPresenceSeconds: 120,
@@ -23,8 +23,12 @@ export interface ResolvedWakeScheduler {
   mode: 'enforce' | 'off';
 }
 
-/** Longest custom instruction handed to the classifier; longer text is cut, not rejected. */
-export const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 1000;
+/**
+ * Longest custom instruction handed to the classifier; longer text is cut, not rejected. Long
+ * enough for a real prompt (who to answer, who to leave alone, examples), short enough to stay a
+ * small fraction of the classifier's input.
+ */
+export const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 4000;
 
 /**
  * Hard cap on the bot-wake channel lists. The parser rejects an over-cap list wholesale and
@@ -60,7 +64,7 @@ const SettingsSchema = z
       .catch({}),
     customInstructions: z.string().catch(''),
     enabled: z.boolean().catch(false),
-    mode: mode.catch('shadow'),
+    mode: mode.catch('enforce'),
     rules: z
       .object({
         allowChannels: idList,
@@ -87,10 +91,13 @@ const SettingsSchema = z
  * The provider setting keys the channel settings form writes. The form renders every field of the
  * `settings` group flat, so the bot-wake options are flat keys there rather than one nested
  * object.
+ *
+ * There is no key for the rules' or the classifier's mode: with bot-wake on they always enforce,
+ * and a value an earlier form saved for them is ignored. Only a hand-written nested `botWake`
+ * object can still ask for `shadow` or `off`, as an operator's override (see `BotWakeConfig`).
  */
 export const BOT_WAKE_SETTING_KEYS = {
   allowChannels: 'botWakeAllowChannels',
-  classifierMode: 'botWakeClassifierMode',
   classifierThreshold: 'botWakeClassifierThreshold',
   collectSeconds: 'botWakeCollectSeconds',
   cooldownSeconds: 'botWakeCooldownSeconds',
@@ -98,7 +105,6 @@ export const BOT_WAKE_SETTING_KEYS = {
   denyChannels: 'botWakeDenyChannels',
   enabled: 'botWakeEnabled',
   maxSilentWakes: 'botWakeMaxSilentWakes',
-  mode: 'botWakeMode',
   ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
   schedulerMode: 'botWakeSchedulerMode',
   scope: 'botWakeScope',
@@ -122,9 +128,7 @@ const chosen = (values: Record<string, unknown>) =>
  */
 const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
   { key: BOT_WAKE_SETTING_KEYS.enabled, path: ['enabled'] },
-  { key: BOT_WAKE_SETTING_KEYS.mode, path: ['mode'] },
   { key: BOT_WAKE_SETTING_KEYS.customInstructions, path: ['customInstructions'] },
-  { key: BOT_WAKE_SETTING_KEYS.classifierMode, path: ['classifier', 'mode'] },
   { key: BOT_WAKE_SETTING_KEYS.classifierThreshold, path: ['classifier', 'threshold'] },
   { key: BOT_WAKE_SETTING_KEYS.allowChannels, path: ['rules', 'allowChannels'] },
   { key: BOT_WAKE_SETTING_KEYS.denyChannels, path: ['rules', 'denyChannels'] },
@@ -198,12 +202,8 @@ const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefi
   const k = BOT_WAKE_SETTING_KEYS;
 
   return {
-    ...chosen({
-      customInstructions: flat(k.customInstructions),
-      enabled: flat(k.enabled),
-      mode: flat(k.mode),
-    }),
-    classifier: chosen({ mode: flat(k.classifierMode), threshold: flat(k.classifierThreshold) }),
+    ...chosen({ customInstructions: flat(k.customInstructions), enabled: flat(k.enabled) }),
+    classifier: chosen({ threshold: flat(k.classifierThreshold) }),
     rules: chosen({
       allowChannels: flat(k.allowChannels),
       denyChannels: flat(k.denyChannels),
@@ -261,7 +261,7 @@ export const parseBotWakeSettings = (
   return {
     config: { ...raw, rules },
     rules,
-    ruleMode: raw.mode ?? 'shadow',
+    ruleMode: raw.mode ?? 'enforce',
     scheduler: {
       collectMs: Math.max(MIN_COLLECT_SECONDS, schedulerRaw.collectSeconds ?? 0) * 1000,
       cooldownMs: Math.max(MIN_COOLDOWN_SECONDS, schedulerRaw.cooldownSeconds ?? 0) * 1000,

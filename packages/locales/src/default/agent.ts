@@ -440,16 +440,7 @@ export default {
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
   'channel.botWakeEnabled': 'Judge unprompted follow-ups',
   'channel.botWakeEnabledHint':
-    "Turns on the rules below. They decide whether the bot may answer a message nobody addressed to it: a watch keyword in a thread it was not mentioned in, or a message continuing a conversation it already joined. Plain channel chatter is only judged and recorded, unless the rules are set to Enforce: then a message that calls the bot by name, or comes soon after it spoke, can start a reply. Off keeps today's behavior, where a watch keyword wakes the bot without a rule check.",
-  'channel.botWakeMode': 'Rules',
-  'channel.botWakeModeHint': 'How the built-in rules and the settings below are applied.',
-  'channel.botWakeModeOff': 'Off',
-  'channel.botWakeModeOffHint': 'Rules are not evaluated.',
-  'channel.botWakeModeShadow': 'Record only',
-  'channel.botWakeModeShadowHint': 'Rules are evaluated and recorded, but never stop a reply.',
-  'channel.botWakeModeEnforce': 'Enforce',
-  'channel.botWakeModeEnforceHint':
-    'A rule that says no stops the bot from joining. A message that calls the bot by name, or comes soon after it spoke, can also start a reply, even without an @mention.',
+    "Turns on the wake options below. The bot judges messages nobody addressed to it and may join in; off keeps today's behavior, where a watch keyword wakes the bot without any check.",
   'channel.botWakeScope': 'Where it may join',
   'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
   'channel.botWakeScopeAll': 'Everywhere it can see',
@@ -481,23 +472,14 @@ export default {
   'channel.botWakeOwnerPresenceSeconds': 'Owner presence (seconds)',
   'channel.botWakeOwnerPresenceSecondsHint':
     "If the bot's owner posted in the channel within this time, the bot stays quiet. 0 turns this off.",
-  'channel.botWakeClassifierMode': 'Addressed-to-bot check',
-  'channel.botWakeClassifierModeHint':
-    'A small model scores whether a message is directed at the bot. It only runs on ambiguous follow-ups.',
-  'channel.botWakeClassifierModeOff': 'Off',
-  'channel.botWakeClassifierModeOffHint': 'No model calls.',
-  'channel.botWakeClassifierModeShadow': 'Record only',
-  'channel.botWakeClassifierModeShadowHint': 'Scores are recorded; nothing is blocked.',
-  'channel.botWakeClassifierModeEnforce': 'Enforce',
-  'channel.botWakeClassifierModeEnforceHint': 'Messages scoring below the threshold are skipped.',
-  'channel.botWakeClassifierThreshold': 'Score threshold',
+  'channel.botWakeClassifierThreshold': 'Sensitivity',
   'channel.botWakeClassifierThresholdHint':
-    'Used when the check is set to enforce. From 0 to 1; a higher value skips more messages.',
+    'How sure the bot must be that a message is for it before it joins, from 0 to 1. A higher value makes it join less often.',
   'channel.botWakeCustomInstructions': 'Custom instructions',
   'channel.botWakeCustomInstructionsHint':
-    'Plain-language guidance for the check, such as when to join and when to stay out. It informs the model and is not a hard rule. Up to 1000 characters.',
+    'Written to the bot like a prompt: who it should answer, what to leave alone, examples of each. It guides the judgement and is not a hard rule. Up to 4000 characters.',
   'channel.botWakeCustomInstructionsPlaceholder':
-    'e.g. Join when someone asks about billing; stay out of casual chat',
+    'Answer when someone asks about billing, refunds or invoices, or follows up on something you said.\nStay out of casual chat between teammates and of messages addressed to someone else.\nIf a message mentions you only in passing, do not reply.',
   'channel.botWakeSchedulerMode': 'Batch follow-ups',
   'channel.botWakeSchedulerModeHint':
     'Hold follow-ups briefly and answer a burst of messages in one run instead of one run per message. Has no effect on deployments without a job queue.',
@@ -587,7 +569,17 @@ export default {
   'channel.tab.reply': 'Replies',
   'channel.tab.wake': 'Wake policy',
   'channel.wake.intro':
-    'Decides whether the bot may answer a message nobody addressed to it: a watch keyword in a thread it was not mentioned in, or a message continuing a conversation it already joined. Plain channel chatter is only judged and recorded, never answered.',
+    'Lets the bot speak up when nobody @-mentioned it: when a message calls it by name, when someone follows up soon after it spoke, or when a watch keyword matches. It judges each message first, and may choose to stay silent.',
+  'channel.wake.section.keywords': 'Keywords',
+  'channel.wake.section.channels': 'Channels',
+  'channel.wake.section.channelsDesc':
+    'Where the bot may join a conversation nobody addressed to it.',
+  'channel.wake.section.pace': 'Pace',
+  'channel.wake.section.paceDesc': 'How soon, and how often, the bot speaks up on its own.',
+  'channel.wake.section.judgement': 'Judgement',
+  'channel.wake.section.judgementDesc':
+    'How the bot decides a message is meant for it. Write what it should answer and what it should leave alone, in your own words.',
+  'channel.wake.section.more': 'More',
   'channel.tab.advanced': 'Advanced',
   'channel.group.connection': 'Connection options',
   'channel.reply.instant':

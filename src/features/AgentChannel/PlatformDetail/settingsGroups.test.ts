@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
-import { getSchemaFields, groupSettingsFields } from './settingsGroups';
+import { getSchemaFields, groupSettingsFields, groupWakeFields } from './settingsGroups';
 
 const field = (key: string): FieldSchema => ({ key, label: key, type: 'string' });
 
@@ -63,7 +64,7 @@ describe('groupSettingsFields', () => {
         'charLimit',
         'botWakeEnabled',
         'displayToolCalls',
-        'botWakeMode',
+        'botWakeScope',
         'dmPolicy',
         'watchKeywords',
       ].map(field),
@@ -71,7 +72,7 @@ describe('groupSettingsFields', () => {
 
     expect(groups.map((g) => [g.key, g.fields.map((f) => f.key)])).toEqual([
       ['access', ['dmPolicy']],
-      ['wake', ['watchKeywords', 'botWakeEnabled', 'botWakeMode']],
+      ['wake', ['watchKeywords', 'botWakeEnabled', 'botWakeScope']],
       ['reply', ['displayToolCalls']],
       ['advanced', ['charLimit']],
     ]);
@@ -110,5 +111,77 @@ describe('getSchemaFields', () => {
       'charLimit',
       'botWakeEnabled',
     ]);
+  });
+});
+
+describe('groupWakeFields', () => {
+  const K = BOT_WAKE_SETTING_KEYS;
+  const keysOf = (fields: FieldSchema[]) =>
+    groupWakeFields(fields).map((section) => [section.key, section.fields.map((f) => f.key)]);
+
+  it('splits the wake options into keywords, channels, pace and judgement, in that order', () => {
+    // Deliberately shuffled: the sections decide the order, not the schema.
+    const fields = [
+      K.customInstructions,
+      K.cooldownSeconds,
+      'watchKeywords',
+      K.denyChannels,
+      K.classifierThreshold,
+      K.windowSeconds,
+      K.scope,
+      K.collectSeconds,
+      K.allowChannels,
+      K.schedulerMode,
+      K.maxSilentWakes,
+      K.ownerPresenceSeconds,
+    ].map(field);
+
+    expect(keysOf(fields)).toEqual([
+      ['keywords', ['watchKeywords']],
+      ['channels', [K.scope, K.allowChannels, K.denyChannels]],
+      [
+        'pace',
+        [
+          K.windowSeconds,
+          K.maxSilentWakes,
+          K.ownerPresenceSeconds,
+          K.schedulerMode,
+          K.collectSeconds,
+          K.cooldownSeconds,
+        ],
+      ],
+      ['judgement', [K.customInstructions, K.classifierThreshold]],
+    ]);
+  });
+
+  it('keeps the prompt first in its section, so the large text area is what you land on', () => {
+    const section = groupWakeFields([K.classifierThreshold, K.customInstructions].map(field)).find(
+      (s) => s.key === 'judgement',
+    )!;
+
+    expect(section.fields[0].key).toBe(K.customInstructions);
+  });
+
+  it('shows only the keywords until the rollout reaches the user', () => {
+    expect(keysOf(['watchKeywords'].map(field))).toEqual([['keywords', ['watchKeywords']]]);
+  });
+
+  it('keeps a bot-wake option it does not know in a section of its own, so nothing disappears', () => {
+    expect(keysOf([K.scope, 'botWakeSomethingNew'].map(field))).toEqual([
+      ['channels', [K.scope]],
+      ['more', ['botWakeSomethingNew']],
+    ]);
+  });
+
+  it('places every option the runtime reads, apart from the hidden master switch', () => {
+    const placed = groupWakeFields(Object.values(K).map(field)).flatMap((section) =>
+      section.fields.map((f) => f.key),
+    );
+
+    expect(placed.sort()).toEqual(
+      Object.values(K)
+        .filter((key) => key !== K.enabled)
+        .sort(),
+    );
   });
 });

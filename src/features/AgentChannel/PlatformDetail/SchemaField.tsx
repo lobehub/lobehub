@@ -8,7 +8,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FormInput, FormPassword } from '@/components/FormInput';
+import { FormInput, FormPassword, FormTextArea } from '@/components/FormInput';
 import InfoTooltip from '@/components/InfoTooltip';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
@@ -233,6 +233,19 @@ export const SchemaField = memo<SchemaFieldProps>(
               }
             />
           );
+        } else if (field.rows) {
+          // A prompt or other longer text: a text area across the whole row, with a counter
+          // against the limit the runtime enforces.
+          children = (
+            <FormTextArea
+              disabled={disabled}
+              maxLength={field.maximum}
+              placeholder={placeholder}
+              rows={field.rows}
+              showCount={typeof field.maximum === 'number'}
+              style={{ resize: 'vertical', width: '100%' }}
+            />
+          );
         } else {
           children = (
             <FormInput
@@ -261,7 +274,7 @@ export const SchemaField = memo<SchemaFieldProps>(
           desc={desc}
           divider={divider}
           label={label}
-          layout={fullWidth || field.type === 'password' ? 'vertical' : 'horizontal'}
+          layout={fullWidth || field.type === 'password' || field.rows ? 'vertical' : 'horizontal'}
           name={`${parentKey}.${field.key}`}
           validate={validateOverride ?? buildValidate(field, t)}
         >
