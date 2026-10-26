@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactBlockPlugin } from '@lobehub/editor';
+import { ReactBlockPlugin, ReactCollapsiblePlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import { type CSSProperties, useMemo } from 'react';
 import { memo } from 'react';
@@ -40,7 +40,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
   );
 
   const extraPlugins = useMemo(
-    () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],
+    () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 }), ReactCollapsiblePlugin],
     [],
   );
 
