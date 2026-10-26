@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Sortuj ukończone zadania według najnowszych",
   "taskList.form.ordering": "Sortowanie",
   "taskList.form.showArchived": "Pokaż zarchiwizowane",
-  "taskList.form.showCompleted": "Pokaż ukończone i anulowane",
   "taskList.form.showSubTasks": "Pokaż podzadania",
   "taskList.form.subGrouping": "Podgrupowanie",
   "taskList.groupBy.assignee": "Przypisany",

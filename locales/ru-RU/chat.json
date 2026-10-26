@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Сортировать выполненные по давности",
   "taskList.form.ordering": "Сортировка",
   "taskList.form.showArchived": "Показать архивированные",
-  "taskList.form.showCompleted": "Показать завершённые и отменённые",
   "taskList.form.showSubTasks": "Показать подзадачи",
   "taskList.form.subGrouping": "Доп. группировка",
   "taskList.groupBy.assignee": "Исполнитель",

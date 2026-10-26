@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Abgeschlossene Aufgaben nach Aktualität sortieren",
   "taskList.form.ordering": "Sortierung",
   "taskList.form.showArchived": "Archivierte anzeigen",
-  "taskList.form.showCompleted": "Abgeschlossene & stornierte anzeigen",
   "taskList.form.showSubTasks": "Unteraufgaben anzeigen",
   "taskList.form.subGrouping": "Untergruppierung",
   "taskList.groupBy.assignee": "Zuständige Person",

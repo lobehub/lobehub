@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Sắp xếp tác vụ đã hoàn thành theo thời gian gần nhất",
   "taskList.form.ordering": "Sắp xếp",
   "taskList.form.showArchived": "Hiển thị đã lưu trữ",
-  "taskList.form.showCompleted": "Hiện tác vụ đã hoàn thành & đã hủy",
   "taskList.form.showSubTasks": "Hiển thị nhiệm vụ con",
   "taskList.form.subGrouping": "Nhóm phụ",
   "taskList.groupBy.assignee": "Người được giao",

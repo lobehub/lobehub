@@ -36,7 +36,11 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
-import { getVisibleTaskStatuses, normalizeTaskListViewOptions } from './listViewOptions';
+import {
+  getCompletedWithin,
+  getVisibleTaskStatuses,
+  normalizeTaskListViewOptions,
+} from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
@@ -163,13 +167,14 @@ export const getScheduledTaskViewOptions = (
 ): TaskListViewOptions => ({
   ...viewOptions,
   ...PAGINATED_COLLECTION_VIEW,
+  completedTasks: 'all',
   groupBy: 'automationMode',
-  hideCompleted: false,
 });
 
 /**
- * "My tasks" additionally sends `hideCompleted` as a server status filter
- * (`getVisibleTaskStatuses`) rather than applying it to the fetched page.
+ * "My tasks" additionally sends `completedTasks` as a server filter
+ * (`getVisibleTaskStatuses` / `getCompletedWithin`) rather than applying it to
+ * the fetched page.
  */
 export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskListViewOptions => ({
   ...viewOptions,
@@ -279,6 +284,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   });
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
+    completedWithin: getCompletedWithin(viewOptions),
     enabled: isMineCollection && !isMineBoard,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
@@ -369,7 +375,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   }, [agentId, canCreateTask, navigate, projectId]);
 
   const handleShowHiddenCompleted = useCallback(() => {
-    setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
+    setViewOptions((prev) => ({ ...prev, completedTasks: 'all' }));
   }, [setViewOptions]);
 
   const handleCollectionChange = useCallback(

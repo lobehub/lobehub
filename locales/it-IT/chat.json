@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Ordina le attività completate per data recente",
   "taskList.form.ordering": "Ordinamento",
   "taskList.form.showArchived": "Mostra archiviati",
-  "taskList.form.showCompleted": "Mostra completati e annullati",
   "taskList.form.showSubTasks": "Mostra sotto-attività",
   "taskList.form.subGrouping": "Sotto-raggruppamento",
   "taskList.groupBy.assignee": "Assegnatario",

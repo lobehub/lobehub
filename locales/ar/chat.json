@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "ترتيب المهام المكتملة حسب الأحدث",
   "taskList.form.ordering": "الترتيب",
   "taskList.form.showArchived": "عرض المؤرشف",
-  "taskList.form.showCompleted": "عرض المكتملة والمُلغاة",
   "taskList.form.showSubTasks": "عرض المهام الفرعية",
   "taskList.form.subGrouping": "التجميع الفرعي",
   "taskList.groupBy.assignee": "المكلّف",

@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "完了タスクを最近順に並べる",
   "taskList.form.ordering": "並び替え",
   "taskList.form.showArchived": "アーカイブ済みを表示",
-  "taskList.form.showCompleted": "完了・キャンセル済みを表示",
   "taskList.form.showSubTasks": "サブタスクを表示",
   "taskList.form.subGrouping": "サブグループ化",
   "taskList.groupBy.assignee": "担当者",

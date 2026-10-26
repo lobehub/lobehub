@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Trier les tâches terminées par ancienneté",
   "taskList.form.ordering": "Tri",
   "taskList.form.showArchived": "Afficher les archivés",
-  "taskList.form.showCompleted": "Afficher terminées et annulées",
   "taskList.form.showSubTasks": "Afficher les sous-tâches",
   "taskList.form.subGrouping": "Sous-regroupement",
   "taskList.groupBy.assignee": "Attribué à",

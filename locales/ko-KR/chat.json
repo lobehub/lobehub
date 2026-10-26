@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "완료된 작업을 최신순으로 정렬",
   "taskList.form.ordering": "정렬",
   "taskList.form.showArchived": "보관된 항목 보기",
-  "taskList.form.showCompleted": "완료 및 취소된 작업 표시",
   "taskList.form.showSubTasks": "하위 작업 보기",
   "taskList.form.subGrouping": "하위 그룹화",
   "taskList.groupBy.assignee": "담당자",

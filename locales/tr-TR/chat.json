@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Tamamlanan görevleri yakınlığa göre sırala",
   "taskList.form.ordering": "Sıralama",
   "taskList.form.showArchived": "Arşivlenenleri göster",
-  "taskList.form.showCompleted": "Tamamlanan ve iptal edilenleri göster",
   "taskList.form.showSubTasks": "Alt görevleri göster",
   "taskList.form.subGrouping": "Alt gruplama",
   "taskList.groupBy.assignee": "Atanan",

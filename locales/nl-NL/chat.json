@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Voltooide taken sorteren op recentheid",
   "taskList.form.ordering": "Sortering",
   "taskList.form.showArchived": "Gearchiveerde tonen",
-  "taskList.form.showCompleted": "Voltooide & geannuleerde tonen",
   "taskList.form.showSubTasks": "Toon sub-taken",
   "taskList.form.subGrouping": "Subgroepering",
   "taskList.groupBy.assignee": "Toegewezen aan",

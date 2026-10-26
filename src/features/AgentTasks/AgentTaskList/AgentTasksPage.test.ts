@@ -80,7 +80,7 @@ describe('AgentTasksPage', () => {
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
         groupBy: 'automationMode',
-        hideCompleted: false,
+        completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
@@ -101,7 +101,7 @@ describe('AgentTasksPage', () => {
         getMyTaskViewOptions({
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
           groupBy: 'priority',
-          hideCompleted: false,
+          completedTasks: 'all',
           orderBy: 'title',
           orderDirection: 'asc',
           showSubTasks: false,
@@ -109,7 +109,7 @@ describe('AgentTasksPage', () => {
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
         groupBy: 'priority',
-        hideCompleted: false,
+        completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
@@ -172,7 +172,7 @@ describe('AgentTasksPage', () => {
       expect(pinned.showSubTasks).toBe(true);
       // Not pinned: the panel keeps offering these, and they still take effect.
       expect(pinned.groupBy).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy);
-      expect(pinned.hideCompleted).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted);
+      expect(pinned.completedTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.completedTasks);
       expect(pinned.nestedSubTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks);
     });
   });

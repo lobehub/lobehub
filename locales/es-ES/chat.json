@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "Ordenar tareas completadas por antigüedad",
   "taskList.form.ordering": "Ordenación",
   "taskList.form.showArchived": "Mostrar archivados",
-  "taskList.form.showCompleted": "Mostrar completadas y canceladas",
   "taskList.form.showSubTasks": "Mostrar subtareas",
   "taskList.form.subGrouping": "Subagrupación",
   "taskList.groupBy.assignee": "Asignado a",

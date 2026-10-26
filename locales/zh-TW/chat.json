@@ -2514,7 +2514,6 @@
   "taskList.form.orderCompletedByRecency": "依最近完成排序",
   "taskList.form.ordering": "排序方式",
   "taskList.form.showArchived": "顯示已封存",
-  "taskList.form.showCompleted": "顯示已完成與已取消",
   "taskList.form.showSubTasks": "顯示子任務",
   "taskList.form.subGrouping": "次分組",
   "taskList.groupBy.assignee": "負責人",
