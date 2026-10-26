@@ -1,4 +1,4 @@
-import { type ReasoningEffortLevel, ReasoningEffortLevelSchema } from 'model-bank';
+import { type ReasoningEffortLevel, ReasoningEffortLevelSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
 import type { SearchMode } from '../search';
