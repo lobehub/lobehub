@@ -13,7 +13,10 @@ const confirmDeleteMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/DeleteTopicConfirm', () => ({ confirmRemoveTopic: confirmDeleteMock }));
 vi.mock('@/hooks/useActiveLocation', () => ({ useActiveLocation: () => locationFixture }));
 
-const scopeFixture = vi.hoisted(() => ({ enabled: false }));
+const scopeFixture = vi.hoisted(() => ({
+  enabled: false,
+  providerType: null as string | null,
+}));
 const refreshProjectMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const autoRenameMock = vi.hoisted(() => vi.fn());
@@ -22,7 +25,13 @@ const completeMock = vi.hoisted(() => vi.fn());
 const cloneMock = vi.hoisted(() => vi.fn());
 vi.mock('../../useScopedTopics', () => ({
   useScopedTopic: () =>
-    scopeFixture.enabled ? { id: 'topic-1', agentId: 'agent-other' } : undefined,
+    scopeFixture.enabled
+      ? {
+          agentHeterogeneousProviderType: scopeFixture.providerType,
+          agentId: 'agent-other',
+          id: 'topic-1',
+        }
+      : undefined,
   useScopedTopics: () => ({
     scope: scopeFixture.enabled ? { projectId: 'project-1' } : null,
     refresh: refreshProjectMock,
@@ -151,6 +160,7 @@ const getMenuItem = (
 describe('useTopicItemDropdownMenu', () => {
   beforeEach(() => {
     scopeFixture.enabled = false;
+    scopeFixture.providerType = null;
     vi.clearAllMocks();
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
@@ -402,6 +412,16 @@ describe('useTopicItemDropdownMenu', () => {
     it('resolves the row Agent rather than the active one', () => {
       scopeFixture.enabled = true;
       agentMapFixture.value = { 'agent-other': heterogeneousAgent };
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+      );
+
+      expect(result.current.canInlineArchive).toBe(true);
+    });
+
+    it('is offered for a project row whose agent config was never loaded', () => {
+      scopeFixture.enabled = true;
+      scopeFixture.providerType = 'claude-code';
       const { result } = renderHook(() =>
         useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
       );

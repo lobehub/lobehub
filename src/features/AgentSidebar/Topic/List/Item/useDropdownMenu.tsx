@@ -84,10 +84,13 @@ export const useTopicItemDropdownMenu = ({
   const { scope, refresh } = useScopedTopics();
   const fallbackAgentId = useAgentStore((s) => s.activeAgentId);
   const activeAgentId = scopedTopic?.agentId ?? fallbackAgentId;
+  // Project rows carry their agent's provider type, since a cold project visit
+  // never loads each row agent's config into the store.
   const isHeterogeneous = useAgentStore(
     (s) =>
-      !!activeAgentId &&
-      !!agentSelectors.getAgentConfigById(activeAgentId)(s)?.agencyConfig?.heterogeneousProvider,
+      !!scopedTopic?.agentHeterogeneousProviderType ||
+      (!!activeAgentId &&
+        !!agentSelectors.getAgentConfigById(activeAgentId)(s)?.agencyConfig?.heterogeneousProvider),
   );
   const addTab = useElectronStore((s) => s.addTab);
   const appOrigin = useAppOrigin();

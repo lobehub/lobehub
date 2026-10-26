@@ -1074,6 +1074,11 @@ export class ProjectModel {
           string | null
         >`${agents.agencyConfig}->>'executionTargetSelectionPolicy'`,
         agentBoundDeviceId: sql<string | null>`${agents.agencyConfig}->>'boundDeviceId'`,
+        // Lets a row act on its agent's external runtime (Claude Code / Codex)
+        // when that agent's config has never been loaded into the client store.
+        agentHeterogeneousProviderType: sql<
+          string | null
+        >`${agents.agencyConfig}->'heterogeneousProvider'->>'type'`,
         updatedAt: topics.updatedAt,
         projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
       })
