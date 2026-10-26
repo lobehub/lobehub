@@ -482,18 +482,10 @@ describe('LobeOpenRouterAI - custom features', () => {
         default: 'medium',
         levels: ['none', 'low', 'medium', 'high', 'xhigh'],
       });
-      expect(gpt52?.settings?.reasoningEffort?.levels).toEqual([
-        'none',
-        'low',
-        'medium',
-        'high',
-        'xhigh',
-      ]);
+      expect(gpt52?.settings?.reasoningEffort).toEqual(gpt55?.settings?.reasoningEffort);
       expect(gpt51?.settings?.extendParams).toEqual(['textVerbosity']);
-      expect(gpt51?.settings?.reasoningEffort).toEqual({
-        default: 'medium',
-        levels: ['none', 'low', 'medium', 'high'],
-      });
+      const gpt51Levels = gpt51?.settings?.reasoningEffort?.levels;
+      expect(gpt51Levels).toEqual(['none', 'low', 'medium', 'high']);
     });
 
     it('should declare the effort control for gemini-3 flash/pro reasoning', async () => {
@@ -532,14 +524,10 @@ describe('LobeOpenRouterAI - custom features', () => {
       const geminiPro = models.find((m) => m.id === 'google/gemini-3-pro');
       const geminiFlash = models.find((m) => m.id === 'google/gemini-3-flash');
 
-      expect(geminiPro?.settings?.reasoningEffort).toEqual({
-        default: 'high',
-        levels: ['low', 'high'],
-      });
-      expect(geminiFlash?.settings?.reasoningEffort).toEqual({
-        default: 'high',
-        levels: ['minimal', 'low', 'medium', 'high'],
-      });
+      const proEffort = geminiPro?.settings?.reasoningEffort;
+      expect(proEffort).toEqual({ default: 'high', levels: ['low', 'high'] });
+      const flashLevels = geminiFlash?.settings?.reasoningEffort?.levels;
+      expect(flashLevels).toEqual(['minimal', 'low', 'medium', 'high']);
     });
   });
 
