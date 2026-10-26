@@ -281,6 +281,23 @@ describe('useTopicItemDropdownMenu', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it('does not navigate once the user left the Project while the archive was in flight', async () => {
+    scopeFixture.enabled = true;
+    locationFixture.pathname = '/project/project-1/topic/topic-1';
+    let finishArchive!: () => void;
+    completeMock.mockReturnValueOnce(new Promise<void>((resolve) => (finishArchive = resolve)));
+    const { result, unmount } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    );
+
+    const archiving = result.current.toggleCompleted();
+    unmount();
+    finishArchive();
+    await archiving;
+
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it('copies the row Agent link even when another Agent is active', async () => {
     scopeFixture.enabled = true;
     const writeText = vi.fn();
