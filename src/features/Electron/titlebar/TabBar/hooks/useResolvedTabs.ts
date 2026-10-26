@@ -48,6 +48,7 @@ export const resolveTab = (
     t('navigation.lobehub', { ns: 'electron' });
 
   const avatar = pickMeaningful(live?.avatar) ?? pickMeaningful(tab.cached?.avatar);
+  const avatarSeed = pickMeaningful(live?.avatarSeed) ?? pickMeaningful(tab.cached?.avatarSeed);
   const backgroundColor =
     pickMeaningful(live?.backgroundColor) ?? pickMeaningful(tab.cached?.backgroundColor);
 
@@ -55,6 +56,7 @@ export const resolveTab = (
     isActive,
     meta: {
       avatar,
+      avatarSeed,
       backgroundColor,
       icon: staticMeta.icon ?? FALLBACK_ICON,
       title,

@@ -77,6 +77,11 @@ describe('guardedMergeCache', () => {
     expect(merged).toEqual({ avatar: 'a.png', title: 'New' });
   });
 
+  it('caches the seed of a generated project avatar', () => {
+    const merged = guardedMergeCache({ title: 'Fix login · Alpha' }, { avatarSeed: 'Alpha' });
+    expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Fix login · Alpha' });
+  });
+
   it('returns prev when next is undefined', () => {
     const prev = { title: 'Old' };
     expect(guardedMergeCache(prev, undefined)).toBe(prev);

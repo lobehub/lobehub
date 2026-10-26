@@ -5,7 +5,7 @@ import { useChatStore } from '@/store/chat';
 import { type ProjectDetail, useProjectStore } from '@/store/project';
 import type { ChatTopic } from '@/types/topic';
 
-import { useProjectConversationTitle } from './ProjectDynamicMeta';
+import { useProjectConversationTitle, useProjectTabAvatar } from './ProjectDynamicMeta';
 
 vi.mock('./workspaceScope', () => ({
   matchesRouteWorkspace: () => true,
@@ -55,5 +55,39 @@ describe('useProjectConversationTitle', () => {
     );
 
     expect(result.current).toBeUndefined();
+  });
+});
+
+describe('useProjectTabAvatar', () => {
+  afterEach(() => {
+    useProjectStore.setState({ projectDetailMap: {} });
+  });
+
+  it('seeds the generated avatar from the project name when there is no logo', () => {
+    seedStores();
+
+    const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
+
+    expect(result.current).toEqual({ avatar: undefined, avatarSeed: 'Alpha' });
+  });
+
+  it("passes the project's own logo through", () => {
+    useProjectStore.setState({
+      projectDetailMap: {
+        prj_1: {
+          project: { avatar: '🚀', id: 'prj_1', name: 'Alpha', workspaceId: null },
+        } as ProjectDetail,
+      },
+    });
+
+    const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
+
+    expect(result.current).toEqual({ avatar: '🚀', avatarSeed: 'Alpha' });
+  });
+
+  it('publishes no avatar before the project detail lands', () => {
+    const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
+
+    expect(result.current).toEqual({ avatar: undefined, avatarSeed: undefined });
   });
 });

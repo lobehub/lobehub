@@ -10,6 +10,11 @@ export interface StaticRouteMeta {
 
 export interface DynamicRouteMeta {
   avatar?: string;
+  /**
+   * Name a generated avatar is seeded from, for an entity that draws one when it
+   * has no image of its own (a project). Unset keeps the initials fallback.
+   */
+  avatarSeed?: string;
   backgroundColor?: string;
   title?: string;
 }
@@ -38,6 +43,7 @@ export interface RouteHandle {
 
 export interface ResolvedRouteMeta {
   avatar?: string;
+  avatarSeed?: string;
   backgroundColor?: string;
   icon?: LucideIcon;
   title: string;

@@ -46,6 +46,7 @@ export const guardedMergeCache = (
   const merged: DynamicRouteMeta = { ...prev };
   if (isMeaningful(next.title)) merged.title = next.title;
   if (isMeaningful(next.avatar)) merged.avatar = next.avatar;
+  if (isMeaningful(next.avatarSeed)) merged.avatarSeed = next.avatarSeed;
   if (isMeaningful(next.backgroundColor)) merged.backgroundColor = next.backgroundColor;
 
   return Object.keys(merged).length > 0 ? merged : undefined;

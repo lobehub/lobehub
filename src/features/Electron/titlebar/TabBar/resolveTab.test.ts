@@ -47,6 +47,21 @@ describe('resolveTab', () => {
     expect(resolved.meta.icon).toBe(MessageSquare);
   });
 
+  it('carries a project avatar seed from the snapshot and the live meta', () => {
+    const cold = resolveTab(fixtureRoutes, tab('/agent/abc', { avatarSeed: 'Alpha' }), false, t);
+    expect(cold.meta.avatarSeed).toBe('Alpha');
+
+    const live = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { avatarSeed: 'Old name' }),
+      true,
+      t,
+      { avatarSeed: 'Alpha' },
+      '/agent/abc',
+    );
+    expect(live.meta.avatarSeed).toBe('Alpha');
+  });
+
   it('active tab: live dynamic meta overlays the snapshot', () => {
     const resolved = resolveTab(
       fixtureRoutes,
