@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
+import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { magpieModelKey, params } from './index';
@@ -55,6 +56,38 @@ describe('params', () => {
 
   it('points at the gateway on the loopback port', () => {
     expect(params.baseURL).toBe('http://127.0.0.1:3425/v1');
+  });
+
+  it('names LobeHub in the User-Agent the gateway counts callers by', () => {
+    const client = params.customClient!.createClient!({ apiKey: 'placeholder-to-avoid-error' });
+
+    expect(client).toBeInstanceOf(OpenAI);
+    // The SDK keeps its headers on the client it builds.
+    expect(client['_options']?.defaultHeaders?.['User-Agent']).toMatch(/^lobehub\//);
+  });
+
+  it('keeps a header it was handed, rather than overwriting it', () => {
+    const client = params.customClient!.createClient!({
+      apiKey: 'placeholder-to-avoid-error',
+      defaultHeaders: { 'X-Trace': 'kept' },
+    });
+
+    expect(client['_options']?.defaultHeaders?.['X-Trace']).toBe('kept');
+  });
+
+  it('turns debug output on only when asked', () => {
+    delete process.env.DEBUG_MAGPIE_CHAT_COMPLETION;
+    delete process.env.DEBUG_MAGPIE_RESPONSES;
+    expect(params.debug!.chatCompletion!()).toBe(false);
+    expect(params.debug!.responses!()).toBe(false);
+
+    process.env.DEBUG_MAGPIE_CHAT_COMPLETION = '1';
+    process.env.DEBUG_MAGPIE_RESPONSES = '1';
+    expect(params.debug!.chatCompletion!()).toBe(true);
+    expect(params.debug!.responses!()).toBe(true);
+
+    delete process.env.DEBUG_MAGPIE_CHAT_COMPLETION;
+    delete process.env.DEBUG_MAGPIE_RESPONSES;
   });
 });
 
@@ -156,6 +189,14 @@ describe('the model list magpie serves', () => {
     ]);
 
     expect(cards[0].displayName).toBe('Claude Opus 5.5');
+  });
+
+  it('keeps a label that says nothing extra, having no ` · ` to cut', async () => {
+    const cards = await load([
+      model({ id: 'somelab/experimental-llm-v0', magpie_label: 'experimental-llm-v0' }),
+    ]);
+
+    expect(cards[0].displayName).toBe('experimental-llm-v0');
   });
 
   it('tells two vendors’ models of one name apart by the provider magpie puts after it', async () => {
