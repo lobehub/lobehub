@@ -4153,6 +4153,25 @@ When I am ___, I need ___
   'tools.composio.tools': 'tools',
 
   'tools.composio.verifyAuth': 'I have completed authentication',
+  'tools.connectorFeedback.askAdmin': 'Ask an admin to connect',
+  'tools.connectorFeedback.askAdminCopied':
+    'Request copied. Send it to {{name}} or a workspace owner.',
+  'tools.connectorFeedback.askAdminCopiedNoCreator':
+    'Request copied. Send it to a workspace owner.',
+  'tools.connectorFeedback.askAdminMessage':
+    'Could you connect {{name}} for our LobeHub workspace? {{url}}',
+  'tools.connectorFeedback.connectFailed': 'Connection failed: {{reason}}',
+  'tools.connectorFeedback.createdBy': 'Created by {{name}}',
+  'tools.connectorFeedback.manageOnly': 'Only the creator or a workspace owner can change this',
+  'tools.connectorFeedback.reason.authIncomplete':
+    'the authorization window closed before access to {{name}} was granted',
+  'tools.connectorFeedback.reason.forbidden':
+    'only the creator or a workspace owner can change this connector',
+  'tools.connectorFeedback.reason.network': 'the network connection was interrupted',
+  'tools.connectorFeedback.reason.unknown': 'something went wrong',
+  'tools.connectorFeedback.removeFailed':
+    'Remove failed: {{reason}}. The connector is still here, so you can try again.',
+  'tools.connectorFeedback.removeFailedFinal': 'Remove failed: {{reason}}',
 
   'tools.lobehubSkill.authorize': 'Authorize',
 

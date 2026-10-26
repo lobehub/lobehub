@@ -10,7 +10,9 @@ import { ConnectorSourceType } from '@/database/schemas';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 
+import ConnectorActionErrorText from '../ConnectorActionErrorText';
 import CustomConnectorModal from '../CustomConnectorModal';
 import { getLocalizedConnectorDetail } from './localization';
 import ToolPermissionGroup from './ToolPermissionGroup';
@@ -114,6 +116,21 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       [t],
     );
 
+    // A failed uninstall / delete / disconnect also stays in the panel: the toast
+    // is gone long before the user looks back. Keyed by connector so switching
+    // to another one never shows a stale reason.
+    const [removeError, setRemoveError] = useState<{
+      connectorId: string;
+      error: ConnectorActionError;
+    }>();
+    const notifyRemoveError = useCallback(
+      (error: unknown) => {
+        notifyActionError(error);
+        setRemoveError({ connectorId, error: toConnectorActionError('remove', error) });
+      },
+      [connectorId, notifyActionError],
+    );
+
     // Custom connector sync hits the remote MCP server with stored credentials
     // and rewrites tool rows — creator/owner only (enforced server-side too).
     // Builtin/marketplace bootstrap syncs are no-ops for non-managers.
@@ -147,6 +164,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         content: deleteConfirmContent,
         okButtonProps: { danger: true },
         onOk: async () => {
+          setRemoveError(undefined);
           try {
             if (isBuiltin) {
               await uninstallBuiltinTool(connector.identifier);
@@ -156,7 +174,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             await deleteConnector(connectorId);
             onDelete?.();
           } catch (error) {
-            notifyActionError(error);
+            notifyRemoveError(error);
           }
         },
         title: t('connector.uninstallConfirm', 'Uninstall this tool?'),
@@ -280,10 +298,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                         disabled={!canManage}
                         size="small"
                         onClick={async () => {
+                          setRemoveError(undefined);
                           try {
                             await disconnectConnector(connectorId);
                           } catch (error) {
-                            notifyActionError(error);
+                            notifyRemoveError(error);
                           }
                         }}
                       >
@@ -301,11 +320,12 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                             content: deleteConfirmContent,
                             okButtonProps: { danger: true },
                             onOk: async () => {
+                              setRemoveError(undefined);
                               try {
                                 await deleteConnector(connectorId);
                                 onDelete?.();
                               } catch (error) {
-                                notifyActionError(error);
+                                notifyRemoveError(error);
                               }
                             },
                             title: t('connector.deleteConfirm', 'Delete this connector?'),
@@ -346,6 +366,12 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             padding: 16,
           }}
         >
+          {removeError?.connectorId === connectorId && (
+            <div style={{ marginBottom: 12 }}>
+              <ConnectorActionErrorText error={removeError.error} name={connectorName} />
+            </div>
+          )}
+
           {/* Description */}
           {connectorDescription && (
             <div

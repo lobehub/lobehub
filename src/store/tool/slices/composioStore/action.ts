@@ -11,6 +11,7 @@ import {
 } from '@/libs/replica';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
+import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -209,6 +210,7 @@ export class ComposioStoreActionImpl {
     this.#set(
       produce((draft: ComposioStoreState) => {
         draft.loadingComposioServerIds.add(identifier);
+        delete draft.composioServerErrors[identifier];
       }),
       false,
       n('createComposioConnection/start'),
@@ -279,6 +281,12 @@ export class ComposioStoreActionImpl {
       this.#set(
         produce((draft: ComposioStoreState) => {
           draft.loadingComposioServerIds.delete(identifier);
+          // Kept on the row, so the failure stays visible after any toast is gone.
+          if (cacheScope.get() === scope)
+            draft.composioServerErrors[identifier] = {
+              ...toConnectorActionError('connect', error),
+              scope,
+            };
         }),
         false,
         n('createComposioConnection/error'),
@@ -368,6 +376,7 @@ export class ComposioStoreActionImpl {
       this.#markLocalWrite(scope);
 
       clearLoading('refreshComposioConnectionStatus/success');
+      this.setComposioServerError(identifier, undefined);
 
       try {
         await lambdaClient.composio.updateComposioPlugin.mutate({
@@ -426,6 +435,13 @@ export class ComposioStoreActionImpl {
       });
     } catch (error) {
       console.error('[Composio] Failed to clean up stale connection:', error);
+      // A permission rejection here means minting a new link is rejected too:
+      // stop and keep the reason on the row instead of failing twice silently.
+      const actionError = toConnectorActionError('connect', error);
+      if (actionError.code === 'FORBIDDEN') {
+        if (cacheScope.get() === scope) this.setComposioServerError(identifier, actionError);
+        return undefined;
+      }
     }
 
     // Identity switched during the cleanup: minting now would create (and
@@ -444,13 +460,14 @@ export class ComposioStoreActionImpl {
   removeComposioConnection = async (identifier: string): Promise<void> => {
     const { composioServers } = this.#get();
     const server = composioServers.find((s) => s.identifier === identifier);
+    const scope = cacheScope.get();
 
-    // Drop the row locally first — the server delete stays best-effort, so a
-    // failure never resurrects the row the user just deleted. Recording the
+    // Drop the row locally first so the delete shows at once. Recording the
     // removal also cancels a pending add of the same identifier: the row was
     // created but never echoed, so leaving it in `added` would re-append it the
     // moment a response clears `removed`, resurrecting the deleted row for the
     // rest of the session.
+    this.setComposioServerError(identifier, undefined);
     this.#localIntent().added.delete(identifier);
     this.#localIntent().removed.add(identifier);
     this.#servers.remove(identifier);
@@ -464,8 +481,33 @@ export class ComposioStoreActionImpl {
         });
       } catch (error) {
         console.error('[Composio] Failed to delete connection:', error);
+        // The server already tolerates a missing remote account, so a rejected
+        // call (permission, network) means the connection still exists. Put the
+        // row back with the reason, so the user sees it failed and can retry.
+        if (cacheScope.get() !== scope) return;
+        this.#localIntent().removed.delete(identifier);
+        this.#connections.update(COMPOSIO_SERVERS_KEY, (servers) => {
+          const list = servers ?? [];
+          return list.some((s) => s.identifier === identifier) ? list : [...list, server];
+        });
+        this.#markLocalWrite();
+        this.setComposioServerError(identifier, toConnectorActionError('remove', error));
       }
     }
+  };
+
+  /** Record (or clear, with `undefined`) the last failed write of a connection row. */
+  setComposioServerError = (identifier: string, error: ConnectorActionError | undefined): void => {
+    if (!error && !this.#get().composioServerErrors[identifier]) return;
+
+    this.#set(
+      produce((draft: ComposioStoreState) => {
+        if (error) draft.composioServerErrors[identifier] = { ...error, scope: cacheScope.get() };
+        else delete draft.composioServerErrors[identifier];
+      }),
+      false,
+      n('setComposioServerError'),
+    );
   };
 
   /**
