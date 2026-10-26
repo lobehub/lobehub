@@ -26,7 +26,7 @@
   },
   "peerDependencies": {
     "@lobehub/editor": "^6.0.0",
-    "@lobehub/ui": "^6.0.4",
+    "@lobehub/ui": "^6.9.0",
     "lucide-react": "*",
     "react": "*"
   }
