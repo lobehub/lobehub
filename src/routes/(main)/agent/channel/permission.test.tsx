@@ -85,7 +85,12 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       // The channel form names quick-created bot apps after the agent.
-      agentMap: {},
+      agentMap: {
+        // A name (who the agent is) and a title (the role it plays) that differ.
+        'agent-id': { name: 'Shadow Arvin', title: 'Simulated teammate' },
+      },
+      // The agent meta selector looks up the built-in agents for a default avatar.
+      builtinAgentIdMap: {},
       connectBot: vi.fn(),
       createBotProvider: vi.fn(),
       deleteAllBotProviders: vi.fn(),
@@ -311,6 +316,18 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('button', { name: 'channel.testConnection' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.discard' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.save' })).toBeDisabled();
+  });
+
+  it("speaks as the agent's name, not its role title", async () => {
+    render(
+      <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
+    );
+
+    // The test window is narrow, so the preview opens from its button.
+    fireEvent.click(await screen.findByRole('button', { name: 'channel.quickView.open' }));
+    // The quick view's bot speaks under the name.
+    await waitFor(() => expect(screen.getAllByText('Shadow Arvin').length).toBeGreaterThan(0));
+    expect(screen.queryByText('Simulated teammate')).not.toBeInTheDocument();
   });
 
   it('discards form edits and restores the persisted configuration', async () => {

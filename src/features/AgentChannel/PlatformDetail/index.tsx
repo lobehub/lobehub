@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import {
   ActionIcon,
   Alert,
@@ -185,7 +186,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
   ({ platformDef, agentId, currentConfig, disabled }) => {
     const { t } = useTranslation('agent');
     const navigate = useWorkspaceAwareNavigate();
-    const agentName = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+    // The name the agent is addressed by; its title is the role, used only when it has no name.
+    const agentName = useAgentStore((s) =>
+      agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
+    );
     const agentAvatar = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).avatar);
     const agentBackground = useAgentStore(
       (s) => agentSelectors.getAgentMetaById(agentId)(s).backgroundColor,
