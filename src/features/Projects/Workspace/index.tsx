@@ -18,6 +18,7 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow: auto;
     width: 100%;
+    height: 100%;
   `,
   heading: css`
     text-align: center;
@@ -30,12 +31,13 @@ const styles = createStaticStyles(({ css }) => ({
   page: css`
     box-sizing: border-box;
     width: min(1060px, calc(100% - 64px));
+    min-height: 100%;
     margin-inline: auto;
-    padding-block: 42px 72px;
+    padding-block: 48px;
 
     @media (width <= 720px) {
       width: calc(100% - 40px);
-      padding-block: 32px 48px;
+      padding-block: 32px;
     }
   `,
   shell: css`
@@ -60,7 +62,7 @@ const ProjectWorkspace = memo(() => {
   return (
     <Flexbox className={styles.shell} flex={1}>
       <div className={styles.content}>
-        <Flexbox className={styles.page} gap={0}>
+        <Flexbox className={styles.page} gap={0} justify={'center'}>
           <Flexbox className={styles.intro} gap={18}>
             <Flexbox align={'center'} className={styles.heading} gap={5}>
               <Text fontSize={26} weight={650}>
