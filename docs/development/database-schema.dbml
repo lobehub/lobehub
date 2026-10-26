@@ -5112,6 +5112,8 @@ table workspace_members {
   workspace_id text [not null]
   user_id text [not null]
   role text [not null, default: 'member']
+  job_title text
+  responsibilities text
   joined_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
   deleted_at "timestamp with time zone"
