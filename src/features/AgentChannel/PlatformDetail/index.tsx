@@ -258,6 +258,16 @@ const PlatformDetail = memo<PlatformDetailProps>(
     );
     const connectResult = connectNotice ?? (runtimeHidden ? undefined : runtimeResult);
 
+    // Failures from an explicit save, connect or test render in the alerts at the
+    // top of the page; bring them into view, since the sticky Save button may have
+    // been clicked from a section far below. Live runtime updates do not scroll.
+    const alertsRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      if ([saveResult, connectNotice, testResult].some((result) => result?.type === 'error')) {
+        alertsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, [saveResult, connectNotice, testResult]);
+
     const connectCurrentBot = useCallback(
       async (applicationId: string) => {
         setConnecting(true);
@@ -593,6 +603,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
               form={form}
               hasConfig={!!currentConfig}
               platformDef={platformDef}
+              ref={alertsRef}
               saveResult={saveResult}
               testResult={testResult}
             />

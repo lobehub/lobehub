@@ -4,7 +4,7 @@ import { Alert, Button, Flexbox } from '@lobehub/ui';
 import { type FormInstance, useWatch } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, type Ref, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
@@ -51,6 +51,7 @@ interface StatusAlertsProps {
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
   platformDef: SerializedPlatformDefinition;
+  ref?: Ref<HTMLDivElement>;
   saveResult?: TestResult;
   testResult?: TestResult;
 }
@@ -61,7 +62,7 @@ interface StatusAlertsProps {
  * Success of a plain save is a toast, not a banner.
  */
 const StatusAlerts = memo<StatusAlertsProps>(
-  ({ connectResult, currentConfig, form, hasConfig, platformDef, saveResult, testResult }) => {
+  ({ connectResult, currentConfig, form, hasConfig, platformDef, ref, saveResult, testResult }) => {
     const { t } = useTranslation('agent');
     const platformId = platformDef.id;
 
@@ -111,7 +112,7 @@ const StatusAlerts = memo<StatusAlertsProps>(
       return null;
 
     return (
-      <Flexbox gap={12} style={{ width: '100%' }}>
+      <Flexbox gap={12} ref={ref} style={{ width: '100%' }}>
         {showSaveError && (
           <Alert
             closable
