@@ -35,7 +35,7 @@ import {
   DisabledConnect,
   useConnectorRowDescription,
 } from './ConnectorRowFeedback';
-import { useConnectorManageGate } from './connectorRowState';
+import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
@@ -371,6 +371,15 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       error: actionError,
       name: serverType.label,
     });
+
+    // A connection that became active (also through a later list revalidation,
+    // e.g. after a slow OAuth) settles any earlier connect failure. A failed
+    // remove leaves the row active on purpose, so its reason stays.
+    const hasStaleConnectError = isSettledByConnection(isConnected, actionError);
+    useEffect(() => {
+      if (hasStaleConnectError) setServerError(serverType.identifier, undefined);
+    }, [hasStaleConnectError, serverType.identifier, setServerError]);
+
     const isPending = server?.status === ComposioServerStatus.PENDING_AUTH;
     const isError = server?.status === ComposioServerStatus.ERROR;
 

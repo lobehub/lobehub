@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useConnectorManageGate } from './connectorRowState';
+import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
 
 const mocks = vi.hoisted(() => ({
   connectors: [] as Array<{
@@ -50,5 +50,19 @@ describe('useConnectorManageGate', () => {
 
   it('keeps the normal flow when nobody has connected it yet', () => {
     expect(gate()).toEqual({ canManage: true, creatorName: undefined });
+  });
+});
+
+describe('isSettledByConnection', () => {
+  it('clears a connect failure once the connection is active', () => {
+    expect(isSettledByConnection(true, { action: 'connect', code: 'AUTH_INCOMPLETE' })).toBe(true);
+  });
+
+  it('keeps a failed remove on an active row', () => {
+    expect(isSettledByConnection(true, { action: 'remove', code: 'NETWORK' })).toBe(false);
+  });
+
+  it('keeps any failure while not connected', () => {
+    expect(isSettledByConnection(false, { action: 'connect', code: 'FORBIDDEN' })).toBe(false);
   });
 });

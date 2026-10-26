@@ -1,6 +1,17 @@
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { type ConnectorActionError } from '@/utils/connectorActionError';
+
+/**
+ * Whether a row's stored failure is settled by the connection being active: an
+ * earlier connect failure is (e.g. a slow OAuth that later succeeded), but a
+ * failed remove leaves the row active on purpose, so its reason must stay.
+ */
+export const isSettledByConnection = (
+  isConnected: boolean,
+  error: ConnectorActionError | undefined,
+): boolean => isConnected && error?.action === 'connect';
 
 /**
  * Row-level manage gate of a workspace-shared connection, mirroring the server's

@@ -27,6 +27,7 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 import { toConnectorActionError } from '@/utils/connectorActionError';
 
 import { useConnectorRowDescription } from './ConnectorRowFeedback';
+import { isSettledByConnection } from './connectorRowState';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
@@ -306,9 +307,12 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
     const description = useConnectorRowDescription({ error: actionError, name: provider.label });
 
+    // Becoming connected settles an earlier connect failure; a failed disconnect
+    // leaves the row connected on purpose, so its reason stays.
+    const hasStaleConnectError = isSettledByConnection(isConnected, actionError);
     useEffect(() => {
-      if (isConnected) setActionError(provider.id, undefined);
-    }, [isConnected, provider.id, setActionError]);
+      if (hasStaleConnectError) setActionError(provider.id, undefined);
+    }, [hasStaleConnectError, provider.id, setActionError]);
 
     // Compact connect/status control for the left-list (NavItem) row. Mirrors the
     // ChatInput skills dropdown UX: connected → green check; otherwise a Connect
