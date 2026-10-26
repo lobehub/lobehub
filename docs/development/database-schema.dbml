@@ -2490,6 +2490,31 @@ table linear_connections {
   }
 }
 
+table linear_sync_rules {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  connection_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  team_id varchar(255) [not null]
+  team_name varchar(255) [not null]
+  linear_project_id varchar(255)
+  linear_project_name varchar(255)
+  state_types jsonb [not null]
+  last_run_at "timestamp with time zone"
+  last_result jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    project_id [name: 'linear_sync_rules_project_id_idx']
+    connection_id [name: 'linear_sync_rules_connection_id_idx']
+    user_id [name: 'linear_sync_rules_user_id_idx']
+    workspace_id [name: 'linear_sync_rules_workspace_id_idx']
+  }
+}
+
 table llm_generation_tracing {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   scenario text [not null]
@@ -3305,8 +3330,8 @@ table project_sites {
   indexes {
     project_id [name: 'project_sites_project_id_idx']
     workspace_id [name: 'project_sites_workspace_id_idx']
-
-
+    
+    
   }
 }
 
@@ -4160,6 +4185,33 @@ table tasks {
     (project_id, status) [name: 'tasks_project_id_status_idx']
     (workspace_id, visibility, created_by_user_id) [name: 'tasks_workspace_visibility_idx']
     (workspace_id, identifier) [name: 'tasks_identifier_workspace_id_unique', unique]
+  }
+}
+
+table task_external_links {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  external_id varchar(255) [not null]
+  external_identifier varchar(255) [not null]
+  external_url text [not null]
+  external_container_id varchar(255)
+  external_updated_at "timestamp with time zone"
+  synced_hash text [not null]
+  last_synced_at "timestamp with time zone" [not null, default: `now()`]
+  metadata jsonb [not null, default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'task_external_links_task_id_unique', unique]
+    (user_id, provider, external_id) [name: 'task_external_links_personal_unique', unique]
+    (workspace_id, provider, external_id) [name: 'task_external_links_workspace_unique', unique]
+    (provider, external_container_id) [name: 'task_external_links_container_idx']
+    user_id [name: 'task_external_links_user_id_idx']
   }
 }
 
