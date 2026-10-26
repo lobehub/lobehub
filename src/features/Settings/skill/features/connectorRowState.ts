@@ -1,4 +1,4 @@
-import { useResourceManageable } from '@/hooks/useResourceManageable';
+import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type ConnectorActionError } from '@/utils/connectorActionError';
@@ -15,18 +15,14 @@ export const isSettledByConnection = (
 
 /**
  * Row-level manage gate of a workspace-shared connection, mirroring the server's
- * `assertComposioRowManageable`: only its creator or a workspace owner may
- * (re)connect or remove it. Everyone else gets the creator's name, so the row can
- * say whom to ask instead of offering a button that fails with a 403.
+ * `assertComposioRowManageable`: members co-maintain shared connectors unless a
+ * workspace owner or admin restricted it, in which case the row stays visible
+ * with a disabled Connect and an "Ask an admin" entry instead of a button that
+ * fails with a 403.
  */
-export const useConnectorManageGate = (
-  identifier: string,
-): { canManage: boolean; creatorName?: string } => {
+export const useConnectorManageGate = (identifier: string): { canManage: boolean } => {
   const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
-  const canManage = useResourceManageable(connector?.userId);
+  const { canManage } = useConnectorManageable(connector);
 
-  return {
-    canManage,
-    creatorName: canManage ? undefined : (connector?.authorizedByName ?? undefined),
-  };
+  return { canManage };
 };

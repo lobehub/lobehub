@@ -25,6 +25,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { refreshConnectorManagePolicy } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
@@ -33,7 +34,7 @@ import { ComposioServerStatus, composioStoreSelectors } from '@/store/tool/slice
 import {
   AskAdminButton,
   DisabledConnect,
-  useConnectorRowDescription,
+  renderConnectorRowDescription,
 } from './ConnectorRowFeedback';
 import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
 import { styles } from './style';
@@ -70,7 +71,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const actionError = useToolStore(composioStoreSelectors.getServerError(serverType.identifier));
 
     // Without the row-level gate a member's click hits a 403 and looks dead.
-    const { canManage, creatorName } = useConnectorManageGate(serverType.identifier);
+    const { canManage } = useConnectorManageGate(serverType.identifier);
 
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
@@ -284,7 +285,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         return (
           <Flexbox horizontal align="center" gap={8}>
             <DisabledConnect size="middle" />
-            <AskAdminButton creatorName={creatorName} name={serverType.label} variant="primary" />
+            <AskAdminButton name={serverType.label} variant="primary" />
           </Flexbox>
         );
       }
@@ -365,9 +366,8 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     };
 
     const isConnected = server?.status === ComposioServerStatus.ACTIVE;
-    const description = useConnectorRowDescription({
+    const description = renderConnectorRowDescription({
       askAdmin: !canManage && !isConnected,
-      creatorName,
       error: actionError,
       name: serverType.label,
     });
@@ -375,6 +375,13 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // A connection that became active (also through a later list revalidation,
     // e.g. after a slow OAuth) settles any earlier connect failure. A failed
     // remove leaves the row active on purpose, so its reason stays.
+    // A 403 means the cached policy is stale (an admin restricted connectors
+    // after this page loaded): refetch it so the row switches to the gated state.
+    const isForbidden = actionError?.code === 'FORBIDDEN';
+    useEffect(() => {
+      if (isForbidden) void refreshConnectorManagePolicy();
+    }, [isForbidden]);
+
     const hasStaleConnectError = isSettledByConnection(isConnected, actionError);
     useEffect(() => {
       if (hasStaleConnectError) setServerError(serverType.identifier, undefined);

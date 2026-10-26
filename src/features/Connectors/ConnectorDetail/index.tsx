@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
-import { useResourceManageable } from '@/hooks/useResourceManageable';
+import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
@@ -77,15 +77,20 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
 
-    // Only the creator or a workspace owner may manage this connector — the
-    // server enforces the same rule, this keeps the UI honest about it.
-    const canManage = useResourceManageable(connector?.userId);
-    const manageTooltip = canManage
-      ? undefined
-      : t(
-          'connector.manageOnlyCreator',
-          'Only the creator or a workspace owner can manage this connector',
-        );
+    // Members co-maintain shared connectors unless the workspace restricted it;
+    // editing the stored credentials stays with the creator or a workspace
+    // owner. The server enforces both, this keeps the UI honest about it.
+    const { canManage, canManageCredentials, restrictedByPolicy } =
+      useConnectorManageable(connector);
+    const creatorOnlyTooltip = t(
+      'connector.manageOnlyCreator',
+      'Only the creator or a workspace owner can manage this connector',
+    );
+    const deniedTooltip = restrictedByPolicy
+      ? ts('tools.connectorFeedback.manageOnly')
+      : creatorOnlyTooltip;
+    const manageTooltip = canManage ? undefined : deniedTooltip;
+    const credentialsTooltip = canManageCredentials ? undefined : deniedTooltip;
 
     // Deleting/uninstalling revokes the user's authorization; spell out the
     // consequence. For an agent-owned connector it ALSO unpins the tool from
@@ -106,14 +111,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
         toast.error(
           httpStatus === 403
-            ? t(
-                'connector.manageOnlyCreator',
-                'Only the creator or a workspace owner can manage this connector',
-              )
+            ? deniedTooltip
             : t('connector.actionFailed', 'Operation failed, please try again'),
         );
       },
-      [t],
+      [deniedTooltip, t],
     );
 
     // A failed uninstall / delete / disconnect also stays in the panel: the toast
@@ -131,10 +133,10 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       [connectorId, notifyActionError],
     );
 
-    // Custom connector sync hits the remote MCP server with stored credentials
-    // and rewrites tool rows — creator/owner only (enforced server-side too).
-    // Builtin/marketplace bootstrap syncs are no-ops for non-managers.
-    const canSync = canManage || connector?.sourceType !== ConnectorSourceType.custom;
+    // Custom connector sync uses the stored credentials (on desktop it reads them
+    // through the creator/owner-only edit read), so it follows the credentials
+    // gate. Builtin/marketplace bootstrap syncs are no-ops for non-managers.
+    const canSync = canManageCredentials || connector?.sourceType !== ConnectorSourceType.custom;
 
     const handleSync = useCallback(async () => {
       if (!connector) return;
@@ -261,7 +263,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               </Button>
             </ManageTooltip>
             {/* Sync/Refresh: re-sync tool list from manifest */}
-            <ManageTooltip title={canSync ? undefined : manageTooltip}>
+            <ManageTooltip title={canSync ? undefined : credentialsTooltip}>
               <Button
                 disabled={!canSync}
                 icon={<RefreshCwIcon size={14} />}
@@ -274,9 +276,9 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             </ManageTooltip>
             {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
             {isMcpConnector && connector?.mcpConnectionType === 'http' && (
-              <ManageTooltip title={manageTooltip}>
+              <ManageTooltip title={credentialsTooltip}>
                 <Button
-                  disabled={!canManage}
+                  disabled={!canManageCredentials}
                   icon={<PencilIcon size={14} />}
                   size="small"
                   onClick={() => setCustomModalOpen(true)}
@@ -339,10 +341,10 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 )}
                 {/* Uninstall for builtin and marketplace tools */}
                 {(isBuiltin || isMarketplace) && (
-                  <ManageTooltip title={manageTooltip}>
+                  <ManageTooltip title={credentialsTooltip}>
                     <Button
                       danger
-                      disabled={!canManage}
+                      disabled={!canManageCredentials}
                       icon={<Trash2 size={14} />}
                       size="small"
                       onClick={handleUninstall}

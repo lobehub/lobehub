@@ -26,7 +26,7 @@ import { type LobehubSkillServer } from '@/store/tool/slices/lobehubSkillStore/t
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { toConnectorActionError } from '@/utils/connectorActionError';
 
-import { useConnectorRowDescription } from './ConnectorRowFeedback';
+import { renderConnectorRowDescription } from './ConnectorRowFeedback';
 import { isSettledByConnection } from './connectorRowState';
 import { styles } from './style';
 
@@ -305,7 +305,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     };
 
     const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
-    const description = useConnectorRowDescription({ error: actionError, name: provider.label });
+    const description = renderConnectorRowDescription({ error: actionError, name: provider.label });
 
     // Becoming connected settles an earlier connect failure; a failed disconnect
     // leaves the row connected on purpose, so its reason stays.

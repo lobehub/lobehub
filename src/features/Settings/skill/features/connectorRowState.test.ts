@@ -4,12 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
 
 const mocks = vi.hoisted(() => ({
-  connectors: [] as Array<{
-    authorizedByName?: string | null;
-    identifier: string;
-    userId?: string;
-  }>,
-  isOwner: false,
+  connectors: [] as Array<{ identifier: string; userId?: string }>,
+  policy: undefined as
+    { canEditPolicy: boolean; canManage: boolean; memberManage: string } | undefined,
 }));
 
 vi.mock('@/store/tool', () => ({
@@ -17,39 +14,41 @@ vi.mock('@/store/tool', () => ({
     selector({ connectors: mocks.connectors }),
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: <T>(selector: (state: { user: { id: string } }) => T): T =>
-    selector({ user: { id: 'me' } }),
+vi.mock('@/libs/swr', () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: () => ({ data: mocks.policy }),
 }));
 
-vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
-  useIsWorkspaceOwner: () => mocks.isOwner,
+vi.mock('@/hooks/useResourceManageable', () => ({
+  useResourceManageable: (userId?: string | null) => !userId || userId === 'me',
 }));
 
 describe('useConnectorManageGate', () => {
   beforeEach(() => {
     mocks.connectors = [];
-    mocks.isOwner = false;
+    mocks.policy = undefined;
   });
 
   const gate = () => renderHook(() => useConnectorManageGate('gmail')).result.current;
 
-  it('gates a member out of a connection another member created, naming the creator', () => {
-    mocks.connectors = [{ authorizedByName: 'Arvin', identifier: 'gmail', userId: 'arvin' }];
-    expect(gate()).toEqual({ canManage: false, creatorName: 'Arvin' });
+  it('lets a member co-maintain a connection another member created by default', () => {
+    mocks.connectors = [{ identifier: 'gmail', userId: 'arvin' }];
+    mocks.policy = { canEditPolicy: false, canManage: true, memberManage: 'all_members' };
+    expect(gate()).toEqual({ canManage: true });
   });
 
-  it('lets the creator and a workspace owner manage it', () => {
-    mocks.connectors = [{ authorizedByName: 'Me', identifier: 'gmail', userId: 'me' }];
-    expect(gate()).toEqual({ canManage: true, creatorName: undefined });
+  it('gates a member out once admins restricted connector management', () => {
+    mocks.connectors = [{ identifier: 'gmail', userId: 'me' }];
+    mocks.policy = { canEditPolicy: false, canManage: false, memberManage: 'admins_only' };
+    expect(gate()).toEqual({ canManage: false });
 
-    mocks.connectors = [{ authorizedByName: 'Arvin', identifier: 'gmail', userId: 'arvin' }];
-    mocks.isOwner = true;
-    expect(gate()).toEqual({ canManage: true, creatorName: undefined });
+    // Not connected yet: Connect is gated too, the row itself stays.
+    mocks.connectors = [];
+    expect(gate()).toEqual({ canManage: false });
   });
 
-  it('keeps the normal flow when nobody has connected it yet', () => {
-    expect(gate()).toEqual({ canManage: true, creatorName: undefined });
+  it('keeps the normal flow while the policy is still loading', () => {
+    expect(gate()).toEqual({ canManage: true });
   });
 });
 

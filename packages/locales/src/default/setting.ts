@@ -4155,23 +4155,29 @@ When I am ___, I need ___
   'tools.composio.verifyAuth': 'I have completed authentication',
   'tools.connectorFeedback.askAdmin': 'Ask an admin to connect',
   'tools.connectorFeedback.askAdminCopied':
-    'Request copied. Send it to {{name}} or a workspace owner.',
-  'tools.connectorFeedback.askAdminCopiedNoCreator':
-    'Request copied. Send it to a workspace owner.',
+    'Request copied. Send it to a workspace owner or admin.',
   'tools.connectorFeedback.askAdminMessage':
     'Could you connect {{name}} for our LobeHub workspace? {{url}}',
   'tools.connectorFeedback.connectFailed': 'Connection failed: {{reason}}',
-  'tools.connectorFeedback.createdBy': 'Created by {{name}}',
-  'tools.connectorFeedback.manageOnly': 'Only the creator or a workspace owner can change this',
+  'tools.connectorFeedback.manageOnly': 'Only workspace owners and admins can change connectors',
   'tools.connectorFeedback.reason.authIncomplete':
     'the authorization window closed before access to {{name}} was granted',
   'tools.connectorFeedback.reason.forbidden':
-    'only the creator or a workspace owner can change this connector',
+    'only workspace owners and admins can change connectors here',
   'tools.connectorFeedback.reason.network': 'the network connection was interrupted',
   'tools.connectorFeedback.reason.unknown': 'something went wrong',
   'tools.connectorFeedback.removeFailed':
     'Remove failed: {{reason}}. The connector is still here, so you can try again.',
   'tools.connectorFeedback.removeFailedFinal': 'Remove failed: {{reason}}',
+  'tools.connectorFeedback.restricted':
+    'Connectors in this workspace are managed by its owners and admins.',
+  'tools.connectorPolicy.desc':
+    'Choose who can connect, re-authorize and remove the connectors shared in this workspace.',
+  'tools.connectorPolicy.options.allMembers': 'All members',
+  'tools.connectorPolicy.options.onlyAdmins': 'Owners and admins',
+  'tools.connectorPolicy.title': 'Who can manage connectors',
+  'tools.connectorPolicy.updateFailed':
+    "Couldn't update who can manage connectors. Please try again.",
 
   'tools.lobehubSkill.authorize': 'Authorize',
 
