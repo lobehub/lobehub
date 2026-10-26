@@ -43,7 +43,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
 
   // Try Bearer token authentication - check format first to determine type
   if (bearerToken) {
-    log('Bearer token received: %s...', bearerToken.slice(0, 10));
+    log('Bearer token received: present');
 
     // Check if bearerToken matches API Key format (prefix + 16 alphanumeric chars)
     const isApiKeyFormat = validateApiKeyFormat(bearerToken);
