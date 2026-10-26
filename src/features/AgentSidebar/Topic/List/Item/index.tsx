@@ -591,7 +591,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
         <NavItem
           draggable
-          actions={() => <Actions fav={fav} id={id} status={status} title={title} />}
           active={isTopicActive}
           description={workingDirectoryNode}
           href={href}
@@ -599,6 +598,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
           slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
+          actions={() => (
+            <Actions showInlineArchive fav={fav} id={id} status={status} title={title} />
+          )}
           extra={
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
