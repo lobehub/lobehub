@@ -599,7 +599,14 @@ const TopicItemRow = memo<TopicItemRowProps>(
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           actions={() => (
-            <Actions showInlineArchive fav={fav} id={id} status={status} title={title} />
+            <Actions
+              fav={fav}
+              id={id}
+              // Archiving a topic mid-run would hide work that is still going.
+              showInlineArchive={!shouldShowRunningIcon}
+              status={status}
+              title={title}
+            />
           )}
           extra={
             <>
