@@ -58,15 +58,11 @@ export async function loadOrCreateState(
   allowMissingRunningOperation = false,
 ): Promise<OperationState> {
   let state = operationStates.get(operationId);
-  if (state) {
-    // Defensive: caller mismatch on topicId would corrupt persistence —
-    // assert and throw rather than silently writing to the wrong topic.
-    if (state.topicId !== topicId) {
-      throw new Error(
-        `Operation ${operationId} is already bound to topic ${state.topicId}, not ${topicId}`,
-      );
-    }
-    return state;
+  // A cached state must never be reused for another topic.
+  if (state && state.topicId !== topicId) {
+    throw new Error(
+      `Operation ${operationId} is already bound to topic ${state.topicId}, not ${topicId}`,
+    );
   }
 
   const topic = await deps.topicModel.findById(topicId);
@@ -106,6 +102,11 @@ export async function loadOrCreateState(
       );
     }
   }
+
+  // Cached accumulators do not grant write ownership. A steer can replace the
+  // topic's operation without advancing this producer's step index, so every
+  // batch must pass the same ownership/liveness check as a cold replica.
+  if (state) return state;
 
   // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
   // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
@@ -398,17 +399,13 @@ export async function refreshMainStateFromDb(
   if (snapshot.model) state.main.turnModel = snapshot.model;
   if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
-  // Recover the chain spine from the DB. The next normal
-  // turn parents off the run's latest main-thread message that is neither a
-  // tool nor a TOOLLESS signal callback (a tools-bearing signal turn is
-  // main-chain — see `getLatestSpineMessageId`); reading it straight
-  // from the DB (independent of
-  // `currentAssistantId`, which can regress to the seed placeholder on a cold
-  // / non-sticky replica — see the multi-replica caveat on the class) keeps
-  // consecutive cold-replica steps chained linearly instead of forking onto a
-  // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
-  // maintained in-memory across the run's tool batches.
+  // Recover only THIS operation's spine. A late write from the interrupted
+  // producer can be newer than the steered run's seed; using the topic-wide
+  // latest row would attach the new reply to the old branch. Reading stamped
+  // steps still recovers progress on cold replicas whose pointer is stale.
+  // Before the first stamped step, keep the run's seeded/current spine.
   const spineId = await deps.messageModel.getLatestSpineMessageId({
+    operationId: state.operationId,
     threadId: state.threadId ?? null,
     topicId: state.topicId,
   });

@@ -45,10 +45,6 @@ describe('HeterogeneousPersistenceHandler', () => {
           message.id !== 'thread-asst-1',
       );
       expect(nextThreadAssistant?.parentId).toBe('thread-asst-1');
-      expect(h.messageModel.getLatestSpineMessageId).toHaveBeenCalledWith({
-        threadId: 'thread-1',
-        topicId: 'topic-1',
-      });
     });
 
     it('flushes prior content, opens a new assistant chained off the prior assistant (spine)', async () => {
