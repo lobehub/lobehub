@@ -18,7 +18,11 @@ import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { getFalInputSchema, listFalGenerationModels } from './catalog';
-import { createFalVideo, getFalTaskRoutedVideoEndpoints, pollFalVideoStatus } from './createVideo';
+import {
+  createFalVideo,
+  getFalTaskRoutedVideoEndpoints,
+  pollFalVideoStatus,
+} from './createVideo';
 import {
   isFalResolutionTierEndpoint,
   resolveFalEndpointId,

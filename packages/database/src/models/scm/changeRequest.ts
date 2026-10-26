@@ -9,7 +9,7 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, type SQL,sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
 import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
