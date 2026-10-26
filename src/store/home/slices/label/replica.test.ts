@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The agent-label registry is a `@lobechat/replica` resource whose view is the
+ * The agent-label registry is a `local-replica` resource whose view is the
  * home store's flat `agentLabels` field: the persisted projection paints while
  * the network confirms it, an unchanged response keeps the array reference, and
  * a cache-scope switch drops the previous workspace's registry before paint —

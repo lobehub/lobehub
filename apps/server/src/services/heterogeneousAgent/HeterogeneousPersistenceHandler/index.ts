@@ -17,6 +17,7 @@ import { applyMainIntent, applySubagentIntent } from './applyIntents';
 import { eventKey, operationStates } from './operationState';
 import {
   loadOrCreateState,
+  recoverLastToolMessageFromDb,
   refreshMainStateFromDb,
   refreshSubagentRunsFromDb,
   refreshToolMessageIndex,
@@ -30,6 +31,10 @@ export type { HeterogeneousPersistenceHandlerDeps } from './types';
 const log = debug('lobe-server:hetero-agent:persistence');
 
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
+
+/** A `newStep` carrying `externalSignal` opens a signal turn (a background task's wake-up). */
+const opensSignalTurn = (event: AgentStreamEvent): boolean =>
+  event.type === 'stream_start' && !!event.data?.newStep && !!event.data?.externalSignal;
 
 /** The raw text a CLI would have echoed into the answer for this failure. */
 const errorEchoText = (error: { body?: Record<string, unknown>; message?: string }): string => {
@@ -117,6 +122,11 @@ export class HeterogeneousPersistenceHandler {
     await refreshToolMessageIndex(this.deps, state);
     await refreshMainStateFromDb(this.deps, state);
     await refreshSubagentRunsFromDb(this.deps, state);
+    // Only a batch that opens a signal turn needs the tool anchor; skip the
+    // lookup for the rest.
+    if (params.events.some(opensSignalTurn)) {
+      await recoverLastToolMessageFromDb(this.deps, state);
+    }
 
     for (const event of params.events) {
       const key = eventKey(event);

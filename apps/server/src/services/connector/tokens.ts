@@ -175,7 +175,7 @@ const refreshOnce = (
  * background tool sync scheduled after the run started, so the first call after
  * every access-token expiry 401'd even when the refresh token was still valid —
  * and the model then reported a connection that only needed a refresh as one
- * the owner must reconnect (LOBE-14771).
+ * the owner must reconnect.
  *
  * `connectorModel` must carry the gatekeeper so rotated credentials are
  * persisted encrypted. Never throws; a connector that cannot be refreshed is

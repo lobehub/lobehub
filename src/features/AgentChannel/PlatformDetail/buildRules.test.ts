@@ -1,7 +1,7 @@
 import { BOT_CREDENTIAL_MASK } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { buildValidate } from './Body';
+import { buildValidate } from './SchemaField';
 
 /** Discord's real bot-token pattern, the one a masked value has to survive. */
 const tokenField = {

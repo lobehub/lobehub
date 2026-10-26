@@ -848,7 +848,7 @@ describe('ToolExecutionService', () => {
     });
   });
 
-  // LOBE-14771: the SDK puts the 401 status only in `.code` and MCPService
+  // The SDK puts the 401 status only in `.code` and MCPService
   // wraps it in a TRPCError, so the model used to see a bare "Invalid or
   // expired token" and told Share visitors to reauthorize a connection that
   // belongs to the creator.

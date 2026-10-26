@@ -1316,7 +1316,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   return (
     <Flexbox gap={4}>
       {overview}
-      <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={4}>
+      <Flexbox horizontal align={'center'} justify={'space-between'} paddingBlock={4} wrap={'wrap'}>
         <Flexbox horizontal align={'center'} gap={12}>
           {titleAndViews}
         </Flexbox>

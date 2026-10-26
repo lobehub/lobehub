@@ -427,6 +427,8 @@ export default {
   'navPanel.agent': 'Agents',
   'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
+  'navPanel.openMenu': 'Open menu',
+  'navPanel.shortcuts': 'Shortcuts',
   'navPanel.displayItems': 'Display Items',
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',

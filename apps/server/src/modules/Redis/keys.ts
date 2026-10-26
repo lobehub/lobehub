@@ -110,6 +110,12 @@ export const RedisKeys = {
      */
     channel: (key: string): string => `channel:v1:${key}`,
     /**
+     * The last messages said in one channel or thread, shared by every bot listening there, so it
+     * carries no application id.
+     * Full key: bot-wake:conversation_log:v1:{key}
+     */
+    conversationLog: (key: string): string => `conversation_log:v1:${key}`,
+    /**
      * Wake scheduler state machine of one channel.
      * Full key: bot-wake:scheduler:v1:{key}
      */

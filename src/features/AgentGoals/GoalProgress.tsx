@@ -30,6 +30,18 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: min(100%, 390px);
     min-width: 390px;
+
+    /* On a phone the fixed width would crush the goal title beside it. The
+       metrics take what is left on the row's second line (beside the agent
+       and the menu), and the duration / cost cells shrink to their content. */
+    @media (width <= 767px) {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      flex: 1 1 0;
+      column-gap: 8px;
+
+      width: auto;
+      min-width: 0;
+    }
   `,
   needsYou: css`
     flex: none;

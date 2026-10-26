@@ -52,6 +52,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
+import { useVisibleTopicPrefetch } from '../../hooks/useVisibleTopicPrefetch';
 import ThreadList from '../../TopicListContent/ThreadList';
 import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
@@ -267,6 +268,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
     suppressAgentAvatar,
   }) => {
     const scopedTopic = useScopedTopic(id);
+    // Warm this row's transcript as soon as it is on screen, so clicking it is
+    // a cache hit instead of a visible load.
+    const prefetchRef = useVisibleTopicPrefetch(id);
     const scope = useTopicListScope();
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
@@ -591,7 +595,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
         <NavItem
           draggable
-          actions={() => <Actions fav={fav} id={id} status={status} title={title} />}
           active={isTopicActive}
           description={workingDirectoryNode}
           href={href}
@@ -599,6 +602,16 @@ const TopicItemRow = memo<TopicItemRowProps>(
           slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
+          actions={() => (
+            <Actions
+              fav={fav}
+              id={id}
+              // Archiving a topic mid-run would hide work that is still going.
+              showInlineArchive={!shouldShowRunningIcon}
+              status={status}
+              title={title}
+            />
+          )}
           extra={
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
@@ -627,7 +640,12 @@ const TopicItemRow = memo<TopicItemRowProps>(
     );
 
     return (
-      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
+      <Flexbox
+        data-testid="topic-item"
+        data-topic-id={id}
+        ref={prefetchRef}
+        style={{ position: 'relative' }}
+      >
         {metaCard ? (
           <Popover
             arrow={false}

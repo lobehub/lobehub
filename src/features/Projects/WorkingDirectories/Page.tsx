@@ -7,6 +7,7 @@ import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { ProjectKnowledgeBaseSettings } from '../KnowledgeBases';
@@ -33,6 +34,7 @@ export function ProjectDirectoriesPage() {
   const { error, revalidate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const canManage = useCanManageProject();
   const detail = useCurrentProjectDetail(projectId);
+  const isMobile = useIsMobile();
   if (error && !detail) return <AsyncError error={error} variant="page" onRetry={revalidate} />;
   if (!detail) return <RouteLoading />;
 
@@ -86,7 +88,7 @@ export function ProjectDirectoriesPage() {
   const activeSection = sections.find((item) => item.key === section) ?? sections[0];
 
   return (
-    <Flexbox flex={1} padding={32} style={{ overflow: 'auto' }}>
+    <Flexbox flex={1} padding={isMobile ? 16 : 32} style={{ overflow: 'auto' }}>
       <Flexbox gap={28} style={{ width: '100%', maxWidth: 800, marginInline: 'auto' }}>
         <Text fontSize={24} weight={600}>
           {t('settings.title')}

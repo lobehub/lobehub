@@ -1,4 +1,4 @@
-import type { Chat } from 'chat';
+import type { Chat, Message, MessageContext } from 'chat';
 
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -12,7 +12,7 @@ import type {
 } from '../platforms';
 import type { WakeMessageLike } from '../wake/signal';
 import type { FollowupGate } from './followupGate';
-import type { BotWakeEntryPoint, BotWakeReason } from './wakeDecision';
+import type { BotWakeEntryPoint, BotWakeInitiation, BotWakeReason } from './wakeDecision';
 
 export interface ResolvedAgentInfo {
   agentId: string;
@@ -131,6 +131,16 @@ export interface BotHandlerContext {
   dmSettings: DmSettings;
   /** Last check before a follow-up wake (watch keyword) runs: enforced policies, then the scheduler. */
   gateFollowup: FollowupGate;
+  /**
+   * Whether a message nobody addressed to the bot should wake it anyway (its name is in the text,
+   * or it spoke lately and the classifier agrees). `undefined` unless the rules are enforcing.
+   */
+  initiate: (
+    entryPoint: BotWakeEntryPoint,
+    message: WakeMessageLike,
+    thread: { id: string },
+    threadSubscribed?: boolean,
+  ) => Promise<BotWakeInitiation | undefined>;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
   /** Records the wake decision a branch just made. Observation only; never throws. */
   observe: (
@@ -141,10 +151,24 @@ export interface BotHandlerContext {
     reason: BotWakeReason,
     threadSubscribed?: boolean,
   ) => void;
+  /** Records a skipped burst: the merged latest message, and each other person's parked one. */
+  observeBurst: (
+    entryPoint: BotWakeEntryPoint,
+    message: Message,
+    context: MessageContext | undefined,
+    thread: { id: string },
+    threadSubscribed?: boolean,
+  ) => void;
   operatorUserId?: string;
   passGatesOrNotify: BotAccessGate;
   platform: string;
   reactionMode: BotReactionMode;
+  /** Keeps what people said, burst included, in the channel's shared log. Never throws. */
+  remember: (
+    entryPoint: BotWakeEntryPoint,
+    messages: WakeMessageLike[],
+    thread: { id: string },
+  ) => void;
   serverDB: LobeChatDatabase;
   userId: string;
   watchKeywordEntries: WatchKeywordEntry[];

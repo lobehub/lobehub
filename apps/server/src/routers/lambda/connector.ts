@@ -1,4 +1,5 @@
 import { getComposioAppByIdentifier } from '@lobechat/const';
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -11,6 +12,8 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
+import { WorkspaceModel } from '@/database/models/workspace';
+import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { ConnectorMetadata, OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
@@ -49,6 +52,13 @@ import {
   assertWorkspaceRowManageable,
   isWorkspaceNonOwner,
 } from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertConnectorCredentialsManageable,
+  assertConnectorMaintainable,
+  canManageWorkspaceConnectors,
+  getConnectorMemberManage,
+  isWorkspaceConnectorAdmin,
+} from './_helpers/connectorManagePolicy';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -266,8 +276,9 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Edit-read returns decrypted credentials — same creator/owner gate as
-      // the mutations that this edit view feeds.
+      // Edit-read returns decrypted credentials — creator/owner only. Not gated by
+      // the member policy: desktop stdio/local connectors read their config
+      // here at run time, so a restriction must not stop the creator using them.
       assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
 
       const { oidcConfig, credentials, ...rest } = connector;
@@ -286,6 +297,54 @@ export const connectorRouter = router({
    * URI the user registers matches the one used at authorize time.
    */
   getRedirectUri: wsCompatProcedure.query(() => ({ redirectUri: getConnectorRedirectUri() })),
+
+  /**
+   * The caller's standing under the workspace connector policy: whether they may
+   * maintain shared connectors, and whether they may change who can. Lets the
+   * settings list disable what the server would reject instead of failing a click.
+   */
+  getManagePolicy: connectorProcedure.query(async ({ ctx }) => {
+    const [canManage, memberManage] = await Promise.all([
+      canManageWorkspaceConnectors(ctx),
+      getConnectorMemberManage(ctx),
+    ]);
+    return {
+      canEditPolicy: !!ctx.workspaceId && isWorkspaceConnectorAdmin(ctx),
+      canManage,
+      memberManage,
+    };
+  }),
+
+  /** Owners and admins choose whether members may maintain shared connectors. */
+  updateManagePolicy: connectorProcedure
+    .use(requireWorkspaceRoleWhenScoped('admin'))
+    .input(z.object({ memberManage: z.enum(['all_members', 'admins_only']) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Connector policy applies to workspaces only',
+        });
+      }
+      // A restricted API key must not rewrite who may change credentials.
+      if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Restricted API keys cannot change the workspace connector policy',
+        });
+      }
+
+      const workspaceModel = new WorkspaceModel(ctx.serverDB, ctx.userId);
+      const previous = await workspaceModel.getConnectorMemberManage(ctx.workspaceId);
+      await workspaceModel.updateConnectorMemberManage(ctx.workspaceId, input.memberManage);
+      await new WorkspaceAuditLogModel(ctx.serverDB).create({
+        action: 'security.policy_updated',
+        metadata: { policy: 'connector.member_manage', previous, value: input.memberManage },
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return { memberManage: input.memberManage };
+    }),
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -338,10 +397,14 @@ export const connectorRouter = router({
     // DB indexes are non-unique so multiple same-identifier rows can coexist
     // across scopes).
     const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
+    // Adding a workspace connector follows the member policy. Re-adding over
+    // someone else's row rewrites its server/command while the row stays theirs
+    // (their runs would execute it, and they could read the new credentials), so
+    // that keeps the creator-or-owner rule.
+    if (existing && existing.userId !== ctx.userId)
+      await assertConnectorCredentialsManageable(ctx, existing);
+    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
     if (existing) {
-      // The upsert path rewrites another creator's config/credentials — only
-      // the creator (or a workspace owner) may re-add over an existing row.
-      assertWorkspaceRowManageable(ctx, existing.userId, 'connector');
       await ctx.connectorModel.update(existing.id, {
         ...fields,
         isEnabled: input.isEnabled ?? true,
@@ -385,7 +448,7 @@ export const connectorRouter = router({
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Rebinding routes the connector's credentials to the agent — creator/owner only.
-      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      await assertConnectorCredentialsManageable(ctx, connector);
 
       const existingAgentRow = await ctx.connectorModel.findScopedByIdentifier(
         connector.identifier,
@@ -413,7 +476,7 @@ export const connectorRouter = router({
     .mutation(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      await assertConnectorCredentialsManageable(ctx, connector);
       if (!connector.agentId) return { id: input.connectorId }; // already base — no-op
 
       const existingBase = await ctx.connectorModel.findScopedByIdentifier(connector.identifier);
@@ -445,7 +508,7 @@ export const connectorRouter = router({
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Cloning duplicates the source's encrypted credentials into a row the
       // agent owner controls — creator/owner only.
-      assertWorkspaceRowManageable(ctx, source.userId, 'connector');
+      await assertConnectorCredentialsManageable(ctx, source);
 
       const existing = await ctx.connectorModel.findScopedByIdentifier(
         source.identifier,
@@ -480,7 +543,7 @@ export const connectorRouter = router({
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Mounting routes the source's credentials to the agent and locks the
       // row (metadata.mountedByAgentId) — creator/owner only.
-      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      await assertConnectorCredentialsManageable(ctx, connector);
       if (connector.agentId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -520,7 +583,7 @@ export const connectorRouter = router({
       const connector = await ctx.connectorModel.findById(input.connectorId);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Clearing the mount lock mutates the source row — creator/owner only.
-      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      await assertConnectorCredentialsManageable(ctx, connector);
 
       const { mountedByAgentId: _drop, ...restMeta } = connector.metadata ?? {};
       await ctx.connectorModel.update(input.connectorId, { metadata: restMeta });
@@ -541,8 +604,8 @@ export const connectorRouter = router({
     .mutation(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Re-authorizing overwrites the stored OAuth credentials.
-      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      // Re-authorizing replaces the stored OAuth credentials with the caller's.
+      await assertConnectorMaintainable(ctx, connector);
       if (!connector.mcpServerUrl) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
       }
@@ -658,7 +721,9 @@ export const connectorRouter = router({
     .mutation(async ({ input, ctx }) => {
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+      // A patch may keep the stored credentials while repointing the server
+      // URL, which would send them elsewhere — creator/owner only.
+      await assertConnectorCredentialsManageable(ctx, target);
 
       const { credentials, ...patch } = input.patch;
       // Preserve the server-owned `composio.linkedByUserId` from the stored row
@@ -687,7 +752,7 @@ export const connectorRouter = router({
       const target = await ctx.connectorModel.findById(input.id);
       // Missing row → keep the delete idempotent, nothing to authorize.
       if (!target) return;
-      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+      await assertConnectorMaintainable(ctx, target);
 
       const connectedAccountId = target.metadata?.composio?.connectedAccountId;
       if (connectedAccountId) {
@@ -740,9 +805,8 @@ export const connectorRouter = router({
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Syncing rewrites the connector's tool rows and refreshes OAuth tokens —
-      // an edit-class operation, so it gets the same creator/owner gate as
-      // update/delete/reset.
-      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+      // a maintenance operation, gated like delete/reset.
+      await assertConnectorMaintainable(ctx, target);
       try {
         return await syncConnectorToolsById(input.id, ctx);
       } catch (err: any) {
@@ -791,7 +855,7 @@ export const connectorRouter = router({
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Permission gates decide what auto-runs for the whole workspace.
-      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+      await assertConnectorMaintainable(ctx, target);
 
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
       await Promise.all(
@@ -817,7 +881,9 @@ export const connectorRouter = router({
       const tool = await ctx.connectorToolModel.findById(input.toolId);
       if (!tool) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector tool not found' });
       const owner = await ctx.connectorModel.findById(tool.userConnectorId);
-      assertWorkspaceRowManageable(ctx, owner?.userId, 'connector');
+      // A tool whose connector is outside the caller's scope is not theirs to gate.
+      if (!owner) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      await assertConnectorMaintainable(ctx, owner);
 
       await ctx.connectorToolModel.updatePermission(input.toolId, input.permission);
     }),
@@ -895,8 +961,8 @@ export const connectorRouter = router({
     .mutation(async ({ input, ctx }) => {
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Same edit-class gate as `syncTools` — rewrites the connector's tool rows.
-      assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+      // Same gate as `syncTools` — rewrites the connector's tool rows.
+      await assertConnectorMaintainable(ctx, target);
 
       const syncInputs = input.tools.map((t) => ({
         crudType: inferCrudType(t.toolName),

@@ -6,7 +6,7 @@ import { memo, type ReactNode } from 'react';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
-import Avatar from '@/components/Avatar';
+import UserAvatar from '@/components/UserAvatar';
 
 /**
  * Prefer the bot-channel initiator over the account that owns the bot.
@@ -52,13 +52,12 @@ const TopicCreatorAvatar = memo<TopicCreatorAvatarProps>(
 
     const avatar = (
       <Tooltip title={author.fullName}>
-        <Avatar
-          avatar={author.avatar ?? undefined}
-          name={author.fullName ?? undefined}
+        <UserAvatar
+          avatar={author.avatar}
+          name={author.fullName}
           shape={'circle'}
           size={size}
           style={{ flex: 'none' }}
-          title={author.fullName ?? undefined}
         />
       </Tooltip>
     );

@@ -411,4 +411,65 @@ describe('DiscordGatewayClient', () => {
       expect(client.extractAuthorLocale!(makeMessage({}))).toBeUndefined();
     });
   });
+
+  describe('getBotNames', () => {
+    const withApi = (getBotNames: ReturnType<typeof vi.fn>) => {
+      const client = createClient() as any;
+      client.discord = { getBotNames };
+
+      return client as { botNames?: { expiresAt: number }; getBotNames: () => Promise<string[]> };
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reads the names once and serves them from memory for an hour', async () => {
+      const read = vi.fn().mockResolvedValue(['Shadow Arvin']);
+      const client = withApi(read);
+
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    it('picks up a rename once the hour has passed', async () => {
+      vi.useFakeTimers();
+      const read = vi.fn().mockResolvedValueOnce(['Old Name']).mockResolvedValue(['New Name']);
+      const client = withApi(read);
+
+      await client.getBotNames();
+      vi.advanceTimersByTime(60 * 60 * 1000 + 1);
+
+      await expect(client.getBotNames()).resolves.toEqual(['New Name']);
+    });
+
+    it('keeps the last known names when a refresh fails, and waits before asking again', async () => {
+      vi.useFakeTimers();
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce(['Shadow Arvin'])
+        .mockRejectedValue(new Error('429'));
+      const client = withApi(read);
+
+      await client.getBotNames();
+      vi.advanceTimersByTime(60 * 60 * 1000 + 1);
+
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      // One failed refresh, not one per message.
+      expect(read).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(60 * 1000 + 1);
+      await client.getBotNames();
+      expect(read).toHaveBeenCalledTimes(3);
+    });
+
+    it('throws when there is no name to fall back on, so the caller retries on the next message', async () => {
+      const client = withApi(vi.fn().mockRejectedValue(new Error('down')));
+
+      await expect(client.getBotNames()).rejects.toThrow('down');
+    });
+  });
 });

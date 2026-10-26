@@ -132,4 +132,94 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
 
     expect(result).toBeUndefined();
   });
+
+  describe('conversation log', () => {
+    const line = (n: number, extra: Record<string, unknown> = {}) => ({
+      at: n * 1_000,
+      authorId: `u${n % 3}`,
+      authorName: `User ${n % 3}`,
+      id: `m${n}`,
+      isBot: false,
+      text: `message ${n}`,
+      ...extra,
+    });
+
+    it('returns the messages before the current one, oldest first', async () => {
+      const key = 'discord:g:log1';
+      await domain.rememberMessages([key], [line(3), line(1), line(2), line(4)]);
+
+      const recent = await domain.readRecentMessages(key, 10, 'm4');
+
+      expect(recent?.map((entry) => entry.id)).toEqual(['m1', 'm2', 'm3']);
+      expect(recent?.[0]).toMatchObject({ authorName: 'User 1', text: 'message 1' });
+    });
+
+    it('limits a read to the newest messages', async () => {
+      const key = 'discord:g:log2';
+      await domain.rememberMessages(
+        [key],
+        [1, 2, 3, 4, 5].map((n) => line(n)),
+      );
+
+      expect((await domain.readRecentMessages(key, 2))?.map((entry) => entry.id)).toEqual([
+        'm4',
+        'm5',
+      ]);
+    });
+
+    it('keeps one copy of a message that two bots both saw', async () => {
+      const key = 'discord:g:log3';
+      await domain.rememberMessages([key], [line(1), line(2)]);
+      await domain.rememberMessages([key], [line(2), line(3)]);
+
+      expect((await domain.readRecentMessages(key, 10))?.map((entry) => entry.id)).toEqual([
+        'm1',
+        'm2',
+        'm3',
+      ]);
+    });
+
+    it('keeps the newest 200 messages of a channel and drops the rest', async () => {
+      const key = 'discord:g:log4';
+      await domain.rememberMessages(
+        [key],
+        Array.from({ length: 215 }, (_, i) => line(i + 1)),
+      );
+
+      const all = await domain.readRecentMessages(key, 500);
+
+      expect(all).toHaveLength(200);
+      expect(all?.[0].id).toBe('m16');
+      expect(all?.at(-1)?.id).toBe('m215');
+    });
+
+    it('writes the same message under every key given, and lets the log expire', async () => {
+      const keys = ['discord:g:log5', 'discord:g:log5:thread'];
+      await domain.rememberMessages(keys, [line(1)]);
+
+      for (const key of keys) {
+        expect((await domain.readRecentMessages(key, 5))?.map((entry) => entry.id)).toEqual(['m1']);
+      }
+      const { default: IORedis } = await import('ioredis');
+      const raw = new IORedis(url!);
+      const ttl = await raw.ttl(`${prefix}:bot-wake:conversation_log:v1:${keys[0]}`);
+      raw.disconnect();
+
+      expect(ttl).toBeGreaterThan(0);
+    });
+
+    it('reads an unknown channel as empty and ignores a stored value that is not a message', async () => {
+      expect(await domain.readRecentMessages('discord:g:nothing', 5)).toEqual([]);
+
+      const { default: IORedis } = await import('ioredis');
+      const raw = new IORedis(url!);
+      await raw.zadd(`${prefix}:bot-wake:conversation_log:v1:discord:g:junk`, 1, 'not json');
+      raw.disconnect();
+      await domain.rememberMessages(['discord:g:junk'], [line(2)]);
+
+      expect(
+        (await domain.readRecentMessages('discord:g:junk', 5))?.map((entry) => entry.id),
+      ).toEqual(['m2']);
+    });
+  });
 });

@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react';
 
 import { useConversationStore } from '@/features/Conversation/store';
 
-type BeforeRetry = () => Promise<void> | void;
+/** Runs before the retry; resolving to `false` skips the retry. */
+type BeforeRetry = () => Promise<boolean | void> | boolean | void;
 
 /**
  * @param id - Error message id; its parent user message is the retry target.
@@ -24,7 +25,7 @@ export const useRetryParentMessage = (id: string, parentIdOverride?: string) => 
 
       setLoading(true);
       try {
-        await beforeRetry?.();
+        if ((await beforeRetry?.()) === false) return;
         await regenerateUserMessage(parentId);
       } finally {
         setLoading(false);

@@ -1,6 +1,13 @@
 import type { BotWakeMessageKind } from '@lobechat/prompts';
 
-import type { WakePolicy, WakePolicyMode, WakePolicyResult, WakeRules, WakeSignal } from '../types';
+import type {
+  WakeConversation,
+  WakePolicy,
+  WakePolicyMode,
+  WakePolicyResult,
+  WakeRules,
+  WakeSignal,
+} from '../types';
 
 export const CLASSIFIER_POLICY_ID = 'bot-wake:classifier';
 
@@ -15,6 +22,8 @@ export interface WakeClassification {
 }
 
 export interface WakeClassifierInput {
+  /** Who the bot is and what was said just before the message. */
+  conversation?: WakeConversation;
   customInstructions?: string;
   signal: WakeSignal;
 }
@@ -55,7 +64,7 @@ export const createClassifierPolicy = (
   timeoutMs = CLASSIFIER_TIMEOUT_MS,
 ): WakePolicy => ({
   costly: true,
-  evaluate: async ({ signal }) => {
+  evaluate: async ({ signal, state }) => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -67,7 +76,14 @@ export const createClassifierPolicy = (
         }, timeoutMs);
       });
       const outcome = await Promise.race([
-        classify({ customInstructions: rules.customInstructions, signal }, controller.signal),
+        classify(
+          {
+            conversation: state.conversation,
+            customInstructions: rules.customInstructions,
+            signal,
+          },
+          controller.signal,
+        ),
         timedOut,
       ]);
 
@@ -91,6 +107,6 @@ export const createClassifierPolicy = (
   },
   id: CLASSIFIER_POLICY_ID,
   mode,
-  requires: ['channel'],
-  version: 1,
+  requires: ['channel', 'conversation'],
+  version: 2,
 });

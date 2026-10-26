@@ -15,6 +15,7 @@ import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
 import { lockChannel } from './transaction';
 import type { ChannelAccess, ChannelWriteOptions } from './types';
+import { createChannelThread, readChannelView } from './view';
 
 export type { ChannelAddAgentInput } from './agent';
 export type { ChannelClaim, ChannelClaimOptions } from './claim';
@@ -49,14 +50,19 @@ export class ChannelRepository {
     this.workspaceId = normalizeWorkspaceId(workspaceId);
   }
 
-  /**
-   * Creates the channel with the caller as its owner member. With `agentId`, opens the caller's
-   * direct conversation with that Agent in this scope, returning the existing one if present.
-   */
-  create = async (params: { agentId?: string; title: string; visibility?: ChannelVisibility }) =>
+  /** Opens the unique direct conversation, or creates a group with its initial members. */
+  create = async (params: {
+    agentId?: string;
+    agents?: ChannelAddAgentInput[];
+    title: string;
+    visibility?: ChannelVisibility;
+  }) =>
     this.db.transaction(async (tx) => {
       const { agentId } = params;
-      if (agentId !== undefined && (!agentId.trim() || params.visibility === 'public'))
+      if (
+        agentId !== undefined &&
+        (!agentId.trim() || params.visibility === 'public' || !!params.agents?.length)
+      )
         throw new ChannelError(
           'BAD_REQUEST',
           'A direct conversation requires an Agent and private visibility',
@@ -94,6 +100,8 @@ export class ChannelRepository {
         .returning();
 
       if (agentId) await addAgentMember(tx, channel, this.userId, { agentId });
+      for (const agent of params.agents ?? [])
+        await addAgentMember(tx, channel, this.userId, agent);
 
       return { channel, member } satisfies ChannelAccess;
     });
@@ -103,6 +111,36 @@ export class ChannelRepository {
     this.write(channelId, (tx, { channel }) => addAgentMember(tx, channel, this.userId, input), {
       minRole: 'admin',
     });
+
+  detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) =>
+    this.write(
+      channelId,
+      async (tx, access) => ({
+        channel: access.channel,
+        ...(await readChannelView(tx, channelId, options)),
+      }),
+      { allowArchived: true },
+    );
+
+  createThread = async (channelId: string, input: Parameters<typeof createChannelThread>[2]) =>
+    this.write(channelId, (tx) => createChannelThread(tx, channelId, input));
+
+  markRead = async (channelId: string, sequence: number) =>
+    this.write(
+      channelId,
+      async (tx, { channel, member }) => {
+        const lastReadSequence = Math.max(
+          member.lastReadSequence ?? 0,
+          Math.min(sequence, channel.sequence),
+        );
+        await tx
+          .update(channelMembers)
+          .set({ lastReadSequence })
+          .where(eq(channelMembers.id, member.id));
+        return lastReadSequence;
+      },
+      { allowArchived: true },
+    );
 
   /** Active channels the caller belongs to in the current scope, newest first. */
   list = async (): Promise<ChannelItem[]> => {

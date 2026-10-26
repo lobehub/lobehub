@@ -36,7 +36,7 @@ describe('refreshExpiredConnectorTokens', () => {
     vi.clearAllMocks();
   });
 
-  // LOBE-14771: agent runs baked the stored (expired) token into manifests, so
+  // Agent runs baked the stored (expired) token into manifests, so
   // the first call after every expiry 401'd even when it was refreshable.
   it('refreshes an expired token and persists the rotated credentials', async () => {
     vi.mocked(refreshConnectorToken).mockResolvedValue({

@@ -2,6 +2,51 @@
 
 版本规则见 learnings/README.md §6（patch 修误报 / minor 加规则或 WARN→FAIL / major 改 stage 与路由）。
 
+## 5.8.0 — 2026-10-23
+
+一批设计思路（minor：新增 reference 编号 C-19、C-20；不删编号，不改 stage 与路由）。
+
+- **M-01 判据 3**：先问题，后组件；不从现有页面、截图或组件清单出发修补。
+- **SKILL.md 输出契约 · 示意图**：只画被讨论的模块，编号标注设计理由，低密度。
+- **C-17**：状态由值本身表达，不加复述的 badge；关闭 / 恢复默认是同一控件里的选择；按功能分组命名；与已有设置页一致。
+- **新增 C-19**（web / desktop / mobile）：滚动边缘的模糊与淡出是为了扩大可读区域，只藏在框架身后，淡出到背景 token（web：`ProgressiveBlur`）；无模糊能力时只淡出、框架实底。C-02 布局行同步。
+- **新增 C-20**（仅 mobile）：导航与输入浮在内容上，内容用满屏幕。
+- **30-structure** 登记 C-19、C-20；`refs:meta` 补触发词；tests 加 `wording:` 断言。learnings：LRN-20261023-01..04。
+
+## 5.7.0 — 2026-10-22
+
+按环境绑定的凭证先按环境分组（minor：新增 reference 编号 C-18；不删编号，不改 stage 与路由）。
+
+- **新增 C-18**（`references/components.md`）：Vercel 环境变量、QStash、Redis 这类按环境配置的凭证 / 密钥 / secret / 环境变量，环境做顶层分组，每个环境下列出它的凭证（层级清楚用 `Tree`，环境少用 `Accordion`）；同名 key 在每个环境下各列一次；只有一个环境时不造分组。不要把 env 做成平铺表里的一列。
+- **30-structure**：「只加载」与「症状 → 规则」登记 C-18；`components.md` 的 `refs:meta` 加 C-18 触发词（凭证、环境、env、token、密钥、secret、环境变量、轮换、作用域）。
+- learnings：LRN-20261022-01。
+
+## 5.6.0 — 2026-10-19
+
+React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模式并改为默认、新增 `lint-allow`；不删编号，不改 stage 与路由）。Fixes [#2](https://github.com/lobehub/lobe-design-skill/issues/2)。
+
+- **`LOBE-RN-DOM-UI` 只报组件导入**：从 `@lobehub/ui` 根入口、组件子入口（`/form`、`/pro-table`、`/dashboard`、`/mobile`…）或 `@lobehub/ui/es/<Component>` 导入 PascalCase 名字（具名 / 默认 / `default as` / 命名空间）才报；`@lobehub/ui/es/hooks/*`、`Markdown/plugins/*`、`styles`、`utils`、`types`、`locale` 等工具子路径，以及 `useTheme` / `cssVar` 这类小写导出、`import type`、副作用导入不再误报（宿主实测 9 处误报）。
+- **`lint-allow:`**（`product.md`，可多行）：`lint-allow: LOBE-RN-DOM-UI src/components/hooks/**, src/components/styles/**` 按路径（相对项目根的 glob）关掉指定规则；报告头显示生效的 allow。
+- **托管块精简模式 + 宿主语言**：`bootstrap.mjs` 新增 `--compact`（默认，~16 行：入口、先读项目层、平台、优先级、lint、沉淀、升级）/ `--full`（原完整中文块）与 `--lang zh|en`（默认按宿主 `AGENTS.md` 块外文本判断，不足时看 README）。块内第一行写 `<!-- lobe-design:mode=… lang=… -->`，重跑沿用、flag 覆盖；BEGIN / END 标记不变，≤ 5.5.0 的旧块重跑时换成默认精简块。`--check` 同时识别 `skill 版本` 与 `skill version`。
+- **平台中立措辞**：SKILL.md frontmatter `description` 改为「原子层取自宿主组件库（web：`@lobehub/ui` + `cssVar`；React Native：项目组件库如 `@lobehub/ui-rn` + `useTheme()` token）」；`stages/50-visual.md` 取值规则按平台分写；`10-decode`、`30-structure`（硬性前提标注 web 作用域）、SKILL.md C-11 段、`references/design.md` D-01 同步。
+- **`LOBE-ICON-BUTTON-LABEL`**：mobile 规则集的提示只写 `accessibilityLabel`（非按钮可点元素补 `accessibilityRole="button"`），web 提示仍是 `title` / `aria-label`。
+- **tests**：RN fixture 增加 `@lobehub/ui/es` 工具导入（Markdown 插件、hooks、颜色种子）；`bad-rn.tsx` 增加 `es/Markdown` 组件导入与缺 `accessibilityLabel` 的图标按钮；新增 `== issue #2 (RN follow-ups)` 一节（组件导入判定、`lint-allow`、精简 / 语言 / 沿用 / 旧块迁移 / 幂等 / `--check`、措辞断言、RN 图标按钮提示）。
+
+## 5.5.0 — 2026-10-16
+
+05-init 识别出的平台真正生效（minor：新增 RN 专属 WARN 规则 `LOBE-RN-DOM-UI`、规则平台作用域与项目层适用性开关；不删编号，不改 stage 与路由）。Fixes [#1](https://github.com/lobehub/lobe-design-skill/issues/1)。
+
+- **lint 平台门控**：新增 `scripts/platform.mjs`（lint / bootstrap / project-scan 共用）。平台来源：`--platform` / 文件内 `lobe-design-platform:` 注释 / `*.native|ios|android.tsx` → `.agents/ux/product.md` 的 `平台：` 行 → `package.json`（`react-native` / `expo` / `@lobehub/ui-rn` → mobile）。每条规则声明 `platforms`（`--rules` 显示）；mobile 跳过 web 专属规则（`LOBE-ANTD-IMPORT`、`LOBE-FORM-ENTRY`、`LOBE-ANT-ICONS`、`LOBE-CREATE-STYLES`、`LOBE-I18N-PROVIDER`、`LOBE-CSS-LINE-COMMENT`、`LOBE-ANT-CLASS`、`LOBE-ANT-VAR-OVERRIDE`、`LOBE-REIMPLEMENT-ATOM`、`LOBE-FONT-FAMILY`、`LOBE-EYEBROW`、`LOBE-BLUR-CARD`、`LOBE-SIDE-STRIPE`、`LOBE-GLOW`、`LOBE-GRADIENT-TEXT`、`LOBE-OUTLINE-NONE`、`LOBE-IMG-ALT`、`LOBE-DIV-CLICK`、`LOBE-GRADIENT-ANIMATION-OVERUSE`）；`LOBE-RAW-COLOR` 在 mobile 上给 RN 主题 token 的修法而不是 `cssVar`。新增 `--platform` / `--root`，报告头显示 `platform=…（来源）`。
+- **项目层适用性关规则**：`product.md` 里标「不适用 / N/A」那一行的规则编号（含区间 `C-01..C-11`）与 lint id、以及 `lint-off: LOBE-XXX, D-01` 行，关掉对应 lint 规则（按 id 或其引用编号）。
+- **新增 `LOBE-RN-DOM-UI`**（WARN，C-01，仅 mobile）：RN 界面导入 `@lobehub/ui` / `antd` 这类 DOM 组件库（`import type` 不报）。fixtures：`bad-rn.tsx` / `good-rn.tsx`。
+- **误报**：`LOBE-ICON-BUTTON-LABEL`（K-07）接受 `accessibilityLabel`；`LOBE-REDUCED-MOTION` 接受 `isReduceMotionEnabled` / `ReduceMotion`。
+- **优先级改写**：删掉托管块的「冲突时以 skill 为准」，改为「项目层的平台与适用性优先于 skill 通用规则；其余冲突以 skill 为准；项目层违背通用原则须写明理由」。SKILL.md、`references/init.md`（新增 I-10）、`references/components.md` C-01（标注平台作用域 web / desktop）同步。
+- **托管块按平台生成**：mobile 时加「平台：mobile（React Native）」一节（原子层用项目 RN 组件库、不改用 `@lobehub/ui`、web 专属条目不适用、可达性照常），lint 指令改为按 mobile 规则集、按项目主题修。skill 内文件统一写 `$LOBE_DESIGN/scripts/…`；尚不存在的项目层文件不再写成代码样式路径（宿主路径检查不再报死链）。
+- **Round 2 / project-scan 平台感知**：输出 `stack.platform`、`primaryUi`（mobile 时为 RN 组件库，含 tsconfig alias，如 `@lobehub/ui-rn → src/components`）、`depOnlyUi`（mobile 上的 `@lobehub/ui` 等 DOM 库只算依赖）、`navigation`（`expo-router` / `@react-navigation/*`）、`componentScheme` 与逐文件启发式初分 `componentClasses`。mobile 分类为「项目原子层 / 薄包装 / 业务组件」，不再出现「改用 lobe-ui」。05-init 与 I-08 同步。
+- **75-copy 路由分区按路径段匹配**：`refs.mjs` 新增 `matchRoute`：`/api-keys` 命中 `/:wsSlug/api-keys`（任意位置的连续段），不再被 `/api-keys-legacy` 这类前缀误命中；支持 `/*/api-keys`（一段）、`/admin/**`（任意多段）、`^/admin`（从根）；多条命中取更具体的；新增 `--page <路由>`。
+- **文档**：`install.sh` 在 skill 仓库根目录（不在 `skills/lobe-design/` 下），`references/init.md` 与托管块的安装说明写明。
+- **tests**：新增 RN fixture 项目 `tests/fixtures/rn-project/`（expo + react-native + `@lobehub/ui-rn` alias，`StyleSheet` 组件）与 `== platform (mobile / RN)` 一节：0 web-only FAIL、强制 web 时仍报（门控而非失效）、`product.md` 平台 / 适用性、托管块无 web 专属指令与新优先级、project-scan 分类；75-copy 路由段匹配用例。`check-learnings` 读 fixtures 时跳过子目录。
+
 ## 5.4.2 — 2026-10-16
 
 `--copy` 重装时不再把备份留在宿主项目里（patch：不改规则通过条件）。

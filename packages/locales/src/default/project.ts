@@ -72,6 +72,12 @@ export default {
   'settings.general': 'General',
   'settings.logo': 'Logo',
   'settings.logoDescription': 'Shown in the project header, sidebar and switcher.',
+  'settings.logoHint':
+    'Click the logo to upload an image or pick an emoji. Changes are saved right away.',
+  'settings.logoUpdated': 'Logo updated',
+  'settings.nameHint': 'Use 255 characters at most.',
+  'settings.saveFailed': 'Could not save the change',
+  'settings.saved': 'Saved',
   'settings.logoSizeExceeded': 'The logo must be smaller than 2 MB.',
   'settings.logoUploadFailed': 'Could not upload the logo',
   'settings.advanced': 'Advanced',

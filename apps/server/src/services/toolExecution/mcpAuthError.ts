@@ -31,8 +31,7 @@ export const isMcpAuthorizationError = (error: unknown): boolean => {
  * error says nothing about who owns the connection, so models guessed and told
  * Agent Share visitors to "reauthorize in the browser" — but a shared run
  * executes with a connection from the creator's side (theirs, or one a
- * workspace member authorized), which the visitor can neither see nor repair
- * (LOBE-14771).
+ * workspace member authorized), which the visitor can neither see nor repair.
  */
 export const buildMcpAuthorizationErrorContent = (
   identifier: string,

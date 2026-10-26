@@ -57,6 +57,17 @@ describe('useRetryParentMessage', () => {
     expect(calls).toEqual(['before', 'regenerate']);
   });
 
+  it('should skip regenerating when the pre-retry action reports failure', async () => {
+    const { result } = renderHook(() => useRetryParentMessage('assistant-message'));
+
+    await act(async () => {
+      await result.current.retryParentMessage(async () => false);
+    });
+
+    expect(storeMock.regenerateUserMessage).not.toHaveBeenCalled();
+    expect(result.current.loading).toBe(false);
+  });
+
   it('should skip retry when the message has no parent', async () => {
     storeMock.displayMessages = [{ id: 'assistant-message' }];
     const { result } = renderHook(() => useRetryParentMessage('assistant-message'));

@@ -15,6 +15,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { SessionDefaultGroup } from '@/types/session';
 
+import FeatureNav from '../FeatureNav';
 import CollapseGroup, { type CollapseGroupItem } from './CollapseGroup';
 import Actions from './CollapseGroup/Actions';
 import Inbox from './Inbox';
@@ -92,6 +93,7 @@ const DefaultMode = memo(() => {
 
   return (
     <>
+      <FeatureNav />
       <Inbox />
       <CollapseGroup
         activeKey={sessionGroupKeys}

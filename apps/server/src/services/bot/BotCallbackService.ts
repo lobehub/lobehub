@@ -330,6 +330,7 @@ export class BotCallbackService {
         platformThreadId: body.platformThreadId,
         settings,
         spoke,
+        spoken: { id: body.operationId ?? randomUUID(), text: body.lastAssistantContent },
         wakeKind: body.wakeKind,
       });
     } catch (error) {

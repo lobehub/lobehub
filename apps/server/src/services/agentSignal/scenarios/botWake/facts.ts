@@ -96,6 +96,35 @@ export const resolveChannelKeys = (
   };
 };
 
+/**
+ * Keys of a conversation's shared message log, the channel first and then the thread when there is
+ * one. Unlike the wake state they carry no application id: every bot in a channel reads and writes
+ * the same log, so the channel's last messages are stored once however many bots listen.
+ *
+ * A person's message is filed under the last key only (where it was said); the bot's own reply is
+ * filed under all of them, because people answer it from the channel as well as from the thread.
+ */
+export const resolveConversationLogKeys = (
+  platform: string,
+  platformThreadId: string,
+): string[] => {
+  if (platform === 'discord') {
+    const [, guildId, channelId, threadId] = platformThreadId.split(':');
+
+    if (guildId && channelId) {
+      const channel = ['discord', guildId, channelId].join(':');
+
+      return threadId ? [channel, `${channel}:${threadId}`] : [channel];
+    }
+  }
+
+  return [`${platform}:${platformThreadId.split(':').slice(1).join(':')}`];
+};
+
+/** Where a message said in this conversation is filed: the most specific log. */
+export const resolveConversationLogKey = (platform: string, platformThreadId: string): string =>
+  resolveConversationLogKeys(platform, platformThreadId).at(-1)!;
+
 /** Every key the channel's state is written under (channel first, then thread when there is one). */
 export const wakeStateKeys = (keys: WakeChannelKeys): string[] =>
   keys.threadKey ? [keys.channelKey, keys.threadKey] : [keys.channelKey];

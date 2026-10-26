@@ -10,7 +10,7 @@ import { DownloadCache } from '../../utils/referenceImageCache';
  * that accumulates large images (screenshots, desktop `readFile` results)
  * eventually exceeds the provider's request body limit and every later send
  * fails with HTTP 413 — Anthropic rejects bodies over 32MB, DeepSeek's
- * Anthropic endpoint around 40–48MB, Bedrock lower still. See LOBE-15186.
+ * Anthropic endpoint around 40–48MB, Bedrock lower still.
  *
  * This pre-pass keeps the inlined image bytes under a budget by replacing the
  * oldest images with a fixed text placeholder. Prompt caching constrains how:

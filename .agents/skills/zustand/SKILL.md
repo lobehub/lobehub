@@ -1,6 +1,6 @@
 ---
 name: zustand
-description: 'Use for Zustand stores: state shapes and type sources, state-only stores with xActions classes, replica-backed list/detail data (@lobechat/replica), selectors, optimistic writes, and legacy slice/internal_* action composition.'
+description: 'Use for Zustand stores: state shapes and type sources, state-only stores with xActions classes, replica-backed list/detail data (local-replica), selectors, optimistic writes, and legacy slice/internal_* action composition.'
 user-invocable: false
 ---
 
@@ -33,7 +33,7 @@ Actions stay out of the Zustand state. Reference: `src/store/page`.
 
 ## Replica-Backed Server Data
 
-Server lists and details the UI paints go through `@/libs/replica`, not a hand-written SWR `onSuccess` + reducer. The engine owns hydration from IndexedDB, head revalidation, paging, optimistic overlays with rollback, and scope (user + workspace) isolation. API reference: [`packages/replica/README.md`](../../../packages/replica/README.md).
+Server lists and details the UI paints go through `@/libs/replica`, not a hand-written SWR `onSuccess` + reducer. The engine owns hydration from IndexedDB, head revalidation, paging, optimistic overlays with rollback, and scope (user + workspace) isolation. API reference: the [`local-replica` README](https://github.com/lobehub/local-replica#readme). The engine is maintained in [lobehub/local-replica](https://github.com/lobehub/local-replica): fix it there, publish, then bump the dependency here.
 
 1. Define the resource (`defineReplica` / `definePagedReplica`) in the store's `projection.ts`, converting server rows at the boundary.
 2. Add two state fields per replica: the view (`xxxMap: Record<key, TData>`) and its bookkeeping (`xxxReplica: createReplicaState()`).

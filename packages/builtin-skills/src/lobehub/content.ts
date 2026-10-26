@@ -54,7 +54,7 @@ run commands.
 | \`lh kb\` | Knowledge base management (create, upload, organize) | \`references/kb\` |
 | \`lh file\` | File management | \`references/file\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
-| \`lh search\` | Search local resources or the web | \`references/search\` |
+| \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |
 | \`lh project\` / \`lh task\` | Projects and agent tasks | \`references/project\` |
 | \`lh goal\` | Long-running goal graphs | \`references/goal\` |
@@ -107,7 +107,10 @@ lh kb list
 lh kb create-doc <kbId> -t "Meeting Notes" -c "..."
 
 # Search messages
-lh message search "deployment issue"
+lh message search "deployment issue" --since 7d
+
+# Recall everything about a topic from last week (messages, topics, goals, pages)
+lh recall "replica" --since 2026-10-12 --until 2026-10-18
 
 # Generate an image
 lh gen image "a sunset over mountains" -m dall-e-3

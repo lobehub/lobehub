@@ -31,6 +31,18 @@ const Point = memo<PointProps>(({ desc, icon, title }) => (
 
 Point.displayName = 'DocsMergePoint';
 
+/**
+ * Rendered as a component so it re-renders once the `file` namespace loads;
+ * a string resolved when the modal opens shows the raw key on a cold load.
+ */
+export const DocsMergeNoticeTitle = memo(() => {
+  const { t } = useTranslation('file');
+
+  return t('docs.mergeNotice.title');
+});
+
+DocsMergeNoticeTitle.displayName = 'DocsMergeNoticeTitle';
+
 /** Where things moved when Pages and Resources became Docs. */
 export const DocsMergeNoticeContent = memo(() => {
   const { t } = useTranslation('file');

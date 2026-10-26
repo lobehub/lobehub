@@ -9,6 +9,12 @@ import {
   isMessageListServerVerified,
 } from '@/services/message/cache';
 import { revalidateConversationMessages } from '@/services/message/replica';
+import {
+  PREFETCH_BATCH_SIZE,
+  primeMessageListPage,
+  readMessagesByRoundCursorBatch,
+  releaseUnusedPrimedMessageListPage,
+} from '@/services/message/roundCursorPage';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
@@ -28,6 +34,13 @@ import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
  */
 
 const log = debug('lobe-client:message-query');
+
+/**
+ * Topics one visible-row prefetch pass may warm. A viewport renders far fewer
+ * rows than this; the cap only stops a long list or a fast scroll from turning
+ * one paint into an unbounded fan-out.
+ */
+const MAX_PREFETCH_TOPICS_PER_CALL = 24;
 
 type Setter = StoreSetter<ChatStore>;
 export const messageQuery = (set: Setter, get: () => ChatStore, _api?: unknown) =>
@@ -112,6 +125,81 @@ export class MessageQueryActionImpl {
     } catch (error) {
       // Background warming should never surface an unhandled rejection.
       log('Failed to warm the message transcript: %O', error);
+    }
+  };
+
+  /**
+   * Batched form of {@link prefetchMessages} for a list surface: every visible
+   * topic the caller hands over is warmed from ONE server read.
+   *
+   * Each topic still goes through its own transcript head path — same merge,
+   * cursor and persistence — because the batch only hands over the page
+   * (`primeMessageListPage`); what changes is that N visible rows cost one
+   * request. A page the batch did not return, or a failed batch, leaves that
+   * topic on its normal read.
+   *
+   * Eligibility mirrors the single prefetch: no client-minted topic, nothing
+   * running locally, and nothing the store can already paint.
+   */
+  prefetchTopicMessagesBatch = async (params: {
+    agentId?: string | null;
+    groupId?: string | null;
+    topicIds: string[];
+  }): Promise<void> => {
+    const { agentId, topicIds } = params;
+    if (!agentId || topicIds.length === 0) return;
+
+    const chat = this.#get();
+    const transcript = getMessageTranscript(this.#set, this.#get);
+
+    const contexts = [...new Set(topicIds)]
+      .filter((topicId) => !chat.creatingTopicIds.includes(topicId))
+      // The active conversation loads through its own sync; warming it here
+      // would race that read with the smaller prefetch window.
+      .filter((topicId) => topicId !== chat.activeTopicId)
+      .map((topicId) => ({
+        agentId,
+        groupId: params.groupId ?? undefined,
+        scope: 'main' as const,
+        threadId: null,
+        topicId,
+      }))
+      .filter((context) => !operationSelectors.isAgentRuntimeRunningByContext(context)(chat))
+      // "Visible and nothing local" is the whole point: a populated transcript
+      // is already what the row would paint on click.
+      .filter((context) => !transcript.read(transcript.keyOf(context))?.items.length)
+      .slice(0, MAX_PREFETCH_TOPICS_PER_CALL);
+
+    for (let index = 0; index < contexts.length; index += PREFETCH_BATCH_SIZE) {
+      const chunk = contexts.slice(index, index + PREFETCH_BATCH_SIZE);
+      const pages = readMessagesByRoundCursorBatch(chunk);
+
+      const primed = chunk.map((context) => {
+        const page = pages.then((result) => {
+          const batched = result.get(context.topicId!);
+          // A topic the batch skipped must not settle as an empty transcript.
+          if (!batched) throw new Error(`No batch page for topic ${context.topicId}`);
+
+          return batched;
+        });
+        primeMessageListPage(context, page);
+
+        return { context, page };
+      });
+
+      await Promise.all(
+        primed.map(async ({ context, page }) => {
+          try {
+            await transcript.slice.fetch(context);
+          } catch (error) {
+            log('Failed to warm the topic transcript %s: %O', context.topicId, error);
+          }
+          // This fetch joins a read already in flight when one is out, and a
+          // joined read never takes the page primed here. Dropping the unused
+          // prime keeps an old batch window from answering a later head read.
+          releaseUnusedPrimedMessageListPage(context, page);
+        }),
+      );
     }
   };
 

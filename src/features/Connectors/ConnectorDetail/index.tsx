@@ -7,10 +7,13 @@ import { useTranslation } from 'react-i18next';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
-import { useResourceManageable } from '@/hooks/useResourceManageable';
+import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
+import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 
+import ConnectorActionErrorText from '../ConnectorActionErrorText';
 import CustomConnectorModal from '../CustomConnectorModal';
 import { getLocalizedConnectorDetail } from './localization';
 import ToolPermissionGroup from './ToolPermissionGroup';
@@ -66,6 +69,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const resetConnectorPermissions = useToolStore((s) => s.resetConnectorPermissions);
     const disconnectConnector = useToolStore((s) => s.disconnectConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
+    const forgetComposioConnection = useToolStore((s) => s.forgetComposioConnection);
     const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
     const uninstallMCPPlugin = useToolStore((s) => s.uninstallMCPPlugin);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -75,15 +79,21 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
 
-    // Only the creator or a workspace owner may manage this connector — the
-    // server enforces the same rule, this keeps the UI honest about it.
-    const canManage = useResourceManageable(connector?.userId);
-    const manageTooltip = canManage
-      ? undefined
-      : t(
-          'connector.manageOnlyCreator',
-          'Only the creator or a workspace owner can manage this connector',
-        );
+    // Members co-maintain shared connectors unless the workspace restricted it;
+    // editing the stored credentials stays with the creator or a workspace
+    // owner. The server enforces both, this keeps the UI honest about it.
+    const { canManage, canManageCredentials, isPending, restrictedByPolicy } =
+      useConnectorManageable(connector);
+    const creatorOnlyTooltip = t(
+      'connector.manageOnlyCreator',
+      'Only the creator or a workspace owner can manage this connector',
+    );
+    const deniedTooltip = restrictedByPolicy
+      ? ts('tools.connectorFeedback.manageOnly')
+      : creatorOnlyTooltip;
+    // While the policy loads the controls are disabled without a reason yet.
+    const manageTooltip = canManage || isPending ? undefined : deniedTooltip;
+    const credentialsTooltip = canManageCredentials || isPending ? undefined : deniedTooltip;
 
     // Deleting/uninstalling revokes the user's authorization; spell out the
     // consequence. For an agent-owned connector it ALSO unpins the tool from
@@ -99,25 +109,44 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             'This removes the connector and its authorization from your account. Any agent that uses it will need to be re-authorized afterwards.',
         });
 
+    // A 403 means the cached policy was stale: refetch it so the buttons turn
+    // disabled with their hover reason, rather than reporting a permission error
+    // for a button that looked usable. Returns whether it was such a rejection.
+    const settlePermissionRejection = useCallback((error: unknown) => {
+      const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
+      if (httpStatus !== 403) return false;
+      void refreshConnectorManagePolicy();
+      return true;
+    }, []);
+
     const notifyActionError = useCallback(
       (error: unknown) => {
-        const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
-        toast.error(
-          httpStatus === 403
-            ? t(
-                'connector.manageOnlyCreator',
-                'Only the creator or a workspace owner can manage this connector',
-              )
-            : t('connector.actionFailed', 'Operation failed, please try again'),
-        );
+        if (settlePermissionRejection(error)) return;
+        toast.error(t('connector.actionFailed', 'Operation failed, please try again'));
       },
-      [t],
+      [settlePermissionRejection, t],
     );
 
-    // Custom connector sync hits the remote MCP server with stored credentials
-    // and rewrites tool rows — creator/owner only (enforced server-side too).
-    // Builtin/marketplace bootstrap syncs are no-ops for non-managers.
-    const canSync = canManage || connector?.sourceType !== ConnectorSourceType.custom;
+    // A failed uninstall / delete / disconnect also stays in the panel: the toast
+    // is gone long before the user looks back. Keyed by connector so switching
+    // to another one never shows a stale reason.
+    const [removeError, setRemoveError] = useState<{
+      connectorId: string;
+      error: ConnectorActionError;
+    }>();
+    const notifyRemoveError = useCallback(
+      (error: unknown) => {
+        if (settlePermissionRejection(error)) return;
+        notifyActionError(error);
+        setRemoveError({ connectorId, error: toConnectorActionError('remove', error) });
+      },
+      [connectorId, notifyActionError, settlePermissionRejection],
+    );
+
+    // Custom connector sync uses the stored credentials (on desktop it reads them
+    // through the creator/owner-only edit read), so it follows the credentials
+    // gate. Builtin/marketplace bootstrap syncs are no-ops for non-managers.
+    const canSync = canManageCredentials || connector?.sourceType !== ConnectorSourceType.custom;
 
     const handleSync = useCallback(async () => {
       if (!connector) return;
@@ -147,6 +176,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         content: deleteConfirmContent,
         okButtonProps: { danger: true },
         onOk: async () => {
+          setRemoveError(undefined);
           try {
             if (isBuiltin) {
               await uninstallBuiltinTool(connector.identifier);
@@ -154,9 +184,13 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               await uninstallMCPPlugin(connector.identifier);
             }
             await deleteConnector(connectorId);
+            // The Composio list does not watch these writes; without this the
+            // uninstalled row keeps showing as connected until a reload.
+            if (getComposioAppByIdentifier(connector.identifier))
+              forgetComposioConnection(connector.identifier);
             onDelete?.();
           } catch (error) {
-            notifyActionError(error);
+            notifyRemoveError(error);
           }
         },
         title: t('connector.uninstallConfirm', 'Uninstall this tool?'),
@@ -243,7 +277,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
               </Button>
             </ManageTooltip>
             {/* Sync/Refresh: re-sync tool list from manifest */}
-            <ManageTooltip title={canSync ? undefined : manageTooltip}>
+            <ManageTooltip title={canSync ? undefined : credentialsTooltip}>
               <Button
                 disabled={!canSync}
                 icon={<RefreshCwIcon size={14} />}
@@ -256,9 +290,9 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             </ManageTooltip>
             {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
             {isMcpConnector && connector?.mcpConnectionType === 'http' && (
-              <ManageTooltip title={manageTooltip}>
+              <ManageTooltip title={credentialsTooltip}>
                 <Button
-                  disabled={!canManage}
+                  disabled={!canManageCredentials}
                   icon={<PencilIcon size={14} />}
                   size="small"
                   onClick={() => setCustomModalOpen(true)}
@@ -280,10 +314,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                         disabled={!canManage}
                         size="small"
                         onClick={async () => {
+                          setRemoveError(undefined);
                           try {
                             await disconnectConnector(connectorId);
                           } catch (error) {
-                            notifyActionError(error);
+                            notifyRemoveError(error);
                           }
                         }}
                       >
@@ -301,11 +336,12 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                             content: deleteConfirmContent,
                             okButtonProps: { danger: true },
                             onOk: async () => {
+                              setRemoveError(undefined);
                               try {
                                 await deleteConnector(connectorId);
                                 onDelete?.();
                               } catch (error) {
-                                notifyActionError(error);
+                                notifyRemoveError(error);
                               }
                             },
                             title: t('connector.deleteConfirm', 'Delete this connector?'),
@@ -319,10 +355,10 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 )}
                 {/* Uninstall for builtin and marketplace tools */}
                 {(isBuiltin || isMarketplace) && (
-                  <ManageTooltip title={manageTooltip}>
+                  <ManageTooltip title={credentialsTooltip}>
                     <Button
                       danger
-                      disabled={!canManage}
+                      disabled={!canManageCredentials}
                       icon={<Trash2 size={14} />}
                       size="small"
                       onClick={handleUninstall}
@@ -346,6 +382,12 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             padding: 16,
           }}
         >
+          {removeError?.connectorId === connectorId && (
+            <div style={{ marginBottom: 12 }}>
+              <ConnectorActionErrorText error={removeError.error} name={connectorName} />
+            </div>
+          )}
+
           {/* Description */}
           {connectorDescription && (
             <div

@@ -9,7 +9,7 @@ import {
   jobsOf,
   lease,
 } from '../../repositories/channel/__tests__/testUtils';
-import { agentOperations, channelMessages, channels, topics } from '../../schemas';
+import { agentOperations, channelJobs, channelMessages, channels, topics } from '../../schemas';
 import { AgentOperationModel } from '../agentOperation';
 import { MessageModel } from '../message';
 import { TopicModel } from '../topic';
@@ -88,6 +88,12 @@ describe('Channel source and ordinary conversation boundaries', () => {
       await db.select().from(channelMessages).where(eq(channelMessages.id, state.publicMessage.id)),
     ).toHaveLength(1);
     const next = await setup();
+    // A claimed reply holds its writer; the Channel goes only once execution has ended.
+    await expect(db.delete(channels).where(eq(channels.id, next.channel.id))).rejects.toThrow();
+    await db
+      .update(channelJobs)
+      .set({ writerHeld: false })
+      .where(eq(channelJobs.id, next.claim.job.id));
     await db.delete(channels).where(eq(channels.id, next.channel.id));
     expect(await next.runtime.findById(next.internal.id)).toBeDefined();
     expect(await new TopicModel(db, fixture.ownerId).findById(next.claim.topic.id)).toBeDefined();

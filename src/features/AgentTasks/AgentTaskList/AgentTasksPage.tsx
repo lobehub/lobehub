@@ -27,6 +27,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -35,7 +36,12 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
-import { getVisibleTaskStatuses, normalizeTaskListViewOptions } from './listViewOptions';
+import {
+  getCompletedWithin,
+  getVisibleTaskStatuses,
+  normalizeTaskListViewOptions,
+  toStoredTaskListViewOptions,
+} from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 import TaskList from './TaskList';
 import TaskListVisibilityFilter from './TaskListVisibilityFilter';
@@ -64,6 +70,8 @@ interface TaskPageHeaderVisibilityParams {
   agentId?: string;
   isEmptyHero: boolean;
   isMobile: boolean;
+  /** The mobile bundle, whose header already leads back to the scope. */
+  mobileSurface?: boolean;
   projectId?: string;
 }
 
@@ -71,6 +79,7 @@ export const getTaskPageHeaderVisibility = ({
   agentId,
   isEmptyHero,
   isMobile,
+  mobileSurface = false,
   projectId,
 }: TaskPageHeaderVisibilityParams) => {
   // The global page's own crumb is the `tasks` tab, so the breadcrumb only
@@ -79,7 +88,10 @@ export const getTaskPageHeaderVisibility = ({
   const isGlobalEmpty = !isScoped && isEmptyHero;
 
   return {
-    showBreadcrumb: isScoped,
+    // The mobile header only fits the tabs; its back button and the agent /
+    // project drawer already lead to the scope the breadcrumb names. A narrow
+    // desktop window has neither, so it keeps the breadcrumb.
+    showBreadcrumb: isScoped && !mobileSurface,
     showTaskAgentPanelToggle: !isGlobalEmpty && shouldRenderTaskAgentPanelToggle(isMobile),
     showViewOptions: !isGlobalEmpty,
   };
@@ -142,10 +154,13 @@ export const clampCollectionPage = (page: number, total: number): number =>
  * - every fetched row renders. With `showSubTasks: false` `TaskList` folds a
  *   child away whenever its parent shares the page, which would leave the page
  *   sparse while `total` still counts the hidden rows. Nesting (when enabled)
- *   still tucks a child under a parent that is on the same page.
+ *   still tucks a child under a parent that is on the same page. Likewise the
+ *   `completedTasks` cut is applied server-side before pagination; repeating it
+ *   on the page with the browser clock could drop rows `total` still counts.
  * Grouping stays client-side — it only arranges the rows of the current page.
  */
 const PAGINATED_COLLECTION_VIEW = {
+  completedTasks: 'all',
   orderBy: 'updatedAt',
   orderDirection: 'asc',
   showSubTasks: true,
@@ -157,12 +172,12 @@ export const getScheduledTaskViewOptions = (
   ...viewOptions,
   ...PAGINATED_COLLECTION_VIEW,
   groupBy: 'automationMode',
-  hideCompleted: false,
 });
 
 /**
- * "My tasks" additionally sends `hideCompleted` as a server status filter
- * (`getVisibleTaskStatuses`) rather than applying it to the fetched page.
+ * "My tasks" additionally sends `completedTasks` as a server filter
+ * (`getVisibleTaskStatuses` / `getCompletedWithin`) rather than applying it to
+ * the fetched page.
  */
 export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskListViewOptions => ({
   ...viewOptions,
@@ -272,6 +287,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   });
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
+    completedWithin: getCompletedWithin(viewOptions),
     enabled: isMineCollection && !isMineBoard,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
@@ -314,7 +330,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         groupBy: normalized.groupBy === 'automationMode' ? 'status' : normalized.groupBy,
         subGroupBy: normalized.subGroupBy === 'automationMode' ? 'none' : normalized.subGroupBy,
       };
-      updateSystemStatus({ taskListViewOptions: next }, 'updateTaskListViewOptions');
+      updateSystemStatus(
+        { taskListViewOptions: toStoredTaskListViewOptions(next) },
+        'updateTaskListViewOptions',
+      );
     },
     [updateSystemStatus, viewOptions],
   );
@@ -362,7 +381,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   }, [agentId, canCreateTask, navigate, projectId]);
 
   const handleShowHiddenCompleted = useCallback(() => {
-    setViewOptions((prev) => ({ ...prev, hideCompleted: false }));
+    setViewOptions((prev) => ({ ...prev, completedTasks: 'all' }));
   }, [setViewOptions]);
 
   const handleCollectionChange = useCallback(
@@ -403,6 +422,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
       isOrdinaryCollection,
     }),
     isMobile,
+    mobileSurface: isMobileSurface(),
     projectId,
   });
 

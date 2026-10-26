@@ -44,6 +44,8 @@ export interface RecordOperationStartParams {
   operationId: string;
   parentOperationId?: string | null;
   provider?: string;
+  /** Trusted trigger dispatch: atomically consume an existing matching idle reservation. */
+  requireReservation?: boolean;
   startedAt?: Date;
   taskId?: string | null;
   threadId?: string | null;
@@ -170,6 +172,24 @@ export class AgentOperationModel {
       userId: this.userId,
       workspaceId: this.workspaceId ?? null,
     };
+
+    const reservationIdentity = and(
+      eq(agentOperations.id, params.operationId),
+      eq(agentOperations.status, 'idle'),
+      eq(agentOperations.userId, this.userId),
+      sql`${agentOperations.workspaceId} IS NOT DISTINCT FROM ${this.workspaceId ?? null}`,
+      sql`${agentOperations.topicId} IS NOT DISTINCT FROM ${params.topicId ?? null}`,
+      sql`${agentOperations.agentId} IS NOT DISTINCT FROM ${params.agentId ?? null}`,
+    );
+    if (params.requireReservation) {
+      const [started] = await this.db
+        .update(agentOperations)
+        .set(values)
+        .where(reservationIdentity)
+        .returning({ id: agentOperations.id });
+      if (!started) throw new Error('Operation reservation is no longer available');
+      return;
+    }
 
     // A trigger may reserve an idle operation before dispatch. Only the same execution
     // identity may initialize it; duplicate starts never overwrite a running or terminal row.

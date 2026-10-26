@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "Platform hatası",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "Şema uyumsuzluğu",
   "builtins.lobe-agent.apiName.vent.rejected": "Kaydedilmedi",
+  "builtins.lobe-agent.subAgent.backgroundHint": "Sonuç, tamamlandığında bu konuşmaya gönderilecektir.",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "Arka planda çalışıyor",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} jeton",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} araç",
   "builtins.lobe-agent.subAgent.stopped": "Bitirmeden durduruldu",

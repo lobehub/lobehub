@@ -46,6 +46,11 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     min-height: 0;
   `,
+  bodyScrollable: css`
+    /* Rows past the card height scroll inside the card instead of being clipped. */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  `,
   card: css`
     overflow: hidden;
 
@@ -129,6 +134,10 @@ const WidgetCard = memo<WidgetCardProps>(
     // The running badge would repeat the spinning refresh button and the pulsing dot.
     const badges = health.badges.filter((badge) => badge !== 'running');
 
+    // Lists and tables are the only outputs taller than their card; the rest size to it.
+    const scrollable =
+      bodyState === 'output' && (output?.type === 'list' || output?.type === 'table');
+
     let body: ReactNode;
     if (bodyState === 'output' && output) {
       body = (
@@ -191,7 +200,7 @@ const WidgetCard = memo<WidgetCardProps>(
             </Flexbox>
           )}
         </Flexbox>
-        <div className={styles.body}>{body}</div>
+        <div className={cx(styles.body, scrollable && styles.bodyScrollable)}>{body}</div>
         {updatedAt && (
           <Flexbox horizontal align={'center'} className={styles.footer} gap={6}>
             <HealthDot health={health} />

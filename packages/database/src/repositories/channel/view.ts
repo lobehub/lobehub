@@ -1,0 +1,211 @@
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt } from 'drizzle-orm';
+
+import {
+  agentOperations,
+  agents,
+  channelJobs,
+  channelMembers,
+  channelMessages,
+  channelThreads,
+  files as fileTable,
+  users,
+} from '../../schemas';
+import type { Transaction } from '../../type';
+import { fileIdsByMessage } from './attachments';
+import { activeMembers } from './delivery';
+import { ChannelError } from './error';
+
+const publicMessageColumns = {
+  ...getTableColumns(channelMessages),
+  senderAgentAvatar: agents.avatar,
+  senderAgentName: agents.name,
+  senderAgentTitle: agents.title,
+  senderUserAvatar: users.avatar,
+  senderUserName: users.fullName,
+  senderUsername: users.username,
+};
+
+type MessageRow = typeof channelMessages.$inferSelect & {
+  senderAgentAvatar: string | null;
+  senderAgentName: string | null;
+  senderAgentTitle: string | null;
+  senderUserAvatar: string | null;
+  senderUserName: string | null;
+  senderUsername: string | null;
+};
+
+const publicMessage = (row: MessageRow, fileIds: string[]) => {
+  const {
+    senderAgentAvatar,
+    senderAgentName,
+    senderAgentTitle,
+    senderUserAvatar,
+    senderUserName,
+    senderUsername,
+    ...message
+  } = row;
+  const isAgent = message.routingStatus === 'reply';
+  return {
+    ...message,
+    fileIds,
+    author: {
+      avatar: isAgent ? senderAgentAvatar : senderUserAvatar,
+      id: isAgent ? message.agentId : message.userId,
+      name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
+      type: isAgent ? ('agent' as const) : ('user' as const),
+    },
+  };
+};
+
+/** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
+export const readChannelView = async (
+  tx: Transaction,
+  channelId: string,
+  options: { before?: number; limit?: number; threadId?: string | null } = {},
+) => {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
+  const [members, reversed, threads, jobs] = await Promise.all([
+    tx
+      .select({
+        active: channelMembers.active,
+        actorType: channelMembers.actorType,
+        agentId: channelMembers.agentId,
+        avatar: agents.avatar,
+        description: channelMembers.description,
+        id: channelMembers.id,
+        name: channelMembers.name,
+        role: channelMembers.role,
+        userId: channelMembers.userId,
+        userName: users.fullName,
+        username: users.username,
+        userAvatar: users.avatar,
+        lastReadSequence: channelMembers.lastReadSequence,
+      })
+      .from(channelMembers)
+      .leftJoin(users, eq(users.id, channelMembers.userId))
+      .leftJoin(agents, eq(agents.id, channelMembers.agentId))
+      .where(eq(channelMembers.channelId, channelId))
+      .orderBy(asc(channelMembers.createdAt)),
+    tx
+      .select(publicMessageColumns)
+      .from(channelMessages)
+      .leftJoin(users, eq(users.id, channelMessages.userId))
+      .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+      .where(
+        and(
+          eq(channelMessages.channelId, channelId),
+          options.threadId
+            ? eq(channelMessages.threadId, options.threadId)
+            : isNull(channelMessages.threadId),
+          options.before === undefined ? undefined : lt(channelMessages.sequence, options.before),
+        ),
+      )
+      .orderBy(desc(channelMessages.sequence))
+      .limit(limit + 1),
+    tx
+      .select()
+      .from(channelThreads)
+      .where(eq(channelThreads.channelId, channelId))
+      .orderBy(asc(channelThreads.createdAt)),
+    tx
+      .select({
+        id: channelJobs.id,
+        memberId: channelJobs.memberId,
+        messageId: channelJobs.messageId,
+        threadId: channelJobs.threadId,
+        status: channelJobs.status,
+        blockedCode: channelJobs.blockedCode,
+        writerHeld: channelJobs.writerHeld,
+        operationStatus: agentOperations.status,
+        createdAt: channelJobs.createdAt,
+        publicationRevoked: channelJobs.publicationRevoked,
+      })
+      .from(channelJobs)
+      .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          options.threadId
+            ? eq(channelJobs.threadId, options.threadId)
+            : isNull(channelJobs.threadId),
+        ),
+      )
+      .orderBy(desc(channelJobs.createdAt))
+      .limit(200),
+  ]);
+  if (options.threadId && !threads.some((thread) => thread.id === options.threadId))
+    throw new ChannelError('NOT_FOUND', 'Thread not found');
+  const thread = threads.find((entry) => entry.id === options.threadId);
+  const [rootMessage] = thread
+    ? await tx
+        .select(publicMessageColumns)
+        .from(channelMessages)
+        .leftJoin(users, eq(users.id, channelMessages.userId))
+        .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, thread.rootMessageId),
+          ),
+        )
+    : [];
+  const page = reversed.slice(0, limit).reverse();
+  const files = await fileIdsByMessage(tx, [
+    ...page.map((message) => message.id),
+    ...(rootMessage ? [rootMessage.id] : []),
+  ]);
+  const ids = [...new Set([...files.values()].flat())];
+  const attachments = ids.length
+    ? await tx
+        .select({
+          id: fileTable.id,
+          name: fileTable.name,
+          fileType: fileTable.fileType,
+          size: fileTable.size,
+          url: fileTable.url,
+        })
+        .from(fileTable)
+        .where(inArray(fileTable.id, ids))
+    : [];
+  return {
+    attachments,
+    hasMore: reversed.length > limit,
+    jobs,
+    members,
+    threads,
+    rootMessage: rootMessage ? publicMessage(rootMessage, files.get(rootMessage.id) ?? []) : null,
+    messages: page.map((message) => publicMessage(message, files.get(message.id) ?? [])),
+  };
+};
+
+/** A branch freezes its main-line boundary; opening it never creates or replays a job. */
+export const createChannelThread = async (
+  tx: Transaction,
+  channelId: string,
+  input: { followerMemberIds: string[]; rootMessageId: string },
+) => {
+  const [root] = await tx
+    .select()
+    .from(channelMessages)
+    .where(
+      and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, input.rootMessageId)),
+    );
+  if (!root || root.threadId)
+    throw new ChannelError('BAD_REQUEST', 'Choose a message on the main timeline');
+  const [existing] = await tx
+    .select()
+    .from(channelThreads)
+    .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.rootMessageId, root.id)));
+  if (existing) return existing;
+  const followers = await activeMembers(tx, channelId, [...new Set(input.followerMemberIds)]);
+  const [thread] = await tx
+    .insert(channelThreads)
+    .values({
+      channelId,
+      followerMemberIds: followers.map((member) => member.id),
+      rootMessageId: root.id,
+      rootSequence: root.sequence,
+    })
+    .returning();
+  return thread;
+};

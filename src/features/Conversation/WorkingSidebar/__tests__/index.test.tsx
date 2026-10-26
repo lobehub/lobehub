@@ -696,6 +696,50 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(screen.queryByTestId('review')).not.toBeInTheDocument();
   });
 
+  it('keeps the active Review mounted while the panel is collapsed', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+    globalStore.status.workingSidebarTab = 'review';
+
+    // A new `availableWidth` on each rerender gets past the sidebar's `memo`.
+    const { rerender } = render(<AgentWorkingSidebar availableWidth={1600} />);
+    const review = screen.getByTestId('review');
+    expect(renderedReview.current?.active).toBe(true);
+
+    globalStore.status.showRightPanel = false;
+    rerender(<AgentWorkingSidebar availableWidth={1601} />);
+    expect(review).toBeInTheDocument();
+
+    globalStore.status.showRightPanel = true;
+    rerender(<AgentWorkingSidebar availableWidth={1602} />);
+    expect(screen.getByTestId('review')).toBe(review);
+    expect(renderedReview.current?.active).toBe(true);
+  });
+
+  it('releases Review once the panel stays collapsed', () => {
+    vi.useFakeTimers();
+    try {
+      agentStore.activeAgentId = 'agent';
+      reviewState.repoType = 'git';
+      reviewState.workingDirectory = '/repo';
+      localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+      globalStore.status.workingSidebarTab = 'review';
+
+      const { rerender } = render(<AgentWorkingSidebar availableWidth={1600} />);
+      globalStore.status.showRightPanel = false;
+      rerender(<AgentWorkingSidebar availableWidth={1601} />);
+      act(() => vi.advanceTimersByTime(29_000));
+      expect(screen.getByTestId('review')).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens Skills and Documents by default for a new workspace context', () => {
     localStorageState.openTabsByContext = {};
     globalStore.status.workingSidebarTab = 'overview';

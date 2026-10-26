@@ -476,7 +476,11 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
   /**
    * Write a conversation's rows (memory only). An unchanged id sequence keeps
    * the entry's paging; so does `preservePaging` (a reducer edit of the same
-   * window). Anything else is a fresh, unpaged transcript.
+   * window). Rows that changed only after an unchanged oldest row (a run step
+   * adding its assistant and tool rows) keep what is known about the history
+   * before it: re-assuming more there would page a reached topic start again
+   * on every scroll to the top while the run goes on. Anything else is a
+   * fresh, unpaged transcript.
    */
   const commit = (
     context: TranscriptContext,
@@ -491,13 +495,22 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     if (clientCreatedId) noteClientWrite(clientCreatedId);
     return slice.update(
       key,
-      (current) =>
-        current &&
-        (preservePaging ||
+      (current) => {
+        if (!current) return transcriptOf(messages);
+        if (
+          preservePaging ||
           (current.items.length === messages.length &&
-            current.items.every((item, index) => item.id === messages[index].id)))
-          ? { ...current, items: messages }
-          : transcriptOf(messages),
+            current.items.every((item, index) => item.id === messages[index].id))
+        )
+          return { ...current, items: messages };
+        const keepsOlderEdge =
+          context.messageReadMode !== 'forward' &&
+          current.items.length > 0 &&
+          current.items[0].id === messages[0]?.id;
+        return keepsOlderEdge
+          ? { ...transcriptOf(messages), hasMore: current.hasMore, nextCursor: current.nextCursor }
+          : transcriptOf(messages);
+      },
       { persist: false },
     );
   };

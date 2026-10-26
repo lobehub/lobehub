@@ -1,7 +1,8 @@
 import { PROJECT_MEMBER_ROLES, type ProjectMemberRole } from '@lobechat/types';
-import { Avatar, Flexbox, Select, Text } from '@lobehub/ui';
+import { Flexbox, Select, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import UserAvatar from '@/components/UserAvatar';
 import type { ProjectMemberItem } from '@/services/projectReview';
 
 interface MemberRowProps {
@@ -15,7 +16,7 @@ export function MemberRow({ busy, member, onRoleChange }: MemberRowProps) {
   const name = member.user?.name ?? member.userId;
   return (
     <Flexbox horizontal align="center" gap={12} paddingBlock={12} paddingInline={16}>
-      <Avatar avatar={member.user?.avatar || undefined} size={28} title={name} />
+      <UserAvatar avatar={member.user?.avatar} name={name} size={28} />
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Text ellipsis>{name}</Text>
         {member.user?.email && name !== member.user.email && (

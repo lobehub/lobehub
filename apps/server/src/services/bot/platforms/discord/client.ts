@@ -63,12 +63,16 @@ function isSubscribableThread(platformThreadId: string): boolean {
   return guildId === '@me' || !!discordThreadId;
 }
 
+const BOT_NAMES_TTL_MS = 60 * 60 * 1000;
+const BOT_NAMES_RETRY_MS = 60 * 1000;
+
 class DiscordGatewayClient implements PlatformClient {
   readonly id = 'discord';
   readonly applicationId: string;
 
   private abort = new AbortController();
   private bot: ChatBot<any> | null = null;
+  private botNames?: { expiresAt: number; names: string[] };
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private discord: DiscordApi;
@@ -483,6 +487,29 @@ class DiscordGatewayClient implements PlatformClient {
     const [, guildId, , discordThreadId] = threadId.split(':');
     return guildId === '@me' || !discordThreadId;
   }
+
+  /**
+   * The bot account's names, read once an hour: renaming a bot is rare, and each read is a REST
+   * call. A failed refresh keeps serving the last known names and waits a minute before asking
+   * again, so an outage costs one request a minute rather than one per message.
+   */
+  getBotNames = async (): Promise<string[]> => {
+    const now = Date.now();
+    if (this.botNames && this.botNames.expiresAt > now) return this.botNames.names;
+
+    try {
+      const names = await this.discord.getBotNames();
+      this.botNames = { expiresAt: now + BOT_NAMES_TTL_MS, names };
+
+      return names;
+    } catch (error) {
+      if (!this.botNames) throw error;
+      log('getBotNames refresh failed, keeping the last known names: %O', error);
+      this.botNames = { ...this.botNames, expiresAt: now + BOT_NAMES_RETRY_MS };
+
+      return this.botNames.names;
+    }
+  };
 
   /**
    * Spawn a Discord thread off the triggering message when the bot wakes

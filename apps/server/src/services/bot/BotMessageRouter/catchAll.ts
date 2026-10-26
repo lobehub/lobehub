@@ -31,12 +31,15 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     displayToolCalls,
     dmSettings,
     gateFollowup,
+    initiate,
     isMessageMonitoringAllowed,
     observe,
+    observeBurst,
     operatorUserId,
     passGatesOrNotify,
     platform,
     reactionMode,
+    remember,
     serverDB,
     userId,
     watchKeywordEntries,
@@ -67,6 +70,9 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
   // those messages (shadow by default), so they must reach this handler.
   if (dmCatchAllEnabled || keywordCatchAllEnabled || botWakeEnabled) {
     bot.onNewMessage(/./, async (thread, message, context?: MessageContext) => {
+      // Everyone's words, other bots' too, are context for a later judgement; never DMs (the
+      // recorder refuses them) and never the bot's own.
+      remember('catchAll', [...(context?.skipped ?? []), message], thread);
       if (message.author.isBot === true) return;
 
       // Skip text-based slash commands — already handled by registerCommands
@@ -90,16 +96,24 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       // If neither path applies, return so the regex doesn't act as a
       // channel-wide hijack. DMs still need the dmCatchAllEnabled gate
       // because a DM message can arrive while DM policy is disabled.
+      let initiation: Awaited<ReturnType<typeof initiate>>;
       if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) {
-        // Observation only. Gated like every other passive listening path.
+        // Gated like every other passive listening path.
         if (
-          botWakeEnabled &&
-          !isDM &&
-          (await isMessageMonitoringAllowed(`onNewMessage (${platform} bot-wake)`, thread.id))
+          !botWakeEnabled ||
+          isDM ||
+          !(await isMessageMonitoringAllowed(`onNewMessage (${platform} bot-wake)`, thread.id))
         ) {
-          observe('catchAll', message, thread, 'skip', 'not-addressed');
+          return;
         }
-        return;
+
+        // Nobody addressed the bot. With the rules enforcing it may still speak up: its name is in
+        // the text, or it spoke lately and the classifier agrees. Otherwise this is observation only.
+        initiation = await initiate('catchAll', mergeSkippedMessages(message, context), thread);
+        if (!initiation) {
+          observeBurst('catchAll', message, context, thread);
+          return;
+        }
       }
 
       if (matchesWatchKeyword) {
@@ -121,9 +135,14 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
 
       const replyLocale = detectReplyLocale(message);
 
+      // A wake the bot started itself answers chatter nobody asked it to join: if the sender is not
+      // allowed, drop it quietly rather than posting a rejection notice into the channel.
+      const gateThread = initiation
+        ? { id: thread.id, isDM: thread.isDM, post: async () => undefined }
+        : thread;
       if (
         !(await passGatesOrNotify(
-          thread,
+          gateThread,
           message.author,
           replyLocale,
           `onNewMessage (${platform} catch-all)`,
@@ -171,12 +190,16 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
             applied.prefixLength,
           );
         }
+      }
 
+      if (matchesWatchKeyword || initiation) {
         // Last check before a keyword wake runs: enforced policies, then the scheduler. Before
         // the thread below is opened, so a parked message does not leave an empty thread behind.
         if (
           (await gateFollowup({
             entryPoint: 'catchAll',
+            // Already judged by `initiate`: do not judge again.
+            initiated: !!initiation,
             merged,
             parked: [...(context?.skipped ?? []), message],
             thread,
@@ -221,7 +244,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         merged,
         thread,
         'wake',
-        matchesWatchKeyword ? 'watch-keyword' : 'direct-message',
+        initiation?.reason ?? (matchesWatchKeyword ? 'watch-keyword' : 'direct-message'),
       );
       void emitAgentSignalSourceEvent(
         {
@@ -269,6 +292,9 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           displayToolCalls,
           reactionMode,
           replyLocale,
+          // A wake the bot started itself may end in silence (`NO_REPLY`) and holds back its
+          // reactions and typing until it decides to speak.
+          wakeKind: initiation ? 'followup' : undefined,
         });
       } catch (error) {
         log('onNewMessage: unhandled error from handleMention: %O', error);

@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import PlatformDetail, { type ChannelFormValues } from '@/features/AgentChannel/PlatformDetail';
 import Body from '@/features/AgentChannel/PlatformDetail/Body';
-import Footer from '@/features/AgentChannel/PlatformDetail/Footer';
+import { FooterActions } from '@/features/AgentChannel/PlatformDetail/Footer';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
 import Header from './Header';
@@ -29,6 +29,13 @@ vi.mock('react-i18next', () => ({
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
+}));
+
+// The channel body reads released-behind flags from the server config store, which is a
+// context store: without a provider it throws while rendering.
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (s: { featureFlags: Record<string, unknown> }) => unknown) =>
+    selector({ featureFlags: {} }),
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -212,12 +219,19 @@ const currentConfig = {
   settings: { charLimit: 2000 },
 };
 
-const BodyHarness = ({ disabled }: { disabled?: boolean }) => {
+const BodyHarness = ({
+  activeTab,
+  disabled,
+}: {
+  activeTab: 'advanced' | 'connect';
+  disabled?: boolean;
+}) => {
   const form = useForm<ChannelFormValues>();
 
   return (
     <Body
       hasConfig
+      activeTab={activeTab}
       currentConfig={currentConfig}
       disabled={disabled}
       form={form}
@@ -230,11 +244,10 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
   const form = useForm<ChannelFormValues>();
 
   return (
-    <Footer
+    <FooterActions
       hasConfig
       isDirty
       connecting={false}
-      currentConfig={currentConfig}
       disabled={disabled}
       form={form}
       platformDef={platformDef}
@@ -250,6 +263,9 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
   );
 };
 
+// A saved bot folds its credentials away; open them the way a person would.
+const openCredentials = () => fireEvent.click(screen.getByText('channel.credentials'));
+
 describe('Agent channel permission gates', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
@@ -257,30 +273,35 @@ describe('Agent channel permission gates', () => {
   });
 
   it('renders channel credentials as read-only when editing is denied', () => {
-    render(<BodyHarness disabled />);
+    const { unmount } = render(<BodyHarness disabled activeTab="connect" />);
 
-    expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toBeDisabled();
+    openCredentials();
+    expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toBeDisabled();
     expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeDisabled();
+    unmount();
+
+    render(<BodyHarness disabled activeTab="advanced" />);
+
+    expect(screen.getByRole('textbox', { name: /^channel.charLimit/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
   });
 
-  it('toggles advanced settings from the full header row', async () => {
-    render(<BodyHarness />);
+  it('shows one tab at a time and keeps the others mounted', () => {
+    const { rerender } = render(<BodyHarness activeTab="advanced" />);
 
-    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument();
-    const header = screen.getByRole('button', { name: 'channel.settings' });
+    expect(screen.getByRole('textbox', { name: /^channel.charLimit/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: /^channel.applicationId/ }),
+    ).not.toBeInTheDocument();
+    // The hidden panel is still in the document, so its values survive a save.
+    expect(document.querySelector('#channel-panel-connect')).toHaveAttribute('hidden');
 
-    fireEvent.click(header);
-    await waitFor(() =>
-      expect(screen.queryByRole('textbox', { name: 'channel.charLimit' })).not.toBeInTheDocument(),
-    );
+    rerender(<BodyHarness activeTab="connect" />);
 
-    fireEvent.click(header);
-    await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument(),
-    );
+    openCredentials();
+    expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /^channel.charLimit/ })).not.toBeInTheDocument();
   });
 
   it('disables mutating channel actions when editing is denied', () => {
@@ -297,7 +318,10 @@ describe('Agent channel permission gates', () => {
       <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
     );
 
-    const applicationId = screen.getByRole('textbox', { name: 'channel.applicationId' });
+    // A saved bot opens on its first settings tab; the app ID lives on "connect".
+    fireEvent.click(screen.getByRole('tab', { name: 'channel.tab.connect' }));
+    openCredentials();
+    const applicationId = screen.getByRole('textbox', { name: /^channel.applicationId/ });
     await waitFor(() => expect(applicationId).toHaveValue('app-id'));
     expect(screen.queryByRole('button', { name: 'channel.discard' })).not.toBeInTheDocument();
 
@@ -309,7 +333,7 @@ describe('Agent channel permission gates', () => {
     );
     screen.getByRole('button', { name: 'channel.discard' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toHaveValue('app-id'),
+      expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toHaveValue('app-id'),
     );
   }, 15_000);
 
@@ -320,7 +344,6 @@ describe('Agent channel permission gates', () => {
         agentId="agent-id"
         currentConfig={currentConfig}
         platformDef={platformDef}
-        runtimeStatus="connected"
       />,
     );
 

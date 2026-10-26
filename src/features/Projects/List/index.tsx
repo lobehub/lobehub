@@ -275,11 +275,12 @@ const ProjectListPage = memo(() => {
           <SearchBar
             allowClear
             placeholder={t('list.searchPlaceholder')}
-            style={{ maxWidth: 280 }}
+            // Natural width as before on wide screens; only shrinks when the row is tight.
+            style={{ flex: '0 1 auto', maxWidth: 280, minWidth: 0 }}
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
+          <Button icon={PlusIcon} style={{ flex: 'none' }} onClick={() => openCreateProjectModal()}>
             {t('create.action')}
           </Button>
         </Flexbox>

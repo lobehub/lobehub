@@ -24,6 +24,8 @@ export interface ChannelClaimOptions {
   leaseMs: number;
   /** Process or queue worker that will drive the run. */
   leaseOwner: string;
+  /** Trusted presence snapshot from the current Gateway scope; omitted by storage-only callers. */
+  onlineDeviceIds?: string[];
   /** Trusted server defaults from getServerDefaultAgentConfig(); use {} when unconfigured. */
   serverDefaultAgentConfig: PartialDeep<LobeAgentConfig>;
 }
@@ -243,6 +245,15 @@ export const claimJob = async (
   const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
+    return null;
+  }
+
+  if (
+    member.config?.deviceId &&
+    options.onlineDeviceIds &&
+    !options.onlineDeviceIds.includes(member.config.deviceId)
+  ) {
+    await block(tx, job, 'device_offline', 'Waiting for the configured device to connect');
     return null;
   }
 

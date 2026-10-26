@@ -111,21 +111,21 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     error,
     onDismiss,
     onRetry,
-    onTransfer,
+    onHandoff,
     workingDirectoryReset,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
     onRetry?: () => void;
-    onTransfer?: () => void;
+    onHandoff?: () => void;
     workingDirectoryReset?: { name?: string; onReset: () => Promise<void> };
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
       {onRetry && <button onClick={onRetry}>guide-retry</button>}
-      {onTransfer && <button onClick={onTransfer}>transfer</button>}
+      {onHandoff && <button onClick={onHandoff}>handoff</button>}
       {workingDirectoryReset && (
         <button onClick={() => void workingDirectoryReset.onReset()}>
           {`reset-to:${workingDirectoryReset.name}`}
@@ -681,7 +681,7 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('transfer'));
+    fireEvent.click(screen.getByText('handoff'));
     expect(createTopicForwardModalMock).toHaveBeenCalledWith({
       cancelSourceContinuation: true,
       sourceAgentId: 'source-agent',
@@ -727,7 +727,7 @@ describe('ErrorMessageExtra', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('transfer'));
+    fireEvent.click(screen.getByText('handoff'));
     expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
 
     const props = createTopicForwardModalMock.mock.calls[0][0];

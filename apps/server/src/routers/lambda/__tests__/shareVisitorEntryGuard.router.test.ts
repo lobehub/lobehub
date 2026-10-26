@@ -52,6 +52,7 @@ const mockMessageDeleteMessagesBySession = vi.fn();
 const mockMessageUpdateTTS = vi.fn();
 const mockMessageUpdateTranslate = vi.fn();
 vi.mock('@/database/models/message', () => ({
+  MESSAGE_KEYWORD_SEARCH_MAX_LIMIT: 100,
   MessageModel: vi.fn(function () {
     return {
       deleteMessagesBySession: mockMessageDeleteMessagesBySession,

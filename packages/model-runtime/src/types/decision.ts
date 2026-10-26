@@ -138,6 +138,12 @@ export interface DecisionOptions {
   pricingContext?: ModelPricingContext;
   signal?: AbortSignal;
   /**
+   * Structured tracing config consumed by tracing hooks (e.g. `llm_generation_tracing`), the same
+   * bag `generateObject` takes. Loosely typed so the runtime stays tracing-agnostic; callers
+   * import `TracingOptions` from `@lobechat/llm-generation-tracing` for the strongly typed shape.
+   */
+  tracing?: Record<string, unknown>;
+  /**
    * userId for the request
    */
   user?: string;

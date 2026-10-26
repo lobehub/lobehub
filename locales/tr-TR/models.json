@@ -765,6 +765,7 @@
   "irag-1.0.description": "ERNIE iRAG, görsel arama, görsel-metin alma ve içerik üretimi için görsel geri getirme destekli üretim modelidir.",
   "jamba-large.description": "Karmaşık kurumsal görevler için tasarlanmış, en güçlü ve gelişmiş modelimizdir; olağanüstü performans sunar.",
   "jamba-mini.description": "Sınıfındaki en verimli modeldir; hız ve kalite arasında denge sağlar, daha küçük bir kaynak kullanımı sunar.",
+  "jev-1.14.0.description": "TypeSafe Jev, oluşturulan metin yerine yazılı sorular için kalibre edilmiş olasılıklar döndüren bir Sistem Bir karar modelidir.",
   "jina-deepsearch-v1.description": "DeepSearch, web araması, okuma ve akıl yürütmeyi birleştirerek derinlemesine araştırmalar yapar. Araştırma görevinizi alır, çoklu yinelemelerle geniş aramalar yapar ve ardından bir yanıt üretir. Süreç, sürekli araştırma, akıl yürütme ve çok yönlü problem çözmeyi içerir; bu, önceden eğitilmiş verilerden yanıt veren standart LLM'lerden veya tek seferlik yüzeysel aramaya dayanan geleneksel RAG sistemlerinden temelde farklıdır.",
   "kimi-k2-instruct.description": "Kimi K2 Instruct, Kimi'nin resmi akıl yürütme modelidir; kod, soru-cevap ve daha fazlası için uzun bağlam desteği sunar.",
   "kimi-k2-thinking.description": "kimi-k2-thinking, genel ajanlık ve akıl yürütme yeteneklerine sahip bir Moonshot AI düşünme modelidir. Derin akıl yürütmede mükemmeldir ve çok adımlı araç kullanımıyla zor problemleri çözebilir.",

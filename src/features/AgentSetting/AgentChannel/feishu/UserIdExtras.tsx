@@ -161,7 +161,7 @@ export const FeishuUserIdExtras = ({
       icon={<Download size={14} />}
       loading={loading}
       size="small"
-      style={{ alignSelf: 'flex-start', marginBlockEnd: 12, marginInlineStart: 32 }}
+      style={{ alignSelf: 'flex-start', marginBlockEnd: 12 }}
       type="default"
       onClick={handleClick}
     >

@@ -230,6 +230,19 @@ export interface ScmChangeRequestSnapshot {
 /** The LobeHub records a change request is tied to. Only ever filled in, never cleared. */
 export interface ScmChangeRequestLinks {
   acceptanceId?: string | null;
+  /**
+   * Where `acceptanceId` came from, when the answer decides whether the model
+   * may write it.
+   *
+   * - `hand-link` — the acceptance's own `metadata.pullRequests`. Resolved
+   *   outside the change-request row lock, so the model re-checks the link
+   *   before writing: an unlink that commits in between must not be undone by
+   *   a delivery that read the link while it still stood.
+   * - `row-binding` — only echoed from the row the delivery matched. The row
+   *   under its lock is the authority on that binding, and it may have lost it
+   *   to an unlink since, so the model never lets the echo revive it.
+   */
+  acceptanceSource?: 'hand-link' | 'row-binding';
   installationId?: string | null;
   taskId?: string | null;
   topicId?: string | null;

@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { styles } from './style';
 import { taskDetailPath } from './taskDetailPath';
@@ -47,7 +48,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   );
 
   const allTasksLabel = (
-    <Text color={'inherit'} weight={500}>
+    <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
       {t('taskList.all')}
     </Text>
   );
@@ -133,14 +134,20 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
       className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} />}
       items={[
-        {
-          title:
-            taskId || agentCrumbNode ? (
-              <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
-            ) : (
-              allTasksLabel
-            ),
-        },
+        // On a phone the header's back button already leads up, and there is
+        // no room for the root crumb beside the task title.
+        ...(isMobileSurface() && (taskId || agentCrumbNode)
+          ? []
+          : [
+              {
+                title:
+                  taskId || agentCrumbNode ? (
+                    <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+                  ) : (
+                    allTasksLabel
+                  ),
+              },
+            ]),
         ...(agentCrumbNode ? [agentCrumbNode] : []),
         ...ancestorCrumbs,
         ...(currentTaskCrumb ? [currentTaskCrumb] : []),

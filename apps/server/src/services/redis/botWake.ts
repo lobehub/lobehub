@@ -4,6 +4,12 @@ import debug from 'debug';
 import pMap from 'p-map';
 
 import { RedisKeys } from '@/server/modules/Redis';
+import {
+  CONVERSATION_LOG_MAX_LINES,
+  parseLine,
+  serializeLine,
+} from '@/server/services/agentSignal/scenarios/botWake/conversation';
+import type { WakeConversationLine } from '@/server/services/agentSignal/scenarios/botWake/types';
 
 import { getRedisServiceClient } from './client';
 
@@ -16,6 +22,9 @@ const getClient = () => getRedisServiceClient('botWake');
 const CHANNEL_TTL_SECONDS = 24 * 60 * 60;
 const SCHEDULER_TTL_SECONDS = 24 * 60 * 60;
 const CLASSIFIER_CALLS_TTL_SECONDS = 2 * 60 * 60;
+// A channel's recent messages are context for the next judgement, not an archive: an idle channel
+// loses them after three days, and an active one never holds more than the newest 200.
+const CONVERSATION_LOG_TTL_SECONDS = 3 * 24 * 60 * 60;
 
 // A conversation contributes its own key plus its Discord thread keys, so the read fan-out stays
 // small but is still bounded: an unbounded `Promise.all` would open one Redis round trip per key.
@@ -99,7 +108,84 @@ return 0
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// ZADD every line (score = send time, member = the serialized line, so two bots adding the same
+// message collapse into one), then keep the newest ARGV[1] and refresh the TTL, atomically.
+const REMEMBER_MESSAGES_SCRIPT = `
+for i = 3, #ARGV, 2 do
+  redis.call('ZADD', KEYS[1], ARGV[i], ARGV[i + 1])
+end
+redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -(tonumber(ARGV[1]) + 1))
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return 1
+`;
+
+// The newest ARGV[1] members, newest first.
+const READ_MESSAGES_SCRIPT = `
+return redis.call('ZREVRANGE', KEYS[1], 0, tonumber(ARGV[1]) - 1)
+`;
+
 export const botWake = {
+  /**
+   * Adds messages to the conversation log of every key given (a channel and, on Discord, its
+   * thread). The log is a sorted set scored by send time whose member is the whole serialized
+   * line, so a message that two bots both saw is stored once. Keeps the newest 200 lines.
+   */
+  async rememberMessages(keys: readonly string[], lines: readonly WakeConversationLine[]) {
+    if (keys.length === 0 || lines.length === 0) return;
+
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const args = lines.flatMap((line) => [line.at, serializeLine(line)]);
+      await pMap(
+        keys,
+        (key) =>
+          redis.eval(
+            REMEMBER_MESSAGES_SCRIPT,
+            1,
+            RedisKeys.botWake.conversationLog(key),
+            CONVERSATION_LOG_MAX_LINES,
+            CONVERSATION_LOG_TTL_SECONDS,
+            ...args,
+          ),
+        { concurrency: 4 },
+      );
+    } catch (error) {
+      log('rememberMessages failed: %O', error);
+    }
+  },
+
+  /**
+   * The newest `limit` messages of a conversation, oldest first, leaving out `excludeId` (the
+   * message being judged). `undefined` when Redis is unavailable, `[]` for a quiet channel.
+   */
+  async readRecentMessages(
+    key: string,
+    limit: number,
+    excludeId?: string,
+  ): Promise<WakeConversationLine[] | undefined> {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const raw = await redis.eval<string[]>(
+        READ_MESSAGES_SCRIPT,
+        1,
+        RedisKeys.botWake.conversationLog(key),
+        limit + (excludeId ? 1 : 0),
+      );
+
+      return raw
+        .map(parseLine)
+        .filter((line): line is WakeConversationLine => !!line && line.id !== excludeId)
+        .slice(0, limit)
+        .reverse();
+    } catch (error) {
+      log('readRecentMessages failed: %O', error);
+    }
+  },
+
   /**
    * Counts one classifier call against the bot's UTC hour. `undefined` without Redis, so the
    * caller decides whether to spend.
@@ -128,11 +214,9 @@ export const botWake = {
       const redis = await getClient();
       if (!redis) return;
 
-      const hashes = await pMap(
-        keys,
-        (key) => redis.hgetall(RedisKeys.botWake.channel(key)),
-        { concurrency: CHANNEL_READ_CONCURRENCY },
-      );
+      const hashes = await pMap(keys, (key) => redis.hgetall(RedisKeys.botWake.channel(key)), {
+        concurrency: CHANNEL_READ_CONCURRENCY,
+      });
 
       return mergeBotWakeChannelFields(hashes.map(parseFields));
     } catch (error) {

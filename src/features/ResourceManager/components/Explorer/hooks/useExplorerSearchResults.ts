@@ -10,7 +10,7 @@ import { type FileListItem } from '@/types/files';
  * Rows of the explorer's search overlay, or `searchParams: null` while no
  * keyword is typed.
  *
- * Search results are a `@lobechat/replica` entry owned by the ResourceManager
+ * Search results are a `local-replica` entry owned by the ResourceManager
  * store: the head page is persisted, so re-opening a search paints the rows it
  * had before the request lands. The keyword is part of the query identity, so
  * the painted rows are only used while they still answer the request on screen.

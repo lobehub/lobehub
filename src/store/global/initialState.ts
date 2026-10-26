@@ -448,8 +448,15 @@ export interface SystemStatus {
    */
   taskListViewMode?: TaskViewMode;
   taskListViewOptions?: {
+    /**
+     * Left out of the defaults on purpose: status is deep-merged over the
+     * persisted value, so a default here would override the legacy
+     * `hideCompleted` it replaces before normalization could migrate it.
+     */
+    completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
     groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
-    hideCompleted: boolean;
+    /** @deprecated Replaced by `completedTasks`; read once to migrate. */
+    hideCompleted?: boolean;
     nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
@@ -579,7 +586,6 @@ export const INITIAL_STATUS = {
   recentPageSize: 5,
   taskListViewOptions: {
     groupBy: 'status',
-    hideCompleted: true,
     nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,

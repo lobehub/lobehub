@@ -7,7 +7,13 @@ import type { WakeAuthor, WakeSignal } from '@/server/services/agentSignal/scena
 /** The part of a chat-sdk `Message` the wake pipeline reads. */
 export interface WakeMessageLike {
   attachments?: unknown[];
-  author?: { isBot?: boolean | 'unknown'; isMe?: boolean; userId?: string };
+  author?: {
+    fullName?: string;
+    isBot?: boolean | 'unknown';
+    isMe?: boolean;
+    userId?: string;
+    userName?: string;
+  };
   id: string;
   isMention?: boolean;
   raw?: unknown;

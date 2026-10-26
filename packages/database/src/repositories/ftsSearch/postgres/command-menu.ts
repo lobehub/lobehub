@@ -26,12 +26,14 @@ import type {
   FtsSearchFileResult,
   FtsSearchKnowledgeBaseResult,
   FtsSearchMessageResult,
+  FtsSearchTimeRange,
   FtsSearchTopicResult,
 } from '../types';
 import type { PostgresFtsSearchContext } from './context';
 import { AGENT_SCOPE_CANDIDATE_POOL } from './context';
 import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, buildSelectedResponse, mapScoresToRelevance, truncate } from './results';
+import { timeRangeWhere } from './timeRange';
 
 /** Topics and messages are displayed by recency after a larger scored candidate pool is fetched. */
 const RECENCY_CANDIDATE_MULTIPLIER = 4;
@@ -145,6 +147,7 @@ export async function searchTopics(
   query: string,
   limit: number,
   agentId?: string,
+  timeRange?: FtsSearchTimeRange,
 ): Promise<FtsSearchBackendResponse<FtsSearchTopicResult>> {
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
   const { db, dialect } = context;
@@ -174,6 +177,7 @@ export async function searchTopics(
         // the creator's command-menu search.
         notShareVisitorTopic(),
         agentId && !context.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
+        timeRangeWhere(topics, timeRange),
         dialect.match(TOPIC_FIELDS, preparedQuery),
       ),
     )
@@ -262,6 +266,7 @@ export async function searchMessages(
   query: string,
   limit: number,
   agentId?: string,
+  timeRange?: FtsSearchTimeRange,
 ): Promise<FtsSearchBackendResponse<FtsSearchMessageResult>> {
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
   const { db, dialect } = context;
@@ -292,6 +297,7 @@ export async function searchMessages(
         // userId and are only identifiable through their parent topic.
         notShareVisitorMessage(),
         agentId && !context.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
+        timeRangeWhere(messages, timeRange),
         dialect.match(MESSAGE_FIELDS, preparedQuery),
       ),
     )

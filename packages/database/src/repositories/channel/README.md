@@ -124,26 +124,28 @@ Author names and attachment availability are resolved at read time.
 - Existing hard-delete paths already reach Channel rows: Agent deletion (including trash purge,
   session and group deletion) cascades direct conversations, `UserModel.deleteUser` removes
   personal channels and direct conversations, and workspace deletion cascades every channel in it.
-  The storage cascade removes jobs and directory locks; it does not stop external processes.
-  Before Channel creation is exposed, these paths must stop active writers and confirm physical
-  termination first. This unactivated foundation does not provide that orchestration.
+  Cascades do not stop external processes. The integration's `channel_preserve_active_writer`
+  database trigger rejects any job deletion while `writer_held` is true, including cascades.
+  Stop replies and confirm physical termination before retrying the deletion. This prevents
+  existing deletion paths from silently dropping a live directory lock; it does not automatically
+  stop external processes on behalf of a destructive operation.
 - Deleting a Channel deletes its jobs/public history, not ordinary conversations or execution
   records. Deleting a topic/operation clears the corresponding job reference; it does not delete
   the Channel timeline or release an unconfirmed writer.
 
 ## Migration and verification
 
-`0184_channel_tables` is the consolidated, unshipped PR migration regenerated from the final
-schema on top of 0183. It creates Channel tables and references existing Agents, topics,
-operations and files; it does not add columns or indexes to the ordinary chat tables. Defensive
-DDL permits replay of this exact schema, not conversion from earlier development-only versions.
-A separately deployed prototype needs an explicit inventory and conversion plan before cutover.
-The normal deployment migration runner applies this migration; no separate online index step is
-needed for existing chat tables.
+`0184_channel_tables` is the foundation migration already on `canary` and must remain unchanged.
+It creates Channel tables and references existing Agents, topics, operations and files; it does
+not add columns or indexes to the ordinary chat tables. The integration adds the active-writer
+deletion guard in `0187_channel_preserve_active_writer`, so databases that already applied the
+foundation receive the guard too. Both migrations are applied by the normal deployment runner;
+no separate online index step is needed for existing chat tables. Defensive DDL permits replay
+of this exact schema, not conversion from earlier development-only versions. A separately
+deployed prototype needs an explicit inventory and conversion plan before cutover.
 
 Focused integration tests cover storage separation, ordinary access boundaries, attachment
 retention, continuation/expiry, incremental input, routing, stops and writer locks. Run with PGlite
 and with PostgreSQL (`vitest.config.server.mts`); the two concurrent claim/sequence tests require
-real PostgreSQL row locking. No product acceptance surface exists yet: this PR remains an
-unactivated database/repository foundation. Runtime and UI integration will require acceptance
-when delivered.
+real PostgreSQL row locking. Runtime and UI integration require separate product acceptance;
+storage tests alone do not verify the user-visible Channel flow.

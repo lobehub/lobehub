@@ -3647,11 +3647,11 @@ When I am ___, I need ___
     'Connect a bot your team owns to {{name}}. Everyone in the group can @{{name}} to hand off work — nobody has to link an account.',
   'workspace.onboarding.flow.channels.quote': "Add me to your team's group chats,",
   'workspace.onboarding.flow.channels.highlight': 'and anyone can hand me work.',
-  'workspace.onboarding.flow.channels.showMore': 'More channels ({{count}})',
+  'workspace.onboarding.flow.channels.showMore': 'More IM bots ({{count}})',
   'workspace.onboarding.flow.channels.showLess': 'Show less',
-  'workspace.onboarding.flow.channels.more': 'You can change channels anytime in Agent → Channels.',
+  'workspace.onboarding.flow.channels.more': 'You can change IM bots anytime in Agent → IM Bots.',
   'workspace.onboarding.flow.channels.connect.back': 'Back to list',
-  'workspace.onboarding.flow.channels.connect.category': 'Bot channel',
+  'workspace.onboarding.flow.channels.connect.category': 'IM Bot',
   'workspace.onboarding.flow.channels.connect.description':
     "Use your own {{platform}} app to bring {{name}} into your team's chats as a bot.",
   'workspace.onboarding.flow.channels.connect.guide': 'Setup guide',
@@ -3668,7 +3668,7 @@ When I am ___, I need ___
   'workspace.onboarding.flow.channels.connect.attempt': 'Attempt {{count}}',
   'workspace.onboarding.flow.channels.connect.connectedTitle': '{{name}} connected',
   'workspace.onboarding.flow.channels.connect.connectedDesc':
-    'Members can now @{{name}} in your group to hand off work. Change it anytime in Agent → Channels.',
+    'Members can now @{{name}} in your group to hand off work. Change it anytime in Agent → IM Bots.',
   'workspace.onboarding.flow.channels.connect.edit': 'Edit credentials',
   'workspace.onboarding.flow.channels.connect.failedTitle': "Couldn't connect {{name}}",
   'workspace.onboarding.flow.channels.connect.errorCode': 'Error code: {{code}}',
@@ -4153,6 +4153,31 @@ When I am ___, I need ___
   'tools.composio.tools': 'tools',
 
   'tools.composio.verifyAuth': 'I have completed authentication',
+  'tools.connectorFeedback.askAdmin': 'Ask an admin to connect',
+  'tools.connectorFeedback.askAdminCopied':
+    'Request copied. Send it to a workspace owner or admin.',
+  'tools.connectorFeedback.askAdminMessage':
+    'Could you connect {{name}} for our LobeHub workspace? {{url}}',
+  'tools.connectorFeedback.connectFailed': 'Connection failed: {{reason}}',
+  'tools.connectorFeedback.manageOnly': 'Only workspace owners and admins can change connectors',
+  'tools.connectorFeedback.reason.authIncomplete':
+    'the authorization window closed before access to {{name}} was granted',
+  'tools.connectorFeedback.reason.forbidden':
+    'only workspace owners and admins can change connectors here',
+  'tools.connectorFeedback.reason.network': 'the network connection was interrupted',
+  'tools.connectorFeedback.reason.unknown': 'something went wrong',
+  'tools.connectorFeedback.removeFailed':
+    'Remove failed: {{reason}}. The connector is still here, so you can try again.',
+  'tools.connectorFeedback.removeFailedFinal': 'Remove failed: {{reason}}',
+  'tools.connectorFeedback.restricted':
+    'Connectors in this workspace are managed by its owners and admins.',
+  'tools.connectorPolicy.desc':
+    'Choose who can connect, re-authorize and remove the connectors shared in this workspace.',
+  'tools.connectorPolicy.options.allMembers': 'All members',
+  'tools.connectorPolicy.options.onlyAdmins': 'Owners and admins',
+  'tools.connectorPolicy.title': 'Who can manage connectors',
+  'tools.connectorPolicy.updateFailed':
+    "Couldn't update who can manage connectors. Please try again.",
 
   'tools.lobehubSkill.authorize': 'Authorize',
 
@@ -4308,7 +4333,7 @@ When I am ___, I need ___
     'Runs once in the checkout, with network access, before the conversation starts.',
   'environments.form.env': 'Environment variables',
   'environments.form.envHint':
-    'Non-secret values only — stored as plain text and exported while the repository is cloned and the setup command runs.',
+    'Non-secret values only — stored as plain text and exported while the repository is cloned, while the setup command runs, and into every command the conversation runs.',
   'environments.form.addEnv': 'New variable',
   'environments.form.envCount_one': '{{count}} variable',
   'environments.form.envCount_other': '{{count}} variables',

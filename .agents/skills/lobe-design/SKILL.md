@@ -1,6 +1,6 @@
 ---
 name: lobe-design
-version: 5.4.2
+version: 5.8.0
 description: >
   Single entry for LobeHub UI design work. Routes any instruction — macro ("重做这个后台", "整体打磨一下"),
   medium ("把列表页的交互和空态补齐") or fine ("这个按钮颜色不对", "修 K-07") — into a business-first, layered
@@ -9,9 +9,11 @@ description: >
   portfolio / campaign), polishing existing product UI, admin consoles / dashboards / forms / workflows,
   design-system unification, screenshot restoration, pre-launch audit, and project bootstrap (AGENTS.md).
   Grounded in classic analysis models (double diamond, Gestalt, Nielsen heuristics, Kano, peak-end, Fogg,
-  journey map, cognitive load) and in a layered component boundary: take atoms from @lobehub/ui,
-  build business composites yourself. Built on @lobehub/ui, @lobehub/ui/form, @lobehub/ui/pro-table, cssVar
-  tokens, @lobehub/charts / icons / fluent-emoji / streamdown, with runnable lint, route, refs and
+  journey map, cognitive load) and in a layered component boundary: take atoms from the host's component
+  library and build business composites yourself. Platform-aware (web / desktop / mobile, read from the
+  project layer): web takes atoms from @lobehub/ui (/form, /pro-table) with cssVar tokens; React Native takes
+  them from the project's own library (e.g. @lobehub/ui-rn) with useTheme() tokens. Web ecosystem:
+  @lobehub/charts / icons / fluent-emoji / streamdown. Runnable lint (platform-gated), route, refs and
   bootstrap checks; in-product UI copy by product profile (consumer / SaaS / admin / developer), with
   zh-CN typography. Trigger on lobe-design, lobe-ui, lobehub, LobeChat UI, 控制台, 后台, 看板, 落地页, 官网,
   截图还原, 设计稿, 设计系统统一, 打磨, polish, refine, 审查, 上线前检查, 组件选择, 设计准则, AI 味, 文案, 措辞, 中英文空格, 初始化, AGENTS.md.
@@ -22,6 +24,7 @@ description: >
 一个入口，按需展开。本文件只负责四件事：**先理解业务、识别场景、决定跑哪些 stage、规定每一步的输出**。具体规则在 `stages/` 和 `references/` 里，进入某个 stage 时才读取，不要一开始就全部读完。
 
 **宿主项目已安装时**：把 `.agents/ux/product.md`（产品画像与适用性）和 `.agents/ux/components.md`（组件用法）当作本 skill 的一等输入——**先读它们，再进 stage**。没有这两份时，先跑 `05-init`（装完 / 升级后也应重跑）。
+**优先级**：`product.md` 里的平台与适用性（标为「不适用」的规则、按平台限定的规则）优先于本 skill 的通用规则；其余冲突以 skill 为准；项目层要违背通用原则（可达性、P-xx）必须写明理由（[init.md](references/init.md) I-10）。**平台是 mobile（React Native）时**，本文件与 references 里 web 专属的条目（`@lobehub/ui` 原子层、`cssVar` / `createStaticStyles`、antd、CSS 类名、`outline`、`font-family`）不适用：原子层是项目自己的 RN 组件库（如 `@lobehub/ui-rn`），`lint-lobe.mjs` 按平台自动跳过这些规则。
 
 ## 为什么这样分层
 
@@ -76,22 +79,22 @@ description: >
 
 | 层 | 例子 | 怎么办 |
 | --- | --- | --- |
-| 原子层 | `Button` `Input` `Modal` `Table` `Tag` | **必须**从 `@lobehub/ui` 取用（C-01 硬性规则，lint 兜底） |
+| 原子层 | `Button` `Input` `Modal` `Table` `Tag` | web：**必须**从 `@lobehub/ui` 取用（C-01 硬性规则，lint 兜底）；mobile：用项目的 RN 组件库（如 `@lobehub/ui-rn`） |
 | 皮肤层 | `Block` `Surface` `ConsoleShell` `PageHeader` | 用 lobe-ui / dashboard 现成的 |
 | 组合层 | 会话区、消息体、工作流画布、业务卡片簇 | **优先自建**，用原子层 + 皮肤层拼 |
 | 领域层 | Agent 会话、模型调用、审批流 | **必须自建** |
 
 判据：布局由业务语义决定 → 自建；需要跨页复用 → 自建一个项目内组件；只是为了外观相近 → 用现成件。
 反过来，把 `Table` / `Modal` / `Input` 在项目里重写一遍同样是错的（`LOBE-REIMPLEMENT-ATOM`）。
-自建件内部只能用原子层和皮肤层，取值仍走 `cssVar`，并且**不要改 lobe-ui 源码**。`chat` 系列是这条边界的参照实现。
+自建件内部只能用原子层和皮肤层，取值仍走主题 token（web：`cssVar`；RN：`useTheme()` 的 token），并且**不要改组件库源码**。`chat` 系列是这条边界的参照实现。
 
 ### 3. 项目接入与两轮自迭代（`stages/05-init.md`，`scripts/bootstrap.mjs`，`scripts/project-scan.mjs`）
 
 **装完或升级后先跑 05**（或对 Agent 说「初始化 / 升级后刷新」）：
 
-1. **接入**：探测 `AGENTS.md` → `CLAUDE.md` → 都没有就建立，把入口、触发、纪律、自迭代写进托管块（块外一字不改；`--print` 后再写）。
+1. **接入**：探测 `AGENTS.md` → `CLAUDE.md` → 都没有就建立，把入口、触发、纪律、自迭代写进托管块（块外一字不改；`--print` 后再写）。默认写精简块并跟随宿主语言（`--full` / `--lang zh|en` 覆盖，见 [init.md](references/init.md) I-04）。
 2. **Round 1 产品画像**：`project-scan.mjs` 收集确定性事实 → 写 `.agents/ux/product.md`（平台、产品类型、用户、核心任务、规则适用性、文案 profile）。
-3. **Round 2 组件盘点**：扫描项目组件 → 写 `.agents/ux/components.md`（薄包装 / 与 lobe-ui 重复 / 业务组件用法；无实现细节）。
+3. **Round 2 组件盘点**：扫描项目组件 → 写 `.agents/ux/components.md`（web：薄包装 / 与 lobe-ui 重复 / 业务组件；mobile：项目原子层 / 薄包装 / 业务组件；无实现细节）。
 
 项目层在 `.agents/ux/`，**不进**已安装 skill，重装不覆盖。日常 UI 任务**先读** `product.md` 与 `components.md`，再按 stage 加载。`--check` / `project-scan --check` 发现缺失或过期时重跑两轮。
 
@@ -220,6 +223,10 @@ brief：<一行摘要>
 未解决遗留 / 缺口：…
 学习候选：<本次被用户纠正的地方 → `node scripts/check-learnings.mjs --new` 生成条目，按 learnings/README.md 选层回写>
 ```
+
+### 示意图
+
+给用户看方案时，示意图只画正在讨论的那个模块，用编号标注讲清为什么这样设计，保持低密度，让人一眼看到要比较的地方，而不是整个应用。
 
 ## 资产目录（都由本入口按需引用，不是独立的 skill）
 

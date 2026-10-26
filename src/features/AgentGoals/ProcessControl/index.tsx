@@ -26,10 +26,13 @@ import {
 } from './useGoalProcessActions';
 
 // One left edge for headings and their content, so a section's rows line up
-// under its title instead of sitting on an indent.
+// under its title instead of sitting on an indent. The header bleeds out by the
+// trigger's padding, so the hover fill gets breathing room around the title
+// while the text itself keeps that edge.
 const SECTION_STYLES = {
+  header: { marginInline: -8 },
   panel: { paddingInline: 0 },
-  trigger: { paddingBlock: 8, paddingInline: 0 },
+  trigger: { paddingBlock: 8, paddingInline: 8 },
 };
 
 /**

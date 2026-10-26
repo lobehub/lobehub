@@ -118,6 +118,32 @@ describe('bot-wake recorder policy set', () => {
     expect(verdicts.at(-1)).toMatchObject({ confidence: 0.2, reason: 'two people talking' });
   });
 
+  it('runs the same policies from the keys the settings form writes', async () => {
+    make({ botWakeClassifierMode: 'shadow', botWakeEnabled: true }).record(observation());
+    await flush();
+
+    const { verdicts } = recorded()[0];
+    expect(verdicts.map((verdict: any) => verdict.policyId)).toEqual([
+      'legacy-router',
+      'bot-wake:internal-rules',
+      'bot-wake:owner-rules',
+      'bot-wake:classifier',
+    ]);
+    expect(classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a bot whose form was saved with bot-wake off to the router verdict alone', async () => {
+    const state = fakeState();
+    make({ botWakeEnabled: false, botWakeMode: 'shadow', botWakeScope: 'all' }, state).record(
+      observation(),
+    );
+    await flush();
+
+    expect(recorded()[0].verdicts).toHaveLength(1);
+    expect(state.readChannel).not.toHaveBeenCalled();
+    expect(classify).not.toHaveBeenCalled();
+  });
+
   it('shadow mode never turns a router wake into a skip, even when every policy denies', async () => {
     make({ botWake: { enabled: true, rules: { scope: 'none' } } }).record(
       observation({ outcome: 'wake', reason: 'watch-keyword' }, { text: '👍' }),

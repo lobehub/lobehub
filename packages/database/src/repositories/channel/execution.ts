@@ -90,6 +90,42 @@ export const releaseOutcome = (
 export class ChannelExecutionRepository {
   constructor(private readonly db: LobeChatDatabase) {}
 
+  /** The dispatch call settled; no later work from that call can start a process. */
+  finishDispatch = async (channelId: string, jobId: string) =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const job = await claimed(tx, channelId, jobId, true);
+      await tx
+        .update(channelJobs)
+        .set({ leaseExpiresAt: null, leaseOwner: null })
+        .where(eq(channelJobs.id, job.id));
+    });
+
+  /** Retire only an untouched reservation, racing recordStart on the operation row itself. */
+  retireReservation = async (channelId: string, jobId: string) =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const job = await claimed(tx, channelId, jobId, true);
+      if (!job.operationId || !job.writerHeld) return false;
+      const status = job.publicationRevoked ? 'interrupted' : 'error';
+      const [retired] = await tx
+        .update(agentOperations)
+        .set({ status, completedAt: new Date() })
+        .where(and(eq(agentOperations.id, job.operationId), eq(agentOperations.status, 'idle')))
+        .returning({ id: agentOperations.id });
+      if (!retired) return false;
+      await tx
+        .update(channelJobs)
+        .set({
+          leaseExpiresAt: null,
+          leaseOwner: null,
+          publicationRevoked: true,
+          status: job.publicationRevoked ? 'cancelled' : 'failed',
+          writerHeld: false,
+        })
+        .where(eq(channelJobs.id, job.id));
+      await audit(tx, channelId, 'reservation_retired', job.id, { status });
+      return true;
+    });
+
   /** Writes back a Jev decision for `attempt`; false when the result is stale. */
   resolveRouting = async (
     channelId: string,

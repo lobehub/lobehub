@@ -28,6 +28,11 @@ export interface FollowupGateDeps {
 
 export interface FollowupGateInput {
   entryPoint: BotWakeEntryPoint;
+  /**
+   * The wake came from `recorder.initiate`, which already ran the enforcing policies on this very
+   * message; judging again would repeat a model call to reach the same answer.
+   */
+  initiated?: boolean;
   /** The message as it would run (merged text). */
   merged: Message;
   /** Every original message behind `merged`, oldest first; these are what gets parked. */
@@ -51,19 +56,21 @@ export interface FollowupGateInput {
  */
 export const createFollowupGate = (deps: FollowupGateDeps) => {
   return async (input: FollowupGateInput): Promise<'proceed' | 'stop'> => {
-    const { entryPoint, merged, parked, thread, threadSubscribed } = input;
+    const { entryPoint, initiated, merged, parked, thread, threadSubscribed } = input;
 
     // Rollout off: no judging, no scheduling, no parking. The wake runs exactly as it used to.
     if (!(await deps.recorder.isRolledOut())) return 'proceed';
 
-    const decision = await deps.recorder.judge({
-      entryPoint,
-      message: merged,
-      outcome: 'wake',
-      reason: 'watch-keyword',
-      threadId: thread.id,
-      threadSubscribed,
-    });
+    const decision = initiated
+      ? undefined
+      : await deps.recorder.judge({
+          entryPoint,
+          message: merged,
+          outcome: 'wake',
+          reason: 'watch-keyword',
+          threadId: thread.id,
+          threadSubscribed,
+        });
     if (decision?.verdict === 'deny') {
       log('denied by %s: %s', decision.decidedBy, decision.reason);
       deps.observe(entryPoint, merged, thread, 'skip', 'policy-denied', threadSubscribed);

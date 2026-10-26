@@ -133,6 +133,63 @@ describe('internal rules policy', () => {
   });
 });
 
+describe('internal rules policy: naming the bot', () => {
+  const policy = createInternalRulesPolicy('enforce');
+  const conversation = { botNames: ['Shadow Arvin'], recent: [] };
+  const run = (s: WakeSignal, names = conversation) =>
+    policy.evaluate({ signal: s, state: { ...snapshot(), conversation: names } });
+
+  it('allows a plain message that calls the bot by name', () => {
+    const result = run(signal({ message: 'Shadow Arvin 听得到吗' }));
+
+    expect([result.verdict, result.reason]).toEqual(['allow', 'named-in-text']);
+    expect(result.tags).toContain('named-in-text');
+  });
+
+  it('lets an owner-written message count the same as anyone else’s', () => {
+    const owner = { ...human, isOwner: true };
+
+    expect(run(signal({ author: owner, message: 'shadow arvin, are you there?' })).verdict).toBe(
+      'allow',
+    );
+  });
+
+  it('still refuses what the other rules refuse, even when the bot is named', () => {
+    const named = 'Shadow Arvin ';
+    const cases: [Partial<WakeSignal>, string][] = [
+      [{ author: { ...human, isBot: true }, message: `${named}hi` }, 'bot-message'],
+      [{ author: { ...human, isMe: true }, message: `${named}hi` }, 'self-message'],
+      [{ author: { ...human, isSystem: true }, message: `${named}hi` }, 'system-message'],
+      [
+        { mentions: { ...noMentions, otherUserIds: ['u2'] }, message: `<@u2> ${named}hi` },
+        'mentions-someone-else',
+      ],
+      [
+        { mentions: { ...noMentions, everyone: true }, message: `@everyone ${named}` },
+        'broadcast-mention',
+      ],
+    ];
+
+    for (const [overrides, reason] of cases) {
+      expect([run(signal(overrides)).verdict, run(signal(overrides)).reason]).toEqual([
+        'deny',
+        reason,
+      ]);
+    }
+  });
+
+  it('has no opinion when nothing names the bot, or when its names are not known', () => {
+    expect(run(signal({ message: 'is anyone around?' })).verdict).toBe('abstain');
+    expect(run(signal({ message: 'Shadow Arvin hi' }), { botNames: [], recent: [] }).verdict).toBe(
+      'abstain',
+    );
+    expect(
+      policy.evaluate({ signal: signal({ message: 'Shadow Arvin hi' }), state: snapshot() })
+        .verdict,
+    ).toBe('abstain');
+  });
+});
+
 describe('owner rules policy', () => {
   const run = (
     botWake: Record<string, unknown>,
@@ -309,6 +366,25 @@ describe('classifier policy', () => {
 
     expect(classify).toHaveBeenCalledWith(
       expect.objectContaining({ customInstructions: 'billing only' }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('hands the model who the bot is and what was said just before', async () => {
+    const classify = answer();
+    const conversation = {
+      botNames: ['Shadow Arvin'],
+      lastBotMessage: 'The rollout starts at noon.',
+      recent: [{ at: 1, authorName: 'Bob', id: 'm0', isBot: false, text: 'is it live yet?' }],
+    };
+
+    await createClassifierPolicy('enforce', rules, classify).evaluate({
+      signal: signal(),
+      state: { ...snapshot(), conversation },
+    });
+
+    expect(classify).toHaveBeenCalledWith(
+      expect.objectContaining({ conversation }),
       expect.any(AbortSignal),
     );
   });

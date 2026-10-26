@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "Erro na plataforma",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "Incompatibilidade de esquema",
   "builtins.lobe-agent.apiName.vent.rejected": "Não registrado",
+  "builtins.lobe-agent.subAgent.backgroundHint": "O resultado será enviado para esta conversa quando terminar.",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "Executando em segundo plano",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} tokens",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} ferramentas",
   "builtins.lobe-agent.subAgent.stopped": "Parado antes de terminar",

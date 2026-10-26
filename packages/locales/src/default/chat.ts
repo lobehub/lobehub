@@ -342,6 +342,9 @@ export default {
     'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.collapsed': 'Compressed {{turns}} earlier turns · View summary',
   'compression.collapsedUnknown': 'Compressed earlier history · View summary',
+  'compression.emptySummary': 'The model returned an empty summary',
+  'compression.failed': 'Context compression failed, original messages kept',
+  'compression.failedReason': 'Summary generation failed: {{reason}}',
   'compression.history': 'Original conversation',
   'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
@@ -1103,13 +1106,27 @@ export default {
   'messageForward.successMulti': 'Forwarded to {{count}} agents',
   'messageForward.transcript.header':
     'The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:',
-  'messageForward.topic.handoffFailed':
-    'Transfer did not start because the source continuation could not be cancelled. It may already be running. Refresh the conversation and check its status.',
-  'messageForward.topic.sourceSchedulePaused':
-    'Transfer could not be confirmed. The original scheduled continuation is paused. Check the target conversation before retrying or scheduling again.',
   'messageForward.topic.context': 'Topic context',
   'messageForward.topic.description':
     "The selected Agent will receive this topic's context and continue the work.",
+  'messageForward.topic.handoff.failed': 'Could not hand off this topic. Please try again.',
+  'messageForward.topic.handoff.header':
+    'The following topic was handed off from another conversation. Please use it as context and continue:',
+  'messageForward.topic.handoff.notStarted':
+    'Handoff did not start because the source continuation could not be cancelled. It may already be running. Refresh the conversation and check its status.',
+  'messageForward.topic.handoff.notePlaceholder':
+    'Add a note (optional) — sent along with the topic context',
+  'messageForward.topic.handoff.partialFailed': 'Could not hand off to some Agents',
+  'messageForward.topic.handoff.sourceSchedulePaused':
+    'Handoff could not be confirmed. The original scheduled continuation is paused. Check the target conversation before retrying or scheduling again.',
+  'messageForward.topic.handoff.submit': 'Hand off',
+  'messageForward.topic.handoff.submitCount': 'Hand off ({{count}})',
+  'messageForward.topic.handoff.success': 'Handed off to {{title}}',
+  'messageForward.topic.handoff.successMulti_one': 'Handed off to {{count}} Agent',
+  'messageForward.topic.handoff.successMulti_other': 'Handed off to {{count}} Agents',
+  'messageForward.topic.handoff.title': 'Hand off to another Agent',
+  'messageForward.topic.handoff.unconfirmed':
+    'Handoff could not be confirmed. Check the target conversation before trying again.',
   'messageForward.topic.header':
     'The following topic was forwarded from another conversation. Please use it as context and continue:',
   'messageForward.topic.loadFailed': 'Could not load this topic for forwarding',
@@ -1241,9 +1258,9 @@ export default {
   'cliOverloadedGuide.retryHint':
     'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
   'cliOverloadedGuide.title': '{{name}} is temporarily overloaded',
+  'cliRateLimitGuide.actions.handoff': 'Hand off to another Agent',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
   'cliRateLimitGuide.actions.retry': 'Retry message',
-  'cliRateLimitGuide.actions.transfer': 'Transfer to another Agent',
   'cliRateLimitGuide.afterReset':
     'This account has reached its current usage limit. You can continue after {{resetAt}}.',
   'cliRateLimitGuide.afterResetWithLimitType':
@@ -1268,7 +1285,6 @@ export default {
   'cliRateLimitGuide.schedule.continueAfter': 'Continue in ~{{duration}}',
   'cliRateLimitGuide.schedule.continueAfterReset': 'Continue after reset',
   'cliRateLimitGuide.schedule.retryNow': 'Retry now',
-  'cliRateLimitGuide.schedule.runNow': 'Run now',
   'cliRateLimitGuide.schedule.scheduledAfterReset':
     'Scheduled. This run will continue automatically once the limit resets.',
   'cliRateLimitGuide.schedule.scheduledForApprox':
@@ -1868,6 +1884,8 @@ export default {
   'signalCallbacks.empty': 'No callback messages',
   'signalCallbacks.expand': 'Show details',
   'signalCallbacks.title': '{{tool}} · {{count}} callback updates',
+  'taskCompletion.title': '{{tool}} "{{description}}" finished',
+  'taskCompletion.titleWithoutDescription': '{{tool}} finished',
   'skillViewer.files': 'Files',
   'skillViewer.foldFiles': 'Hide files',
   'skillViewer.unfoldFiles': 'Show files',
@@ -1880,7 +1898,7 @@ export default {
   'supervisor.todoList.allComplete': 'All tasks completed',
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
-  'tab.integration': 'Channels',
+  'tab.integration': 'IM Bots',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',
   'tab.search': 'Search',
@@ -2684,7 +2702,6 @@ export default {
   'goalProcess.result.continueSeed.open': 'Still open:',
   'goalProcess.result.continueSeed.requirement': 'Original requirement:',
   'goalProcess.result.continueSeed.title': 'Continue: {{title}}',
-  'goalProcess.result.criteria.document': 'Evidence document',
   'goalProcess.result.criteria.empty': 'This Goal has no structured acceptance criteria.',
   'goalProcess.result.criteria.evidenceCount': '{{count}} evidence',
   'goalProcess.result.criteria.state.failed': 'Not met',
@@ -2989,6 +3006,11 @@ export default {
   'goalTurn.trigger.takeover': 'Takeover',
   'taskList.activeTasks': 'Active Tasks',
   'taskList.all': 'All tasks',
+  'taskList.completedTasks.all': 'All',
+  'taskList.completedTasks.day': 'Past day',
+  'taskList.completedTasks.month': 'Past month',
+  'taskList.completedTasks.none': 'None',
+  'taskList.completedTasks.week': 'Past week',
   'taskList.archived': 'Archived',
   'taskList.visibility.all': 'All',
   'taskList.visibility.label': 'Visibility',
@@ -2997,12 +3019,12 @@ export default {
   'taskList.emptyHero.greeting': 'What should we tackle today?',
   'taskList.emptyHero.templatesTitle': 'Templates picked for you',
   'taskList.form.columns': 'Columns',
+  'taskList.form.completedTasks': 'Completed & canceled',
   'taskList.form.grouping': 'Grouping',
   'taskList.form.nestedSubTasks': 'Nested sub-tasks',
   'taskList.form.orderCompletedByRecency': 'Sort completed tasks by recency',
   'taskList.form.ordering': 'Ordering',
   'taskList.form.showArchived': 'Show archived',
-  'taskList.form.showCompleted': 'Show completed & canceled',
   'taskList.form.showSubTasks': 'Show sub-tasks',
   'taskList.form.subGrouping': 'Sub-grouping',
   'taskList.hiddenCompleted.count_one': '{{count}} task',

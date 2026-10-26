@@ -4,7 +4,9 @@
 
 ## 聚焦
 
-- 取值：颜色、圆角、阴影、字体都走 `cssVar`；状态色从基础 token 派生
+- 取值：颜色、圆角、阴影、字体都走主题 token，状态色从基础 token 派生。按平台（`product.md` 的 `平台：`）：
+  - **web / desktop**：`cssVar`（从 `@lobehub/ui` 导入；字体由 `theme.css` 提供）
+  - **mobile（React Native）**：项目主题的 `useTheme()` token（如 `theme.colorText`、`theme.borderRadius`），写进 `StyleSheet` / 项目的 `createStyles`；字体用项目主题里的字体 token
 - **主题色本身要改时**（换品牌 / primary、定制色板、重调状态色阶）：不要在本 stage 手改 hex——改去 lobe-ui 的 [`tuning-color-palettes`](https://github.com/lobehub/lobe-ui/tree/master/.agents/skills/tuning-color-palettes)（本机已安装则按名调用）。本 stage 只决定如何**用**已有 token（克制、对比、反 AI 味）
 - 间距与对齐：4 的倍数；区块之间的间距要大于区块内部的间距；对齐线要少
 - 排版：字阶、字重、中文排版、等宽数字
@@ -14,7 +16,7 @@
 
 ## 不负责（重要）
 
-- **不评估组件选型，也不评估项目是否符合 LobeUI 架构。** 硬性架构规则由 `lint-lobe.mjs` 兜底，本 stage 只需要跑一下脚本，不需要把架构规范读进上下文。看到选型问题，记 `遗留 → 30`。
+- **不评估组件选型，也不评估项目是否符合宿主组件库的架构（web：LobeUI；RN：项目组件库）。** 硬性架构规则由 `lint-lobe.mjs` 兜底，本 stage 只需要跑一下脚本，不需要把架构规范读进上下文。看到选型问题，记 `遗留 → 30`。
 - 不改信息层级、区域顺序 → 40；不改文案措辞 → 75
 - 不补状态和边界 → 70
 - 不重新定方向（0→1 页面的方向卡由 20 产出，本 stage 只执行）

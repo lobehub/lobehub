@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import DashboardBoard from './Board';
 import DashboardActionsMenu from './DashboardActionsMenu';
@@ -32,6 +33,9 @@ const BoardPageHeader = memo<DashboardBoardPageProps>(
 
     return (
       <NavHeader
+        // The board's own back leads to its list; on mobile it replaces the
+        // generic back button instead of sitting beside a second one.
+        showTogglePanelButton={!isMobileSurface()}
         left={
           <Flexbox horizontal align={'center'} gap={6}>
             <ActionIcon
