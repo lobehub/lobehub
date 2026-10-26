@@ -89,6 +89,25 @@ const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number
   }
 };
 
+/**
+ * Whether a persisted blob may leave its tool set out.
+ *
+ * Reading the external key and writing it are two separate deploys. A queue
+ * continuation targets the shared runtime URL, not a versioned deployment, so
+ * during a rolling deploy (or a rollback) an operation saved by this build can
+ * next execute on a worker running the previous one — and that worker's
+ * `loadAgentState` never reads `agent_runtime_toolset`. Stripping on the first
+ * deploy would hand it a blob with no tool set, and the next LLM call would go
+ * out with the empty set `selectOperationToolSet` falls back to.
+ *
+ * So this build ships the reader only: while the flag is off nothing changes —
+ * the blob keeps its inline tool set byte-for-byte and no external key is
+ * written. Operators flip it on once the previous build has drained, which is
+ * when the mixed-version window is gone.
+ */
+const isToolSetStripEnabled = (): boolean =>
+  process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET === '1';
+
 export interface StepResult {
   events?: AgentEvent[];
   executionTime: number;
@@ -190,17 +209,22 @@ export class AgentStateManager {
   private serializeStateForPersist(state: AgentState): string {
     // `operationToolSet` is externalized to its own key (see
     // `externalizeToolSet`) and re-attached on load, so it never travels in the
-    // blob. It is immutable after creation, so a single write per operation
-    // replaces re-serializing ~300–400 KB of tool schemas at every step.
+    // blob — once stripping is enabled. Until then the blob keeps its inline
+    // copy so a previous-build worker can still execute the operation (see
+    // `isToolSetStripEnabled`). It is immutable after creation, so a single
+    // write per operation replaces re-serializing ~300–400 KB of tool schemas
+    // at every step.
     const { operationToolSet: _toolSet, ...withoutToolSet } = state as AgentState & {
       operationToolSet?: unknown;
     };
-    if (hasNonPersistedMessage((withoutToolSet as { messages?: unknown }).messages)) {
-      return JSON.stringify(withoutToolSet);
-    }
-    const { messages: _messages, ...rest } = withoutToolSet as typeof withoutToolSet & {
+    const persistable = (isToolSetStripEnabled() ? withoutToolSet : state) as AgentState & {
       messages?: unknown;
+      operationToolSet?: unknown;
     };
+    if (hasNonPersistedMessage(persistable.messages)) {
+      return JSON.stringify(persistable);
+    }
+    const { messages: _messages, ...rest } = persistable;
     return JSON.stringify(rest);
   }
 
@@ -254,12 +278,13 @@ export class AgentStateManager {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
 
     try {
-      await this.externalizeToolSet(operationId, state);
+      const stripToolSet = isToolSetStripEnabled();
+      if (stripToolSet) await this.externalizeToolSet(operationId, state);
       const serializedState = this.serializeStateForPersist(state);
       await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
       // Keep the externalized tool set alive in lockstep with the blob so a
       // long run never loads a stripped blob whose tool set has expired.
-      await this.redis.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
+      if (stripToolSet) await this.redis.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
 
       // Update metadata
       await this.updateOperationMetadata(operationId, {
@@ -345,7 +370,8 @@ export class AgentStateManager {
     try {
       // Write-once before opening the pipeline; the inline loop warms the cache
       // on its first step and every later step skips the tool-set write.
-      await this.externalizeToolSet(operationId, stepResult.newState);
+      const stripToolSet = isToolSetStripEnabled();
+      if (stripToolSet) await this.externalizeToolSet(operationId, stepResult.newState);
 
       const pipeline = this.redis.multi();
 
@@ -357,7 +383,7 @@ export class AgentStateManager {
         this.serializeStateForPersist(stepResult.newState),
       );
       // Refresh the externalized tool set's TTL alongside the blob.
-      pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
+      if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
 
       // Save step history
       const stepsKey = `${this.STEPS_PREFIX}:${operationId}`;
