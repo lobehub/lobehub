@@ -2,7 +2,13 @@ import type { ScmChangeRequestLinks } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { ScmIdentityModel } from '@/database/models/scm';
-import { acceptances, verifyRuns, works, workspaceMembers } from '@/database/schemas';
+import {
+  acceptances,
+  scmChangeRequests,
+  verifyRuns,
+  works,
+  workspaceMembers,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { SCM_WRITE_ROLES } from './scope';
@@ -18,7 +24,9 @@ import { SCM_WRITE_ROLES } from './scope';
  * 3. The acceptance round that recorded this PR url in its coding context
  *    (`verify_runs.context.pullRequest.url`), written by `lh acceptance run ingest`.
  * 4. The acceptance this PR was linked to by hand (`lh acceptance link-pr`,
- *    stored in `acceptances.metadata.pullRequests`).
+ *    stored in `acceptances.metadata.pullRequests`). The acceptance already
+ *    bound to the row wins over the newest link, so a link that lost the
+ *    claim cannot decide what a later merge accepts.
  *
  * Every source is fenced, because a PR body can name any acceptance id and
  * without a fence a merge on an attacker's repository would accept someone
@@ -295,6 +303,43 @@ export const resolveChangeRequestLinks = async (
   // the acceptance only, not its subject's conversation: the link says which
   // delivery the PR closes, not whose agent its failures should wake, and
   // removing it must leave nothing behind on the row.
+  if (!links.acceptanceId) {
+    // A link can outlive its claim: a second `link-pr` is refused while the
+    // row already names another acceptance, but its metadata keeps the link,
+    // so it stays resolvable here. The binding on the row outranks it —
+    // otherwise whichever acceptance was touched last would decide what a
+    // merge accepts, and a delivery could change hands without an unlink.
+    const [bound] = await db
+      .select({ acceptanceId: scmChangeRequests.acceptanceId })
+      .from(scmChangeRequests)
+      .where(
+        and(
+          eq(scmChangeRequests.provider, 'github'),
+          sql`lower(${scmChangeRequests.repoFullName}) = ${params.repoFullName.toLowerCase()}`,
+          eq(scmChangeRequests.number, params.number),
+          isNotNull(scmChangeRequests.acceptanceId),
+        ),
+      )
+      .limit(1);
+
+    if (bound?.acceptanceId) {
+      const [boundRow] = await db
+        .select({ id: acceptances.id, workspaceId: acceptances.workspaceId })
+        .from(acceptances)
+        .where(
+          and(
+            eq(acceptances.id, bound.acceptanceId),
+            inTenantScope(db, acceptances, params.scope, pin),
+          ),
+        )
+        .limit(1);
+      if (boundRow) {
+        links.acceptanceId = boundRow.id;
+        pin ??= boundRow.workspaceId ?? null;
+      }
+    }
+  }
+
   if (!links.acceptanceId) {
     const linkedPullRequest = sql`EXISTS (
       SELECT 1 FROM jsonb_array_elements(COALESCE(${acceptances.metadata} -> 'pullRequests', '[]'::jsonb)) AS pr
