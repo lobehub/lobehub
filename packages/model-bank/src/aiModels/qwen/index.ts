@@ -28,7 +28,11 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-13',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -57,7 +61,11 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-31',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -93,7 +101,12 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-02',
     settings: {
-      extendParams: ['qwen38ReasoningEffort', 'preserveThinking'],
+      extendParams: ['preserveThinking'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'xhigh'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -129,7 +142,12 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-02',
     settings: {
-      extendParams: ['qwen38ReasoningEffort', 'preserveThinking'],
+      extendParams: ['preserveThinking'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'xhigh'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -371,7 +389,7 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -398,7 +416,7 @@ const qwenChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',

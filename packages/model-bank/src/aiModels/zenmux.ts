@@ -35,7 +35,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -142,7 +143,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-20',
     settings: {
-      extendParams: ['thinkingLevel2', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -170,7 +172,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -219,7 +222,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -245,7 +248,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -742,7 +745,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -789,7 +793,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -814,7 +819,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -839,7 +845,8 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -1230,7 +1237,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

@@ -517,7 +517,15 @@ describe('ChatService', () => {
 
         // Mock aiModelSelectors for extend params support
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+        vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+          () =>
+            ({
+              settings: {
+                reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+              },
+            }) as any,
+        );
         // The user-level model-instance config supplies the effort; the legacy
         // agent chatConfig value below must be ignored by the resolver
         vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
@@ -542,6 +550,38 @@ describe('ChatService', () => {
         );
       });
 
+      // LOBE-14979: the control showed "high" while nothing was sent, so MiniMax ran at "max".
+      it('sends the card default effort when the user has not picked one', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [{ content: 'Test default effort', role: 'user' }] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+        vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+          () =>
+            ({
+              settings: {
+                reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+              },
+            }) as any,
+        );
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({}));
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'MiniMax-M3.1-Flash',
+          provider: 'minimax',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'MiniMax-M3.1-Flash', provider: 'minimax' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ reasoning_effort: 'high' }),
+          expect.anything(),
+        );
+      });
+
       it('should map DeepSeek reasoning effort to enabled thinking', async () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
         const messages = [
@@ -549,13 +589,23 @@ describe('ChatService', () => {
         ] as UIChatMessage[];
 
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekV4ReasoningEffort',
-        ]);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+        vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+          () =>
+            ({
+              settings: {
+                reasoningEffort: {
+                  controlsThinking: true,
+                  default: 'high',
+                  levels: ['none', 'high', 'max'],
+                },
+              },
+            }) as any,
+        );
         // Reasoning fields are user-level model-instance settings now — agent
         // chatConfig values are ignored by the resolver
         vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
-          deepseekV4ReasoningEffort: 'max',
+          reasoningEffort: 'max',
         }));
 
         await chatService.createAssistantMessage({
@@ -585,11 +635,21 @@ describe('ChatService', () => {
         ] as UIChatMessage[];
 
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'deepseekV4ReasoningEffort',
-        ]);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+        vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+          () =>
+            ({
+              settings: {
+                reasoningEffort: {
+                  controlsThinking: true,
+                  default: 'high',
+                  levels: ['none', 'high', 'max'],
+                },
+              },
+            }) as any,
+        );
         vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
-          deepseekV4ReasoningEffort: 'none',
+          reasoningEffort: 'none',
         }));
 
         await chatService.createAssistantMessage({
@@ -618,9 +678,23 @@ describe('ChatService', () => {
         ] as UIChatMessage[];
 
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'qwen38ReasoningEffort',
-        ]);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+        vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+          () =>
+            ({
+              settings: {
+                reasoningEffort: {
+                  controlsThinking: true,
+                  default: 'medium',
+                  levels: ['none', 'low', 'medium', 'xhigh'],
+                },
+              },
+            }) as any,
+        );
+
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'medium',
+        }));
 
         await chatService.createAssistantMessage({
           messages,
@@ -628,7 +702,6 @@ describe('ChatService', () => {
           provider: 'qwen',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
-            chatConfig: { qwen38ReasoningEffort: 'medium' },
           }),
         });
 
@@ -650,9 +723,23 @@ describe('ChatService', () => {
         ] as UIChatMessage[];
 
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
-          'qwen38ReasoningEffort',
-        ]);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+        vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+          () =>
+            ({
+              settings: {
+                reasoningEffort: {
+                  controlsThinking: true,
+                  default: 'medium',
+                  levels: ['none', 'low', 'medium', 'xhigh'],
+                },
+              },
+            }) as any,
+        );
+
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'none',
+        }));
 
         await chatService.createAssistantMessage({
           messages,
@@ -660,7 +747,6 @@ describe('ChatService', () => {
           provider: 'qwen',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
-            chatConfig: { qwen38ReasoningEffort: 'none' },
           }),
         });
 
@@ -1803,7 +1889,11 @@ describe('ChatService', () => {
         request({ channel: 'llmcall:user-1:abcdefgh', headers: {} }),
       );
       const relayedError = {
-        error: { message: "model 'gpt-oss:20b' not found", name: 'ResponseError', status_code: 404 },
+        error: {
+          message: "model 'gpt-oss:20b' not found",
+          name: 'ResponseError',
+          status_code: 404,
+        },
         errorType: 'OllamaBizError',
         provider: 'ollama',
       };
@@ -2229,7 +2319,13 @@ describe('ChatService private methods', () => {
 
       // Mock aiModelSelectors for extend params support
       vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
-      vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
+      vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => []);
+      vi.spyOn(aiModelSelectors, 'getEnabledModelById').mockReturnValue(
+        () =>
+          ({
+            settings: { reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] } },
+          }) as any,
+      );
       // The user-level model-instance config supplies the effort; the legacy
       // agent chatConfig value below must be ignored by the resolver
       vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({

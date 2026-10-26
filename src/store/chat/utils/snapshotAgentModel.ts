@@ -85,7 +85,7 @@ export const snapshotAgentReasoning = async (
   /** Creation must settle the saved config before persistence, including a first send after reload. */
   await getAiInfraStoreState().ensureModelReasoningConfig(model, provider);
   const aiInfraState = getAiInfraStoreState();
-  if (!aiModelSelectors.isModelHasReasoningExtendParams(model, provider)(aiInfraState)) return;
+  if (!aiModelSelectors.isModelHasReasoningControls(model, provider)(aiInfraState)) return;
   if (!aiModelSelectors.isModelReasoningConfigLoaded(model, provider)(aiInfraState)) return;
 
   return {

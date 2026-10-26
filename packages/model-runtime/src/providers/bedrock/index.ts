@@ -47,7 +47,7 @@ import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
-import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
+import { rejectsDisabledThinkingAtEffort, resolveAnthropicEffort } from '../anthropic/modelId';
 import { recordBedrockResponseEvent } from './providerDiagnostics';
 
 /**
@@ -279,7 +279,6 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     options?: ChatMethodOptions,
   ): Promise<Response> => {
     const {
-      effort,
       enabledContextCaching = true,
       max_tokens,
       messages,
@@ -289,6 +288,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       tools,
       thinking,
     } = payload;
+    const effort = resolveAnthropicEffort(model, payload.effort, payload.reasoning_effort);
     const inputStartAt = Date.now();
     const system_message = messages.find((m) => m.role === 'system');
     const user_messages = normalizeClaudeThinkingHistoryMessages(

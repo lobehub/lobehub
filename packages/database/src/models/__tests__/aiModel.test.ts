@@ -243,7 +243,7 @@ describe('AiModelModel', () => {
     it('should merge config instead of replacing it, preserving chatConfig', async () => {
       const { id } = await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'azure' });
       await aiProviderModel.updateModelReasoningConfig(id, 'azure', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
 
       // The old model-config modal only knows deploymentName; saving it must not
@@ -252,7 +252,7 @@ describe('AiModelModel', () => {
 
       const row = await aiProviderModel.findByIdAndProvider(id, 'azure');
       expect(row!.config).toEqual({
-        chatConfig: { gpt5_6ReasoningEffort: 'high' },
+        chatConfig: { reasoningEffort: 'high' },
         deploymentName: 'my-deploy',
       });
     });
@@ -261,7 +261,7 @@ describe('AiModelModel', () => {
   describe('model reasoning config (personal scope)', () => {
     it('should create a preference-only row without flipping enabled or source', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'xhigh',
+        reasoningEffort: 'xhigh',
         reasoningMode: 'pro',
       });
 
@@ -269,7 +269,7 @@ describe('AiModelModel', () => {
         where: and(eq(aiModels.id, 'gpt-5.6-sol'), eq(aiModels.userId, userId)),
       });
       expect(row!.config).toEqual({
-        chatConfig: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+        chatConfig: { reasoningEffort: 'xhigh', reasoningMode: 'pro' },
       });
       // A row that exists only to hold the preference must not change model
       // visibility (enabled NULL falls back to builtin defaults) nor claim an
@@ -279,6 +279,42 @@ describe('AiModelModel', () => {
       expect(row!.workspaceId).toBeNull();
     });
 
+    it('should drop legacy effort keys when a write sets reasoningEffort', async () => {
+      // Regression: a legacy key left next to a new pick made the migration
+      // script overwrite the new pick with the old version's value
+      await aiProviderModel.create({ id: 'gpt-5.2', providerId: 'openai' });
+      await aiProviderModel.update('gpt-5.2', 'openai', {
+        config: {
+          chatConfig: { gpt5_2ReasoningEffort: 'low', reasoningMode: 'pro' } as any,
+          deploymentName: 'keep-me',
+        },
+      });
+
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.2', 'openai', {
+        reasoningEffort: 'xhigh',
+      });
+
+      const row = await aiProviderModel.findByIdAndProvider('gpt-5.2', 'openai');
+      expect(row!.config).toEqual({
+        chatConfig: { reasoningEffort: 'xhigh', reasoningMode: 'pro' },
+        deploymentName: 'keep-me',
+      });
+    });
+
+    it('should keep legacy effort keys when a write does not set reasoningEffort', async () => {
+      await aiProviderModel.create({ id: 'gpt-5.2', providerId: 'openai' });
+      await aiProviderModel.update('gpt-5.2', 'openai', {
+        config: { chatConfig: { gpt5_2ReasoningEffort: 'low' } as any },
+      });
+
+      await aiProviderModel.updateModelReasoningConfig('gpt-5.2', 'openai', {
+        reasoningMode: 'pro',
+      });
+
+      const config = await aiProviderModel.getModelReasoningConfig('gpt-5.2', 'openai');
+      expect(config).toEqual({ gpt5_2ReasoningEffort: 'low', reasoningMode: 'pro' });
+    });
+
     it('should merge partial chatConfig writes and preserve sibling config keys', async () => {
       await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'openai' });
       await aiProviderModel.update('gpt-5.6-sol', 'openai', {
@@ -286,14 +322,14 @@ describe('AiModelModel', () => {
       });
 
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
         reasoningMode: 'pro',
       });
 
       const config = await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai');
-      expect(config).toEqual({ gpt5_6ReasoningEffort: 'high', reasoningMode: 'pro' });
+      expect(config).toEqual({ reasoningEffort: 'high', reasoningMode: 'pro' });
 
       const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
       expect(row!.config).toMatchObject({ deploymentName: 'keep-me' });
@@ -301,7 +337,7 @@ describe('AiModelModel', () => {
 
     it('should read/write the personal row even when scoped to a workspace', async () => {
       await workspaceAiModelModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'low',
+        reasoningEffort: 'low',
       });
 
       // Written to the personal row (workspaceId NULL), not the workspace row
@@ -313,16 +349,16 @@ describe('AiModelModel', () => {
 
       // And readable through both scopes — the preference is cross-workspace
       expect(await workspaceAiModelModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
-        gpt5_6ReasoningEffort: 'low',
+        reasoningEffort: 'low',
       });
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
-        gpt5_6ReasoningEffort: 'low',
+        reasoningEffort: 'low',
       });
     });
 
     it('should list every personal reasoning config in one read', async () => {
       await workspaceAiModelModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'low',
+        reasoningEffort: 'low',
       });
       await aiProviderModel.updateModelReasoningConfig('claude-opus-5', 'anthropic', {
         reasoningMode: 'pro',
@@ -333,13 +369,13 @@ describe('AiModelModel', () => {
         'gpt-5.6-sol',
         'openai',
         {
-          gpt5_6ReasoningEffort: 'high',
+          reasoningEffort: 'high',
         },
       );
 
       const expected = {
         'anthropic/claude-opus-5': { reasoningMode: 'pro' },
-        'openai/gpt-5.6-sol': { gpt5_6ReasoningEffort: 'low' },
+        'openai/gpt-5.6-sol': { reasoningEffort: 'low' },
       };
       expect(await aiProviderModel.getAllModelReasoningConfigs()).toEqual(expected);
       // Cross-workspace, like the single-model read
@@ -348,7 +384,7 @@ describe('AiModelModel', () => {
 
     it('should isolate configs across providers and users', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
 
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'azure')).toBeUndefined();
@@ -359,7 +395,7 @@ describe('AiModelModel', () => {
 
     it('should survive a remote model list sync', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
 
       await aiProviderModel.batchUpdateAiModels('openai', [
@@ -374,13 +410,13 @@ describe('AiModelModel', () => {
       ]);
 
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
     });
 
     it('should survive clearing remote models after a sync', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
 
       // Sync claims the preference row as remote too (so its synced metadata
@@ -400,7 +436,7 @@ describe('AiModelModel', () => {
       await aiProviderModel.clearRemoteModels('openai');
 
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
       // Demoted back to a hidden preference-only shell — the synced metadata
       // must not linger as a ghost list entry after clearing remote models
@@ -427,13 +463,13 @@ describe('AiModelModel', () => {
       ] as AiProviderModelListItem[]);
       // ...then the user saves a preference onto the remote row
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
 
       await aiProviderModel.clearRemoteModels('openai');
 
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
       // Demoted to a preference-only row: remote identity and metadata stripped
       const row = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
@@ -449,7 +485,7 @@ describe('AiModelModel', () => {
 
     it('should identify preference-only shells', async () => {
       await aiProviderModel.updateModelReasoningConfig('gpt-5.6-sol', 'openai', {
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
       await aiProviderModel.create({ enabled: true, id: 'real-model', providerId: 'openai' });
 
@@ -467,7 +503,7 @@ describe('AiModelModel', () => {
         source: 'custom',
       });
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
-        gpt5_6ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
       const promoted = await aiProviderModel.findByIdAndProvider('gpt-5.6-sol', 'openai');
       expect(AiModelModel.isPreferenceOnlyRow(promoted!)).toBe(false);

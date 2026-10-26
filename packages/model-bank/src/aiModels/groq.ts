@@ -113,7 +113,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-06',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -139,7 +139,7 @@ const groqChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-06',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

@@ -10,13 +10,13 @@ describe.each([chatTopicCreateMetadataSchema, chatTopicMetadataUpdateSchema])(
   'reasoning metadata validation',
   (schema) => {
     it('rejects invalid known reasoning enum values', () => {
-      expect(
-        schema.safeParse({ reasoningConfig: { gpt5ReasoningEffort: 'invalid' } }).success,
-      ).toBe(false);
+      expect(schema.safeParse({ reasoningConfig: { reasoningEffort: 'invalid' } }).success).toBe(
+        false,
+      );
       expect(schema.safeParse({ reasoningConfig: { reasoningMode: 'fast' } }).success).toBe(false);
     });
     it('accepts valid values and an explicit default pin', () => {
-      for (const reasoningConfig of [{}, { gpt5ReasoningEffort: 'high', reasoningMode: 'pro' }]) {
+      for (const reasoningConfig of [{}, { reasoningEffort: 'high', reasoningMode: 'pro' }]) {
         expect(schema.parse({ reasoningConfig })).toEqual({ reasoningConfig });
       }
     });
@@ -121,7 +121,7 @@ describe('chatTopicMetadataUpdateSchema', () => {
       model: 'test-model',
       onboardingSession: { phase: 'summary', finishedAt: '2026-09-29T00:00:00.000Z' },
       provider: 'test-provider',
-      reasoningConfig: { gpt5ReasoningEffort: 'high' },
+      reasoningConfig: { reasoningEffort: 'high' },
       repos: ['owner/repo'],
       runningOperation: null,
       workingDirectory: '/repo',

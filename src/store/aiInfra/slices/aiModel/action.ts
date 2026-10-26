@@ -399,7 +399,7 @@ export class AiModelActionImpl {
     // The config only matters for models declaring reasoning-family extend
     // params (resolveModelExtendParams ignores it otherwise) — skip the
     // blocking round trip for everything else.
-    if (!aiModelSelectors.isModelHasReasoningExtendParams(id, provider)(this.#get())) return;
+    if (!aiModelSelectors.isModelHasReasoningControls(id, provider)(this.#get())) return;
 
     const key = modelReasoningConfigKey(provider, id);
     const state = this.#get();

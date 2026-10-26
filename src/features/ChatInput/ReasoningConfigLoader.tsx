@@ -27,7 +27,7 @@ const ReasoningConfigLoader = memo(() => {
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
   const hasReasoningParams = useAiInfraStore(
-    aiModelSelectors.isModelHasReasoningExtendParams(model, provider),
+    aiModelSelectors.isModelHasReasoningControls(model, provider),
   );
 
   if (!hasReasoningParams) return null;

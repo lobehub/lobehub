@@ -26,7 +26,7 @@ const superGrokChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2026-05',
     releasedAt: '2026-09-21',
     settings: {
-      extendParams: ['grok4_7ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -50,7 +50,7 @@ const superGrokChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2026-02',
     releasedAt: '2026-08-12',
     settings: {
-      extendParams: ['grok4_6ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -73,7 +73,7 @@ const superGrokChatModels: AIChatModelCard[] = [
     id: 'grok-4.5',
     releasedAt: '2026-07-08',
     settings: {
-      extendParams: ['grok4_5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

@@ -164,7 +164,14 @@ const openrouterChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-09-22',
-    settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
+    settings: {
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -225,7 +232,14 @@ const openrouterChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-09-22',
-    settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
+    settings: {
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -277,7 +291,10 @@ const openrouterChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-09-21',
-    settings: { extendParams: ['grok4_7ReasoningEffort'], searchImpl: 'params' },
+    settings: {
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -413,7 +430,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
     },
     type: 'chat',
   },

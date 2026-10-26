@@ -3,45 +3,16 @@ import { type ExtendParamsType } from 'model-bank';
 import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
-import DeepSeekReasoningEffortSlider, {
-  DeepSeekV4GAReasoningEffortSlider,
-} from '@/features/ModelSwitchPanel/components/ControlsForm/DeepSeekReasoningEffortSlider';
-import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
-import GLM52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GLM52ReasoningEffortSlider';
-import GLM53ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GLM53ReasoningEffortSlider';
-import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
-import { GPT6ReasoningEffortSlider } from '@/features/ModelSwitchPanel/components/ControlsForm/GPT6ReasoningEffortSlider';
-import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
-import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
-import GPT52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ReasoningEffortSlider';
-import { GPT56ReasoningEffortSlider } from '@/features/ModelSwitchPanel/components/ControlsForm/GPT56ReasoningEffortSlider';
-import Grok43ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok43ReasoningEffortSlider';
-import Grok45ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok45ReasoningEffortSlider';
-import Grok46ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok46ReasoningEffortSlider';
-import Grok47ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok47ReasoningEffortSlider';
-import Grok420ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok420ReasoningEffortSlider';
-import Hy3ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
 import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
-import { KimiK3ReasoningEffortSlider } from '@/features/ModelSwitchPanel/components/ControlsForm/KimiK3ReasoningEffortSlider';
-import Opus47EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Opus47EffortSlider';
-import Qwen38ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Qwen38ReasoningEffortSlider';
-import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningEffortSlider';
 import ReasoningModeSegmented from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningModeSegmented';
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
 import ReasoningTokenSlider32k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider80k';
-import Ring26ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Ring26ReasoningEffortSlider';
-import Step3_5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Step3_5ReasoningEffortSlider';
 import TextVerbositySlider from '@/features/ModelSwitchPanel/components/ControlsForm/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingBudgetSlider';
-import ThinkingLevel2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel2Slider';
-import ThinkingLevel3Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel3Slider';
-import ThinkingLevel4Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel4Slider';
-import ThinkingLevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevelSlider';
 import ThinkingSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingSlider';
 
 type ExtendParamsOption = {
@@ -79,105 +50,8 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'reasoningBudgetToken80k',
   },
   {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.effort.hint',
-    key: 'effort',
-  },
-  {
-    hintKey:
-      'providerModels.item.modelConfig.extendParams.options.deepseekV4GAReasoningEffort.hint',
-    key: 'deepseekV4GAReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint',
-    key: 'deepseekV4ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.qwen38ReasoningEffort.hint',
-    key: 'qwen38ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint',
-    key: 'opus47Effort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
-    key: 'reasoningEffort',
-  },
-  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningMode.hint',
     key: 'reasoningMode',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint',
-    key: 'gpt5ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint',
-    key: 'gpt5_1ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint',
-    key: 'gpt5_2ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_6ReasoningEffort.hint',
-    key: 'gpt5_6ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt6ReasoningEffort.hint',
-    key: 'gpt6ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint',
-    key: 'gpt5_2ProReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint',
-    key: 'glm5_2ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.glm5_3ReasoningEffort.hint',
-    key: 'glm5_3ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint',
-    key: 'grok4_20ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_3ReasoningEffort.hint',
-    key: 'grok4_3ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_5ReasoningEffort.hint',
-    key: 'grok4_5ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_6ReasoningEffort.hint',
-    key: 'grok4_6ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint',
-    key: 'grok4_7ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint',
-    key: 'hy3ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
-    key: 'kimiK3ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint',
-    key: 'ring2_6ReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
-    key: 'codexMaxReasoningEffort',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint',
-    key: 'step3_5ReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint',
@@ -190,22 +64,6 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint',
     key: 'thinkingBudget',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint',
-    key: 'thinkingLevel',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint',
-    key: 'thinkingLevel2',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel3.hint',
-    key: 'thinkingLevel3',
-  },
-  {
-    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint',
-    key: 'thinkingLevel4',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.urlContext.hint',
@@ -232,35 +90,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
 // Map variant keys to their base i18n title key (synced with ControlsForm.tsx)
 // This allows reusing existing i18n translations instead of adding new ones
 const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
-  codexMaxReasoningEffort: 'reasoningEffort',
-  deepseekV4GAReasoningEffort: 'reasoningEffort',
-  deepseekV4ReasoningEffort: 'reasoningEffort',
-  gpt5ReasoningEffort: 'reasoningEffort',
-  gpt5_1ReasoningEffort: 'reasoningEffort',
-  gpt5_2ProReasoningEffort: 'reasoningEffort',
-  gpt5_2ReasoningEffort: 'reasoningEffort',
-  gpt5_6ReasoningEffort: 'reasoningEffort',
-  gpt6ReasoningEffort: 'reasoningEffort',
-  glm5_2ReasoningEffort: 'reasoningEffort',
-  glm5_3ReasoningEffort: 'reasoningEffort',
-  grok4_20ReasoningEffort: 'reasoningEffort',
-  grok4_3ReasoningEffort: 'reasoningEffort',
-  grok4_5ReasoningEffort: 'reasoningEffort',
-  grok4_6ReasoningEffort: 'reasoningEffort',
-  grok4_7ReasoningEffort: 'reasoningEffort',
-  hy3ReasoningEffort: 'reasoningEffort',
-  kimiK3ReasoningEffort: 'reasoningEffort',
-  qwen38ReasoningEffort: 'reasoningEffort',
-  ring2_6ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
   imageResolution2: 'imageResolution',
-  opus47Effort: 'effort',
   reasoningBudgetToken32k: 'reasoningBudgetToken',
   reasoningBudgetToken80k: 'reasoningBudgetToken',
-  step3_5ReasoningEffort: 'reasoningEffort',
-  thinkingLevel2: 'thinkingLevel',
-  thinkingLevel3: 'thinkingLevel',
-  thinkingLevel4: 'thinkingLevel',
 };
 
 type PreviewMeta = {
@@ -271,91 +104,17 @@ type PreviewMeta = {
 };
 
 const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
-  codexMaxReasoningEffort: {
-    labelSuffix: ' (Codex)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  deepseekV4GAReasoningEffort: {
-    labelSuffix: ' (DeepSeek V4 GA)',
-    previewWidth: 280,
-    tag: 'reasoning_effort',
-  },
-  deepseekV4ReasoningEffort: {
-    labelSuffix: ' (DeepSeek V4)',
-    previewWidth: 240,
-    tag: 'reasoning_effort',
-  },
-  qwen38ReasoningEffort: {
-    labelSuffix: ' (Qwen3.8 Max)',
-    previewWidth: 280,
-    tag: 'reasoning_effort',
-  },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
-  effort: { labelSuffix: ' (Opus 4.6)', previewWidth: 280, tag: 'output_config.effort' },
   enableAdaptiveThinking: {
     labelSuffix: ' (Opus 4.6)',
     previewWidth: 300,
     tag: 'thinking.type',
   },
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
-  gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
-  gpt5_1ReasoningEffort: { labelSuffix: ' (GPT-5.1)', previewWidth: 300, tag: 'reasoning_effort' },
-  gpt5_2ProReasoningEffort: {
-    labelSuffix: ' (GPT-5.2 Pro)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
-  gpt5_6ReasoningEffort: { labelSuffix: ' (GPT-5.6)', previewWidth: 340, tag: 'reasoning_effort' },
-  gpt6ReasoningEffort: { labelSuffix: ' (GPT-6)', previewWidth: 300, tag: 'reasoning_effort' },
-  glm5_2ReasoningEffort: { labelSuffix: ' (GLM-5.2)', previewWidth: 240, tag: 'reasoning_effort' },
-  glm5_3ReasoningEffort: { labelSuffix: ' (GLM-5.3)', previewWidth: 240, tag: 'reasoning_effort' },
-  grok4_20ReasoningEffort: {
-    labelSuffix: ' (Grok 4.20)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  grok4_3ReasoningEffort: {
-    labelSuffix: ' (Grok 4.3)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  grok4_5ReasoningEffort: {
-    labelSuffix: ' (Grok 4.5)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  grok4_6ReasoningEffort: {
-    labelSuffix: ' (Grok 4.6)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  grok4_7ReasoningEffort: {
-    labelSuffix: ' (Grok 4.7)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  hy3ReasoningEffort: {
-    labelSuffix: ' (Hy3 preview)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
-  kimiK3ReasoningEffort: {
-    labelSuffix: ' (Kimi K3)',
-    previewWidth: 260,
-    tag: 'reasoning_effort',
-  },
-  ring2_6ReasoningEffort: {
-    labelSuffix: ' (Ring 2.6)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
   imageAspectRatio: { labelSuffix: '', previewWidth: 350, tag: 'aspect_ratio' },
   imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
-  opus47Effort: { labelSuffix: ' (Opus 4.7+)', previewWidth: 280, tag: 'output_config.effort' },
   preserveThinking: {
     labelSuffix: ' (Qwen3.6+ / GLM-4.7+)',
     previewWidth: 460,
@@ -373,19 +132,9 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     previewWidth: 350,
     tag: 'thinking.budget_tokens',
   },
-  reasoningEffort: { previewWidth: 250, tag: 'reasoning_effort' },
-  step3_5ReasoningEffort: {
-    labelSuffix: ' (Step 3.5)',
-    previewWidth: 300,
-    tag: 'reasoning_effort',
-  },
   textVerbosity: { labelSuffix: '', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
   thinkingBudget: { labelSuffix: ' (Gemini)', previewWidth: 500, tag: 'thinkingBudget' },
-  thinkingLevel: { labelSuffix: ' (3 Flash)', previewWidth: 280, tag: 'thinkingLevel' },
-  thinkingLevel2: { labelSuffix: ' (3 Pro)', previewWidth: 200, tag: 'thinkingLevel' },
-  thinkingLevel3: { labelSuffix: ' (Gemini 3.1)', previewWidth: 200, tag: 'thinkingLevel' },
-  thinkingLevel4: { labelSuffix: ' (Nano Banana 2)', previewWidth: 200, tag: 'thinkingLevel' },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -497,49 +246,21 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   // Preview controls are read-only examples; the form only stores supported parameter keys.
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
-      codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
-      deepseekV4GAReasoningEffort: <DeepSeekV4GAReasoningEffortSlider value="high" />,
-      deepseekV4ReasoningEffort: <DeepSeekReasoningEffortSlider value="high" />,
-      qwen38ReasoningEffort: <Qwen38ReasoningEffortSlider value="xhigh" />,
       disableContextCaching: <Switch checked disabled />,
-      effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
       preserveThinking: <Switch checked disabled />,
-      gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
-      gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
-      gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
-      gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
-      gpt5_6ReasoningEffort: <GPT56ReasoningEffortSlider value="medium" />,
-      gpt6ReasoningEffort: <GPT6ReasoningEffortSlider value="medium" />,
-      glm5_2ReasoningEffort: <GLM52ReasoningEffortSlider value="max" />,
-      glm5_3ReasoningEffort: <GLM53ReasoningEffortSlider value="max" />,
-      grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
-      grok4_3ReasoningEffort: <Grok43ReasoningEffortSlider value="low" />,
-      grok4_5ReasoningEffort: <Grok45ReasoningEffortSlider value="high" />,
-      grok4_6ReasoningEffort: <Grok46ReasoningEffortSlider value="high" />,
-      grok4_7ReasoningEffort: <Grok47ReasoningEffortSlider value="high" />,
-      hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
-      kimiK3ReasoningEffort: <KimiK3ReasoningEffortSlider value="max" />,
-      ring2_6ReasoningEffort: <Ring26ReasoningEffortSlider value="high" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,
       imageResolution2: <ImageResolution2Slider value="1K" />,
-      opus47Effort: <Opus47EffortSlider value="high" />,
       reasoningBudgetToken: <ReasoningTokenSlider defaultValue={1 * 1024} />,
       reasoningBudgetToken32k: <ReasoningTokenSlider32k defaultValue={1 * 1024} />,
       reasoningBudgetToken80k: <ReasoningTokenSlider80k defaultValue={1 * 1024} />,
-      reasoningEffort: <ReasoningEffortSlider value="medium" />,
       reasoningMode: <ReasoningModeSegmented value="standard" />,
-      step3_5ReasoningEffort: <Step3_5ReasoningEffortSlider value="low" />,
       textVerbosity: <TextVerbositySlider value="medium" />,
       thinking: <ThinkingSlider value="auto" />,
       thinkingBudget: <ThinkingBudgetSlider defaultValue={2 * 1024} />,
-      thinkingLevel: <ThinkingLevelSlider value="high" />,
-      thinkingLevel2: <ThinkingLevel2Slider value="high" />,
-      thinkingLevel3: <ThinkingLevel3Slider value="high" />,
-      thinkingLevel4: <ThinkingLevel4Slider value="minimal" />,
       urlContext: <Switch checked disabled />,
     }),
     [],

@@ -127,10 +127,8 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 
 // model-bank is a TypeScript source file that cannot be dynamically imported in vitest
 vi.mock('model-bank', async (importOriginal) => ({
-  // serverCallLlmContextHints gates the model-instance reasoning-config DB
-  // read on the real MODEL_REASONING_EXTEND_PARAMS list
-  MODEL_REASONING_EXTEND_PARAMS: (await importOriginal<typeof ModelBank>())
-    .MODEL_REASONING_EXTEND_PARAMS,
+  // Reasoning helpers and schemas stay real; only the bundled list is stubbed.
+  ...(await importOriginal<typeof ModelBank>()),
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
   ModelProvider: {
     LobeHub: 'lobehub',

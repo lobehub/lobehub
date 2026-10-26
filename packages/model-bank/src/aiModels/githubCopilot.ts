@@ -20,7 +20,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-08',
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
     },
     type: 'chat',
   },
@@ -42,7 +43,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-08',
     releasedAt: '2026-03-18',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
     },
     type: 'chat',
   },
@@ -63,7 +65,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-08',
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['codexMaxReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
     },
     type: 'chat',
   },
@@ -84,7 +86,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-08',
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
     },
     type: 'chat',
   },
@@ -105,7 +108,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-08',
     releasedAt: '2025-12-18',
     settings: {
-      extendParams: ['codexMaxReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
     },
     type: 'chat',
   },
@@ -125,7 +128,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2024-09',
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -146,7 +150,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2024-05',
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -186,7 +191,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-05',
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['enableAdaptiveThinking', 'effort'],
+      extendParams: ['enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -207,7 +213,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-05',
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['enableAdaptiveThinking', 'effort'],
+      extendParams: ['enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -228,7 +235,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2025-05',
     releasedAt: '2026-02-17',
     settings: {
-      extendParams: ['enableAdaptiveThinking', 'enableReasoning', 'reasoningBudgetToken', 'effort'],
+      extendParams: ['enableAdaptiveThinking', 'enableReasoning', 'reasoningBudgetToken'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -385,7 +393,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'oswe-vscode-prime',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -401,7 +410,8 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     displayName: 'Raptor mini (Secondary)',
     id: 'oswe-vscode-secondary',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },

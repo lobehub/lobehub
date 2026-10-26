@@ -46,7 +46,7 @@ const cerebrasModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

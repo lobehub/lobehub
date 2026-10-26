@@ -1,12 +1,15 @@
 import { readFrozenModelFacts } from '@lobechat/mecha';
 import debug from 'debug';
-import type { AiModelConfig, ModelAbilities } from 'model-bank';
+import type { ModelAbilities } from 'model-bank';
 
 import type { loadModels } from '@/business/client/model-bank/loadModels';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
-import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
+import {
+  createServerModelParamsProviders,
+  toUserModelRowFacts,
+} from '@/server/modules/Mecha/ModelParams/providers';
 
 import { resolveServerSearchDecision } from '../../searchDecision';
 import type { ExecRunContext } from '../../types';
@@ -88,18 +91,7 @@ export const resolveModelContext = async (
       }),
       // Reuse the row read above rather than querying it a second time.
       getUserModelRow: async () =>
-        activeModelMetadata
-          ? {
-              abilities: activeModelMetadata.abilities,
-              // Deployment-catalog providers resolve the request model by the
-              // user-configured alias when present (merged over the bundled
-              // card when the facts freeze).
-              deploymentName:
-                (activeModelMetadata.config as AiModelConfig | null)?.deploymentName ?? null,
-              displayName: activeModelMetadata.displayName,
-              extendParams: activeModelMetadata.settings?.extendParams ?? undefined,
-            }
-          : null,
+        activeModelMetadata ? toUserModelRowFacts(activeModelMetadata) : null,
     },
   );
   const searchDecision = resolveServerSearchDecision({

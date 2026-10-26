@@ -22,6 +22,22 @@ export type GoogleThinkingModelCategory = 'pro' | 'flash' | 'flashLite' | 'robot
  */
 export type GoogleThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
+const GOOGLE_THINKING_LEVELS = new Set<string>(['minimal', 'low', 'medium', 'high']);
+
+/**
+ * The Gemini `thinkingLevel` for a request: an explicit `thinkingLevel` wins, otherwise the
+ * unified `reasoning_effort` when it is a level Gemini accepts.
+ */
+export const resolveGoogleThinkingLevel = (
+  thinkingLevel: GoogleThinkingLevel | undefined,
+  reasoningEffort: string | undefined,
+): GoogleThinkingLevel | undefined => {
+  if (thinkingLevel) return thinkingLevel;
+  if (reasoningEffort && GOOGLE_THINKING_LEVELS.has(reasoningEffort)) {
+    return reasoningEffort as GoogleThinkingLevel;
+  }
+};
+
 /**
  * Options for resolving Google thinking configuration
  */

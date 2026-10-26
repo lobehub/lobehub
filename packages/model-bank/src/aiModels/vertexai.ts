@@ -46,7 +46,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-09-02',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -93,7 +94,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-08-13',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -140,7 +142,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -183,7 +186,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-19',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -228,7 +232,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-21',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -262,7 +267,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -354,7 +360,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-19',
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -393,7 +400,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-07',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -430,7 +438,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -493,7 +502,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-18',
     settings: {
-      extendParams: ['thinkingLevel2', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -535,7 +545,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-17',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },

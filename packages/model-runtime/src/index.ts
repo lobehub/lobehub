@@ -102,7 +102,6 @@ export {
   type ApplyModelExtendParamsContext,
   type ModelExtendParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
-  resolveDefaultThinkingLevelForModel,
   resolveEffectiveReasoningChatConfig,
   type ResolveEffectiveReasoningChatConfigContext,
 } from './utils/modelExtendParams';

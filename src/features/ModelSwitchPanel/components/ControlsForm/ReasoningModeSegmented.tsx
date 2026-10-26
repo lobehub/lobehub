@@ -1,5 +1,5 @@
 import { Segmented } from '@lobehub/ui';
-import { MODEL_REASONING_PARAM_LEVELS } from 'model-bank/aiModel';
+import { REASONING_MODES } from 'model-bank/aiModel';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,7 +8,6 @@ import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentC
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
-const REASONING_MODES = MODEL_REASONING_PARAM_LEVELS.reasoningMode;
 type ReasoningMode = (typeof REASONING_MODES)[number];
 
 export interface ReasoningModeSegmentedProps {

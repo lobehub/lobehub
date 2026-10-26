@@ -1,9 +1,5 @@
 import type { AiProviderModelListItem } from 'model-bank';
-import {
-  AiModelSourceEnum,
-  type ExtendParamsType,
-  MODEL_REASONING_EXTEND_PARAMS,
-} from 'model-bank/aiModel';
+import { AiModelSourceEnum } from 'model-bank/aiModel';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { ModelSearchImplement } from '@/types/search';
@@ -128,33 +124,33 @@ const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreS
   return model?.settings?.extendParams;
 };
 
-const REASONING_EXTEND_PARAMS_SET = new Set<ExtendParamsType>(MODEL_REASONING_EXTEND_PARAMS);
-
 /**
- * The subset of the model's extend params covered by the user-level
- * model-instance reasoning config (effort family + reasoningMode).
+ * The model's reasoning effort control (`settings.reasoningEffort`): the
+ * selectable levels and the level it runs at when the user picked none.
  */
-const modelReasoningExtendParams = (id: string, provider: string) => (s: AIProviderStoreState) =>
-  (modelExtendParams(id, provider)(s) ?? []).filter((param) =>
-    REASONING_EXTEND_PARAMS_SET.has(param),
-  );
+const modelReasoningEffortSettings = (id: string, provider: string) => (s: AIProviderStoreState) =>
+  getEnabledModelById(id, provider)(s)?.settings?.reasoningEffort;
 
-const isModelHasReasoningExtendParams =
-  (id: string, provider: string) => (s: AIProviderStoreState) =>
-    modelReasoningExtendParams(id, provider)(s).length > 0;
+const isModelHasReasoningMode = (id: string, provider: string) => (s: AIProviderStoreState) =>
+  !!modelExtendParams(id, provider)(s)?.includes('reasoningMode');
 
 /**
- * Whether the model exposes extend params beyond the reasoning family. The
- * reasoning family is edited through the ChatInput Effort control (user-level
- * model-instance config), so surfaces rendering a ControlsForm with
- * `hideReasoningParams` must gate on this instead of `isModelHasExtendParams`,
- * otherwise a reasoning-only model shows an empty popover.
+ * Whether the model has a control covered by the user-level model-instance
+ * reasoning config: an effort control or a reasoning mode.
+ */
+const isModelHasReasoningControls = (id: string, provider: string) => (s: AIProviderStoreState) =>
+  !!modelReasoningEffortSettings(id, provider)(s) || isModelHasReasoningMode(id, provider)(s);
+
+/**
+ * Whether the model exposes extend params beyond the reasoning controls. Those
+ * are edited through the ChatInput Effort control (user-level model-instance
+ * config), so surfaces rendering a ControlsForm with `hideReasoningParams`
+ * must gate on this instead of `isModelHasExtendParams`, otherwise a
+ * reasoning-only model shows an empty popover.
  */
 const isModelHasNonReasoningExtendParams =
   (id: string, provider: string) => (s: AIProviderStoreState) =>
-    (modelExtendParams(id, provider)(s) ?? []).some(
-      (param) => !REASONING_EXTEND_PARAMS_SET.has(param),
-    );
+    (modelExtendParams(id, provider)(s) ?? []).some((param) => param !== 'reasoningMode');
 
 /**
  * The user's saved per-model-instance reasoning defaults (personal scope).
@@ -182,10 +178,14 @@ const modelDisabledParams = (id: string, provider: string) => (s: AIProviderStor
   return model?.settings?.disabledParams;
 };
 
+/**
+ * Whether the model has any control the ControlsForm renders: an extend param
+ * or a reasoning effort control.
+ */
 const isModelHasExtendParams = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const controls = modelExtendParams(id, provider)(s);
 
-  return !!controls && controls.length > 0;
+  return (!!controls && controls.length > 0) || !!modelReasoningEffortSettings(id, provider)(s);
 };
 
 const modelBuiltinSearchImpl = (id: string, provider: string) => (s: AIProviderStoreState) => {
@@ -238,7 +238,8 @@ export const aiModelSelectors = {
   isModelHasContextWindowToken,
   isModelHasExtendParams,
   isModelHasNonReasoningExtendParams,
-  isModelHasReasoningExtendParams,
+  isModelHasReasoningControls,
+  isModelHasReasoningMode,
   isModelLoading,
   isModelReasoningConfigLoaded,
   isModelReasoningConfigUpdating,
@@ -254,6 +255,6 @@ export const aiModelSelectors = {
   modelDisabledParams,
   modelExtendParams,
   modelReasoningConfig,
-  modelReasoningExtendParams,
+  modelReasoningEffortSettings,
   totalAiProviderModelList,
 };

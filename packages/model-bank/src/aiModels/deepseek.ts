@@ -59,7 +59,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-31',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
     },
     type: 'chat',
   },
@@ -89,7 +93,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-13',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
     },
     type: 'chat',
   },
@@ -120,7 +128,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-21',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
     },
     type: 'chat',
   },
