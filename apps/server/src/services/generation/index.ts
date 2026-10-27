@@ -58,16 +58,7 @@ export async function fetchImageFromUrl(
     // are read and returned, other responses leak status/statusText for blind probing.
     // ssrfSafeFetch blocks private/link-local IPs at connect time and on every redirect hop.
     // See GHSA-53h9-fmjf-frwr / #16536.
-    const response = await fetchWithRetry(url, fetchHeaders);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,
-      );
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-    return { buffer, mimeType };
+    return downloadWithRetry(url, fetchHeaders);
   }
 }
 
@@ -84,18 +75,23 @@ const isRetryableStatus = (status: number) => status === 408 || status === 429 |
  * Download through ssrfSafeFetch, retrying transient failures: thrown network/body-read
  * errors and 408/429/5xx responses. SSRF blocks and other 4xx responses are final.
  */
-const fetchWithRetry = async (
+const downloadWithRetry = async (
   url: string,
   fetchHeaders?: Record<string, string>,
-): Promise<Response> => {
+): Promise<{ buffer: Buffer; mimeType: string }> => {
   for (let attempt = 0; ; attempt++) {
     const canRetry = attempt < IMAGE_DOWNLOAD_RETRY_DELAYS_MS.length;
+    let response: Response;
 
     try {
-      const response = await ssrfSafeFetch(url, { headers: fetchHeaders });
-      if (!canRetry || !isRetryableStatus(response.status)) return response;
-
-      log('Image download returned %d, retrying (attempt %d)', response.status, attempt + 1);
+      response = await ssrfSafeFetch(url, { headers: fetchHeaders });
+      // ssrfSafeFetch resolves at the headers, so a reset while downloading the body
+      // surfaces here and must stay inside the retry.
+      if (response.ok) {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+        return { buffer, mimeType };
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.startsWith('SSRF blocked')) throw error;
@@ -110,8 +106,19 @@ const fetchWithRetry = async (
       }
 
       log('Image download failed, retrying (attempt %d): %s', attempt + 1, message);
+      await new Promise((resolve) => setTimeout(resolve, IMAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt]));
+      continue;
     }
 
+    // The error body is never read; release its connection.
+    await response.body?.cancel().catch(() => {});
+    if (!canRetry || !isRetryableStatus(response.status)) {
+      throw new Error(
+        `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    log('Image download returned %d, retrying (attempt %d)', response.status, attempt + 1);
     await new Promise((resolve) => setTimeout(resolve, IMAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt]));
   }
 };
