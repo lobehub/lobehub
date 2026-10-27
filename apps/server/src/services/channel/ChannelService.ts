@@ -4,6 +4,7 @@ import { isChannelRuntime } from '@lobechat/types';
 import pMap from 'p-map';
 
 import { DeviceModel } from '@/database/models/device';
+import { ProjectModel } from '@/database/models/project';
 import type {
   ChannelAddAgentInput,
   ChannelSendInput,
@@ -32,6 +33,7 @@ export class ChannelService {
   readonly repository: ChannelRepository;
   private readonly agentService: AgentService;
   private readonly deviceModel: DeviceModel;
+  private readonly projectModel: ProjectModel;
 
   constructor(
     private readonly db: LobeChatDatabase,
@@ -41,6 +43,7 @@ export class ChannelService {
     this.repository = new ChannelRepository(db, userId, workspaceId);
     this.agentService = new AgentService(db, userId, workspaceId);
     this.deviceModel = new DeviceModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId);
   }
 
   private async resolveAgent(input: ChannelAgentSelection): Promise<ChannelAddAgentInput> {
@@ -89,12 +92,19 @@ export class ChannelService {
     return { agentId: input.agentId, config, description: input.description, name: input.name };
   }
 
-  create = async (input: { agents: ChannelAgentSelection[]; title: string }) => {
+  create = async (input: {
+    agents: ChannelAgentSelection[];
+    projectId?: string;
+    title: string;
+  }) => {
+    // The project must be readable in this scope, the same visibility as the project list.
+    if (input.projectId && !(await this.projectModel.findById(input.projectId)))
+      throw new ChannelError('NOT_FOUND', 'Project not found');
     // Resolving probes devices, so cap the work one request can start.
     const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
       concurrency: 5,
     });
-    return this.repository.create({ agents, title: input.title });
+    return this.repository.create({ agents, projectId: input.projectId, title: input.title });
   };
 
   addAgent = async (channelId: string, input: ChannelAgentSelection) => {

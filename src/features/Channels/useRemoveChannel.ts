@@ -37,8 +37,11 @@ export const useRemoveChannel = () => {
           throw error; // Keep the confirmation open so the user can retry or cancel.
         }
         if (cacheScope.get() !== scope) return;
+        // A project's Channel returns to its project, where the list lives.
         if (matchChannel(latest.current.location.pathname) === channel.id)
-          latest.current.navigate('/', { replace: true });
+          latest.current.navigate(channel.projectId ? `/project/${channel.projectId}` : '/', {
+            replace: true,
+          });
         toast.success(t('moveToTrashSuccess'));
       },
     });

@@ -260,6 +260,11 @@ export interface SystemStatus {
    */
   expandAgentSidebarSectionsByAgent?: Record<string, Record<string, boolean>>;
   expandInputActionbar?: boolean;
+  /**
+   * Per-project expanded state of the project sidebar's sections (Channels / Topics), keyed by
+   * projectId. Nested booleans for the same `merge` reason as the agent sections above.
+   */
+  expandProjectSidebarSectionsByProject?: Record<string, Record<string, boolean>>;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
   fileManagerViewMode?: 'list' | 'masonry';

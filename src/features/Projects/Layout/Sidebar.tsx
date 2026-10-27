@@ -22,7 +22,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
-import { ProjectDirectoryTopics } from '../WorkingDirectories/SidebarTopics';
 import {
   getProjectAcceptancePath,
   getProjectDashboardPath,
@@ -33,6 +32,7 @@ import {
   toProjectPathname,
 } from './navigation';
 import ProjectHeader from './ProjectHeader';
+import SidebarSections from './SidebarSections';
 
 const ProjectSidebarContent = memo(() => {
   const { t } = useTranslation('project');
@@ -104,7 +104,7 @@ const ProjectSidebarContent = memo(() => {
             onClick={() => navigate(`/project/${projectId}/settings/general`)}
           />
           {detail?.project && (
-            <ProjectDirectoryTopics
+            <SidebarSections
               coordinatorAgentId={detail.project.coordinatorAgentId}
               projectId={detail.project.id}
             />

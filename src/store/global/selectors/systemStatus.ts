@@ -115,6 +115,11 @@ const agentSidebarSections =
   (s: GlobalState): Record<string, boolean> | undefined =>
     agentId ? s.status.expandAgentSidebarSectionsByAgent?.[agentId] : undefined;
 
+const projectSidebarSections =
+  (projectId: string | undefined) =>
+  (s: GlobalState): Record<string, boolean> | undefined =>
+    projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
+
 /** Upper bound of `topic.getTopics`'s `pageSize` input on the server. */
 export const MAX_TOPIC_PAGE_SIZE = 100;
 
@@ -558,6 +563,7 @@ export const systemStatusSelectors = {
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,
+  projectSidebarSections,
   sidebarItems,
   sessionGroupKeys,
   showAgentBuilderPanel,

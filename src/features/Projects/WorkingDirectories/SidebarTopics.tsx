@@ -1,4 +1,15 @@
-import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Button,
+  cx,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +45,14 @@ import { canStageDraftOn, startProjectTopicDraft } from './startProjectTopicDraf
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
 
-export function ProjectDirectoryTopics(props: { projectId: string; coordinatorAgentId: string }) {
+interface ProjectDirectoryTopicsProps {
+  coordinatorAgentId: string;
+  /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
+  itemKey: string;
+  projectId: string;
+}
+
+export function ProjectDirectoryTopics(props: ProjectDirectoryTopicsProps) {
   const scope = useMemo(
     () => ({ coordinatorAgentId: props.coordinatorAgentId, projectId: props.projectId }),
     [props.projectId, props.coordinatorAgentId],
@@ -53,13 +71,7 @@ export function ProjectDirectoryTopics(props: { projectId: string; coordinatorAg
   );
 }
 
-function ProjectTopicList({
-  projectId,
-  coordinatorAgentId,
-}: {
-  projectId: string;
-  coordinatorAgentId: string;
-}) {
+function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDirectoryTopicsProps) {
   const { t } = useTranslation('project');
   const { t: tTopic } = useTranslation('topic');
   const { topicGroupMode } = useAgentTopicGroupMode();
@@ -85,12 +97,23 @@ function ProjectTopicList({
   const navigate = useWorkspaceAwareNavigate();
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
   return (
-    <Flexbox gap={1} paddingBlock={12}>
-      <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
-        <Text fontSize={12} type="secondary" weight={500}>
-          {t('topics.title')}
-        </Text>
-        <Flexbox horizontal align="center" gap={2}>
+    <AccordionItem value={itemKey}>
+      <AccordionHeader>
+        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <Text ellipsis fontSize={12} type="secondary" weight={500}>
+            {t('topics.title')}
+          </Text>
+        </AccordionTrigger>
+        <Flexbox
+          horizontal
+          align="center"
+          gap={2}
+          className={cx(
+            'accordion-action',
+            accordionStyles.action,
+            accordionStyles.actionBorderless,
+          )}
+        >
           <ToggleGroups />
           <Filter />
           <ActionIcon
@@ -122,38 +145,42 @@ function ProjectTopicList({
             }}
           />
         </Flexbox>
-      </Flexbox>
-      {request.error || directoriesRequest.error ? (
-        <AsyncError
-          error={request.error || directoriesRequest.error}
-          onRetry={() => Promise.all([request.revalidate(), directoriesRequest.revalidate()])}
-        />
-      ) : null}
-      {!request.hasData || isPreferenceLoading ? (
-        <SkeletonList />
-      ) : !topics.length && !request.error ? (
-        <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
-          {t('directories.noConversations')}
-        </Text>
-      ) : filteredEmpty ? (
-        <Flexbox align="flex-start" gap={4} paddingInline={8}>
-          <Text type="secondary">{tTopic('filter.emptyFiltered')}</Text>
-          <Button size="small" type="text" onClick={() => filterState?.setFilter({})}>
-            {tTopic('filter.clear')}
-          </Button>
+      </AccordionHeader>
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        <Flexbox gap={1} paddingBlock={1}>
+          {request.error || directoriesRequest.error ? (
+            <AsyncError
+              error={request.error || directoriesRequest.error}
+              onRetry={() => Promise.all([request.revalidate(), directoriesRequest.revalidate()])}
+            />
+          ) : null}
+          {!request.hasData || isPreferenceLoading ? (
+            <SkeletonList />
+          ) : !topics.length && !request.error ? (
+            <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
+              {t('directories.noConversations')}
+            </Text>
+          ) : filteredEmpty ? (
+            <Flexbox align="flex-start" gap={4} paddingInline={8}>
+              <Text type="secondary">{tTopic('filter.emptyFiltered')}</Text>
+              <Button size="small" type="text" onClick={() => filterState?.setFilter({})}>
+                {tTopic('filter.clear')}
+              </Button>
+            </Flexbox>
+          ) : null}
+          {isPreferenceLoading ? null : topicGroupMode === 'flat' ? (
+            <FlatMode />
+          ) : topicGroupMode === 'byStatus' ? (
+            <ByStatusMode />
+          ) : topicGroupMode === 'byAgent' ? (
+            <ByAgentMode />
+          ) : topicGroupMode === 'byDevice' ? (
+            <ByDeviceMode />
+          ) : (
+            <ByTimeMode />
+          )}
         </Flexbox>
-      ) : null}
-      {isPreferenceLoading ? null : topicGroupMode === 'flat' ? (
-        <FlatMode />
-      ) : topicGroupMode === 'byStatus' ? (
-        <ByStatusMode />
-      ) : topicGroupMode === 'byAgent' ? (
-        <ByAgentMode />
-      ) : topicGroupMode === 'byDevice' ? (
-        <ByDeviceMode />
-      ) : (
-        <ByTimeMode />
-      )}
-    </Flexbox>
+      </AccordionPanel>
+    </AccordionItem>
   );
 }
