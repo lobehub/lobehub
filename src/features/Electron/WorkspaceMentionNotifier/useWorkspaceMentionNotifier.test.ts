@@ -58,6 +58,8 @@ const poll = (rows: MentionNotificationRow[]) =>
 const row = (id: string): MentionNotificationRow => ({
   actionUrl: `/page/${id}`,
   content: `Bob: ping ${id}`,
+  // `n1` < `n2` < …: later ids were created later.
+  createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, Number(id.slice(1)))),
   id,
   title: 'Bob mentioned you',
 });

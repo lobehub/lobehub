@@ -14,6 +14,7 @@ import { authSelectors } from '@/store/user/selectors';
 import {
   MAX_MENTION_BANNERS_PER_POLL,
   type MentionNotificationRow,
+  type MentionWatermark,
   pickNewMentions,
   toMentionNotificationParams,
 } from './mentionNotification';
@@ -26,7 +27,8 @@ const MENTION_PAGE_SIZE = MAX_MENTION_BANNERS_PER_POLL * 5;
  * Raises an OS notification when another workspace member @-mentions the user.
  *
  * Mentions land in the active workspace's inbox under the `mention` category;
- * this polls the unread ones and announces each id it has not seen before.
+ * this polls the unread ones and announces each one created after the newest
+ * mention it has already seen.
  * The main process decides whether to show the banner (only while the window
  * is hidden or unfocused), so a user already looking at the app is not pinged
  * twice — the inbox bell still carries the mention.
@@ -38,7 +40,7 @@ export const useWorkspaceMentionNotifier = (): void => {
   const enabled = enableBusinessFeatures && isLogin === true && !!workspaceId;
 
   // Per workspace, so switching away and back doesn't re-announce old mentions.
-  const seenByWorkspace = useSingleton(() => new Map<string, Set<string>>());
+  const watermarkByWorkspace = useSingleton(() => new Map<string, MentionWatermark>());
 
   const { data } = useClientPollingSWR<MentionNotificationRow[]>(
     enabled ? inboxKeys.unreadMentions(workspaceId) : null,
@@ -55,8 +57,8 @@ export const useWorkspaceMentionNotifier = (): void => {
   useEffect(() => {
     if (!data || !workspaceId) return;
 
-    const { fresh, seen } = pickNewMentions(data, seenByWorkspace.get(workspaceId));
-    seenByWorkspace.set(workspaceId, seen);
+    const { fresh, watermark } = pickNewMentions(data, watermarkByWorkspace.get(workspaceId));
+    watermarkByWorkspace.set(workspaceId, watermark);
     if (fresh.length === 0) return;
 
     const workspaceSlug = getActiveWorkspaceSlug();
@@ -65,5 +67,5 @@ export const useWorkspaceMentionNotifier = (): void => {
         .showNotification(toMentionNotificationParams(row, workspaceSlug))
         .catch((error) => console.error('Workspace mention desktop notification failed:', error));
     }
-  }, [data, seenByWorkspace, workspaceId]);
+  }, [data, watermarkByWorkspace, workspaceId]);
 };
