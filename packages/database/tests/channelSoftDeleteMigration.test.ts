@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import journal from '../migrations/meta/_journal.json';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
-const TAG = '0188_channel_soft_delete';
+const TAG = '0189_channel_soft_delete';
 
 const readChannels = async (client: PGlite) =>
   (

@@ -67,9 +67,9 @@ const assertTrashAndRecreate = async (client: PGlite) => {
     { count: 2, trashed: true },
   ]);
 };
-
+// Every shipped Channel schema (foundation, writer guard, latest canary) must upgrade in place.
 // Both the shipped foundation and the later writer-guard deployment must upgrade in place.
-describe.each([184, 187])(
+describe.each([184, 187, 188])(
   'Channel thread recycle-bin upgrade after migration %i',
   (lastMigration) => {
     const client = new PGlite({ extensions: { vector } });
@@ -128,7 +128,7 @@ describe.each([184, 187])(
     it('replaces the old unique index and safely replays without losing trashed threads', async () => {
       await assertTrashAndRecreate(client);
       const before = await client.query('SELECT * FROM channel_threads ORDER BY id');
-      const entry = journal.entries.find(({ tag }) => tag === '0188_channel_soft_delete');
+      const entry = journal.entries.find(({ tag }) => tag === '0189_channel_soft_delete');
       const migration = readMigrationFiles({ migrationsFolder }).find(
         ({ folderMillis }) => folderMillis === entry?.when,
       );

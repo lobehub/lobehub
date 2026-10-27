@@ -303,6 +303,21 @@ describe('WorkspaceMemberModel', () => {
       expect(row.deletedAt).not.toBeNull();
     });
 
+    it('clears their job title and responsibilities so a re-invite starts without them', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.updateMemberProfile(workspaceId, memberId, {
+        title: 'Designer',
+        responsibilities: 'Design system',
+      });
+
+      await model.removeMember(workspaceId, memberId);
+      const revived = await model.addMember({ userId: memberId, workspaceId });
+
+      expect(revived.title).toBeNull();
+      expect(revived.responsibilities).toBeNull();
+    });
+
     it('drops their team memberships so a re-invite does not restore them', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       await model.addMember({ userId: memberId, workspaceId });
@@ -557,6 +572,47 @@ describe('WorkspaceMemberModel', () => {
         .from(tasks)
         .where(eq(tasks.id, 'wm-task-eligible-role'));
       expect(task.assigneeUserId).toBe(memberId);
+    });
+  });
+
+  describe('updateMemberProfile', () => {
+    it('sets and clears the profile of an active member', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+
+      const updated = await model.updateMemberProfile(workspaceId, memberId, {
+        title: 'Product Manager',
+        responsibilities: 'Owns the mobile roadmap',
+      });
+      expect(updated?.title).toBe('Product Manager');
+      expect(updated?.responsibilities).toBe('Owns the mobile roadmap');
+
+      const cleared = await model.updateMemberProfile(workspaceId, memberId, { title: null });
+      expect(cleared?.title).toBeNull();
+      // an omitted field is left untouched
+      expect(cleared?.responsibilities).toBe('Owns the mobile roadmap');
+    });
+
+    it('keeps the profile per workspace', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.addMember({ userId: memberId, workspaceId: otherWorkspaceId });
+
+      await model.updateMemberProfile(workspaceId, memberId, { title: 'Engineer' });
+      await model.updateMemberProfile(otherWorkspaceId, memberId, { title: 'Advisor' });
+
+      expect((await model.getMember(workspaceId, memberId))?.title).toBe('Engineer');
+      expect((await model.getMember(otherWorkspaceId, memberId))?.title).toBe('Advisor');
+    });
+
+    it('does not update a soft-deleted member', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await model.removeMember(workspaceId, memberId);
+
+      const result = await model.updateMemberProfile(workspaceId, memberId, { title: 'Ghost' });
+
+      expect(result).toBeUndefined();
     });
   });
 

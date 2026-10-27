@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "f79811d1-7777-4b72-aae2-3dfe6eba42ed",
+  "id": "c5c00e30-513b-4e9c-a0b1-6b40e986f12b",
   "policies": {},
   "prevId": "7c8b5944-a341-485c-a9f6-514a3a55e780",
   "roles": {},
@@ -11556,18 +11556,6 @@
           "notNull": false,
           "default": "'{}'::jsonb"
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_deleted": {
-          "name": "is_deleted",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -11594,7 +11582,6 @@
             }
           ],
           "isUnique": true,
-          "where": "\"channel_threads\".\"is_deleted\" IS NOT TRUE",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -11679,6 +11666,13 @@
           "notNull": true,
           "default": 0
         },
+        "archived": {
+          "name": "archived",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "visibility": {
           "name": "visibility",
           "type": "text",
@@ -11692,18 +11686,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'{}'::jsonb"
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_deleted": {
-          "name": "is_deleted",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -43569,6 +43551,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'member'"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "responsibilities": {
+          "name": "responsibilities",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "joined_at": {
           "name": "joined_at",

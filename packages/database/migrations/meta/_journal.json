@@ -1320,8 +1320,15 @@
     {
       "idx": 188,
       "version": "7",
-      "when": 1793074228155,
-      "tag": "0188_channel_soft_delete",
+      "when": 1793034171659,
+      "tag": "0188_workspace_member_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1793075261489,
+      "tag": "0189_channel_soft_delete",
       "breakpoints": true
     }
   ],
