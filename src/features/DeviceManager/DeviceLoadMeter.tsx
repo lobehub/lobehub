@@ -5,14 +5,13 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
-import { sx } from '@/styles/sx';
-
 import { formatPercent } from './DeviceHealth/format';
 import { USAGE_COLOR, useDeviceMetricSeries } from './DeviceHealth/shared';
 import { currentUsage } from './DeviceHealth/viewState';
 import { LOAD_HINT_SEGMENTS, type LoadHint, loadHint, type LoadHintMetric } from './deviceLoadHint';
 
 const styles = stylex.create({
+  lit: (color: string) => ({ backgroundColor: color }),
   // Bottom segment first in the DOM, stacked upwards.
   root: {
     display: 'flex',
@@ -71,14 +70,7 @@ const DeviceLoadMeter = ({ load }: { load: DeviceLoad }) => {
   return (
     <div aria-label={load.summary} role={'img'} {...stylex.props(styles.root)}>
       {Array.from({ length: LOAD_HINT_SEGMENTS }, (_, i) => (
-        <span
-          key={i}
-          {...sx(
-            styles.segment,
-            undefined,
-            i < load.hint.lit ? { backgroundColor: color } : undefined,
-          )}
-        />
+        <span key={i} {...stylex.props(styles.segment, i < load.hint.lit && styles.lit(color))} />
       ))}
     </div>
   );
