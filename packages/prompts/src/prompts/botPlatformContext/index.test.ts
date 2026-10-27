@@ -226,6 +226,31 @@ describe('formatBotPlatformContext', () => {
     expect(formatBotPlatformContext({ ...base, named: true })).not.toContain('<optional_reply>');
   });
 
+  // A bot told "去重 before you dispatch a task" replied "以后派任务前先跑一遍 gh 搜索" and wrote it
+  // nowhere, so the next wake would repeat the miss.
+  it('tells the agent to save a correction to a durable carrier instead of only promising it', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const result = formatBotPlatformContext(base);
+
+    expect(result).toContain('<self_improvement>');
+    expect(result).toContain('make the change durable in this same turn');
+    // One carrier per kind of lesson, each with the tool that writes it.
+    expect(result).toContain(
+      'your bot duties (`botWakeDuties`): `lobe-message` getBotDetail → updateBot',
+    );
+    expect(result).toContain(
+      'your system prompt: `lobe-agent-management` getAgentDetail → updatePrompt',
+    );
+    expect(result).toContain('createDocument with hintIsSkill=true');
+    // updateBot is owner-only at runtime, so a non-owner's rule falls back to the system prompt.
+    expect(result).toContain('if updateBot refuses, put the rule in your system prompt instead');
+    expect(result).toContain('never claim you will remember it');
+    // The criticism branch points at the block instead of asking for a spoken promise.
+    expect(formatBotPlatformContext({ ...base, named: true, wakeKind: 'followup' })).toContain(
+      'save what you will do differently as <self_improvement> describes',
+    );
+  });
+
   it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
 

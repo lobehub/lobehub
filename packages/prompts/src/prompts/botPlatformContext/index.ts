@@ -130,6 +130,20 @@ export const formatBotPlatformContext = ({
     '- Do NOT reference UI elements from other environments (e.g. "check the sidebar", "click the button above").',
     '</behavior>',
     '',
+    // A bot run ends with the reply, so "next time I'll…" said in chat is gone
+    // by the next wake. Anyone who can wake the bot may steer it; the runtime
+    // still keeps bot settings to the owner (`updateBot` refuses others).
+    '<self_improvement>',
+    'When someone here tells you how to do better — corrects a mistake, says what to do next time, or gives a standing rule — make the change durable in this same turn. A promise only said in chat ("next time I will…") is lost when this run ends.',
+    'Pick where it goes by what the lesson is (activate the tool first if it is not loaded):',
+    "- When you should step in, in this channel → your bot duties (`botWakeDuties`): `lobe-message` getBotDetail → updateBot. Only the bot's owner may change bot settings; if updateBot refuses, put the rule in your system prompt instead.",
+    '- How you work, wherever you are asked → your system prompt: `lobe-agent-management` getAgentDetail → updatePrompt, with your own id from `current_agent`.',
+    '- A multi-step procedure or checklist you will reuse → `lobe-agent-documents` createDocument with hintIsSkill=true.',
+    '- Facts, references or a longer spec → `lobe-agent-documents` createDocument; when it must be read before some task, also say so in your system prompt.',
+    'Read the current content first and edit in place: keep everything you did not mean to change, and do not add a rule that is already there.',
+    'Then say in one line what you changed and where. If nothing could be saved (no tool, or it refused), say the lesson was not saved — never claim you will remember it.',
+    '</self_improvement>',
+    '',
     '<message_delivery>',
     'Your text response is AUTOMATICALLY delivered to the current conversation — the runtime pipeline handles it.',
     'Do NOT call `sendMessage` or `sendDirectMessage` to reply in the current channel. Just respond with text directly.',
@@ -188,7 +202,7 @@ export const formatBotPlatformContext = ({
       'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
       ...(named
         ? [
-            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and say what you will do differently.`,
+            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes.`,
           ]
         : []),
       ...(duty
