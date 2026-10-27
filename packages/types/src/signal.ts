@@ -82,17 +82,17 @@ export interface SignalDecisionMetadata {
 
 /** What a label needs beyond `label`, `source` and `confidence`. No message content, as above. */
 export interface SignalDecisionLabelMetadata {
+  /**
+   * The signal that proved the label, when another event did — e.g. the later manual mention
+   * that shows a `missed_wake`. A signal's `external_id`, not its row id.
+   */
+  evidenceExternalId?: string;
   /** Scenario-specific extras that are not worth a typed field yet. */
   extra?: Record<string, unknown>;
   /** Short rationale from a judge model or a person. */
   rationale?: string;
   /** Machine-readable reason behind the label, e.g. a `BotNoReplyReason`. */
   reason?: string;
-  /**
-   * The signal that proved the label, when another event did — e.g. the later manual mention
-   * that shows a `missed_wake`. A signal's `external_id`, not its row id.
-   */
-  evidenceExternalId?: string;
   /** Where the label was applied: `reaction`, `button`, `admin`, `job`, … */
   surface?: string;
 }
@@ -134,6 +134,8 @@ export const BOT_NO_REPLY_REASONS = [
   'empty_completion',
 ] as const;
 export type BotNoReplyReason = (typeof BOT_NO_REPLY_REASONS)[number];
+/** A reason the agent itself can give in the token; `empty_completion` is only ever detected. */
+export type BotNoReplyClaimedReason = Exclude<BotNoReplyReason, 'empty_completion'>;
 
 /**
  * The decision label each silence reason is written under. Staying silent means the wake was not
@@ -147,6 +149,39 @@ export const BOT_NO_REPLY_LABELS: Record<BotNoReplyReason, SignalDecisionLabel> 
   not_addressed: 'false_wake',
   off_topic: 'false_wake',
   unspecified: 'false_wake',
+};
+
+/**
+ * `NO_REPLY`, `NO_REPLY:duplicate`, tolerating backticks (`\x60`) / brackets and a trailing period.
+ * Matched against trimmed text, so it needs no trailing whitespace of its own.
+ */
+const BOT_NO_REPLY_PATTERN = new RegExp(
+  String.raw`^[\s\x60[(]*${BOT_NO_REPLY_TOKEN}(?:\s*[:：]\s*([a-z_]+))?[\s\x60\])]*[.。]?$`,
+  'i',
+);
+
+const BOT_NO_REPLY_REASON_SET = new Set<string>(BOT_NO_REPLY_REASONS);
+
+/**
+ * Reads a text that consists only of the `NO_REPLY[:reason]` token and returns its reason.
+ *
+ * An unknown reason collapses to `unspecified`, and so does `empty_completion`: that one is
+ * detected by the server, never claimed by the agent. Returns `undefined` for any other text,
+ * including text that merely mentions the token.
+ */
+export const parseBotNoReplyToken = (
+  content?: string | null,
+): BotNoReplyClaimedReason | undefined => {
+  if (!content) return undefined;
+
+  const match = BOT_NO_REPLY_PATTERN.exec(content.trim());
+  if (!match) return undefined;
+
+  const raw = match[1]?.toLowerCase();
+
+  return raw && BOT_NO_REPLY_REASON_SET.has(raw) && raw !== 'empty_completion'
+    ? (raw as BotNoReplyClaimedReason)
+    : 'unspecified';
 };
 
 /** An agent run that finished by choosing silence. */

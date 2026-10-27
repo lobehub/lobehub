@@ -1,13 +1,5 @@
-import type { BotNoReplyReason, BotNoReplyResult, BotWakeKind } from '@lobechat/types';
-import { BOT_NO_REPLY_REASONS, BOT_NO_REPLY_TOKEN } from '@lobechat/types';
-
-const REASONS = new Set<string>(BOT_NO_REPLY_REASONS);
-
-/** `NO_REPLY`, `NO_REPLY:duplicate`, tolerating backticks / brackets and a trailing period. */
-const NO_REPLY_PATTERN = new RegExp(
-  String.raw`^[\s\`\[(]*${BOT_NO_REPLY_TOKEN}(?:\s*[:：]\s*([a-z_]+))?[\s\`\])]*[.。]?\s*$`,
-  'i',
-);
+import type { BotNoReplyResult, BotWakeKind } from '@lobechat/types';
+import { parseBotNoReplyToken } from '@lobechat/types';
 
 export interface DetectNoReplyInput {
   /** The run's final assistant text. */
@@ -39,15 +31,7 @@ export const detectNoReply = ({
 
   if (!text) return hasAttachments ? undefined : { reason: 'empty_completion' };
 
-  const match = NO_REPLY_PATTERN.exec(text);
-  if (!match) return undefined;
+  const reason = parseBotNoReplyToken(text);
 
-  const raw = match[1]?.toLowerCase();
-  // `empty_completion` is detected by us, never claimed by the agent.
-  const reason: BotNoReplyReason =
-    raw && REASONS.has(raw) && raw !== 'empty_completion'
-      ? (raw as BotNoReplyReason)
-      : 'unspecified';
-
-  return { reason };
+  return reason ? { reason } : undefined;
 };
