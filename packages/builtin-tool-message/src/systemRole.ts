@@ -135,6 +135,7 @@ Skipping step 1 will silently wipe other entries.
 
 **Validation behaviour:** the server validates settings before persisting and returns \`updateBot error: <field>: <reason>\` when something fails (e.g. \`userId: Pairing policy requires the owner's Platform User ID.\`). Surface that message to the user and ask for the missing value rather than retrying blindly.
 
+**Owner only:** inside a bot conversation (Discord, Slack, …) only the bot's owner may change a bot or messenger connection (\`updateBot\`, \`toggleBot\`, \`deleteBot\`, \`connectBot\`, \`createBot\`, and the messenger unlink / uninstall / active-agent calls). When anyone else asks, the call fails with "Only the bot's owner can change its settings"; tell them to ask the owner instead of retrying or looking for another way to make the change.
 </access_policies>
 
 <messaging_capabilities>
