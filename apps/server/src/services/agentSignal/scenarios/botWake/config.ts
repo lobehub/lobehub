@@ -59,6 +59,12 @@ export const BOT_WAKE_PACE_PRESETS: Record<Exclude<BotWakePace, 'custom'>, BotWa
   },
 };
 
+/** Classifier thresholds a pace-less config holds when nobody tuned it: the form's old and current default. */
+const UNTOUCHED_CLASSIFIER_THRESHOLDS = new Set<number>([
+  0.5,
+  BOT_WAKE_PACE_PRESETS.balanced.classifierThreshold,
+]);
+
 /** Spec: a burst is collected for at least 20s, and a run is followed by at least 60s of cooldown. */
 export const MIN_COLLECT_SECONDS = 20;
 export const MIN_COOLDOWN_SECONDS = 60;
@@ -296,7 +302,12 @@ const withPace = (
     read(k.windowSeconds, balanced.windowSeconds) === balanced.windowSeconds &&
     read(k.maxSilentWakes, balanced.maxSilentWakes) === balanced.maxSilentWakes &&
     read(k.ownerPresenceSeconds, balanced.ownerPresenceSeconds) === balanced.ownerPresenceSeconds &&
-    read(k.schedulerMode, balanced.scheduler.mode) === balanced.scheduler.mode;
+    read(k.schedulerMode, balanced.scheduler.mode) === balanced.scheduler.mode &&
+    // A preset sets the threshold too, so a tuned one must read as custom or the next save would
+    // replace it. The form saved its default, 0.5 before presets owned it, so that is untouched.
+    UNTOUCHED_CLASSIFIER_THRESHOLDS.has(
+      read(k.classifierThreshold, balanced.classifierThreshold) as number,
+    );
 
   return { ...settings, [k.pace]: untouched ? 'balanced' : 'custom' };
 };

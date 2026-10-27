@@ -492,6 +492,14 @@ describe('flattenBotWakeSettings', () => {
       flattenBotWakeSettings({ [K.enabled]: true, [K.schedulerMode]: 'enforce' })?.[K.pace],
     ).toBe('custom');
     expect(flattenBotWakeSettings({ [K.pace]: 'calm' })?.[K.pace]).toBe('calm');
+    // The threshold the form used to save by default is untouched; a tuned one is custom, or the
+    // next save would let the preset replace it.
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.5 })?.[K.pace],
+    ).toBe('balanced');
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.9 })?.[K.pace],
+    ).toBe('custom');
   });
 
   it('runs a preset pace on its own numbers, and a custom or absent one on the saved numbers', () => {
