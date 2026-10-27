@@ -13,8 +13,8 @@ exports[`buildProjectContextPrompt > gives the coordinator the roster, knowledge
   - Research (kb_research)
 </knowledge_bases>
 <open_tasks total="5">
-  APO-2 ● running  [high]  Draft post — Writer (agt_writer)
-  APO-3 ○ backlog  [-]  (unnamed) — unassigned
+  APO-2 (id: undefined) ● running  [high]  Draft post — Writer (agt_writer)
+  APO-3 (id: undefined) ○ backlog  [-]  (unnamed) — unassigned
   … and 3 more
 </open_tasks>
 <coordination_rules>

@@ -72,7 +72,7 @@ describe('extractTaskWorkTargets', () => {
         args: { name: 'A', instruction: 'do' },
         result: { state: { identifier: 'T-1', taskId: 'task_1', success: true }, success: true },
       }),
-    ).toEqual([{ taskId: 'task_1', taskIdentifier: 'T-1' }]);
+    ).toEqual([{ taskId: 'task_1', taskIdentifier: undefined }]);
   });
 
   it('falls back to args.identifier for updates that return no state (server runtime)', () => {
@@ -146,7 +146,7 @@ describe('resolveWorkRegistration', () => {
     ).toEqual({
       action: 'create',
       changeType: 'created',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
 
@@ -171,7 +171,7 @@ describe('resolveWorkRegistration', () => {
       }),
     ).toEqual({
       action: 'delete',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
   });

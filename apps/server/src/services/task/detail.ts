@@ -72,8 +72,8 @@ export class TaskDetailService {
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
   }
 
-  async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    let task = await this.taskModel.resolve(taskIdOrIdentifier);
+  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
+    let task = await this.taskModel.findById(taskId);
     if (!task) return null;
 
     // Auto-detect heartbeat timeout for running tasks before assembling detail.
@@ -82,7 +82,7 @@ export class TaskDetailService {
       if (elapsed > task.heartbeatTimeout) {
         await this.taskModel.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
         await this.taskTopicModel.timeoutRunning(task.id);
-        task = await this.taskModel.resolve(taskIdOrIdentifier);
+        task = await this.taskModel.findById(taskId);
         if (!task) return null;
       }
     }
@@ -184,10 +184,10 @@ export class TaskDetailService {
 
     // Build dependency map for all descendants
     const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
-    const depMap = new Map<string, string>();
+    const depMap = new Map<string, { id: string; identifier: string }>();
     for (const dep of allDescendantDeps) {
       const depId = idToIdentifier.get(dep.dependsOnId);
-      if (depId) depMap.set(dep.taskId, depId);
+      if (depId) depMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depId });
     }
 
     const runningTopicByTaskId = new Map<string, (typeof allDescendantTopics)[number]>();
@@ -236,11 +236,13 @@ export class TaskDetailService {
           ...(s.archivedAt ? { archivedAt: new Date(s.archivedAt).toISOString() } : {}),
           assigneeUserId: s.assigneeUserId,
           automationMode: s.automationMode,
-          blockedBy: depMap.get(s.id),
+          blockedBy: depMap.get(s.id)?.identifier,
+          blockedById: depMap.get(s.id)?.id,
           createdByUserId: s.createdByUserId,
           visibility: s.visibility,
           children: buildSubtaskTree(s.id),
           ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
+          id: s.id,
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
@@ -272,11 +274,17 @@ export class TaskDetailService {
     );
 
     // Resolve parent
-    let parent: { agentId: string | null; identifier: string; name: string | null } | null = null;
+    let parent: {
+      id: string;
+      agentId: string | null;
+      identifier: string;
+      name: string | null;
+    } | null = null;
     if (task.parentTaskId) {
       const parentTask = await this.taskModel.findById(task.parentTaskId);
       if (parentTask) {
         parent = {
+          id: parentTask.id,
           agentId: parentTask.assigneeAgentId,
           identifier: parentTask.identifier,
           name: parentTask.name,
@@ -501,6 +509,7 @@ export class TaskDetailService {
         const info = depIdToInfo.get(d.dependsOnId);
         return {
           dependsOn: info?.identifier ?? d.dependsOnId,
+          dependsOnId: d.dependsOnId,
           name: info?.name,
           type: d.type,
         };

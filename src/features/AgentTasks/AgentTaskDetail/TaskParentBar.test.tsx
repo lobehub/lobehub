@@ -16,6 +16,7 @@ const createState = (parent: any) => ({
   activeTaskId: 'T-child',
   taskDetailMap: {
     'T-child': {
+      id: 'T-child',
       identifier: 'T-child',
       instruction: 'Child instruction',
       parent,
@@ -71,12 +72,14 @@ describe('TaskParentBar', () => {
     mocks.getDetail.mockReset();
     mocks.taskState = createState({
       agentId: 'agt_parent',
+      id: 'T-parent',
       identifier: 'T-parent',
       name: 'Parent task',
     });
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
@@ -100,12 +103,14 @@ describe('TaskParentBar', () => {
 
   it('falls back to the global route when the parent task owner is unknown', async () => {
     mocks.taskState = createState({
+      id: 'T-parent',
       identifier: 'T-parent',
       name: 'Parent task',
     });
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: null,
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
@@ -125,12 +130,14 @@ describe('TaskParentBar', () => {
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
         subtasks: [
           {
             assignee: { id: 'agt_sibling' },
+            id: 'T-sibling',
             identifier: 'T-sibling',
             status: 'backlog',
           },

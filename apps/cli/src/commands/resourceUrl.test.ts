@@ -37,7 +37,7 @@ describe('resourcePath', () => {
     ],
     [resourcePath.file({ id: 'file_1' }), '/resource?file=file_1'],
     [resourcePath.dashboard({ id: 'dsh_1', projectId: 'prj_1' }), '/project/prj_1/dashboard/dsh_1'],
-    [resourcePath.task({ identifier: 'T-1', name: 'Ship it' }), '/task/T-1/ship-it'],
+    [resourcePath.task({ id: 'task_1', identifier: 'T-1', name: 'Ship it' }), '/task/T-1/ship-it'],
     [resourcePath.acceptance('acc_1'), '/acceptance/acc_1'],
   ])('builds %s', (actual, expected) => {
     expect(actual).toBe(expected);

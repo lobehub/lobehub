@@ -174,7 +174,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'task': {
-          navigate(taskDetailPath(result.identifier, undefined, result.title));
+          navigate(taskDetailPath(result.identifier ?? result.id, undefined, result.title));
           break;
         }
       }

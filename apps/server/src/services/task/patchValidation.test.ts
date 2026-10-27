@@ -32,7 +32,7 @@ const storedTask = (id: string, overrides: Record<string, unknown> = {}) => ({
 const buildContext = (rows: Record<string, Record<string, unknown>> = {}) => {
   const taskModel = {
     findAllDescendants: vi.fn().mockResolvedValue([]),
-    findById: vi.fn().mockResolvedValue({ id: 'parent-1', projectId: 'project-1' }),
+    findById: vi.fn(async (id: string) => storedTask(id, rows[id])),
     resolve: vi.fn(async (id: string) => storedTask(id, rows[id])),
   };
   const taskService = {
@@ -94,7 +94,10 @@ describe('resolveTaskPatchInvariants hierarchy', () => {
   });
 
   it('refuses a public child under a private parent', async () => {
-    const { context, taskService } = buildContext({ 'task-1': { visibility: 'public' } });
+    const { context, taskService } = buildContext({
+      'task-1': { visibility: 'public' },
+      'parent-1': { visibility: 'private' },
+    });
     const patch = { parentTaskId: 'parent-1' };
     taskService.assertParentVisibilityCompat.mockImplementation(() => {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Subtask cannot be more public than' });
@@ -103,7 +106,7 @@ describe('resolveTaskPatchInvariants hierarchy', () => {
     await expect(
       resolveTaskPatchInvariants(context, { data: patch, id: 'task-1', parentTaskId: 'parent-1' }),
     ).rejects.toThrow('Subtask cannot be more public than');
-    expect(taskService.assertParentVisibilityCompat).toHaveBeenCalledWith('public', undefined);
+    expect(taskService.assertParentVisibilityCompat).toHaveBeenCalledWith('public', 'private');
   });
 
   it('accepts clearing the parent', async () => {
@@ -139,7 +142,10 @@ describe('resolveTaskPatchInvariants assignment', () => {
   });
 
   it('refuses a private assignee agent on a public task', async () => {
-    const { context, taskService } = buildContext({ 'task-1': { visibility: 'public' } });
+    const { context, taskService } = buildContext({
+      'task-1': { visibility: 'public' },
+      'parent-1': { visibility: 'private' },
+    });
     const patch = { assigneeAgentId: 'agent-1' };
     taskService.assertAgentVisibilityCompat.mockImplementation(() => {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Public task needs a public agent' });

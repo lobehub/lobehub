@@ -22,21 +22,28 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { aid } = useParams<{ aid?: string }>();
   const agentMeta = useAgentDisplayMeta(aid);
-  const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
+  const taskTitle = useTaskStore((s) =>
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.name : undefined,
+  );
   const taskIdentifier = useTaskStore((s) =>
-    taskId ? s.taskDetailMap[taskId]?.identifier : undefined,
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.identifier : undefined,
   );
   const ancestors = useTaskStore(
     useShallow((s) => {
       if (!taskId) return [];
-      const chain: Array<{ agentId?: string | null; identifier: string; name?: string | null }> =
-        [];
+      const chain: Array<{
+        id: string;
+        agentId?: string | null;
+        identifier: string;
+        name?: string | null;
+      }> = [];
       const visited = new Set<string>([taskId]);
-      let cursor = s.taskDetailMap[taskId]?.parent;
-      while (cursor?.identifier && !visited.has(cursor.identifier)) {
-        const detail = s.taskDetailMap[cursor.identifier];
-        visited.add(cursor.identifier);
+      let cursor = s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.parent;
+      while (cursor?.id && !visited.has(cursor.id)) {
+        const detail = s.taskDetailMap[cursor.id];
+        visited.add(cursor.id);
         chain.push({
+          id: cursor.id,
           agentId: cursor.agentId === undefined ? detail?.agentId : cursor.agentId,
           identifier: cursor.identifier,
           name: cursor.name ?? detail?.name,
@@ -81,8 +88,8 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
         }
       : agentCrumb;
 
-  const ancestorCrumbs = ancestors.map(({ identifier, agentId, name }) => ({
-    key: identifier,
+  const ancestorCrumbs = ancestors.map(({ id, identifier, agentId, name }) => ({
+    key: id,
     title: (
       <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined, name)}>
         <Text color={'inherit'} weight={500}>

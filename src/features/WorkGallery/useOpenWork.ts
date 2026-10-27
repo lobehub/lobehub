@@ -40,7 +40,9 @@ export const useOpenWork = () => {
           return;
         }
         case 'task': {
-          navigate(taskDetailPath(openTarget.identifier, undefined, openTarget.name));
+          navigate(
+            taskDetailPath(openTarget.identifier ?? openTarget.taskId, undefined, openTarget.name),
+          );
         }
       }
     },

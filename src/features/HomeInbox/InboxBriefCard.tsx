@@ -91,7 +91,13 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
 
   const openTask = () => {
     if (!brief.taskId) return;
-    navigate(taskDetailPath(brief.taskId, brief.agentId ?? undefined, brief.taskName));
+    navigate(
+      taskDetailPath(
+        brief.taskIdentifier ?? brief.taskId,
+        brief.agentId ?? undefined,
+        brief.taskName,
+      ),
+    );
   };
 
   const content = (
@@ -194,6 +200,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         recommendedActionKey={goal?.recommendedAction}
         resolvedAction={brief.resolvedAction}
         taskId={brief.taskId}
+        taskIdentifier={brief.taskIdentifier}
         taskStatus={brief.taskStatus}
         topicId={brief.topicId}
         topicTitle={brief.taskName}

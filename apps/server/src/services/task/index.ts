@@ -13,7 +13,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
-import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
+import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { writeKeepingArchivedIdle } from './archiveGuard';
@@ -28,7 +28,7 @@ import {
   type UpdateStatusCascadeResult,
   type UpdateStatusResult,
 } from './statusTransitions';
-import { interruptTaskOperation, resolveTaskOrThrow } from './utils';
+import { findTaskOrThrow, interruptTaskOperation } from './utils';
 
 export type { UpdateStatusCascadeResult, UpdateStatusResult } from './statusTransitions';
 
@@ -65,8 +65,9 @@ export interface CreateTaskInput {
 }
 
 export interface RunReadySubtasksResult {
-  failed: { error: string; identifier: string }[];
+  failed: { error: string; id?: string; identifier: string }[];
   kickedOff: string[];
+  kickedOffTasks?: { id: string; identifier: string }[];
   plan: SubtaskGraphPlan;
   skipped?: { reason: 'nothing-runnable' };
 }
@@ -121,7 +122,7 @@ export class TaskService {
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
-      const parent = await this.resolveOrThrow(createData.parentTaskId);
+      const parent = await this.findOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
       parentVisibility = parent.visibility;
       if (createData.projectId && createData.projectId !== parent.projectId) {
@@ -322,11 +323,8 @@ export class TaskService {
    * `keepOperationId` spares the caller's own run (an agent deleting the task
    * it is executing), which would otherwise interrupt itself mid-tool-call.
    */
-  async deleteTask(
-    idOrIdentifier: string,
-    options: { keepOperationId?: string } = {},
-  ): Promise<TaskItem> {
-    const task = await this.resolveOrThrow(idOrIdentifier);
+  async deleteTask(taskId: string, options: { keepOperationId?: string } = {}): Promise<TaskItem> {
+    const task = await this.findOrThrow(taskId);
 
     const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
 
@@ -428,7 +426,7 @@ export class TaskService {
     id: string;
     topicId?: string;
   }): Promise<ReviewResult> {
-    const task = await this.resolveOrThrow(input.id);
+    const task = await this.findOrThrow(input.id);
 
     const reviewConfig = this.taskModel.getReviewConfig(task);
     if (!reviewConfig?.enabled) {
@@ -501,23 +499,23 @@ export class TaskService {
   }
 
   /**
-   * Compute the subtask execution plan for `idOrIdentifier` without
+   * Compute the subtask execution plan for `taskId` without
    * actually kicking anything off.
    */
-  async previewSubtaskLayers(idOrIdentifier: string): Promise<SubtaskGraphPlan> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async previewSubtaskLayers(taskId: string): Promise<SubtaskGraphPlan> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
-    const { plan } = await graph.planForParent(parent.id);
-    return plan;
+    const { plan, descendants } = await graph.planForParent(parent.id);
+    return displaySubtaskPlan(plan, descendants);
   }
 
   /**
-   * Kick off the first runnable layer of subtasks under `idOrIdentifier`.
+   * Kick off the first runnable layer of subtasks under `taskId`.
    * Subsequent layers fire automatically through
    * `TaskRunnerService.cascadeOnCompletion` as each upstream finishes.
    */
-  async runReadySubtasks(idOrIdentifier: string): Promise<RunReadySubtasksResult> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async runReadySubtasks(taskId: string): Promise<RunReadySubtasksResult> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
     const { descendants, plan } = await graph.planForParent(parent.id);
 
@@ -525,26 +523,24 @@ export class TaskService {
       return {
         failed: [],
         kickedOff: [],
-        plan,
+        plan: displaySubtaskPlan(plan, descendants),
         skipped: { reason: 'nothing-runnable' as const },
       };
     }
 
     const firstLayer = plan.layers[0];
-    const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+    const byId = new Map(descendants.map((d) => [d.id, d]));
     const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
 
     const kickedOff: string[] = [];
-    const failed: { error: string; identifier: string }[] = [];
+    const failed: { error: string; id?: string; identifier: string }[] = [];
 
     const settled = await pMap(
       firstLayer,
-      async (identifier): Promise<PromiseSettledResult<string>> => {
+      async (id): Promise<PromiseSettledResult<string>> => {
         try {
-          const id = identifierToId.get(identifier);
-          if (!id) throw new Error(`Subtask ${identifier} not found`);
           await runner.runTask({ taskId: id });
-          return { status: 'fulfilled', value: identifier };
+          return { status: 'fulfilled', value: id };
         } catch (reason) {
           return { reason, status: 'rejected' };
         }
@@ -553,17 +549,27 @@ export class TaskService {
     );
 
     for (const [index, result] of settled.entries()) {
-      const identifier = firstLayer[index];
+      const id = firstLayer[index];
+      const identifier = byId.get(id)!.identifier;
       if (result.status === 'fulfilled') {
         kickedOff.push(identifier);
       } else {
         const message =
           result.reason instanceof Error ? result.reason.message : 'Failed to start task';
-        failed.push({ error: message, identifier });
+        failed.push({ error: message, id, identifier });
       }
     }
 
-    return { failed, kickedOff, plan };
+    return {
+      failed,
+      kickedOff,
+      kickedOffTasks: settled.flatMap((result, index) =>
+        result.status === 'fulfilled'
+          ? [{ id: firstLayer[index], identifier: byId.get(firstLayer[index])!.identifier }]
+          : [],
+      ),
+      plan: displaySubtaskPlan(plan, descendants),
+    };
   }
 
   private async assertAssigneeAgentBelongsToUser(assigneeAgentId?: string | null): Promise<void> {
@@ -717,13 +723,11 @@ export class TaskService {
     );
   }
 
-  private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
-    return resolveTaskOrThrow(this.deps, idOrIdentifier);
+  private async findOrThrow(taskId: string): Promise<TaskItem> {
+    return findTaskOrThrow(this.taskModel, taskId);
   }
 
-  async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(
-      taskIdOrIdentifier,
-    );
+  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
+    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(taskId);
   }
 }

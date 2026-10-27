@@ -20,7 +20,7 @@ vi.mock('@/database/models/task', () => ({
     constructor(_db: unknown, userId: string, workspaceId?: string) {
       mocks.taskScopes.push([userId, workspaceId]);
     }
-    resolveMany = mocks.resolveTasks;
+    resolveRefs = mocks.resolveTasks;
   },
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -50,9 +50,9 @@ describe('AcceptanceService.listWithSubjects', () => {
       },
     ];
     const query = vi.fn().mockResolvedValue(rows);
-    mocks.resolveTasks.mockResolvedValue([
-      { id: 'recent', identifier: 'T-1', name: 'Recent report' },
-    ]);
+    mocks.resolveTasks.mockResolvedValue({
+      byRef: new Map([['recent', { id: 'recent', identifier: 'T-1', name: 'Recent report' }]]),
+    });
     mocks.resolveTopics.mockResolvedValue([{ id: 'older', title: 'Needle report' }]);
     mocks.resolveDocuments.mockResolvedValue([]);
     const service = new AcceptanceService({} as any, 'user-1') as any;
@@ -119,7 +119,9 @@ describe('AcceptanceService.listWithSubjects', () => {
 
   it('resolves foreign rows in a fixed number of reads however many owners a page spans', async () => {
     mocks.resolveTasks.mockReset();
-    mocks.resolveTasks.mockResolvedValue([{ id: 'mine', identifier: 'T-1', name: 'Task mine' }]);
+    mocks.resolveTasks.mockResolvedValue({
+      byRef: new Map([['mine', { id: 'mine', identifier: 'T-1', name: 'Task mine' }]]),
+    });
     mocks.resolveTopics.mockResolvedValue([]);
     mocks.resolveDocuments.mockResolvedValue([]);
     mocks.taskScopes.length = 0;

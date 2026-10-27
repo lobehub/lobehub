@@ -13,9 +13,10 @@ import {
   schedulePatternSchema,
   scheduleTimezoneSchema,
 } from '@/server/services/task/scheduleValidation';
+import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
-import { idInput, resolveOrThrow, taskProcedureWrite } from './procedures';
+import { idInput, taskProcedureWrite } from './procedures';
 
 const updateSchema = z.object({
   assigneeAgentId: z.string().nullish(),
@@ -83,7 +84,16 @@ export const updateRouter = router({
   update: taskProcedureWrite
     .input(idInput.merge(updateSchema).extend({ actorAgentId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
-      const { actorAgentId, configPatch, id, parentTaskId, status, ...data } = input;
+      const {
+        actorAgentId,
+        configPatch: rawConfigPatch,
+        id,
+        parentTaskId,
+        status,
+        ...data
+      } = input;
+      const configPatch = await normalizeTaskConfig(ctx.taskModel, rawConfigPatch);
+      if (data.config) data.config = await normalizeTaskConfig(ctx.taskModel, data.config);
       try {
         const model = ctx.taskModel;
         const actor = await resolveActivityActor(ctx, actorAgentId);
@@ -146,7 +156,7 @@ export const updateRouter = router({
     .input(idInput.merge(z.object({ visibility: z.enum(['private', 'public']) })))
     .mutation(async ({ input, ctx }) => {
       try {
-        const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+        const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
 
         // Mirror the edit-lock contract from `update`: reject visibility flips
         // while another workspace member is actively editing this task. Without
@@ -255,8 +265,11 @@ export const updateRouter = router({
       const { id, config } = input;
       try {
         const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
-        const task = await model.updateTaskConfig(resolved.id, config);
+        const resolved = await resolveTaskOrThrow(model, id);
+        const task = await model.updateTaskConfig(
+          resolved.id,
+          (await normalizeTaskConfig(model, config))!,
+        );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return { data: task, message: 'Config updated', success: true };
       } catch (error) {
@@ -285,7 +298,10 @@ export const updateRouter = router({
         // A person (or their agent) changed it: record who. System
         // transitions call the service without an actor and stay silent.
         const actor = await resolveActivityActor(ctx, actorAgentId);
-        const result = await ctx.taskService.updateStatus(statusInput, actor);
+        const result = await ctx.taskService.updateStatus(
+          { ...statusInput, id: (await resolveTaskOrThrow(ctx.taskModel, statusInput.id)).id },
+          actor,
+        );
         const {
           task,
           unlocked,
@@ -301,6 +317,8 @@ export const updateRouter = router({
           success: true,
           ...(completionDeferred && { completionDeferred: true }),
           ...(unlocked.length > 0 && { unlocked }),
+          unlockedTasks: result.unlockedTasks,
+          pausedTasks: result.pausedTasks,
           ...(paused.length > 0 && { paused }),
           ...(checkpointTriggered && { checkpointTriggered: true }),
           ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId }),
@@ -325,7 +343,7 @@ export const updateRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await ctx.taskService.updateStatusCascade(
-          input,
+          { ...input, id: (await resolveTaskOrThrow(ctx.taskModel, input.id)).id },
           await resolveActivityActor(ctx),
         );
         return { data: result, message: `Task family ${input.status}`, success: true };
@@ -341,7 +359,7 @@ export const updateRouter = router({
     }),
   acquireTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
     if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
-    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
     const prev = await ctx.editLockService.getActiveHolder('task', resolved.id);
     const result = await ctx.editLockService.acquire('task', resolved.id);
     if ((result.holderId ?? null) !== (prev ?? null)) {
@@ -354,7 +372,7 @@ export const updateRouter = router({
   }),
   getTaskLock: taskProcedureWrite.input(idInput).query(async ({ ctx, input }) => {
     if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
-    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
     const holder = await ctx.editLockService.getActiveHolder('task', resolved.id);
     return {
       expiresAt: null,
@@ -364,7 +382,7 @@ export const updateRouter = router({
   }),
   releaseTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
     if (!ctx.workspaceId) return;
-    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
     // Only broadcast "unlocked" when we actually released our own lock — if the
     // lease expired and another member took over, the lock is still held.
     const released = await ctx.editLockService.release('task', resolved.id);

@@ -5,6 +5,7 @@ import { type SaveStatus } from '@/types/saveState';
 
 export interface TaskDetailSliceState {
   activeTaskId?: string;
+  activeTaskRef?: string;
   /**
    * Topic-scoped fallbacks for a drawer opened outside a task detail — the home
    * inbox opens runs that may have no parent task at all, so there is no
@@ -28,6 +29,7 @@ export interface TaskDetailSliceState {
    * explicit reload signal instead of comparing against live, unsaved content.
    */
   taskInstructionRevisionMap: Record<string, number>;
+  taskRefIndex: Record<string, string>;
   // Save status is scoped per task id (mirrors `taskDetailMap`). A store-wide
   // field would leak one task's `failed` state across navigation, since
   // `setActiveTaskId` only swaps `activeTaskId` and never clears the status.
@@ -38,6 +40,7 @@ export const initialTaskDetailSliceState: TaskDetailSliceState = {
   isCreatingTask: false,
   isDeletingTask: false,
   taskDetailMap: {},
+  taskRefIndex: {},
   taskDetailReplica: createReplicaState(),
   taskInstructionRevisionMap: {},
   taskSaveStatusMap: {},

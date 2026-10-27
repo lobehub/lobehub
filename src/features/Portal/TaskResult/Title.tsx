@@ -14,7 +14,9 @@ import { useLiveRun } from './useLiveRun';
 const Title = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useChatStore(chatPortalSelectors.taskResultId);
-  const detail = useTaskStore((state) => (taskId ? state.taskDetailMap[taskId] : undefined));
+  const detail = useTaskStore((state) =>
+    taskId ? state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId] : undefined,
+  );
   const liveRun = useLiveRun();
   const agentMeta = useAgentDisplayMeta(liveRun?.agentId);
 

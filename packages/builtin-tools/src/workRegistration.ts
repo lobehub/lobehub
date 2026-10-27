@@ -168,7 +168,9 @@ export const extractTaskWorkTargets = ({
     .filter((item) => (item as TaskWorkTargetCandidate).success === true)
     .map((item) => ({
       taskId: asString((item as TaskWorkTargetCandidate).taskId),
-      taskIdentifier: asString((item as TaskWorkTargetCandidate).identifier),
+      taskIdentifier: asString((item as TaskWorkTargetCandidate).taskId)
+        ? undefined
+        : asString((item as TaskWorkTargetCandidate).identifier),
     }))
     .filter((target) => Boolean(target.taskId || target.taskIdentifier));
 };

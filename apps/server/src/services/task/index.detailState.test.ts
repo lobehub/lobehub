@@ -10,7 +10,7 @@ import { TaskService } from './index';
 const mocks = vi.hoisted(() => ({
   findByOperations: vi.fn(),
   findWithHandoff: vi.fn(),
-  resolve: vi.fn(),
+  findById: vi.fn(),
   timeoutRunning: vi.fn(),
   update: vi.fn(),
   updateStatus: vi.fn(),
@@ -56,7 +56,7 @@ vi.mock('@/database/models/task', () => ({
       getDependencies: vi.fn().mockResolvedValue([]),
       getTreePinnedDocuments: vi.fn().mockResolvedValue({ nodeMap: {}, tree: [] }),
       getVerifyConfig: vi.fn().mockReturnValue(undefined),
-      resolve: mocks.resolve,
+      findById: mocks.findById,
       update: mocks.update,
       updateStatus: mocks.updateStatus,
     };
@@ -99,7 +99,7 @@ describe('TaskService.getTaskDetail state', () => {
       lastHeartbeatAt: new Date(Date.now() - 120_000),
       status: 'running',
     };
-    mocks.resolve
+    mocks.findById
       .mockResolvedValueOnce(stale)
       .mockResolvedValueOnce({ ...stale, error: 'Heartbeat timeout', status: 'paused' });
 
@@ -109,14 +109,14 @@ describe('TaskService.getTaskDetail state', () => {
       error: 'Heartbeat timeout',
     });
     expect(mocks.timeoutRunning).toHaveBeenCalledWith('task-1');
-    expect(mocks.resolve).toHaveBeenCalledTimes(2);
+    expect(mocks.findById).toHaveBeenCalledTimes(2);
     // The re-read task is no longer running, so its timeout error is cleared.
     expect(mocks.update).toHaveBeenCalledWith('task-1', { error: null });
     expect(detail).toMatchObject({ error: null, status: 'paused' });
   });
 
   it('keeps a running task whose heartbeat is still fresh', async () => {
-    mocks.resolve.mockResolvedValue({
+    mocks.findById.mockResolvedValue({
       ...baseTask,
       heartbeatTimeout: 600,
       lastHeartbeatAt: new Date(),
@@ -130,7 +130,7 @@ describe('TaskService.getTaskDetail state', () => {
   });
 
   it("decorates each run row with its verify round's verdict", async () => {
-    mocks.resolve.mockResolvedValue(baseTask);
+    mocks.findById.mockResolvedValue(baseTask);
     mocks.findWithHandoff.mockResolvedValue([
       {
         createdAt: new Date('2024-01-02T00:00:00Z'),

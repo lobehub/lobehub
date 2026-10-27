@@ -63,6 +63,14 @@ describe('onTopicComplete webhook', () => {
     expect(json).toHaveBeenCalledWith({ success: true });
   });
 
+  it('accepts a stable-id-only payload from a newer queue writer', async () => {
+    const { taskIdentifier: _legacy, ...payload } = failedRunPayload;
+    const { context, json } = makeContext(payload);
+    await onTopicComplete(context);
+    expect(json).toHaveBeenCalledWith({ success: true });
+    expect(lifecycleOnTopicComplete).toHaveBeenCalledTimes(1);
+  });
+
   it('acks a delayed delivery for a run the sweep already settled without re-applying it', async () => {
     isRunAlreadySettled.mockResolvedValue(true);
     const { context, json } = makeContext(failedRunPayload);

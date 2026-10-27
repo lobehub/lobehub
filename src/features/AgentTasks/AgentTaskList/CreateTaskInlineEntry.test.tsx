@@ -572,7 +572,11 @@ describe('CreateTaskInlineEntry', () => {
   it('confirms the task exists once it is created, and offers a way to open it', async () => {
     editorMarkdownMock.value = 'Write a project plan';
     analyzeIntentMock.mockResolvedValue(clearReading);
-    createTaskMock.mockResolvedValue({ identifier: 'TASK-9', name: 'Write the Q3 project plan' });
+    createTaskMock.mockResolvedValue({
+      id: 'task_9',
+      identifier: 'TASK-9',
+      name: 'Write the Q3 project plan',
+    });
 
     render(<CreateTaskInlineEntry variant="hero" />);
     fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
@@ -591,12 +595,16 @@ describe('CreateTaskInlineEntry', () => {
 
     render(description as ReactNode);
     fireEvent.click(screen.getByText('taskIntent.openCreated'));
-    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('TASK-9'));
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'));
   });
 
   it('confirms every creation path, not only the straight-through one', async () => {
     editorMarkdownMock.value = 'Write a project plan';
-    createTaskMock.mockResolvedValue({ identifier: 'TASK-9', name: 'Write the Q3 project plan' });
+    createTaskMock.mockResolvedValue({
+      id: 'task_9',
+      identifier: 'TASK-9',
+      name: 'Write the Q3 project plan',
+    });
     analyzeIntentMock.mockResolvedValue({
       ...clearReading,
       clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],

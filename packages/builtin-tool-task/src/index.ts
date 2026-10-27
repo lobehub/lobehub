@@ -21,6 +21,7 @@ export {
 export { TaskIdentifier, TaskManifest } from './manifest';
 export { normalizeSetTaskVerifyParams } from './setTaskVerify';
 export { systemPrompt } from './systemRole';
+export { resolveTaskOpenTarget, taskResultState } from './taskRef';
 export type {
   CreateGoalParams,
   CreateGoalState,

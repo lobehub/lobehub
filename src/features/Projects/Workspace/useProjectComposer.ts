@@ -92,7 +92,7 @@ export const useProjectComposer = (
         });
         clearContent();
         clearChatUploadFileList(files.map((file) => file.id));
-        if (task) navigate(taskDetailPath(task.id, undefined, task.name));
+        if (task) navigate(taskDetailPath(task.identifier, undefined, task.name));
         return;
       }
 

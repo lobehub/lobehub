@@ -66,8 +66,8 @@ export const recentRouter = router({
           }
           case 'task': {
             routePath = item.routeId
-              ? `/agent/${item.routeId}/task/${item.id}`
-              : `/task/${item.id}`;
+              ? `/agent/${item.routeId}/task/${item.taskIdentifier ?? item.id}`
+              : `/task/${item.taskIdentifier ?? item.id}`;
             break;
           }
         }
@@ -77,6 +77,7 @@ export const recentRouter = router({
           description: item.description,
           icon: item.type,
           id: item.id,
+          taskIdentifier: item.taskIdentifier,
           lastAssistantMessage: item.lastAssistantMessage,
           metadata: item.metadata as ChatTopicMetadata | undefined,
           routePath,

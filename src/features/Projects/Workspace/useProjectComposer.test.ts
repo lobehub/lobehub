@@ -174,7 +174,7 @@ describe('useProjectComposer', () => {
   });
 
   it('assigns a task to the picked project agent', async () => {
-    mocks.createTask.mockResolvedValue({ id: 'task_1', name: 'Ship it' });
+    mocks.createTask.mockResolvedValue({ id: 'task_1', identifier: 'T-1', name: 'Ship it' });
     const { result } = renderHook(() => useProjectComposer(project, 'task', 'reviewer'));
 
     await act(async () => {
@@ -255,7 +255,7 @@ describe('useProjectComposer', () => {
   });
 
   it('records a project task with its attachments in task mode', async () => {
-    mocks.createTask.mockResolvedValue({ id: 'task_1', name: 'Ship it' });
+    mocks.createTask.mockResolvedValue({ id: 'task_1', identifier: 'T-1', name: 'Ship it' });
     mocks.fileList = [image];
     const { result } = renderHook(() => useProjectComposer(project, 'task', 'coordinator'));
 
@@ -272,7 +272,7 @@ describe('useProjectComposer', () => {
       }),
     );
     expect(mocks.clearChatUploadFileList).toHaveBeenCalledWith(['file_1']);
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/task_1/ship-it');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1/ship-it');
     expect(mocks.createProjectTopic).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });

@@ -9,6 +9,7 @@ import { TaskService } from '@/server/services/task';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { resolveTaskPatchInvariants } from '@/server/services/task/patchValidation';
 import { assertResultingScheduleValid } from '@/server/services/task/scheduleValidation';
+import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { BaseService } from '../common/base.service';
@@ -79,7 +80,9 @@ export class TaskRestService extends BaseService {
   }
 
   async getTask(id: string): ServiceResult<unknown> {
-    const detail = await this.taskService.getTaskDetail(id);
+    const detail = await this.taskService.getTaskDetail(
+      (await resolveTaskOrThrow(this.taskModel, id)).id,
+    );
     if (!detail) throw this.createNotFoundError('Task not found');
     return detail;
   }
@@ -90,7 +93,13 @@ export class TaskRestService extends BaseService {
     // create boundary, so a schedule the dispatcher cannot evaluate is refused
     // here instead of being stored and silently never firing.
     assertResultingScheduleValid(null, input);
-    const task = await this.taskService.createTask(input);
+    const task = await this.taskService.createTask({
+      ...input,
+      config: await normalizeTaskConfig(this.taskModel, input.config),
+      parentTaskId: input.parentTaskId
+        ? (await resolveTaskOrThrow(this.taskModel, input.parentTaskId)).id
+        : undefined,
+    });
     // Creating a task already assigned to another member notifies them, the way
     // the tRPC create boundary does; self-assignment is filtered inside the
     // helper, so this stays silent for the caller's own task.
@@ -99,6 +108,7 @@ export class TaskRestService extends BaseService {
   }
 
   async updateTask(id: string, input: UpdateTaskRequest): ServiceResult<unknown> {
+    input = { ...input, config: await normalizeTaskConfig(this.taskModel, input.config) };
     // Hierarchy, visibility, assignment and schedule invariants all live in one
     // shared place, so this patch cannot persist what the in-app editor refuses
     // — a task parented to itself, a public child under a private parent, an
@@ -138,7 +148,11 @@ export class TaskRestService extends BaseService {
     // A person (or their agent) made this change, so it belongs in the feed —
     // the service treats a missing actor as a system transition.
     return this.taskService.updateStatus(
-      { error: input.error, id, status: input.status },
+      {
+        error: input.error,
+        id: (await resolveTaskOrThrow(this.taskModel, id)).id,
+        status: input.status,
+      },
       { userId: this.userId },
     );
   }

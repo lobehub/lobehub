@@ -43,7 +43,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
     return list;
   }
 
-  const taskMap = new Map(nodes.map((item) => [item.identifier, item]));
+  const taskMap = new Map(nodes.map((item) => [item.id!, item]));
   const depthMemo = new Map<string, number>();
 
   const getDepth = (identifier: string, stack: Set<string>): number => {
@@ -53,7 +53,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
     if (stack.has(identifier)) return 0;
 
     const node = taskMap.get(identifier);
-    const parentIdentifier = node?.blockedBy;
+    const parentIdentifier = node?.blockedById;
     if (!node || !parentIdentifier || !taskMap.has(parentIdentifier)) {
       depthMemo.set(identifier, 0);
       return 0;
@@ -68,7 +68,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
   };
 
   return nodes.map((task) => ({
-    depth: getDepth(task.identifier, new Set<string>()),
+    depth: getDepth(task.id!, new Set<string>()),
     task,
   }));
 };
@@ -129,7 +129,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       const itemStatus = toTaskStatus(subtask.task.status);
 
       return {
-        key: subtask.task.identifier,
+        key: subtask.task.id!,
         label: (
           <Flexbox horizontal align="center" gap={8}>
             {subtask.depth > 0 && <div style={{ flex: 'none', width: subtask.depth * 16 }} />}
