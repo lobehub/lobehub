@@ -328,6 +328,46 @@ describe('owner rules policy', () => {
   });
 });
 
+describe('owner rules policy: naming the bot', () => {
+  const rules = rulesFor({ rules: { ownerPresenceSeconds: 120 } });
+  const conversation = { botNames: ['Nasa'], recent: [] };
+  const run = (
+    s: Partial<WakeSignal>,
+    c: Partial<WakeChannelState>,
+    botWake: Record<string, unknown> = { rules: { ownerPresenceSeconds: 120 } },
+  ) =>
+    createOwnerRulesPolicy('enforce', rulesFor(botWake)).evaluate({
+      signal: signal(s),
+      state: { ...snapshot(c), conversation },
+    });
+
+  it('does not let owner presence silence someone else calling the bot by name', () => {
+    const result = run({ message: 'Nasa ？' }, { ownerLastSpokeAt: NOW - 10_000 });
+
+    expect([result.verdict, result.reason]).toEqual(['abstain', 'no-owner-rule-opinion']);
+  });
+
+  it('still suppresses unnamed chatter while the owner is around', () => {
+    const result = createOwnerRulesPolicy('enforce', rules).evaluate({
+      signal: signal({ message: 'anyone know why the deploy is slow?' }),
+      state: { ...snapshot({ ownerLastSpokeAt: NOW - 10_000 }), conversation },
+    });
+
+    expect([result.verdict, result.reason]).toEqual(['deny', 'owner-present']);
+  });
+
+  it('keeps scope and the channel lists in force when the bot is named', () => {
+    const named = { message: 'Nasa hi' };
+    const recent = { ownerLastSpokeAt: NOW - 10_000 };
+
+    expect(run(named, recent, { rules: { scope: 'none' } }).reason).toBe('scope-none');
+    expect(run(named, recent, { rules: { denyChannels: ['c1'] } }).reason).toBe('channel-denied');
+    expect(run(named, recent, { rules: { allowChannels: ['c2'] } }).reason).toBe(
+      'channel-not-allowed',
+    );
+  });
+});
+
 describe('classifier policy', () => {
   const rules = rulesFor({
     classifier: { mode: 'enforce', threshold: 0.5 },

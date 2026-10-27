@@ -1,3 +1,4 @@
+import { matchesBotName } from '../conversation';
 import type { WakePolicy, WakePolicyMode, WakePolicyResult, WakeRules } from '../types';
 
 export const OWNER_RULES_POLICY_ID = 'bot-wake:owner-rules';
@@ -13,6 +14,10 @@ const deny = (reason: string): WakePolicyResult => ({
  * The bot owner's structured rules: scope, channel allow/deny lists, follow-up window, the
  * silent-wake budget and owner-presence suppression.
  *
+ * Owner presence keeps the bot from joining chatter on its own while the owner is around to
+ * answer. A message that calls the bot by name asked for the bot, not the owner, so presence does
+ * not silence it. Scope and the channel lists still do: those say where the bot may speak at all.
+ *
  * Free-text instructions are deliberately not read here. They are context for the classifier;
  * compiling prose into patterns would make the rule set say something the owner never wrote.
  *
@@ -21,7 +26,7 @@ const deny = (reason: string): WakePolicyResult => ({
  *
  * Returns:
  * - `deny` with the first rule that matched (checked in a fixed order: scope, deny list, allow
- *   list, window, budget, owner presence)
+ *   list, window, budget, owner presence; owner presence is skipped when the text names the bot)
  * - `allow` when the bot spoke within the follow-up window and nothing denied
  * - `abstain` otherwise: outside the window the owner's rules have no opinion
  */
@@ -55,7 +60,8 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
       rules.ownerPresenceSeconds > 0 &&
       channel?.ownerLastSpokeAt !== undefined &&
       !signal.author?.isOwner &&
-      now - channel.ownerLastSpokeAt < rules.ownerPresenceSeconds * 1000
+      now - channel.ownerLastSpokeAt < rules.ownerPresenceSeconds * 1000 &&
+      !matchesBotName(signal.message, state.conversation?.botNames ?? [])
     ) {
       return deny('owner-present');
     }
@@ -78,6 +84,6 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
   },
   id: OWNER_RULES_POLICY_ID,
   mode,
-  requires: ['channel'],
-  version: 1,
+  requires: ['channel', 'conversation'],
+  version: 2,
 });

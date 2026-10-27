@@ -145,7 +145,6 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
   it.each([
     { reason: 'scope none', rules: { scope: 'none' } },
     { reason: 'channel denied', rules: { denyChannels: ['c1'] } },
-    { reason: 'owner present', rules: { ownerPresenceSeconds: 600 } },
   ])('an owner rule still vetoes a message that names the bot ($reason)', async ({ rules }) => {
     const state = fakeState({ ...spokeRecently(), ownerLastSpokeAt: Date.now() - 1000 });
     const recorder = make({ botWake: { enabled: true, mode: 'enforce', rules } }, state);
@@ -155,6 +154,20 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
         observation({}, { author: { isBot: false, isMe: false, userId: 'someone-else' } }),
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('wakes when someone else names the bot while the owner is around', async () => {
+    const state = fakeState({ ownerLastSpokeAt: Date.now() - 10_000, silentWakes: 0 });
+    const recorder = make(
+      { botWake: { enabled: true, mode: 'enforce', rules: { ownerPresenceSeconds: 120 } } },
+      state,
+    );
+
+    await expect(
+      recorder.initiate(
+        observation({}, { author: { isBot: false, isMe: false, userId: 'someone-else' } }),
+      ),
+    ).resolves.toEqual({ reason: 'named-in-text' });
   });
 
   it('never wakes on its own message or another bot, even naming itself', async () => {
@@ -335,6 +348,26 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     const [decision] = recorded();
     expect(decision.toTag).toBe('named');
     expect(decision.metadata.stateSnapshot.conversation.botNames).toEqual([BOT_NAME]);
+  });
+
+  it('records the enforcing rule that stopped a named wake, not a shadow replay of it', async () => {
+    const recorder = make(
+      { botWake: { enabled: true, mode: 'enforce', rules: { denyChannels: ['c1'] } } },
+      fakeState(),
+    );
+
+    expect(await recorder.initiate(observation())).toBeUndefined();
+    recorder.record(observation());
+    await flush();
+
+    const verdicts = recorded()[0].verdicts.map((verdict: any) => [
+      verdict.policyId,
+      verdict.mode,
+      verdict.verdict,
+      verdict.reason,
+    ]);
+    expect(verdicts).toContainEqual(['bot-wake:owner-rules', 'enforce', 'deny', 'channel-denied']);
+    expect(verdicts.some(([, mode]: string[]) => mode === 'shadow')).toBe(false);
   });
 
   it('a message that did not wake the bot is still recorded as it was judged', async () => {

@@ -618,7 +618,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
         const ruleDecision = await aggregateWakeVerdictsAsync(rulePolicies, signal, snapshot);
         if (ruleDecision.verdict !== 'allow' || ruleDecision.fastPath) {
-          keepEvaluation(observation, { channel, conversation });
+          // An enforcing deny is what kept the bot quiet: keep its verdicts, so the row names the
+          // rule that stopped the wake instead of replaying every policy as if it only watched.
+          keepEvaluation(observation, {
+            channel,
+            conversation,
+            verdicts: ruleDecision.verdict === 'deny' ? ruleVerdicts(ruleDecision) : undefined,
+          });
           return;
         }
 
