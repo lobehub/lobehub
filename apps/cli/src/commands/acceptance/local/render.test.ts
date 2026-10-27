@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -11,7 +12,7 @@ import { createLocalAcceptance, firstRound } from './testUtils';
 
 const { outputJson, spawn } = vi.hoisted(() => ({
   outputJson: vi.fn(),
-  spawn: vi.fn(() => ({ unref: () => {} })),
+  spawn: vi.fn(),
 }));
 vi.mock('node:child_process', () => ({ spawn }));
 vi.mock('../../../utils/format', async (original) => ({
@@ -36,6 +37,7 @@ describe('lh acceptance run render', () => {
   beforeEach(() => {
     originalExitCode = process.exitCode;
     process.exitCode = undefined;
+    spawn.mockImplementation(() => Object.assign(new EventEmitter(), { unref: () => {} }));
     vi.spyOn(log, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'log').mockImplementation(() => {});
     fixture = createLocalAcceptance([firstRound()]);
@@ -96,6 +98,40 @@ describe('lh acceptance run render', () => {
     ]);
     expect(outputJson.mock.calls.at(-1)![0]).toMatchObject({ roundIndex: 2, rounds: 2 });
   });
+
+  it.each(['synchronous', 'asynchronous'])(
+    '%s browser failure keeps the rendered report usable',
+    async (failure) => {
+      const child = Object.assign(new EventEmitter(), { unref: () => {} });
+      const error = new Error('spawn xdg-open ENOENT');
+      spawn.mockImplementationOnce(() => {
+        if (failure === 'synchronous') throw error;
+        return child;
+      });
+      fixture.addRound({
+        dir: '20260102-090000-complete',
+        result: {
+          cases: [{ id: 'rename', name: 'Rename keeps the new title', status: 'pass' }],
+          title: 'Topic rename',
+        },
+      });
+
+      const summary = await renderReportAction(fixture.acceptanceDir, {
+        json: true,
+        open: true,
+        requirement: 'Users can rename a topic',
+      });
+      if (failure === 'asynchronous') {
+        await Promise.resolve();
+        expect(() => child.emit('error', error)).not.toThrow();
+      }
+
+      expect(summary.publicationStatus).toBe('complete');
+      expect(process.exitCode).toBeUndefined();
+      expect(embedded(readFileSync(summary.reportPath, 'utf8')).rounds).toHaveLength(2);
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining(error.message));
+    },
+  );
 
   it('opens the page on Windows without handing its path to a shell', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;

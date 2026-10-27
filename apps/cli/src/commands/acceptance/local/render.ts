@@ -33,10 +33,17 @@ const openInBrowser = (file: string) => {
       : process.platform === 'win32'
         ? ['rundll32', ['url.dll,FileProtocolHandler', file]]
         : ['xdg-open', [file]];
+  const onError = (error: unknown) => {
+    log.warn(
+      `Could not open browser automatically: ${error instanceof Error ? error.message : String(error)}. Open the report path manually.`,
+    );
+  };
   try {
-    spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
-  } catch {
-    // No browser to open; the path is printed either way.
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+    child.once('error', onError);
+    child.unref();
+  } catch (error) {
+    onError(error);
   }
 };
 
