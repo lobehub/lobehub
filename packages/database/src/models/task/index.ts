@@ -7,7 +7,7 @@ import type {
   TaskVerifyConfig,
   WorkspaceData,
 } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
@@ -80,15 +80,16 @@ export class TaskModel {
     }
 
     // A prefix is derived from placement, never accepted as a creation field.
+    // Anyone who can see a project may file work in it; project settings stay
+    // with its creator. A project without its own identifier keeps the scope's
+    // default prefix.
     let identifierPrefix = DEFAULT_TASK_IDENTIFIER_PREFIX;
     if (createData.projectId) {
-      const project = await new ProjectModel(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).findManageableById(createData.projectId);
+      const project = await new ProjectModel(this.db, this.userId, this.workspaceId).findById(
+        createData.projectId,
+      );
       if (!project) throw new Error('Project not found');
-      identifierPrefix = project.identifier;
+      identifierPrefix = project.identifier ?? DEFAULT_TASK_IDENTIFIER_PREFIX;
     }
 
     return rows.insertWithNextSeq(this.ctx, createData, identifierPrefix, options.maxRetries ?? 5);
@@ -96,6 +97,22 @@ export class TaskModel {
 
   async findById(id: string): Promise<TaskItem | null> {
     return rows.findById(this.ctx, id);
+  }
+
+  /** Recover creation when a repair request lost its response before linking the Task. */
+  async findByRepairRequest(requestId: string): Promise<TaskItem | null> {
+    const [task] = await this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          taskOwnership(this.ctx),
+          eq(tasks.createdByUserId, this.userId),
+          sql`${tasks.config}->'acceptanceRepair'->>'requestId' = ${requestId}`,
+        ),
+      )
+      .limit(1);
+    return (task as TaskItem) ?? null;
   }
 
   async findByIds(ids: string[]): Promise<TaskItem[]> {
@@ -271,6 +288,14 @@ export class TaskModel {
     extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
     return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
+  }
+
+  async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
+    return rows.completeIfCompletionRequested(this.ctx, id, operationId);
+  }
+
+  async withdrawCompletionRequest(id: string, operationId: string): Promise<boolean> {
+    return rows.withdrawCompletionRequest(this.ctx, id, operationId);
   }
 
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {

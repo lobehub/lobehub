@@ -1,5 +1,5 @@
 {
-  "version": "5.4.2",
+  "version": "5.8.0",
   "$comment": "Single source of truth for routing (route.mjs), progressive disclosure (refs.mjs) and isolation checks (check-structure.mjs). Edit here first, then the matching stage file.",
   "stageOrder": [
     "00-brief",

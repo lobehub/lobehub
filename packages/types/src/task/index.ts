@@ -225,7 +225,8 @@ export interface TaskTopicHandoff {
    */
   briefDecision?: BriefDecision;
   /**
-   * Raw last assistant message of the run, captured on completion.
+   * Raw output of the run, captured on completion: its last assistant message,
+   * or its earlier report when that message was only a trailing remark.
    * Shown on the run card alongside the LLM-synthesized `summary` so the feed
    * surfaces the actual run output, not only the summary.
    */

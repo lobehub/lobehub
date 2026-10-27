@@ -31,6 +31,8 @@ import { registerNotifyCommand } from './commands/notify';
 import { registerPluginCommand } from './commands/plugin';
 import { registerProjectCommand } from './commands/project';
 import { registerProviderCommand } from './commands/provider';
+import { registerReadCommand } from './commands/read';
+import { registerRecallCommand } from './commands/recall';
 import { registerSearchCommand } from './commands/search';
 import { registerSessionGroupCommand } from './commands/session-group';
 import { registerSkillCommand } from './commands/skill';
@@ -86,6 +88,8 @@ export function createProgram() {
   registerDoctorCommand(program);
   registerDocCommand(program);
   registerSearchCommand(program);
+  registerReadCommand(program);
+  registerRecallCommand(program);
   registerKbCommand(program);
   registerMemoryCommand(program);
   registerAgentCommand(program);

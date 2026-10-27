@@ -69,6 +69,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
+    updateOperationMetadata: vi.fn(),
     updateTopicStatus: vi.fn(async () => {}),
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
@@ -178,6 +179,10 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     // gateway/hetero reach completeRun with the op still `running`, so cancelled
     // must move it to terminal here. No markUnread, no failOperation, no signal.
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
+    // Settled as `completed`, yet nothing drains its queue: say so.
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith(OP, {
+      endedWithoutCompletion: true,
+    });
     expect(store.markTopicUnread).not.toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
     expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();

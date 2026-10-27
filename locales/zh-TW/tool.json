@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "鍵值為「{{key}}」的憑證已存在，但類型為不同的類型（{{type}}），因此無法從此處取代。請跳過，並以不同的鍵值請求。",
   "credsInput.notice.workspace": "已加密儲存到此工作區的憑證中。這些值直接存入存儲中，且不會顯示給 AI。",
   "credsInput.placeholder": "輸入 {{field}}",
+  "credsInput.proseConfirm": "仍然儲存",
+  "credsInput.proseWarning": "“{{fields}}” 的值看起來像是一個句子而不是一個秘密（它包含 CJK 文本或整個短語）。如果是誤貼，請在儲存前修正；否則請確認並選擇“仍然儲存”。",
   "credsInput.saveFailed": "無法儲存憑證。請再試一次。",
   "credsInput.skip": "跳過",
   "credsInput.submit": "儲存",

@@ -21,9 +21,13 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import { createLobehubSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
+import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 import { type LobehubSkillServer } from '@/store/tool/slices/lobehubSkillStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { toConnectorActionError } from '@/utils/connectorActionError';
 
+import { renderConnectorRowDescription } from './ConnectorRowFeedback';
+import { isSettledByConnection } from './connectorRowState';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
@@ -53,6 +57,19 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
     const revokeConnect = useToolStore((s) => s.revokeLobehubSkill);
     const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+    const setActionError = useToolStore((s) => s.setLobehubSkillError);
+    const actionError = useToolStore(lobehubSkillStoreSelectors.getServerError(provider.id));
+
+    // The OAuth window is gone and the provider is still not connected: keep the
+    // reason on the row, the user may not have noticed the popup failed.
+    const reportIfNotConnected = useCallback(() => {
+      const latest = lobehubSkillStoreSelectors.getServerByIdentifier(provider.id)(
+        useToolStore.getState(),
+      );
+      if (latest?.status !== LobehubSkillStatus.CONNECTED) {
+        setActionError(provider.id, { action: 'connect', code: 'AUTH_INCOMPLETE' });
+      }
+    }, [provider.id, setActionError]);
 
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
@@ -100,8 +117,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           pollIntervalRef.current = null;
         }
         setIsWaitingAuth(false);
+        reportIfNotConnected();
       }, POLL_TIMEOUT_MS);
-    }, [checkStatus, provider.id]);
+    }, [checkStatus, provider.id, reportIfNotConnected]);
 
     const startWindowMonitor = useCallback(
       (oauthWindow: Window) => {
@@ -115,6 +133,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
               oauthWindowRef.current = null;
               await checkStatus(provider.id);
               setIsWaitingAuth(false);
+              reportIfNotConnected();
             }
           } catch {
             console.info(
@@ -128,7 +147,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           }
         }, 500);
       },
-      [checkStatus, provider.id, startFallbackPolling],
+      [checkStatus, provider.id, reportIfNotConnected, startFallbackPolling],
     );
 
     const openOAuthWindow = useCallback(
@@ -169,6 +188,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       if (server?.isConnected) return;
 
       setIsConnecting(true);
+      setActionError(provider.id, undefined);
       try {
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
         const redirectUri = window.location.protocol.startsWith('http')
@@ -178,6 +198,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         openOAuthWindow(authorizeUrl);
       } catch (error) {
         console.error('[LobehubSkill] Failed to get authorize URL:', error);
+        setActionError(provider.id, toConnectorActionError('connect', error));
       } finally {
         setIsConnecting(false);
       }
@@ -284,6 +305,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     };
 
     const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
+    const description = renderConnectorRowDescription({ error: actionError, name: provider.label });
+
+    // Becoming connected settles an earlier connect failure; a failed disconnect
+    // leaves the row connected on purpose, so its reason stays.
+    const hasStaleConnectError = isSettledByConnection(isConnected, actionError);
+    useEffect(() => {
+      if (hasStaleConnectError) setActionError(provider.id, undefined);
+    }, [hasStaleConnectError, provider.id, setActionError]);
 
     // Compact connect/status control for the left-list (NavItem) row. Mirrors the
     // ChatInput skills dropdown UX: connected → green check; otherwise a Connect
@@ -326,6 +355,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       return (
         <NavItem
           active={isSelected}
+          description={description}
           extra={renderNavExtra()}
           icon={renderNavIcon}
           title={provider.label}

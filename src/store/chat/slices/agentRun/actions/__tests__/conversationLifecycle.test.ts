@@ -318,6 +318,7 @@ describe('ConversationLifecycle actions', () => {
             }),
           }),
           expect.any(Object),
+          { creationOrigin: 'client' },
         );
         expect(createCompressionGroupSpy).toHaveBeenCalledWith({
           agentId,

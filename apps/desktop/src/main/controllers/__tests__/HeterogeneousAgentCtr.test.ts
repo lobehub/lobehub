@@ -1887,14 +1887,14 @@ describe('HeterogeneousAgentCtr', () => {
       }
     });
 
-    it('disables CodeBuddy background tasks in the spawned environment', async () => {
-      const { cliArgs, options } = await runSendPrompt('hello', {
-        agentType: 'codebuddy',
-        command: 'codebuddy',
-      });
-
+    // without MCP_CONNECTION_NONBLOCKING the first turn misses claude.ai connectors.
+    it.each([
+      ['codebuddy', 'codebuddy', 'CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS', '1'],
+      ['claude-code', 'claude', 'MCP_CONNECTION_NONBLOCKING', 'false'],
+    ])('applies the %s preset env', async (agentType, command, key, value) => {
+      const { cliArgs, options } = await runSendPrompt('hello', { agentType, command });
       expect(cliArgs).toContain('--include-partial-messages');
-      expect(options.env.CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
+      expect(options.env[key]).toBe(value);
     });
 
     it('passes the selected model to the native CodeBuddy process', async () => {

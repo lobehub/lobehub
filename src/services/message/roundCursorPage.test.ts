@@ -5,8 +5,10 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { MessageService } from './index';
 import {
   ForwardPagingUnsupportedError,
+  isPartialHeadWindow,
   primeMessageListPage,
   readMessagesForward,
+  releaseUnusedPrimedMessageListPage,
   SHARED_TOPIC_FIRST_PAGE,
 } from './roundCursorPage';
 
@@ -83,6 +85,70 @@ describe('primeMessageListPage', () => {
 
     expect(query).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ messages: [{ id: 'group' }], olderCursor: null });
+  });
+
+  it('drops a page no read took, so a later read goes to the server', async () => {
+    query.mockResolvedValueOnce(page('fresh'));
+    const context = nextContext();
+    const orphaned = listPage('orphaned');
+
+    primeMessageListPage(context, orphaned);
+    // The head read joined an already in-flight query, so it never took the page.
+    releaseUnusedPrimedMessageListPage(context, orphaned);
+
+    const result = await service.getMessageListPage(context);
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ messages: [{ id: 'fresh' }], olderCursor: null });
+  });
+
+  it('keeps a page another caller primed for the same conversation', async () => {
+    const context = nextContext();
+    const replacement = listPage('replacement');
+
+    primeMessageListPage(context, listPage('first'));
+    releaseUnusedPrimedMessageListPage(context, replacement);
+
+    expect(await service.getMessageListPage(context)).toEqual({
+      messages: [{ id: 'first' }],
+      olderCursor: null,
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('marks the conversation partial until a normal head read replaces the window', async () => {
+    query.mockResolvedValueOnce(page('fresh'));
+    const context = nextContext();
+
+    expect(isPartialHeadWindow(context)).toBe(false);
+    primeMessageListPage(context, listPage('prefetched'));
+    await service.getMessageListPage(context);
+
+    expect(isPartialHeadWindow(context)).toBe(true);
+
+    await service.getMessageListPage(context);
+
+    expect(isPartialHeadWindow(context)).toBe(false);
+  });
+
+  it('keeps the partial marker when the replacing head read fails', async () => {
+    const context = nextContext();
+
+    primeMessageListPage(context, listPage('prefetched'));
+    await service.getMessageListPage(context);
+    expect(isPartialHeadWindow(context)).toBe(true);
+
+    query.mockRejectedValueOnce(new Error('offline'));
+    await expect(service.getMessageListPage(context)).rejects.toThrow('offline');
+
+    // The rows on screen are still the prefetch window: a resume must widen.
+    expect(isPartialHeadWindow(context)).toBe(true);
+
+    query.mockResolvedValueOnce(page('full'));
+    await service.getMessageListPage(context);
+
+    // Only a head read that actually landed drops the marker.
+    expect(isPartialHeadWindow(context)).toBe(false);
   });
 
   it('falls back to a fresh read when the primed request failed', async () => {

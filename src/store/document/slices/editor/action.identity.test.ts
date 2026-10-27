@@ -144,4 +144,37 @@ describe('document identity and metadata-only saves', () => {
       createdAt: 123,
     });
   });
+
+  it('does not write the previous editor body into the next document before its editor takes over', async () => {
+    const previous = makeEditor('A body');
+    seed('A', 'A body', previous.editor);
+    await useDocumentStore.getState().onEditorInit(previous.editor, 'A');
+
+    // The next canvas loads B into its own editor while the store still points at
+    // the previous editor, which holds A's body.
+    const next = makeEditor('');
+    seed('B', '', previous.editor);
+    await useDocumentStore.getState().onEditorInit(next.editor, 'B');
+    useDocumentStore.getState().handleContentChange();
+    await useDocumentStore.getState().performSave('B', undefined, { saveSource: 'manual' });
+
+    expect(useDocumentStore.getState().documents.B.content).toBe('');
+    expect(useDocumentStore.getState().documents.B.isDirty).toBeFalsy();
+    expect(documentService.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it('syncs editor changes once the editor holding the document is in the store', async () => {
+    const { editor, spy } = makeEditor('');
+    seed('B', '', editor);
+    await useDocumentStore.getState().onEditorInit(editor, 'B');
+
+    // The user types after the body loaded.
+    spy.getDocument.mockImplementation((format: string) =>
+      format === 'json' ? body('B typed') : 'B typed',
+    );
+    useDocumentStore.getState().handleContentChange();
+
+    expect(useDocumentStore.getState().documents.B.content).toBe('B typed');
+    expect(useDocumentStore.getState().documents.B.isDirty).toBe(true);
+  });
 });

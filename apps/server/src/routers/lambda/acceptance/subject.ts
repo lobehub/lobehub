@@ -1,12 +1,13 @@
-import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import { creatableAcceptanceSubjectTypes } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 
 import { acceptanceProcedure, acceptanceWriteProcedure } from './procedures';
 
-const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
+const subjectTypeSchema = z.enum(creatableAcceptanceSubjectTypes);
 
 export const subjectRouter = router({
   /** Get (or lazily create) the aggregate for a subject — the ingest entry point. */
@@ -19,6 +20,16 @@ export const subjectRouter = router({
          * explicitly requested subject is always kept exact.
          */
         foldTaskRunTopic: z.boolean().optional(),
+        /**
+         * The project the delivery's repository declares — used only when
+         * the subject implies none. Only fills an aggregate that has none yet.
+         */
+        fallbackProjectId: z.string().min(1).optional(),
+        /**
+         * A project the caller names, overriding the one the subject implies.
+         * Only fills an aggregate that has none yet.
+         */
+        projectId: z.string().min(1).optional(),
         requirement: z.string().max(2000).optional(),
         subjectId: z.string(),
         subjectType: subjectTypeSchema,
@@ -26,9 +37,14 @@ export const subjectRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const defaults = { requirement: input.requirement, title: input.title };
+      const defaults = {
+        fallbackProjectId: input.fallbackProjectId,
+        projectId: input.projectId,
+        requirement: input.requirement,
+        title: input.title,
+      };
       try {
-        return input.foldTaskRunTopic
+        const result = input.foldTaskRunTopic
           ? await ctx.acceptanceService.ensureForIngest(
               input.subjectType,
               input.subjectId,
@@ -39,6 +55,7 @@ export const subjectRouter = router({
               input.subjectId,
               defaults,
             );
+        return acceptanceResponse(result);
       } catch (error) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -68,7 +85,7 @@ export const subjectRouter = router({
       // to load the whole bundle for one field.
       const latest = await ctx.acceptanceService.latestRound(acceptance.id);
       return {
-        ...acceptance,
+        ...acceptanceResponse(acceptance),
         latestRunStatus: latest?.status ?? null,
         latestRunUserDecision: latest?.userDecision ?? null,
       };

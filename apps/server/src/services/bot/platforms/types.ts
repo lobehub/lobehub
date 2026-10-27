@@ -59,6 +59,12 @@ export interface FieldSchema {
   enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
+  /**
+   * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
+   * `enableBotWake`). The form hides the field unless that flag is on for the signed-in user.
+   * The server stays authoritative; this only keeps unreleased options out of sight.
+   */
+  featureFlag?: string;
   /** Array item schema */
   items?: FieldSchema;
   /** Unique field identifier */
@@ -331,10 +337,17 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
-  /** Get a messenger for a specific thread (outbound messaging). */
-  getMessenger: (platformThreadId: string) => PlatformMessenger;
+  /**
+   * What people call the bot on this platform (display name, username), so a message that says the
+   * name is read as addressed to it. Optional: without it the bot is recognised by @mention only.
+   * Implementations cache; an error is treated as "no names yet" and retried on the next message.
+   */
+  getBotNames?: () => Promise<string[]>;
 
   // --- Runtime Operations ---
+
+  /** Get a messenger for a specific thread (outbound messaging). */
+  getMessenger: (platformThreadId: string) => PlatformMessenger;
 
   readonly id: string;
 

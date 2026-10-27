@@ -1,3 +1,4 @@
+import { siteOriginMatches } from '@lobechat/utils/siteOrigin';
 import type { MiddlewareHandler } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -5,6 +6,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { verifyAcceptanceReviewJWT } from '@/libs/oidc-provider/jwt';
 import type { ReviewAccess } from '@/server/services/acceptanceReview/access';
 import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
+import type { ProjectReviewRole } from '@/server/services/acceptanceReview/projectAccess';
+import {
+  findProjectReviewScope,
+  resolveProjectReviewRole,
+} from '@/server/services/acceptanceReview/projectAccess';
+import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
 import { reviewError } from './errors';
 
@@ -13,6 +20,9 @@ export interface ReviewEnv {
     access: ReviewAccess;
     db: LobeChatDatabase;
     expiresAt: number;
+    project?: { id: string; name: string };
+    role?: ProjectReviewRole | null;
+    site?: { id: string; name: string };
     userId: string;
   };
 }
@@ -31,10 +41,30 @@ export const reviewAuth: MiddlewareHandler<ReviewEnv> = async (c, next) => {
   // The token outlives a visibility change, so read access is re-checked on
   // every request rather than trusted from consent time.
   const db = await getServerDB();
-  const access = await resolveReviewAccess(db, claims.userId, claims.acceptanceId);
-  if (!access) return reviewError(c, 404, 'NOT_FOUND', 'Acceptance not found');
 
-  c.set('access', access);
+  if (claims.site) {
+    const origin = c.req.header('origin');
+    if (!origin || !siteOriginMatches(claims.site.origin, origin)) {
+      return reviewError(c, 403, 'FORBIDDEN', 'Origin not allowed for this token');
+    }
+    const site = await findSiteForOrigin(db, claims.site.siteId, claims.site.origin);
+    if (!site?.acceptanceId) return reviewError(c, 404, 'SITE_GONE', 'Site not found');
+    const access = await resolveReviewAccess(db, claims.userId, site.acceptanceId);
+    if (!access?.can.comment)
+      return reviewError(c, 403, 'SITE_ACCESS_REVOKED', 'No access to this site');
+    const project = await findProjectReviewScope(db, site.projectId);
+    c.set('access', access);
+    c.set('project', project ? { id: project.id, name: project.name } : undefined);
+    c.set('role', project ? await resolveProjectReviewRole(db, claims.userId, project) : null);
+    c.set('site', { id: site.id, name: site.name });
+  } else {
+    const access = claims.acceptanceId
+      ? await resolveReviewAccess(db, claims.userId, claims.acceptanceId)
+      : null;
+    if (!access) return reviewError(c, 404, 'NOT_FOUND', 'Acceptance not found');
+    c.set('access', access);
+  }
+
   c.set('db', db);
   c.set('expiresAt', claims.expiresAt ?? 0);
   c.set('userId', claims.userId);

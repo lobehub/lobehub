@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "Een referentie met sleutel “{{key}}” bestaat al met een ander type ({{type}}) en kan hier niet worden vervangen. Sla over, en vraag erom onder een andere sleutel.",
   "credsInput.notice.workspace": "Versleuteld opgeslagen in de referenties van deze werkruimte. De waarden gaan rechtstreeks naar opslag en worden nooit aan de AI getoond.",
   "credsInput.placeholder": "Voer {{field}} in",
+  "credsInput.proseConfirm": "Toch opslaan",
+  "credsInput.proseWarning": "De waarde voor “{{fields}}” lijkt meer op een zin dan op een geheim (het bevat CJK-tekst of een hele zin). Als het per ongeluk is geplakt, corrigeer het dan voordat je opslaat; anders bevestig met “Toch opslaan”.",
   "credsInput.saveFailed": "Kon de referentie niet opslaan. Probeer het opnieuw.",
   "credsInput.skip": "Overslaan",
   "credsInput.submit": "Opslaan",

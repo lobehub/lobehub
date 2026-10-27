@@ -15,7 +15,8 @@ export const getOIDCCookieKeys = () => {
   if (!key) {
     throw new Error('KEY_VAULTS_SECRET is required for OIDC Provider cookie signing');
   }
-  return [key];
+  const fallbackKey = serverDBEnv.KEY_VAULTS_FALLBACK_SECRET;
+  return fallbackKey?.trim() && fallbackKey !== key ? [key, fallbackKey] : [key];
 };
 
 /**

@@ -37,7 +37,11 @@ import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/m
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
-import { filterPluginsByShareGate, getShareGrantActivatedPluginIds } from '../../shareGate';
+import {
+  filterPluginsByShareGate,
+  getShareGrantActivatedPluginIds,
+  getShareGrantedExtensionIds,
+} from '../../shareGate';
 import type { ExecRunContext } from '../../types';
 import {
   buildOwnershipNote,
@@ -179,6 +183,17 @@ export const discoverTools = async (
   if (shareGate) {
     agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
   }
+  // The unpinned sources the activator may discover (connectors, Composio,
+  // LobeHub Skills, installed plugins) need the same early cut for a share
+  // run: only granted identifiers are read. A grant the owner later disabled
+  // on the Agent is dropped here too, not only after discovery.
+  const shareGrantedExtensionIds = shareGate
+    ? new Set(
+        [...getShareGrantedExtensionIds(shareGate)].filter(
+          (identifier) => !disabledPluginIds.includes(identifier),
+        ),
+      )
+    : undefined;
 
   // Model metadata is needed both for tool support checks and agent-management context.
   const builtinModels = await loadModels();
@@ -195,9 +210,11 @@ export const discoverTools = async (
         candidateIds: [...agentPlugins],
         exclusivePluginIds,
         isGoalTurn,
+        projectId: appContext?.projectId,
         requestedDeviceId,
         resolvedAgentId,
         shareGate,
+        shareGrantedExtensionIds,
         topicId: ctx.topicId,
       });
 
@@ -218,9 +235,13 @@ export const discoverTools = async (
     // `rules` allowlist — because `createEnableChecker`'s explicit-activation
     // bypass (auto activator) short-circuits before rules are consulted, so a
     // present-but-rule-disabled manifest could still be auto-activated.
+    // A share run keeps only granted plugins, so an ungranted one never reaches
+    // the connector permission lookup or the activator pool below.
     const disabledPluginIdSet = new Set(disabledPluginIds);
     const installedPlugins = (await toolReads.installedPlugins).filter(
-      (p) => !disabledPluginIdSet.has(p.identifier),
+      (p) =>
+        !disabledPluginIdSet.has(p.identifier) &&
+        (!shareGrantedExtensionIds || shareGrantedExtensionIds.has(p.identifier)),
     );
     log(
       'execAgent: got %d installed plugins (%d disabled excluded)',
@@ -299,10 +320,15 @@ export const discoverTools = async (
 
     await throwIfExecutionAborted('tool discovery');
 
-    // 5e. Create tools using Server AgentToolsEngine
+    // 5e. Create tools using Server AgentToolsEngine. Project knowledge counts:
+    // every agent in a project searches it, even with none of its own.
+    const projectScope = await toolReads.projectScope;
     hasEnabledKnowledgeBases =
-      agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
-      false;
+      projectScope.hasKnowledgeBases ||
+      (agentConfig.knowledgeBases?.some(
+        (kb: { enabled?: boolean | null }) => kb.enabled === true,
+      ) ??
+        false);
 
     hasAgentDocuments = await toolReads.agentDocuments;
     const hasOversizedFiles = await toolReads.oversizedFiles;
@@ -326,14 +352,17 @@ export const discoverTools = async (
       builtinModels.find((item) => item.id === model && item.providerId === provider)?.abilities ??
       builtinModels.find((item) => item.id === model)?.abilities;
     agentPlugins = [
-      ...agentPlugins,
-      ...(await resolveTurnScopedPluginIds({
-        attachedFileTypes: await toolReads.attachedFileTypes,
-        externalFileTypes: rawExternalFileTypes,
-        isBotConversation,
-        loadHistoryMessages,
-        modelMediaCapabilities,
-      })),
+      ...new Set([
+        ...agentPlugins,
+        ...(await resolveTurnScopedPluginIds({
+          attachedFileTypes: await toolReads.attachedFileTypes,
+          externalFileTypes: rawExternalFileTypes,
+          isBotConversation,
+          isProjectCoordinator: projectScope.isCoordinator,
+          loadHistoryMessages,
+          modelMediaCapabilities,
+        })),
+      ]),
     ];
     if (exclusivePluginIds) {
       agentPlugins = agentPlugins.filter((id) => exclusivePluginIds.includes(id));

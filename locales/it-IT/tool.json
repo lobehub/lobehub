@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "Una credenziale con la chiave “{{key}}” esiste già con un tipo diverso ({{type}}) e non può essere sostituita da qui. Salta e richiedila con una chiave diversa.",
   "credsInput.notice.workspace": "Salvato in modo crittografato nelle credenziali di questo workspace. I valori vanno direttamente in archivio e non vengono mai mostrati all'AI.",
   "credsInput.placeholder": "Inserisci {{field}}",
+  "credsInput.proseConfirm": "Salva comunque",
+  "credsInput.proseWarning": "Il valore per “{{fields}}” sembra una frase piuttosto che un segreto (contiene testo CJK o un'intera frase). Se è stato incollato per errore, correggilo prima di salvare; altrimenti conferma con “Salva comunque”.",
   "credsInput.saveFailed": "Impossibile salvare la credenziale. Riprova.",
   "credsInput.skip": "Salta",
   "credsInput.submit": "Salva",

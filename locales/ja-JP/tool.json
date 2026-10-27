@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "キー「{{key}}」の資格情報は異なるタイプ（{{type}}）で既に存在しており、ここから置き換えることはできません。スキップして、別のキーで要求してください。",
   "credsInput.notice.workspace": "このワークスペースの資格情報に暗号化して保存されました。値は直接ストレージに保存され、AIには表示されません。",
   "credsInput.placeholder": "{{field}}を入力してください",
+  "credsInput.proseConfirm": "それでも保存する",
+  "credsInput.proseWarning": "「{{fields}}」の値は、秘密情報というよりも文章のように見えます（CJKテキストや全体のフレーズが含まれています）。誤って貼り付けた場合は、保存する前に修正してください。それ以外の場合は「それでも保存する」で確認してください。",
   "credsInput.saveFailed": "資格情報を保存できませんでした。もう一度お試しください。",
   "credsInput.skip": "スキップ",
   "credsInput.submit": "保存",

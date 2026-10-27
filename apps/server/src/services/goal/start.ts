@@ -3,8 +3,8 @@ import type { GoalGraphSnapshot, GoalItem, GoalRolloutVariantAxis } from '@lobec
 import { TRPCError } from '@trpc/server';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { GoalManagerService } from './manager';
@@ -120,7 +120,7 @@ export class GoalStartService {
   start = async (goalId: string, input: StartGoalInput = {}): Promise<GoalItem> =>
     this.db.transaction(async (tx) => {
       const db = tx as unknown as LobeChatDatabase;
-      const goalModel = new GoalModel(db, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(db, this.userId, this.workspaceId);
       const goal = await goalModel.lockById(goalId);
       if (!goal) return refuse('Goal not found');
       if (goal.status !== 'draft')
@@ -292,7 +292,7 @@ export class GoalStartService {
       canarySize: probes.length,
       createdByAgentId: goal.agentId ?? undefined,
       goalId: goal.id,
-      goalModel: new GoalModel(db, this.userId, this.workspaceId),
+      goalModel: new GoalRepository(db, this.userId, this.workspaceId),
       planSkillOwner: {
         db,
         goalTitle: goal.title,

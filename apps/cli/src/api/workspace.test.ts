@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { log } from '../utils/logger';
 import {
   __resetStaleScopeWarning,
+  describeScopedNotFound,
   resolveWorkspaceId,
   resolveWorkspaceScope,
   withWorkspaceHeader,
@@ -86,6 +87,37 @@ describe('api/workspace scope resolution', () => {
 
     process.env.LOBEHUB_WORKSPACE_ID = 'ws_env';
     expect(resolveWorkspaceScope()).toEqual({ source: 'env', workspaceId: 'ws_env' });
+  });
+
+  // `workspace use --personal` rewrites the machine-wide default, and an empty
+  // env value falls through to it, so a single personal-space lookup had no way
+  // to leave the saved workspace alone.
+  it('runs one command in personal scope without touching the saved workspace', () => {
+    process.env.LOBEHUB_WORKSPACE_ID = 'personal';
+    mockLoadActiveWorkspace.mockReturnValue(stored());
+
+    expect(resolveWorkspaceScope()).toEqual({ source: 'env' });
+    expect(withWorkspaceHeader({ 'Oidc-Auth': 'token' })).toEqual({ 'Oidc-Auth': 'token' });
+  });
+
+  describe('describeScopedNotFound', () => {
+    const notFound = { data: { code: 'NOT_FOUND' }, message: 'Goal not found' };
+
+    it('says where it looked and how to look in personal space', () => {
+      mockLoadActiveWorkspace.mockReturnValue(stored());
+
+      expect(describeScopedNotFound(notFound)).toBe(
+        'Looked in workspace ws_stored. If it is in your personal space, rerun with LOBEHUB_WORKSPACE_ID=personal; for another workspace, set LOBEHUB_WORKSPACE_ID=<id>.',
+      );
+    });
+
+    it('stays quiet in personal scope and for other errors', () => {
+      expect(describeScopedNotFound(notFound)).toBeUndefined();
+
+      mockLoadActiveWorkspace.mockReturnValue(stored());
+      expect(describeScopedNotFound({ data: { code: 'FORBIDDEN' } })).toBeUndefined();
+      expect(describeScopedNotFound(new Error('Goal not found'))).toBeUndefined();
+    });
   });
 
   it('prefers an explicit argument over everything else', () => {

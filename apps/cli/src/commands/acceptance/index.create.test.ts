@@ -19,6 +19,7 @@ const publishFlow = vi.fn();
 const createRun = vi.fn();
 const attachRun = vi.fn();
 const getUserState = vi.fn();
+const findProject = vi.fn();
 let output: ReturnType<typeof vi.spyOn>;
 
 const run = async (args: string[]) => {
@@ -37,6 +38,7 @@ beforeEach(() => {
       publishFlow: { mutate: publishFlow },
       attachRun: { mutate: attachRun },
     },
+    project: { find: { query: findProject } },
     user: { getUserState: { query: getUserState } },
     verify: { createRun: { mutate: createRun } },
   } as unknown as Awaited<ReturnType<typeof getTrpcClient>>);
@@ -99,6 +101,22 @@ describe('acceptance create', () => {
       });
     },
   );
+
+  it('files the acceptance under the project --project names', async () => {
+    findProject.mockResolvedValue({ data: { id: 'prj_lobe', name: 'LobeHub' } });
+    ensure.mockImplementationOnce(async (input) => ({
+      ...input,
+      id: acceptanceId,
+      status: 'pending',
+    }));
+
+    await run(['create', '--requirement', requirement, '--project', 'LOBE']);
+
+    expect(findProject).toHaveBeenCalledWith({ id: 'LOBE' });
+    expect(ensure).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'prj_lobe' }));
+    const text = output.mock.calls.map(([line]) => line).join('\n');
+    expect(text).toContain('LobeHub');
+  });
 
   it('prints the acceptance ID, URL and absence of new rounds in human-readable output', async () => {
     await run(['create', '--requirement', requirement]);

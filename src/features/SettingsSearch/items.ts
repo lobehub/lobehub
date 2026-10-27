@@ -1,5 +1,13 @@
 import { LAB_FEATURES } from '@/features/Settings/labs/features';
 import { SettingsTabs } from '@/store/global/initialState';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
+
+/**
+ * Tab key the search indexes by. Personal tabs and the workspace-only tabs
+ * share one namespace: tabs whose page is the same on both surfaces use the
+ * personal key (the workspace sidebar maps e.g. `statistics` → `stats`).
+ */
+export type SettingsSearchTab = SettingsTabs | WorkspaceSettingsTabs;
 
 export interface SettingsSearchContext {
   disableEmailPassword: boolean;
@@ -32,7 +40,7 @@ export interface SettingsSearchItem {
   labelKey: string;
   /** i18n namespace of `labelKey` / `descKey`, defaults to `setting` */
   ns?: 'auth' | 'electron' | 'labs' | 'setting' | 'spend' | 'subscription';
-  tab: SettingsTabs;
+  tab: SettingsSearchTab;
   /**
    * Extra visibility gate mirroring the target item's own render condition
    * (tab visibility is already handled via useCategory). Defaults to visible.
@@ -48,7 +56,9 @@ export interface SettingsSearchItem {
  * technical terms — it must always stay searchable; localized keywords enrich
  * on top of this floor.
  */
-export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
+// Keyed by `SettingsSearchTab` values. Typed as `string`: the two tab enums
+// share values ('about', 'skill', …), which TypeScript rejects as record keys.
+export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
   [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
   [SettingsTabs.APIKey]: ['api', 'api key', 'apikey', 'token', 'secret', 'personal key'],
@@ -71,6 +81,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.Drive]: ['storage', 'drive', 'network drive', 'files', 'quota'],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
@@ -166,6 +177,14 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'environment',
   ],
   [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
+  [WorkspaceSettingsTabs.ChatPreference]: [
+    'chat preferences',
+    'follow up',
+    'follow-up suggestions',
+    'input suggestions',
+    'input completion',
+    'autocomplete',
+  ],
 };
 
 /**
@@ -175,7 +194,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
  * "积分", and "文件" (files) should hit Storage ("数据存储"). Each locale
  * carries its own synonym set, layered on top of TAB_SEARCH_EN_KEYWORDS.
  */
-export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
+export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',
   [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
   [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
@@ -205,6 +224,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
   [SettingsTabs.Trash]: 'settingsSearch.tabKeywords.trash',
   [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
+  [WorkspaceSettingsTabs.ChatPreference]: 'settingsSearch.tabKeywords.chatPreference',
 };
 
 /**
@@ -463,6 +483,22 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['follow up', 'input completion', 'prompt rewrite', 'suggestion'],
     labelKey: 'serviceModel.optionalFeatures.title',
     tab: SettingsTabs.ServiceModel,
+  },
+  // Chat Preferences (workspace only — the personal sidebar keeps these rows in
+  // Service Model › Optional Features)
+  {
+    anchor: 'chat-preference-followUpAction',
+    descKey: 'systemAgent.followUpAction.modelDesc',
+    keywords: ['follow up', 'suggestion', 'chips'],
+    labelKey: 'systemAgent.followUpAction.title',
+    tab: WorkspaceSettingsTabs.ChatPreference,
+  },
+  {
+    anchor: 'chat-preference-inputCompletion',
+    descKey: 'systemAgent.inputCompletion.modelDesc',
+    keywords: ['input completion', 'autocomplete', 'suggestion'],
+    labelKey: 'systemAgent.inputCompletion.title',
+    tab: WorkspaceSettingsTabs.ChatPreference,
   },
   {
     anchor: 'service-model-image',

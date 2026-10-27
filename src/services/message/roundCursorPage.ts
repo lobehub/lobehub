@@ -46,6 +46,47 @@ export const toRoundCursorQueryInput = (
   topicShareId: params.topicShareId,
 });
 
+/**
+ * Per-topic window warmed by a visible-row prefetch. Deliberately a fraction of
+ * `MESSAGE_PAGE_ROW_BUDGET`: the budget is multiplied by the number of rows on
+ * screen, and a first paint only needs the newest rounds — the returned cursor
+ * still pages older history on demand.
+ */
+export const PREFETCH_PAGE: ForwardPageSize = { countBudget: 120, roundLimit: 10 };
+
+/** Topics per `getMessagesByCursorBatch` request; matches the server-side cap. */
+export const PREFETCH_BATCH_SIZE = 8;
+
+export interface BatchReadItem {
+  agentId?: string | null;
+  groupId?: string | null;
+  topicId: string;
+}
+
+/**
+ * Newest pages for several conversations in one request, keyed by topic.
+ *
+ * Always whole payloads (no tool-payload projection): a primed page is handed
+ * to whichever head read arrives first, and a projected payload would lose tool
+ * results for a reader that turns the list into LLM context. The prefetch window
+ * is smaller than a normal page, so the page a reader takes here is a faster
+ * first paint, not a different read contract.
+ */
+export const readMessagesByRoundCursorBatch = async (
+  items: BatchReadItem[],
+): Promise<Map<string, MessageListPage>> => {
+  if (items.length === 0) return new Map();
+
+  const pages = await lambdaClient.message.getMessagesByCursorBatch.query({
+    countBudget: PREFETCH_PAGE.countBudget,
+    includeFileWorks: true,
+    items: items.map(({ agentId, groupId, topicId }) => ({ agentId, groupId, topicId })),
+    roundLimit: PREFETCH_PAGE.roundLimit,
+  });
+
+  return new Map(pages.map((page) => [page.topicId, toMessageListPage(page)]));
+};
+
 export type RoundCursorQueryResult = Awaited<
   ReturnType<typeof lambdaClient.message.getMessagesByCursor.query>
 >;
@@ -59,10 +100,19 @@ export const toMessageListPage = (page: RoundCursorQueryResult): MessageListPage
 export const readMessagesByRoundCursor = async (
   params: RoundCursorReadParams,
   cursor: MessageRoundCursor | null,
-): Promise<MessageListPage> =>
-  toMessageListPage(
+): Promise<MessageListPage> => {
+  const page = toMessageListPage(
     await lambdaClient.message.getMessagesByCursor.query(toRoundCursorQueryInput(params, cursor)),
   );
+
+  // The newest page is the head: a normal-budget head read that LANDED replaces
+  // any prefetch window the conversation was painting from. Clear the marker
+  // only now — a pending or failed refresh leaves the prefetch rows in place, so
+  // the next resume still has to widen to get full history.
+  if (cursor === null) markFullHeadWindow(params);
+
+  return page;
+};
 
 /** The `getMessagesByCursor` input for one forward page, starting after `cursor`. */
 export const toForwardRoundCursorQueryInput = (
@@ -162,9 +212,43 @@ export const takePrimedMessageListPage = (
 ): Promise<MessageListPage> | undefined => {
   const key = primeKey(context);
   const page = primedPages.get(key);
-  if (page) primedPages.delete(key);
+  if (page) {
+    primedPages.delete(key);
+    // The reader now paints from a prefetch window, not the normal page budget.
+    partialHeadWindows.add(key);
+  }
 
   return page;
+};
+
+/**
+ * Drop a page a caller primed when no head read took it. A read that joins an
+ * already in-flight query never consumes the prime, and an unclaimed page would
+ * otherwise answer a later, unrelated read with an old window: its snapshot can
+ * predate server-confirmed rows the head merge then drops.
+ */
+export const releaseUnusedPrimedMessageListPage = (
+  context: MessageListQueryContext,
+  page: Promise<MessageListPage>,
+): void => {
+  const key = primeKey(context);
+  if (primedPages.get(key) === page) primedPages.delete(key);
+};
+
+/**
+ * Conversations whose loaded head is a prefetch window rather than the normal
+ * `MESSAGE_PAGE_ROW_BUDGET` page. Enough to paint a row's first screen, but a
+ * consumer that turns the loaded rows into model history (a client-runtime
+ * resume) needs the normal window first.
+ */
+const partialHeadWindows = new Set<string>();
+
+export const isPartialHeadWindow = (context: MessageListQueryContext): boolean =>
+  partialHeadWindows.has(primeKey(context));
+
+/** A full-budget head read replaced the prefetch window with the normal one. */
+const markFullHeadWindow = (context: MessageListQueryContext): void => {
+  partialHeadWindows.delete(primeKey(context));
 };
 
 /** First forward pages handed over by the document, by conversation. */

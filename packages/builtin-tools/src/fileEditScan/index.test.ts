@@ -305,6 +305,83 @@ describe('scanOperationFileEdits', () => {
     });
   });
 
+  describe('claude code content snapshots', () => {
+    const ccCall = (
+      toolCallId: string,
+      apiName: 'Edit' | 'MultiEdit' | 'Write',
+      args: Record<string, unknown>,
+    ): FileEditToolCallRecord => ({
+      apiName,
+      arguments: JSON.stringify(args),
+      identifier: 'claude-code',
+      toolCallId,
+    });
+
+    it('turns Write content into a previewable added-lines patch', () => {
+      const [entry] = scanOperationFileEdits([
+        ccCall('t1', 'Write', { content: '# Spec\n\nbody\n', file_path: '/tmp/spec/spec.md' }),
+      ]);
+      expect(entry).toMatchObject({ kind: 'added', linesAdded: 3, linesDeleted: 0 });
+      expect(entry.diffTexts).toEqual([
+        '--- a/tmp/spec/spec.md\n+++ b/tmp/spec/spec.md\n@@ -0,0 +1,3 @@\n+# Spec\n+\n+body',
+      ]);
+    });
+
+    it('turns Edit and MultiEdit replacements into hunks', () => {
+      const result = scanOperationFileEdits([
+        ccCall('t1', 'Edit', { file_path: '/a.md', new_string: 'new', old_string: 'old' }),
+        ccCall('t2', 'MultiEdit', {
+          edits: [
+            { new_string: 'x2', old_string: 'x1' },
+            { new_string: 'y2\ny3', old_string: 'y1' },
+          ],
+          file_path: '/b.md',
+        }),
+      ]);
+      expect(result.map((r) => [r.path, r.linesAdded, r.linesDeleted])).toEqual([
+        ['/a.md', 1, 1],
+        ['/b.md', 3, 2],
+      ]);
+      expect(result[0].diffTexts[0]).toContain('@@ -1,1 +1,1 @@\n-old\n+new');
+    });
+
+    it('counts content lines that look like patch headers', () => {
+      const result = scanOperationFileEdits([
+        ccCall('t1', 'Write', { content: '++counter\n', file_path: '/a.c' }),
+        ccCall('t2', 'Edit', { file_path: '/b.c', new_string: 'x', old_string: '--old' }),
+      ]);
+      expect(result.map((r) => [r.linesAdded, r.linesDeleted])).toEqual([
+        [1, 0],
+        [1, 1],
+      ]);
+    });
+
+    it('leaves replace_all deltas unknown but keeps the snapshot', () => {
+      const [entry] = scanOperationFileEdits([
+        ccCall('t1', 'Edit', {
+          file_path: '/a.ts',
+          new_string: 'next',
+          old_string: 'prev',
+          replace_all: true,
+        }),
+      ]);
+      expect(entry).toMatchObject({ linesAdded: 0, linesDeleted: 0 });
+      expect(entry.diffTexts[0]).toContain('-prev\n+next');
+    });
+
+    it('keeps lines shared by old_string and new_string as context', () => {
+      const [entry] = scanOperationFileEdits([
+        ccCall('t1', 'Edit', {
+          file_path: '/a.md',
+          new_string: 'a\nnew\nb',
+          old_string: 'a\nold\nb',
+        }),
+      ]);
+      expect(entry).toMatchObject({ linesAdded: 1, linesDeleted: 1 });
+      expect(entry.diffTexts[0]).toContain('@@ -1,3 +1,3 @@\n a\n-old\n+new\n b');
+    });
+  });
+
   describe('terminal-state folding', () => {
     it('folds write + edit + edit on one file (kind added, deltas summed)', () => {
       const result = scanOperationFileEdits([

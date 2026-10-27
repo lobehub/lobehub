@@ -341,4 +341,27 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableKnowledgeBase).toBe(true);
     expect(mappedState.enableRAGEval).toBe(true);
   });
+
+  describe('bot_wake rollout', () => {
+    it('is off for everyone by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.bot_wake).toBe(false);
+      expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'owner-1').enableBotWake).toBe(false);
+    });
+
+    it('turns on for the bot owners on the allowlist only, then for everyone', () => {
+      const allowlist = { ...DEFAULT_FEATURE_FLAGS, bot_wake: ['owner-1'] };
+
+      expect(mapFeatureFlagsEnvToState(allowlist, 'owner-1').enableBotWake).toBe(true);
+      expect(mapFeatureFlagsEnvToState(allowlist, 'owner-2').enableBotWake).toBe(false);
+      expect(mapFeatureFlagsEnvToState(allowlist).enableBotWake).toBe(false);
+
+      const everyone = { ...DEFAULT_FEATURE_FLAGS, bot_wake: true };
+      expect(mapFeatureFlagsEnvToState(everyone, 'owner-2').enableBotWake).toBe(true);
+    });
+
+    it('accepts a published allowlist or boolean', () => {
+      expect(FeatureFlagsSchema.safeParse({ bot_wake: ['owner-1'] }).success).toBe(true);
+      expect(FeatureFlagsSchema.safeParse({ bot_wake: true }).success).toBe(true);
+    });
+  });
 });

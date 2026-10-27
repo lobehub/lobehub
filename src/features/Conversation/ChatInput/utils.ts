@@ -1,8 +1,15 @@
-import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
+import type { ConversationContext, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import type { SendButtonProps } from '@/features/ChatInput/store/initialState';
 import { chatHelpers } from '@/store/chat/helpers';
+import { operationSelectors } from '@/store/chat/selectors';
+import {
+  type QueuedMessage,
+  reconstructUploadFilesFromQueue,
+  SEND_NOW_CANCEL_REASON,
+} from '@/store/chat/slices/operation/types';
+import type { ChatStore } from '@/store/chat/store';
 import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
 
 type SupportedChatInputRole = Extract<OpenAIChatMessage['role'], 'assistant' | 'tool' | 'user'>;
@@ -52,6 +59,37 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
       }
     },
   };
+};
+
+/**
+ * Resolves the locale key that tells a queued follow-up when it will be sent.
+ *
+ * Use when:
+ * - Captioning a QueueTray row with the queue's send timing.
+ *
+ * Expects:
+ * - `count` is the number of queued items; more than one is merged into a single send.
+ * - `waitsForRunEnd` is true when the queue waits behind a heterogeneous CLI run (Claude Code,
+ *   Codex, …; see `operationSelectors.isQueueDrainedAtRunEnd`). That run cannot hand the turn
+ *   back at a step boundary, so the queue only drains once the whole run ends, whereas the
+ *   built-in runtime hands the turn back after the current tool step.
+ *
+ * Returns:
+ * - A `chat` namespace key under `inputQueue`.
+ */
+export const getQueuedHintKey = ({
+  count,
+  waitsForRunEnd,
+}: {
+  count: number;
+  waitsForRunEnd: boolean;
+}) => {
+  const merged = count > 1;
+
+  if (waitsForRunEnd)
+    return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';
+
+  return merged ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint';
 };
 
 const isSupportedChatInputMessage = (
@@ -144,4 +182,84 @@ export const toDisplayableSendErrorMessage = (message?: string): string | undefi
   if (isMachineErrorMessage(trimmed)) return undefined;
 
   return trimmed;
+};
+
+/**
+ * "Send now" for one queued message: take it out of the queue, stop every run
+ * it waits behind, then send it as a steered turn.
+ *
+ * Withdrawn first: interrupting a run that already took it from the server
+ * would leave that copy unanswered. `withdraw` resolving `false` means it is
+ * already on its way, so nothing is stopped or sent. Should the interrupt
+ * fail, it goes back to the tray, held by this client only.
+ */
+export const sendQueuedMessageNow = async ({
+  chat,
+  context,
+  contextKey,
+  msg,
+  withdraw,
+}: {
+  chat: ChatStore;
+  context: ConversationContext;
+  contextKey: string;
+  msg: QueuedMessage;
+  withdraw: (msg: QueuedMessage) => Promise<boolean>;
+}): Promise<void> => {
+  const index = chat.queuedMessages[contextKey]?.findIndex((queued) => queued.id === msg.id) ?? -1;
+  if (!(await withdraw(msg))) return;
+  // Back where it was, so the order the user queued in holds.
+  const putBack = () =>
+    chat.restoreQueuedMessage(
+      contextKey,
+      { ...msg, serverDelivery: undefined, serverUnconfirmed: undefined },
+      index < 0 ? Number.MAX_SAFE_INTEGER : index,
+    );
+
+  // Cancel EVERY running blocker the item could be queued behind, not just the
+  // first: matching one op would miss an interim blocker or the second of the
+  // two concurrent `regenerate` ops a delAndRegenerate/delAndResendThread retry
+  // runs (outer wrapper + inner regenerateUserMessage). Leaving any blocker
+  // running would make the sendMessage below re-enqueue the item, so "Send now"
+  // becomes a no-op. The selector shares the queue-blocking predicate with the
+  // enqueue check.
+  const runningOpIds = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
+  const cancellationConfirmed = await Promise.all(
+    runningOpIds.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON)),
+  ).catch((error: unknown) => {
+    putBack();
+    throw error;
+  });
+  if (cancellationConfirmed.some((confirmed) => !confirmed)) {
+    putBack();
+    throw new Error('Running agent cancellation was not confirmed');
+  }
+
+  // Reconstruct UploadFileItem-shaped objects so the optimistic temp message
+  // can rebuild imageList/videoList from the snapshotted preview metadata.
+  const files = msg.filesPreview?.length
+    ? reconstructUploadFilesFromQueue(msg.filesPreview)
+    : msg.files?.length
+      ? (msg.files.map((id) => ({ id })) as any)
+      : undefined;
+  await chat.sendMessage({
+    context,
+    editorData: msg.editorData,
+    files,
+    message: msg.content,
+    metadata: { ...msg.metadata, steer: true },
+  });
+};
+
+/**
+ * Put a queued message back into the composer for editing. The structured
+ * document keeps its selected skills, tools and @-mentions, which the send
+ * reads back from it; markdown only when there is none.
+ */
+export const putQueuedMessageInEditor = (
+  editor: { setDocument: (type: string, content: any) => void },
+  msg: Pick<QueuedMessage, 'content' | 'editorData'>,
+) => {
+  if (msg.editorData) editor.setDocument('json', msg.editorData);
+  else editor.setDocument('markdown', msg.content);
 };

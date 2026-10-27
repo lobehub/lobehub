@@ -5,6 +5,7 @@ import { getTrpcClient } from '../api/client';
 import { resolveWorkspaceId } from '../api/workspace';
 import { outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 /** Where a board opens: inside its project when it belongs to one, else on the home dashboards. */
@@ -28,7 +29,11 @@ export function registerDashboardCommand(program: Command) {
       const { data } = options.project
         ? await client.dashboard.listByProject.query({ projectId: options.project })
         : await client.dashboard.list.query({});
-      if (options.json !== undefined) return outputJson(data, options.json);
+      if (options.json !== undefined)
+        return outputJson(
+          withUrls(data, await resolveUrlBuilder(client), resourcePath.dashboard),
+          options.json,
+        );
       if (data.length === 0) return console.log('No dashboards found.');
       printTable(
         data.map((item) => [
@@ -48,7 +53,11 @@ export function registerDashboardCommand(program: Command) {
     .action(async (id: string, options: { json?: boolean | string }) => {
       const client = await getTrpcClient();
       const { data } = await client.dashboard.detail.query({ id });
-      if (options.json !== undefined) return outputJson(data, options.json);
+      if (options.json !== undefined)
+        return outputJson(
+          withUrl(data, await resolveUrlBuilder(client), resourcePath.dashboard(data)),
+          options.json,
+        );
       const buildUrl = await resolveAppUrlBuilder(client);
       console.log(`\n${pc.bold(data.title)} ${pc.dim(data.id)}`);
       if (data.description) console.log(data.description);
@@ -98,7 +107,11 @@ export function registerDashboardCommand(program: Command) {
           title: options.title,
           widgetId: options.widget,
         });
-        if (options.json !== undefined) return outputJson(data, options.json);
+        if (options.json !== undefined)
+          return outputJson(
+            withUrl(data, await resolveUrlBuilder(client), resourcePath.dashboard(data)),
+            options.json,
+          );
         const buildUrl = await resolveAppUrlBuilder(client);
         console.log(`${pc.green('✓')} Created dashboard ${pc.bold(data.id)}`);
         console.log(`${pc.bold('dashboard')}: ${buildUrl(dashboardPath(data))}`);

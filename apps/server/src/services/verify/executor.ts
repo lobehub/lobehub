@@ -36,6 +36,7 @@ import { GIF_FRAME_SHEET_NOTE, isGifFrameSheet, resolveModelReadableFrameUrl } f
 import { planItemToPendingResult } from './resultSnapshot';
 import { BatchVerdictSchema, type SingleVerdict, SingleVerdictSchema } from './schema';
 import { VerifyStatusService } from './statusService';
+import { describeThrownError } from './verifierError';
 
 const log = debug('lobe-server:verify-executor');
 
@@ -365,7 +366,7 @@ export class VerifyExecutorService {
       await this.markUnfinishedErrored(
         verifyRunId,
         items,
-        `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
+        `LLM judge failed: ${describeThrownError(error)}`,
       );
     }
   }

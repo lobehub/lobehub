@@ -17,7 +17,7 @@ import { router } from '@/libs/trpc/lambda';
 import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGateway';
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
 
-import { loadDeviceBoundAgents } from '../deviceBoundAgents';
+import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
 import { deviceProcedure } from './procedures';
 
@@ -95,6 +95,24 @@ export const registryRouter = router({
         })),
       };
     }),
+  /**
+   * Where each agent runs for the caller, for a list of agents in one read —
+   * the sidebar decorates every agent group with its device's presence and must
+   * not fetch each agent's config separately. Resolved per caller like
+   * {@link getDeviceActivity}: the stored config merged with the caller's own
+   * device override, keeping only the `device` / `local` targets. Agents that
+   * route nowhere, or that the caller cannot see, are absent from the result.
+   */
+  getAgentDeviceBindings: deviceProcedure
+    .input(z.object({ agentIds: z.array(z.string()).max(200) }))
+    .query(async ({ ctx, input }): Promise<Record<string, string>> =>
+      loadAgentDeviceBindings({
+        agentIds: [...new Set(input.agentIds)],
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
   /**
    * Per-device running-topic counts and the members behind them, for the
    * device list cards. One read for the whole list instead of a request per

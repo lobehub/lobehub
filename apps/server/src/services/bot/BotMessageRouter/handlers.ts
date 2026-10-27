@@ -4,6 +4,8 @@ import debug from 'debug';
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import type { LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
@@ -27,9 +29,14 @@ import {
   type UserAllowlist,
 } from '../platforms';
 import { renderThrownAgentError } from '../renderThrownError';
+import { createWakeClassify } from '../wake/classify';
+import { createWakeIdentityLoader } from '../wake/identity';
+import { resolveWakeScheduler } from '../wake/scheduler';
+import type { WakeMessageLike } from '../wake/signal';
 import { createAccessGate } from './accessGate';
 import { registerCatchAllHandler } from './catchAll';
 import { registerCommands } from './commands';
+import { createFollowupGate, type FollowupGateDeps } from './followupGate';
 import {
   createParticipantTracker,
   isSoloThreadConversation,
@@ -43,6 +50,14 @@ import {
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
+import {
+  type BotWakeEntryPoint,
+  type BotWakeInitiation,
+  botWakeKindFor,
+  type BotWakeObservation,
+  type BotWakeReason,
+  createBotWakeRecorder,
+} from './wakeDecision';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -209,7 +224,131 @@ export function registerHandlers(
 
   const trackThreadParticipants = createParticipantTracker(bot);
 
+  // Observation only: records the decision each branch below already makes (see ./wakeDecision).
+  const wakeRecorder = createBotWakeRecorder({
+    agentId,
+    applicationId,
+    classify: createWakeClassify({
+      agentId,
+      db: serverDB,
+      userId,
+      workspaceId: workspaceId ?? undefined,
+    }),
+    db: serverDB,
+    botNames: client.getBotNames && (async () => (await client.getBotNames!()) ?? []),
+    identity: createWakeIdentityLoader({ agentId, db: serverDB, userId }),
+    operatorUserId,
+    platform,
+    settings: info.settings,
+    userId,
+    workspaceId: workspaceId ?? undefined,
+  });
+
+  const observationOf = (
+    entryPoint: BotWakeObservation['entryPoint'],
+    message: WakeMessageLike,
+    thread: { id: string },
+    outcome: BotWakeObservation['outcome'],
+    reason: BotWakeObservation['reason'],
+    threadSubscribed = false,
+  ): BotWakeObservation => ({
+    entryPoint,
+    message: {
+      attachments: message.attachments,
+      author: message.author,
+      id: message.id,
+      isMention: message.isMention,
+      raw: message.raw,
+      text: message.text,
+    },
+    outcome,
+    reason,
+    threadId: thread.id,
+    threadSubscribed,
+  });
+
+  const observe = (
+    entryPoint: BotWakeObservation['entryPoint'],
+    message: WakeMessageLike,
+    thread: { id: string },
+    outcome: BotWakeObservation['outcome'],
+    reason: BotWakeObservation['reason'],
+    threadSubscribed = false,
+  ) =>
+    wakeRecorder.record(
+      observationOf(entryPoint, message, thread, outcome, reason, threadSubscribed),
+    );
+
+  /**
+   * Keeps what people said, everyone and not just the owner, in the channel's shared log so a later
+   * judgement can read it. A whole burst at once: the SDK hands over the latest message and parks
+   * the rest in `context.skipped`. Fire-and-forget; never throws.
+   */
+  const remember = (
+    entryPoint: BotWakeEntryPoint,
+    messages: WakeMessageLike[],
+    thread: { id: string },
+  ) => {
+    for (const message of messages) {
+      void wakeRecorder.remember(
+        observationOf(entryPoint, message, thread, 'skip', 'not-addressed'),
+      );
+    }
+  };
+
+  /**
+   * Records a skipped burst: the latest message with the same sender's earlier ones merged into
+   * it (the text that was judged), and every other person's parked message as a decision of its
+   * own, so what the bot did not answer is visible beside what it did.
+   */
+  const observeBurst = (
+    entryPoint: BotWakeEntryPoint,
+    message: Parameters<typeof mergeSkippedMessages>[0],
+    context: MessageContext | undefined,
+    thread: { id: string },
+    threadSubscribed = false,
+  ) => {
+    const sameSender = new Set(getSameSenderMessages(message, context?.skipped));
+    for (const other of context?.skipped ?? []) {
+      if (!sameSender.has(other)) {
+        observe(entryPoint, other, thread, 'skip', 'not-addressed', threadSubscribed);
+      }
+    }
+    observe(
+      entryPoint,
+      mergeSkippedMessages(message, context),
+      thread,
+      'skip',
+      'not-addressed',
+      threadSubscribed,
+    );
+  };
+
+  /**
+   * Whether a message nobody addressed to the bot should wake it anyway: it says the bot's name,
+   * or arrives in the follow-up window and the classifier agrees. Always `undefined` unless the
+   * owner switched the rules to `enforce`. `message` is the burst merged, as it would run.
+   */
+  const initiate = (
+    entryPoint: BotWakeEntryPoint,
+    message: WakeMessageLike,
+    thread: { id: string },
+    threadSubscribed = false,
+  ): Promise<BotWakeInitiation | undefined> =>
+    wakeRecorder.initiate(
+      observationOf(entryPoint, message, thread, 'skip', 'not-addressed', threadSubscribed),
+    );
+
+  const gateFollowup = createFollowupGate({
+    applicationId,
+    observe: observe as FollowupGateDeps['observe'],
+    platform,
+    recorder: wakeRecorder,
+    scheduler: resolveWakeScheduler(platform, applicationId, info.settings),
+  });
+
   bot.onNewMention(async (thread, message, context?: MessageContext) => {
+    remember('onNewMention', [...(context?.skipped ?? []), message], thread);
     const replyLocale = detectReplyLocale(message);
     // Record the original @mentioner so the first follow-up in
     // `onSubscribedMessage` recognises them as participant #1 instead of
@@ -224,16 +363,21 @@ export function registerHandlers(
         ungatedOnly: true,
       })
     ) {
+      observe('onNewMention', message, thread, 'skip', 'command');
       return;
     }
 
     // Gate first — must run before tryDispatch so a /command from a
     // non-allowlisted sender can't slip through and side-effect.
     if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onNewMention'))) {
+      observe('onNewMention', message, thread, 'skip', 'access-gate-rejected');
       return;
     }
 
-    if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
+    if (await tryDispatch(thread, message.text, message.author, replyLocale)) {
+      observe('onNewMention', message, thread, 'skip', 'command');
+      return;
+    }
 
     log(
       'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -256,6 +400,13 @@ export function registerHandlers(
     }
 
     const merged = mergeSkippedMessages(message, context);
+    observe(
+      'onNewMention',
+      merged,
+      thread,
+      'wake',
+      thread.isDM ? 'direct-message' : 'explicit-mention',
+    );
     void emitAgentSignalSourceEvent(
       {
         payload: {
@@ -326,6 +477,7 @@ export function registerHandlers(
       ...(context?.skipped ?? []),
       message,
     ]);
+    remember('onSubscribedMessage', [...(context?.skipped ?? []), message], thread);
     if (message.author.isBot === true) return;
     const replyLocale = detectReplyLocale(message);
 
@@ -384,7 +536,19 @@ export function registerHandlers(
           messageMatchesWatchKeyword(m.text, watchKeywords),
         ) === true);
 
-    if (!isAddressedToBot && !isCommand && !matchesWatchKeyword) {
+    // Nobody addressed the bot. With the rules enforcing it may still speak up: its name is in the
+    // text, or it spoke lately and the classifier agrees. Judged on the whole burst, as it would run.
+    const initiation =
+      !isAddressedToBot && !isCommand && !matchesWatchKeyword
+        ? await initiate(
+            'onSubscribedMessage',
+            mergeSkippedMessages(message, context),
+            thread,
+            true,
+          )
+        : undefined;
+
+    if (!isAddressedToBot && !isCommand && !matchesWatchKeyword && !initiation) {
       log(
         'onSubscribedMessage: skip non-mention in group thread, agent=%s, platform=%s, author=%s, thread=%s',
         agentId,
@@ -413,11 +577,15 @@ export function registerHandlers(
           log('onSubscribedMessage: mention-mode announcement failed: %O', error);
         }
       }
+      observeBurst('onSubscribedMessage', message, context, thread, true);
       return;
     }
 
-    if (matchesWatchKeyword && !isAddressedToBot && !isCommand) {
-      if (!(await isMessageMonitoringAllowed('onSubscribedMessage', thread.id))) return;
+    if ((matchesWatchKeyword || initiation) && !isAddressedToBot && !isCommand) {
+      if (!(await isMessageMonitoringAllowed('onSubscribedMessage', thread.id))) {
+        observe('onSubscribedMessage', message, thread, 'skip', 'monitoring-not-allowed', true);
+        return;
+      }
       log(
         'onSubscribedMessage: keyword match wakes bot, agent=%s, platform=%s, author=%s, thread=%s, keywords=%o',
         agentId,
@@ -435,16 +603,28 @@ export function registerHandlers(
         ungatedOnly: true,
       })
     ) {
+      observe('onSubscribedMessage', message, thread, 'skip', 'command', true);
       return;
     }
 
     // Gate before tryDispatch so a /command from a non-allowlisted sender
     // (or in a disabled DM/group scope) cannot side-effect.
-    if (!(await passGatesOrNotify(thread, message.author, replyLocale, 'onSubscribedMessage'))) {
+    // A wake the bot started itself answers chatter nobody asked it to join: if the sender is not
+    // allowed, drop it quietly rather than posting a rejection notice into the thread.
+    const gateThread = initiation
+      ? { id: thread.id, isDM: thread.isDM, post: async () => undefined }
+      : thread;
+    if (
+      !(await passGatesOrNotify(gateThread, message.author, replyLocale, 'onSubscribedMessage'))
+    ) {
+      observe('onSubscribedMessage', message, thread, 'skip', 'access-gate-rejected', true);
       return;
     }
 
-    if (await tryDispatch(thread, message.text, message.author, replyLocale)) return;
+    if (await tryDispatch(thread, message.text, message.author, replyLocale)) {
+      observe('onSubscribedMessage', message, thread, 'skip', 'command', true);
+      return;
+    }
 
     log(
       'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
@@ -487,6 +667,34 @@ export function registerHandlers(
         );
       }
     }
+    const wakeReason: BotWakeReason = thread.isDM
+      ? 'direct-message'
+      : message.isMention === true || isExplicitlyAddressed
+        ? 'explicit-mention'
+        : isSoloBotConversation
+          ? 'solo-conversation'
+          : matchesWatchKeyword && !isCommand
+            ? 'watch-keyword'
+            : (initiation?.reason ?? 'addressed');
+    // Only a wake nobody asked for may end in silence; a DM, @mention, command or solo
+    // conversation is always answered, exactly as before. Until the bot-wake rollout reaches this
+    // bot's owner nothing may: every wake is answered, as it was before the pipeline existed.
+    const wakeKind = (await wakeRecorder.isRolledOut()) ? botWakeKindFor(wakeReason) : 'mention';
+    if (
+      wakeKind === 'followup' &&
+      (await gateFollowup({
+        entryPoint: 'onSubscribedMessage',
+        merged,
+        // Already judged by `initiate`: do not judge again.
+        initiated: !!initiation,
+        parked: [...(context?.skipped ?? []), message],
+        thread,
+        threadSubscribed: true,
+      })) === 'stop'
+    ) {
+      return;
+    }
+    observe('onSubscribedMessage', merged, thread, 'wake', wakeReason, true);
     void emitAgentSignalSourceEvent(
       {
         payload: {
@@ -533,6 +741,7 @@ export function registerHandlers(
         displayToolCalls,
         reactionMode,
         replyLocale,
+        wakeKind,
       });
     } catch (error) {
       const operationId = AgentBridgeService.getActiveOperationId(thread.id);
@@ -567,6 +776,7 @@ export function registerHandlers(
   registerCatchAllHandler(bot, {
     agentId,
     applicationId,
+    botWakeEnabled: isBotWakeEnabled(parseBotWakeSettings(info.settings).config),
     bridge,
     charLimit,
     client,
@@ -574,10 +784,15 @@ export function registerHandlers(
     detectReplyLocale,
     displayToolCalls,
     dmSettings,
+    gateFollowup,
+    initiate,
     isMessageMonitoringAllowed,
+    observeBurst,
     operatorUserId,
     passGatesOrNotify,
     platform,
+    observe,
+    remember,
     reactionMode,
     serverDB,
     userId,

@@ -119,10 +119,18 @@ export const createHarness = (params: {
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     getLatestSpineMessageId: vi.fn(
-      async ({ threadId }: { threadId?: string | null; topicId: string }) => {
+      async ({
+        operationId,
+        threadId,
+      }: {
+        operationId?: string;
+        threadId?: string | null;
+        topicId: string;
+      }) => {
         const match = [...messages.values()].findLast(
           (m) =>
             m.role !== 'tool' &&
+            (!operationId || m.metadata?.operationId === operationId) &&
             (m.threadId ?? null) === (threadId ?? null) &&
             !(m as any).metadata?.signal,
         );

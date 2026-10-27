@@ -202,7 +202,10 @@ export const useDropdownMenu = ({
           label: t('actions.copyLink', { ns: 'topic' }),
           onClick: () => {
             if (!agentId) return;
-            const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(agentId, topicId)}`;
+            const url = `${appOrigin}${buildWorkspaceAwarePath(
+              AGENT_CHAT_TOPIC_URL(agentId, topicId),
+              activeWorkspaceSlug,
+            )}`;
             void navigator.clipboard.writeText(url);
             toast.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
           },

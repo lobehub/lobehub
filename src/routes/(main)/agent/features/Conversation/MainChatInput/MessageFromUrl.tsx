@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useLocation, useSearchParams } from 'react-router';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useConversationStore } from '@/features/Conversation';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
+import { isOnRouteTopic } from '@/features/Conversation/utils/isOnRouteTopic';
 import { overlayCaptureUploadPool } from '@/features/Electron/ScreenCapture/overlayCaptureUploadPool';
 import { canConsumePendingOverlayDispatch } from '@/features/Electron/ScreenCapture/overlayDispatch';
 import { useOverlayDispatchStore } from '@/features/Electron/ScreenCapture/overlayDispatchStore';
@@ -28,6 +29,7 @@ const MessageFromUrl = () => {
   const agentId = context.agentId;
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const { topicId: routeTopicId } = useParams<{ topicId?: string }>();
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -61,6 +63,8 @@ const MessageFromUrl = () => {
     // During agent switching, URL/searchParams may update before ConversationStore context updates.
     // Only consume the param when the route agentId matches the ConversationStore agentId.
     if (routeAgentId && routeAgentId !== agentId) return;
+    // Likewise wait for the topic the URL names, or the send starts a new one.
+    if (!isOnRouteTopic(routeTopicId, context.topicId)) return;
 
     // Ensure required agent info is loaded before consuming the param.
     // For existing conversations (topicId exists), also wait until messages are initialized
@@ -103,6 +107,7 @@ const MessageFromUrl = () => {
     isAgentConfigLoading,
     messagesInit,
     routeAgentId,
+    routeTopicId,
   ]);
 
   useEffect(() => {

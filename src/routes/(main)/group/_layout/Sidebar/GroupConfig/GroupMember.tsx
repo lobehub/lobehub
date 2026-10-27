@@ -7,6 +7,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
+import AddGroupMemberModal from '@/features/AddAgentMemberModal';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -19,7 +20,6 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
-import AddGroupMemberModal from '../AddGroupMemberModal';
 import GroupMemberItem from './GroupMemberItem';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

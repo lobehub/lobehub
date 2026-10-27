@@ -27,7 +27,7 @@
 - `lh task resume <id>` - Resume paused task
 - `lh task complete <id>` - Mark as completed
 - `lh task cancel <id>` - Cancel task
-- `lh task comment <id> -m <message>` - Add comment
+- `lh task comment <id> -m <message>` - Add comment. To notify a member who needs to act, mention them with `<mention name="Name" id="user_xxx" />`, taking the id from `lh workspace members` (never guess it); a plain "@Name" is only text. Each mention sends a notification, so do not @ people in routine progress notes.
 - `lh task sort <parentId> <id1> <id2> ...` - Reorder subtasks
 - `lh task heartbeat <id>` - Send manual heartbeat
 - `lh task watchdog` - Detect and fail stuck tasks

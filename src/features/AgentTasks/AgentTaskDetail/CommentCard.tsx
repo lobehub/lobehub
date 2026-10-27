@@ -23,6 +23,7 @@ import { useTaskStore } from '@/store/task';
 import { isOptimisticActivityId } from '@/store/task/slices/detail/optimisticActivity';
 
 import { styles } from '../shared/style';
+import { commentMarkdownProps } from './commentMarkdown';
 
 // Keep saved comments visually consistent with the editor: render FileNodes
 // as the Linear-style card on its own row instead of the default inline pill.
@@ -191,7 +192,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
         />
       )}
       {!isEditing && !activity.editorData && (
-        <Markdown fontSize={14} variant={'chat'}>
+        <Markdown fontSize={14} variant={'chat'} {...commentMarkdownProps}>
           {content}
         </Markdown>
       )}

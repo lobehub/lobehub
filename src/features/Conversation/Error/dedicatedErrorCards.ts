@@ -19,6 +19,7 @@ export const DEDICATED_ERROR_CARD_TYPES = [
   AgentRuntimeErrorType.OllamaServiceUnavailable,
   AgentRuntimeErrorType.OllamaBizError,
   AgentRuntimeErrorType.ExceededContextWindow,
+  AgentRuntimeErrorType.RequestBodyTooLarge,
   AgentRuntimeErrorType.NoOpenAIAPIKey,
 ] as const;
 

@@ -1,3 +1,4 @@
+import type { SendMessageServerParams } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
 import { definePagedReplica, defineReplica } from '@/libs/replica';
@@ -13,6 +14,7 @@ export interface TopicListParams {
   excludeTriggers?: string[];
   groupId?: string;
   isInbox?: boolean;
+  onlyMine?: boolean;
   pageSize: number;
   sortBy?: TopicQuerySortBy;
   withDetails?: boolean;
@@ -44,6 +46,7 @@ export const normalizeTopicListParams = (
     excludeTriggers,
     groupId,
     isInbox,
+    onlyMine,
     pageSize,
     sortBy,
     withDetails,
@@ -57,6 +60,7 @@ export const normalizeTopicListParams = (
     excludeTriggers: excludeTriggers?.length ? excludeTriggers : undefined,
     groupId,
     isInbox,
+    onlyMine: onlyMine || undefined,
     pageSize: pageSize || DEFAULT_TOPIC_PAGE_SIZE,
     sortBy,
     withDetails: withDetails || undefined,
@@ -81,16 +85,55 @@ export const topicListResource = definePagedReplica<TopicListParams, ChatTopic, 
   key: ({ agentId, groupId }) => topicMapKey({ agentId, groupId }),
   name: 'topicList',
   paging: topicPaging,
-  query: ({ excludeStatuses, excludeTriggers, isInbox, sortBy, withDetails }) => ({
+  query: ({ excludeStatuses, excludeTriggers, isInbox, onlyMine, sortBy, withDetails }) => ({
     excludeStatuses,
     excludeTriggers,
     isInbox: Boolean(isInbox),
+    // Omitted when off so pages persisted before the filter existed still match.
+    onlyMine: onlyMine || undefined,
     sortBy,
     withDetails: Boolean(withDetails),
   }),
   storage: 'indexedDB',
   version: 2,
 });
+
+/** Query descriptors a fetched page stamps onto its `topicDataMap` bucket. */
+export const topicListViewFields = ({
+  excludeStatuses,
+  excludeTriggers,
+  isInbox,
+  onlyMine,
+  sortBy,
+  withDetails,
+}: TopicListParams): Partial<TopicData> => ({
+  excludeStatuses,
+  excludeTriggers,
+  isInbox: Boolean(isInbox),
+  onlyMine,
+  sortBy,
+  withDetails,
+});
+
+/**
+ * The filter a loaded bucket was fetched with, for `sendMessageInServer` to
+ * apply to the topic list it returns. Without it the server echoes an
+ * unfiltered list that `internal_updateTopics` writes back over the filtered
+ * sidebar — completed / cron / other members' topics reappear until the next
+ * revalidation.
+ */
+export const topicListFilterOf = (
+  data: TopicData | undefined,
+): SendMessageServerParams['topicFilter'] => {
+  if (!data) return undefined;
+  const { excludeStatuses, excludeTriggers, onlyMine } = data;
+  if (!excludeStatuses?.length && !excludeTriggers?.length && !onlyMine) return undefined;
+  return {
+    ...(excludeStatuses?.length ? { excludeStatuses } : {}),
+    ...(excludeTriggers?.length ? { excludeTriggers } : {}),
+    ...(onlyMine ? { onlyMine } : {}),
+  };
+};
 
 /**
  * Agent Topics management page (`/agent/:aid/topics`): a different shape of

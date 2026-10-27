@@ -1,5 +1,7 @@
 import { createContext, use } from 'react';
 
+import type { TopicListFilter } from '@/utils/client/topic';
+
 /** Host identity keeps the shared list inside its Project route and data scope. */
 export const TopicListScopeContext = createContext<{
   coordinatorAgentId?: string;
@@ -20,3 +22,15 @@ export interface TopicListRevealState {
 
 export const TopicListRevealContext = createContext<TopicListRevealState | null>(null);
 export const useTopicListReveal = () => use(TopicListRevealContext);
+
+/**
+ * Status / device narrowing of the Project sidebar. Owned by the host so the
+ * filter menu and the list below it read one value; it resets with the host.
+ */
+export interface TopicListFilterState {
+  filter: TopicListFilter;
+  setFilter: (filter: TopicListFilter) => void;
+}
+
+export const TopicListFilterContext = createContext<TopicListFilterState | null>(null);
+export const useTopicListFilter = () => use(TopicListFilterContext);

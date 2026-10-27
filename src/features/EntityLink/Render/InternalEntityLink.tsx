@@ -15,7 +15,9 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
 import { useAgentStore } from '@/store/agent';
@@ -155,7 +157,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           reference.type === 'verify') &&
         shouldHardNavigateToWorkbench(reference.pathname)
       ) {
-        window.location.assign(reference.pathname);
+        // A workspace-prefixed path is already scoped; an unprefixed one (or one
+        // whose active slug was normalized away) is scoped like `navigate` does.
+        window.location.assign(
+          reference.workspaceSlug
+            ? reference.pathname
+            : buildWorkspaceAwarePath(reference.pathname, getActiveWorkspaceSlug()),
+        );
         return;
       }
 

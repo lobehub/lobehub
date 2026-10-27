@@ -7,9 +7,17 @@ import {
   cssVar,
   DropdownMenu,
   Flexbox,
+  Icon,
+  Tag,
   Text,
 } from '@lobehub/ui';
-import { ArrowLeftIcon, MessageSquareTextIcon, MoreHorizontal, SparklesIcon } from 'lucide-react';
+import {
+  ArrowLeftIcon,
+  GlobeIcon,
+  MessageSquareTextIcon,
+  MoreHorizontal,
+  SparklesIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +30,7 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { useDocumentComments } from '../DocumentComments/context';
 import EditingIndicator from '../EditingIndicator';
+import { useIsHtmlPage } from '../HtmlPageBody';
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
@@ -46,6 +55,7 @@ const Header = memo(() => {
     s.onBack,
   ]);
   const rightPanelMode = usePageEditorStore(selectors.rightPanelMode);
+  const isHtmlPage = useIsHtmlPage(documentId);
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
@@ -80,7 +90,15 @@ const Header = memo(() => {
               </Text>
             </>
           )}
-          {documentId && <AutoSaveHint documentId={documentId} style={{ marginLeft: 6 }} />}
+          {/* An artifact's body is never edited here, so a save status would only
+              ever read "latest version"; name what the page is instead. */}
+          {isHtmlPage ? (
+            <Tag icon={<Icon icon={GlobeIcon} />} style={{ marginLeft: 6 }}>
+              {t('pageEditor.artifactTag')}
+            </Tag>
+          ) : (
+            documentId && <AutoSaveHint documentId={documentId} style={{ marginLeft: 6 }} />
+          )}
         </>
       }
       right={

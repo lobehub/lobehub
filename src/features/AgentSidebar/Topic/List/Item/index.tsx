@@ -37,17 +37,22 @@ import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useHasDraft } from '@/features/ChatInput/draftStorage';
 import { startTopicDrag } from '@/features/ChatInput/InputEditor/ReferTopic/topicDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { getProjectConversationPath } from '@/features/Projects/Layout/navigation';
+import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import TopicCreatorAvatar, { useTopicCreator } from '@/features/TopicCreatorAvatar';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
+import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
+import { useVisibleTopicPrefetch } from '../../hooks/useVisibleTopicPrefetch';
 import ThreadList from '../../TopicListContent/ThreadList';
 import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
@@ -263,6 +268,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
     suppressAgentAvatar,
   }) => {
     const scopedTopic = useScopedTopic(id);
+    // Warm this row's transcript as soon as it is on screen, so clicking it is
+    // a cache hit instead of a visible load.
+    const prefetchRef = useVisibleTopicPrefetch(id);
     const scope = useTopicListScope();
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
@@ -278,10 +286,16 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
     // Creator of the topic — resolves only inside an active workspace; drives
     // the identity-first icon layout below.
-    const author = useTopicCreator(
-      isSharedAgent && !metadata?.bot ? userId : undefined,
-      metadata?.botCreator,
-    );
+    // "Only my topics" makes the viewer's own rows self-evident, so the creator
+    // avatar carries no information there — drop it and fall back to the
+    // personal-mode row. A teammate's topic can still be listed (the active
+    // topic is retained under the filter) and keeps its ownership cue. Bot
+    // topics still resolve their initiator via `botCreator`.
+    const onlyMine = useTopicOnlyMine();
+    const currentUserId = useUserStore(userProfileSelectors.userId);
+    const hideOwnCreator = onlyMine && userId === currentUserId;
+    const creatorUserId = isSharedAgent && !metadata?.bot && !hideOwnCreator ? userId : undefined;
+    const author = useTopicCreator(creatorUserId, metadata?.botCreator);
 
     const loadingRingColor = isDarkMode
       ? cssVar.colorWarningBorder
@@ -291,9 +305,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const href = useMemo(() => {
       if (!activeAgentId || !id) return undefined;
       return buildWorkspaceAwarePath(
-        scope
-          ? getProjectConversationPath(scope.projectId, id)
-          : AGENT_CHAT_TOPIC_URL(activeAgentId, id),
+        scope ? getProjectTopicPath(scope.projectId, id) : AGENT_CHAT_TOPIC_URL(activeAgentId, id),
         activeWorkspaceSlug,
       );
     }, [activeAgentId, activeWorkspaceSlug, id, scope]);
@@ -327,6 +339,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const handleClick = useCallback(
       (event?: MouseEvent) => {
         if (event && event.detail > 1) return;
+        if (id) markSidebarTopicActivation(id);
         if (isDesktop && id) recordTopicClickOrigin(id);
         void navRef.current.navigateToTopic(id);
       },
@@ -335,6 +348,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
 
     const handleDoubleClick = useCallback(async () => {
       if (!id || !activeAgentId || !isDesktop) return;
+      markSidebarTopicActivation(id);
       if (scope && href) {
         openTopicInNewTab(id, href);
         void navRef.current.navigateToTopic(id);
@@ -383,7 +397,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // while the user is viewing the topic, like markTopicUnread's own guard.
     const isRunningTailUnread = isMaskedRunningTail && !isTopicActive;
 
-    const hasUnread = id && (isUnreadCompleted || isRunningTailUnread);
+    // `status` is the row's own copy: a project list keeps its topics outside
+    // the chat store, so `isUnreadCompleted` never sees them there.
+    const hasUnread = id && (isUnreadCompleted || status === 'unread' || isRunningTailUnread);
 
     useEffect(() => {
       if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;
@@ -569,7 +585,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
         <TopicCreatorAvatar
           botCreator={metadata?.botCreator}
           corner={ownIconNode}
-          userId={userId}
+          userId={creatorUserId}
         />
       ) : (
         (ownIconNode ?? idleIconPlaceholder)
@@ -579,7 +595,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
       <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
         <NavItem
           draggable
-          actions={() => <Actions fav={fav} id={id} status={status} title={title} />}
           active={isTopicActive}
           description={workingDirectoryNode}
           href={href}
@@ -587,6 +602,16 @@ const TopicItemRow = memo<TopicItemRowProps>(
           slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
+          actions={() => (
+            <Actions
+              fav={fav}
+              id={id}
+              // Archiving a topic mid-run would hide work that is still going.
+              showInlineArchive={!shouldShowRunningIcon}
+              status={status}
+              title={title}
+            />
+          )}
           extra={
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
@@ -615,7 +640,12 @@ const TopicItemRow = memo<TopicItemRowProps>(
     );
 
     return (
-      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
+      <Flexbox
+        data-testid="topic-item"
+        data-topic-id={id}
+        ref={prefetchRef}
+        style={{ position: 'relative' }}
+      >
         {metaCard ? (
           <Popover
             arrow={false}

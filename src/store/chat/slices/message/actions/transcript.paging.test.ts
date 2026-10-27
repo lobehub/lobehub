@@ -108,6 +108,30 @@ describe('message transcript paging and persistence', () => {
     });
   });
 
+  it('keeps the reached topic start when a run appends rows to a synced head', async () => {
+    const context = { agentId: 'step-agent', topicId: 'step-topic', threadId: null };
+    const key = conversationMessagesKey(context);
+    const user = { id: 'user', role: 'user', content: 'go', createdAt: 1 } as UIChatMessage;
+    const step = { id: 'step', role: 'assistant', content: '', createdAt: 2 } as UIChatMessage;
+    vi.mocked(messageService.getMessageListPage).mockResolvedValue({
+      messages: [user],
+      olderCursor: null,
+    });
+    syncMessages(context);
+    await waitFor(() =>
+      expect(useChatStore.getState().messageReplica.entries[key]?.source).toBe('server'),
+    );
+
+    // A step boundary of the run brings the new assistant row in through a replacement.
+    useChatStore.getState().replaceMessages([user, step], { context });
+
+    expect(useChatStore.getState().messagePagingMap[key]?.hasMore).toBe(false);
+    await expect(useChatStore.getState().loadEarlierMessages(context)).resolves.toEqual({
+      started: false,
+    });
+    expect(messageService.getEarlierMessages).not.toHaveBeenCalled();
+  });
+
   it('keeps streamed writes in memory and persists once the run settles', async () => {
     let running = true;
     vi.spyOn(operationSelectors, 'isAgentRuntimeRunningByContext').mockImplementation(

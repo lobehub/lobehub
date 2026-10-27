@@ -26,7 +26,9 @@ export const usePublicationHarness = () => {
       ensure: { mutate: vi.fn() },
       getBundle: { query: vi.fn() },
       linkPullRequest: { mutate: vi.fn() },
+      setProject: { mutate: vi.fn() },
     },
+    project: { find: { query: vi.fn() } },
     verify: {
       createRun: { mutate: vi.fn() },
       getRun: { query: vi.fn() },

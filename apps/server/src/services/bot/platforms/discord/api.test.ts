@@ -66,3 +66,22 @@ describe('DiscordApi.listThreadMembers', () => {
     });
   });
 });
+
+describe('DiscordApi.getBotNames', () => {
+  it('reads the names the bot account goes by, display name first', async () => {
+    const { api, get } = makeApi();
+    get.mockResolvedValue({ global_name: 'Shadow Arvin', username: 'shadow_arvin' });
+
+    await expect(api.getBotNames()).resolves.toEqual(['Shadow Arvin', 'shadow_arvin']);
+    expect(get).toHaveBeenCalledWith('/users/@me');
+  });
+
+  it('lists a name once and skips an unset display name', async () => {
+    const { api, get } = makeApi();
+    get.mockResolvedValue({ global_name: null, username: 'arvin' });
+    await expect(api.getBotNames()).resolves.toEqual(['arvin']);
+
+    get.mockResolvedValue({ global_name: 'arvin', username: 'arvin' });
+    await expect(api.getBotNames()).resolves.toEqual(['arvin']);
+  });
+});

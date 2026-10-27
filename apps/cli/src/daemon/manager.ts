@@ -30,6 +30,8 @@ function getLogFilePath() {
 export interface DaemonStatus {
   connectionStatus: string;
   deviceId?: string;
+  /** Where `gatewayUrl` came from: `server`, `manual`, `official` or `override`. */
+  gatewaySource?: string;
   gatewayUrl: string;
   lastRequestAt?: string;
   pid: number;

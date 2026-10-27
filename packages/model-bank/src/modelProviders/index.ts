@@ -72,6 +72,7 @@ import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
+import { TypeSafeProvider } from './typesafe';
 import UnslothProvider from './unsloth';
 import UpstageProvider from './upstage';
 import V0Provider from './v0';
@@ -186,6 +187,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   Ai302Provider,
   NvidiaProvider,
   TogetherAIProvider,
+  TypeSafeProvider,
   FireworksAIProvider,
   GroqProvider,
   PerplexityProvider,

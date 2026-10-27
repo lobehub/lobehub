@@ -2,6 +2,7 @@ import {
   AGENT_ARTIFACT_SOURCE_TYPES,
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
 } from '@lobechat/const';
@@ -92,6 +93,11 @@ const fileArmColumns = {
   fileType: f.fileType,
   // A file that backs a derived page is addressed by the page id.
   id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
+  knowledgeBaseIds: sql<
+    string[]
+  >`ARRAY(SELECT ${knowledgeBaseFiles.knowledgeBaseId} FROM ${knowledgeBaseFiles} WHERE ${knowledgeBaseFiles.fileId} = ${f.id})`.as(
+    'knowledge_base_ids',
+  ),
   metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
   name: f.name,
   size: f.size,
@@ -131,6 +137,11 @@ const documentArmColumns = {
   fileId: d.fileId,
   fileType: d.fileType,
   id: d.id,
+  knowledgeBaseIds: sql<
+    string[]
+  >`CASE WHEN ${d.knowledgeBaseId} IS NULL THEN ARRAY[]::text[] ELSE ARRAY[${d.knowledgeBaseId}] END`.as(
+    'knowledge_base_ids',
+  ),
   metadata: d.metadata,
   name: sql<string>`COALESCE(${d.title}, ${d.filename}, 'Untitled')`.as('name'),
   size: sql<number>`${d.totalCharCount}`.as('size'),
@@ -171,6 +182,7 @@ interface KnowledgeRow {
   fileId: string | null;
   fileType: string;
   id: string;
+  knowledgeBaseIds: string[] | null;
   metadata: Record<string, any> | null;
   name: string;
   size: number;
@@ -206,6 +218,8 @@ export interface KnowledgeItem {
   fileId?: string | null;
   fileType: string;
   id: string;
+  /** Knowledge bases the row is filed into (empty when it lives outside every base). */
+  knowledgeBaseIds?: string[];
   metadata?: Record<string, any> | null;
   name: string;
   size: number;
@@ -283,6 +297,7 @@ const toKnowledgeItem = (row: KnowledgeRow): KnowledgeItem => ({
   fileId: row.fileId,
   fileType: row.fileType,
   id: row.id,
+  knowledgeBaseIds: row.knowledgeBaseIds ?? [],
   metadata: toJson(row.metadata),
   name: row.name,
   size: Number(row.size),
@@ -454,6 +469,7 @@ export class KnowledgeRepo {
     excludeKnowledgeBaseIds,
     includeContent = true,
     includeContentPreview = false,
+    filesOnly,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
@@ -523,6 +539,11 @@ export class KnowledgeRepo {
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
           ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
           : undefined,
+        // The drive lists uploaded files plus the folders that hold them: a folder
+        // row is the only way into its children, so dropping it strands every
+        // nested file. Pages still live in their own sidebar sections, and this
+        // filter is what keeps them out of the drive.
+        filesOnly ? eq(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
       ],
       includeContent,
       includeContentPreview,
@@ -578,6 +599,64 @@ export class KnowledgeRepo {
       kind === 'file' ? fileArm : kind === 'page' ? documentArm : unionAll(fileArm, documentArm);
 
     const rows = await recent.orderBy(this.orderBy(SortType.Desc, 'updatedAt')).limit(limit);
+
+    return rows.map(toKnowledgeItem);
+  }
+
+  /**
+   * The Docs home list: pages (rich text and HTML artifacts) and uploaded documents (pdf / office / text; no
+   * media, raw data or page-backing rows) together, newest update first,
+   * wherever they live (a knowledge base or not; rows carry `knowledgeBaseIds`
+   * for the location column). `creator` narrows to the caller's own rows
+   * (`self`) or to what other workspace members shared (`others`); private rows
+   * of other members never pass the ownership scope in the first place. All
+   * exclusions run in SQL, so `limit` is never eaten by rows filtered later.
+   */
+  async queryHomeItems({
+    creator,
+    excludeKnowledgeBaseIds,
+    limit = 50,
+  }: {
+    creator?: 'others' | 'self';
+    excludeKnowledgeBaseIds?: string[];
+    limit?: number;
+  } = {}): Promise<KnowledgeItem[]> {
+    const creatorFilter = (column: AnyPgColumn) =>
+      creator === 'self'
+        ? eq(column, this.userId)
+        : creator === 'others'
+          ? ne(column, this.userId)
+          : undefined;
+
+    const fileArm = this.fileArm(
+      [
+        creatorFilter(f.userId),
+        this.fileCategoryFilter(FilesTabs.Documents),
+        excludeKnowledgeBaseIds?.length
+          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+          : undefined,
+      ],
+      undefined,
+      undefined,
+      false,
+    );
+
+    const documentArm = this.documentArm(
+      [
+        creatorFilter(d.userId),
+        // HTML pages (artifacts) are pages too; leaving them out hid every
+        // agent-written report from the list.
+        inArray(d.fileType, [CUSTOM_DOCUMENT_FILE_TYPE, HTML_DOCUMENT_FILE_TYPE]),
+        excludeKnowledgeBaseIds?.length
+          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+      ],
+      false,
+    );
+
+    const rows = await unionAll(fileArm, documentArm)
+      .orderBy(this.orderBy(SortType.Desc, 'updatedAt'))
+      .limit(limit);
 
     return rows.map(toKnowledgeItem);
   }

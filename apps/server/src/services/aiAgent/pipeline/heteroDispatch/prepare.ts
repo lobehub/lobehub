@@ -5,18 +5,23 @@ import {
   collectHeteroAttachedFiles,
   isLocalHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
+import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import { applyTopicModelToHeterogeneousProvider, buildHeteroExecArgs } from '@lobechat/types';
 import debug from 'debug';
 
 import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
+import { FileService } from '@/server/services/file';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
+import type { UnansweredUserTurn } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
+import { collectUnansweredUserTurns } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox/session';
 
 import { supportsCloudHeterogeneousSandbox } from '../../helpers/heteroErrors';
 import type { ExecRunContext } from '../../types';
 import { heteroOperationCapabilities } from '../heteroOperationCapabilities';
+import { buildHeteroProjectContext } from '../projectContext';
 import { buildViewedTaskContextPrompt, joinSystemContext } from '../viewedTaskContext';
 import type { HeteroDispatchDeps, HeteroDispatchInput } from './types';
 
@@ -32,7 +37,13 @@ export const prepareHeteroRun = async (
   deps: HeteroDispatchDeps,
   ctx: Pick<
     ExecRunContext,
-    'agentConfig' | 'appContext' | 'assistantMessageId' | 'prompt' | 'shareGate' | 'topicId'
+    | 'agentConfig'
+    | 'appContext'
+    | 'assistantMessageId'
+    | 'prompt'
+    | 'shareGate'
+    | 'topicId'
+    | 'userMessageMetadata'
   >,
   input: Pick<
     HeteroDispatchInput,
@@ -45,7 +56,7 @@ export const prepareHeteroRun = async (
   >,
   operationId: string,
 ) => {
-  const { agentConfig, appContext, assistantMessageId, prompt, topicId } = ctx;
+  const { agentConfig, appContext, assistantMessageId, prompt, topicId, userMessageMetadata } = ctx;
   const {
     heteroType,
     heterogeneousProvider,
@@ -67,8 +78,9 @@ export const prepareHeteroRun = async (
     operationJwt = await signHeteroOperationJWT({
       // A `/goal` run also gets `goal:manage` so it can create the goal the agent
       // supervises; the server still derives the agent and topic from this
-      // operation, never from the CLI.
-      capabilities: heteroOperationCapabilities(prompt),
+      // operation, never from the CLI. A Task run also gets `acceptance:evidence`
+      // for its own verification round.
+      capabilities: heteroOperationCapabilities(prompt, { taskId: operationTaskId }),
       operationId,
       userId: deps.userId,
       workspaceId: deps.workspaceId,
@@ -112,6 +124,9 @@ export const prepareHeteroRun = async (
   // a serialized duplicate. Amp threads are server-backed, so they rely on
   // native continuation exclusively and never need this local-file fallback.
   let conversationHistory: ConversationHistoryEntry[] | undefined;
+  // A resumed session still needs the prompts of runs stopped before the CLI
+  // recorded them; the history above is withheld from it.
+  let unansweredUserTurns: UnansweredUserTurn[] | undefined;
   if (heteroType !== 'amp') {
     try {
       // `allowShareVisitor`: this is the RUN's own topic, already resolved
@@ -122,12 +137,11 @@ export const prepareHeteroRun = async (
         { topicId, pageSize: 200 },
         { allowShareVisitor: true },
       );
-      const turns = recentMsgs
+      const topicMsgs = recentMsgs.filter((m) => !m.threadId && !selfMessageIds.has(m.id));
+      const turns = topicMsgs
         .filter(
           (m) =>
             (m.role === 'user' || m.role === 'assistant') &&
-            !m.threadId &&
-            !selfMessageIds.has(m.id) &&
             m.content &&
             m.content !== LOADING_FLAT,
         )
@@ -137,6 +151,26 @@ export const prepareHeteroRun = async (
           role: m.role as 'assistant' | 'user',
         }));
       if (turns.length > 0) conversationHistory = turns;
+      if (resumeSessionId) {
+        const unanswered = collectUnansweredUserTurns(topicMsgs, prompt);
+        if (unanswered.length > 0) {
+          // The query returns stored file keys; sign them like the current turn's attachments.
+          const fileService = unanswered.some((turn) => turn.files.length > 0)
+            ? new FileService(deps.db, deps.userId, deps.workspaceId)
+            : undefined;
+          unansweredUserTurns = await Promise.all(
+            unanswered.map(async (turn) => ({
+              ...turn,
+              files: await Promise.all(
+                turn.files.map(async (file) => ({
+                  ...file,
+                  url: (await fileService?.getFullFileUrl(file.url)) || file.url,
+                })),
+              ),
+            })),
+          );
+        }
+      }
     } catch (err) {
       log('execAgent: failed to load conversation history for hetero context: %O', err);
     }
@@ -159,11 +193,23 @@ export const prepareHeteroRun = async (
   const sandboxPlacement = sandbox && { cwd: sandbox.cwd, mode: sandbox.mode };
 
   // Primary context omits history (a failed native resume retries with the full
-  // fallback). `/goal` and the task viewed in a Tasks side chat ride along.
+  // fallback). `/goal`, the task viewed in a Tasks side chat and the content the
+  // user attached to this message ride along — the same selection context the
+  // desktop's in-process run hands its CLI.
   const providerContext = agentConfig.agencyConfig?.heterogeneousProvider?.systemContext;
-  const viewedTaskContext = await buildViewedTaskContextPrompt(deps, appContext, operationTaskId);
+  const [viewedTaskContext, projectContext] = await Promise.all([
+    buildViewedTaskContextPrompt(deps, appContext, operationTaskId),
+    buildHeteroProjectContext(deps, appContext?.projectId, agentConfig.id),
+  ]);
+  const contextSelections = userMessageMetadata?.contextSelections;
+  const pageSelections = userMessageMetadata?.pageSelections;
+  const selectionContext = contextSelections?.length
+    ? formatContextSelections(contextSelections)
+    : pageSelections?.length
+      ? formatPageSelections(pageSelections)
+      : undefined;
   const agentSystemContext = withConversationGoalPrompt(
-    joinSystemContext(providerContext, viewedTaskContext),
+    joinSystemContext(providerContext, projectContext, viewedTaskContext, selectionContext),
     prompt,
   );
   const systemContext = buildCloudHeteroContext({
@@ -172,6 +218,7 @@ export const prepareHeteroRun = async (
     githubToken,
     repos: topicRepos,
     sandbox: sandboxPlacement,
+    unansweredUserTurns,
   });
   const resumeFallbackSystemContext =
     resumeSessionId && conversationHistory
@@ -235,6 +282,7 @@ export const prepareHeteroRun = async (
     sandbox,
     topic,
     topicRepos,
+    unansweredUserTurns,
   };
 };
 

@@ -19,6 +19,17 @@ interface ModelSelection {
   provider: string;
 }
 
+interface SelectModelOptions {
+  /**
+   * Throw when the write fails instead of only reporting it, so a caller can
+   * confirm success (e.g. a "model switched" toast). The member-override path
+   * always throws on failure.
+   */
+  rethrow?: boolean;
+  /** Keep the agent store's generic save-failure toast. @default true */
+  showErrorMessage?: boolean;
+}
+
 /**
  * Why the model trigger is shown but not switchable, so the trigger can say so
  * instead of silently going inert.
@@ -36,7 +47,11 @@ export interface UseAgentModelSelectionResult extends ModelSelection {
   /** Set only while the model is displayed but locked (see the type doc). */
   selectionLockReason?: AgentModelSelectionLockReason;
   selectionPolicy: AgentModelSelectionPolicy;
-  selectModel: (selection: ModelSelection) => Promise<void>;
+  /**
+   * Resolves `false` when the caller may not switch right now (locked, or
+   * access/preference still loading), so nothing was written.
+   */
+  selectModel: (selection: ModelSelection, options?: SelectModelOptions) => Promise<boolean>;
   usesWorkspaceMemberSelection: boolean;
 }
 
@@ -115,11 +130,11 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
       : undefined;
 
   const selectModel = useCallback(
-    async (selection: ModelSelection) => {
-      if (!canSelectModel) return;
+    async (selection: ModelSelection, options?: SelectModelOptions) => {
+      if (!canSelectModel) return false;
 
       if (usesWorkspaceMemberSelection) {
-        if (selectionPolicy !== 'member' || isLoading) return;
+        if (selectionPolicy !== 'member' || isLoading) return false;
 
         await updateWorkspaceUserPreference({
           agentModelOverrides: {
@@ -127,10 +142,11 @@ export const useAgentModelSelection = (agentId: string): UseAgentModelSelectionR
             [agentId]: selection,
           },
         });
-        return;
+        return true;
       }
 
-      await updateAgentConfigById(agentId, applyBusinessModelModeConfig(selection));
+      await updateAgentConfigById(agentId, applyBusinessModelModeConfig(selection), options);
+      return true;
     },
     [
       agentId,

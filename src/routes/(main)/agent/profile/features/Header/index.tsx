@@ -34,6 +34,7 @@ import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -238,6 +239,7 @@ const Header = memo(() => {
     t,
   ]);
 
+  const copyAgentIdItem = useCopyAgentIdMenuItem(activeAgentId);
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
   // Ownership handover to a workspace member — separate from the scope moves.
@@ -332,6 +334,7 @@ const Header = memo(() => {
         key: 'export',
         label: t('pageEditor.menu.export', { ns: 'file' }),
       },
+      copyAgentIdItem,
       importMenuItem ? { type: 'divider' as const } : null,
       importMenuItem,
       businessTransferMenuItems.length > 0 || transferToMemberItem
@@ -382,6 +385,7 @@ const Header = memo(() => {
     canConfigure,
     canManage,
     canSubmitToMarket,
+    copyAgentIdItem,
     createdAt,
     dateLocale,
     handleExportMarkdown,

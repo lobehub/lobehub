@@ -57,6 +57,17 @@ describe('useRetryParentMessage', () => {
     expect(calls).toEqual(['before', 'regenerate']);
   });
 
+  it('should skip regenerating when the pre-retry action reports failure', async () => {
+    const { result } = renderHook(() => useRetryParentMessage('assistant-message'));
+
+    await act(async () => {
+      await result.current.retryParentMessage(async () => false);
+    });
+
+    expect(storeMock.regenerateUserMessage).not.toHaveBeenCalled();
+    expect(result.current.loading).toBe(false);
+  });
+
   it('should skip retry when the message has no parent', async () => {
     storeMock.displayMessages = [{ id: 'assistant-message' }];
     const { result } = renderHook(() => useRetryParentMessage('assistant-message'));
@@ -67,5 +78,18 @@ describe('useRetryParentMessage', () => {
 
     expect(result.current.disabled).toBe(true);
     expect(storeMock.regenerateUserMessage).not.toHaveBeenCalled();
+  });
+
+  it('should retry the supplied parent when the id is a nested group block', async () => {
+    storeMock.displayMessages = [];
+    const { result } = renderHook(() => useRetryParentMessage('group-child-block', 'group-parent'));
+
+    await act(async () => {
+      await result.current.retryParentMessage();
+    });
+
+    expect(result.current.disabled).toBe(false);
+    expect(result.current.parentId).toBe('group-parent');
+    expect(storeMock.regenerateUserMessage).toHaveBeenCalledWith('group-parent');
   });
 });

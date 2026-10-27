@@ -26,7 +26,10 @@ interface HeaderProps {
   itemError?: unknown;
   onBack: () => void;
   onDeleted: () => void;
+  onToggleTopicPanel?: () => void;
   title?: string;
+  /** Topic panel visibility; omit while the page has no topic panel. */
+  topicPanelExpand?: boolean;
   updatedAt?: Date | string | null;
 }
 
@@ -40,6 +43,8 @@ const Header = memo<HeaderProps>(
     onBack,
     onDeleted,
     title,
+    topicPanelExpand,
+    onToggleTopicPanel,
     updatedAt,
   }) => {
     const { t } = useTranslation(['file', 'chat']);
@@ -95,7 +100,13 @@ const Header = memo<HeaderProps>(
           <Flexbox horizontal align={'center'} gap={4}>
             {documentId && !fileBacked && <AutoSaveHint documentId={documentId} />}
             {documentId && !fileBacked && <ShareButton documentId={documentId} />}
-            <ToggleRightPanelButton hideWhenExpanded />
+            {topicPanelExpand !== undefined && (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={topicPanelExpand}
+                onToggle={onToggleTopicPanel}
+              />
+            )}
           </Flexbox>
         }
       />

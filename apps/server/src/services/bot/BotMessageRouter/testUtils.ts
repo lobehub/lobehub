@@ -80,6 +80,15 @@ export const appModule = () => ({
   },
 });
 
+/**
+ * Factory for `vi.mock('@/server/featureFlags')`: the runtime flags with `bot_wake` on or off.
+ * Routers read the flag from the bot owner's runtime flags, so a test that exercises the bot-wake
+ * pipeline has to turn it on explicitly, exactly like a rollout does.
+ */
+export const featureFlagsModule = (enableBotWake = true) => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({ enableBotWake }),
+});
+
 /** Factory for `vi.mock('@chat-adapter/state-ioredis')`. */
 export const stateIoredisModule = () => ({
   createIoRedisState: vi.fn(),
@@ -160,6 +169,8 @@ export const mockAgentBridgeServiceCtor = vi.fn();
 // keep their pre-behaviour. Individual tests can replace this via
 // `.mockResolvedValueOnce(...)` to simulate Discord's auto-thread upgrade.
 export const mockOpenThreadForChannelWake = vi.fn().mockResolvedValue(undefined);
+/** What people call the bot; empty by default so only a test about naming opts in. */
+export const mockGetBotNames = vi.fn().mockResolvedValue([]);
 // Mirrors Discord's `ensureThreadMember`: pulls a platform user into the
 // reply thread so they get notified. Optional on the PlatformClient
 // contract — tests that care assert on it; others ignore the extra call.
@@ -230,6 +241,7 @@ export const mockGetPlatform = vi.fn().mockImplementation(function (platform: st
           return parts.length === 4 && parts[2] ? [parts[2]] : [];
         },
         ensureThreadMember: mockEnsureThreadMember,
+        getBotNames: mockGetBotNames,
         getMessenger: () => ({
           createMessage: vi.fn(),
           editMessage: vi.fn(),
@@ -544,6 +556,7 @@ export function resetBotMessageRouterMocks() {
     };
   });
   mockOpenThreadForChannelWake.mockResolvedValue(undefined);
+  mockGetBotNames.mockResolvedValue([]);
   // participant tracking — restore defaults wiped by
   // clearAllMocks. Empty list = fresh single-human thread; individual
   // describes / tests override as needed.

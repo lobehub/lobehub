@@ -43,7 +43,7 @@ export const invalidateDocumentMutation = async (
       // keyed by `document:editor`, so revalidate the replica instead.
       revalidations.push(revalidateReplica(documentDetailResource, documentId));
     }
-    // The page domain is a `@lobechat/replica` domain, so its by-id copy and
+    // The page domain is a `local-replica` domain, so its by-id copy and
     // its list sync through `replica:sync` keys rather than the SWR cache:
     // refresh them here or a rename / move would not reach the Pages sidebar or
     // the page header until a remount.

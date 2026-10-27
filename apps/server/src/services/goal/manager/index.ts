@@ -13,11 +13,11 @@ import { TRPCError } from '@trpc/server';
 
 import { TopicTrigger } from '@/const/topic';
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { readDeviceDispatchRoute } from '@/server/services/aiAgent/helpers/heteroErrors';
@@ -126,7 +126,7 @@ export class GoalManagerService {
 
   private pause = async (goalId: string, message: string): Promise<GoalTickResult> => {
     await this.db.transaction(async (db) => {
-      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const model = new GoalRepository(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       if (goal && activeStatuses.has(goal.status)) {
         await model.updateStatus(goalId, 'paused');
@@ -242,7 +242,9 @@ export class GoalManagerService {
     if (!this.eligible(graph)) return null;
     if (!graph.goal.config?.managerState) return this.startTurn(graph, undefined, reason);
     const changed = await this.db.transaction(async (db) => {
-      const goal = await new GoalModel(db, this.userId, this.workspaceId).lockById(graph.goal.id);
+      const goal = await new GoalRepository(db, this.userId, this.workspaceId).lockById(
+        graph.goal.id,
+      );
       const state = goal?.config?.managerState;
       if (
         !goal ||
@@ -330,7 +332,7 @@ export class GoalManagerService {
         return this.wait(goal.id, 'Waiting for main Agent CLI planning turn');
       }
       const failed = await this.db.transaction(async (db) => {
-        const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goal.id);
+        const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);
         const current = fresh?.config?.managerState;
         if (current?.token !== state.token || current.consumed) return;
         const settled: GoalManagerState = {
@@ -359,7 +361,10 @@ export class GoalManagerService {
           await saveManagerState(db, goal.id, { ...settled, ...cleared });
           const message = `${decision.reason}. Resume with: lh goal resume ${goal.id}`;
           if (activeStatuses.has(fresh!.status)) {
-            await new GoalModel(db, this.userId, this.workspaceId).updateStatus(goal.id, 'paused');
+            await new GoalRepository(db, this.userId, this.workspaceId).updateStatus(
+              goal.id,
+              'paused',
+            );
             await this.graph(db).recordGoalStatus(goal.id, fresh!.status, 'paused', message);
           }
           return { ...decision, reason: message };
@@ -497,7 +502,7 @@ export class GoalManagerService {
         message: `Main Agent turn deferred until ${state.retryAfter} after a failed turn`,
       };
     const claimed = await this.db.transaction(async (db) => {
-      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const model = new GoalRepository(db, this.userId, this.workspaceId);
       const fresh = await model.lockById(goal.id);
       // `managerSnapshot` does not cover the goal agent, so a handoff landing
       // between the caller's graph read and this lock would otherwise dispatch
@@ -641,7 +646,7 @@ export class GoalManagerService {
         }),
       });
       await this.db.transaction(async (db) => {
-        const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goal.id);
+        const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);
         if (fresh?.config?.managerState?.token === claimed.token) {
           await saveManagerState(db, goal.id, {
             ...fresh.config.managerState,
@@ -683,7 +688,7 @@ export class GoalManagerService {
    */
   confirmTurnExit = async (goalId: string) =>
     this.db.transaction(async (db) => {
-      const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
+      const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goalId);
       const state = fresh?.config?.managerState;
       if (!state || state.consumed) return false;
       const operation = await turnOperation(
@@ -705,7 +710,7 @@ export class GoalManagerService {
    */
   private recordUnstartedDispatch = async (goalId: string, token: string, settle: boolean) =>
     this.db.transaction(async (db) => {
-      const fresh = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
+      const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goalId);
       if (fresh?.config?.managerState?.token !== token) return false;
       await saveManagerState(db, goalId, {
         ...fresh.config.managerState,

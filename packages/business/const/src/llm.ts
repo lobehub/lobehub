@@ -6,6 +6,18 @@ export const DEFAULT_MINI_MODEL = 'gpt-5.6-luna';
 export const DEFAULT_MINI_PROVIDER = 'openai';
 
 /**
+ * The model that scores "is this message talking to the bot?" before a bot joins a conversation
+ * nobody addressed to it. It sits on the path to a reply and has a 2s deadline, so it is a
+ * decision model: one pass over the input that answers typed questions with probabilities,
+ * instead of a chat model that generates JSON. The cloud build points it at its own Jev route.
+ * `engine: 'chat'` points it at a chat model (for example DeepSeek flash) when a deployment has
+ * no decision model.
+ */
+export const DEFAULT_BOT_WAKE_ENGINE: 'chat' | 'decision' = 'decision';
+export const DEFAULT_BOT_WAKE_MODEL = 'gpt-6-luna:decision';
+export const DEFAULT_BOT_WAKE_PROVIDER = 'openai';
+
+/**
  * The speech-to-text model that transcribes voice messages for runtimes that only take text
  * (heterogeneous agents). It only takes effect once its provider is enabled, so a deployment
  * without that provider keeps voice input for those agents hidden.

@@ -17,4 +17,17 @@ describe('heteroOperationCapabilities', () => {
     ]);
     expect(heteroOperationCapabilities(undefined)).not.toContain('goal:manage');
   });
+
+  it('lets a Task run file evidence into its own verification round', () => {
+    // On a device logged in as another member, the operation token is the only
+    // identity that can reach the round its creator owns.
+    expect(heteroOperationCapabilities('align the profile card', { taskId: 'task_1' })).toContain(
+      'acceptance:evidence',
+    );
+  });
+
+  it('keeps acceptance evidence out of a run with no Task', () => {
+    expect(heteroOperationCapabilities('fix the build')).not.toContain('acceptance:evidence');
+    expect(heteroOperationCapabilities('fix the build', {})).not.toContain('acceptance:evidence');
+  });
 });

@@ -51,7 +51,10 @@ export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export type AcceptanceSubjectType = 'task' | 'topic' | 'document' | 'standalone' | 'goal_gate';
+export type AcceptanceSubjectType =
+  'task' | 'topic' | 'document' | 'standalone' | 'goal_gate' | 'site';
+
+export type CreatableAcceptanceSubjectType = Exclude<AcceptanceSubjectType, 'site'>;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -177,8 +180,30 @@ export interface AcceptanceMetadata {
    * `scm_change_requests` rows, which take precedence when both name a PR.
    */
   pullRequests?: AcceptancePullRequestLink[];
+  /** Latest explicit feedback handoff; kept apart from the standing Site review lifecycle. */
+  repair?: AcceptanceRepairRequest;
+  /** Task delivery's link back to the feedback handoff it addresses. */
+  repairSource?: { acceptanceId: string; requestId: string };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
+}
+
+export interface AcceptanceRepairRequest {
+  agentId?: string;
+  comment?: string;
+  commentIds: string[];
+  deliveryAcceptanceId?: string;
+  error?: string;
+  executionUserId?: string;
+  /** Frozen feedback, including page anchors and attachment references. */
+  feedback: string;
+  id: string;
+  operationId?: string;
+  requestedAt: string;
+  requestedBy: string;
+  state: 'failed' | 'finished' | 'running' | 'starting';
+  taskId?: string;
+  topicId?: string;
 }
 
 /** A hand-linked pull request on an acceptance. */

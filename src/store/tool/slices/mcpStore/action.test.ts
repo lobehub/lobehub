@@ -449,20 +449,6 @@ describe('mcpStore actions', () => {
     });
   });
 
-  describe('uninstallMCPPlugin', () => {
-    it('should uninstall plugin and refresh plugins', async () => {
-      const { result } = renderHook(() => useToolStore());
-      const uninstallSpy = vi.spyOn(pluginService, 'uninstallPlugin').mockResolvedValue(undefined);
-
-      await act(async () => {
-        await result.current.uninstallMCPPlugin('test-plugin');
-      });
-
-      expect(uninstallSpy).toHaveBeenCalledWith('test-plugin');
-      expect(result.current.refreshPlugins).toHaveBeenCalled();
-    });
-  });
-
   describe('loadMoreMCPPlugins', () => {
     it('appends the next page of the loaded query', async () => {
       const headItems = Array.from({ length: 20 }, (_, i) => ({

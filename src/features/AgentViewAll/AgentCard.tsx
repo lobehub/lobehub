@@ -10,7 +10,6 @@ import {
   createStaticStyles,
   type DropdownItem,
   Flexbox,
-  responsive,
   Tag,
   Text,
   Tooltip,
@@ -59,19 +58,13 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   grid: css`
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    /* Full-width page: as many 280px+ columns as fit, one column on narrow screens. */
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 12px;
 
     width: 100%;
     min-width: 0;
-
-    ${responsive.md} {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    ${responsive.sm} {
-      grid-template-columns: minmax(0, 1fr);
-    }
   `,
   /* Top-right "…" slot, a SIBLING of the card link (absolutely positioned
      over it) — nesting an interactive menu trigger inside the <a> would put

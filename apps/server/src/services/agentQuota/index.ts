@@ -1,6 +1,8 @@
 import {
   type AccountLoad,
   calibrateCapacity,
+  type ClaudeCodeAccountRouting,
+  type ClaudeCodeRoutedAccount,
   computeTurnCostUsd,
   currentUtilization,
   isScopedWeeklyLimit,
@@ -12,6 +14,7 @@ import {
   type QuotaAccountIdentity,
   type QuotaLimitReading,
   type QuotaTokenUsage,
+  rankAccounts,
   selectAccount,
   windowSecondsForKind,
   windowsToCalibrationIntervals,
@@ -31,6 +34,7 @@ import {
   type QuotaAccountCredentialRef,
   QuotaBindingRole,
   QuotaCostSource,
+  QuotaCredentialMode,
 } from '@/database/types/agentQuota';
 
 import { claudeModelPrice, codexModelPrice } from './pricing';
@@ -68,6 +72,20 @@ export interface QuotaUsageTurn {
  * `@lobechat/heterogeneous-agents/quota` module; this class only wires it to
  * the database models.
  */
+interface SelectAccountOptions {
+  modelScope?: string;
+  now?: number;
+  provider?: string;
+  /**
+   * Provider account ids the caller holds a local login for. Auto mode only
+   * balances across these; omitted = every pooled account is runnable.
+   */
+  runnableExternalAccountIds?: string[];
+}
+
+/** How recently a run must have billed an account to count as running on it. */
+const ACTIVE_RUN_WINDOW_MS = 6 * 60 * 60 * 1000;
+
 export class AgentQuotaService {
   private accounts: AgentProviderAccountModel;
   private bindings: AgentAccountBindingModel;
@@ -353,6 +371,21 @@ export class AgentQuotaService {
     }));
   };
 
+  /**
+   * Agent runs still in flight on an account. Only runs that billed it within
+   * the last few hours count: an operation left `running` by a crashed client
+   * would otherwise stay listed forever.
+   */
+  listActiveRuns = async (accountId: string, now: number = Date.now()) => {
+    const rows = await this.ledger.listActiveRuns(accountId, new Date(now - ACTIVE_RUN_WINDOW_MS));
+
+    return rows.map((row) => ({
+      ...row,
+      lastTurnAt: row.lastTurnAt.getTime(),
+      startedAt: row.startedAt?.getTime() ?? null,
+    }));
+  };
+
   /** Build the LB load view for a set of accounts from their latest readings. */
   resolveAccountLoads = async (
     accountIds: string[],
@@ -416,7 +449,7 @@ export class AgentQuotaService {
    */
   selectForAgent = async (
     agentId: string,
-    options: { modelScope?: string; now?: number; provider?: string } = {},
+    options: SelectAccountOptions = {},
   ): Promise<{
     accountId: string;
     credentialMode: string;
@@ -439,25 +472,89 @@ export class AgentQuotaService {
     };
   };
 
+  /**
+   * The account choice for a run on an execution device, which picks the
+   * login itself (only it knows which accounts it is signed in to): the pin,
+   * or the whole eligible pool best-first. `null` = no routing, and the device
+   * spawns on its default login as before.
+   *
+   * Only `referenced` accounts map to a device login; a run pinned to any
+   * other account keeps the default login, as on the desktop.
+   */
+  planDeviceRouting = async (
+    agentId: string,
+    options: Pick<SelectAccountOptions, 'modelScope' | 'now' | 'provider'> = {},
+  ): Promise<ClaudeCodeAccountRouting | null> => {
+    const bindings = await this.enabledBindings(agentId, options.provider);
+    const accounts = new Map((await this.accounts.list()).map((a) => [a.id, a]));
+    const routed = (accountId: string): ClaudeCodeRoutedAccount | undefined => {
+      const account = accounts.get(accountId);
+      if (account?.credentialMode !== QuotaCredentialMode.referenced) return;
+      if (!account.externalAccountId) return;
+      const name = account.label || account.email;
+      return { externalAccountId: account.externalAccountId, ...(name ? { name } : {}) };
+    };
+
+    const pinned = bindings.find((b) => b.role === QuotaBindingRole.pinned);
+    if (pinned) {
+      const account = routed(pinned.accountId);
+      return account ? { candidates: [account], mode: 'pinned' } : null;
+    }
+
+    const pool = bindings.filter((b) => b.role === QuotaBindingRole.pool);
+    if (pool.length === 0) return null;
+
+    const now = options.now ?? Date.now();
+    const priorityById = new Map(pool.map((b) => [b.accountId, b.priority]));
+    const loads = await this.resolveAccountLoads(
+      pool.map((b) => b.accountId),
+      now,
+    );
+    const candidates = rankAccounts(
+      loads.map((l) => ({ ...l, priority: priorityById.get(l.accountId) ?? 0 })),
+      { modelScope: options.modelScope, now },
+    ).flatMap((load) => routed(load.accountId) ?? []);
+
+    return candidates.length > 0 ? { candidates, mode: 'balanced' } : null;
+  };
+
+  /**
+   * The agent's enabled bindings. Bindings are written provider-blind; a
+   * caller that names its provider must never be routed onto another
+   * provider's account, pinned or pooled.
+   */
+  private enabledBindings = async (agentId: string, provider?: string) => {
+    const bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
+    if (!provider) return bindings;
+
+    // One read of the caller's accounts rather than a lookup per binding.
+    const providerById = new Map((await this.accounts.list()).map((a) => [a.id, a.provider]));
+    return bindings.filter((binding) => providerById.get(binding.accountId) === provider);
+  };
+
   private selectAccountId = async (
     agentId: string,
-    options: { modelScope?: string; now?: number; provider?: string },
+    options: SelectAccountOptions,
   ): Promise<{ accountId: string; reason: 'pinned' | 'balanced' } | null> => {
-    let bindings = (await this.bindings.listByAgent(agentId)).filter((b) => b.enabled);
-    // Bindings are written provider-blind; a caller that names its provider
-    // must never be routed onto another provider's account, pinned or pooled.
-    if (options.provider) {
-      const candidates = await Promise.all(
-        bindings.map((binding) => this.accounts.findById(binding.accountId)),
-      );
-      bindings = bindings.filter(
-        (binding, index) => candidates[index]?.provider === options.provider,
-      );
-    }
+    const bindings = await this.enabledBindings(agentId, options.provider);
     const pinned = bindings.find((b) => b.role === QuotaBindingRole.pinned);
     if (pinned) return { accountId: pinned.accountId, reason: 'pinned' };
 
-    const pool = bindings.filter((b) => b.role === QuotaBindingRole.pool);
+    let pool = bindings.filter((b) => b.role === QuotaBindingRole.pool);
+    // Auto mode may only land on an account the caller can actually run. A
+    // pin is still returned as-is: the caller must say it cannot run it,
+    // rather than quietly run another account.
+    if (options.runnableExternalAccountIds) {
+      const runnable = new Set(options.runnableExternalAccountIds);
+      // One read of the caller's accounts rather than a lookup per binding.
+      const externalIdById = new Map(
+        (await this.accounts.list()).map((account) => [account.id, account.externalAccountId]),
+      );
+      pool = pool.filter((b) => {
+        const externalId = externalIdById.get(b.accountId);
+        return !!externalId && runnable.has(externalId);
+      });
+    }
     if (pool.length === 0) return null;
 
     const now = options.now ?? Date.now();

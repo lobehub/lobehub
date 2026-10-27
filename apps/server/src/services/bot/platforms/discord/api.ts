@@ -95,6 +95,20 @@ export class DiscordApi {
     return { id: data.id };
   }
 
+  /**
+   * What people call this bot: its display name and username. Discord has no other source for
+   * them here, because the chat SDK's `userName` is an internal label, not the account's name.
+   */
+  async getBotNames(): Promise<string[]> {
+    log('getBotNames');
+    const me = (await this.rest.get(Routes.user())) as {
+      global_name?: string | null;
+      username?: string;
+    };
+
+    return [...new Set([me.global_name, me.username].filter((name): name is string => !!name))];
+  }
+
   // ==================== Existing Methods ====================
 
   async editMessage(channelId: string, messageId: string, content: string): Promise<void> {

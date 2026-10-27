@@ -35,3 +35,9 @@ Do not export transport primitives from the business service barrel.
 Existing raw-client and client-lib consumers remain explicit migration debt in ESLint.
 Move them domain by domain; runtime state requires a deployment/keyspace compatibility plan.
 This foundation does not migrate existing runtime, bot or OAuth stores.
+
+- `botWake`: channel state for passive bot waking — when the bot and its owner last spoke, the
+  follow-up window, the silent-wake count (reset when the bot speaks), classifier calls per bot
+  per UTC hour, and the per-channel wake scheduler state (updated under a short lock). Channel
+  state is written under both the channel and a Discord thread key. Every read returns
+  `undefined` without Redis; the caller waits for nothing and falls back to its existing wake.

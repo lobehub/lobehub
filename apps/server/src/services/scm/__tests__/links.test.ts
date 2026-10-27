@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   acceptances,
+  scmChangeRequests,
   scmIdentities,
   topics,
   users,
@@ -343,6 +344,118 @@ describe('resolveChangeRequestLinks', () => {
     expect(resolved.links).toEqual({ acceptanceId });
     expect(resolved.links.workId).toBeUndefined();
     expect(resolved.links.topicId).toBeUndefined();
+  });
+
+  it("finds a teammate's hand link in a workspace the author can write to", async () => {
+    // A bot verified the delivery and linked the PR; a person opened it.
+    const workspace = await workspaceWith('scm-links-hand-ws', otherUserId);
+    const handLink = {
+      linkedAt: new Date().toISOString(),
+      number: 19_719,
+      provider: 'github' as const,
+      repoFullName: 'LobeHub/LobeHub',
+      url: 'https://github.com/LobeHub/LobeHub/pull/19719',
+    };
+    const [topic] = await serverDB
+      .insert(topics)
+      .values({ title: 't', userId: otherUserId })
+      .returning();
+    await serverDB.insert(acceptances).values({
+      id: acceptanceId,
+      metadata: { pullRequests: [handLink] },
+      subjectId: topic.id,
+      subjectType: 'topic' as const,
+      userId: otherUserId,
+      workspaceId: workspace.id,
+    });
+    const scope = { kind: 'author', userId } as const;
+
+    // Not a member: the link stays out of reach.
+    expect(await resolve({ ...base, scope })).toEqual({});
+
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId, workspaceId: workspace.id });
+    const resolved = await resolveChangeRequestLinks(serverDB, { ...base, scope });
+    // The acceptance only: a hand link does not hand over the subject's conversation.
+    // It is flagged as hand-sourced so the model revalidates it before writing.
+    expect(resolved).toEqual({
+      links: { acceptanceId, acceptanceSource: 'hand-link' },
+      workspaceId: workspace.id,
+    });
+
+    // Another PR number in the same repository is not linked.
+    expect(await resolve({ ...base, number: 19_720, scope })).toEqual({});
+  });
+
+  it('keeps the acceptance the row already carries over a later hand link', async () => {
+    // Two acceptances list the same PR: the first claimed the row, the second
+    // was refused by `link-pr` and kept its link. The newest link must not
+    // decide what a merge accepts.
+    const workspace = await workspaceWith('scm-links-claimed-ws', userId);
+    // One acceptance per subject, so the two links sit on different topics.
+    const [claimedTopic, laterTopic] = await serverDB
+      .insert(topics)
+      .values([
+        { title: 'claimed', userId },
+        { title: 'later', userId },
+      ])
+      .returning();
+    const laterId = '11111111-2222-4333-8444-555555555555';
+    const handLink = (at: string) => ({
+      linkedAt: at,
+      number: 19_719,
+      provider: 'github' as const,
+      repoFullName: 'lobehub/lobehub',
+      url: 'https://github.com/lobehub/lobehub/pull/19719',
+    });
+
+    await serverDB.insert(acceptances).values([
+      {
+        id: acceptanceId,
+        metadata: { pullRequests: [handLink('2026-10-01T00:00:00.000Z')] },
+        subjectId: claimedTopic.id,
+        subjectType: 'topic' as const,
+        updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+        userId,
+        workspaceId: workspace.id,
+      },
+      {
+        id: laterId,
+        metadata: { pullRequests: [handLink('2026-10-20T00:00:00.000Z')] },
+        subjectId: laterTopic.id,
+        subjectType: 'topic' as const,
+        updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+        userId,
+        workspaceId: workspace.id,
+      },
+    ]);
+    await serverDB.insert(scmChangeRequests).values({
+      acceptanceId,
+      number: 19_719,
+      provider: 'github',
+      repoFullName: 'lobehub/lobehub',
+      state: 'open',
+      url: base.url,
+      userId,
+      workspaceId: workspace.id,
+    });
+
+    const scope = { kind: 'author', userId } as const;
+    const resolved = await resolveChangeRequestLinks(serverDB, { ...base, scope });
+
+    // The row's own binding, echoed: the model lets the locked row decide.
+    expect(resolved).toEqual({
+      links: { acceptanceId, acceptanceSource: 'row-binding' },
+      workspaceId: workspace.id,
+    });
+
+    // With the binding gone the remaining link takes over again.
+    await serverDB.update(scmChangeRequests).set({ acceptanceId: null });
+    expect(await resolve({ ...base, scope })).toEqual({
+      acceptanceId: laterId,
+      acceptanceSource: 'hand-link',
+    });
   });
 
   it('returns nothing when no source matches', async () => {

@@ -12,7 +12,7 @@ import type {
 import {
   createGroupActionMemberBridgeHook,
   createThreadHooks,
-  pickThreadUsageBaseline,
+  pickThreadCarryOver,
 } from '../hooks/threadRunHooks';
 import type { InternalExecAgentParams } from '../types';
 
@@ -74,7 +74,7 @@ export const createGroupMemberApprovalDeps = (models: {
       // The recovered group-member bridge owns result publication.
       undefined,
       'execVirtualSubAgent',
-      pickThreadUsageBaseline(thread.metadata),
+      pickThreadCarryOver(thread.metadata),
     );
   },
   findMessagePlugin: (messageId) => models.messageModel.findMessagePlugin(messageId),

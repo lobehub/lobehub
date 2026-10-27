@@ -1,5 +1,5 @@
-import { PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const/plugin';
-import { truncateSurrogateSafe } from '@lobechat/utils';
+import { PLUGIN_SCHEMA_SEPARATOR } from '../const/plugin';
+import { truncateSurrogateSafe } from '../utils/truncateSurrogateSafe';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';

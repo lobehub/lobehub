@@ -25,6 +25,7 @@ import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
+import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
 import { withoutDeviceReplay } from './serverRuntimes/withoutDeviceReplay';
 import {
@@ -287,8 +288,8 @@ export class ToolExecutionService {
     const isDeviceOnlyMcp = isDeviceOnlyMcpEndpoint(mcpParams);
 
     // Agent Share visitor runs execute with the CREATOR's identity, so a
-    // device-only MCP would tunnel to (or, without a gateway, spawn on) the
-    // creator's machine on a visitor's behalf. The tool-set gate already drops
+    // device-only MCP would access the creator's device or private network
+    // on a visitor's behalf. The tool-set gate already drops
     // these manifests (`applyShareGateToToolSet`); this is the unbypassable
     // dispatch-site check, mirroring `isShareBlockedBuiltinDispatch`.
     if (context.agentShareVisitor && isDeviceOnlyMcp) {
@@ -307,17 +308,20 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // MCP servers only the user's machine can reach must not be called from
-      // the cloud: stdio (the binary lives on the user's machine) and
-      // localhost / private-network HTTP endpoints (the cloud's fetch can't
-      // reach them, #16533). When a device gateway is configured (cloud
-      // deployment), such calls MUST tunnel to a device — with no reachable
-      // device, fail fast with an actionable error instead of spawning the
-      // command / fetching the private URL on the server (the same rule the
-      // classic-path guard in connector exec enforces). Standalone Electron /
-      // self-host (no gateway) falls through to the in-process MCP service
-      // below, which legitimately runs on the user's machine or LAN.
-      if (isDeviceOnlyMcp && deviceGateway.isConfigured) {
+      // Stdio must run on a desktop device. Without a configured gateway or a
+      // reachable device, fail instead of executing the command on the server.
+      // Private HTTP also uses the device when a gateway is configured, while
+      // self-hosted servers without one can still access their LAN over HTTP.
+      if (mcpParams.type === 'stdio' || (isDeviceOnlyMcp && deviceGateway.isConfigured)) {
+        if (!deviceGateway.isConfigured) {
+          const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
+          return {
+            content: message,
+            error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
+            success: false,
+          };
+        }
+
         const tunnelTarget = context.userId
           ? await this.resolveMcpTunnelTarget(context)
           : undefined;
@@ -333,7 +337,7 @@ export class ToolExecutionService {
         return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
       }
 
-      // For stdio (in-process) / http/sse types, use standard MCP service
+      // HTTP MCP endpoints can execute through the server-side MCP service.
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
@@ -349,6 +353,16 @@ export class ToolExecutionService {
       };
     } catch (error) {
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
+      if (isMcpAuthorizationError(error)) {
+        const content = buildMcpAuthorizationErrorContent(identifier, {
+          isShareVisitor: !!context.agentShareVisitor,
+        });
+        return {
+          content,
+          error: { code: 'UNAUTHORIZED', message: (error as Error).message },
+          success: false,
+        };
+      }
       return {
         content: (error as Error).message,
         error: {

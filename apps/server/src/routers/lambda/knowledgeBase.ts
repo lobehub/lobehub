@@ -43,9 +43,23 @@ import {
  */
 const updatableKnowledgeBaseFields = z.object({
   avatar: z.string().nullish(),
+  /** Cover image (preset key or uploaded URL); `null` restores the generated default. */
+  cover: z.string().nullish(),
   description: z.string().nullish(),
   name: z.string().optional(),
 });
+
+/**
+ * The cover lives in the `settings` jsonb next to other library settings, so an
+ * edit merges into the stored object instead of replacing it.
+ */
+export const mergeKnowledgeBaseCover = (
+  settings: unknown,
+  cover: string | null | undefined,
+): Record<string, unknown> => {
+  const { cover: _previous, ...rest } = (settings as Record<string, unknown> | null) ?? {};
+  return cover ? { ...rest, cover } : rest;
+};
 
 const assertKnowledgeItemsAccessible = async (
   ctx: {
@@ -132,6 +146,7 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         avatar: z.string().optional(),
+        cover: z.string().optional(),
         description: z.string().optional(),
         name: z.string(),
         visibility: z.enum(['private', 'public']).optional(),
@@ -142,6 +157,7 @@ export const knowledgeBaseRouter = router({
         avatar: input.avatar,
         description: input.description,
         name: input.name,
+        settings: input.cover ? { cover: input.cover } : undefined,
         visibility: input.visibility,
       });
 
@@ -496,6 +512,12 @@ export const knowledgeBaseRouter = router({
         workspaceId: existing.workspaceId ?? null,
       });
 
-      return ctx.knowledgeBaseModel.update(input.id, input.value);
+      const { cover, ...value } = input.value;
+      return ctx.knowledgeBaseModel.update(
+        input.id,
+        cover === undefined
+          ? value
+          : { ...value, settings: mergeKnowledgeBaseCover(existing.settings, cover) },
+      );
     }),
 });

@@ -57,7 +57,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const [expanded, setExpanded] = useState(false);
-  const [openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+  const [openCanvas, openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+    s.openCanvas,
     s.openDocument,
     s.openFilePreview,
     s.openTaskDetail,
@@ -91,6 +92,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
         return isSafeExternalUrl(openTarget.url)
           ? () => window.open(openTarget.url, '_blank', 'noopener,noreferrer')
           : undefined;
+      }
+      case 'canvas': {
+        return () => openCanvas(openTarget.canvasId, openTarget.version);
       }
       case 'filePreview': {
         return () => openFilePreview({ fileId: openTarget.fileId });

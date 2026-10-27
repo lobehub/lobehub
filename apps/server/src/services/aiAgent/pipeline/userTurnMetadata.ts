@@ -1,4 +1,4 @@
-import type { AgentSenderMetadata } from '@lobechat/types';
+import type { AgentSenderMetadata, ComposerUserMessageMetadata } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
 import type { InternalExecAgentParams } from '../types';
@@ -7,6 +7,8 @@ export interface UserTurnMetadataInput {
   agentSender?: AgentSenderMetadata;
   appContext?: InternalExecAgentParams['appContext'];
   botSender?: InternalExecAgentParams['botSender'];
+  /** What the composer authored for this message (attached content, …). */
+  composerMetadata?: ComposerUserMessageMetadata;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   selectedSkillIds?: string[];
   steer?: boolean;
@@ -22,11 +24,16 @@ export const buildUserTurnMetadata = ({
   agentSender,
   appContext,
   botSender,
+  composerMetadata,
   externalOrigin,
   selectedSkillIds,
   steer,
   trigger,
 }: UserTurnMetadataInput) => ({
+  // The composer's own part of the message, validated by
+  // `ComposerUserMessageMetadataSchema`. Spread first so every server-derived
+  // field below wins over anything a client sent.
+  ...composerMetadata,
   ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
     ? { trigger: trigger as RequestTrigger }
     : undefined),

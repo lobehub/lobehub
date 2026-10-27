@@ -151,14 +151,17 @@ export class TrashService {
     }, stamp.deletedAt);
   };
 
-  trashTopicsByAgent = async (agentId: string, options?: TrashOptions) => {
+  trashTopicsByAgent = async (
+    agentId: string,
+    options?: TrashOptions & { legacySessionId?: string | null },
+  ) => {
     const stamp = this.stampOptions(options);
     return this.commit(async (ctx) => {
       const topics = await new TopicModel(
         ctx.db,
         this.userId,
         this.workspaceId,
-      ).softDeleteByAgentId(agentId, stamp);
+      ).softDeleteByAgentId(agentId, { ...stamp, legacySessionId: options?.legacySessionId });
       return topicCascades(topics);
     }, stamp.deletedAt);
   };

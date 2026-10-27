@@ -78,6 +78,19 @@ export interface ClaudeCodeScopedWeekly {
 /** Account identity resolved from the local CLI config, for DB persistence. */
 export type ClaudeCodeAccountIdentity = QuotaAccountIdentity;
 
+/**
+ * A Claude Code login on one machine. `configDir: null` is the default login
+ * (no `CLAUDE_CONFIG_DIR` override); otherwise the account's own profile.
+ */
+export interface ClaudeCodeLocalAccount {
+  configDir: string | null;
+  identity: ClaudeCodeAccountIdentity;
+}
+
+/** Which local login a run for one provider account must spawn with. */
+export type ClaudeCodeAccountResolution =
+  { kind: 'default' } | { configDir: string; kind: 'profile' } | { kind: 'missing' };
+
 /** One raw limit reading, for fossilizing into the quota data layer. */
 export type ClaudeCodeQuotaReading = QuotaLimitReading;
 

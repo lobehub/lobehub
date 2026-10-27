@@ -24,6 +24,7 @@ export async function applyMainIntent(
     case 'createAssistant': {
       const createMetadata: Record<string, any> = {
         ...heteroProvenance(state, intent.mainMessageId),
+        operationId: state.operationId,
       };
       if (intent.signal) createMetadata.signal = intent.signal;
       // Persist the turn's CC message.id so a cold replica can recover

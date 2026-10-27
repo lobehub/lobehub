@@ -38,12 +38,12 @@ interface UseClientDataSWRWithSyncOptions<T> extends SWRConfiguration<T> {
  * @example
  * ```ts
  * useClientDataSWRWithSync(
- *   isLogin ? sessionKeys.list(scope) : null,
- *   () => sessionService.getGroupedSessions(),
+ *   agentConfigKeys.search(keyword),
+ *   () => agentService.queryAgents({ keyword }),
  *   {
  *     onData: (data) => {
  *       // Auto sync to store, whether cached or fresh data
- *       set({ sessions: data.sessions, isInit: true });
+ *       set({ agents: data, isInit: true });
  *     },
  *     skipSync: state.isInit, // Optional: skip after initialized
  *   }

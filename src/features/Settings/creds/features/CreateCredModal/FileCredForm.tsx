@@ -1,21 +1,17 @@
 'use client';
 
-import { Button, createStaticStyles, Input, TextArea, toast, Upload } from '@lobehub/ui';
+import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-}));
+const styles = stylex.create({
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+});
 
 interface FileCredFormProps {
   credsApi: CredsApi;
@@ -154,7 +150,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         />
       </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
         <Button
           disabled={!fileHashId || disabled}

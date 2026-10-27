@@ -27,6 +27,7 @@ import { fetchChannelContext, resolveFiles } from './inbound';
 import type {
   ActiveReaction,
   BridgeExecutionDeps,
+  BridgeExecutionResult,
   BridgeHandlerOpts,
   StartupFailureParams,
   ThreadState,
@@ -544,21 +545,28 @@ export class AgentBridgeService {
     // ("already has an active execution") until process restart.
     AgentBridgeService.activeThreads.add(thread.id);
 
-    try {
-      // Immediate feedback: mark as received + show typing. Both are
-      // non-essential UX niceties; a transient platform network error here
-      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
-      if (shouldApplyReaction(reactionMode, 'received')) {
-        await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
-      }
-      await safeSideEffect(() => thread.startTyping(), 'startTyping');
+    // A follow-up wake may end in silence, so nothing the user can see (👀, typing, progress
+    // message) is shown until the agent starts acting — see `deferredFeedback` in `./execute`.
+    const wakeKind = opts.wakeKind ?? 'mention';
+    const deferFeedback = wakeKind === 'followup';
 
-      // Transition from "received" to "thinking" right before we hand off to
-      // the agent runtime. The first afterStep hook fires only after the
-      // first LLM call completes (often 5-10s), so without this swap the
-      // user would see 👀 for the entire duration of the first LLM call.
-      if (shouldApplyReaction(reactionMode, 'thinking')) {
-        await this.setReaction(thread, message, opts.client, THINKING_REACTION_EMOJI, botContext);
+    try {
+      if (!deferFeedback) {
+        // Immediate feedback: mark as received + show typing. Both are
+        // non-essential UX niceties; a transient platform network error here
+        // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+        if (shouldApplyReaction(reactionMode, 'received')) {
+          await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
+        }
+        await safeSideEffect(() => thread.startTyping(), 'startTyping');
+
+        // Transition from "received" to "thinking" right before we hand off to
+        // the agent runtime. The first afterStep hook fires only after the
+        // first LLM call completes (often 5-10s), so without this swap the
+        // user would see 👀 for the entire duration of the first LLM call.
+        if (shouldApplyReaction(reactionMode, 'thinking')) {
+          await this.setReaction(thread, message, opts.client, THINKING_REACTION_EMOJI, botContext);
+        }
       }
 
       try {
@@ -574,6 +582,7 @@ export class AgentBridgeService {
           replyLocale,
           topicId,
           trigger: RequestTrigger.Bot,
+          wakeKind,
         });
         queueHandoffSucceeded = queueMode;
       } catch (error) {
@@ -652,7 +661,7 @@ export class AgentBridgeService {
     thread: Thread<ThreadState>,
     userMessage: Message,
     opts: Parameters<typeof executeWithCallback>[3],
-  ): Promise<{ reply: string; topicId: string }> {
+  ): Promise<BridgeExecutionResult> {
     return executeWithCallback(this.executionDeps(), thread, userMessage, opts);
   }
 

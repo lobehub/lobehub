@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKnowledgeBaseTransferMenuItem';
+import { libraryCoverOf } from '@/features/LibraryCover/presets';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -104,9 +105,20 @@ export const useDropdownMenu = ({
 
   const handleEditDescription = useCallback(() => {
     if (!canEdit) return;
+    // The cover rides on the loaded list row, not on this sidebar item's props.
+    const { knowledgeBaseDetailMap, knowledgeBaseListMap } = useKnowledgeBaseStore.getState();
+    const library =
+      knowledgeBaseDetailMap[id] ??
+      Object.values(knowledgeBaseListMap)
+        .flat()
+        .find((item) => item.id === id);
     open({
       id,
-      initialValues: { description: description || '', name },
+      initialValues: {
+        cover: libraryCoverOf(library?.settings),
+        description: description || '',
+        name,
+      },
     });
   }, [canEdit, description, id, name, open]);
 

@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
-import AsyncError from '@/components/AsyncError';
 import ConversationSkeleton from '@/components/Skeleton/Conversation/List';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
@@ -18,6 +17,8 @@ import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
 import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import OtherScopeAsyncError from '@/features/Workspace/OtherScopeAsyncError';
+import { type ScopedLambdaClient } from '@/features/Workspace/useLocateInOtherScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useChatStore } from '@/store/chat';
@@ -55,6 +56,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px 4px;
   `,
 }));
+
+/** A goal 404s outside its own scope; reading it through another scope tells where it lives. */
+const probeGoalGraph = (client: ScopedLambdaClient, id: string, signal: AbortSignal) =>
+  client.goal.graph.query({ id }, { context: { showNotification: false }, signal });
 
 interface GoalDetailPageProps {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -157,7 +162,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // page (or switching goals) must not leak it into the conversation surface.
   useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
 
-  if (error && !snapshot) return <AsyncError error={error} variant={'page'} onRetry={mutate} />;
+  if (error && !snapshot)
+    return (
+      <OtherScopeAsyncError
+        error={error}
+        pendingFallback={<GoalDetailSkeleton />}
+        resourceKey={`goal:${goalId}`}
+        variant={'page'}
+        probe={(client: ScopedLambdaClient, signal: AbortSignal) =>
+          probeGoalGraph(client, goalId, signal)
+        }
+        onRetry={mutate}
+      />
+    );
   if (!snapshot)
     return isLoading ? (
       <GoalDetailSkeleton />

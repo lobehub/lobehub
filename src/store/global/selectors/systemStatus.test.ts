@@ -358,7 +358,6 @@ describe('systemStatusSelectors', () => {
       const items = systemStatusSelectors.sidebarItems(null)(s);
       const spacerIdx = items.indexOf(SIDEBAR_SPACER_ID);
       // every known key is present
-      expect(items).toContain('pages');
       expect(items).toContain('tasks');
       expect(items).toContain('community');
       expect(items).toContain('resource');
@@ -372,7 +371,8 @@ describe('systemStatusSelectors', () => {
       expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 3);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
-      expect(items.indexOf('pages')).toBeGreaterThan(spacerIdx);
+      // Pages live in Docs now; the retired entry is not backfilled
+      expect(items).not.toContain('pages');
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -394,7 +394,6 @@ describe('systemStatusSelectors', () => {
         SIDEBAR_SPACER_ID,
         'image',
         'community',
-        'pages',
         'memory',
       ]);
     });
@@ -418,7 +417,6 @@ describe('systemStatusSelectors', () => {
         SIDEBAR_SPACER_ID,
         'image',
         'community',
-        'pages',
         'memory',
       ]);
     });

@@ -17,6 +17,12 @@ describe('systemPrompt', () => {
     expect(systemPrompt).not.toContain('cannot be started with runTask/runTasks');
   });
 
+  it('embeds instruction images as markdown instead of bare urls', () => {
+    expect(systemPrompt).toContain('![alt](https://...)');
+    expect(systemPrompt).toContain('a bare URL renders as a plain link');
+    expect(systemPrompt).toContain('Never pass a bare URL');
+  });
+
   it('starts a configured cron schedule by default without running it immediately', () => {
     expect(systemPrompt).toContain(
       'start its schedule by default with updateTaskStatus(identifier, "scheduled")',

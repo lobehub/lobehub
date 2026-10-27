@@ -17,6 +17,7 @@ import {
   FileTextIcon,
   FileTypeIcon,
   LinkIcon,
+  PanelsTopLeftIcon,
   PresentationIcon,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -51,7 +52,8 @@ export type WorkOpenTarget =
    * `url` is the already-allowlisted download fallback for surfaces without a
    * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
    */
-  | { fileId: string; kind: 'filePreview'; url?: string };
+  | { fileId: string; kind: 'filePreview'; url?: string }
+  | { canvasId: string; kind: 'canvas'; version?: number };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -159,6 +161,24 @@ const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
 export const WORK_TYPE_DESCRIPTORS: {
   [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  canvas: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => PanelsTopLeftIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) => {
+      if (!item.resourceId) return null;
+      const eventVersion = 'event' in item ? item.event?.version : undefined;
+      const currentVersion = 'version' in item ? item.version?.version : undefined;
+      // Only an older card pins its version; the current card follows edits made after it opened.
+      const pinned = eventVersion && currentVersion && eventVersion < currentVersion;
+      return {
+        canvasId: item.resourceId,
+        kind: 'canvas',
+        ...(pinned ? { version: eventVersion } : {}),
+      };
+    },
+    getTitle: (item) => item.title,
+  },
   document: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => FileTextIcon,

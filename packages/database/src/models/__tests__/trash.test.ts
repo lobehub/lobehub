@@ -6,7 +6,16 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { topics, trashItems, users, widgets, workspaces } from '../../schemas';
+import {
+  agents,
+  messages,
+  sessions,
+  topics,
+  trashItems,
+  users,
+  widgets,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TrashModel } from '../trash';
 
@@ -453,6 +462,157 @@ describe('TrashModel', () => {
       expect(pruned).toBe(1);
       const left = await serverDB.select().from(trashItems).where(eq(trashItems.userId, userId));
       expect(left.map((r) => r.resourceId)).toEqual([stamped.id]);
+    });
+  });
+
+  describe('findByIds', () => {
+    it('short-circuits an empty list and scopes the rest to the owner', async () => {
+      expect(await model.findByIds([])).toEqual([]);
+
+      const mine = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'r-mine', resourceType: 'topic' },
+      });
+      const theirs = await otherModel.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'r-theirs', resourceType: 'topic' },
+      });
+
+      const rows = await model.findByIds([
+        mine.id,
+        theirs.id,
+        '00000000-0000-0000-0000-000000000000',
+      ]);
+      expect(rows.map((r) => r.id)).toEqual([mine.id]);
+    });
+  });
+
+  describe('bulk-removal guards', () => {
+    it('registerMany / removeByIds / removeByResources short-circuit empty input', async () => {
+      expect(
+        await model.registerMany({ cascades: [], deletedAt: at('2026-08-01T00:00:00Z') }),
+      ).toEqual([]);
+      await expect(model.removeByIds([])).resolves.toBeUndefined();
+      await expect(model.removeByResources([])).resolves.toBeUndefined();
+    });
+
+    it('removeByResources deletes the matching root without a transaction', async () => {
+      const root = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'purge_me', resourceType: 'topic' },
+      });
+
+      await model.removeByResources([{ resourceId: 'purge_me', resourceType: 'topic' }]);
+
+      expect(await model.findById(root.id)).toBeUndefined();
+    });
+  });
+
+  describe('removeRootsUnderAgents', () => {
+    it('is a no-op without agents and drops topic/message roots owned by the purged agents', async () => {
+      await model.removeRootsUnderAgents({ agentIds: [], sessionIds: [] });
+
+      await serverDB.insert(agents).values({ id: 'agt_purged', userId });
+      await serverDB.insert(topics).values({ agentId: 'agt_purged', id: 'tpc_root', userId });
+      await serverDB.insert(messages).values({
+        agentId: 'agt_purged',
+        content: 'hi',
+        id: 'msg_root',
+        role: 'user',
+        topicId: 'tpc_root',
+        userId,
+      });
+
+      const topicRoot = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'tpc_root', resourceType: 'topic' },
+      });
+      const messageRoot = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'msg_root', resourceType: 'message' },
+      });
+      const unrelated = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'tpc_keep', resourceType: 'topic' },
+      });
+
+      await model.removeRootsUnderAgents({ agentIds: ['agt_purged'], sessionIds: [] });
+
+      expect(await model.findById(topicRoot.id)).toBeUndefined();
+      expect(await model.findById(messageRoot.id)).toBeUndefined();
+      expect(await model.findById(unrelated.id)).toBeDefined();
+    });
+
+    it('matches legacy session shells and runs inside a caller transaction', async () => {
+      await serverDB.insert(sessions).values({ id: 'sess_1', slug: 'sess-1', userId });
+      await serverDB.insert(topics).values({ id: 'tpc_sess', sessionId: 'sess_1', userId });
+      const root = await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'tpc_sess', resourceType: 'topic' },
+      });
+
+      await serverDB.transaction(async (tx) => {
+        await model.removeRootsUnderAgents({ agentIds: ['agt_x'], sessionIds: ['sess_1'] }, tx);
+      });
+
+      expect(await model.findById(root.id)).toBeUndefined();
+    });
+  });
+
+  describe('list cursor decoding', () => {
+    it('ignores a cursor that cannot describe a keyset position', async () => {
+      const cursorOf = (raw: string) => Buffer.from(raw).toString('base64url');
+
+      for (const bad of [
+        cursorOf('no-separator'),
+        cursorOf('not-a-number:abc'),
+        cursorOf('123:'),
+      ]) {
+        await expect(model.list({ cursor: bad })).resolves.toBeTruthy();
+      }
+    });
+  });
+
+  describe('listAllRootIds + sweep helpers', () => {
+    it('caps the returned ids when a limit is given', async () => {
+      for (let i = 0; i < 3; i++) {
+        await model.register({
+          deletedAt: at(`2026-08-0${i + 1}T00:00:00Z`),
+          root: { projectId: null, resourceId: `cap_${i}`, resourceType: 'topic' },
+        });
+      }
+
+      expect(await model.listAllRootIds({ limit: 2 })).toHaveLength(2);
+    });
+
+    it('lists expired roots across users honouring a caller-supplied now', async () => {
+      await model.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: { projectId: null, resourceId: 'expired', resourceType: 'topic' },
+      });
+
+      const rows = await TrashModel.listExpiredRoots(serverDB, {
+        limit: 10,
+        now: at('2030-01-01T00:00:00Z'),
+      });
+      expect(rows.some((r) => r.resourceId === 'expired')).toBe(true);
+
+      // omitting `now` falls back to the wall clock
+      await expect(TrashModel.listExpiredRoots(serverDB, { limit: 10 })).resolves.toBeDefined();
+    });
+
+    it('registerMany runs inside a caller transaction', async () => {
+      const roots = await serverDB.transaction(async (tx) =>
+        model.registerMany(
+          {
+            cascades: [{ root: { projectId: null, resourceId: 'tx_root', resourceType: 'topic' } }],
+            deletedAt: at('2026-08-01T00:00:00Z'),
+          },
+          tx,
+        ),
+      );
+
+      expect(roots.map((r) => r.resourceId)).toEqual(['tx_root']);
     });
   });
 });

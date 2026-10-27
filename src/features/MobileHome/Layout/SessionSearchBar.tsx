@@ -7,19 +7,17 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHomeStore } from '@/store/home';
-import { useSessionStore } from '@/store/session';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+
+import { useAgentSearch } from './AgentSearchContext';
 
 const SessionSearchBar = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('chat');
   const isLoaded = useUserStore((s) => s.isLoaded);
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.Search));
 
-  const [keywords, updateSearchKeywords] = useSessionStore((s) => [
-    s.sessionSearchKeywords,
-    s.updateSearchKeywords,
-  ]);
+  const { keywords, setKeywords: updateSearchKeywords } = useAgentSearch();
   const useSearchAgents = useHomeStore((s) => s.useSearchAgents);
 
   const { isValidating } = useSearchAgents(keywords?.trim() || undefined);

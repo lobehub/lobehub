@@ -1,4 +1,4 @@
-import type { ChatTopicBotContext } from '@lobechat/types';
+import type { BotNoReplyResult, BotWakeKind, ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -39,6 +39,19 @@ export interface BridgeHandlerOpts {
    * to inferring from `botContext.platform`, then to English.
    */
   replyLocale?: BotReplyLocale;
+  /**
+   * How the bot was woken. `followup` lets the agent end in silence and holds back every visible
+   * side effect (reaction, typing, progress message) until it decides to speak; `mention`
+   * (the default) is the always-answer path and is unchanged.
+   */
+  wakeKind?: BotWakeKind;
+}
+
+/** What an execution resolves with. `noReply` is set when the agent chose silence. */
+export interface BridgeExecutionResult {
+  noReply?: BotNoReplyResult;
+  reply: string;
+  topicId: string;
 }
 
 /** Snapshot of the emoji currently applied to a given user message. */

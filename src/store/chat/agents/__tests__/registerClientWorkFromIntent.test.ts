@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   deleteTaskWork: vi.fn(),
   handleSkillToolResult: vi.fn(),
   refreshConversation: vi.fn(),
+  registerCanvas: vi.fn(),
   registerDocument: vi.fn(),
   registerTask: vi.fn(),
 }));
@@ -14,6 +15,7 @@ vi.mock('@/services/work', () => ({
     deleteTaskWork: mocks.deleteTaskWork,
     handleSkillToolResult: mocks.handleSkillToolResult,
     refreshConversation: mocks.refreshConversation,
+    registerCanvas: mocks.registerCanvas,
     registerDocument: mocks.registerDocument,
     registerTask: mocks.registerTask,
   },
@@ -55,6 +57,46 @@ describe('registerClientWorkFromIntent', () => {
     mocks.deleteTaskWork.mockResolvedValue(undefined);
     mocks.handleSkillToolResult.mockResolvedValue({ id: 'skill-work-1' });
     mocks.refreshConversation.mockResolvedValue(undefined);
+  });
+
+  describe('canvas', () => {
+    it('registers the saved canvas version with the cumulative cost', async () => {
+      const metadata = {
+        entry: 'index.html',
+        fileCount: 2,
+        manifestKey: 'canvas/u/cvs_1/manifests/a.json',
+        runtimeMajor: 1,
+        totalSize: 40,
+      };
+      await registerClientWorkFromIntent({
+        ...base,
+        intent: {
+          action: 'register',
+          canvas: {
+            canvasId: 'cvs_1',
+            description: 'Up',
+            metadata,
+            title: 'Cost',
+            toolName: 'createCanvas',
+          },
+          type: 'canvas',
+        },
+        sourceToolIdentifier: 'lobe-canvas',
+        sourceToolName: 'createCanvas',
+      });
+
+      expect(mocks.registerCanvas).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canvasId: 'cvs_1',
+          cumulativeCost: 0.011,
+          metadata,
+          title: 'Cost',
+          toolCallId: 'tool-call-1',
+          toolIdentifier: 'lobe-canvas',
+          topicId: 'topic-1',
+        }),
+      );
+    });
   });
 
   describe('task', () => {

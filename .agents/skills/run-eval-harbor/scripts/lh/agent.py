@@ -83,8 +83,7 @@ class LhInstalledAgent(BaseInstalledAgent):
         context: AgentContext,
     ) -> None:
         del context
-        for command in self._lh.run_commands(self.render_instruction(instruction)):
-            await self.exec_as_agent(environment, command=command)
+        await self._lh.run(environment, self.exec_as_agent, self.render_instruction(instruction))
 
     def populate_context_post_run(self, context: AgentContext) -> None:
         self._lh.populate_context(self.logs_dir, context)

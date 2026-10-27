@@ -36,6 +36,4 @@ export const labPreferSelectors = {
     s.preference.lab?.enableTopicAcceptance ?? s.preference.lab?.enableGoals ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
   enableTopicBugReport: (s: UserState): boolean => s.preference.lab?.enableTopicBugReport ?? false,
-  enableWorkspaceOnboardingV2: (s: UserState): boolean =>
-    s.preference.lab?.enableWorkspaceOnboardingV2 ?? false,
 };

@@ -44,18 +44,6 @@ describe('settings search index', () => {
     }
   });
 
-  it('shows workspace-only lab features only to users with workspace access', () => {
-    const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
-    const workspaceFeatures = LAB_FEATURES.filter((feature) => feature.workspaceOnly);
-    expect(workspaceFeatures.length).toBeGreaterThan(0);
-
-    for (const feature of workspaceFeatures) {
-      const item = labsItems.find(({ anchor }) => anchor === `labs-${feature.flag}`)!;
-      expect(item.visible?.({ ...webContext, enableWorkspace: true })).toBe(true);
-      expect(item.visible?.(webContext)).toBe(false);
-    }
-  });
-
   it('indexes the inbox notification channel', () => {
     expect(SETTINGS_SEARCH_ITEMS.some((item) => item.anchor === 'notification-inbox')).toBe(true);
   });

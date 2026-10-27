@@ -1,6 +1,7 @@
 import { runTimedSinkStage as runTimedStage } from '@lobechat/utils';
 
 import { type TopicItem, topics } from '../../schemas';
+import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import type { TopicModelContext } from './context';
 import type { CreateTopicParams, ModelTimingContext } from './types';
@@ -47,6 +48,9 @@ export const create = async (
       hasSessionId: !!params.sessionId,
     },
   );
+
+  if (topic?.projectId && topic.agentId)
+    await joinTopicAgentsToProjects(ctx.db, { topicIds: [topic.id] });
 
   return topic;
 };

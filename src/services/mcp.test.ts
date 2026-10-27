@@ -13,13 +13,26 @@ const mockElectronIpc = {
   },
 };
 
+const environment = vi.hoisted(() => ({
+  isDesktop: false,
+  deviceGatewayConfigured: undefined as boolean | undefined,
+}));
+
+vi.mock('@/store/serverConfig/store', () => ({
+  getServerConfigStoreState: () => ({
+    serverConfig: { deviceGatewayConfigured: environment.deviceGatewayConfigured },
+  }),
+}));
+
 // Mock dependencies. Spread the real module: the connector slice this service
 // pulls in lazily now reaches the user store chain, which reads `DEFAULT_AGENT`
 // from `@lobechat/const` — a partial factory would break on that missing export.
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   CURRENT_VERSION: '1.0.0',
-  isDesktop: false,
+  get isDesktop() {
+    return environment.isDesktop;
+  },
 }));
 
 vi.mock('@lobechat/utils', () => ({
@@ -36,6 +49,12 @@ vi.mock('@lobechat/utils', () => ({
 }));
 
 vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: {
+    connector: {
+      callTool: { mutate: vi.fn() },
+      getForEdit: { query: vi.fn() },
+    },
+  },
   toolsClient: {
     market: {
       callCloudMcpEndpoint: {
@@ -83,10 +102,106 @@ describe('MCPService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    environment.isDesktop = false;
+    environment.deviceGatewayConfigured = undefined;
     mockGetToolStoreState.mockReturnValue({});
   });
 
   describe('invokeMcpToolCall', () => {
+    describe('stdio connectors', () => {
+      const payload: ChatToolPayload = {
+        id: 'local-call',
+        identifier: 'local-connector',
+        apiName: 'read_file',
+        arguments: '{"path":"test.txt"}',
+        type: 'standalone',
+      };
+      const connector = {
+        id: 'connector-id',
+        identifier: payload.identifier,
+        isEnabled: true,
+        mcpConnectionType: 'stdio',
+      };
+      const detail = {
+        ...connector,
+        mcpStdioConfig: { command: 'node', args: ['mcp.js'], env: { TOKEN: 'fresh-secret' } },
+        tools: [{ toolName: 'read_file', permission: 'auto' }],
+      };
+
+      beforeEach(async () => {
+        environment.isDesktop = true;
+        environment.deviceGatewayConfigured = false;
+        mockGetToolStoreState.mockReturnValue({ connectors: [connector] });
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(detail as never);
+      });
+
+      it('executes through local IPC with fresh configuration when no gateway is configured', async () => {
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        const result = {
+          content: 'local result',
+          state: { content: [{ type: 'text', text: 'local result' }] },
+          success: true,
+        };
+        mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize(result));
+
+        await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
+        expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toEqual({
+          args: { path: 'test.txt' },
+          env: detail.mcpStdioConfig.env,
+          params: { command: 'node', args: ['mcp.js'], name: payload.identifier, type: 'stdio' },
+          toolName: 'read_file',
+        });
+        expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        { desktop: true, gateway: true },
+        { desktop: true, gateway: undefined },
+        { desktop: false, gateway: false },
+      ])(
+        'preserves the server route for desktop=$desktop gateway=$gateway',
+        async ({ desktop, gateway }) => {
+          environment.isDesktop = desktop;
+          environment.deviceGatewayConfigured = gateway;
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          const result = {
+            content: 'server result',
+            state: { content: [{ type: 'text', text: 'server result' }] },
+            success: true,
+          };
+          vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
+
+          await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
+          expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+          expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+        },
+      );
+
+      it.each([
+        { ...detail, isEnabled: false },
+        { ...detail, tools: [] },
+        { ...detail, tools: [{ toolName: 'read_file', permission: 'disabled' }] },
+      ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
+
+        await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow();
+        expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+        expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+      });
+
+      it('does not execute when the protected configuration read is denied', async () => {
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.getForEdit.query).mockRejectedValue(
+          new Error('FORBIDDEN'),
+        );
+
+        await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow('FORBIDDEN');
+        expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      });
+    });
+
     it('should invoke tool call with installed plugin', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');
       const { discoverService } = await import('./discover');
