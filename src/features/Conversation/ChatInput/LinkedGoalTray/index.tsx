@@ -1,8 +1,8 @@
 'use client';
 
 import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
-import { ChevronRight, CircleDashed } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { ChevronRight, CircleAlert, CircleDashed } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
@@ -14,7 +14,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-import { isGoalRequestGenerating, selectLinkedGoals } from './linkedGoals';
+import { isGoalRequestGenerating, linkedGoalConfirmState, selectLinkedGoals } from './linkedGoals';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -48,33 +48,42 @@ const styles = createStaticStyles(({ css }) => ({
  * `confirmed` is false while the row is still the persisted copy: its status,
  * gates and progress are whatever they were when it was stored, so the row
  * names the goal and holds a neutral "confirming" state until the server
- * answers rather than presenting a stale "running" as live.
+ * answers rather than presenting a stale "running" as live. `failed` is that
+ * answer never arriving — the row says so and the click retries instead of
+ * opening, because a row nobody confirmed has no live status to show.
  */
-const LinkedGoalRow = memo<{ confirmed: boolean; item: GoalListItem }>(({ confirmed, item }) => {
+const LinkedGoalRow = memo<{
+  confirmed: boolean;
+  failed?: boolean;
+  item: GoalListItem;
+  onRetry?: () => void;
+}>(({ confirmed, failed, item, onRetry }) => {
   const { t } = useTranslation('chat');
   const openGoal = useChatStore((s) => s.openGoal);
   const { goal, pendingDecisions, taskDone, taskTotal } = item;
-  const open = () => openGoal(goal.id);
+  const activate = failed && onRetry ? onRetry : () => openGoal(goal.id);
   const planning = taskTotal === 0 && (goal.status === 'planning' || goal.status === 'running');
 
   return (
     <Flexbox
       horizontal
       align={'center'}
-      aria-label={t('goalProcess.linked.open')}
+      aria-label={t(failed ? 'goalProcess.linked.retry' : 'goalProcess.linked.open')}
       className={styles.row}
       gap={8}
       role={'button'}
       tabIndex={0}
-      onClick={open}
+      onClick={activate}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        open();
+        activate();
       }}
     >
       {confirmed ? (
         <GoalStatusGlyph size={14} status={goal.status} />
+      ) : failed ? (
+        <Icon color={cssVar.colorWarning} icon={CircleAlert} size={14} />
       ) : (
         <Icon color={cssVar.colorTextQuaternary} icon={CircleDashed} size={14} />
       )}
@@ -93,10 +102,16 @@ const LinkedGoalRow = memo<{ confirmed: boolean; item: GoalListItem }>(({ confir
           </Text>
         )
       )}
-      <Text fontSize={12} style={{ flexShrink: 0 }} type={'secondary'}>
+      <Text
+        fontSize={12}
+        style={{ color: failed ? cssVar.colorWarning : undefined, flexShrink: 0 }}
+        type={failed ? undefined : 'secondary'}
+      >
         {/* A `/goal` run marks its goal running at creation; until the plan lands a Task it is still being planned. */}
         {!confirmed
-          ? t('goalProcess.linked.checking')
+          ? failed
+            ? t('goalProcess.linked.checkFailed')
+            : t('goalProcess.linked.checking')
           : planning
             ? t('goalTask.status.planning')
             : t(goalStatusKey(goal.status))}
@@ -131,9 +146,14 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
       messageStateSelectors.isAIGenerating(s),
     ),
   );
-  useFetchTopicGoals(enabled ? topicId : undefined, goalRequestGenerating);
+  const { error, revalidate } = useFetchTopicGoals(
+    enabled ? topicId : undefined,
+    goalRequestGenerating,
+  );
   const topicGoals = useGoalStore(goalSelectors.topicGoals(topicId));
   const confirmed = useGoalStore(goalSelectors.topicGoalsConfirmed(topicId));
+  const confirmState = linkedGoalConfirmState(confirmed, error);
+  const retry = useCallback(() => void revalidate(), [revalidate]);
 
   const goals = useMemo(
     () => selectLinkedGoals(topicGoals, displayMessages),
@@ -145,7 +165,13 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
   return (
     <Flexbox className={cx(styles.container, topAttached && styles.containerTopAttached)}>
       {goals.map((item) => (
-        <LinkedGoalRow confirmed={confirmed} item={item} key={item.goal.id} />
+        <LinkedGoalRow
+          confirmed={confirmed}
+          failed={confirmState === 'failed'}
+          item={item}
+          key={item.goal.id}
+          onRetry={confirmState === 'failed' ? retry : undefined}
+        />
       ))}
     </Flexbox>
   );
