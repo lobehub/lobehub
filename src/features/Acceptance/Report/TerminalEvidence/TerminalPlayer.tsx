@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import { buildXtermTheme } from '@/features/ChatTerminal/theme';
 
+import { terminalReplayError } from './model';
 import { styles } from './playerStyle';
 import { styles as sharedStyles } from './styles';
 import {
@@ -256,18 +257,30 @@ const TerminalPlayer = memo<{ url: string }>(({ url }) => {
       </div>
     );
 
-  if (error || !timeline || !cast)
+  if (error || !timeline || !cast) {
+    const failure = terminalReplayError(error);
     return (
       <div className={sharedStyles.outputState} role={'alert'}>
-        {error?.kind === 'invalid'
-          ? t('report.terminal.player.invalid', { message: error.message })
-          : error?.kind === 'tooLarge'
-            ? t('report.terminal.player.tooLarge', {
-                size: formatSize(ASCIICAST_LIMITS.maxBytes, 0),
-              })
-            : t('report.terminal.player.failed')}
+        {t(failure.summaryKey, { size: formatSize(ASCIICAST_LIMITS.maxBytes, 0) })}
+        {failure.details && (
+          <details key={url} style={{ maxWidth: '100%' }}>
+            <summary className={sharedStyles.linkButton}>{t('report.terminal.error.show')}</summary>
+            <pre
+              className={sharedStyles.mono}
+              style={{
+                margin: 0,
+                overflowWrap: 'anywhere',
+                textAlign: 'start',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {failure.details}
+            </pre>
+          </details>
+        )}
       </div>
     );
+  }
 
   if (timeline.events.length === 0)
     return <div className={sharedStyles.outputState}>{t('report.terminal.output.empty')}</div>;

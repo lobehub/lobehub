@@ -6,6 +6,30 @@ import {
   type TerminalArtifactKey,
 } from '@lobechat/utils/verify/terminalEvidence';
 
+import type { AsciicastLoadError } from './useAsciicast';
+
+interface TerminalReplayErrorPresentation {
+  details?: string;
+  summaryKey:
+    | 'report.terminal.player.failed'
+    | 'report.terminal.player.tooLarge'
+    | 'report.terminal.player.unplayable';
+}
+
+/** Parser diagnostics belong in the disclosure, never in the readable summary. */
+export const terminalReplayError = (
+  error: AsciicastLoadError | null,
+): TerminalReplayErrorPresentation => {
+  if (error?.kind === 'invalid')
+    return { details: error.message, summaryKey: 'report.terminal.player.unplayable' };
+  return {
+    summaryKey:
+      error?.kind === 'tooLarge'
+        ? 'report.terminal.player.tooLarge'
+        : 'report.terminal.player.failed',
+  };
+};
+
 /**
  * Pure decisions behind the terminal evidence card: which files back which
  * view, how an outcome reads, and how a search filters the output. Kept out of

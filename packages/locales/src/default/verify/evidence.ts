@@ -104,8 +104,8 @@ export const verifyEvidenceMessages = {
     "Couldn't load the recording. The text output is still available.",
   'report.terminal.player.idleCompressed':
     'Pauses longer than {{seconds}}s are shortened. Recorded length: {{duration}}.',
-  'report.terminal.player.invalid':
-    "This recording can't be replayed ({{message}}). The text output is still available.",
+  'report.terminal.player.unplayable':
+    "This recording can't be replayed. The text output is still available.",
   'report.terminal.player.markers': 'Markers',
   'report.terminal.player.pause': 'Pause',
   'report.terminal.player.play': 'Play',

@@ -10,6 +10,7 @@ import {
   terminalFoldTitle,
   terminalOutcomeLabel,
   terminalOutcomeTone,
+  terminalReplayError,
 } from './model';
 
 const SHA = 'a'.repeat(64);
@@ -270,5 +271,28 @@ describe('splitTerminalLines', () => {
     expect(splitTerminalLines('a\nb\n')).toEqual(['a', 'b']);
     expect(splitTerminalLines('a\n\n')).toEqual(['a', '']);
     expect(splitTerminalLines('')).toEqual(['']);
+  });
+});
+
+describe('terminalReplayError', () => {
+  it('keeps a parser failure out of the translated summary and retains it as optional details', () => {
+    const message = 'Line 2: event time must be a non-negative number';
+    expect(terminalReplayError({ kind: 'invalid', message })).toEqual({
+      details: message,
+      summaryKey: 'report.terminal.player.unplayable',
+    });
+  });
+
+  it('preserves the size-limit summary without parser details', () => {
+    expect(terminalReplayError({ kind: 'tooLarge' })).toEqual({
+      summaryKey: 'report.terminal.player.tooLarge',
+    });
+  });
+
+  it('uses the load failure summary when no valid recording is available', () => {
+    expect(terminalReplayError({ kind: 'failed' })).toEqual({
+      summaryKey: 'report.terminal.player.failed',
+    });
+    expect(terminalReplayError(null)).toEqual({ summaryKey: 'report.terminal.player.failed' });
   });
 });
