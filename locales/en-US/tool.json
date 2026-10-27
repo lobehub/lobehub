@@ -109,6 +109,8 @@
   "connector.disconnect": "Disconnect",
   "connector.edit": "Edit",
   "connector.edit.success": "Connector updated",
+  "connector.error.network": "The network connection was interrupted. Check your connection and try again.",
+  "connector.error.stdioDesktopOnly": "Stdio connectors can only sync in the desktop app. Open LobeHub Desktop to sync this connector.",
   "connector.manageOnlyCreator": "Only the creator or a workspace owner can manage this connector",
   "connector.noTools": "No tool permissions to configure.",
   "connector.notConnected": "Not connected",

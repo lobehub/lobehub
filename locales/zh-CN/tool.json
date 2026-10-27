@@ -109,6 +109,8 @@
   "connector.disconnect": "断开连接",
   "connector.edit": "编辑",
   "connector.edit.success": "连接器已更新",
+  "connector.error.network": "网络连接已中断，请检查网络后重试。",
+  "connector.error.stdioDesktopOnly": "stdio 连接器只能在桌面端同步，请打开 LobeHub 桌面端同步此连接器。",
   "connector.manageOnlyCreator": "仅创建者或工作区 Owner 可以管理此连接器",
   "connector.noTools": "暂无可配置权限的工具。",
   "connector.notConnected": "未连接",

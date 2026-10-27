@@ -810,6 +810,8 @@ export const connectorRouter = router({
       try {
         return await syncConnectorToolsById(input.id, ctx);
       } catch (err: any) {
+        // Keep actionable rejections and their structured reason for the client.
+        if (err instanceof TRPCError) throw err;
         throw new TRPCError({
           cause: err,
           code: 'INTERNAL_SERVER_ERROR',

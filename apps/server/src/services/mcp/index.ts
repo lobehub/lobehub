@@ -1,6 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import {
   type CheckMcpInstallResult,
+  ConnectorErrorCode,
   type CustomPluginMetadata,
   type LobeChatPluginApi,
   type ToolManifest,
@@ -272,6 +273,7 @@ export class MCPService {
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
     if (params.type === 'stdio' && !isDesktop) {
       throw new TRPCError({
+        cause: { data: { code: ConnectorErrorCode.StdioDesktopOnly } },
         code: 'BAD_REQUEST',
         message: 'Stdio MCP type is not supported in web environment.',
       });

@@ -101,6 +101,7 @@ describe('MCPService stdio authorization', () => {
 
   it('rejects connector tool sync on the web before initializing a stdio client', async () => {
     await expect(new MCPService().listRawTools(stdioParams)).rejects.toMatchObject({
+      cause: { data: { code: 'StdioDesktopOnly' } },
       code: 'BAD_REQUEST',
       message: 'Stdio MCP type is not supported in web environment.',
     });

@@ -15,6 +15,7 @@ import { type ConnectorActionError, toConnectorActionError } from '@/utils/conne
 
 import ConnectorActionErrorText from '../ConnectorActionErrorText';
 import CustomConnectorModal from '../CustomConnectorModal';
+import { formatConnectorActionErrorToast } from '../formatConnectorActionError';
 import { getLocalizedConnectorDetail } from './localization';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
@@ -122,7 +123,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const notifyActionError = useCallback(
       (error: unknown) => {
         if (settlePermissionRejection(error)) return;
-        toast.error(t('connector.actionFailed', 'Operation failed, please try again'));
+        toast.error(formatConnectorActionErrorToast(t, error));
       },
       [settlePermissionRejection, t],
     );
