@@ -362,7 +362,7 @@ describe('DiscordGatewayClient', () => {
     it('names every mention and only strips the leading self mention', () => {
       const client = createNumericClient();
       expect(client.sanitizeUserInput!('<@111> 我搞了个 <@2000> 来抢你的活', { raw } as any)).toBe(
-        '@Shadow Arvin 我搞了个 @Lobo 来抢你的活',
+        '@Shadow Arvin (<@111>) 我搞了个 @Lobo 来抢你的活',
       );
       expect(client.sanitizeUserInput!('<@2000> /new', { raw } as any)).toBe('/new');
     });
@@ -370,7 +370,7 @@ describe('DiscordGatewayClient', () => {
     it('resolveMentions keeps the self mention as a name', () => {
       const client = createNumericClient();
       expect(client.resolveMentions!('<@2000> hi <@111>', { raw } as any)).toBe(
-        '@Lobo hi @Shadow Arvin',
+        '@Lobo hi @Shadow Arvin (<@111>)',
       );
     });
   });

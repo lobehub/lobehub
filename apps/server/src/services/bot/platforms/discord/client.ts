@@ -486,7 +486,7 @@ class DiscordGatewayClient implements PlatformClient {
   }
 
   resolveMentions(text: string, message?: unknown): string {
-    return resolveDiscordMentions(text, collectDiscordMentionNames(message));
+    return resolveDiscordMentions(text, collectDiscordMentionNames(message), this.applicationId);
   }
 
   sanitizeUserInput(text: string, message?: unknown): string {
