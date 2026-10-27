@@ -1,8 +1,4 @@
-import {
-  type ChatToolPayload,
-  type RuntimeStepContext,
-  type SubAgentCallbacks,
-} from '@lobechat/types';
+import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import debug from 'debug';
 
 import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
@@ -85,7 +81,7 @@ export class PluginTypesActionImpl {
 
     // Check if there's a registered executor in Tool Store (new architecture)
     if (await hasExecutor(payload.identifier, payload.apiName)) {
-      const { optimisticUpdateToolMessage, registerAfterCompletionCallback } = this.#get();
+      const { optimisticUpdateToolMessage } = this.#get();
 
       // Get operation context
       const operationId = this.#get().messageOperationMap[id];
@@ -132,47 +128,13 @@ export class PluginTypesActionImpl {
         groupId = getChatGroupStoreState().activeGroupId;
       }
 
-      // Get group orchestration callbacks if available (for group management tools)
-      const groupOrchestration = this.#get().getGroupOrchestrationCallbacks?.();
-
-      // Sub-agent runner injected for sub-agent-spawning tools (lobe-agent.callSubAgent).
-      // Runs the sub-agent in an isolated thread using the current client runtime
-      // and resolves with its output, so the tool returns a normal tool result.
-      const subAgentParentOperationId = rootRuntimeOperationId ?? operationId;
-      const subAgent: SubAgentCallbacks = {
-        run: (runParams) => {
-          if (!agentId || !topicId) {
-            return Promise.resolve({
-              error: 'No agent context available for sub-agent execution',
-              result: 'No agent context available for sub-agent execution',
-              success: false,
-              threadId: '',
-            });
-          }
-          return this.#get().runClientSubAgent({
-            ...runParams,
-            agentId,
-            parentOperationId: subAgentParentOperationId,
-            topicId,
-          });
-        },
-      };
-
-      // Create registerAfterCompletion function that registers callback to root runtime operation
-      const registerAfterCompletion = rootRuntimeOperationId
-        ? (callback: Parameters<typeof registerAfterCompletionCallback>[1]) => {
-            registerAfterCompletionCallback(rootRuntimeOperationId!, callback);
-          }
-        : undefined;
-
       log(
-        '[invokeBuiltinTool] Using Tool Store executor: %s/%s, messageId=%s, agentId=%s, groupId=%s, hasGroupOrchestration=%s, rootRuntimeOp=%s, stepContext=%O',
+        '[invokeBuiltinTool] Using Tool Store executor: %s/%s, messageId=%s, agentId=%s, groupId=%s, rootRuntimeOp=%s, stepContext=%O',
         payload.identifier,
         payload.apiName,
         id,
         agentId,
         groupId,
-        !!groupOrchestration,
         rootRuntimeOperationId,
         !!stepContext,
       );
@@ -200,7 +162,6 @@ export class PluginTypesActionImpl {
           anchorMessageId,
           documentId,
           groupId,
-          groupOrchestration,
           isSubAgent,
           // Only the in-process desktop path reaches here; gateway-routed runs
           // get the same decision from the server device-proxy. Both funnel
@@ -208,7 +169,6 @@ export class PluginTypesActionImpl {
           ...resolveClientLocalSandbox(agentId),
           messageId: id,
           operationId,
-          registerAfterCompletion,
           rootOperationId: rootRuntimeOperationId ?? operationId,
           scope,
           signal: operation?.abortController?.signal,
@@ -217,7 +177,6 @@ export class PluginTypesActionImpl {
             rootRuntimeOperationContext?.sourceMessageId ??
             rootRuntimeOperationContext?.messageId,
           stepContext,
-          subAgent,
           taskId,
           threadId,
           toolCallId: payload.id,

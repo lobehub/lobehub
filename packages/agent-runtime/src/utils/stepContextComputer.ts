@@ -27,7 +27,7 @@ export interface ComputeStepContextParams {
 /**
  * Compute the Step Context from pre-computed values
  *
- * Called in executeClientAgent while loop before each runtime.step() call.
+ * Called by the agent runtime loop before each runtime.step() call.
  * The stepContext is then passed through AgentRuntimeContext to Tool Executors.
  *
  * Note: The actual data (like todos) should be computed using selectors in the UI layer

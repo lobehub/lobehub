@@ -77,6 +77,23 @@ Example:
 HEADLESS=false BASE_URL=http://localhost:3000 npm run test:smoke
 ```
 
+### Agent runs (gateway + LLM mock)
+
+Agents run on the server and stream to the browser over the Agent Gateway; the
+browser has no runtime of its own. Scenarios that send a message therefore need:
+
+- an Agent Gateway the server pushes to, e.g. the self-hosted one:
+  `docker run -d --network host -e SERVICE_TOKEN=<token> -e JWKS_PUBLIC_KEY="$JWKS_KEY" ghcr.io/lobehub/lobehub-gateway:0.5.0`,
+  with `AGENT_GATEWAY_URL=http://localhost:8787`, `ENABLE_AGENT_GATEWAY=1` and
+  `AGENT_GATEWAY_SERVICE_TOKEN=<token>` on the app server;
+- the default provider pointed at the E2E LLM mock endpoint
+  (`src/mocks/llm/server.ts`, port `E2E_LLM_MOCK_PORT`, default `3990`):
+  `DEEPSEEK_API_KEY=e2e-mock-key DEEPSEEK_PROXY_URL=http://127.0.0.1:3990/v1`.
+  The Cucumber run starts the endpoint itself; the built-in web server sets
+  these two variables, an external `BASE_URL` server must set them.
+
+`.github/workflows/e2e.yml` sets all of this up in CI.
+
 ## Writing Tests
 
 ### Feature Files

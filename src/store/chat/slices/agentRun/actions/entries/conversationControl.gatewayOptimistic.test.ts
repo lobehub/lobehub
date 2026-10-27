@@ -2,7 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import * as roundCursorPage from '@/services/message/roundCursorPage';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
@@ -379,70 +378,5 @@ describe('Gateway approval cards update before the resume returns', () => {
     expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).toHaveBeenCalledWith(
       expect.objectContaining({ batchId: 'batch-1', operationId: 'operation-1' }),
     );
-  });
-});
-
-describe('Client runtime approval cards', () => {
-  const setupClient = () => {
-    const { result } = renderHook(() => useChatStore());
-    vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(false);
-    vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockRejectedValue(
-      new Error('save failed'),
-    );
-    vi.spyOn(result.current, 'executeClientAgent').mockResolvedValue(undefined as any);
-    return { result };
-  };
-
-  it('restores the pending card when persisting the approval fails', async () => {
-    seedPendingTools(['tool-1']);
-    const { result } = setupClient();
-
-    await act(async () => {
-      await expect(result.current.approveToolCalling('tool-1', '')).rejects.toThrow('save failed');
-    });
-
-    expect(interventionOf('tool-1')).toMatchObject({ status: 'pending' });
-    expect(result.current.executeClientAgent).not.toHaveBeenCalled();
-  });
-
-  it('reloads a partial head window before resuming the client runtime', async () => {
-    seedPendingTools(['tool-1']);
-    const { result } = renderHook(() => useChatStore());
-    vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(false);
-    vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined as any);
-    const order: string[] = [];
-    vi.spyOn(result.current, 'refreshMessages').mockImplementation(async () => {
-      order.push('refresh');
-    });
-    vi.spyOn(result.current, 'executeClientAgent').mockImplementation(async () => {
-      order.push('run');
-      return undefined as any;
-    });
-    vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
-      context: {},
-      state: {},
-    } as any);
-    vi.spyOn(roundCursorPage, 'isPartialHeadWindow').mockImplementation(
-      (context) => context.topicId === topicId,
-    );
-
-    await act(async () => {
-      await result.current.approveToolCalling('tool-1', '');
-    });
-
-    expect(order).toEqual(['refresh', 'run']);
-  });
-
-  it('restores the pending card when persisting the rejection fails', async () => {
-    seedPendingTools(['tool-1']);
-    const { result } = setupClient();
-
-    await act(async () => {
-      await expect(
-        result.current.rejectAndContinueToolCalling('tool-1', 'not now'),
-      ).rejects.toThrow('save failed');
-    });
-
-    expect(interventionOf('tool-1')).toMatchObject({ rejectedReason: '', status: 'pending' });
   });
 });

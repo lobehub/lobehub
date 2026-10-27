@@ -36,7 +36,6 @@ beforeEach(() => {
 
   act(() => {
     useChatStore.setState({
-      executeClientAgent: vi.fn(),
       executeGatewayAgent: vi.fn(),
       isGatewayModeEnabled: () => true,
       mainInputEditor: null,
@@ -110,19 +109,41 @@ describe('sendMessage behind a running Gateway run', () => {
     expect(append.mock.calls[0][0].request).toMatchObject({ contextSelections, pageSelections });
   });
 
-  it('keeps the follow-up in this client when the agent does not run on the Gateway', async () => {
+  // ROOT CAUSE:
+  //
+  // The browser has no agent runtime of its own any more (`🔥 refactor(agent-runtime):
+  // remove the browser client runtime`), so "not a Gateway run" is no longer
+  // reachable through `isGatewayModeEnabled`. What still keeps a follow-up here
+  // is a conversation the server queue cannot address on its own: one thread of
+  // a topic, a group member, a shared or scoped conversation (see
+  // `ownsTopicQueue`).
+  it('keeps the follow-up in this client when the conversation does not own the topic queue', async () => {
+    const threadContext = { ...context, threadId: 'test-thread-id' };
+    const threadKey = messageMapKey(threadContext);
     act(() => {
-      useChatStore.setState({ isGatewayModeEnabled: () => false });
+      useChatStore.setState({
+        operations: {
+          'op-running': {
+            childOperationIds: [],
+            context: threadContext,
+            id: 'op-running',
+            metadata: { serverOperationId: 'op-server' },
+            status: 'running',
+            type: 'execServerAgentRuntime',
+          },
+        } as any,
+        operationsByContext: { [threadKey]: ['op-running'] },
+      });
     });
     const { result } = renderHook(() => useChatStore());
     const append = vi.spyOn(aiAgentService, 'appendQueuedFollowUp');
 
     await act(async () => {
-      await result.current.sendMessage({ context, message: 'also check the tests' });
+      await result.current.sendMessage({ context: threadContext, message: 'also check the tests' });
     });
 
     expect(append).not.toHaveBeenCalled();
-    const [queued] = useChatStore.getState().queuedMessages[contextKey];
+    const [queued] = useChatStore.getState().queuedMessages[threadKey];
     expect(queued.content).toBe('also check the tests');
     expect(queued.serverDelivery).toBeUndefined();
     expect(aiAgentService.setQueuedMessages).toHaveBeenCalledWith({

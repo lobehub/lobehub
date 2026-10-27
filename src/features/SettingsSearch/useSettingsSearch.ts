@@ -127,7 +127,6 @@ export const useSettingsSearch = (
   const { hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const enableChannels = useServerConfigStore(serverConfigSelectors.enableChannels);
-  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
@@ -146,7 +145,6 @@ export const useSettingsSearch = (
       enableBusinessFeatures: !!enableBusinessFeatures,
       enableChannels,
       enableComposio: !!enableComposio,
-      enableGatewayMode: !!enableGatewayMode,
       enableWorkspace: !!enableWorkspace,
       hasEmail,
       hideDocs: !!hideDocs,
@@ -311,7 +309,6 @@ export const useSettingsSearch = (
     enableBusinessFeatures,
     enableChannels,
     enableComposio,
-    enableGatewayMode,
     enableWorkspace,
     hasEmail,
     hideDocs,

@@ -116,16 +116,16 @@ For specific content, please refer to the [Feature Flags](/docs/self-hosting/adv
 ### `ENABLE_AGENT_GATEWAY`
 
 - Type: Optional
-- Description: Enables Gateway Mode for self-hosted deployments. It only takes effect when `AGENT_GATEWAY_URL` is also configured.
+- Description: Enables Gateway Mode for self-hosted deployments. It only takes effect when `AGENT_GATEWAY_URL` and `AGENT_GATEWAY_SERVICE_TOKEN` are also configured.
 - Default: `0`
 - Example: `1`
 
-Business builds enable Gateway Mode automatically. Self-hosted deployments can set `ENABLE_AGENT_GATEWAY=1` together with `AGENT_GATEWAY_URL` to expose Gateway Mode to clients.
+Business builds enable Gateway Mode automatically. Self-hosted deployments can set `ENABLE_AGENT_GATEWAY=1` together with `AGENT_GATEWAY_URL` and `AGENT_GATEWAY_SERVICE_TOKEN` to expose Gateway Mode to clients. Agents only run through the Agent Gateway, so a deployment without all three values cannot run agents.
 
 ### `AGENT_GATEWAY_URL`
 
 - Type: Optional
-- Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend. Browsers open their WebSocket connection to this address, so it must be reachable from the browser.
+- Description: Agent Gateway endpoint used by Gateway Mode to run agents on the backend. Browsers open their WebSocket connection to this address, so it must be reachable from the browser.
 - Default: -
 - Example: `https://agent-gateway.example.com`
 
@@ -146,7 +146,7 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 ### `AGENT_GATEWAY_SERVICE_TOKEN`
 
 - Type: Optional
-- Description: Agent Gateway authentication token, used for authentication between Gateway Mode and self-deployed Agent Gateway
+- Description: Agent Gateway authentication token, used for authentication between Gateway Mode and self-deployed Agent Gateway. Self-hosted Gateway Mode stays off without it, because the server cannot forward run events to the gateway
 - Default: -
 - Example: `dev-secret`
 

@@ -25,7 +25,7 @@ describe('canPreviewTopic', () => {
     [string, Partial<TopicHoverEnv>, Partial<typeof row & { groupId: string; status: string }>]
   >([
     ['the flag is off', { enabled: false }, {}],
-    ['the agent runs in the browser', { isProjectedRead: () => false }, {}],
+    ['the read is not projected', { isProjectedRead: () => false }, {}],
     ['the topic is open', { activeTopicId: 'tpc_a' }, {}],
     ['the topic is still being created', { creatingTopicIds: ['tpc_a'] }, {}],
     ['messages are already loaded', { hasLocalMessages: () => true }, {}],

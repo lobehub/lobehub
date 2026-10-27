@@ -18,8 +18,10 @@ works for any LobeHub streaming session.
 `{"type":"auth_failed","reason":"signature verification failed"}` → close
 `1008`. The server→gateway **push** still returns `200` (it uses the static
 `AGENT_GATEWAY_SERVICE_TOKEN`, not JWKS) — so events flow server-side but the
-browser never receives them. That's why client / SSE / online-gateway are all
-**not** a real local closed loop. Confirm the failure shape by hooking
+browser never receives them. That's why the online gateway is **not** a real
+local closed loop (and since the client runtime removal there is no client /
+SSE path to fall back to: without a reachable gateway the send fails with "no
+Agent Gateway configured"). Confirm the failure shape by hooking
 `WebSocket` in the page and reading the first frame after the `auth` send.
 
 **Fix — run the gateway yourself.** The gateway worker lives in a **sibling
@@ -58,6 +60,22 @@ node .agents/acceptance/scripts/agent-gateway/local-gateway-probe.mjs
 #      ENABLE_AGENT_GATEWAY=1                     (→ serverConfig.enableGatewayMode)
 ```
 
+**Alternative — the self-hosted Go gateway container** (what E2E runs; no sibling
+repo or `.dev.vars` needed). The `init-dev-env.sh` env already provides
+`AGENT_GATEWAY_SERVICE_TOKEN` and `JWKS_KEY`:
+
+```bash
+docker run -d -p <port>:8787 \
+  -e SERVICE_TOKEN="$AGENT_GATEWAY_SERVICE_TOKEN" \
+  -e JWKS_PUBLIC_KEY="$JWKS_KEY" \
+  ghcr.io/lobehub/lobehub-gateway:0.5.0
+# then start the app with
+#   AGENT_GATEWAY_URL=http://localhost:<port> ENABLE_AGENT_GATEWAY=1
+```
+
+Still run the JWT probe (step 3, `GATEWAY_WS=ws://localhost:<port>`) before
+trusting it.
+
 Key facts the setup relies on: `JWKS_PUBLIC_KEY` is just `JWKS_KEY` with the
 private fields (`d,p,q,dp,dq,qi`) stripped — same `kid`, so signatures verify.
 The app's gateway URL flows `AGENT_GATEWAY_URL` →
@@ -75,14 +93,14 @@ exactly why the gateway must already trust the signing key via
 
 `scripts/agent-gateway/`
 
-| File                      | Role                                                              |
-| ------------------------- | ----------------------------------------------------------------- |
-| `local-gateway-setup.sh`  | Writes `agent-gateway/.dev.vars` from the app's `.env.local`      |
-| `local-gateway-probe.mjs` | Signs an app JWT, asserts the local gateway returns auth\_success |
-| `probe.js`                | Injects a 200ms sampler + `__PROBE_EVENT` marker + `__switchTab`  |
-| `probe-dump.js`           | Stops the sampler and returns `{events, samples}` as JSON string  |
-| `tab-switch.js`           | Runs N round-trip switches between two tabs, marks each step      |
-| `analyze.mjs`             | Node post-processor: timeline + regression detection              |
+| File                      | Role                                                             |
+| ------------------------- | ---------------------------------------------------------------- |
+| `local-gateway-setup.sh`  | Writes `agent-gateway/.dev.vars` from the app's `.env.local`     |
+| `local-gateway-probe.mjs` | Signs an app JWT, asserts the local gateway returns auth_success |
+| `probe.js`                | Injects a 200ms sampler + `__PROBE_EVENT` marker + `__switchTab` |
+| `probe-dump.js`           | Stops the sampler and returns `{events, samples}` as JSON string |
+| `tab-switch.js`           | Runs N round-trip switches between two tabs, marks each step     |
+| `analyze.mjs`             | Node post-processor: timeline + regression detection             |
 
 ## Standard workflow
 

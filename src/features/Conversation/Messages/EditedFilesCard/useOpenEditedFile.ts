@@ -164,7 +164,7 @@ export const useOpenEditedFile = () => {
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(activeAgentId);
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled();
 
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,

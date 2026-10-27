@@ -100,7 +100,7 @@ Given('用户已登录系统', async function (this: CustomWorld) {
 Given('用户进入 Lobe AI 对话页面', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 设置 LLM mock...');
   // Setup LLM mock before navigation
-  llmMockManager.setResponse('hello', presetResponses.greeting);
+  await llmMockManager.setResponse('hello', presetResponses.greeting);
   await llmMockManager.setup(this.page);
 
   console.log('   📍 Step: 直接进入 Lobe AI 对话路由...');

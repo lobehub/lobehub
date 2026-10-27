@@ -28,6 +28,10 @@ tags:
   Started](/docs/self-hosting/start) first.
 </Callout>
 
+<Callout type="warning">
+  LobeHub 2.3 and later need an Agent Gateway to run Agents. Set one up before deploying or upgrading: see [Upgrade to LobeHub 2.3 with the Agent Gateway](/docs/self-hosting/migration/v2/agent-gateway).
+</Callout>
+
 ## Deploying on a Linux Server
 
 Here is the process for deploying the LobeHub server database version on a Linux server:
@@ -46,10 +50,10 @@ Here is the process for deploying the LobeHub server database version on a Linux
   The above command will create a Postgres instance named `my-postgres` with the network set to `pg`, where `paradedb/paradedb:latest-pg17` is a Postgres 17 image with the `pgvector` and `pg_search` extensions installed and enabled by default.
 
   <Callout type="info">
-    The ParadeDB image includes pgvector (vector search) and pg\_search (full-text search) plugins, which are important
+    The ParadeDB image includes pgvector (vector search) and pg_search (full-text search) plugins, which are important
     components for LobeHub to implement RAG and knowledge base search.
 
-    It should be noted that the new version of ParadeDB requires explicitly enabling the pg\_search extension in order to be used by LobeHub. Here we explicitly enable pg\_search.
+    It should be noted that the new version of ParadeDB requires explicitly enabling the pg_search extension in order to be used by LobeHub. Here we explicitly enable pg_search.
   </Callout>
 
   <Callout type="warning">

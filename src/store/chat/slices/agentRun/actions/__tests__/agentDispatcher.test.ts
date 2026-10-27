@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { selectRuntimeType } from '../dispatch/agentDispatcher';
+import { type RuntimeSelectionContext, selectRuntimeType } from '../dispatch/agentDispatcher';
 
 const heteroProvider = { command: 'claude', type: 'claude-code' as const };
 const apiHeteroProvider = {
@@ -29,57 +29,45 @@ describe('selectRuntimeType', () => {
   describe('on web (isDesktop = false)', () => {
     const opts = { isDesktop: false };
 
-    it('returns client when no signal is set', () => {
-      expect(selectRuntimeType({ isGatewayMode: false }, opts)).toBe('client');
-    });
-
-    it('returns gateway when gateway mode is enabled', () => {
-      expect(selectRuntimeType({ isGatewayMode: true }, opts)).toBe('gateway');
+    it('returns gateway when no signal is set (there is no client runtime)', () => {
+      expect(selectRuntimeType({}, opts)).toBe('gateway');
     });
 
     it('keeps device-only model providers (Ollama / LM Studio) on gateway', () => {
       // The agent's model provider is deliberately not a routing input: a
       // provider only this device can reach still runs its loop on the server,
       // which relays each LLM attempt back to this client (`agent_llm_relay`).
-      // Falling back to the client runtime here would reintroduce #19624.
-      const localModelAgent = { isGatewayMode: true, model: 'qwen3', provider: 'lmstudio' };
+      // There is no client runtime to fall back to (#19624).
+      const localModelAgent: RuntimeSelectionContext & { model: string; provider: string } = {
+        model: 'qwen3',
+        provider: 'lmstudio',
+      };
       expect(selectRuntimeType(localModelAgent, opts)).toBe('gateway');
     });
 
     it('routes local heterogeneousProvider to gateway on web', () => {
-      expect(
-        selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: true }, opts),
-      ).toBe('gateway');
-      expect(
-        selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: false }, opts),
-      ).toBe('gateway');
+      expect(selectRuntimeType({ heterogeneousProvider: heteroProvider }, opts)).toBe('gateway');
+      expect(selectRuntimeType({ heterogeneousProvider: heteroProvider }, opts)).toBe('gateway');
     });
 
     it('routes remote platform agents (openclaw/hermes) to gateway on web', () => {
-      expect(
-        selectRuntimeType(
-          { heterogeneousProvider: remoteHeteroProvider, isGatewayMode: false },
-          opts,
-        ),
-      ).toBe('gateway');
-      expect(
-        selectRuntimeType(
-          { heterogeneousProvider: remoteHeteroProviderHermes, isGatewayMode: false },
-          opts,
-        ),
-      ).toBe('gateway');
+      expect(selectRuntimeType({ heterogeneousProvider: remoteHeteroProvider }, opts)).toBe(
+        'gateway',
+      );
+      expect(selectRuntimeType({ heterogeneousProvider: remoteHeteroProviderHermes }, opts)).toBe(
+        'gateway',
+      );
     });
 
     it('routes Codex device execution to gateway on Android (isDesktop=false)', () => {
       // Android cannot spawn the CLI in-process. A bound macOS device must go
-      // through Agent Gateway — never the Provider API (`client`).
+      // through Agent Gateway.
       expect(
         selectRuntimeType(
           {
             boundDeviceId: 'macos-device',
             executionTarget: 'device',
             heterogeneousProvider: codexCliProvider,
-            isGatewayMode: false,
           },
           opts,
         ),
@@ -90,7 +78,6 @@ describe('selectRuntimeType', () => {
             boundDeviceId: 'macos-device',
             executionTarget: 'device',
             heterogeneousProvider: codexCliProvider,
-            isGatewayMode: true,
           },
           opts,
         ),
@@ -102,33 +89,39 @@ describe('selectRuntimeType', () => {
     const opts = { isDesktop: true };
 
     it('returns hetero for local CLI agents (claude-code, codex)', () => {
-      expect(
-        selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: true }, opts),
-      ).toBe('hetero');
-      expect(
-        selectRuntimeType({ heterogeneousProvider: heteroProvider, isGatewayMode: false }, opts),
-      ).toBe('hetero');
+      expect(selectRuntimeType({ heterogeneousProvider: heteroProvider }, opts)).toBe('hetero');
+      expect(selectRuntimeType({ heterogeneousProvider: heteroProvider }, opts)).toBe('hetero');
     });
 
     it('routes remote platform agents (openclaw/hermes) to gateway even on desktop', () => {
       // openclaw and hermes use device gateway, not desktop subprocess — must not go to hetero
-      expect(
-        selectRuntimeType(
-          { heterogeneousProvider: remoteHeteroProvider, isGatewayMode: false },
-          opts,
-        ),
-      ).toBe('gateway');
-      expect(
-        selectRuntimeType(
-          { heterogeneousProvider: remoteHeteroProviderHermes, isGatewayMode: false },
-          opts,
-        ),
-      ).toBe('gateway');
+      expect(selectRuntimeType({ heterogeneousProvider: remoteHeteroProvider }, opts)).toBe(
+        'gateway',
+      );
+      expect(selectRuntimeType({ heterogeneousProvider: remoteHeteroProviderHermes }, opts)).toBe(
+        'gateway',
+      );
     });
 
-    it('falls back to gateway/client when no hetero provider', () => {
-      expect(selectRuntimeType({ isGatewayMode: true }, opts)).toBe('gateway');
-      expect(selectRuntimeType({ isGatewayMode: false }, opts)).toBe('client');
+    it('falls back to gateway when no hetero provider', () => {
+      expect(selectRuntimeType({}, opts)).toBe('gateway');
+    });
+  });
+
+  describe('regression: the browser client runtime is gone', () => {
+    it.each([false, true])(
+      'resolves a non-hetero agent without gateway context to gateway (isDesktop=%s)',
+      (isDesktop) => {
+        const result = selectRuntimeType({}, { isDesktop });
+        expect(result).toBe('gateway');
+        expect(result).not.toBe('client');
+      },
+    );
+
+    it('ignores a stale isGatewayMode=false signal from old callers', () => {
+      const legacyCtx = { isGatewayMode: false } as RuntimeSelectionContext;
+      expect(selectRuntimeType(legacyCtx, { isDesktop: false })).toBe('gateway');
+      expect(selectRuntimeType(legacyCtx, { isDesktop: true })).toBe('gateway');
     });
   });
 
@@ -139,7 +132,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: apiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -150,7 +142,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'sandbox',
             heterogeneousProvider: apiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -161,7 +152,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: apiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: false },
         ),
@@ -174,7 +164,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: serverDefaultApiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -185,7 +174,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'sandbox',
             heterogeneousProvider: serverDefaultApiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -196,7 +184,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: serverDefaultApiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: false },
         ),
@@ -209,7 +196,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: codexApiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -220,14 +206,13 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'sandbox',
             heterogeneousProvider: codexApiHeteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
       ).toThrow(/Desktop local execution/);
     });
 
-    it.each(['client', 'gateway'] as const)(
+    it.each(['gateway'] as const)(
       'rejects API mode inherited from the %s parent runtime',
       (parentRuntime) => {
         expect(() =>
@@ -235,7 +220,6 @@ describe('selectRuntimeType', () => {
             {
               executionTarget: 'local',
               heterogeneousProvider: apiHeteroProvider,
-              isGatewayMode: false,
               parentRuntime,
             },
             { isDesktop: true },
@@ -250,7 +234,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: apiHeteroProvider,
-            isGatewayMode: false,
             parentRuntime: 'hetero',
           },
           { isDesktop: true },
@@ -258,7 +241,7 @@ describe('selectRuntimeType', () => {
       ).toBe('hetero');
     });
 
-    it.each(['client', 'gateway', 'hetero'] as const)(
+    it.each(['gateway', 'hetero'] as const)(
       'rejects every %s parent runtime for API mode on web',
       (parentRuntime) => {
         expect(() =>
@@ -266,7 +249,6 @@ describe('selectRuntimeType', () => {
             {
               executionTarget: 'local',
               heterogeneousProvider: apiHeteroProvider,
-              isGatewayMode: false,
               parentRuntime,
             },
             { isDesktop: false },
@@ -281,7 +263,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'device',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -300,7 +281,6 @@ describe('selectRuntimeType', () => {
             boundDeviceId: 'this-desktop-device-id',
             executionTarget: 'device',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -313,7 +293,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'sandbox',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -326,7 +305,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: true },
         ),
@@ -339,7 +317,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
           },
           { isDesktop: false },
         ),
@@ -348,16 +325,10 @@ describe('selectRuntimeType', () => {
 
     it('preserves legacy default when executionTarget is unset (desktop → hetero, web → gateway)', () => {
       expect(
-        selectRuntimeType(
-          { heterogeneousProvider: heteroProvider, isGatewayMode: false },
-          { isDesktop: true },
-        ),
+        selectRuntimeType({ heterogeneousProvider: heteroProvider }, { isDesktop: true }),
       ).toBe('hetero');
       expect(
-        selectRuntimeType(
-          { heterogeneousProvider: heteroProvider, isGatewayMode: false },
-          { isDesktop: false },
-        ),
+        selectRuntimeType({ heterogeneousProvider: heteroProvider }, { isDesktop: false }),
       ).toBe('gateway');
     });
   });
@@ -369,7 +340,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
             workspaceScoped: true,
           },
           { isDesktop: true },
@@ -377,7 +347,7 @@ describe('selectRuntimeType', () => {
       ).toBe('gateway');
       expect(
         selectRuntimeType(
-          { heterogeneousProvider: heteroProvider, isGatewayMode: false, workspaceScoped: true },
+          { heterogeneousProvider: heteroProvider, workspaceScoped: true },
           { isDesktop: true },
         ),
       ).toBe('gateway');
@@ -397,7 +367,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: apiHeteroProvider,
-            isGatewayMode: false,
             isWorkspaceAgent: true,
             workspaceScoped: false,
           },
@@ -410,7 +379,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: codexApiHeteroProvider,
-            isGatewayMode: false,
             isWorkspaceAgent: true,
             workspaceScoped: false,
           },
@@ -425,7 +393,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: serverDefaultApiHeteroProvider,
-            isGatewayMode: false,
             isWorkspaceAgent: true,
             workspaceScoped: false,
           },
@@ -440,7 +407,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: heteroProvider,
-            isGatewayMode: false,
             isWorkspaceAgent: true,
             workspaceScoped: false,
           },
@@ -455,7 +421,6 @@ describe('selectRuntimeType', () => {
           {
             executionTarget: 'local',
             heterogeneousProvider: apiHeteroProvider,
-            isGatewayMode: false,
             isWorkspaceAgent: false,
           },
           { isDesktop: true },
@@ -468,22 +433,14 @@ describe('selectRuntimeType', () => {
     it('parentRuntime wins over every other signal', () => {
       expect(
         selectRuntimeType(
-          {
-            parentRuntime: 'client',
-            heterogeneousProvider: heteroProvider,
-            isGatewayMode: true,
-          },
+          { heterogeneousProvider: heteroProvider, parentRuntime: 'gateway' },
           { isDesktop: true },
         ),
-      ).toBe('client');
-
-      expect(
-        selectRuntimeType({ parentRuntime: 'gateway', isGatewayMode: false }, { isDesktop: false }),
       ).toBe('gateway');
 
-      expect(
-        selectRuntimeType({ parentRuntime: 'hetero', isGatewayMode: true }, { isDesktop: false }),
-      ).toBe('hetero');
+      expect(selectRuntimeType({ parentRuntime: 'gateway' }, { isDesktop: false })).toBe('gateway');
+
+      expect(selectRuntimeType({ parentRuntime: 'hetero' }, { isDesktop: false })).toBe('hetero');
     });
   });
 });
