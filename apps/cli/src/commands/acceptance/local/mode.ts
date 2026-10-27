@@ -1,15 +1,19 @@
-import { getValidToken } from '../../../auth/refresh';
-import { pickAuthSource } from '../../../auth/source';
+import { existsSync } from 'node:fs';
+
+import { credentialsPath, pickAuthSource } from '../../../auth/source';
 
 /**
- * Whether this machine has never signed in to LobeHub: no credential in the
- * environment and no stored login. Such a user gets local reports. A login
+ * Whether this machine has no credential in the environment and no stored
+ * login file. Such a user gets local reports. A login
  * that exists but no longer works is NOT signed out — they expect their
  * acceptance to publish, so the failure must surface instead.
  */
-export const isSignedOut = async (): Promise<boolean> => {
+export const isSignedOut = (): boolean => {
   if (pickAuthSource().kind !== 'stored') return false;
-  return (await getValidToken()).status === 'no-login';
+  // Token lookup also reports `no-login` for expired credentials without a
+  // refresh token, and unreadable files cannot be distinguished by loading.
+  // Leave validation and refresh to the authenticated path, not mode selection.
+  return !existsSync(credentialsPath());
 };
 
 export const LOCAL_MODE_INSTRUCTION =

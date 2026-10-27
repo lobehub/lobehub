@@ -117,7 +117,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     .action(async (options: { json?: boolean | string }) => {
       // Never signed in: nothing to stop on — acceptance runs locally and the
       // report is an offline page. A sign-in that exists but fails still stops.
-      if (await isSignedOut()) {
+      if (isSignedOut()) {
         const instruction = LOCAL_MODE_INSTRUCTION;
         if (options.json !== undefined) {
           outputJson(
