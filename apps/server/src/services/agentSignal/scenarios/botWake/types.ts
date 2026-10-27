@@ -188,6 +188,11 @@ export interface WakeDecision {
 export interface WakeChannelState {
   /** Latest time the bot posted in this channel or its thread. */
   botLastSpokeAt?: number;
+  /**
+   * Platform id of the person whose message last woke the bot in this conversation. The follow-up
+   * window is a follow-up to them: someone else's message in it is not.
+   */
+  followupAuthorId?: string;
   /** End of the follow-up window opened by the bot's last post. */
   followupUntil?: number;
   /** Latest time the bot's owner posted in this channel or its thread. */

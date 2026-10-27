@@ -288,6 +288,23 @@ describe('bot-wake recorder policy set', () => {
     );
   });
 
+  it('remembers who woke the bot on the conversation it will reply in, and nobody it skipped', async () => {
+    const state = { ...fakeState(), recordWakeAuthor: vi.fn(async () => {}) };
+    const recorder = make({ botWake: { enabled: true } }, state);
+
+    recorder.record(
+      observation(
+        { outcome: 'wake', reason: 'explicit-mention', threadId: 'discord:g1:c1:t9' },
+        { isMention: true, text: '<@555> hi' },
+      ),
+    );
+    recorder.record(observation({ threadId: 'discord:g1:c1:t9' }, { id: 'm2' }));
+    await flush();
+
+    expect(state.recordWakeAuthor).toHaveBeenCalledOnce();
+    expect(state.recordWakeAuthor).toHaveBeenCalledWith('discord:app:g1:c1:t9', 'alice-id');
+  });
+
   it('stamps the message with the time it was seen, not when a slow flag read finished', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {

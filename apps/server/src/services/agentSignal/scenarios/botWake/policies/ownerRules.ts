@@ -27,8 +27,10 @@ const deny = (reason: string): WakePolicyResult => ({
  * Returns:
  * - `deny` with the first rule that matched (checked in a fixed order: scope, deny list, allow
  *   list, window, budget, owner presence; owner presence is skipped when the text names the bot)
- * - `allow` when the bot spoke within the follow-up window and nothing denied
- * - `abstain` otherwise: outside the window the owner's rules have no opinion
+ * - `allow` when the bot spoke within the follow-up window, the author is the person whose message
+ *   woke it there, and nothing denied
+ * - `abstain` otherwise: outside the window, or for someone else in it, the owner's rules have no
+ *   opinion
  */
 export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): WakePolicy => ({
   evaluate: ({ signal, state }) => {
@@ -66,7 +68,13 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
       return deny('owner-present');
     }
 
-    if (windowOpen) {
+    // The window follows up on the person the bot answered. Anyone else speaking in it, the owner
+    // included, is more likely answering that person than the bot; the classifier's stricter bar
+    // (`classifier-confident`) may still wake it.
+    const partner = channel?.followupAuthorId;
+    const followsUp = !partner || !signal.author || signal.author.id === partner;
+
+    if (windowOpen && followsUp) {
       return {
         confidence: 0.6,
         reason: 'inside-followup-window',
@@ -85,5 +93,5 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
   id: OWNER_RULES_POLICY_ID,
   mode,
   requires: ['channel', 'conversation'],
-  version: 2,
+  version: 3,
 });

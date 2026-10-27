@@ -314,6 +314,48 @@ describe('owner rules policy', () => {
       name: 'owner presence suppression switched off',
     },
     {
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u1',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['allow', 'inside-followup-window'],
+      name: 'the person the bot answered follows up inside the window',
+    },
+    // "让 agent 用 lh 试试看？" / "我试试": two people talking to each other right after the bot
+    // answered one of them.
+    {
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u2',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['abstain', 'no-owner-rule-opinion'],
+      name: 'someone else speaking inside the window is not a follow-up',
+    },
+    // "你直接进我们的 agent 里面 IM bot 那边配置就好了": the owner answering the person the bot
+    // just helped.
+    {
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u2',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['abstain', 'no-owner-rule-opinion'],
+      name: 'the owner is not a follow-up to a conversation the bot had with someone else',
+      signal: { author: { ...human, id: 'o1', isOwner: true } },
+    },
+    {
+      botWake: { rules: { scope: 'bot-threads' } },
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u2',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['abstain', 'no-owner-rule-opinion'],
+      name: 'bot-threads scope: someone else in the bot thread is left to the classifier',
+    },
+    {
       botWake: { rules: { maxSilentWakes: 1, ownerPresenceSeconds: 120 } },
       channel: { ownerLastSpokeAt: NOW - 1000, silentWakes: 5 },
       expected: ['deny', 'budget-exhausted'],

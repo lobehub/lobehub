@@ -8,6 +8,9 @@ export const PROACTIVE_POLICY_ID = 'bot-wake:proactive';
 /** Messages shorter than this carry no request to act on ("ok", "+1", "嗯"). */
 const MIN_PROACTIVE_MESSAGE_LENGTH = 6;
 
+/** Another person spoke this recently, right before the owner: the owner is answering them. */
+const ANSWERING_OTHER_MS = 2 * 60 * 1000;
+
 export interface WakeProactiveJudgement {
   /** 0..1: how likely the owner would welcome the bot stepping in now. */
   helpful: number;
@@ -50,7 +53,8 @@ const degraded = (reason: string): WakePolicyResult => ({
  * Returns:
  * - `abstain` without a model call for anyone but the owner, for a message too short to act on,
  *   and for a reply to someone else: the owner is answering that person, and the model, which
- *   only sees the text, reads the "你" in it as the assistant
+ *   only sees the text, reads the "你" in it as the assistant. The same for a message right after
+ *   another person spoke (`answering-other`): a conversation between people, reply or not
  * - `abstain` tagged `degraded` when the model errors or answers late: no answer is not a yes
  * - Otherwise `allow` when the score reaches `rules.proactive.threshold`, else `deny`;
  *   `confidence` is the score
@@ -69,6 +73,16 @@ export const createProactivePolicy = (
       signal.replyToAuthorId !== signal.author.id
     ) {
       return abstain('reply-to-other');
+    }
+    const previous = state.conversation?.recent.at(-1);
+    if (
+      previous &&
+      !previous.isBot &&
+      previous.authorId !== undefined &&
+      previous.authorId !== signal.author.id &&
+      signal.timestamp - previous.at < ANSWERING_OTHER_MS
+    ) {
+      return abstain('answering-other');
     }
     if (
       isEmptyOrEmojiOnly(signal.message, signal.hasAttachments) ||
@@ -116,5 +130,5 @@ export const createProactivePolicy = (
   id: PROACTIVE_POLICY_ID,
   mode: rules.proactive.mode,
   requires: ['channel', 'conversation'],
-  version: 1,
+  version: 2,
 });

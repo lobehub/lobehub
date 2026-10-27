@@ -2,14 +2,16 @@
 import { parseBotWakeSettings } from '../botWake/config';
 import type { WakeProactiveJudge } from '../botWake/policies';
 import { createProactivePolicy, PROACTIVE_POLICY_ID } from '../botWake/policies';
-import type { WakeAuthor, WakeSignal } from '../botWake/types';
+import type { WakeAuthor, WakeConversationLine, WakeSignal } from '../botWake/types';
 
 const owner: WakeAuthor = { id: 'o1', isBot: false, isMe: false, isOwner: true, isSystem: false };
+
+const NOW = 1_700_000_000_000;
 
 const signal = (overrides: Partial<WakeSignal> = {}): WakeSignal => ({
   author: owner,
   message: '哎 这个 UI 一眼看上去还是太 vibe 了，得想想怎么refine',
-  timestamp: 1_700_000_000_000,
+  timestamp: NOW,
   ...overrides,
 });
 
@@ -60,6 +62,31 @@ describe('proactive policy', () => {
 
     expect((await reply('bot-app')).verdict).toBe('allow');
     expect((await reply('o1')).verdict).toBe('allow');
+  });
+
+  // "你别一直往里塞太动态的就好了": the owner answering a teammate who just spoke, without using
+  // Discord's reply.
+  it('stays out right after another person spoke, but not after the bot or the owner', async () => {
+    const judge = judgeScoring(1);
+    const after = (line: Partial<WakeConversationLine>, at = NOW - 30_000) =>
+      createProactivePolicy(rules(), judge).evaluate({
+        signal: signal(),
+        state: {
+          conversation: {
+            botNames: ['Nasa'],
+            recent: [
+              { at, authorId: 'teammate', id: 'm0', isBot: false, text: '我先这么改', ...line },
+            ],
+          },
+        },
+      });
+
+    expect(await after({})).toMatchObject({ reason: 'answering-other', verdict: 'abstain' });
+    expect(judge).not.toHaveBeenCalled();
+
+    expect((await after({}, NOW - 5 * 60_000)).verdict).toBe('allow');
+    expect((await after({ authorId: 'bot-app', isBot: true })).verdict).toBe('allow');
+    expect((await after({ authorId: 'o1' })).verdict).toBe('allow');
   });
 
   it('does not ask about a message too short to act on', async () => {

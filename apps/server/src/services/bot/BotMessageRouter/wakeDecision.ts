@@ -161,6 +161,8 @@ export interface WakeStatePort {
     excludeId?: string,
   ) => Promise<WakeConversationLine[] | undefined>;
   recordOwnerSpoke: (keys: readonly string[], at: number) => Promise<void>;
+  /** Remembers whose message woke the bot, on the conversation's own key. */
+  recordWakeAuthor?: (key: string, authorId: string) => Promise<void>;
   /** Keeps the wake decided for a message until its replay. */
   rememberInitiation?: (applicationId: string, messageId: string, value: string) => Promise<void>;
   /** Adds messages to the shared log of every key given. */
@@ -376,6 +378,7 @@ const buildSnapshot = (
 const toChannelState = (fields: BotWakeChannelFields | undefined): WakeChannelState | undefined =>
   fields && {
     botLastSpokeAt: fields.botLastSpokeAt,
+    followupAuthorId: fields.followupAuthorId,
     followupUntil: fields.followupUntil,
     ownerLastSpokeAt: fields.ownerLastSpokeAt,
     silentWakes: fields.silentWakes,
@@ -645,6 +648,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
     if (enabled && signal.author?.isOwner) {
       await state.recordOwnerSpoke(wakeStateKeys(signal.channelKeys!), signal.timestamp);
+    }
+
+    // Who the bot is about to answer: its reply opens the follow-up window on the same key (the
+    // Discord thread it replies in), and only this person's next words follow up on it.
+    if (enabled && observation.outcome === 'wake' && signal.author?.id) {
+      const conversationKey = wakeStateKeys(signal.channelKeys!).at(-1);
+      if (conversationKey) await state.recordWakeAuthor?.(conversationKey, signal.author.id);
     }
 
     // `initiate` may have read the state and run the policies already; do neither twice.
