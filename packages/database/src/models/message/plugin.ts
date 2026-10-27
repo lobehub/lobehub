@@ -258,7 +258,7 @@ export class MessagePluginStore extends MessageScope {
    * 1. Time window — same `topicId` + `threadId`, with the owning message's
    *    `createdAt` inside `[startedAt, completedAt]` (`completedAt` falls back to
    *    now for an op still finalizing). The primary path for in-process runs.
-   * 2. Heterogeneous match — the message carries
+   * 2. Heterogeneous match — a message in the same `topicId` carries
    *    `metadata.heterogeneousToolStateOperationId === operationId` directly,
    *    which a CLI-backed run stamps regardless of when the row lands. Mirrors
    *    the jsonb predicate in {@link findVerifyMessageByOperationId}.
@@ -298,10 +298,13 @@ export class MessagePluginStore extends MessageScope {
     //   every time, since most ops never stamp the key). Looking up the few
     //   matching message ids in a JOIN-free query first, then fetching those rows
     //   by primary key, leaves the planner no join to mis-order: the lookup is
-    //   single-table (index-served once the metadata expression is indexed; a
-    //   bounded scan otherwise) and the fetch is a pure PK access. Kept
-    //   topic-agnostic to preserve the prior behaviour exactly — a late CLI row
-    //   can land outside the op's window (and, rarely, its topic).
+    //   single-table and the fetch is a pure PK access.
+    //   The lookup is bounded by the op's topic, not its window: a late CLI row
+    //   can land after `completedAt`, but the tool message it stamps is always
+    //   one the run wrote into its own topic. The metadata expression has no
+    //   index, so a user-wide lookup filtered every message the user owns
+    //   (1.6M rows, 40s–300s per `heteroFinish` for a heavy user); the topic
+    //   index keeps it to the topic's few thousand rows at most.
     const projection = {
       apiName: messagePlugins.apiName,
       arguments: messagePlugins.arguments,
@@ -336,6 +339,7 @@ export class MessagePluginStore extends MessageScope {
         .where(
           and(
             this.ownership(),
+            eq(messages.topicId, params.topicId),
             sql`${messages.metadata}->>'heterogeneousToolStateOperationId' = ${params.operationId}`,
           ),
         );
