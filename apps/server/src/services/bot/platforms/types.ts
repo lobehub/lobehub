@@ -246,6 +246,15 @@ export interface UsageStats {
 
 // --------------- Platform Client ---------------
 
+/** Behaviour the router asks a platform's Chat SDK patches to adopt. */
+export interface ChatPatchOptions {
+  /**
+   * Asked before the adapter opens a reply thread for an @-mention on its own. `true` keeps the
+   * message in the channel, so the router decides where the reply goes.
+   */
+  deferMentionThread?: () => Promise<boolean>;
+}
+
 /**
  * A client to a specific platform instance, holding credentials and runtime context.
  *
@@ -258,7 +267,15 @@ export interface PlatformClient {
    * Apply platform-specific Chat SDK compatibility patches after bot initialization.
    * Useful for adapter quirks that should stay encapsulated within the platform client.
    */
-  applyChatPatches?: (chatBot: Chat<any>) => void;
+  applyChatPatches?: (chatBot: Chat<any>, options?: ChatPatchOptions) => void;
+
+  /**
+   * Whether a reply to a message in `threadId` could move into a new sub-thread, i.e. the message
+   * sits at the top level of a channel that supports threads. Used to decide whether the bot may
+   * choose between answering in the channel and opening a thread. Omit when the platform never
+   * opens one.
+   */
+  canOpenReplyThread?: (threadId: string) => boolean;
 
   /** Create a Chat SDK adapter config for inbound message handling. */
   createAdapter: () => Record<string, any>;
@@ -361,8 +378,10 @@ export interface PlatformClient {
    * What people call the bot on this platform (display name, username), so a message that says the
    * name is read as addressed to it. Optional: without it the bot is recognised by @mention only.
    * Implementations cache; an error is treated as "no names yet" and retried on the next message.
+   * `platformThreadId`, when given, adds the names the bot goes by in that conversation's server
+   * (a Discord guild nickname).
    */
-  getBotNames?: () => Promise<string[]>;
+  getBotNames?: (platformThreadId?: string) => Promise<string[]>;
 
   // --- Runtime Operations ---
 
@@ -404,7 +423,12 @@ export interface PlatformClient {
    * caught and `undefined` returned so the router falls back to the
    * original threadId rather than swallowing the user message.
    */
-  openThreadForChannelWake?: (threadId: string, messageRaw: unknown) => Promise<string | undefined>;
+  openThreadForChannelWake?: (
+    threadId: string,
+    messageRaw: unknown,
+    /** The new thread's name; the platform's generic name when omitted. */
+    name?: string,
+  ) => Promise<string | undefined>;
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;

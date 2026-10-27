@@ -41,6 +41,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     reactionMode,
     remember,
     serverDB,
+    startReply,
     userId,
     watchKeywordEntries,
     watchKeywords,
@@ -192,62 +193,39 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         }
       }
 
-      if (matchesWatchKeyword || initiation) {
-        // Last check before a keyword wake runs: enforced policies, then the scheduler. Before
-        // the thread below is opened, so a parked message does not leave an empty thread behind.
-        if (
-          (await gateFollowup({
-            entryPoint: 'catchAll',
-            // Already judged by `initiate`: do not judge again. A message addressed to the bot
-            // does not wait for the scheduler's collect window.
-            immediate: initiation?.addressed,
-            initiated: !!initiation,
-            merged,
-            parked: [...(context?.skipped ?? []), message],
-            thread,
-          })) === 'stop'
-        ) {
-          return;
-        }
-
-        // Discord (and any platform that prefers thread isolation) opts
-        // into spawning a sub-thread for the reply via this hook. The
-        // chat-sdk Discord adapter only auto-creates a thread on
-        // @-mention, so without this the keyword wake would clutter the
-        // parent channel with the bot's output. Best-effort: on hook
-        // failure we keep the original thread.id and reply in the
-        // channel rather than dropping the message.
-        if (typeof client.openThreadForChannelWake === 'function') {
-          try {
-            const upgraded = await client.openThreadForChannelWake(
-              thread.id,
-              (message as { raw?: unknown }).raw,
-            );
-            if (upgraded && upgraded !== thread.id) {
-              log(
-                'onNewMessage (%s catch-all): opened reply thread for keyword wake, %s -> %s',
-                platform,
-                thread.id,
-                upgraded,
-              );
-              (thread as { id: string }).id = upgraded;
-            }
-          } catch (error) {
-            log(
-              'onNewMessage (%s catch-all): openThreadForChannelWake threw, posting in channel: %O',
-              platform,
-              error,
-            );
-          }
-        }
+      // Last check before a keyword wake runs: enforced policies, then the scheduler. Before the
+      // reply below is opened, so a parked message does not leave an empty thread behind.
+      if (
+        (matchesWatchKeyword || initiation) &&
+        (await gateFollowup({
+          entryPoint: 'catchAll',
+          // Already judged by `initiate`: do not judge again. A message addressed to the bot
+          // does not wait for the scheduler's collect window.
+          immediate: initiation?.addressed,
+          initiated: !!initiation,
+          merged,
+          parked: [...(context?.skipped ?? []), message],
+          thread,
+        })) === 'stop'
+      ) {
+        return;
       }
-      observe(
-        'catchAll',
-        merged,
+
+      // A wake the bot started itself may end in silence (`NO_REPLY`) and holds back its
+      // reactions and typing until it decides to speak.
+      const wakeKind = initiation ? 'followup' : 'mention';
+      // Where the reply goes and what is said before the run (see `startReply`). Keyword and name
+      // wakes in a channel used to get their own reply thread, since the chat-sdk Discord adapter
+      // only auto-creates one on @-mention; that stays the behaviour when the bot does not decide.
+      const openingReply = await startReply({
+        entryPoint: 'catchAll',
+        legacyOpensThread: matchesWatchKeyword || !!initiation,
+        message: merged,
+        rawMessage: (message as { raw?: unknown }).raw,
+        reason: initiation?.reason ?? (matchesWatchKeyword ? 'watch-keyword' : 'direct-message'),
         thread,
-        'wake',
-        initiation?.reason ?? (matchesWatchKeyword ? 'watch-keyword' : 'direct-message'),
-      );
+        wakeKind,
+      });
       void emitAgentSignalSourceEvent(
         {
           payload: {
@@ -292,13 +270,12 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           charLimit,
           client,
           displayToolCalls,
+          openingReply,
           reactionMode,
           replyLocale,
-          // A wake the bot started itself may end in silence (`NO_REPLY`) and holds back its
-          // reactions and typing until it decides to speak.
-          wakeKind: initiation ? 'followup' : undefined,
           named: initiation?.reason === 'named-in-text',
           proactive: initiation?.reason === 'proactive-help',
+          wakeKind,
         });
       } catch (error) {
         log('onNewMessage: unhandled error from handleMention: %O', error);

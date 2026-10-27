@@ -34,6 +34,11 @@ export interface BridgeHandlerOpts {
    */
   named?: boolean;
   /**
+   * The short acknowledgement already posted before the run ("Got it, I'll check the logs
+   * first"), so the agent continues from it instead of acknowledging again.
+   */
+  openingReply?: string;
+  /**
    * The bot woke on its own to offer its owner help nobody asked for (a `followup` wake); the
    * agent is told why. See `formatBotPlatformContext`.
    */

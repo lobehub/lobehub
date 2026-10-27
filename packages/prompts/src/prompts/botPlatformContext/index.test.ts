@@ -222,4 +222,24 @@ describe('formatBotPlatformContext', () => {
     );
     expect(formatBotPlatformContext(base)).not.toContain('NO_REPLY');
   });
+
+  it('tells the agent the acknowledgement it already posted, so it does not acknowledge twice', () => {
+    const result = formatBotPlatformContext({
+      openingReply: '收到，我先翻下昨天的报错 <日志>',
+      platformName: 'Discord',
+      supportsMarkdown: true,
+    });
+
+    expect(result).toContain('<opening_reply>');
+    expect(result).toContain('"收到，我先翻下昨天的报错 &lt;日志&gt;"');
+    expect(result).toContain('Do not acknowledge again');
+  });
+
+  it('adds no opening block when nothing was posted before the run', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+
+    expect(formatBotPlatformContext({ ...base, openingReply: '  ' })).toBe(
+      formatBotPlatformContext(base),
+    );
+  });
 });

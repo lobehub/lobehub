@@ -144,6 +144,16 @@ const subscribed = async (
     ...extra,
   });
 
+/** A wake that opens a new topic: a channel wake, or a subscribed thread whose topic is gone. */
+const fresh = async (thread: any, client: any, extra: Record<string, unknown> = {}) =>
+  new AgentBridgeService(FAKE_DB, USER_ID).handleMention(thread, message(), {
+    agentId: 'agent-1',
+    botContext,
+    client,
+    replyLocale: 'en-US',
+    ...extra,
+  });
+
 const execParams = () => mockExecAgent.mock.calls[0][0];
 const posted = (thread: any) => thread.post.mock.calls.map((c: any[]) => c[0]);
 
@@ -300,6 +310,37 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
 
       expect(mockRecordNoReplyLabel).not.toHaveBeenCalled();
       expect(posted(thread).at(-1).markdown).toContain('no response content');
+    });
+
+    it('followup that opens a new topic still holds feedback back and may end in silence', async () => {
+      runHooks({
+        onComplete: { lastAssistantContent: 'NO_REPLY', operationId: 'op-1', reason: 'done' },
+      });
+      const { thread } = createThread();
+      const { client, replaceReaction } = createClient();
+
+      await fresh(thread, client, { wakeKind: 'followup' });
+
+      expect(replaceReaction).not.toHaveBeenCalled();
+      expect(thread.startTyping).not.toHaveBeenCalled();
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(execParams().botPlatformContext.wakeKind).toBe('followup');
+      expect(mockRecordNoReplyLabel).toHaveBeenCalledWith(
+        FAKE_DB,
+        expect.objectContaining({ noReply: { reason: 'unspecified' } }),
+      );
+    });
+
+    it('tells the agent the acknowledgement already posted before the run', async () => {
+      runHooks({ onComplete: { lastAssistantContent: 'found it', reason: 'done' } });
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await fresh(thread, client, { openingReply: "Got it, I'll check the logs first." });
+
+      expect(execParams().botPlatformContext.openingReply).toBe(
+        "Got it, I'll check the logs first.",
+      );
     });
 
     it('tells a followup agent it may stay silent', async () => {

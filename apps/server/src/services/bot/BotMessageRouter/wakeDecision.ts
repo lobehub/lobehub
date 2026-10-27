@@ -139,6 +139,8 @@ const TAG_BY_REASON: Record<BotWakeReason, string> = {
 
 export interface BotWakeObservation {
   entryPoint: BotWakeEntryPoint;
+  /** Verdicts of steps after the wake decision itself, such as how the reply was opened. */
+  extraVerdicts?: SignalDecisionVerdict[];
   /** The message as the handler saw it (merged text when the bot was woken). */
   message: WakeMessageLike;
   outcome: 'defer' | 'skip' | 'wake';
@@ -218,10 +220,11 @@ export interface BotWakeRecorderOptions {
   agentId: string;
   applicationId: string;
   /**
-   * What people call this bot (its display names), so a message that says one is read as
-   * addressed to it. Called lazily and only when a message needs judging.
+   * What people call this bot in a conversation (its display names, and its nickname in that
+   * server), so a message that says one is read as addressed to it. Called lazily and only when a
+   * message needs judging.
    */
-  botNames?: () => Promise<readonly string[]>;
+  botNames?: (platformThreadId: string) => Promise<readonly string[]>;
   /** Bot-side config that gates the scenario's shadow policies. */
   botWakeConfig?: BotWakeConfig | null;
   /** Model call for the classifier policy; without it the classifier is not evaluated. */
@@ -263,6 +266,11 @@ export interface BotWakeRecorderOptions {
  * handlers decide exactly as they did before and this runs afterwards, off the request path.
  */
 export interface BotWakeRecorder {
+  /**
+   * The conversation as a judgement sees it: the bot's names, its agent and owner, and the recent
+   * lines of the shared log. Never throws; `undefined` when nothing is known.
+   */
+  conversation: (observation: BotWakeObservation) => Promise<WakeConversation | undefined>;
   /**
    * Decides whether to wake the bot for a message nobody addressed to it. The internal and owner
    * rules start a wake only when the owner switched them to `enforce`; the proactive judge only
@@ -521,9 +529,9 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   // No cache here: the platform client owns the names and refreshes them on its own schedule, so
   // a renamed bot answers to the new name and stops answering to the old one. A failed lookup is
   // retried on the next message.
-  const resolveBotNames = async (): Promise<readonly string[]> => {
+  const resolveBotNames = async (platformThreadId: string): Promise<readonly string[]> => {
     try {
-      return (await options.botNames?.()) ?? [];
+      return (await options.botNames?.(platformThreadId)) ?? [];
     } catch (error) {
       log('bot name lookup failed: %O', error);
 
@@ -547,7 +555,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   ): Promise<WakeConversation | undefined> => {
     const logKey = logKeyFor(observation);
     const [botNames, identity, lines] = await Promise.all([
-      resolveBotNames(),
+      resolveBotNames(observation.threadId),
       resolveIdentity(),
       logKey && state.readRecentMessages
         ? state.readRecentMessages(logKey, CONVERSATION_READ_LINES, observation.message.id)
@@ -674,15 +682,18 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       conversation: summarizeConversation(conversation),
     };
 
-    const verdicts = await buildWakeVerdicts(
-      observation,
-      { ...signal, message: text },
-      policies,
-      enabled,
-      channel,
-      conversation,
-      evaluated?.verdicts,
-    );
+    const verdicts = [
+      ...(await buildWakeVerdicts(
+        observation,
+        { ...signal, message: text },
+        policies,
+        enabled,
+        channel,
+        conversation,
+        evaluated?.verdicts,
+      )),
+      ...(observation.extraVerdicts ?? []),
+    ];
 
     const recorded = await recordSignalDecision(db, {
       agentId,
@@ -738,6 +749,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   };
 
   return {
+    conversation: async (observation) => {
+      try {
+        return await readConversation(observation);
+      } catch (error) {
+        log('conversation read failed: entry=%s %O', observation.entryPoint, error);
+      }
+    },
     isRolledOut: rolledOut,
     judge: async (observation) => {
       const observedAt = Date.now();

@@ -14,6 +14,8 @@ export interface BotPlatformContext {
   currentChannel?: BotPlatformInfo['currentChannel'];
   /** The bot woke only because its name is in the text (see `formatBotPlatformContext`). */
   named?: boolean;
+  /** Acknowledgement already posted before the run (see `formatBotPlatformContext`). */
+  openingReply?: BotPlatformInfo['openingReply'];
   platformName: string;
   /** The bot woke on its own to offer its owner help (see `formatBotPlatformContext`). */
   proactive?: boolean;

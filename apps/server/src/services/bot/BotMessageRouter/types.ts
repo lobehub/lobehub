@@ -170,6 +170,26 @@ export interface BotHandlerContext {
     thread: { id: string },
   ) => void;
   serverDB: LobeChatDatabase;
+  /**
+   * Opens the reply to a message that woke the bot (an acknowledgement, and the channel or a new
+   * thread), records the wake, and returns the acknowledgement it posted. Swaps `thread.id` when a
+   * thread opens.
+   */
+  startReply: (input: {
+    entryPoint: BotWakeEntryPoint;
+    /** The previous behaviour opened a reply thread here; kept when the bot does not decide. */
+    legacyOpensThread?: boolean;
+    message: WakeMessageLike;
+    rawMessage: unknown;
+    reason: BotWakeReason;
+    thread: {
+      id: string;
+      post: (message: string) => Promise<unknown>;
+      startTyping?: () => Promise<unknown>;
+    };
+    threadSubscribed?: boolean;
+    wakeKind: 'followup' | 'mention';
+  }) => Promise<string | undefined>;
   userId: string;
   watchKeywordEntries: WatchKeywordEntry[];
   watchKeywords: ReadonlyArray<string>;

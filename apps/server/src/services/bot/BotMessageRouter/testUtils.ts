@@ -301,6 +301,7 @@ export const platformsModule = async () => ({
   },
   normalizeBotReactionMode: (value: unknown) =>
     value === 'full' || value === 'none' ? value : 'minimal',
+  normalizeBotReplyPlacementMode: (value: unknown) => (value === 'thread' ? 'thread' : 'agent'),
   normalizeBotReplyLocale: (raw: string | undefined | null): string | undefined => {
     if (!raw) return undefined;
     const parts = raw.replaceAll('_', '-').split('-');

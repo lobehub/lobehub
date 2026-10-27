@@ -48,7 +48,7 @@ const ACCESS_KEYS = [
 ];
 
 /** What a reply looks like in the chat. */
-export const REPLY_KEYS = ['displayToolCalls', 'showUsageStats', 'reactionMode'];
+export const REPLY_KEYS = ['replyPlacement', 'displayToolCalls', 'showUsageStats', 'reactionMode'];
 
 /**
  * When the bot speaks up without being @mentioned: first the keywords that wake it, then the
