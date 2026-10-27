@@ -173,7 +173,8 @@ export interface BotHandlerContext {
   /**
    * Opens the reply to a message that woke the bot (an acknowledgement, and the channel or a new
    * thread), records the wake, and returns the acknowledgement it posted. Swaps `thread.id` when a
-   * thread opens.
+   * thread opens. Call `release` once the bridge has taken the run: until then the channel stays
+   * claimed, so a concurrent opening does not pick it too.
    */
   startReply: (input: {
     entryPoint: BotWakeEntryPoint;
@@ -189,7 +190,7 @@ export interface BotHandlerContext {
     };
     threadSubscribed?: boolean;
     wakeKind: 'followup' | 'mention';
-  }) => Promise<string | undefined>;
+  }) => Promise<{ openingReply?: string; release: () => void }>;
   userId: string;
   watchKeywordEntries: WatchKeywordEntry[];
   watchKeywords: ReadonlyArray<string>;

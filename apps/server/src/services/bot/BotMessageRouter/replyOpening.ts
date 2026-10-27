@@ -19,6 +19,45 @@ export const REPLY_OPENER_POLICY_ID = 'reply-opener';
  */
 export const REPLY_OPENER_TIMEOUT_MS = 5000;
 
+/**
+ * How long a channel stays claimed by an opening that never reaches the bridge (an early return or
+ * a thrown error between the two). The handler releases the claim long before this.
+ */
+export const CHANNEL_CLAIM_TTL_MS = 60_000;
+
+/**
+ * Channels an opening has picked whose run has not reached the bridge yet. The bridge only marks a
+ * conversation active once `handleMention` starts, and the acknowledgement is posted before that,
+ * so two openings at once could otherwise both pick the same free channel; the bridge would then
+ * drop the second run and leave its acknowledgement unanswered. Per process, like the bridge's own
+ * active set.
+ */
+const channelClaims = new Map<string, { expiresAt: number; token: symbol }>();
+
+const isClaimed = (channel: string) => {
+  const claim = channelClaims.get(channel);
+  if (!claim) return false;
+  if (claim.expiresAt > Date.now()) return true;
+  channelClaims.delete(channel);
+
+  return false;
+};
+
+/** Claims `channel` until the returned release runs (or the TTL passes). */
+const claimChannel = (channel: string) => {
+  const token = Symbol(channel);
+  channelClaims.set(channel, { expiresAt: Date.now() + CHANNEL_CLAIM_TTL_MS, token });
+
+  return () => {
+    if (channelClaims.get(channel)?.token === token) channelClaims.delete(channel);
+  };
+};
+
+/** Drops every channel claim. Tests only. */
+export const resetChannelClaims = () => channelClaims.clear();
+
+const noop = () => {};
+
 /** The thread a handler is about to reply in. Its `id` is swapped when a reply thread opens. */
 export interface OpeningThread {
   id: string;
@@ -35,6 +74,11 @@ export interface OpeningMessage {
 export interface ReplyOpeningResult {
   /** The acknowledgement posted before the run, for the agent to continue from. */
   openingReply?: string;
+  /**
+   * Ends the opening's claim on the channel it picked. Call it once the bridge has taken the run
+   * (after `handleMention` / `handleSubscribedMessage`), which marks the conversation active itself.
+   */
+  release: () => void;
   /** How the opening went, for the wake decision row. Absent when nothing was decided. */
   verdict?: SignalDecisionVerdict;
 }
@@ -194,7 +238,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
       // As before: a reply thread opens where one used to, wherever the platform has one.
       if (legacyOpensThread) await openThread(thread, targets);
 
-      return {};
+      return { release: noop };
     }
 
     // Nobody asked: join the conversation where it is, and say nothing before the run decides
@@ -202,7 +246,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
     if (wakeKind === 'followup') {
       if (targets) moveTo(thread, targets.channel);
 
-      return { verdict: verdictOf('channel:followup', 0, 'abstain') };
+      return { release: noop, verdict: verdictOf('channel:followup', 0, 'abstain') };
     }
 
     // Show life while the bot decides; the channel is where the person is looking.
@@ -225,6 +269,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
       const opened = await openThread(thread, targets);
 
       return {
+        release: noop,
         verdict: verdictOf(
           `${opened ? 'thread' : 'channel'}:fallback-${failure}`,
           latencyMs,
@@ -234,15 +279,23 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
     }
     const latencyMs = Date.now() - startedAt;
 
-    // A channel the bot is already answering in cannot take a second reply at the same time.
+    // A channel the bot is already answering in, or another opening has just picked, cannot take
+    // a second reply at the same time.
     const channelBusy =
-      !!targets && opening.placement === 'channel' && !!deps.isBusy?.(targets.channel);
+      !!targets &&
+      opening.placement === 'channel' &&
+      (!!deps.isBusy?.(targets.channel) || isClaimed(targets.channel));
     let inThread = false;
+    let release = noop;
     if (targets) {
       if (opening.placement === 'thread' || channelBusy) {
         inThread = await openThread(thread, targets, opening.title);
       }
-      if (!inThread) moveTo(thread, targets.channel);
+      if (!inThread) {
+        moveTo(thread, targets.channel);
+        // Claimed before the acknowledgement is awaited, so a concurrent opening sees it.
+        release = claimChannel(targets.channel);
+      }
     }
 
     let openingReply: string | undefined;
@@ -265,6 +318,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
 
     return {
       openingReply,
+      release,
       verdict: verdictOf(
         `${inThread ? 'thread' : 'channel'}${channelBusy ? ':channel-busy' : ''}${openingReply ? '+ack' : ''}`,
         latencyMs,

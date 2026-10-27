@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createReplyOpening } from './replyOpening';
+import { createReplyOpening, resetChannelClaims } from './replyOpening';
 
 const CHANNEL = 'discord:guild-1:chan-1';
 
@@ -28,6 +28,7 @@ describe('createReplyOpening', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetChannelClaims();
     client = makeClient();
   });
 
@@ -64,6 +65,7 @@ describe('createReplyOpening', () => {
     expect(thread.id).toBe(`${CHANNEL}:thread-9`);
     expect(thread.post).not.toHaveBeenCalled();
     expect(result).toEqual({
+      release: expect.any(Function),
       verdict: expect.objectContaining({ reason: 'thread:fallback-timeout', verdict: 'abstain' }),
     });
   });
@@ -134,7 +136,7 @@ describe('createReplyOpening', () => {
     const result = await open(service);
 
     expect(opener).not.toHaveBeenCalled();
-    expect(result).toEqual({});
+    expect(result).toEqual({ release: expect.any(Function) });
   });
 
   it('does not decide on a platform that never offers reply targets', async () => {
@@ -151,6 +153,37 @@ describe('createReplyOpening', () => {
 
     expect(thread.id).toBe(`${CHANNEL}:thread-9`);
     expect(result.verdict?.reason).toBe('thread:channel-busy');
+  });
+
+  it('does not pick a channel another opening has just picked, until that one is handed off', async () => {
+    opener.mockResolvedValue({ ack: 'On it.', placement: 'channel', title: '' });
+    let posted!: () => void;
+    const first = makeThread();
+    // The first acknowledgement is still being posted while the second opening decides.
+    first.post.mockReturnValue(
+      new Promise<void>((resolve) => {
+        posted = resolve;
+      }),
+    );
+    const second = makeThread();
+    const service = create();
+
+    const firstOpening = open(service, first);
+    await vi.waitFor(() => expect(first.post).toHaveBeenCalled());
+    const secondResult = await open(service, second);
+    posted();
+    const firstResult = await firstOpening;
+
+    expect(first.id).toBe(CHANNEL);
+    expect(second.id).toBe(`${CHANNEL}:thread-9`);
+    expect(secondResult.verdict?.reason).toBe('thread:channel-busy+ack');
+
+    // Once the first run is handed to the bridge, the channel is free again.
+    firstResult.release();
+    secondResult.release();
+    const third = makeThread();
+    await open(service, third);
+    expect(third.id).toBe(CHANNEL);
   });
 
   it('answers a wake nobody asked for in the channel, without asking the model', async () => {

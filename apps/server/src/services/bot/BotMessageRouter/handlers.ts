@@ -413,7 +413,7 @@ export function registerHandlers(
       opening.verdict ? { ...observation, extraVerdicts: [opening.verdict] } : observation,
     );
 
-    return opening.openingReply;
+    return { openingReply: opening.openingReply, release: opening.release };
   };
 
   const gateFollowup = createFollowupGate({
@@ -477,7 +477,7 @@ export function registerHandlers(
     }
 
     const merged = mergeSkippedMessages(message, context);
-    const openingReply = await startReply({
+    const { openingReply, release } = await startReply({
       entryPoint: 'onNewMention',
       message: merged,
       rawMessage: (message as { raw?: unknown }).raw,
@@ -544,6 +544,8 @@ export function registerHandlers(
       } catch {
         // best-effort notification
       }
+    } finally {
+      release();
     }
   });
 
@@ -775,7 +777,7 @@ export function registerHandlers(
     ) {
       return;
     }
-    const openingReply = await startReply({
+    const { openingReply, release } = await startReply({
       entryPoint: 'onSubscribedMessage',
       message: merged,
       rawMessage: (message as { raw?: unknown }).raw,
@@ -847,6 +849,8 @@ export function registerHandlers(
       } catch {
         // best-effort notification
       }
+    } finally {
+      release();
     }
   });
 

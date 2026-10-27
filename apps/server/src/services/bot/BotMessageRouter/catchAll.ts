@@ -217,7 +217,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       // Where the reply goes and what is said before the run (see `startReply`). Keyword and name
       // wakes in a channel used to get their own reply thread, since the chat-sdk Discord adapter
       // only auto-creates one on @-mention; that stays the behaviour when the bot does not decide.
-      const openingReply = await startReply({
+      const { openingReply, release } = await startReply({
         entryPoint: 'catchAll',
         legacyOpensThread: matchesWatchKeyword || !!initiation,
         message: merged,
@@ -285,6 +285,8 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         } catch {
           // best-effort notification
         }
+      } finally {
+        release();
       }
     });
   }
