@@ -1,5 +1,7 @@
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type {
   AuthorizationServerMetadata,
+  FetchLike,
   OAuthClientInformationFull,
   OAuthClientInformationMixed,
   OAuthTokens,
@@ -38,6 +40,20 @@ export const getConnectorRedirectUri = (): string => {
   return new URL(CONNECTOR_OAUTH_CALLBACK_PATH, base).toString();
 };
 
+/**
+ * The MCP server URL and every endpoint its metadata advertises (authorization
+ * server, registration and token endpoints) are chosen by whoever configured
+ * the connector, so all connector OAuth requests go through the SSRF-safe
+ * transport. The SDK helpers take it as `fetchFn`.
+ */
+const connectorFetch: FetchLike = (url, init) => ssrfSafeFetch(url.toString(), init);
+
+/** RFC 8414 / OIDC discovery for a connector's authorization server. */
+export const discoverConnectorAuthorizationServerMetadata = (
+  authorizationServerUrl: string,
+): Promise<AuthorizationServerMetadata | undefined> =>
+  discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn: connectorFetch });
+
 export interface DiscoveredOAuth {
   authorizationServerUrl: string;
   metadata: AuthorizationServerMetadata;
@@ -58,10 +74,13 @@ export interface DiscoveredOAuth {
 export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<DiscoveredOAuth> => {
   let resourceMetadataUrl: URL | undefined;
   try {
-    const res = await fetch(mcpServerUrl, {
+    const res = await connectorFetch(mcpServerUrl, {
       headers: { accept: 'application/json, text/event-stream' },
       method: 'GET',
     });
+    // Only the status and `WWW-Authenticate` header matter. Release the body: a server
+    // may answer this GET with an SSE stream that never ends.
+    await res.body?.cancel().catch(() => {});
     if (res.status === 401) resourceMetadataUrl = extractResourceMetadataUrl(res);
   } catch (err) {
     log('probe request failed, falling back to well-known discovery: %O', err);
@@ -69,7 +88,11 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
 
   let authorizationServerUrl: string | undefined;
   try {
-    const prm = await discoverOAuthProtectedResourceMetadata(mcpServerUrl, { resourceMetadataUrl });
+    const prm = await discoverOAuthProtectedResourceMetadata(
+      mcpServerUrl,
+      { resourceMetadataUrl },
+      connectorFetch,
+    );
     authorizationServerUrl = prm?.authorization_servers?.[0]?.toString();
   } catch (err) {
     log('protected-resource-metadata discovery failed: %O', err);
@@ -80,7 +103,7 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
 
   let metadata: AuthorizationServerMetadata | undefined;
   try {
-    metadata = await discoverAuthorizationServerMetadata(authorizationServerUrl);
+    metadata = await discoverConnectorAuthorizationServerMetadata(authorizationServerUrl);
   } catch (error) {
     if (IssuerMismatchError.isInstance(error)) {
       throw new Error(
@@ -137,6 +160,7 @@ export const registerDynamicClient = async (params: {
       scope: params.scopes?.join(' '),
       token_endpoint_auth_method: selectRegistrationAuthMethod(params.metadata),
     },
+    fetchFn: connectorFetch,
     metadata: params.metadata,
     scope: params.scopes?.join(' '),
   });
@@ -270,6 +294,7 @@ export const exchangeConnectorCode = async (params: {
       authorizationCode: params.authorizationCode,
       clientInformation,
       codeVerifier: params.codeVerifier,
+      fetchFn: connectorFetch,
       iss: params.iss,
       metadata: params.metadata,
       redirectUri: params.redirectUri,
@@ -288,6 +313,7 @@ export const refreshConnectorToken = async (params: {
   withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
     refreshAuthorization(params.authorizationServerUrl, {
       clientInformation,
+      fetchFn: connectorFetch,
       metadata: params.metadata,
       refreshToken: params.refreshToken,
       resource: params.resource ? new URL(params.resource) : undefined,

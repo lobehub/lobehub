@@ -16,6 +16,11 @@ vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   registerClient: vi.fn(),
 }));
+// These tests stub the global fetch; the SSRF boundary itself is covered by
+// oauth.network.test.ts over real sockets.
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: (url: string, init?: RequestInit) => fetch(url, init),
+}));
 
 const metadataWith = (
   token_endpoint_auth_methods_supported?: string[],

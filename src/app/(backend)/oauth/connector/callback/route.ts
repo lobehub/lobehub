@@ -1,7 +1,4 @@
-import {
-  discoverAuthorizationServerMetadata,
-  IssuerMismatchError,
-} from '@modelcontextprotocol/client';
+import { IssuerMismatchError } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
@@ -10,7 +7,11 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { exchangeConnectorCode, toClientInformation } from '@/server/services/connector/oauth';
+import {
+  discoverConnectorAuthorizationServerMetadata,
+  exchangeConnectorCode,
+  toClientInformation,
+} from '@/server/services/connector/oauth';
 import { consumeConnectorOAuthState } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
@@ -131,7 +132,9 @@ export const GET = async (req: NextRequest) => {
       return renderFailure('connector_missing_client');
     }
 
-    const metadata = await discoverAuthorizationServerMetadata(payload.authorizationServerUrl);
+    const metadata = await discoverConnectorAuthorizationServerMetadata(
+      payload.authorizationServerUrl,
+    );
     if (!metadata) {
       return renderFailure('metadata_discovery_failed');
     }

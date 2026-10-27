@@ -1,12 +1,15 @@
 import type { OAuthTokens } from '@modelcontextprotocol/client';
-import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import pMap from 'p-map';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorCredentials } from '@/database/schemas';
 
-import { refreshConnectorToken, toClientInformation } from './oauth';
+import {
+  discoverConnectorAuthorizationServerMetadata,
+  refreshConnectorToken,
+  toClientInformation,
+} from './oauth';
 
 const log = debug('lobe-server:connector:tokens');
 
@@ -62,7 +65,7 @@ export const ensureFreshConnectorToken = async (
   if (!oidc?.issuer || !oidc.clientId) return connector;
 
   try {
-    const metadata = await discoverAuthorizationServerMetadata(oidc.issuer);
+    const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer);
     if (!metadata) return connector;
 
     const { authMethod, tokens } = await refreshConnectorToken({
