@@ -641,7 +641,7 @@ export default {
     'Where the bot answers a message sent to it in a channel. Messages already in a thread or a DM are answered where they are.',
   'channel.replyPlacementAgent': 'Let the bot decide',
   'channel.replyPlacementAgentHint':
-    'Quick answers stay in the channel; longer work moves into a thread it names. When the work takes a while, it first posts a short note on what it will do.',
+    'Quick answers stay in the channel; longer work moves into a thread under the message. When the work takes a while, it first posts a short note on what it will do.',
   'channel.replyPlacementThread': 'Always open a thread',
   'channel.replyPlacementThreadHint':
     'Every message that wakes the bot in a channel gets its own thread',

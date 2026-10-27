@@ -10,10 +10,17 @@ const makeThread = (id = CHANNEL) => ({
   startTyping: vi.fn().mockResolvedValue(undefined),
 });
 
-const makeClient = () => ({
-  canOpenReplyThread: (id: string) => id.split(':').length === 3,
-  openThreadForChannelWake: vi.fn().mockResolvedValue(`${CHANNEL}:thread-9`),
-});
+/** Discord-shaped: the message arrives keyed by the channel, and a named thread opens on demand. */
+const makeClient = () => {
+  const openThread = vi.fn().mockResolvedValue(`${CHANNEL}:thread-9`);
+
+  return {
+    getReplyTargets: vi.fn((id: string) =>
+      id.split(':').length === 3 ? { channel: id, namesThread: true, openThread } : undefined,
+    ),
+    openThread,
+  };
+};
 
 describe('createReplyOpening', () => {
   let client: ReturnType<typeof makeClient>;
@@ -36,7 +43,7 @@ describe('createReplyOpening', () => {
 
   const open = (service: ReturnType<typeof create>, thread = makeThread()) =>
     service.open({
-      message: { raw: { id: 'msg-1' }, text: 'look into it' },
+      message: { id: 'msg-1', raw: { id: 'msg-1' }, text: 'look into it' },
       thread,
       wakeKind: 'mention',
     });
@@ -48,11 +55,12 @@ describe('createReplyOpening', () => {
     const result = await open(create({ timeoutMs: 20 }), thread);
 
     expect(opener.mock.calls[0][1].aborted).toBe(true);
-    expect(client.openThreadForChannelWake).toHaveBeenCalledWith(
-      CHANNEL,
-      { id: 'msg-1' },
-      undefined,
-    );
+    expect(client.getReplyTargets).toHaveBeenCalledWith(CHANNEL, {
+      id: 'msg-1',
+      raw: { id: 'msg-1' },
+      text: 'look into it',
+    });
+    expect(client.openThread).toHaveBeenCalledWith(undefined);
     expect(thread.id).toBe(`${CHANNEL}:thread-9`);
     expect(thread.post).not.toHaveBeenCalled();
     expect(result).toEqual({
@@ -62,7 +70,7 @@ describe('createReplyOpening', () => {
 
   it('acknowledges in the channel when the thread it chose cannot be opened', async () => {
     opener.mockResolvedValue({ ack: 'On it.', placement: 'thread', title: 'Deploy' });
-    client.openThreadForChannelWake.mockRejectedValue(new Error('missing permission'));
+    client.openThread.mockRejectedValue(new Error('missing permission'));
     const thread = makeThread();
 
     const result = await open(create(), thread);
@@ -114,11 +122,76 @@ describe('createReplyOpening', () => {
     expect(result).toEqual({});
   });
 
-  it('does not decide on a platform that never opens reply threads', async () => {
-    const service = create({
-      client: { openThreadForChannelWake: client.openThreadForChannelWake },
-    });
+  it('does not decide on a platform that never offers reply targets', async () => {
+    const service = create({ client: {} });
 
     await expect(service.decidesPlacement()).resolves.toBe(false);
+  });
+
+  it('opens a thread instead when the bot is already answering in the channel', async () => {
+    opener.mockResolvedValue({ placement: 'channel', title: '' });
+    const thread = makeThread();
+
+    const result = await open(create({ isBusy: (id) => id === CHANNEL }), thread);
+
+    expect(thread.id).toBe(`${CHANNEL}:thread-9`);
+    expect(result.verdict?.reason).toBe('thread:channel-busy');
+  });
+
+  it('answers a wake nobody asked for in the channel, without asking the model', async () => {
+    const thread = makeThread();
+
+    const result = await create().open({
+      message: { id: 'msg-1', text: 'anyone?' },
+      thread,
+      wakeKind: 'followup',
+    });
+
+    expect(opener).not.toHaveBeenCalled();
+    expect(thread.id).toBe(CHANNEL);
+    expect(result.verdict?.reason).toBe('channel:followup');
+  });
+
+  describe('on a platform whose message arrives keyed by the thread under it (Slack)', () => {
+    const SLACK_THREAD = 'slack:C1:111.222';
+    const openSlackThread = vi.fn(async () => SLACK_THREAD);
+    const slackClient = {
+      getReplyTargets: () => ({
+        channel: 'slack:C1',
+        namesThread: false,
+        openThread: openSlackThread,
+      }),
+    };
+
+    it('moves a quick answer out of the thread into the channel', async () => {
+      opener.mockResolvedValue({ placement: 'channel', title: '' });
+      const thread = makeThread(SLACK_THREAD);
+
+      const result = await open(create({ client: slackClient }), thread);
+
+      expect(thread.id).toBe('slack:C1');
+      expect(result.verdict?.reason).toBe('channel');
+    });
+
+    it('keeps the thread for longer work, without naming it', async () => {
+      opener.mockResolvedValue({ ack: 'On it.', placement: 'thread', title: 'Deploy failure' });
+      const thread = makeThread(SLACK_THREAD);
+
+      const result = await open(create({ client: slackClient }), thread);
+
+      expect(openSlackThread).toHaveBeenCalledWith(undefined);
+      expect(thread.id).toBe(SLACK_THREAD);
+      expect(thread.post).toHaveBeenCalledWith('On it.');
+      expect(result.verdict?.reason).toBe('thread+ack');
+    });
+
+    it('keeps the thread when the model fails, as before', async () => {
+      opener.mockRejectedValue(new Error('provider down'));
+      const thread = makeThread(SLACK_THREAD);
+
+      await open(create({ client: slackClient }), thread);
+
+      expect(thread.id).toBe(SLACK_THREAD);
+    });
   });
 });

@@ -259,13 +259,15 @@ export function registerHandlers(
   });
 
   /**
-   * How the bot opens a reply: an acknowledgement before the run, and the channel or a thread it
-   * names. Decided by the bot only while the owner leaves the placement to it (see
-   * `./replyOpening`); otherwise the previous behaviour.
+   * How the bot opens a reply: an acknowledgement before the run, and the channel or a thread
+   * under the message, on any platform that offers the choice (`PlatformClient.getReplyTargets`).
+   * Decided by the bot only while the owner leaves the placement to it (see `./replyOpening`);
+   * otherwise the previous behaviour.
    */
   const replyOpening = createReplyOpening({
     applicationId,
     client,
+    isBusy: (platformThreadId) => AgentBridgeService.isThreadActive(platformThreadId),
     mode: normalizeBotReplyPlacementMode(info.settings?.replyPlacement),
     opener: createReplyOpener({
       agentId,
@@ -400,6 +402,7 @@ export function registerHandlers(
       conversation: () => wakeRecorder.conversation(observation),
       legacyOpensThread,
       message: {
+        id: message.id,
         raw: rawMessage,
         text: client.sanitizeUserInput?.(message.text ?? '', message) ?? message.text,
       },

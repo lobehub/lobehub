@@ -244,6 +244,31 @@ export interface UsageStats {
   totalTokens: number;
 }
 
+// --------------- Reply Targets ---------------
+
+/**
+ * Where the reply to a message at the top level of a channel can go: the channel itself, or a
+ * thread under the message. Each target is a `platformThreadId` the handler swaps in before the
+ * run, so everything downstream (posting, reactions, subscription) follows the choice.
+ *
+ * - Discord: the message arrives keyed by the channel; a thread is created off it on demand and
+ *   can be named.
+ * - Slack: the message arrives keyed by the thread under it (`slack:<channel>:<ts>`); the channel
+ *   is `slack:<channel>`, and the thread exists as soon as someone replies in it, without a name.
+ */
+export interface ReplyTargets {
+  /** Posts at the top level of the channel the message was sent in. */
+  channel: string;
+  /** Whether `openThread` uses its `name`. A thread without a name takes the platform's own. */
+  namesThread: boolean;
+  /**
+   * Opens the thread under the message and returns its `platformThreadId`. Best-effort: resolves
+   * `undefined` instead of throwing when the platform refuses, so the reply falls back to the
+   * channel rather than being lost.
+   */
+  openThread: (name?: string) => Promise<string | undefined>;
+}
+
 // --------------- Platform Client ---------------
 
 /** Behaviour the router asks a platform's Chat SDK patches to adopt. */
@@ -268,14 +293,6 @@ export interface PlatformClient {
    * Useful for adapter quirks that should stay encapsulated within the platform client.
    */
   applyChatPatches?: (chatBot: Chat<any>, options?: ChatPatchOptions) => void;
-
-  /**
-   * Whether a reply to a message in `threadId` could move into a new sub-thread, i.e. the message
-   * sits at the top level of a channel that supports threads. Used to decide whether the bot may
-   * choose between answering in the channel and opening a thread. Omit when the platform never
-   * opens one.
-   */
-  canOpenReplyThread?: (threadId: string) => boolean;
 
   /** Create a Chat SDK adapter config for inbound message handling. */
   createAdapter: () => Record<string, any>;
@@ -388,6 +405,17 @@ export interface PlatformClient {
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
 
+  /**
+   * Where the reply to `message` can go, when it sits at the top level of a channel that has
+   * threads (see `ReplyTargets`). `undefined` when there is no choice: a DM, a message already
+   * inside a thread, or a threadless platform (Telegram, WeChat, QQ). Omit when the platform never
+   * offers one; the reply then stays in `platformThreadId`.
+   */
+  getReplyTargets?: (
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ) => ReplyTargets | undefined;
+
   readonly id: string;
 
   /**
@@ -404,31 +432,6 @@ export interface PlatformClient {
    * group. Platforms that can't tell omit the method.
    */
   isSoloBotConversation?: (platformThreadId: string) => Promise<boolean>;
-
-  /**
-   * Optional hook called from the router when a non-DM message wakes the
-   * bot via a watch-keyword match (). Platforms that prefer to
-   * isolate the reply in a sub-thread (Discord, where the chat-sdk
-   * auto-creates a thread only on @-mention) should spawn one off the
-   * triggering message and return the upgraded composite threadId so the
-   * downstream `bridge.handleMention` posts inside the new thread.
-   *
-   * Return `undefined` (or omit the method) to leave the threadId
-   * unchanged — the bot then replies in the original channel, which is
-   * the right behaviour for threadless platforms (Telegram / WeChat / QQ)
-   * and for Slack / Lark / Feishu where channel-level replies are the
-   * conventional response shape.
-   *
-   * Implementations must be best-effort: any platform error should be
-   * caught and `undefined` returned so the router falls back to the
-   * original threadId rather than swallowing the user message.
-   */
-  openThreadForChannelWake?: (
-    threadId: string,
-    messageRaw: unknown,
-    /** The new thread's name; the platform's generic name when omitted. */
-    name?: string,
-  ) => Promise<string | undefined>;
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;

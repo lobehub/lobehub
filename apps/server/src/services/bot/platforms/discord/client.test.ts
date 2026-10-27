@@ -532,13 +532,18 @@ describe('DiscordGatewayClient', () => {
   });
 
   describe('reply threads chosen by the bot', () => {
-    it('can open a reply thread only at the top level of a server channel', () => {
+    it('offers the channel or a thread only at the top level of a server channel', () => {
       const client = createClient() as any;
+      const message = { id: 'msg-1', raw: { id: 'msg-1' } };
 
-      expect(client.canOpenReplyThread('discord:guild-1:chan-1')).toBe(true);
-      expect(client.canOpenReplyThread('discord:guild-1:chan-1:thread-1')).toBe(false);
-      expect(client.canOpenReplyThread('discord:@me:dm-1')).toBe(false);
-      expect(client.canOpenReplyThread('telegram:chat-1')).toBe(false);
+      expect(client.getReplyTargets('discord:guild-1:chan-1', message)).toEqual({
+        channel: 'discord:guild-1:chan-1',
+        namesThread: true,
+        openThread: expect.any(Function),
+      });
+      expect(client.getReplyTargets('discord:guild-1:chan-1:thread-1', message)).toBeUndefined();
+      expect(client.getReplyTargets('discord:@me:dm-1', message)).toBeUndefined();
+      expect(client.getReplyTargets('telegram:chat-1', message)).toBeUndefined();
     });
 
     it('names the thread it opens after the subject', async () => {
@@ -546,11 +551,9 @@ describe('DiscordGatewayClient', () => {
       const startThreadFromMessage = vi.fn().mockResolvedValue({ id: 'thread-9' });
       client.discord = { ...client.discord, startThreadFromMessage };
 
-      const result = await client.openThreadForChannelWake(
-        'discord:guild-1:chan-1',
-        { id: 'msg-1' },
-        '  昨天部署失败排查 ',
-      );
+      const result = await client
+        .getReplyTargets('discord:guild-1:chan-1', { id: 'msg-1', raw: { id: 'msg-1' } })
+        .openThread('  昨天部署失败排查 ');
 
       expect(startThreadFromMessage).toHaveBeenCalledWith('chan-1', 'msg-1', '昨天部署失败排查');
       expect(result).toBe('discord:guild-1:chan-1:thread-9');

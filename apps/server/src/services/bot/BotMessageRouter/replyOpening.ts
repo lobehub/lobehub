@@ -4,7 +4,7 @@ import debug from 'debug';
 import { describeLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import type { WakeConversation } from '@/server/services/agentSignal/scenarios/botWake/types';
 
-import type { BotReplyPlacementMode, PlatformClient } from '../platforms';
+import type { BotReplyPlacementMode, PlatformClient, ReplyTargets } from '../platforms';
 import type { ReplyOpener, ReplyOpening } from '../wake/opener';
 
 const log = debug('lobe-server:bot:reply-opening');
@@ -27,6 +27,7 @@ export interface OpeningThread {
 }
 
 export interface OpeningMessage {
+  id?: string;
   raw?: unknown;
   text?: string;
 }
@@ -41,7 +42,12 @@ export interface ReplyOpeningResult {
 export interface ReplyOpeningDeps {
   /** The bot's own platform id, so its earlier lines read as its own. */
   applicationId: string;
-  client: Pick<PlatformClient, 'canOpenReplyThread' | 'openThreadForChannelWake'>;
+  client: Pick<PlatformClient, 'getReplyTargets'>;
+  /**
+   * Whether the bot is already answering in a conversation. A second reply in a busy channel
+   * would be dropped as a duplicate, so it moves into a thread instead.
+   */
+  isBusy?: (platformThreadId: string) => boolean;
   mode: BotReplyPlacementMode;
   opener?: ReplyOpener;
   /** The `bot_wake` rollout flag for the bot's owner: the bot decides only while it is on. */
@@ -64,8 +70,8 @@ export interface OpenReplyInput {
 
 export interface ReplyOpeningService {
   /**
-   * Whether the bot decides where it answers. When it does, the Discord adapter must not open a
-   * thread for an @-mention on its own.
+   * Whether the bot decides where it answers. When it does, an adapter that opens a thread for an
+   * @-mention on its own (Discord) must not.
    */
   decidesPlacement: () => Promise<boolean>;
   /**
@@ -104,7 +110,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
   const timeoutMs = deps.timeoutMs ?? REPLY_OPENER_TIMEOUT_MS;
 
   const decidesPlacement = async () => {
-    if (mode !== 'agent' || !opener || !client.canOpenReplyThread) return false;
+    if (mode !== 'agent' || !opener || !client.getReplyTargets) return false;
     try {
       return await deps.rolledOut();
     } catch {
@@ -112,17 +118,27 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
     }
   };
 
-  const openThread = async (thread: OpeningThread, message: OpeningMessage, name?: string) => {
-    if (!client.openThreadForChannelWake) return false;
+  const moveTo = (thread: OpeningThread, platformThreadId: string) => {
+    if (platformThreadId === thread.id) return;
+    log('reply moves %s -> %s', thread.id, platformThreadId);
+    thread.id = platformThreadId;
+  };
+
+  /** Moves the reply into the thread under the message; `false` leaves `thread.id` as it was. */
+  const openThread = async (
+    thread: OpeningThread,
+    targets: ReplyTargets | undefined,
+    name?: string,
+  ) => {
+    if (!targets) return false;
     try {
-      const upgraded = await client.openThreadForChannelWake(thread.id, message.raw, name);
-      if (!upgraded || upgraded === thread.id) return false;
-      log('opened reply thread %s -> %s', thread.id, upgraded);
-      thread.id = upgraded;
+      const opened = await targets.openThread(targets.namesThread ? name : undefined);
+      if (!opened) return false;
+      moveTo(thread, opened);
 
       return true;
     } catch (error) {
-      log('openThreadForChannelWake threw, replying in the channel: %O', error);
+      log('openThread threw, replying in the channel: %O', error);
 
       return false;
     }
@@ -165,18 +181,22 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
 
   const open = async (input: OpenReplyInput): Promise<ReplyOpeningResult> => {
     const { legacyOpensThread = false, message, thread, wakeKind } = input;
-    const canOpenThread = client.canOpenReplyThread?.(thread.id) ?? false;
+    const targets = client.getReplyTargets?.(thread.id, message);
 
     if (!(await decidesPlacement())) {
-      // As before: the platform's hook alone decides whether a thread opens.
-      if (legacyOpensThread) await openThread(thread, message);
+      // As before: a reply thread opens where one used to, wherever the platform has one.
+      if (legacyOpensThread) await openThread(thread, targets);
 
       return {};
     }
 
     // Nobody asked: join the conversation where it is, and say nothing before the run decides
     // whether to speak at all.
-    if (wakeKind === 'followup') return { verdict: verdictOf('channel:followup', 0, 'abstain') };
+    if (wakeKind === 'followup') {
+      if (targets) moveTo(thread, targets.channel);
+
+      return { verdict: verdictOf('channel:followup', 0, 'abstain') };
+    }
 
     // Show life while the bot decides; the channel is where the person is looking.
     void thread.startTyping?.().catch(() => {});
@@ -184,7 +204,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
     const startedAt = Date.now();
     let opening: ReplyOpening;
     try {
-      opening = await decide(input, canOpenThread);
+      opening = await decide(input, !!targets);
     } catch (error) {
       const latencyMs = Date.now() - startedAt;
       const failure = (error as Error)?.message === 'timeout' ? 'timeout' : 'error';
@@ -195,7 +215,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
         error,
       );
       // The previous behaviour: every channel wake got its own thread.
-      const opened = canOpenThread && (await openThread(thread, message));
+      const opened = await openThread(thread, targets);
 
       return {
         verdict: verdictOf(
@@ -207,8 +227,16 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
     }
     const latencyMs = Date.now() - startedAt;
 
-    const inThread =
-      opening.placement === 'thread' && (await openThread(thread, message, opening.title));
+    // A channel the bot is already answering in cannot take a second reply at the same time.
+    const channelBusy =
+      !!targets && opening.placement === 'channel' && !!deps.isBusy?.(targets.channel);
+    let inThread = false;
+    if (targets) {
+      if (opening.placement === 'thread' || channelBusy) {
+        inThread = await openThread(thread, targets, opening.title);
+      }
+      if (!inThread) moveTo(thread, targets.channel);
+    }
 
     let openingReply: string | undefined;
     if (opening.ack) {
@@ -231,7 +259,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
     return {
       openingReply,
       verdict: verdictOf(
-        `${inThread ? 'thread' : 'channel'}${openingReply ? '+ack' : ''}`,
+        `${inThread ? 'thread' : 'channel'}${channelBusy ? ':channel-busy' : ''}${openingReply ? '+ack' : ''}`,
         latencyMs,
       ),
     };

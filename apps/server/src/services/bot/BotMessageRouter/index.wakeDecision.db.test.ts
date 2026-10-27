@@ -139,6 +139,8 @@ describe('mock Discord bot-wake decision records (real database, real router han
   it('persists one decision per inbound path and leaves the wake/skip behavior as it was', async () => {
     await boot({
       dmPolicy: 'open',
+      // The reply opening adds its own verdict; it is covered in `index.replyOpening.test.ts`.
+      replyPlacement: 'thread',
       watchKeywords: [{ instruction: '', keyword: 'deploy' }],
     });
     mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });

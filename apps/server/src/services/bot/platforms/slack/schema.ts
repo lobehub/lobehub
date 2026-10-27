@@ -13,6 +13,7 @@ import {
   makeServerIdField,
   makeUserIdField,
   reactionModeField,
+  replyPlacementField,
   watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
@@ -117,6 +118,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      replyPlacementField,
       displayToolCallsField,
       reactionModeField,
       {

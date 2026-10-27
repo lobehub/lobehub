@@ -103,7 +103,6 @@ const withDiscordPlacement = () =>
         createClient: (...args: unknown[]) => ({
           ...createClient(...args),
           applyChatPatches: mocks.applyChatPatches,
-          canOpenReplyThread: (id: string) => id.split(':').length === 3 && !id.includes('@me'),
         }),
       },
     };

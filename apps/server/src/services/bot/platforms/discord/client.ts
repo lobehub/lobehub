@@ -19,6 +19,7 @@ import {
   messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
+  type ReplyTargets,
   type UsageStats,
   type ValidationResult,
 } from '../types';
@@ -35,6 +36,15 @@ import { patchDiscordForwardedInteractions, patchDiscordMentionThreads } from '.
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
+
+/** `discord:<guild>:<channel>` with a real guild: not a DM, not already inside a thread. */
+const isTopLevelGuildChannel = (threadId: string): boolean => {
+  const [platform, guildId, channelId, discordThreadId] = threadId.split(':');
+
+  return (
+    platform === 'discord' && !!guildId && guildId !== '@me' && !!channelId && !discordThreadId
+  );
+};
 
 const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -224,14 +234,6 @@ class DiscordGatewayClient implements PlatformClient {
     if (options?.deferMentionThread) {
       patchDiscordMentionThreads(chatBot, options.deferMentionThread);
     }
-  }
-
-  canOpenReplyThread(threadId: string): boolean {
-    const [platform, guildId, channelId, discordThreadId] = threadId.split(':');
-
-    return (
-      platform === 'discord' && !!guildId && guildId !== '@me' && !!channelId && !discordThreadId
-    );
   }
 
   createAdapter(): Record<string, any> {
@@ -564,6 +566,23 @@ class DiscordGatewayClient implements PlatformClient {
   };
 
   /**
+   * A message at the top level of a guild channel can be answered in the channel, or in a thread
+   * spawned off it and named after its subject. DMs and messages inside a thread have no choice.
+   */
+  getReplyTargets(
+    threadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+
+    return {
+      channel: threadId,
+      namesThread: true,
+      openThread: (name) => this.openThreadForChannelWake(threadId, message.raw, name),
+    };
+  }
+
+  /**
    * Spawn a Discord thread off the triggering message when the bot wakes
    * in a top-level guild channel via a watch-keyword match. The chat-sdk
    * adapter only auto-creates a thread on @-mention (see chat-adapter
@@ -589,7 +608,7 @@ class DiscordGatewayClient implements PlatformClient {
     messageRaw: unknown,
     name?: string,
   ): Promise<string | undefined> {
-    if (!this.canOpenReplyThread(threadId)) return undefined;
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
     const [, guildId, channelId] = threadId.split(':');
     const raw = messageRaw as Record<string, unknown> | undefined;
     const messageId = typeof raw?.id === 'string' ? raw.id : undefined;
