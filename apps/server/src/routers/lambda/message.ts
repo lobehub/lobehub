@@ -42,7 +42,6 @@ import {
   assertCreatorTopicTargets,
 } from './_helpers/shareVisitorTargetGuard';
 import { basicContextSchema } from './_schema/context';
-import { messageBatchProcedures } from './messageBatch';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
 
@@ -565,7 +564,6 @@ export const messageRouter = router({
     .input(messagesByCursorInputSchema)
     .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
 
-  ...messageBatchProcedures,
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
   }),

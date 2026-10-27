@@ -27,7 +27,6 @@ import {
   aiAgentService,
   type ResolveAgentInterventionBySourceResult,
 } from '@/services/aiAgent';
-import { isPartialHeadWindow } from '@/services/message/roundCursorPage';
 import { shareChatService } from '@/services/shareChat';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -791,26 +790,6 @@ export class ConversationControlActionImpl {
     }
   };
 
-  /**
-   * Widen a prefetch-sized head window before a client-runtime resume.
-   *
-   * A topic opened from the visible-row prefetch paints from a smaller page than
-   * a normal head read. The local runtime builds the model's history from the
-   * loaded rows, so resuming a parked tool inside such a topic would hand the
-   * model only the prefetched rounds and silently drop the older context the
-   * normal window carries. Reading the normal head first restores it; a failed
-   * read only costs context, never the resume itself.
-   */
-  #widenPrefetchHeadWindow = async (context: ConversationContext): Promise<void> => {
-    if (!isPartialHeadWindow(context)) return;
-
-    try {
-      await this.#get().refreshMessages(context);
-    } catch (error) {
-      console.warn('[conversationControl] Failed to widen a prefetched head window:', error);
-    }
-  };
-
   approveToolCalling = async (
     toolMessageId: string,
     _assistantGroupId: string,
@@ -937,10 +916,6 @@ export class ConversationControlActionImpl {
     }
 
     // 3. Get current messages for state construction using context
-    // The local runtime resumes from the loaded rows as its history: make sure a
-    // prefetch-sized window is widened back to the normal head first.
-    await this.#widenPrefetchHeadWindow(effectiveContext);
-
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
     const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
     const currentRequestMetadata = this.#getRequestMetadataFromMessageChain(
@@ -1350,8 +1325,6 @@ export class ConversationControlActionImpl {
     // the agent marketplace picker forks agents directly) — the LLM should see the
     // tool result, not a fake user turn.
     if (!shouldCreateUserMessage) {
-      await this.#widenPrefetchHeadWindow(effectiveContext);
-
       const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
       const requestMetadata = this.#getRequestMetadataFromMessageChain(
         toolMessageId,
@@ -1405,8 +1378,6 @@ export class ConversationControlActionImpl {
     }
 
     // 2b. Default path: create a user message summarizing the response, resume from user
-    await this.#widenPrefetchHeadWindow(effectiveContext);
-
     const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
     const userMessageContent = Object.values(resolvedResponse).join(', ');
     const groupId = toolMessage.groupId;
