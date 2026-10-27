@@ -96,7 +96,7 @@ export const reviewRouter = router({
         const resolved = await resolveTaskOrThrow(model, id);
         const task = await model.updateCheckpointConfig(
           resolved.id,
-          await normalizeCheckpointTaskRefs(model, checkpoint),
+          await normalizeCheckpointTaskRefs(model, checkpoint, model.getCheckpointConfig(resolved)),
         );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return {

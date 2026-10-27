@@ -33,6 +33,36 @@ const fixture = async () => {
 };
 
 describe('checkpoint mixed-version compatibility', () => {
+  it.each(['updateCheckpoint', 'update', 'updateConfig', 'configPatch'] as const)(
+    'preserves unchanged legacy selections after a child is deleted through %s',
+    async (entry) => {
+      const { parent, a } = await fixture();
+      const tasks = { beforeIds: [a.identifier], afterIds: [a.identifier] };
+      await model.updateCheckpointConfig(parent.id, { tasks });
+      await model.delete(a.id);
+      const checkpoint = { tasks, topic: { before: true } };
+      if (entry === 'updateCheckpoint') {
+        await caller.updateCheckpoint({ id: parent.id, checkpoint });
+      } else if (entry === 'updateConfig') {
+        await caller.updateConfig({ id: parent.id, config: { checkpoint } });
+      } else {
+        await caller.update({
+          id: parent.id,
+          ...(entry === 'configPatch'
+            ? { configPatch: { checkpoint } }
+            : { config: { checkpoint } }),
+        });
+      }
+      expect(model.getCheckpointConfig((await model.findById(parent.id))!)).toEqual(checkpoint);
+      await expect(
+        caller.updateCheckpoint({
+          id: parent.id,
+          checkpoint: { tasks: { beforeIds: ['MISSING-NEW'] } },
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    },
+  );
+
   it('dual-writes canonical labels and stable pairs, so an old reader still pauses', async () => {
     const { parent, a } = await fixture();
     await caller.updateCheckpoint({

@@ -117,6 +117,9 @@ const hasInstructionSnapshotChanged = (
 
 type Setter = StoreSetter<TaskStore>;
 
+const cachedTaskId = (ref: string | undefined, index: Record<string, string>) =>
+  ref?.trim().startsWith('task_') ? ref.trim() : ref ? index[ref] : undefined;
+
 export const createTaskDetailSlice = (set: Setter, get: () => TaskStore, _api?: unknown) =>
   new TaskDetailSliceActionImpl(set, get, _api);
 
@@ -317,7 +320,7 @@ export class TaskDetailSliceActionImpl {
   };
 
   internal_resolveTaskId = async (ref: string): Promise<string> => {
-    const known = this.#get().taskRefIndex[ref];
+    const known = cachedTaskId(ref, this.#get().taskRefIndex);
     if (known) return known;
     const scope = cacheScope.get();
     const { data } = await taskService.find(ref);
@@ -421,7 +424,7 @@ export class TaskDetailSliceActionImpl {
     this.#set(
       {
         activeTaskRef: taskId,
-        activeTaskId: taskId ? this.#get().taskRefIndex[taskId] : undefined,
+        activeTaskId: cachedTaskId(taskId, this.#get().taskRefIndex),
         activeTopicDrawerAgentId: undefined,
         activeTopicDrawerFocusRequest: undefined,
         activeTopicDrawerTitle: undefined,
@@ -674,7 +677,7 @@ export class TaskDetailSliceActionImpl {
 
   useFetchTaskDetail = (taskRef?: string) => {
     const scope = cacheScope.use();
-    const knownId = useTaskStore((state) => (taskRef ? state.taskRefIndex[taskRef] : undefined));
+    const knownId = useTaskStore((state) => cachedTaskId(taskRef, state.taskRefIndex));
     const resolution = useClientDataSWR(
       taskRef && !knownId ? ['taskRef', scope, taskRef] : null,
       async () => {

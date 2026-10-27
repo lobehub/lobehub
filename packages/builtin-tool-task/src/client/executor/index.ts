@@ -969,7 +969,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     log('[TaskExecutor] runTasks - count:', identifiers.length);
 
     const results: RunTasksItemResult[] = [];
-    const lines: string[] = [];
 
     const byId = new Map<string, { id: string; identifier: string; refs: string[] }>();
     for (const ref of identifiers) {
@@ -1006,7 +1005,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           topicId: result.topicId,
           success: true,
         });
-        lines.push(`${task.identifier} (id: ${task.id}) — started`);
       } catch (error) {
         results.push({
           identifier: task.identifier,
@@ -1032,7 +1030,15 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         : `Started ${succeeded}/${results.length} tasks (${failed} failed):`;
 
     return {
-      content: [header, ...lines].join('\n'),
+      content: [
+        header,
+        ...results.map((result) => {
+          const label = result.taskId
+            ? `${result.identifier} (id: ${result.taskId})`
+            : result.identifier;
+          return `${label} — ${result.success ? 'started' : `failed: ${result.error}`}`;
+        }),
+      ].join('\n'),
       state: { failed, results, succeeded },
       success: failed === 0,
     };

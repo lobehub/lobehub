@@ -92,8 +92,6 @@ export const updateRouter = router({
         status,
         ...data
       } = input;
-      const configPatch = await normalizeTaskConfig(ctx.taskModel, rawConfigPatch);
-      if (data.config) data.config = await normalizeTaskConfig(ctx.taskModel, data.config);
       try {
         const model = ctx.taskModel;
         const actor = await resolveActivityActor(ctx, actorAgentId);
@@ -111,6 +109,14 @@ export const updateRouter = router({
           },
           { data, id, parentTaskId },
         );
+        const configPatch = await normalizeTaskConfig(model, rawConfigPatch, resolved.config);
+        if (normalizedUpdateData.config) {
+          normalizedUpdateData.config = await normalizeTaskConfig(
+            model,
+            normalizedUpdateData.config,
+            resolved.config,
+          );
+        }
         // Agent attribution comes from `resolveActivityActor` above. The
         // assignment activity is written inside this update's own transaction
         // (see `TaskModel.updateWithLog`), so a concurrent reassignment cannot
@@ -268,7 +274,7 @@ export const updateRouter = router({
         const resolved = await resolveTaskOrThrow(model, id);
         const task = await model.updateTaskConfig(
           resolved.id,
-          (await normalizeTaskConfig(model, config))!,
+          (await normalizeTaskConfig(model, config, resolved.config))!,
         );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return { data: task, message: 'Config updated', success: true };

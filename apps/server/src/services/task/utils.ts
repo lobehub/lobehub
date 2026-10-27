@@ -1,5 +1,7 @@
 import type { CheckpointConfig, TaskItem } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
+import isEqual from 'fast-deep-equal';
 
 import { checkpointTaskPairsMatch } from '@/database/models/task/checkpoint';
 
@@ -69,6 +71,7 @@ export async function findTaskOrThrow(taskModel: TaskServiceDeps['taskModel'], t
 export async function normalizeCheckpointTaskRefs(
   taskModel: TaskServiceDeps['taskModel'],
   checkpoint: CheckpointConfig,
+  previous?: CheckpointConfig,
 ) {
   if (!checkpoint.tasks) return checkpoint;
   const tasks = { ...checkpoint.tasks };
@@ -79,7 +82,15 @@ export async function normalizeCheckpointTaskRefs(
     ] as const
   ).filter(
     ([idsKey, pairsKey]) =>
-      tasks[idsKey] !== undefined && !checkpointTaskPairsMatch(tasks[idsKey], tasks[pairsKey]),
+      tasks[idsKey] !== undefined &&
+      !checkpointTaskPairsMatch(tasks[idsKey], tasks[pairsKey]) &&
+      // Whole-config round trips must not reinterpret unchanged legacy selections.
+      // They can contain deleted tasks or exact historical values that never matched.
+      !(
+        tasks[pairsKey] === undefined &&
+        previous?.tasks?.[pairsKey] === undefined &&
+        isEqual(tasks[idsKey], previous?.tasks?.[idsKey])
+      ),
   );
   if (!pending.length) return checkpoint;
   const resolved = await resolveTasksOrThrow(
@@ -105,10 +116,15 @@ export async function normalizeCheckpointTaskRefs(
 export async function normalizeTaskConfig(
   taskModel: TaskServiceDeps['taskModel'],
   config: Record<string, unknown> | undefined,
+  previous?: unknown,
 ) {
   if (!config?.checkpoint) return config;
   return {
     ...config,
-    checkpoint: await normalizeCheckpointTaskRefs(taskModel, config.checkpoint as CheckpointConfig),
+    checkpoint: await normalizeCheckpointTaskRefs(
+      taskModel,
+      config.checkpoint as CheckpointConfig,
+      isRecord(previous) ? (previous.checkpoint as CheckpointConfig | undefined) : undefined,
+    ),
   };
 }

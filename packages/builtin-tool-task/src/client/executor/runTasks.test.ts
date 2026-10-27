@@ -42,4 +42,14 @@ describe('TaskExecutor batch references', () => {
     expect(result.content).toContain('Ambiguous task reference');
     expect(mocks.run).not.toHaveBeenCalled();
   });
+  it('includes lookup and kickoff failures in the model-visible content', async () => {
+    mocks.find.mockRejectedValueOnce(new Error('Task not found: T-9'));
+    mocks.run.mockRejectedValueOnce(new Error('Already running'));
+    const result = await taskExecutor.runTasks({ identifiers: ['T-9', 'task_1'] });
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('T-9');
+    expect(result.content).toContain('Task not found: T-9');
+    expect(result.content).toContain('T-1 (id: task_1)');
+    expect(result.content).toContain('Already running');
+  });
 });

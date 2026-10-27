@@ -23,6 +23,7 @@ import {
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
@@ -427,7 +428,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         onChange: (depIdentifier: string) => void,
       ): Promise<string | undefined> => {
         const resolved = await resolveTasksOrThrow(taskModel(), ids, { duplicates: 'collapse' });
-        await Promise.all(resolved.tasks.map((dep) => apply(dep.id)));
+        await pMap(resolved.tasks, (dep) => apply(dep.id), { concurrency: 5 });
         resolved.tasks.forEach((dep) => onChange(taskResultLabel(dep)));
         return undefined;
       };

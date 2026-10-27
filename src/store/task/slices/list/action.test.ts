@@ -336,7 +336,7 @@ describe('TaskListSliceAction', () => {
       const queryKey = result.current.queryKey!;
       expect(result.current.data).toBeUndefined();
 
-      const items = [{ id: 'task-1', id: 'T-1', identifier: 'T-1', status: 'scheduled' }] as any;
+      const items = [{ id: 'task-1', identifier: 'T-1', status: 'scheduled' }] as any;
       act(() => {
         useTaskStore.setState({ taskListMap: { [queryKey]: { items, total: 7 } } });
       });
@@ -360,7 +360,7 @@ describe('TaskListSliceAction', () => {
     it('seeds the scheduled page from its persisted row before anything mounts', async () => {
       const { scheduledTaskListQuery } = await import('./action');
       const { taskListQueryKey, taskListResource } = await import('./projection');
-      const items = [{ id: 'task-1', id: 'T-1', identifier: 'T-1', status: 'scheduled' }];
+      const items = [{ id: 'task-1', identifier: 'T-1', status: 'scheduled' }];
       const get = vi
         .spyOn(taskListResource.storage!, 'get')
         .mockResolvedValue({ data: { items, total: 1 } as any, updatedAt: 1 });

@@ -159,11 +159,11 @@ describe('TaskDetailSliceAction', () => {
         data: { id: 'T-7', identifier: 'T-7' },
         success: true,
       } as any);
-      await useTaskStore.getState().fetchTaskDetail('task_raw');
+      await useTaskStore.getState().fetchTaskDetail('old-7');
 
       const { taskDetailMap } = useTaskStore.getState();
-      expect(taskDetailMap.task_raw).toBeUndefined();
-      expect(useTaskStore.getState().taskRefIndex.task_raw).toBe('T-7');
+      expect(taskDetailMap['old-7']).toBeUndefined();
+      expect(useTaskStore.getState().taskRefIndex['old-7']).toBe('T-7');
       expect(taskDetailMap['T-7']).toMatchObject({ id: 'T-7', identifier: 'T-7' });
     });
 

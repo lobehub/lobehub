@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import useSWR from 'swr';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, createReplicaState } from '@/libs/replica';
 import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
+import { useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 
 import { useTaskStore } from '../../store';
 import { taskGroupListEntity, taskListEntity } from '../list/projection';
+import { taskDetailResource } from './projection';
 
 vi.mock('@/services/task', () => ({
   taskService: { find: vi.fn(), getDetail: vi.fn(), updateStatus: vi.fn(), update: vi.fn() },
@@ -36,8 +40,35 @@ beforeEach(() => {
     taskGroupListReplica: createReplicaState(),
   });
 });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('canonical task cache', () => {
+  it('hydrates a canonical route from persisted detail without an online alias lookup', async () => {
+    const scope = `task-offline-${crypto.randomUUID()}:personal`;
+    vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+    vi.spyOn(cacheScope, 'use').mockReturnValue(scope);
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+    // Run the real hydration query while the network sync is unavailable.
+    vi.mocked(useClientDataSWR).mockImplementation(
+      (key, fetcher) =>
+        useSWR(Array.isArray(key) && key[0] === 'replica:hydrate' ? key : null, fetcher) as never,
+    );
+    vi.mocked(taskService.find).mockRejectedValue(new Error('offline'));
+    await taskDetailResource.storage!.set(
+      { scope, queryKey: 'task_1' },
+      { data: detail, updatedAt: 1 },
+    );
+    useTaskStore.getState().setActiveTaskId('task_1');
+    const { result } = renderHook(() => useTaskStore.getState().useFetchTaskDetail('task_1'));
+    await waitFor(() => expect(useTaskStore.getState().taskDetailMap.task_1).toMatchObject(detail));
+    expect(useTaskStore.getState().activeTaskId).toBe('task_1');
+    expect(result.current.error).toBeUndefined();
+    expect(taskService.find).not.toHaveBeenCalled();
+  });
+
   it('resolves an old route once and stores only the stable id', async () => {
     vi.mocked(taskService.find).mockResolvedValue({ data: detail, success: true } as never);
     vi.mocked(taskService.getDetail).mockResolvedValue({ data: detail, success: true } as never);

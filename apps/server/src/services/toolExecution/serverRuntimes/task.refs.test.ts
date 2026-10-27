@@ -10,27 +10,54 @@ vi.mock('@/server/routers/lambda/task', () => ({ taskRouter: { createCaller: vi.
 vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));
 
 const setup = () => {
-  const rows = ['1', '2', '3'].map((n) => ({
+  const rows = Array.from({ length: 12 }, (_, i) => String(i + 1)).map((n) => ({
     id: `task_${n}`,
     identifier: `T-${n}`,
     status: 'backlog',
   })) as TaskItem[];
   const resolveRefs = async (refs: string[]) => matchTaskRefs(refs.map(parseTaskRef), rows);
   const run = vi.fn().mockResolvedValue({ topicId: 'tpc_1', operationId: 'op_1' });
+  const model = {
+    addDependency: vi.fn(),
+    removeDependency: vi.fn(),
+    resolveRefs,
+    resolve: async (ref: string) => (await resolveRefs([ref])).byRef.get(ref) ?? null,
+  };
   const runtime = createTaskRuntime({
     taskId: 'task_1',
-    taskModel: {
-      resolveRefs,
-      resolve: async (ref: string) => (await resolveRefs([ref])).byRef.get(ref) ?? null,
-    } as never,
+    taskModel: model as never,
     taskCaller: { run } as never,
     taskService: {} as never,
     agentModel: {} as never,
   });
-  return { run, runtime };
+  return { model, run, runtime };
 };
 
 describe('task runtime canonical references', () => {
+  it.each(['addDependencies', 'removeDependencies'] as const)(
+    'caps concurrent database writes for %s',
+    async (field) => {
+      const { model, runtime } = setup();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const write = field === 'addDependencies' ? model.addDependency : model.removeDependency;
+      write.mockImplementation(() => gate);
+      const pending = runtime.editTask({
+        identifier: 'task_1',
+        [field]: Array.from({ length: 11 }, (_, i) => `task_${i + 2}`),
+      });
+      try {
+        await vi.waitFor(() => expect(write.mock.calls.length).toBeGreaterThanOrEqual(5));
+        expect(write).toHaveBeenCalledTimes(5);
+      } finally {
+        release();
+        await pending;
+      }
+      expect(write).toHaveBeenCalledTimes(11);
+    },
+  );
   it('resolves a run ref before calling the router and returns canonical state', async () => {
     const { run, runtime } = setup();
     const result = await runtime.runTask({
