@@ -8,6 +8,14 @@ export const DUTY_POLICY_ID = 'bot-wake:duty';
 /** Messages shorter than this carry nothing to act on ("ok", "+1", "嗯"). */
 const MIN_DUTY_MESSAGE_LENGTH = 6;
 
+/** Longest duty named in the stored verdict reason. The woken agent gets the full duty. */
+const DUTY_LABEL_LENGTH = 120;
+
+const dutyLabel = (duty: string) => {
+  const line = duty.replaceAll(/\s+/g, ' ').trim();
+  return line.length > DUTY_LABEL_LENGTH ? `${line.slice(0, DUTY_LABEL_LENGTH - 1)}…` : line;
+};
+
 /** Another person spoke this recently, right before the author: the author is answering them. */
 const ANSWERING_OTHER_MS = 2 * 60 * 1000;
 
@@ -17,7 +25,7 @@ export interface WakeDutyInput extends WakeClassifierInput {
 }
 
 export interface WakeDutyJudgement {
-  /** The duty the message falls within, short; absent when the model did not say. */
+  /** The duty the message falls within, in full; absent when the model did not say. */
   duty?: string;
   /** 0..1: how likely the message falls within the bot's duties, so it should step in now. */
   inDuty: number;
@@ -135,8 +143,8 @@ export const createDutyPolicy = (
       return {
         confidence: outcome.inDuty,
         matched,
-        // The stored verdict keeps only the reason, so it names the duty too.
-        reason: matched ? `[${matched}] ${reason}` : reason,
+        // The stored verdict keeps only the reason, so it names the duty too, shortened.
+        reason: matched ? `[${dutyLabel(matched)}] ${reason}` : reason,
         tags: ['duty'],
         verdict: outcome.inDuty >= rules.duties.threshold ? 'allow' : 'deny',
       };

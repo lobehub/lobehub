@@ -10,7 +10,6 @@ import {
   BOT_WAKE_CLASSIFIER_JSON_SCHEMA,
   BOT_WAKE_CLASSIFIER_PROMPT_VERSION,
   BOT_WAKE_DECISION_PROMPT_VERSION,
-  BOT_WAKE_DUTY_JSON_SCHEMA,
   BOT_WAKE_DUTY_PROMPT_VERSION,
   BOT_WAKE_NO_DUTY,
   chainAgentSignalAnalyzeIntentFeedbackSatisfaction,
@@ -304,13 +303,38 @@ describe('application generation chains', () => {
       expect(Object.keys(questions)).toEqual(['inDuty']);
     });
 
-    it('asks the chat model for a score, the matched duty and a reason', () => {
-      const { messages } = chainBotWakeDutyClassifier({ duties: 'Triage bugs.', message: 'm' });
+    it('asks the chat model for a score, the key of the matched duty and a reason', () => {
+      const long = `Assess feature requests people describe${', with the use case and the result they expect'.repeat(4)}, then create a task for dario`;
+      const { duties, messages, schema } = chainBotWakeDutyClassifier({
+        duties: `- ${long}\n- Notify the requester once the PR is up`,
+        message: 'm',
+      });
 
-      expect(BOT_WAKE_DUTY_JSON_SCHEMA.schema.required).toEqual(['inDuty', 'duty', 'reason']);
+      expect(duties).toEqual({
+        'duty-1': long,
+        'duty-2': 'Notify the requester once the PR is up',
+      });
+      expect(schema.schema.required).toEqual(['inDuty', 'duty', 'reason']);
+      expect(schema.schema.properties.duty).toEqual({
+        enum: ['duty-1', 'duty-2', BOT_WAKE_NO_DUTY],
+        type: 'string',
+      });
+      // The full duty is listed under its key; nothing caps its length.
+      expect(messages[0].content).toContain(`- duty-1: ${long}`);
       expect(messages[0].content).toContain('falls within its duties');
       // Anyone's message counts, not only the owner's.
       expect(messages[0].content).toContain('It does not matter who wrote the message');
+    });
+
+    it('does not ask the chat model which duty matched when there is only one', () => {
+      const { messages, schema } = chainBotWakeDutyClassifier({
+        duties: 'Triage bugs.',
+        message: 'm',
+      });
+
+      expect(schema.schema.required).toEqual(['inDuty', 'reason']);
+      expect(schema.schema.properties).not.toHaveProperty('duty');
+      expect(messages[0].content).not.toContain('The duties by key');
     });
 
     it('splits the duties into one per line, without list markers', () => {

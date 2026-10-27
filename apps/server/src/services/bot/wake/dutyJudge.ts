@@ -7,11 +7,9 @@ import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { GenerateObjectPayload } from '@lobechat/model-runtime';
 import {
-  BOT_WAKE_DUTY_JSON_SCHEMA,
   BOT_WAKE_DUTY_PROMPT_VERSION,
   chainBotWakeDutyClassifier,
   chainBotWakeDutyDecision,
-  MAX_MATCHED_DUTY_LENGTH,
 } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -28,14 +26,21 @@ import { createRuntimeCache, ProbabilitySchema, toPromptInput } from './classify
 const log = debug('lobe-server:bot:wake-duty');
 
 const DutySchema = z.object({
-  duty: z.string(),
+  duty: z.string().optional(),
   inDuty: z.number().min(0).max(1),
   reason: z.string(),
 });
 
-/** The matched duty as the agent is told it: one line, short. */
-const shortDuty = (duty: string | undefined) =>
-  duty?.replaceAll(/\s+/g, ' ').trim().slice(0, MAX_MATCHED_DUTY_LENGTH) || undefined;
+/**
+ * The full duty the model picked by key, as the owner wrote it: the agent that carries it out is
+ * told nothing else about it. The only duty when the owner wrote one; none for `none`, a refusal or
+ * an unknown key.
+ */
+const pickDuty = (duties: Record<string, string>, key: string | undefined) => {
+  const listed = Object.values(duties);
+  if (listed.length === 1) return listed[0];
+  return (key && duties[key]?.trim()) || undefined;
+};
 
 /**
  * Builds the model call behind the duty policy: does a message nobody addressed to the bot fall
@@ -90,36 +95,27 @@ export const createWakeDutyJudge = ({
         );
       }
       const probability = ProbabilitySchema.parse(inDuty.probability);
-      const listed = Object.values(duties);
-      const matched =
-        listed.length === 1
-          ? listed[0]
-          : duty?.type === 'choice'
-            ? duties[duty.choice as keyof typeof duties]
-            : undefined;
-
       return {
-        duty: shortDuty(matched),
+        duty: pickDuty(duties, duty?.type === 'choice' ? duty.choice : undefined),
         inDuty: probability,
         reason: `${model} p=${probability.toFixed(2)}`,
       };
     }
 
-    const chain = chainBotWakeDutyClassifier(input);
+    const { duties, messages, schema } = chainBotWakeDutyClassifier(input);
     const result = await runtime.generateObject(
       {
-        messages: chain.messages as GenerateObjectPayload['messages'],
+        messages: messages as GenerateObjectPayload['messages'],
         model,
-        schema: BOT_WAKE_DUTY_JSON_SCHEMA,
+        schema,
       },
       {
         metadata: { trigger: RequestTrigger.Bot },
         signal: abortSignal,
-        tracing: tracing(BOT_WAKE_DUTY_JSON_SCHEMA.name),
+        tracing: tracing(schema.name),
       },
     );
     const { duty, inDuty, reason } = DutySchema.parse(result);
-
-    return { duty: shortDuty(duty), inDuty, reason };
+    return { duty: pickDuty(duties, duty), inDuty, reason };
   };
 };

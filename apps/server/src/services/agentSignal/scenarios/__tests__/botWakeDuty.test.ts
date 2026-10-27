@@ -157,6 +157,18 @@ describe('duty policy', () => {
     });
   });
 
+  it('hands the woken agent the whole duty and names it shortened in the stored reason', async () => {
+    const long =
+      '当有人在群里描述一个新需求、并且说明了使用场景和期望的结果时，先判断复杂度：简单的需求直接在 LobeHub 里给 dario 建一个任务，写清楚需求原文和验收标准，然后在原消息下回复任务链接；复杂的需求先和提需求的人确认范围，再拆成多个任务分给对应的人，PR 提了之后通知提需求的人';
+    const result = await run(judgeScoring(0.9, long));
+
+    expect(result.matched).toBe(long);
+    const label = result.reason.slice(1, result.reason.indexOf(']'));
+    expect(label).toHaveLength(120);
+    expect(label.endsWith('…')).toBe(true);
+    expect(long.startsWith(label.slice(0, -1))).toBe(true);
+  });
+
   it('keeps the reason as it is when the model named no duty', async () => {
     const judge = vi.fn<WakeDutyJudge>(async () => ({ duty: ' ', inDuty: 0.9, reason: 'p=0.9' }));
     const result = await run(judge);

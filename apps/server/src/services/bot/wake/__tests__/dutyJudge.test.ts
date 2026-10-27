@@ -50,7 +50,7 @@ describe('createWakeDutyJudge', () => {
     expect(options.signal).toBe(abort.signal);
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'duty-v1',
+      promptVersion: 'duty-v2',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_duty_decision',
     });
@@ -92,12 +92,8 @@ describe('createWakeDutyJudge', () => {
     ).rejects.toThrow('decision model refused: unsure');
   });
 
-  it('can use a chat model through generateObject', async () => {
-    mockGenerateObject.mockResolvedValue({
-      duty: '  评估需求\n并建任务 ',
-      inDuty: 0.3,
-      reason: 'just a remark',
-    });
+  it('can use a chat model through generateObject, which names the duty by key', async () => {
+    mockGenerateObject.mockResolvedValue({ duty: 'duty-2', inDuty: 0.3, reason: 'just a remark' });
 
     const result = await createWakeDutyJudge({
       db: {} as never,
@@ -105,10 +101,71 @@ describe('createWakeDutyJudge', () => {
       userId: 'u1',
     })({ conversation, duties: DUTIES, signal }, new AbortController().signal);
 
-    expect(result).toEqual({ duty: '评估需求 并建任务', inDuty: 0.3, reason: 'just a remark' });
-    const [payload] = mockGenerateObject.mock.calls[0];
+    expect(result).toEqual({
+      duty: 'PR 提了之后通知提需求的人',
+      inDuty: 0.3,
+      reason: 'just a remark',
+    });
+    const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(payload.schema.name).toBe('bot_wake_duty');
+    expect(payload.schema.schema.properties.duty.enum).toEqual(['duty-1', 'duty-2', 'none']);
     expect(payload.messages[0].content).toContain('falls within its duties');
     expect(payload.messages[1].content).toContain('PR 提了之后通知提需求的人');
+    expect(options.tracing).toMatchObject({
+      promptVersion: 'duty-v2',
+      schemaName: 'bot_wake_duty',
+    });
+  });
+
+  it('names no duty when the chat model picks none, and the only one when there is one', async () => {
+    const judge = createWakeDutyJudge({ db: {} as never, engine: 'chat', userId: 'u1' });
+
+    mockGenerateObject.mockResolvedValueOnce({ duty: 'none', inDuty: 0.1, reason: 'chatter' });
+    const none = await judge(
+      { conversation, duties: DUTIES, signal },
+      new AbortController().signal,
+    );
+    expect(none.duty).toBeUndefined();
+
+    mockGenerateObject.mockResolvedValueOnce({ inDuty: 0.9, reason: 'a bug report' });
+    await expect(
+      judge({ conversation, duties: 'Triage bug reports.', signal }, new AbortController().signal),
+    ).resolves.toMatchObject({ duty: 'Triage bug reports.', inDuty: 0.9 });
+  });
+
+  describe('a duty longer than 120 characters', () => {
+    const long =
+      '当有人在群里描述一个新需求、并且说明了使用场景和期望的结果时，先判断复杂度：简单的需求直接在 LobeHub 里给 dario 建一个任务，写清楚需求原文和验收标准，然后在原消息下回复任务链接；复杂的需求先和提需求的人确认范围，再拆成多个任务分给对应的人，PR 提了之后通知提需求的人';
+    const duties = `- ${long}\n- 每周五下午汇总本周的线上报错`;
+
+    it('keeps the whole duty the decision model chose', async () => {
+      mockDecide.mockResolvedValue({
+        answers: {
+          duty: { choice: 'duty-1', type: 'choice' },
+          inDuty: { probability: 0.9, type: 'boolean' },
+        },
+      });
+
+      const result = await createWakeDutyJudge({ db: {} as never, userId: 'u1' })(
+        { conversation, duties, signal },
+        new AbortController().signal,
+      );
+
+      expect(result.duty).toBe(long);
+    });
+
+    it('keeps the whole duty the chat model named by key', async () => {
+      mockGenerateObject.mockResolvedValue({ duty: 'duty-1', inDuty: 0.9, reason: 'a request' });
+
+      const result = await createWakeDutyJudge({ db: {} as never, engine: 'chat', userId: 'u1' })(
+        { conversation, duties, signal },
+        new AbortController().signal,
+      );
+
+      expect(result.duty).toBe(long);
+      expect(mockGenerateObject.mock.calls[0][0].messages[0].content).toContain(
+        `- duty-1: ${long}`,
+      );
+    });
   });
 });
