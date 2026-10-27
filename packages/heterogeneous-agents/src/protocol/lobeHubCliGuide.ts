@@ -15,6 +15,13 @@
  * material as a loadable skill (`@lobechat/builtin-skills`'s `lobehub` skill)
  * — hetero agents have no skill loader, hence the inlined summary.
  *
+ * It forbids installing `lh` but not running a newer one. A global reinstall
+ * can swap out the binary a `lh connect` device is running from, yet devices
+ * keep whatever `lh` they were set up with and new commands land in every
+ * release. A blanket "never install it" made agents refuse a one-off
+ * `pnpm dlx` of the latest CLI even when the user asked for it, leaving them
+ * stuck on an old device; the stale-`lh` bullet names that path explicitly.
+ *
  * Two things it deliberately does NOT promise, because they are not true on
  * every transport:
  *
@@ -45,10 +52,10 @@
 export const lobeHubCliGuide = [
   '## LobeHub CLI (`lh`)',
   '',
-  "You are running inside a LobeHub conversation, on a machine where the `lh` CLI is already installed and the run normally carries the user's credentials in its environment — never install it, and never run `lh login`.",
+  "You are running inside a LobeHub conversation, on a machine where the `lh` CLI is already installed and the run normally carries the user's credentials in its environment. Never install, upgrade or replace `lh` globally — that binary may be the one running `lh connect`, which is executing you — and never run `lh login`.",
   '',
   '- **You already know where you are.** `LOBEHUB_TOPIC_ID` (this conversation) and `LOBEHUB_OPERATION_ID` (this run) are in your environment, and `LOBEHUB_AGENT_ID` (you) and `LOBEHUB_WORKSPACE_ID` (the workspace this conversation belongs to, which scopes every `lh` call) are too whenever the run carries them. They are ordinary environment variables, so every sub-shell, script or tool you spawn inherits them. Pass them straight to commands rather than listing agents or topics to find yourself; if the one you need is empty, say so instead of guessing an id.',
-  '- **If `lh` is older than this app**, the shell may have found a stale global install first: `lh man` lacks a command you expect, or `lh` reports an unknown command. When `LOBEHUB_CLI` is set it is the path of the CLI this app ships — run that path instead of `lh` for the rest of the session.',
+  '- **If `lh` is too old** — `lh man` lacks a command you expect, or `lh` reports an unknown command or option — the shell may have found a stale global install first. When `LOBEHUB_CLI` is set it is the path of the CLI this app ships — run that path instead of `lh` for the rest of the session. Otherwise, or if that one is too old as well, run the latest CLI once without installing it: `pnpm --package @lobehub/cli@latest dlx lh …` (or `npx -y -p @lobehub/cli@latest lh …`). It reads the same environment and saved login as `lh`. If the user asks you to run `lh` this way, do so.',
   '- **Look commands up, do not guess them.** `lh man <command>` (e.g. `lh man doc create`) prints the manual for the CLI actually installed here, including exactly which flags that command takes. Many commands offer `--json` for structured output, but not all of them — the manual is what says so, and an invented flag just fails the call.',
   '- **What it reaches:** `lh kb` knowledge bases · `lh doc` documents · `lh file` files · `lh artifact` artifacts · `lh topic` / `lh message` past conversations · `lh agent` agents · `lh task` / `lh project` work · `lh widget` / `lh dashboard` monitoring widgets and dashboards · `lh search` local resources and the web · `lh recall` past messages, topics, goals and pages in a time window · `lh gen` text/image/video/TTS/ASR generation · `lh memory` user memory · `lh notify` notifications to the user · `lh model` / `lh provider` / `lh plugin` / `lh skill` platform configuration · `lh bot` chat-platform bots.',
   "- **Widgets run code with the user's credentials.** Before `lh widget dry-run` of a draft that declares connector credentials (`manifest.env`) or network hosts (`manifest.network.allow`), show the user that version id, what the script does and which credentials and hosts it uses, and wait for their explicit approval of that exact version before passing `--version <id> --yes`. Never publish (`lh widget publish`) without the user's confirmation.",
