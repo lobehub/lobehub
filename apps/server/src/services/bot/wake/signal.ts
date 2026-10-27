@@ -49,13 +49,27 @@ const isSystemMessage = (platform: string, raw: unknown): boolean => {
   return type !== undefined && !DISCORD_USER_MESSAGE_TYPES.has(type);
 };
 
-/** Who wrote the message a Discord reply points at; the gateway inlines it as `referenced_message`. */
-const readReplyToAuthorId = (platform: string, raw: unknown): string | undefined => {
-  if (platform !== 'discord' || typeof raw !== 'object' || raw === null) return undefined;
-  const id = (raw as { referenced_message?: { author?: { id?: unknown } } | null })
-    .referenced_message?.author?.id;
+interface DiscordRawAuthor {
+  global_name?: unknown;
+  id?: unknown;
+  username?: unknown;
+}
 
-  return typeof id === 'string' && id ? id : undefined;
+/** Who wrote the message a Discord reply points at; the gateway inlines it as `referenced_message`. */
+const readReplyTo = (
+  platform: string,
+  raw: unknown,
+): Pick<WakeSignal, 'replyToAuthorId' | 'replyToAuthorName'> => {
+  if (platform !== 'discord' || typeof raw !== 'object' || raw === null) return {};
+  const author = (raw as { referenced_message?: { author?: DiscordRawAuthor } | null })
+    .referenced_message?.author;
+  if (typeof author?.id !== 'string' || !author.id) return {};
+
+  const name = [author.global_name, author.username].find(
+    (value): value is string => typeof value === 'string' && !!value.trim(),
+  );
+
+  return { replyToAuthorId: author.id, ...(name ? { replyToAuthorName: name.trim() } : {}) };
 };
 
 /**
@@ -95,7 +109,7 @@ export const buildWakeSignal = ({
     message: text,
     platform,
     platformThreadId,
-    replyToAuthorId: readReplyToAuthorId(platform, message.raw),
+    ...readReplyTo(platform, message.raw),
     timestamp,
   };
 };

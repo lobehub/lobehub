@@ -699,6 +699,8 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       ...snapshot,
       // Who wrote it, so a decision can be read without the purged payload: an id, not a name.
       author: signal.author && { id: signal.author.id, isOwner: signal.author.isOwner },
+      // Whom a reply answered, so a wake on a reply to someone else can be found and audited.
+      ...(signal.replyToAuthorId ? { replyToAuthorId: signal.replyToAuthorId } : {}),
       conversation: summarizeConversation(conversation),
     };
 

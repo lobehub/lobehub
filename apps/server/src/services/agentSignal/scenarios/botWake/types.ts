@@ -26,6 +26,8 @@ export interface WakeSignal {
    * Absent when it is not a reply or the platform does not say.
    */
   replyToAuthorId?: string;
+  /** The name that author shows, for the classifier to read; absent when the platform omits it. */
+  replyToAuthorName?: string;
   timestamp: number;
 }
 

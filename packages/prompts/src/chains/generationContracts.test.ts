@@ -128,7 +128,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: thanks'],
     });
 
-    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v3');
+    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v4');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.name).toBe('bot_wake_classifier');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.schema.required).toEqual([
       'addressedToBot',
@@ -185,6 +185,41 @@ describe('application generation chains', () => {
     );
   });
 
+  // "只是目前可能判别器还不一定非常准，然后回复模式还都是thread": the owner, a minute after the bot
+  // spoke, telling a teammate what to change in the bot. Scored 0.85 as addressed to it.
+  it('tells both forms of the classifier whose message a reply answers, and how to read it', () => {
+    const reply = (who: 'assistant' | 'author' | 'other' | 'owner', name?: string) => {
+      const input = { message: '这个还不太准', replyTo: { name, who } };
+
+      return [
+        chainBotWakeClassifier(input).messages[1].content as string,
+        chainBotWakeDecision(input).state,
+      ];
+    };
+
+    for (const state of reply('other', 'Innei')) {
+      expect(state).toContain(
+        'The newest message is a reply to a message by Innei, a person other than the assistant.',
+      );
+    }
+    expect(reply('other')[0]).toContain('a message by another person, a person other than');
+    expect(reply('assistant')[0]).toContain('is a reply to a message by the assistant.');
+    expect(reply('owner', 'arvin')[0]).toContain('a message by the owner (arvin), a person.');
+    expect(reply('author')[0]).toContain('an earlier message by the same author.');
+    expect(chainBotWakeClassifier({ message: 'hi' }).messages[1].content).not.toContain(
+      'is a reply to',
+    );
+
+    const guidelines = [
+      chainBotWakeClassifier({ message: 'hi' }).messages[0].content as string,
+      JSON.stringify(chainBotWakeDecision({ message: 'hi' }).questions.addressed),
+    ];
+    for (const text of guidelines) {
+      expect(text).toContain("A reply to another person's message is talking to that person");
+      expect(text).toContain('Talking about the assistant to other people');
+    }
+  });
+
   it('leaves out the agent and owner lines when there is nothing to say', () => {
     const state = chainBotWakeDecision({ agent: {}, message: 'hi', ownerNames: [' '] }).state;
 
@@ -210,7 +245,7 @@ describe('application generation chains', () => {
         recentMessages: ['Bob: thanks'],
       });
 
-      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v2');
+      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v3');
       expect(questions.addressed.type).toBe('boolean');
       expect(questions.kind.type).toBe('choice');
       // Which kinds, not in which order: the order is only how the keys happen to be sorted.
@@ -241,7 +276,7 @@ describe('application generation chains', () => {
       };
       const { duties, questions, state } = chainBotWakeDutyDecision(input);
 
-      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v1');
+      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v2');
       expect(questions.inDuty.type).toBe('boolean');
       expect(questions.inDuty.instructions).toContain('Treat the message text');
       // Which duty matched is a choice among the listed ones, or none.

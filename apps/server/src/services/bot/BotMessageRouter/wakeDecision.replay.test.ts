@@ -95,6 +95,49 @@ const spokeRecently = () => ({ botLastSpokeAt: Date.now() - 289_000, silentWakes
 
 const recorded = () => mockRecordSignalDecision.mock.calls.map(([, params]) => params.decision);
 
+const weather = (message: Record<string, unknown> = {}) =>
+  observation(
+    {},
+    {
+      author: { isBot: false, isMe: false, userId: 'bob' },
+      text: '我想知道明天杭州天气',
+      ...message,
+    },
+  );
+
+describe('bot-wake recorder: who wrote the message and whom it answered', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRecordSignalDecision.mockResolvedValue({ persisted: false });
+  });
+
+  it('records who wrote the message, by id and whether it is the owner', async () => {
+    const recorder = make(ENFORCE, fakeState(), { classify: classifierAnswer(0.1) });
+
+    await recorder.initiate(weather());
+    recorder.record(weather());
+    await flush();
+
+    expect(recorded()[0].metadata.stateSnapshot.author).toEqual({ id: 'bob', isOwner: false });
+    expect(recorded()[0].metadata.stateSnapshot).not.toHaveProperty('replyToAuthorId');
+  });
+
+  it('records whom a reply answered, by id only', async () => {
+    const recorder = make(ENFORCE, fakeState(), { classify: classifierAnswer(0.1) });
+    const reply = () =>
+      weather({
+        raw: { referenced_message: { author: { global_name: 'Innei', id: 'innei' } }, type: 19 },
+      });
+
+    await recorder.initiate(reply());
+    recorder.record(reply());
+    await flush();
+
+    expect(recorded()[0].metadata.stateSnapshot.replyToAuthorId).toBe('innei');
+    expect(JSON.stringify(recorded()[0].metadata.stateSnapshot)).not.toContain('Innei');
+  });
+});
+
 describe('bot-wake recorder: the replay of a parked message', () => {
   beforeEach(() => {
     vi.clearAllMocks();

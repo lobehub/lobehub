@@ -90,6 +90,20 @@ export const createRuntimeCache = ({
   };
 };
 
+/** Whose message the judged one replies to, as the prompt names it. */
+const describeReplyTo = ({
+  conversation,
+  signal,
+}: Pick<WakeClassifierInput, 'conversation' | 'signal'>): BotWakeClassifierInput['replyTo'] => {
+  const { replyToAuthorId: id, replyToAuthorName: name } = signal;
+  if (!id) return;
+  if (id === signal.applicationId) return { name, who: 'assistant' };
+  if (id === signal.author?.id) return { name, who: 'author' };
+  if (conversation?.ownerId && id === conversation.ownerId) return { name, who: 'owner' };
+
+  return { name, who: 'other' };
+};
+
 /** The classifier input as the prompt chains take it. */
 export const toPromptInput = ({
   conversation,
@@ -106,6 +120,7 @@ export const toPromptInput = ({
   recentMessages: conversation?.recent.map((line) =>
     describeLine(line, signal.applicationId, conversation.ownerId),
   ),
+  replyTo: describeReplyTo({ conversation, signal }),
 });
 
 /**

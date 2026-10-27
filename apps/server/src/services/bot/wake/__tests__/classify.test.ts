@@ -40,7 +40,7 @@ describe('createWakeClassify', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v3',
+      promptVersion: 'v4',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_classifier',
     });
@@ -169,10 +169,40 @@ describe('createWakeClassify with a decision model (the default)', () => {
 
     expect(mockDecide.mock.calls[0][1].tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'decision-v2',
+      promptVersion: 'decision-v3',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_decision',
     });
+  });
+
+  it('tells the model whose message a reply answers: the bot, the owner, the author or someone else', async () => {
+    mockDecide.mockResolvedValue(answer(0.5));
+    const classify = createWakeClassify({ db: {} as never, userId: 'u1' });
+    const stateFor = async (replyToAuthorId: string, replyToAuthorName?: string) => {
+      mockDecide.mockClear();
+      await classify(
+        {
+          conversation: { botNames: ['Nasa'], ownerId: 'owner-1', recent: [] },
+          signal: {
+            ...signal,
+            applicationId: 'app-1',
+            author: { id: 'u-9', isBot: false, isMe: false, isOwner: false, isSystem: false },
+            replyToAuthorId,
+            replyToAuthorName,
+          },
+        },
+        new AbortController().signal,
+      );
+
+      return mockDecide.mock.calls[0][0].state as string;
+    };
+
+    expect(await stateFor('innei-1', 'Innei')).toContain(
+      'a reply to a message by Innei, a person other than the assistant',
+    );
+    expect(await stateFor('app-1')).toContain('a reply to a message by the assistant');
+    expect(await stateFor('owner-1', 'arvin')).toContain('a message by the owner (arvin)');
+    expect(await stateFor('u-9')).toContain('an earlier message by the same author');
   });
 
   it('tells the model which agent the bot is and who owns it, and marks the owner’s lines', async () => {
