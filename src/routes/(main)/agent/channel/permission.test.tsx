@@ -4,6 +4,7 @@
 import { useForm } from '@lobehub/ui/form';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import PlatformDetail, { type ChannelFormValues } from '@/features/AgentChannel/PlatformDetail';
@@ -268,6 +269,8 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
   );
 };
 
+const LocationProbe = () => <output data-testid="location">{useLocation().search}</output>;
+
 // A saved bot folds its credentials away; open them the way a person would.
 const openCredentials = () => fireEvent.click(screen.getByText('channel.credentials'));
 
@@ -321,6 +324,7 @@ describe('Agent channel permission gates', () => {
   it("speaks as the agent's name, not its role title", async () => {
     render(
       <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
+      { wrapper: MemoryRouter },
     );
 
     // The test window is narrow, so the preview opens from its button.
@@ -333,6 +337,7 @@ describe('Agent channel permission gates', () => {
   it('discards form edits and restores the persisted configuration', async () => {
     render(
       <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
+      { wrapper: MemoryRouter },
     );
 
     // A saved bot opens on its first settings tab; the app ID lives on "connect".
@@ -353,6 +358,32 @@ describe('Agent channel permission gates', () => {
       expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toHaveValue('app-id'),
     );
   }, 15_000);
+
+  it('opens the tab named in the URL and writes the picked tab back to it', () => {
+    render(
+      <MemoryRouter initialEntries={['/agent/agent-id/channel/discord?tab=connect']}>
+        <PlatformDetail
+          agentId="agent-id"
+          currentConfig={currentConfig}
+          platformDef={platformDef}
+        />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    // A saved bot would open on access; the URL asks for connect.
+    expect(screen.getByRole('tab', { name: 'channel.tab.connect' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'channel.tab.access' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=access');
+    expect(screen.getByRole('tab', { name: 'channel.tab.access' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
 
   it('disables the channel enable switch and status refresh when editing is denied', () => {
     render(
@@ -458,6 +489,7 @@ describe('Agent channel permission gates', () => {
           name: 'WeChat',
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const alert = screen.getByTestId('channel-paid-alert');
@@ -481,6 +513,7 @@ describe('Agent channel permission gates', () => {
           name: 'WeChat',
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const title = screen.getByTestId('channel-paid-alert-title');
@@ -510,6 +543,7 @@ describe('Agent channel permission gates', () => {
           name: 'WeChat',
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const title = screen.getByTestId('channel-paid-alert-title');
