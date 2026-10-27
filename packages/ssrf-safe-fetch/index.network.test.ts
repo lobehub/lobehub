@@ -1,5 +1,7 @@
 import type { Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +16,20 @@ const within = <T>(promise: Promise<T>, ms: number, label: string) =>
       setTimeout(() => reject(new Error(`${label} did not happen within ${ms}ms`)), ms);
     }),
   ]);
+
+setFlagsFromString('--expose-gc');
+const gc = runInNewContext('gc') as () => void;
+
+/** Collects garbage every 100 ms until `settled` resolves or `ms` elapses. */
+const collectUntil = async (settled: Promise<unknown>, ms: number) => {
+  let done = false;
+  void settled.then(() => (done = true));
+  for (let waited = 0; !done && waited < ms; waited += 100) {
+    gc();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return done;
+};
 
 /** Writes 16 KB chunks until the client goes away; the response never ends on its own. */
 const writeForever = (res: ServerResponse) => {
@@ -46,6 +62,14 @@ describe('ssrfSafeFetch network boundary', () => {
       } else if (path === '/endless') {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         writeForever(res);
+      } else if (path === '/endless-error') {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        writeForever(res);
+      } else if (path === '/sse-ticking') {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        let id = 0;
+        const timer = setInterval(() => res.write(`data: ${id++}\n\n`), 50);
+        res.once('close', () => clearInterval(timer));
       } else if (path === '/json') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
@@ -107,6 +131,32 @@ describe('ssrfSafeFetch network boundary', () => {
 
     expect(text).toBe('x'.repeat(100_000));
     await within(socketClosed.get('/endless')!, 2000, 'upstream socket close');
+  });
+
+  it('releases the upstream connection of a response dropped without reading its body', async () => {
+    // Same shape as a caller giving up on a non-2xx status: the Response goes out of scope.
+    const status = await ssrfSafeFetch(`${base}/endless-error`, undefined, allowPrivate).then(
+      (response) => response.status,
+    );
+    expect(status).toBe(500);
+
+    await expect(collectUntil(socketClosed.get('/endless-error')!, 3000)).resolves.toBe(true);
+  });
+
+  it('keeps a stream that is being read alive when its Response is collected', async () => {
+    // A long-lived SSE consumer that keeps only its reader, not the Response.
+    const reader = await ssrfSafeFetch(`${base}/sse-ticking`, undefined, allowPrivate).then(
+      (response) => response.body!.getReader(),
+    );
+    await reader.read();
+
+    const closedDuringGc = await collectUntil(socketClosed.get('/sse-ticking')!, 1000);
+    const { done, value } = await reader.read();
+
+    expect(closedDuringGc).toBe(false);
+    expect(done).toBe(false);
+    expect(new TextDecoder().decode(value)).toMatch(/^data: \d+/);
+    await reader.cancel();
   });
 
   it('still reads complete bodies through .json()', async () => {

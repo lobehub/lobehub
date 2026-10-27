@@ -98,8 +98,23 @@ const toWebBody = (body: NodeBody, cap?: number): ReadableStream<Uint8Array> => 
 };
 
 /**
+ * Cancels the body of a Response that was garbage-collected before anyone read or cancelled
+ * it, e.g. a caller that gave up on a non-2xx status. Otherwise a large or never-ending body
+ * keeps its upstream connection open for as long as the server does. A locked body is being
+ * read (such as an SSE consumer that kept only its reader), so it is left alone.
+ */
+const abandonedBodies = new FinalizationRegistry<ReadableStream<Uint8Array>>((body) => {
+  if (!body.locked) body.cancel().catch(() => {});
+});
+
+/**
  * SSRF-safe fetch implementation for server-side use
  * Uses request-filtering-agent to prevent requests to private IP addresses
+ *
+ * Resolves once the response headers arrive; the body streams. Read the body or cancel it
+ * when giving up on a response so its connection is released right away. A dropped
+ * Response is cleaned up on garbage collection as a fallback, so keep the Response (or
+ * lock its body with a reader) for as long as you intend to read.
  *
  * @param url - The URL to fetch
  * @param options - Standard fetch options
@@ -148,11 +163,14 @@ export const ssrfSafeFetch = async (
 
     // Resolve as soon as headers arrive: the SSRF checks run at connect time and on every
     // redirect hop, so the body can stream to the caller (e.g. a never-ending SSE response).
-    return new Response(body, {
+    const webResponse = new Response(body, {
       headers: response.headers as any,
       status,
       statusText: response.statusText,
     });
+    if (webResponse.body) abandonedBodies.register(webResponse, webResponse.body);
+
+    return webResponse;
   } catch (error) {
     throw toFetchError(error);
   }

@@ -355,6 +355,8 @@ export class SkillImporter {
       const response = await ssrfSafeFetch(input.url, { signal: controller.signal });
 
       if (!response.ok) {
+        // The error body is never read; release its connection now rather than at GC.
+        await response.body?.cancel().catch(() => {});
         if (response.status === 404) {
           throw new SkillImportError(`Resource not found at ${input.url}`, 'NOT_FOUND');
         }

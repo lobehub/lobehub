@@ -70,4 +70,16 @@ describe('SkillImporter URL download', () => {
     });
     expect(mocks.parseSkillMd).not.toHaveBeenCalled();
   });
+
+  it.each([404, 500])('releases the unread body of a %d response', async (status) => {
+    const cancel = vi.fn();
+    mocks.ssrfSafeFetch.mockResolvedValue(
+      new Response(new ReadableStream({ cancel, pull: () => new Promise(() => {}) }), { status }),
+    );
+
+    await expect(importer().importFromUrl({ url })).rejects.toMatchObject({
+      code: status === 404 ? 'NOT_FOUND' : 'DOWNLOAD_FAILED',
+    });
+    expect(cancel).toHaveBeenCalled();
+  });
 });
