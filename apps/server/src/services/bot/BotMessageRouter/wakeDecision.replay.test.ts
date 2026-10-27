@@ -160,7 +160,9 @@ describe('bot-wake recorder: the replay of a parked message', () => {
     await expect(recorder.initiate(parked())).resolves.toMatchObject({
       reason: 'followup-window',
     });
+    // With what the agent is told about it: the score it was woken on, not a new one.
     await expect(recorder.initiate(replay())).resolves.toMatchObject({
+      followup: { participants: [], score: 0.71 },
       reason: 'followup-window',
     });
     expect(classify).toHaveBeenCalledOnce();

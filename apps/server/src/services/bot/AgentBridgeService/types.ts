@@ -1,3 +1,4 @@
+import type { BotPlatformContext } from '@lobechat/context-engine';
 import type { BotNoReplyResult, BotWakeKind, ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 
@@ -34,6 +35,11 @@ export interface BridgeHandlerOpts {
    * `formatBotPlatformContext`.
    */
   duty?: { matched?: string };
+  /**
+   * The bot woke in its follow-up window (a `followup` wake): how sure the classifier was and who
+   * else is in the thread. The agent is told why. See `formatBotPlatformContext`.
+   */
+  followup?: BotPlatformContext['followup'];
   /**
    * The bot woke only because its name is in the text (a `followup` wake): people often talk about
    * it rather than to it, and the agent is told so. See `formatBotPlatformContext`.

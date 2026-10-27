@@ -14,8 +14,10 @@ import type { LobeChatDatabase } from '@/database/type';
 import { recordSignalDecision } from '@/server/services/agentSignal/persistence/recordDecision';
 import { aggregateWakeVerdictsAsync } from '@/server/services/agentSignal/scenarios/botWake/aggregator';
 import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import type { WakeParticipant } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
   CONVERSATION_PROMPT_LINES,
+  conversationParticipants,
   discordMessageTime,
   toConversationLine,
 } from '@/server/services/agentSignal/scenarios/botWake/conversation';
@@ -202,18 +204,38 @@ const INITIATION_TRAITS: Record<BotWakeInitiationReason, { addressed: boolean }>
   'named-in-text': { addressed: true },
 };
 
+/**
+ * `followup-window` only: what the woken agent is told about a follow-up nobody addressed to it,
+ * so it can tell a message for it from one for someone else in a busy thread.
+ */
+export interface BotWakeFollowupContext {
+  /** Who else took part in the conversation lately, newest first; names only. */
+  participants: WakeParticipant[];
+  /** 0..1: how sure the addressed classifier was that the message is for the bot. */
+  score?: number;
+}
+
 /** A wake the recorder started on its own: the rule that started it, and what that implies. */
 export interface BotWakeInitiation {
   /** See {@link INITIATION_TRAITS}. */
   addressed: boolean;
   /** `in-duty` only: the duty the message falls within, when the judge named one. */
   duty?: string;
+  /** `followup-window` only. See {@link BotWakeFollowupContext}. */
+  followup?: BotWakeFollowupContext;
   reason: BotWakeInitiationReason;
 }
 
-const initiationFor = (reason: BotWakeInitiationReason, duty?: string): BotWakeInitiation => ({
+/** What a wake carries for the agent besides its reason. */
+type InitiationDetails = Pick<BotWakeInitiation, 'duty' | 'followup'>;
+
+const initiationFor = (
+  reason: BotWakeInitiationReason,
+  { duty, followup }: InitiationDetails = {},
+): BotWakeInitiation => ({
   ...INITIATION_TRAITS[reason],
   ...(duty && { duty }),
+  ...(followup && { followup }),
   reason,
 });
 
@@ -412,9 +434,7 @@ const summarizeConversation = (conversation?: WakeConversation) =>
   };
 
 /** The wake decided for a parked message, as kept for its replay. */
-interface RememberedInitiation {
-  /** See {@link BotWakeInitiation.duty}. */
-  duty?: string;
+interface RememberedInitiation extends InitiationDetails {
   reason: BotWakeInitiationReason;
   verdicts: SignalDecisionVerdict[];
 }
@@ -432,8 +452,17 @@ const parseRemembered = (raw: string | undefined): RememberedInitiation | undefi
     const value = JSON.parse(raw) as Partial<RememberedInitiation>;
     if (!isInitiationReason(value.reason)) return;
 
+    const followup = value.followup;
+
     return {
       duty: typeof value.duty === 'string' ? value.duty : undefined,
+      followup:
+        followup && Array.isArray(followup.participants)
+          ? {
+              participants: followup.participants,
+              score: typeof followup.score === 'number' ? followup.score : undefined,
+            }
+          : undefined,
       reason: value.reason,
       verdicts: Array.isArray(value.verdicts) ? value.verdicts : [],
     };
@@ -632,20 +661,20 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     observation: BotWakeObservation,
     reason: BotWakeInitiationReason,
     evaluation: Evaluation,
-    duty?: string,
+    details: InitiationDetails = {},
   ): Promise<BotWakeInitiation> => {
     keepEvaluation(observation, evaluation);
     await state.rememberInitiation?.(
       applicationId,
       getOriginMessageId(observation.message),
       JSON.stringify({
-        duty,
+        ...details,
         reason,
         verdicts: evaluation.verdicts ?? [],
       } satisfies RememberedInitiation),
     );
 
-    return initiationFor(reason, duty);
+    return initiationFor(reason, details);
   };
 
   /**
@@ -667,7 +696,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     // A shadow judge only scores; a degraded one abstains, so it never lands here.
     if (dutyPolicy.mode === 'enforce' && judged.verdict === 'allow') {
       const record = judged.records.find((entry) => entry.policyId === DUTY_POLICY_ID);
-      return initiated(observation, 'in-duty', evaluation, record?.matched);
+      return initiated(observation, 'in-duty', evaluation, { duty: record?.matched });
     }
 
     keepEvaluation(observation, evaluation);
@@ -839,7 +868,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           if (remembered) {
             keepEvaluation(observation, { channel, conversation, verdicts: remembered.verdicts });
 
-            return initiationFor(remembered.reason, remembered.duty);
+            return initiationFor(remembered.reason, remembered);
           }
         }
 
@@ -890,6 +919,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         // Only the window is open. A classifier the owner enforces must confirm; one that only
         // watches is scored for the record and does not stand in the way.
         const classifier = policies.find((policy) => policy.id === CLASSIFIER_POLICY_ID);
+        let score: number | undefined;
         if (classifier) {
           const classified = await aggregateWakeVerdictsAsync([classifier], signal, snapshot);
           verdicts.push(...ruleVerdicts(classified));
@@ -904,9 +934,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
               ? await judgeDuty(observation, signal, snapshot, evaluation)
               : undefined;
           }
+          if (!degraded) score = classified.records[0]?.confidence;
         }
 
-        return initiated(observation, 'followup-window', evaluation);
+        // The agent is told why it woke: how sure the classifier was, and who else is talking.
+        return initiated(observation, 'followup-window', evaluation, {
+          followup: { participants: conversationParticipants(conversation, applicationId), score },
+        });
       } catch (error) {
         botWakeFailureCounter.add(1, { stage: 'initiate' });
         log('initiate failed: entry=%s %O', observation.entryPoint, error);

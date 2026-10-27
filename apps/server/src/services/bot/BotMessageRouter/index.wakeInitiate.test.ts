@@ -276,6 +276,24 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({ wakeKind: 'followup' });
   });
 
+  it('tells the agent woken in its follow-up window how sure the check was and who else is here', async () => {
+    mocks.channel.current = { botLastSpokeAt: Date.now() - 60_000, silentWakes: 0 };
+    mocks.classify.mockResolvedValue({ addressedToBot: 0.8, kind: 'request', reason: 'x' });
+    mocks.logs.set(CHANNEL, [
+      { at: 1, authorId: 'bob-id', authorName: 'bob', id: 'a', isBot: false, text: 'hmm' },
+    ]);
+    await boot(enforcing);
+
+    await catchAll()(thread(), message({ text: '那现在呢?' }));
+    await flush();
+
+    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+      followup: { participants: [{ isBot: false, isOwner: false, name: 'bob' }], score: 0.8 },
+      wakeKind: 'followup',
+    });
+  });
+
   it('never wakes for another bot, even one that names it', async () => {
     await boot(enforcing);
 

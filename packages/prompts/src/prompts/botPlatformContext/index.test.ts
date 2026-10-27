@@ -183,6 +183,46 @@ describe('formatBotPlatformContext', () => {
     );
     // The reason the runtime assigns itself is not offered to the agent.
     expect(result).not.toContain('empty_completion');
+    // "嗯，我又抢话乱接了。这条我不接，你们定。": saying it stays out is a reply too.
+    expect(result).toContain('Announcing that you will stay out');
+    expect(result).toContain('is itself a reply');
+  });
+
+  // A multi-party thread: the owner talking to a teammate or to another agent, scored 0.56-0.68,
+  // woke the bot in its follow-up window every time and it answered every time.
+  it('tells an agent woken in its follow-up window why, how sure the check was and who else is here', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true, wakeKind: 'followup' as const };
+    const result = formatBotPlatformContext({
+      ...base,
+      followup: {
+        participants: [
+          { isOwner: true, name: 'Ava' },
+          { name: 'Sam<i>' },
+          { isBot: true, name: 'Dario' },
+        ],
+        score: 0.56,
+      },
+    });
+
+    expect(result).toContain('you spoke in this conversation a little while ago');
+    expect(result).toContain('a quick check was 56% sure the message is meant for you');
+    // Names only, escaped like any user-controlled text; the owner and other bots are marked.
+    expect(result).toContain(
+      'Also taking part lately: Ava (your owner), Sam&lt;i&gt;, Dario (a bot).',
+    );
+    expect(result).toContain('You are one participant among several');
+    expect(result).toContain('If the message is addressed to someone else');
+    expect(result).toContain('NO_REPLY:not_addressed');
+
+    // Without a score or anyone else known, it still says why, and nothing empty.
+    const bare = formatBotPlatformContext({ ...base, followup: {} });
+    expect(bare).toContain('replied to you or said your name. You are one participant');
+    expect(bare).not.toContain('sure the message');
+    expect(bare).not.toContain('Also taking part');
+    // Only a follow-up wake carries it.
+    expect(formatBotPlatformContext({ ...base, wakeKind: 'mention', followup: {} })).not.toContain(
+      'one participant among several',
+    );
   });
 
   it('tells an agent woken by its duties which duty, and to act on it or stay silent', () => {
@@ -223,6 +263,8 @@ describe('formatBotPlatformContext', () => {
     expect(named).toContain('Decide the way a teammate in the room would');
     // Criticism of the bot is answered, not let go.
     expect(named).toContain('When someone is unhappy with something you did');
+    // ...once: "我撤了", then two minutes later another reply.
+    expect(named).toContain('Say it once, briefly, then keep to it');
     expect(formatBotPlatformContext({ ...base, named: true })).not.toContain('<optional_reply>');
   });
 

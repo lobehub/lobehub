@@ -57,6 +57,16 @@ export interface BotPlatformInfo {
    */
   duty?: { matched?: string };
   /**
+   * The bot woke because it spoke in this conversation lately and the message came after (a
+   * `followup` wake), not because anyone addressed it. `score` is how sure the addressed check was
+   * (0..1); `participants` who else took part lately, by name. The agent is told it is one
+   * participant among several.
+   */
+  followup?: {
+    participants?: { isBot?: boolean; isOwner?: boolean; name: string }[];
+    score?: number;
+  };
+  /**
    * The bot woke only because its name is in the text, with no @-mention or reply (a `followup`
    * wake). The agent is told people often talk about it rather than to it.
    */
@@ -97,6 +107,26 @@ const sanitize = (text: string) =>
     (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[ch]!,
   );
 
+type FollowupParticipant = NonNullable<
+  NonNullable<BotPlatformInfo['followup']>['participants']
+>[number];
+
+const describeParticipant = ({ isBot, isOwner, name }: FollowupParticipant) =>
+  `${sanitize(name)}${isOwner ? ' (your owner)' : isBot ? ' (a bot)' : ''}`;
+
+/** Why a follow-up-window wake happened, and the rule for a thread with several participants. */
+const followupHint = ({ participants = [], score }: NonNullable<BotPlatformInfo['followup']>) =>
+  [
+    'Why you were woken: you spoke in this conversation a little while ago and this message came after. Nobody @-mentioned you, replied to you or said your name',
+    score === undefined
+      ? '.'
+      : `; a quick check was ${Math.round(score * 100)}% sure the message is meant for you.`,
+    participants.length > 0
+      ? ` Also taking part lately: ${participants.map(describeParticipant).join(', ')}.`
+      : '',
+    ` You are one participant among several, not the one everyone is talking to. If the message is addressed to someone else, or others are leading the discussion, end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. Speak only when the message is clearly for you, or the conversation needs something only you can add.`,
+  ].join('');
+
 /**
  * Format bot platform context into a system-level instruction.
  *
@@ -107,6 +137,7 @@ export const formatBotPlatformContext = ({
   canReadHistory = true,
   currentChannel,
   duty,
+  followup,
   named,
   openingReply,
   platformName,
@@ -210,9 +241,11 @@ export const formatBotPlatformContext = ({
       `If you have nothing worth adding — the message is not for you, is off topic, repeats something already answered, or was already handled — end your turn with exactly \`${BOT_NO_REPLY_TOKEN}\` and no other text.`,
       `You may append a reason: \`${BOT_NO_REPLY_TOKEN}:<reason>\`, where reason is one of ${BOT_NO_REPLY_REASONS.filter((r) => r !== 'empty_completion').join(', ')}.`,
       'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
+      `Announcing that you will stay out ("I'll leave this one to you", "这条我不接") is itself a reply and interrupts just the same: when you decide not to take part, end with \`${BOT_NO_REPLY_TOKEN}\` instead of saying so.`,
+      ...(followup ? [followupHint(followup)] : []),
       ...(named
         ? [
-            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes.`,
+            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes. Say it once, briefly, then keep to it: do not apologise again or announce that you are staying out.`,
           ]
         : []),
       ...(duty
