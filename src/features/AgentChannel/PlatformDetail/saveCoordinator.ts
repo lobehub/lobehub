@@ -35,7 +35,10 @@ export const createSaveCoordinator = () => {
     /** An explicit save is running; an autosave that got this far should stand down. */
     isExplicit: () => explicit,
     runAuto,
-    /** (Re)start the delay before an autosave. */
+    /**
+     * (Re)start the delay before an autosave. `save` runs inside `runAuto`, so it must not call
+     * `runAuto` itself: the slot is already taken and that call would return without saving.
+     */
     scheduleAuto: (save: () => Promise<void>, delay: number) => {
       clearTimeout(timer);
       timer = setTimeout(() => void runAuto(save), delay);

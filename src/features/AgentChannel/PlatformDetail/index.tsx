@@ -472,30 +472,31 @@ const PlatformDetail = memo<PlatformDetailProps>(
       const stored = storedRef.current;
       if (!replyDiffers(values.settings, stored.settings, replyKeys)) return;
 
-      await saveCoordinator.runAuto(async () => {
-        autoSavingRef.current = true;
-        try {
-          const settings = mergeSettingsWithDefaults(
-            platformDef.schema,
-            omitUndefinedValues({ ...stored.settings, ...pickKeys(values.settings, replyKeys) }),
-          );
-          await updateBotProvider(currentConfig.id, agentId, { settings });
-          storedRef.current = { ...stored, settings: settings as ChannelFormValues['settings'] };
-          toast.success(t('channel.saved'));
-        } catch {
-          toast.error(t('channel.updateFailed'));
-          form.setValues({
-            settings: {
-              ...form.getValues().settings,
-              ...(pickKeys(stored.settings, replyKeys) as ChannelFormValues['settings']),
-            },
-          });
-        } finally {
-          autoSavingRef.current = false;
-          // Anything toggled while this save was running still has to go out.
-          valuesChangedRef.current?.();
-        }
-      });
+      // This already runs inside the coordinator (`scheduleAuto` wraps it in `runAuto`), which holds
+      // the autosave slot: asking `runAuto` again from in here finds the slot taken and returns
+      // without saving, so a reply setting would never be written.
+      autoSavingRef.current = true;
+      try {
+        const settings = mergeSettingsWithDefaults(
+          platformDef.schema,
+          omitUndefinedValues({ ...stored.settings, ...pickKeys(values.settings, replyKeys) }),
+        );
+        await updateBotProvider(currentConfig.id, agentId, { settings });
+        storedRef.current = { ...stored, settings: settings as ChannelFormValues['settings'] };
+        toast.success(t('channel.saved'));
+      } catch {
+        toast.error(t('channel.updateFailed'));
+        form.setValues({
+          settings: {
+            ...form.getValues().settings,
+            ...(pickKeys(stored.settings, replyKeys) as ChannelFormValues['settings']),
+          },
+        });
+      } finally {
+        autoSavingRef.current = false;
+        // Anything toggled while this save was running still has to go out.
+        valuesChangedRef.current?.();
+      }
     }, [
       agentId,
       currentConfig,
