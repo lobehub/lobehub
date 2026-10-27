@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "このモデルは動画認識に対応しています",
   "ModelSelect.featureTag.vision": "このモデルはビジョン認識をサポートしています。",
   "ModelSelect.removed": "選択されたモデルはリストから削除されました。選択を解除すると自動的に削除されます。",
+  "ModelSelect.routing": "ルーティング",
+  "ModelSelect.routingTooltip": "ルーティンググループ: 複数のプロバイダーがこのモデルを提供し、各リクエストは応答するプロバイダーに送られます。",
   "ModelSelect.staleModel.current": "現在の選択",
   "ModelSelect.staleModel.notEnabled.action": "このモデルを有効にする",
   "ModelSelect.staleModel.notEnabled.actionFailed": "モデルの有効化に失敗しました。もう一度お試しください。",

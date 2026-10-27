@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Dit model ondersteunt videobegrip",
   "ModelSelect.featureTag.vision": "Dit model ondersteunt visuele herkenning.",
   "ModelSelect.removed": "Het model staat niet in de lijst. Het wordt automatisch verwijderd als het wordt gedeselecteerd.",
+  "ModelSelect.routing": "Routering",
+  "ModelSelect.routingTooltip": "Een routeringsgroep: meerdere providers bedienen dit model, en elk verzoek gaat naar degene die antwoordt.",
   "ModelSelect.staleModel.current": "Huidige selectie",
   "ModelSelect.staleModel.notEnabled.action": "Schakel dit model in",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Het inschakelen van het model is mislukt. Probeer het opnieuw.",

@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Dieses Modell unterstützt Videoerkennung",
   "ModelSelect.featureTag.vision": "Dieses Modell unterstützt visuelle Erkennung.",
   "ModelSelect.removed": "Das Modell ist nicht in der Liste. Es wird automatisch entfernt, wenn es abgewählt wird.",
+  "ModelSelect.routing": "Routing",
+  "ModelSelect.routingTooltip": "Eine Routing-Gruppe: Mehrere Anbieter bedienen dieses Modell, und jede Anfrage geht an denjenigen, der antwortet.",
   "ModelSelect.staleModel.current": "Aktuelle Auswahl",
   "ModelSelect.staleModel.notEnabled.action": "Dieses Modell aktivieren",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Das Aktivieren des Modells ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
