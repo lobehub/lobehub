@@ -6,7 +6,7 @@ import type * as VerifyServiceModule from '@/server/services/verify';
 import { verifyRouter } from '.';
 
 const mocks = vi.hoisted(() => ({
-  createEvidence: vi.fn(),
+  createManyEvidence: vi.fn(),
   findCriteriaByIds: vi.fn(),
   findDocumentById: vi.fn(),
   findFileById: vi.fn(),
@@ -62,7 +62,7 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 
 vi.mock('@/database/models/verifyEvidence', () => ({
   VerifyEvidenceModel: vi.fn(function () {
-    return { create: mocks.createEvidence };
+    return { createMany: mocks.createManyEvidence };
   }),
 }));
 
@@ -125,22 +125,28 @@ describe('verify router fan-outs', () => {
     expect(state.peak).toBe(FAN_OUT_LIMIT);
   });
 
-  it('submitCheckEvidence writes evidence in order with bounded concurrency', async () => {
+  it('submitCheckEvidence resolves files in order with bounded concurrency and inserts once', async () => {
     mocks.findRunById.mockResolvedValue({ id: 'run-1', plan: [] });
     mocks.upsertByCheckItem.mockResolvedValue({ id: 'result-1' });
-    const { state, tracked } = trackInFlight((row: { content: string }) => ({
-      id: `evidence-${row.content}`,
+    const { state, tracked } = trackInFlight((id: string) => ({
+      fileType: 'image/png',
+      id,
+      name: `${id}.png`,
     }));
-    mocks.createEvidence.mockImplementation(tracked);
+    mocks.findFileById.mockImplementation(tracked);
+    mocks.createManyEvidence.mockImplementation(async (rows: { fileId: string }[]) =>
+      rows.map((row) => ({ id: `evidence-${row.fileId}` })),
+    );
 
     const res = await createCaller().submitCheckEvidence({
       checkItemId: 'item-1',
-      evidence: ids.map((id) => ({ content: id, type: 'text' as const })),
+      evidence: ids.map((id) => ({ fileId: id, type: 'screenshot' as const })),
       verifyRunId: 'run-1',
     });
 
     expect(res.evidence).toEqual(ids.map((id) => ({ id: `evidence-${id}` })));
     expect(state.peak).toBe(FAN_OUT_LIMIT);
+    expect(mocks.createManyEvidence).toHaveBeenCalledTimes(1);
   });
 
   it('listReportSummaries loads reports in order with bounded concurrency', async () => {

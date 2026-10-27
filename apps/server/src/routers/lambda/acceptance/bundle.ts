@@ -21,6 +21,7 @@ import {
   buildCheckReviewOverlay,
   createEvidenceFileResolver,
   isCurrentReviewPrediction,
+  resolveEvidenceFiles,
   REVIEW_PREDICT_MODEL_CONFIG,
   shouldSurfaceProposal,
 } from '@/server/services/verify';
@@ -156,7 +157,7 @@ export const bundleRouter = router({
         evidence.filter(
           (e) => timelineResultIds.has(e.checkResultId) || flowResultIds.has(e.checkResultId),
         ),
-        async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId ?? null)) }),
+        (e) => resolveEvidenceFiles(resolveFileMeta, e),
         { concurrency: FILE_META_RESOLVE_CONCURRENCY },
       );
       const evidenceByResult = new Map<string, typeof enriched>();

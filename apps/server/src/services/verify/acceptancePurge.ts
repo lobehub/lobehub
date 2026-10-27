@@ -1,6 +1,7 @@
+import { verifyEvidenceFileIds } from '@lobechat/const/verify';
 import { FileSource } from '@lobechat/types';
-import { and, eq, inArray, isNotNull, notExists, notInArray } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 
 import { serverDBEnv } from '@/config/db';
 import { AcceptanceModel } from '@/database/models/acceptance';
@@ -38,35 +39,63 @@ const listRunIds = async (
   return rows.map((row) => row.id);
 };
 
-const listExclusiveEvidenceFileIds = async (db: LobeChatDatabase, runIds: string[]) => {
-  if (runIds.length === 0) return [];
-  const otherEvidence = alias(verifyEvidence, 'other_evidence');
-  const otherResults = alias(verifyCheckResults, 'other_results');
-  const rows = await db
-    .selectDistinct({ fileId: verifyEvidence.fileId })
+/** Evidence rows of the given rounds (inside) or of every other round (outside). */
+const evidenceRows = (
+  db: LobeChatDatabase,
+  runIds: string[],
+  where: 'inside' | 'outside',
+  extra?: SQL,
+) =>
+  db
+    .select({
+      fileId: verifyEvidence.fileId,
+      metadata: verifyEvidence.metadata,
+      type: verifyEvidence.type,
+    })
     .from(verifyEvidence)
     .innerJoin(verifyCheckResults, eq(verifyCheckResults.id, verifyEvidence.checkResultId))
-    .innerJoin(files, eq(files.id, verifyEvidence.fileId))
     .where(
       and(
-        inArray(verifyCheckResults.verifyRunId, runIds),
-        isNotNull(verifyEvidence.fileId),
-        eq(files.source, FileSource.Acceptance),
-        notExists(
-          db
-            .select({ id: otherEvidence.id })
-            .from(otherEvidence)
-            .innerJoin(otherResults, eq(otherResults.id, otherEvidence.checkResultId))
-            .where(
-              and(
-                eq(otherEvidence.fileId, verifyEvidence.fileId),
-                notInArray(otherResults.verifyRunId, runIds),
-              ),
-            ),
-        ),
+        where === 'inside'
+          ? inArray(verifyCheckResults.verifyRunId, runIds)
+          : notInArray(verifyCheckResults.verifyRunId, runIds),
+        extra,
       ),
     );
-  return rows.map((row) => row.fileId!);
+
+/**
+ * Acceptance files that only these rounds' evidence references — a row's own
+ * payload file and, for terminal evidence, the stdout / stderr / recording files
+ * its record names. A file another round still cites survives the purge.
+ */
+const listExclusiveEvidenceFileIds = async (db: LobeChatDatabase, runIds: string[]) => {
+  if (runIds.length === 0) return [];
+  const candidates = [
+    ...new Set((await evidenceRows(db, runIds, 'inside')).flatMap(verifyEvidenceFileIds)),
+  ];
+  if (candidates.length === 0) return [];
+
+  const acceptanceFiles = await db
+    .select({ id: files.id })
+    .from(files)
+    .where(and(inArray(files.id, candidates), eq(files.source, FileSource.Acceptance)));
+  if (acceptanceFiles.length === 0) return [];
+  const ids = acceptanceFiles.map((file) => file.id);
+
+  const citedElsewhere = await evidenceRows(
+    db,
+    runIds,
+    'outside',
+    or(
+      inArray(verifyEvidence.fileId, ids),
+      and(
+        eq(verifyEvidence.type, 'terminal'),
+        sql`jsonb_path_exists(${verifyEvidence.metadata}, '$.terminal.artifacts.*.fileId ? (@ == $ids[*])', jsonb_build_object('ids', ${JSON.stringify(ids)}::jsonb))`,
+      ),
+    ),
+  );
+  const retained = new Set(citedElsewhere.flatMap(verifyEvidenceFileIds));
+  return ids.filter((id) => !retained.has(id));
 };
 
 const listRetainedHashes = async (
