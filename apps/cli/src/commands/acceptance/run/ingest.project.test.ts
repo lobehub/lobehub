@@ -4,12 +4,16 @@ import path from 'node:path';
 import { TRPCClientError } from '@trpc/client';
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveWorkspaceScope } from '../../../api/workspace';
 import { log } from '../../../utils/logger';
 import type * as VerifyHelpers from '../utils';
 import { usePublicationHarness } from './testUtils';
 
 vi.mock('../../../api/client', () => ({ getTrpcClient: vi.fn() }));
-vi.mock('../../../api/workspace', () => ({ resolveWorkspaceId: vi.fn() }));
+vi.mock('../../../api/workspace', () => ({
+  resolveWorkspaceId: vi.fn(),
+  resolveWorkspaceScope: vi.fn(),
+}));
 vi.mock('../../../settings', () => ({ resolveServerUrl: vi.fn() }));
 vi.mock('../../../utils/uploadLocalFile', () => ({ uploadLocalFile: vi.fn() }));
 vi.mock('../utils', async (importOriginal) => ({
@@ -104,17 +108,60 @@ describe('lh acceptance run ingest — project filing', () => {
   it('publishes ungrouped, with a warning, when the declared project is not in this workspace', async () => {
     await writeReport();
     await declareProject({ project: 'LOBE' });
+    vi.mocked(resolveWorkspaceScope).mockReturnValue({ source: 'env', workspaceId: 'ws_team' });
     client.project.find.query.mockRejectedValue(notFound());
 
     await run('ingest', h.dir, '--json');
 
     expect(vi.mocked(log.warn)).toHaveBeenCalledWith(
-      expect.stringContaining('publishing ungrouped'),
+      expect.stringContaining('which this workspace does not have'),
     );
     expect(client.acceptance.ensure.mutate.mock.calls[0][0]).not.toHaveProperty(
       'fallbackProjectId',
     );
     expect(client.verify.createRun.mutate).toHaveBeenCalled();
+  });
+
+  it('names personal space as the reason when the declared project is not found there', async () => {
+    await writeReport();
+    await declareProject({ project: 'LOBE' });
+    vi.stubEnv('LOBEHUB_JWT', '');
+    vi.mocked(resolveWorkspaceScope).mockReturnValue({ source: 'personal' });
+    client.project.find.query.mockRejectedValue(notFound());
+
+    await run('ingest', h.dir, '--json');
+
+    const warning = vi
+      .mocked(log.warn)
+      .mock.calls.map(([message]) => message)
+      .join('\n');
+    expect(warning).toContain('runs in your personal space');
+    expect(warning).toContain('LOBEHUB_WORKSPACE_ID');
+    expect(client.verify.createRun.mutate).toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: 'an explicit personal scope', scope: { source: 'env' as const }, jwt: '' },
+    {
+      name: 'a server-dispatched personal run',
+      scope: { source: 'personal' as const },
+      jwt: 'op-token',
+    },
+  ])('does not tell $name to change its workspace', async ({ jwt, scope }) => {
+    await writeReport();
+    await declareProject({ project: 'LOBE' });
+    vi.stubEnv('LOBEHUB_JWT', jwt);
+    vi.mocked(resolveWorkspaceScope).mockReturnValue(scope);
+    client.project.find.query.mockRejectedValue(notFound());
+
+    await run('ingest', h.dir, '--json');
+
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('which this workspace does not have'),
+    );
+    expect(vi.mocked(log.warn)).not.toHaveBeenCalledWith(
+      expect.stringContaining('LOBEHUB_WORKSPACE_ID'),
+    );
   });
 
   it('ignores a malformed config instead of failing the round', async () => {

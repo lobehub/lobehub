@@ -3,6 +3,7 @@ import path from 'node:path';
 import { TRPCClientError } from '@trpc/client';
 
 import type { TrpcClient } from '../../api/client';
+import { resolveWorkspaceScope } from '../../api/workspace';
 import { log } from '../../utils/logger';
 import { findDeclaredProject } from './utils';
 
@@ -25,6 +26,12 @@ export const projectEnsureInput = (project: AcceptanceProject | undefined) => {
 
 const isNotFound = (error: unknown) =>
   error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND';
+
+const isUnchosenPersonalScope = () => {
+  const scope = resolveWorkspaceScope();
+  if (scope.workspaceId || process.env.LOBEHUB_JWT) return false;
+  return scope.source === 'personal' || scope.source === 'stale';
+};
 
 /**
  * The project a delivery is filed under when the caller says so: `--project`,
@@ -69,6 +76,18 @@ export async function resolveAcceptanceProject(
     return { id: data.id, name: data.name, source: 'config' };
   } catch (error) {
     if (!isNotFound(error)) throw error;
+    // Only the acceptance's own workspace lets its members review it, so a
+    // round published from personal space is the creator's alone — a terminal
+    // that never chose a workspace looks like a teammate's missing permission.
+    // An explicit `LOBEHUB_WORKSPACE_ID=personal` or a server-dispatched run
+    // (whose scope the server sets) meant to be personal, so neither is told
+    // to change it.
+    if (isUnchosenPersonalScope()) {
+      log.warn(
+        `${file} files acceptances under project "${declared.project}", but this command runs in your personal space — publishing ungrouped, and only you can review it. To publish to the project's workspace, set LOBEHUB_WORKSPACE_ID=<workspace id> or run 'lh workspace use <workspace>'.`,
+      );
+      return;
+    }
     log.warn(
       `${file} files acceptances under project "${declared.project}", which this workspace does not have — publishing ungrouped.`,
     );

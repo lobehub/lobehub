@@ -51,6 +51,9 @@ export const usePublicationHarness = () => {
     state.printed = [];
     vi.spyOn(console, 'log').mockImplementation((line) => state.printed.push(String(line)));
     vi.spyOn(log, 'warn').mockImplementation(() => {});
+    // This repository declares a project in `.agents/acceptance/config.json`;
+    // run outside it so a suite only sees the project it declares itself.
+    vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
     vi.mocked(resolveServerUrl).mockReturnValue('https://app.lobehub.com');
     vi.mocked(getTrpcClient).mockResolvedValue(
       client as unknown as Awaited<ReturnType<typeof getTrpcClient>>,
@@ -76,6 +79,7 @@ export const usePublicationHarness = () => {
   afterEach(async () => {
     process.exitCode = originalExitCode;
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     await rm(state.dir, { force: true, recursive: true });
   });
 
