@@ -71,23 +71,27 @@ export async function resolveAcceptanceProject(
     return;
   }
 
+  // Only the acceptance's own workspace lets its members review it, so a
+  // round published from personal space is the creator's alone — a terminal
+  // that never chose a workspace looks like a teammate's missing permission.
+  // Say so whether or not personal space happens to have the project. An
+  // explicit `LOBEHUB_WORKSPACE_ID=personal` or a server-dispatched run (whose
+  // scope the server sets) meant to be personal, so neither is told to change it.
+  const warnPersonalScope = () => {
+    if (!isUnchosenPersonalScope()) return false;
+    log.warn(
+      `${file} files acceptances under project "${declared.project}", but this command runs in your personal space, so workspace teammates cannot review this acceptance — only you can. To publish to the project's workspace instead, set LOBEHUB_WORKSPACE_ID=<workspace id> or run 'lh workspace use <workspace>'.`,
+    );
+    return true;
+  };
+
   try {
     const { data } = await client.project.find.query({ id: declared.project });
+    warnPersonalScope();
     return { id: data.id, name: data.name, source: 'config' };
   } catch (error) {
     if (!isNotFound(error)) throw error;
-    // Only the acceptance's own workspace lets its members review it, so a
-    // round published from personal space is the creator's alone — a terminal
-    // that never chose a workspace looks like a teammate's missing permission.
-    // An explicit `LOBEHUB_WORKSPACE_ID=personal` or a server-dispatched run
-    // (whose scope the server sets) meant to be personal, so neither is told
-    // to change it.
-    if (isUnchosenPersonalScope()) {
-      log.warn(
-        `${file} files acceptances under project "${declared.project}", but this command runs in your personal space — publishing ungrouped, and only you can review it. To publish to the project's workspace, set LOBEHUB_WORKSPACE_ID=<workspace id> or run 'lh workspace use <workspace>'.`,
-      );
-      return;
-    }
+    if (warnPersonalScope()) return;
     log.warn(
       `${file} files acceptances under project "${declared.project}", which this workspace does not have — publishing ungrouped.`,
     );

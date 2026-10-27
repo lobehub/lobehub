@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { TRPCClientError } from '@trpc/client';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveWorkspaceScope } from '../../../api/workspace';
 import { log } from '../../../utils/logger';
@@ -29,6 +29,10 @@ const notFound = () =>
 describe('lh acceptance run ingest — project filing', () => {
   const h = usePublicationHarness();
   const { client, run } = h;
+
+  beforeEach(() => {
+    vi.mocked(resolveWorkspaceScope).mockReturnValue({ source: 'env', workspaceId: 'ws_team' });
+  });
 
   /** The report directory doubles as the repository root its adapter lives in. */
   const declareProject = async (config: unknown) => {
@@ -108,7 +112,6 @@ describe('lh acceptance run ingest — project filing', () => {
   it('publishes ungrouped, with a warning, when the declared project is not in this workspace', async () => {
     await writeReport();
     await declareProject({ project: 'LOBE' });
-    vi.mocked(resolveWorkspaceScope).mockReturnValue({ source: 'env', workspaceId: 'ws_team' });
     client.project.find.query.mockRejectedValue(notFound());
 
     await run('ingest', h.dir, '--json');
@@ -136,8 +139,26 @@ describe('lh acceptance run ingest — project filing', () => {
       .mock.calls.map(([message]) => message)
       .join('\n');
     expect(warning).toContain('runs in your personal space');
+    expect(warning).toContain('workspace teammates cannot review');
     expect(warning).toContain('LOBEHUB_WORKSPACE_ID');
     expect(client.verify.createRun.mutate).toHaveBeenCalled();
+  });
+
+  it('still names personal space when personal space has a project with the declared id', async () => {
+    await writeReport();
+    await declareProject({ project: 'LOBE' });
+    vi.stubEnv('LOBEHUB_JWT', '');
+    vi.mocked(resolveWorkspaceScope).mockReturnValue({ source: 'personal' });
+    client.project.find.query.mockResolvedValue({ data: { id: 'prj_mine', name: 'Mine' } });
+
+    await run('ingest', h.dir, '--json');
+
+    expect(vi.mocked(log.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('workspace teammates cannot review'),
+    );
+    expect(client.acceptance.ensure.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackProjectId: 'prj_mine' }),
+    );
   });
 
   it.each([
