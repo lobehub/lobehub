@@ -140,12 +140,12 @@ const livePrivateWhere = (): SQL =>
  * Whether a registry row sits on the private side of its workspace bin. A root
  * keeps the side it had when it was trashed (`meta.private`, snapshotted by
  * `registerMany`), so making a still-live parent public later does not expose
- * it; rows registered before the snapshot existed fall back to the live check.
+ * it.
  *
- * It fails closed: a root whose source row, or recorded project, was removed
- * outside the trash (a hard delete or an FK cascade) can no longer prove it
- * was shared, so it stays on its deleter's private side until the sweep
- * prunes it.
+ * It fails closed: a root that cannot prove it was shared stays on its
+ * deleter's private side — one registered before the snapshot existed (its
+ * parents may have changed since), or one whose source row or recorded
+ * project was removed outside the trash (a hard delete or an FK cascade).
  */
 const privateRootWhere = (): SQL =>
   or(
@@ -156,7 +156,7 @@ const privateRootWhere = (): SQL =>
     ),
     // COALESCE: a NULL here would turn the whole OR, and its NOT, into NULL.
     sql`COALESCE((${trashItems.meta} ->> 'private') = 'true', false)`,
-    and(sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`, livePrivateWhere()),
+    sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`,
   ) as SQL;
 
 const toTrashItem = (row: TrashItemRow): TrashItem => ({

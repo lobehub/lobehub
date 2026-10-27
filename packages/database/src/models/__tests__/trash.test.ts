@@ -380,9 +380,10 @@ describe('TrashModel', () => {
       expect(await sideIds('public')).toEqual([]);
       expect(await sideIds('private')).toEqual(['tpc_flip']);
 
-      // A row registered before the snapshot existed follows the live parent.
+      // A row registered before the snapshot existed cannot prove it was shared.
       await serverDB.update(trashItems).set({ meta: null }).where(eq(trashItems.id, root.id));
-      expect(await sideIds('public')).toEqual(['tpc_flip']);
+      expect(await sideIds('public')).toEqual([]);
+      expect(await sideIds('private')).toEqual(['tpc_flip']);
     });
 
     it('keeps a root whose source or project is gone off the public side', async () => {
