@@ -1,14 +1,17 @@
+import { type IEditor } from '@lobehub/editor';
+import { toast } from '@lobehub/ui';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import type { ChatInputEditor } from '@/features/ChatInput';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { appendTaskAttachments } from '@/features/Home/InputArea/taskAttachments';
 import { taskNameFromMessage } from '@/features/Home/InputArea/taskName';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentService } from '@/services/agent';
-import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -39,18 +42,49 @@ const ensureAgentConfigLoaded = async (agentId: string) => {
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
 };
 
+/** How long a refused draft waits for the conversation's composer to mount. */
+const COMPOSER_MOUNT_TIMEOUT = 10_000;
+
+/**
+ * Runs `apply` on the conversation's composer, waiting for it to mount when
+ * the send fails before the page has rendered it.
+ */
+const withConversationEditor = (apply: (editor: ChatInputEditor) => void) => {
+  const editor = useChatStore.getState().mainInputEditor;
+  if (editor) return apply(editor);
+
+  const timer = setTimeout(() => unsubscribe(), COMPOSER_MOUNT_TIMEOUT);
+  const unsubscribe = useChatStore.subscribe((state) => {
+    if (!state.mainInputEditor) return;
+    clearTimeout(timer);
+    unsubscribe();
+    apply(state.mainInputEditor);
+  });
+};
+
+/**
+ * The composer that owns a send from the project home: the conversation page's,
+ * which mounts only after the navigation. It is looked up when the send needs
+ * it — to put a refused draft back — not when the send starts.
+ */
+export const conversationComposer: ChatInputEditor = {
+  clearContent: () => withConversationEditor((editor) => editor.clearContent()),
+  focus: () => withConversationEditor((editor) => editor.focus()),
+  getJSONState: () => useChatStore.getState().mainInputEditor?.getJSONState(),
+  getMarkdownContent: () => useChatStore.getState().mainInputEditor?.getMarkdownContent() ?? '',
+  get instance() {
+    return useChatStore.getState().mainInputEditor?.instance as IEditor;
+  },
+  setDocument: (type, content, options) =>
+    withConversationEditor((editor) => editor.setDocument(type, content, options)),
+  setExpand: (expand) => withConversationEditor((editor) => editor.setExpand(expand)),
+  setJSONState: (content) => withConversationEditor((editor) => editor.setJSONState(content)),
+};
+
 export class AttachmentsNotReadyError extends Error {
   constructor() {
     super('Attachments are still uploading');
     this.name = 'AttachmentsNotReadyError';
-  }
-}
-
-/** The send was refused before the message reached the conversation; the draft stays. */
-export class MessageNotAcceptedError extends Error {
-  constructor() {
-    super('The message was not accepted');
-    this.name = 'MessageNotAcceptedError';
   }
 }
 
@@ -60,10 +94,10 @@ export const useProjectComposer = (
   /** The project agent the message goes to; the main agent unless the user picked another. */
   agentId: string,
 ) => {
+  const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
   const workspaceSlug = useActiveWorkspaceSlug();
   const createProjectTopic = useProjectDirectoryStore((s) => s.createProjectTopic);
-  const refreshProjectTopics = useProjectDirectoryStore((s) => s.refreshProjectTopics);
   const createTask = useTaskStore((s) => s.createTask);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
@@ -104,39 +138,40 @@ export const useProjectComposer = (
         createProjectTopic({ agentId, projectId: project.id, title }),
         ensureAgentConfigLoaded(agentId),
       ]);
-      // Leave the composer only once the conversation owns the message. A send
-      // refused before that (access, device or preflight checks) either rejects
-      // or resolves without accepting, and with `inputEditor: null` nothing
-      // would put the draft back — so it stays here until then.
-      const accepted = await new Promise<boolean>((resolve) => {
-        sendMessage({
-          context: { agentId, topicId: topic.id, ...(workspaceSlug ? { workspaceSlug } : {}) },
-          editorData,
-          files,
-          inputEditor: null,
-          message,
-          onMessageAccepted: () => resolve(true),
-        }).then(
-          () => resolve(false),
-          (error) => {
-            console.error('[ProjectComposer] send failed', error);
-            resolve(false);
-          },
-        );
-      });
-      if (!accepted) {
-        // Don't leave an empty conversation behind for every failed attempt.
-        await topicService
-          .removeTopic(topic.id)
-          .then(() => refreshProjectTopics(project.id))
-          .catch((error) =>
-            console.error('[ProjectComposer] failed to drop the empty topic', error),
-          );
-        throw new MessageNotAcceptedError();
-      }
+      // Open the conversation right away: the send shows its message there
+      // optimistically instead of holding this composer until the server has
+      // accepted it. From here the conversation's composer owns the draft, so a
+      // refused send puts it back there rather than here.
       clearContent();
       clearChatUploadFileList();
       navigate(getProjectTopicPath(project.slug ?? project.id, topic.id));
+
+      let accepted = false;
+      let restored = false;
+      const restoreFiles = () => {
+        restored = true;
+        useFileStore.getState().restoreChatUploadFileList(files);
+      };
+      sendMessage({
+        context: { agentId, topicId: topic.id, ...(workspaceSlug ? { workspaceSlug } : {}) },
+        editorData,
+        files,
+        inputEditor: conversationComposer,
+        message,
+        onMessageAccepted: () => {
+          accepted = true;
+        },
+        // The send already put the text back into the composer it names.
+        onPreflightFailure: restoreFiles,
+      }).catch((error) => {
+        console.error('[ProjectComposer] send failed', error);
+        if (accepted || restored) return;
+        // A refusal thrown before the send reached its own recovery.
+        if (editorData) conversationComposer.setJSONState(editorData);
+        else conversationComposer.setDocument('markdown', message);
+        restoreFiles();
+        toast.error(t('overview.messageNotSent'));
+      });
     } finally {
       setSending(false);
     }

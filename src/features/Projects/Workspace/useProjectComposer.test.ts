@@ -8,7 +8,7 @@ import type { ProjectDetail } from '@/store/project';
 
 import {
   AttachmentsNotReadyError,
-  MessageNotAcceptedError,
+  conversationComposer,
   toConversationTitle,
   useProjectComposer,
 } from './useProjectComposer';
@@ -21,10 +21,12 @@ const mocks = vi.hoisted(() => ({
   fileList: [] as unknown[],
   getAgentConfigById: vi.fn(),
   internal_dispatchAgentMap: vi.fn(),
+  chatListeners: new Set<(state: { mainInputEditor: unknown }) => void>(),
+  mainInputEditor: null as unknown,
   navigate: vi.fn(),
-  refreshProjectTopics: vi.fn(),
-  removeTopic: vi.fn(),
+  restoreChatUploadFileList: vi.fn(),
   sendMessage: vi.fn(),
+  toastError: vi.fn(),
   workspaceSlug: null as string | null,
 }));
 
@@ -32,8 +34,12 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => mocks.workspaceSlug,
 }));
 
-vi.mock('@/services/topic', () => ({
-  topicService: { removeTopic: mocks.removeTopic },
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+vi.mock('@lobehub/ui', () => ({
+  toast: { error: mocks.toastError },
 }));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -44,7 +50,6 @@ vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectoryStore: (selector: (state: unknown) => unknown) =>
     selector({
       createProjectTopic: mocks.createProjectTopic,
-      refreshProjectTopics: mocks.refreshProjectTopics,
     }),
 }));
 
@@ -53,15 +58,31 @@ vi.mock('@/store/task', () => ({
     selector({ createTask: mocks.createTask }),
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (state: unknown) => unknown) =>
-    selector({ sendMessage: mocks.sendMessage }),
-}));
+vi.mock('@/store/chat', () => {
+  const state = () => ({ mainInputEditor: mocks.mainInputEditor, sendMessage: mocks.sendMessage });
+  const useChatStore = Object.assign((selector: (s: unknown) => unknown) => selector(state()), {
+    getState: state,
+    subscribe: (listener: (s: { mainInputEditor: unknown }) => void) => {
+      mocks.chatListeners.add(listener);
+      return () => mocks.chatListeners.delete(listener);
+    },
+  });
+  return { useChatStore };
+});
+
+/** The conversation page mounts its composer, which registers as the main editor. */
+const mountConversationEditor = () => {
+  const editor = { setDocument: vi.fn(), setJSONState: vi.fn() };
+  mocks.mainInputEditor = editor;
+  for (const listener of mocks.chatListeners) listener({ mainInputEditor: editor });
+  return editor;
+};
 
 vi.mock('@/store/file', () => {
   const state = () => ({
     chatUploadFileList: mocks.fileList,
     clearChatUploadFileList: mocks.clearChatUploadFileList,
+    restoreChatUploadFileList: mocks.restoreChatUploadFileList,
   });
   const useFileStore = Object.assign((selector: (s: unknown) => unknown) => selector(state()), {
     getState: state,
@@ -114,7 +135,8 @@ describe('useProjectComposer', () => {
     mocks.agentMap = { coordinator: {} };
     mocks.fileList = [];
     mocks.workspaceSlug = null;
-    mocks.removeTopic.mockResolvedValue(undefined);
+    mocks.mainInputEditor = null;
+    mocks.chatListeners.clear();
     // The conversation takes the message, then the run goes on in the background.
     mocks.sendMessage.mockImplementation(({ onMessageAccepted }) => {
       onMessageAccepted?.();
@@ -146,9 +168,10 @@ describe('useProjectComposer', () => {
       context: { agentId: 'coordinator', topicId: 'tpc_1' },
       editorData,
       files: [image],
-      inputEditor: null,
+      inputEditor: conversationComposer,
       message: 'Plan the next milestone\nwith details',
       onMessageAccepted: expect.any(Function),
+      onPreflightFailure: expect.any(Function),
     });
     expect(mocks.navigate).toHaveBeenCalledWith('/project/apollo/topic/tpc_1');
     expect(input.clearContent).toHaveBeenCalled();
@@ -187,40 +210,63 @@ describe('useProjectComposer', () => {
   });
 
   /**
+   * @example Project home: sending kept the text and a spinner in the home
+   * composer until the server accepted the message — no optimistic message.
+   */
+  it('opens the conversation before the server has accepted the message', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    mocks.sendMessage.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
+    const input = composer('Hello');
+
+    await act(async () => {
+      await result.current.send(input);
+    });
+
+    expect(mocks.sendMessage).toHaveBeenCalled();
+    expect(mocks.navigate).toHaveBeenCalledWith('/project/apollo/topic/tpc_1');
+    expect(input.clearContent).toHaveBeenCalled();
+    expect(result.current.sending).toBe(false);
+  });
+
+  /**
    * @example Codex review: a preflight rejection was fire-and-forget while the
    * composer cleared itself and navigated, so the draft and attachments were lost.
    */
-  it('keeps the draft and drops the empty topic when the send is refused before acceptance', async () => {
+  it('puts a draft the send refused back into the conversation composer once it mounts', async () => {
     mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
     mocks.fileList = [image];
     mocks.sendMessage.mockRejectedValue(new Error('device offline'));
     const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
-    const input = composer('Hello');
 
     await act(async () => {
-      await expect(result.current.send(input)).rejects.toBeInstanceOf(MessageNotAcceptedError);
+      await result.current.send(composer('Hello'));
     });
 
-    expect(input.clearContent).not.toHaveBeenCalled();
-    expect(mocks.clearChatUploadFileList).not.toHaveBeenCalled();
-    expect(mocks.navigate).not.toHaveBeenCalled();
-    expect(mocks.removeTopic).toHaveBeenCalledWith('tpc_1');
-    expect(mocks.refreshProjectTopics).toHaveBeenCalledWith('prj_1');
-    expect(result.current.sending).toBe(false);
+    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledWith([image]);
+    expect(mocks.toastError).toHaveBeenCalledWith('overview.messageNotSent');
+
+    const editor = mountConversationEditor();
+    expect(editor.setJSONState).toHaveBeenCalledWith(editorData);
   });
 
-  it('treats a send that resolves without accepting the message as refused', async () => {
+  it('leaves the restore to the send when it recovered the draft itself', async () => {
     mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
-    mocks.sendMessage.mockResolvedValue(undefined);
+    mocks.fileList = [image];
+    const editor = mountConversationEditor();
+    mocks.sendMessage.mockImplementation(async ({ onPreflightFailure }) => {
+      onPreflightFailure();
+      throw new Error('refused');
+    });
     const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
-    const input = composer('Hello');
 
     await act(async () => {
-      await expect(result.current.send(input)).rejects.toBeInstanceOf(MessageNotAcceptedError);
+      await result.current.send(composer('Hello'));
     });
 
-    expect(input.clearContent).not.toHaveBeenCalled();
-    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledTimes(1);
+    expect(editor.setJSONState).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
   /** @example Codex review: desktop notifications from these sends linked outside the workspace. */
