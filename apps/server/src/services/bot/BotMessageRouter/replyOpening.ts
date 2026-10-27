@@ -153,23 +153,30 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
   };
 
   const decide = async (input: OpenReplyInput, canOpenThread: boolean): Promise<ReplyOpening> => {
-    const conversation = await readConversation(input);
+    // One deadline for the whole opening: the context lookup (bot names, identity, recent lines)
+    // can stall too, and the bot must not stay silent past it.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const ask = async () => {
+      const conversation = await readConversation(input);
+      if (controller.signal.aborted) throw new Error('timeout');
+
+      return opener!(
+        {
+          agent: conversation?.agent,
+          botNames: conversation?.botNames,
+          canOpenThread,
+          message: input.message.text ?? '',
+          recentMessages: conversation?.recent.map((line) =>
+            describeLine(line, deps.applicationId, conversation.ownerId),
+          ),
+        },
+        controller.signal,
+      );
+    };
     try {
       return await Promise.race([
-        opener!(
-          {
-            agent: conversation?.agent,
-            botNames: conversation?.botNames,
-            canOpenThread,
-            message: input.message.text ?? '',
-            recentMessages: conversation?.recent.map((line) =>
-              describeLine(line, deps.applicationId, conversation.ownerId),
-            ),
-          },
-          controller.signal,
-        ),
+        ask(),
         new Promise<never>((_, reject) => {
           controller.signal.addEventListener('abort', () => reject(new Error('timeout')));
         }),

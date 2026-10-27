@@ -68,6 +68,21 @@ describe('createReplyOpening', () => {
     });
   });
 
+  it('falls back on time when the conversation lookup stalls', async () => {
+    const thread = makeThread();
+
+    const result = await create({ timeoutMs: 20 }).open({
+      conversation: () => new Promise(() => {}),
+      message: { id: 'msg-1', raw: { id: 'msg-1' }, text: 'look into it' },
+      thread,
+      wakeKind: 'mention',
+    });
+
+    expect(opener).not.toHaveBeenCalled();
+    expect(thread.id).toBe(`${CHANNEL}:thread-9`);
+    expect(result.verdict?.reason).toBe('thread:fallback-timeout');
+  });
+
   it('acknowledges in the channel when the thread it chose cannot be opened', async () => {
     opener.mockResolvedValue({ ack: 'On it.', placement: 'thread', title: 'Deploy' });
     client.openThread.mockRejectedValue(new Error('missing permission'));
