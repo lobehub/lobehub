@@ -33,6 +33,7 @@ import { buildMessageContextSelections } from '../../ChatInput/utils/contextSele
 import WideScreenContainer from '../../WideScreenContainer';
 import { usePendingInterventions } from '../hooks/usePendingInterventions';
 import InterventionBar from '../InterventionBar';
+import { McpElicitationConnectionError } from '../InterventionBar/McpElicitationForm';
 import {
   dataSelectors,
   messageStateSelectors,
@@ -476,6 +477,7 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
+          <McpElicitationConnectionError />
           {sendMessageErrorMsg && (
             <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}

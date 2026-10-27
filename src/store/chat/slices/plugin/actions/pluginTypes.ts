@@ -5,6 +5,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { resolveClientLocalSandbox } from '@/helpers/localSandbox';
 import { type MCPToolCallResult } from '@/libs/mcp';
@@ -339,6 +340,21 @@ export class PluginTypesActionImpl {
       const result = await mcpService.invokeMcpToolCall(payload, {
         // Resolve connectors as this agent's runs do: a linked one serves only its agent
         agentId: message?.agentId ?? undefined,
+        elicitation:
+          operationId && message?.parentId
+            ? {
+                identity: {
+                  apiName: payload.apiName,
+                  assistantMessageId: message.parentId,
+                  identifier: payload.identifier,
+                  operationId,
+                  toolCallId: payload.id,
+                  toolMessageId: id,
+                },
+                deadline: Date.now() + 60_000,
+                workspaceId: getActiveWorkspaceId() ?? undefined,
+              }
+            : undefined,
         signal: abortController?.signal,
         topicId: message?.topicId,
       });

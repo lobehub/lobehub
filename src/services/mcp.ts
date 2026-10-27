@@ -1,4 +1,5 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   getMcpServerFingerprint,
   isSyncedMcpToolVisibleTo,
@@ -21,6 +22,7 @@ import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
+import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
@@ -163,6 +165,7 @@ class MCPService {
     payload: ChatToolPayload,
     {
       agentId,
+      elicitation,
       fromMcpApp,
       onThisDevice,
       server,
@@ -171,6 +174,7 @@ class MCPService {
     }: {
       /** Resolve connectors the way this agent's conversation does (agent-owned first). */
       agentId?: string;
+      elicitation?: McpElicitationCall;
       /**
        * The call is an MCP App view's `tools/call`, not the model's:
        * - only tools whose `_meta.ui.visibility` includes "app" run, which the
@@ -203,6 +207,17 @@ class MCPService {
     const { identifier, arguments: args, apiName } = payload;
     // Calls run on this machine announce MCP Apps only under the user's flag
     const mcpApps = isMcpAppsOn();
+    const {
+      lambdaClient: defaultClient,
+      createWorkspaceLambdaClient,
+      createWorkspaceToolsClient,
+    } = await import('@/libs/trpc/client');
+    const executionClient = elicitation
+      ? createWorkspaceLambdaClient(elicitation.workspaceId ?? null)
+      : defaultClient;
+    const executionTools = elicitation
+      ? createWorkspaceToolsClient(elicitation.workspaceId ?? null)
+      : toolsClient;
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
@@ -211,11 +226,25 @@ class MCPService {
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    let connector:
+      | Pick<
+          ConnectorWithTools,
+          'id' | 'identifier' | 'isEnabled' | 'mcpConnectionType' | 'mcpServerUrl'
+        >
+      | undefined = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    if (elicitation) {
+      // A server-dispatched MCP call must work before any connector settings UI
+      // has mounted. Resolve the current scoped installation independently.
+      const [base, owned] = await Promise.all([
+        executionClient.connector.list.query(),
+        agentId ? executionClient.connector.listByAgent.query({ agentId }) : Promise.resolve([]),
+      ]);
+      connector = [...owned, ...base].find((entry) => entry.identifier === identifier);
+    }
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
-    const plugin = installPlugin || customPlugin;
+    let plugin = installPlugin || customPlugin;
 
     // An agent's own connectors may not be loaded on the client yet; with no
     // plugin to fall back to, let the server resolve the identifier for the agent.
@@ -223,7 +252,6 @@ class MCPService {
       ? connector.isEnabled && (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
       : !!agentId && !plugin;
     if (isConnector) {
-      const { lambdaClient } = await import('@/libs/trpc/client');
       const runsHere =
         connector &&
         isDesktop &&
@@ -234,7 +262,7 @@ class MCPService {
       if (runsHere) {
         // Persisted connector projections omit env secrets and may be stale.
         // This protected read retains the connector's credential ownership gate.
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+        const detail = await executionClient.connector.getForEdit.query({ id: connector.id });
         if (!detail.isEnabled) throw new Error('Connector is disabled');
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {
@@ -261,6 +289,7 @@ class MCPService {
         throwIfAborted(signal);
         const result = await ensureElectronIpc().mcp.callTool(
           serializeMcpIpcPayload({
+            elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
             args: safeParseJSON(args) ?? {},
             env: config.env,
             ...(fromMcpApp && { fromApp: true }),
@@ -277,10 +306,11 @@ class MCPService {
         return markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(result));
       }
       try {
-        return (await lambdaClient.connector.callTool.mutate(
+        return (await executionClient.connector.callTool.mutate(
           {
             agentId,
             args,
+            elicitation,
             // The server checks the view's server against the connector it resolves
             ...(fromMcpApp && { fromApp: true, server }),
             identifier,
@@ -302,6 +332,12 @@ class MCPService {
           success: false,
         } satisfies MCPToolCallResult;
       }
+    }
+
+    if (!plugin && elicitation) {
+      plugin = (await executionClient.plugin.getPlugins.query()).find(
+        (entry) => entry.identifier === identifier,
+      );
     }
 
     if (!plugin) return;
@@ -341,6 +377,7 @@ class MCPService {
     };
 
     const data = {
+      elicitation,
       // For desktop IPC, always pass a record/object for tool "arguments"
       // (IPC layer serializes the whole payload into a JSON envelope).
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
@@ -382,7 +419,7 @@ class MCPService {
         // Server will automatically get user access token from database
         // and format the result to MCPToolCallResult
         // Server-side also handles telemetry reporting
-        result = await toolsClient.market.callCloudMcpEndpoint.mutate({
+        result = await executionTools.market.callCloudMcpEndpoint.mutate({
           apiParams,
           identifier,
           meta,
@@ -391,7 +428,11 @@ class MCPService {
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
         // Note: IPC doesn't support AbortSignal yet
-        const serialized = serializeMcpIpcPayload({ ...data, mcpApps });
+        const serialized = serializeMcpIpcPayload({
+          ...data,
+          mcpApps,
+          elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
+        });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
         result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else if (isLocalHttp) {
@@ -407,7 +448,7 @@ class MCPService {
         result = await markLocalView(deserializeMcpIpcPayload(serializedResult) as any);
       } else {
         // For other types, use the toolsClient
-        result = await toolsClient.mcp.callTool.mutate(data, { signal });
+        result = await executionTools.mcp.callTool.mutate(data, { signal });
       }
 
       success = true;

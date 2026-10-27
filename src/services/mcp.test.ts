@@ -50,29 +50,38 @@ vi.mock('@lobechat/utils', () => ({
   }),
 }));
 
-vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: {
-    connector: {
-      callTool: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
-    },
-  },
-  toolsClient: {
-    market: {
-      callCloudMcpEndpoint: {
-        mutate: vi.fn(),
+vi.mock('@/libs/trpc/client', () => {
+  const result = {
+    lambdaClient: {
+      connector: {
+        list: { query: vi.fn().mockResolvedValue([]) },
+        listByAgent: { query: vi.fn().mockResolvedValue([]) },
+        callTool: { mutate: vi.fn() },
+        getForEdit: { query: vi.fn() },
       },
     },
-    mcp: {
-      callTool: {
-        mutate: vi.fn(),
+    toolsClient: {
+      market: {
+        callCloudMcpEndpoint: {
+          mutate: vi.fn(),
+        },
       },
-      getStreamableMcpServerManifest: {
-        query: vi.fn(),
+      mcp: {
+        callTool: {
+          mutate: vi.fn(),
+        },
+        getStreamableMcpServerManifest: {
+          query: vi.fn(),
+        },
       },
     },
-  },
-}));
+  };
+  return {
+    ...result,
+    createWorkspaceLambdaClient: vi.fn(() => result.lambdaClient),
+    createWorkspaceToolsClient: vi.fn(() => result.toolsClient),
+  };
+});
 
 vi.mock('@/utils/electron/ipc', () => ({
   ensureElectronIpc: () => mockElectronIpc,
@@ -113,6 +122,43 @@ describe('MCPService', () => {
   });
 
   describe('invokeMcpToolCall', () => {
+    it('resolves a server-dispatched stdio connector before the settings store is initialized', async () => {
+      environment.isDesktop = true;
+      environment.deviceGatewayConfigured = false;
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      vi.mocked(lambdaClient.connector.list.query).mockResolvedValueOnce([
+        { id: 'fresh', identifier: 'cold-stdio', isEnabled: true, mcpConnectionType: 'stdio' },
+      ] as any);
+      vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValueOnce({
+        id: 'fresh',
+        identifier: 'cold-stdio',
+        isEnabled: true,
+        mcpConnectionType: 'stdio',
+        tools: [{ toolName: 'form', permission: 'auto' }],
+        mcpStdioConfig: { command: 'node', args: ['server.mjs'] },
+      } as any);
+      mockElectronIpc.mcp.callTool.mockResolvedValue(
+        superjson.serialize({ content: 'continued', success: true, state: {} }),
+      );
+      const identity = {
+        apiName: 'form',
+        assistantMessageId: 'assistant',
+        identifier: 'cold-stdio',
+        operationId: 'op',
+        toolCallId: 'original',
+      };
+      const result = await mcpService.invokeMcpToolCall(
+        { apiName: 'form', arguments: '{}', identifier: 'cold-stdio', id: 'original', type: 'mcp' },
+        { elicitation: { identity, deadline: Date.now() + 1000 } },
+      );
+      expect(result?.content).toBe('continued');
+      const payload = superjson.deserialize(
+        mockElectronIpc.mcp.callTool.mock.calls.at(-1)![0],
+      ) as any;
+      expect(payload.elicitation).toMatchObject({ identity, relayResult: true });
+      expect(lambdaClient.connector.getForEdit.query).toHaveBeenCalledWith({ id: 'fresh' });
+    });
+
     describe('HTTP connector connection failures', () => {
       const payload = {
         apiName: 'echo',

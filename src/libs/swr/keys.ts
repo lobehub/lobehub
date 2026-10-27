@@ -1081,3 +1081,15 @@ export const swrKeys = {
   verify: verifyKeys,
   video: videoKeys,
 };
+
+export const mcpElicitationKeys = {
+  pending: def(
+    'mcpElicitation:pending',
+    (userId: string, topicId: string, threadId?: string | null) => [
+      'mcpElicitation:pending',
+      userId,
+      topicId,
+      threadId ?? null,
+    ],
+  ),
+};

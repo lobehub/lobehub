@@ -13,6 +13,8 @@ import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections'
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
 import { llmRelayChunks, llmRelayPayload } from './handlers/llmRelay';
+import { mcpElicitationExpire } from './handlers/mcpElicitationExpire';
+import { mcpElicitationResume } from './handlers/mcpElicitationResume';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
@@ -41,6 +43,8 @@ app.post('/', qstashOrApiKeyAuth(), execAgent);
 
 // POST /api/agent/run — execute a single step (QStash signature)
 app.post('/run', qstashAuth(), runStep);
+app.post('/mcp-elicitation-resume', qstashAuth(), mcpElicitationResume);
+app.post('/mcp-elicitation-expire', qstashAuth(), mcpElicitationExpire);
 app.get('/run', runStepHealth);
 
 app.post('/channel/advance', qstashAuth(), channelAdvance);

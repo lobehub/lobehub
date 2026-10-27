@@ -2,6 +2,7 @@ import { memo } from 'react';
 
 import Intervention from '../Messages/AssistantGroup/Tool/Detail/Intervention';
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
+import { McpElicitationForm } from './McpElicitationForm';
 import { styles } from './style';
 import UserInterventionErrorBoundary from './UserInterventionErrorBoundary';
 
@@ -12,6 +13,13 @@ interface InterventionContentProps {
 
 const InterventionContent = memo<InterventionContentProps>(
   ({ intervention, actionsPortalTarget }) => {
+    if (intervention.mcpElicitation)
+      return (
+        <McpElicitationForm
+          key={intervention.mcpElicitation.batchId}
+          pending={intervention.mcpElicitation}
+        />
+      );
     const boundaryKey = [
       intervention.apiName,
       intervention.identifier,

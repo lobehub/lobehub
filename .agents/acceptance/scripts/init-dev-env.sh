@@ -736,7 +736,7 @@ cmd_dev_next() {
   # next directly is equivalent and port-correct in both cloud and submodule.
   prepare_dev_state
   write_dev_state dev-next
-  exec pnpm exec next dev -p "$SERVER_PORT"
+  exec node "$WORKSPACE_ROOT/node_modules/next/dist/bin/next" dev -p "$SERVER_PORT"
 }
 
 cmd_dev() {

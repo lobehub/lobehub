@@ -713,7 +713,7 @@ describe('MCPService', () => {
         argsStr: argsString,
       });
 
-      expect(mockClient.callTool).toHaveBeenCalledWith('testTool', argsObject);
+      expect(mockClient.callTool).toHaveBeenCalledWith('testTool', argsObject, undefined);
     });
 
     it('should retry with a fresh session when NoValidSessionId error occurs', async () => {
@@ -735,8 +735,8 @@ describe('MCPService', () => {
       expect(result.success).toBe(true);
       expect(mockClient.callTool).toHaveBeenCalledTimes(2);
       // Retry must drop the cached client: first attempt skipCache=false, retry skipCache=true
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApps: false });
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApps: false, scope: 'tool' });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false, scope: 'tool' });
     });
 
     it('should retry up to 3 times for NoValidSessionId error', async () => {
@@ -1006,7 +1006,7 @@ describe('MCPService', () => {
 
       expect(result).toEqual(resources);
       expect(mockClient.listResources).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false, scope: 'metadata' });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {
@@ -1034,7 +1034,7 @@ describe('MCPService', () => {
 
       expect(result).toEqual(prompts);
       expect(mockClient.listPrompts).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false, scope: 'metadata' });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {

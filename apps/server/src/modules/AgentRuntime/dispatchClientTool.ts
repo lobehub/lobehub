@@ -1,3 +1,4 @@
+import { mcpTransportCallId } from '@lobechat/mcp-elicitation/transport';
 import type { ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 
@@ -17,6 +18,7 @@ interface DispatchContext {
   assistantMessageId?: string;
   documentId?: string | null;
   groupId?: string | null;
+  mcpElicitation?: boolean;
   operationId: string;
   rootOperationId?: string;
   scope?: string | null;
@@ -33,6 +35,7 @@ interface DispatchContext {
    */
   timeoutMs?: number;
   topicId?: string | null;
+  workspaceId?: string;
 }
 
 const clampTimeout = (value: number): number =>
@@ -73,6 +76,10 @@ export async function dispatchClientTool(
 ): Promise<ToolExecutionResultResponse> {
   const { operationId, streamManager } = ctx;
   const startedAt = Date.now();
+  const transportCallId =
+    ctx.mcpElicitation || chatToolPayload.type === 'mcp'
+      ? mcpTransportCallId(operationId, chatToolPayload.id, ctx.workspaceId)
+      : chatToolPayload.id;
 
   if (typeof streamManager.sendToolExecute !== 'function') {
     return buildErrorResult(
@@ -122,11 +129,11 @@ export async function dispatchClientTool(
       sourceMessageId: ctx.sourceMessageId,
       taskId: ctx.taskId,
       threadId: ctx.threadId,
-      toolCallId: chatToolPayload.id,
+      toolCallId: transportCallId,
       topicId: ctx.topicId,
     });
 
-    const result = await waiter.waitForResult(chatToolPayload.id, timeoutMs);
+    const result = await waiter.waitForResult(transportCallId, timeoutMs);
     const executionTime = Date.now() - startedAt;
 
     if (!result) {
@@ -161,6 +168,10 @@ function projectToExecutionResult(
     error: payload.error,
     executionTime,
     state: payload.state,
+    toolMessageId:
+      typeof payload.state?.mcpToolMessageId === 'string'
+        ? payload.state.mcpToolMessageId
+        : undefined,
     success: payload.success,
     // Forward the client-relayed Work registration intent so the agent runtime
     // loop calls `registerWork` (the persist path strips it — never hits the DB).

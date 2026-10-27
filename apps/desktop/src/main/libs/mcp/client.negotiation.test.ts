@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startNegotiationServers } from '../../../../../../src/libs/mcp/__tests__/fixtures/negotiationServers';
@@ -32,10 +33,9 @@ describe('desktop transport protocol policy', () => {
         content: [{ text: 'MCP negotiation tool succeeded', type: 'text' }],
       });
       if (era === 'modern') {
-        await expect(client.callTool('needs_input', {})).resolves.toMatchObject({
-          isError: true,
-          content: [{ type: 'text', text: expect.stringContaining('requires user input') }],
-        });
+        await expect(client.callTool('needs_input', {})).rejects.toBeInstanceOf(
+          McpInputRequiredError,
+        );
       }
     } finally {
       await client.disconnect();

@@ -226,7 +226,11 @@ export class ServerToolTransport implements ToolTransport {
           documentId: context.state.origin?.documentId,
           groupId: context.state.origin?.groupId,
           operationId,
+          mcpElicitation: Boolean(
+            context.effectiveManifestMap[chatToolPayload.identifier]?.mcpParams,
+          ),
           rootOperationId: operationId,
+          workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
           scope: context.state.origin?.scope,
           sourceMessageId: context.state.origin?.sourceMessageId,
           streamManager,
@@ -235,6 +239,16 @@ export class ServerToolTransport implements ToolTransport {
           timeoutMs,
           topicId: context.state.origin?.topicId ?? this.ctx.topicId,
         });
+        if (
+          !dispatchResult.toolMessageId &&
+          context.effectiveManifestMap[chatToolPayload.identifier]?.mcpParams
+        ) {
+          dispatchResult.toolMessageId =
+            (await this.ctx.messageModel.findToolMessageIdByToolCallId(
+              chatToolPayload.id,
+              context.parentMessageId,
+            )) ?? undefined;
+        }
         execution = { attempts: 1, result: dispatchResult };
       } else {
         if (context.toolSource && !chatToolPayload.source) {
@@ -261,6 +275,7 @@ export class ServerToolTransport implements ToolTransport {
         execution = await executeToolWithRetry(
           () =>
             toolExecutionService.executeTool(chatToolPayload, {
+              abortSignal: context.abortSignal,
               activatedSkills: context.activatedSkills as any,
               activeDeviceId: resolveRunActiveDeviceId(context.state),
               activeDeviceScope: context.state.principal?.actor?.deviceScope,

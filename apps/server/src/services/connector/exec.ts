@@ -1,4 +1,5 @@
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -8,6 +9,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
+import type { McpElicitationService } from '../mcp/elicitation/McpElicitationService';
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
@@ -84,6 +86,7 @@ export const callConnectorToolById = async (
   params: {
     agentId?: string;
     args?: string;
+    elicitation?: McpElicitationCall;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
     identifier: string;
@@ -91,7 +94,7 @@ export const callConnectorToolById = async (
     server?: string;
     toolName: string;
   },
-  ctx: ConnectorExecContext,
+  ctx: ConnectorExecContext & { mcpElicitationService?: McpElicitationService },
 ): Promise<unknown> => {
   const [connector] = await findConnector(params, ctx);
   if (!connector) {
@@ -174,7 +177,30 @@ export const callConnectorToolById = async (
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
+  const elicitation = params.elicitation;
+  const host =
+    elicitation && ctx.mcpElicitationService
+      ? ctx.mcpElicitationService.createLegacyHost(
+          elicitation.identity,
+          Math.min(elicitation.deadline, Date.now() + 120_000),
+        )
+      : undefined;
+  if (elicitation && ctx.mcpElicitationService) {
+    if (
+      elicitation.identity.identifier !== params.identifier ||
+      elicitation.identity.apiName !== params.toolName
+    )
+      throw new ConnectorToolCallError('FORBIDDEN', 'MCP interaction identity mismatch');
+    await ctx.mcpElicitationService.assertIdentity(elicitation.identity);
+  }
   return mcpService.callTool({
+    elicitation: {
+      host,
+      interactive: !!host,
+      scope: ctx.mcpElicitationService
+        ? JSON.stringify([ctx.mcpElicitationService.userId, ctx.mcpElicitationService.workspaceId])
+        : undefined,
+    },
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,

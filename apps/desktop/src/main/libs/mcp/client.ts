@@ -5,7 +5,13 @@ import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp
 import { toRecord } from '@lobechat/utils/object';
 import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
-  Client,
+  McpElicitationClient,
+  type McpElicitationContinuation,
+  type McpElicitationHost,
+  McpProtocolClient,
+} from '@lobechat/mcp-elicitation';
+import type { Client, Progress, Transport } from '@modelcontextprotocol/client';
+import {
   ProtocolError,
   ProtocolErrorCode,
   SdkError,
@@ -353,6 +359,7 @@ export class MCPClient {
   private static readonly STDERR_LOG_LIMIT = 200;
 
   private readonly mcp: Client;
+  private readonly elicitation: McpElicitationClient;
 
   private transport: Transport;
   private stderrLogs: string[] = [];
@@ -388,7 +395,7 @@ export class MCPClient {
       mcpApps?: boolean;
     } = {},
   ) {
-    this.mcp = new Client(
+    this.mcp = new McpProtocolClient(
       { name: 'lobehub-desktop-mcp-client', version: '1.0.0' },
       {
         ...(mcpApps && {
@@ -411,6 +418,8 @@ export class MCPClient {
       this.modelHiddenTools = undefined;
       this.toolListingFailedAt = undefined;
     });
+
+    this.elicitation = new McpElicitationClient(this.mcp, true, () => this.disconnect());
 
     switch (params.type) {
       case 'http': {
@@ -877,32 +886,33 @@ export class MCPClient {
     };
   }
 
-  async callTool(toolName: string, args: any): Promise<ToolCallResult> {
-    try {
-      const result = await this.mcp.callTool(
-        { arguments: args, name: toolName },
-        {
-          timeout: getDesktopEnv().MCP_TOOL_TIMEOUT,
-        },
-      );
-      return result as ToolCallResult;
-    } catch (error) {
-      if (
-        SdkError.isInstance(error) &&
-        error.code === SdkErrorCode.UnsupportedResultType &&
-        toRecord(error.data)?.resultType === 'input_required'
-      ) {
-        return {
-          content: [
+  async callTool(
+    toolName: string,
+    args: any,
+    options: {
+      host?: McpElicitationHost;
+      continuation?: McpElicitationContinuation;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<ToolCallResult> {
+    const invoke = options.host
+      ? () =>
+          this.elicitation.callToolInteractively(
+            { arguments: args, name: toolName },
+            { timeout: getDesktopEnv().MCP_TOOL_TIMEOUT, signal: options.signal },
+            options.host!,
+          )
+      : () =>
+          this.elicitation.callTool(
+            { arguments: args, name: toolName },
             {
-              type: 'text',
-              text: 'This MCP tool requires user input that LobeHub does not support yet. Use a tool that does not require additional input.',
+              timeout: getDesktopEnv().MCP_TOOL_TIMEOUT,
+              signal: options.signal,
             },
-          ],
-          isError: true,
-        };
-      }
-      throw error;
-    }
+            options.host,
+            options.continuation,
+          );
+    const result = await invoke();
+    return result as ToolCallResult;
   }
 }

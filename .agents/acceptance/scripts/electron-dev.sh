@@ -432,7 +432,7 @@ do_stop() {
     fi
   fi
 
-  agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close --all 2>/dev/null || true
+  agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close 2>/dev/null || true
   rm -f "$PIDFILE"
 
   # Pool mode: capture the (freshly rotated) login before touching the userData,

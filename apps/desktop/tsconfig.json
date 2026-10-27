@@ -23,6 +23,7 @@
   },
   "include": [
     "../../src/libs/mcp/__tests__/fixtures/negotiationServers.ts",
+    "../../src/libs/mcp/__tests__/fixtures/elicitationServers.ts",
     "src/main/**/*",
     "src/main/global.d.ts",
     "src/preload/**/*",
