@@ -155,7 +155,10 @@ export interface ContextFactProviders {
   /** Recently used agents, most recent first. */
   listRecentAgents?: (
     limit: number,
-  ) => Promise<{ description?: string | null; id: string; title?: string | null }[] | undefined>;
+  ) => Promise<
+    | { description?: string | null; id: string; name?: string | null; title?: string | null }[]
+    | undefined
+  >;
   /** Files synced into the topic's sandbox upload dir. */
   listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
   /** Messages of a referenced topic, oldest first. */

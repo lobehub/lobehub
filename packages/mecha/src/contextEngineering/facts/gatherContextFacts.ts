@@ -397,7 +397,11 @@ const gatherAgentManagementContext = async (
     // Self-management (updateAgent / installPlugin on itself) stays available
     // inside a sub-agent, so its own id is kept; only the delegation list goes.
     const currentAgent = request.agentId
-      ? { id: request.agentId, title: request.agent.title ?? undefined }
+      ? {
+          id: request.agentId,
+          name: request.agent.name ?? undefined,
+          title: request.agent.title ?? undefined,
+        }
       : undefined;
 
     if (canDelegate) {
@@ -411,6 +415,7 @@ const gatherAgentManagementContext = async (
         availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
           description: a.description ?? undefined,
           id: a.id,
+          name: a.name ?? undefined,
           title: a.title ?? 'Untitled',
         })),
         availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,

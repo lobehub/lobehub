@@ -279,6 +279,19 @@ describe('gatherContextFacts', () => {
       expect(ctx.availablePlugins).toBeUndefined();
     });
 
+    it('carries each agent’s name beside its title, for itself and the others', async () => {
+      const facts = await gatherContextFacts(
+        request({ agent: { name: 'Nasa', title: 'Shadow Arvin' } }),
+        { listRecentAgents: async () => [{ id: 'agt_2', name: 'Tiko', title: 'Reviewer' }] },
+      );
+
+      const ctx = facts.step.agentManagementContext!;
+      expect(ctx.currentAgent).toStrictEqual({ id: 'agt_1', name: 'Nasa', title: 'Shadow Arvin' });
+      expect(ctx.availableAgents).toStrictEqual([
+        { description: undefined, id: 'agt_2', name: 'Tiko', title: 'Reviewer' },
+      ]);
+    });
+
     it('adds providers and the plugin catalog only when the tool is enabled', async () => {
       const facts = await gatherContextFacts(
         request({
