@@ -108,7 +108,6 @@ export class TaskRestService extends BaseService {
   }
 
   async updateTask(id: string, input: UpdateTaskRequest): ServiceResult<unknown> {
-    input = { ...input, config: await normalizeTaskConfig(this.taskModel, input.config) };
     // Hierarchy, visibility, assignment and schedule invariants all live in one
     // shared place, so this patch cannot persist what the in-app editor refuses
     // — a task parented to itself, a public child under a private parent, an
@@ -123,8 +122,11 @@ export class TaskRestService extends BaseService {
         userId: this.userId,
         workspaceId: this.workspaceId,
       },
-      { data: input, id, parentTaskId: input.parentTaskId },
+      { data: { ...input }, id, parentTaskId: input.parentTaskId },
     );
+    if (data.config) {
+      data.config = await normalizeTaskConfig(this.taskModel, data.config, resolved.config);
+    }
 
     // The patch is a partial row update; the model owns which columns are
     // accepted and normalises the null-vs-undefined distinction itself.
