@@ -27,6 +27,14 @@ export const TRASH_RESOURCE_TYPES = [
 export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 
 /**
+ * Which side of a workspace bin a root sits on. `private` when the resource,
+ * or an agent, group or project it lives under, is private to its creator;
+ * `public` otherwise. Personal bins have no sides.
+ */
+export const TRASH_VISIBILITIES = ['public', 'private'] as const;
+export type TrashVisibility = (typeof TRASH_VISIBILITIES)[number];
+
+/**
  * Lightweight, denormalised snapshot captured at trash time so the recycle
  * bin list can render a row without joining the source table. Kept small on
  * purpose — the source row is still there until purge, so anything heavier
@@ -88,13 +96,14 @@ export type TrashProjectFilter = string | null | undefined;
 /** Filters shared by the recycle-bin list, its counts and "empty trash". */
 export interface TrashRootFilter {
   /**
-   * Only roots this user trashed. Set server-side for workspace non-owners, so
-   * a member never sees titles of teammates' resources (a message root's title
-   * is a content excerpt).
+   * Only roots this user trashed. Set server-side in a workspace for the
+   * private side, so nobody sees another member's private deletions.
    */
   deletedByUserId?: string;
   projectId?: TrashProjectFilter;
   resourceType?: TrashResourceType;
+  /** Workspace bins only: one side of the bin (see {@link TrashVisibility}). */
+  visibility?: TrashVisibility;
 }
 
 export interface TrashListParams extends TrashRootFilter {

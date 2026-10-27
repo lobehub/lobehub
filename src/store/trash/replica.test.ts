@@ -143,7 +143,10 @@ describe('trash replicas', () => {
             queryKey: trashListKey({ projectId, resourceType: 'topic' }),
             scope: value,
           }),
-          trashCountResource.storage!.remove({ queryKey: trashCountKey(projectId), scope: value }),
+          trashCountResource.storage!.remove({
+            queryKey: trashCountKey({ projectId }),
+            scope: value,
+          }),
         ]),
       ),
     );
@@ -379,13 +382,13 @@ describe('trash replicas', () => {
 
   describe('selectors', () => {
     it('totalCount sums the per-type counts of one project filter', async () => {
-      vi.mocked(trashService.countByType).mockImplementation(async (projectId) =>
-        projectId === 'proj_a' ? { topic: 4 } : { agent: 1, topic: 2 },
+      vi.mocked(trashService.countByType).mockImplementation(async (filter) =>
+        filter?.projectId === 'proj_a' ? { topic: 4 } : { agent: 1, topic: 2 },
       );
       renderHook(
         () => {
-          useTrashStore((s) => s.useFetchTrashCount)(true);
-          useTrashStore((s) => s.useFetchTrashCount)(true, 'proj_a');
+          useTrashStore((s) => s.useFetchTrashCount)(true, {});
+          useTrashStore((s) => s.useFetchTrashCount)(true, { projectId: 'proj_a' });
         },
         { wrapper },
       );
@@ -397,12 +400,16 @@ describe('trash replicas', () => {
         }),
       );
       await waitFor(() =>
-        expect(useTrashStore.getState().trashCountMap[trashCountKey('proj_a')]).toEqual({
+        expect(
+          useTrashStore.getState().trashCountMap[trashCountKey({ projectId: 'proj_a' })],
+        ).toEqual({
           topic: 4,
         }),
       );
       const state = useTrashStore.getState();
       expect(trashSelectors.totalCount()(state)).toBe(3);
+      // Each side of a workspace bin keeps its own counts.
+      expect(trashSelectors.countByType({ visibility: 'public' })(state)).toBeUndefined();
       expect(trashSelectors.countByType()(state)).toEqual({ agent: 1, topic: 2 });
       expect(trashSelectors.filterCount({ projectId: 'proj_a' })(state)).toBe(4);
       expect(

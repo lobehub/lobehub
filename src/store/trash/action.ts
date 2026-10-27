@@ -1,4 +1,4 @@
-import type { TrashCountByType, TrashItem, TrashProjectFilter } from '@lobechat/types';
+import type { TrashCountByType, TrashItem } from '@lobechat/types';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
@@ -9,7 +9,7 @@ import {
   type ReplicaSyncResult,
 } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
-import { trashService, type TrashViewFilter } from '@/services/trash';
+import { type TrashCountFilter, trashService, type TrashViewFilter } from '@/services/trash';
 import { channelActions } from '@/store/channel';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -22,6 +22,7 @@ import {
   type TrashListParams,
   trashListResource,
 } from './projection';
+import { trashSelectors } from './selectors';
 import type { TrashStore } from './store';
 
 const n = setNamespace('trash');
@@ -93,7 +94,7 @@ export class TrashActionImpl {
     });
     this.#trashCount = createReplicaSlice(trashCountResource, {
       actionPrefix: n('trashCount'),
-      fetcher: ({ projectId }) => trashService.countByType(projectId),
+      fetcher: (filter) => trashService.countByType(filter),
       get,
       set,
       stateKey: 'trashCountReplica',
@@ -103,12 +104,10 @@ export class TrashActionImpl {
 
   /** One recycle-bin page: `cursor` undefined = the head (newest first). */
   #fetchPage = async (
-    { projectId, resourceType }: TrashListParams,
+    filter: TrashListParams,
     cursor?: string,
   ): Promise<ReplicaPageResult<TrashItem, string>> => {
-    const { items, nextCursor } = await trashService.list(
-      cursor ? { cursor, projectId, resourceType } : { projectId, resourceType },
-    );
+    const { items, nextCursor } = await trashService.list(cursor ? { ...filter, cursor } : filter);
     return { items, nextCursor };
   };
 
@@ -119,13 +118,19 @@ export class TrashActionImpl {
    * loaded on an earlier visit. `scope` binds the project to the scope it was
    * chosen in (see `trashSelectors.activeProjectId`).
    */
-  setFilter = ({ projectId, resourceType }: TrashViewFilter, scope: string) => {
+  setFilter = (filter: TrashViewFilter, scope: string) => {
+    const { projectId, resourceType, visibility } = filter;
     this.#set(
-      { activeType: resourceType, projectSelection: { projectId, scope } },
+      {
+        activeType: resourceType,
+        // A personal view has no side; keep the workspace side for the next visit.
+        ...(visibility ? { activeVisibility: visibility } : {}),
+        projectSelection: { projectId, scope },
+      },
       false,
       n('setFilter'),
     );
-    this.#trashList.collapse(trashListKey({ projectId, resourceType }));
+    this.#trashList.collapse(trashListKey(filter));
   };
 
   /** Re-fetch the list(s) and the counts of the active identity. */
@@ -167,15 +172,16 @@ export class TrashActionImpl {
    * revalidated in place by `refresh`.
    */
   #dropOtherViews = ({ rows }: { rows: boolean }) => {
-    const { activeType, projectSelection, trashCountMap, trashListMap } = this.#get();
-    const projectId =
-      projectSelection?.scope === cacheScope.get() ? projectSelection.projectId : undefined;
-    const countKey = trashCountKey(projectId);
+    const state = this.#get();
+    const { activeType, trashCountMap, trashListMap } = state;
+    const projectId = trashSelectors.activeProjectId(cacheScope.get())(state);
+    const visibility = trashSelectors.activeVisibility(!!getActiveWorkspaceId())(state);
+    const countKey = trashCountKey({ projectId, visibility });
     for (const key of Object.keys(trashCountMap)) {
       if (key !== countKey) this.#trashCount.remove(key);
     }
     if (!rows) return;
-    const listKey = trashListKey({ projectId, resourceType: activeType });
+    const listKey = trashListKey({ projectId, resourceType: activeType, visibility });
     for (const key of Object.keys(trashListMap)) {
       if (key !== listKey) this.#trashList.remove(key);
     }
@@ -302,9 +308,9 @@ export class TrashActionImpl {
   useFetchTrash = (enabled: boolean, filter: TrashViewFilter): ReplicaSyncResult =>
     this.#trashList.useSync(enabled ? filter : null);
 
-  /** Fetch orchestration for one project filter's per-type counts; read them via `trashSelectors`. */
-  useFetchTrashCount = (enabled: boolean, projectId?: TrashProjectFilter): ReplicaSyncResult =>
-    this.#trashCount.useSync(enabled ? { projectId } : null);
+  /** Fetch orchestration for one side and project filter's per-type counts; read them via `trashSelectors`. */
+  useFetchTrashCount = (enabled: boolean, filter: TrashCountFilter): ReplicaSyncResult =>
+    this.#trashCount.useSync(enabled ? filter : null);
 }
 
 export type TrashAction = Pick<TrashActionImpl, keyof TrashActionImpl>;
