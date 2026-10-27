@@ -1,5 +1,10 @@
 import type { BotWakeKind } from '@lobechat/types';
-import { BOT_NO_REPLY_REASONS, BOT_NO_REPLY_TOKEN } from '@lobechat/types';
+import {
+  BOT_NO_REPLY_REASONS,
+  BOT_NO_REPLY_TOKEN,
+  BOT_STAND_DOWN_MINUTES,
+  BOT_STAND_DOWN_TOKEN,
+} from '@lobechat/types';
 
 /** One prior topic (session) from the same IM channel. */
 export interface RecentChannelTopic {
@@ -86,6 +91,11 @@ export interface BotPlatformInfo {
   replyEmojis?: { emoji: string; usage?: string }[];
   /** How the bot talks in this conversation, as the owner wrote it (the channel's or the default). */
   replyStyle?: string;
+  /**
+   * The agent may step back from this conversation when people say it is interfering: it ends its
+   * reply with `STAND_DOWN`, and for a while only an @-mention or a reply wakes it here.
+   */
+  standDown?: boolean;
   supportsMarkdown: boolean;
   /**
    * How the bot was woken. On `followup` the agent is told it may stay silent; on `mention` (or
@@ -144,6 +154,7 @@ export const formatBotPlatformContext = ({
   recentChannelHistory,
   replyEmojis,
   replyStyle,
+  standDown,
   supportsMarkdown,
   wakeKind,
   warnings,
@@ -239,13 +250,13 @@ export const formatBotPlatformContext = ({
       '<optional_reply>',
       'You were woken by the conversation itself, not by someone addressing you directly. Speaking is optional.',
       `If you have nothing worth adding — the message is not for you, is off topic, repeats something already answered, or was already handled — end your turn with exactly \`${BOT_NO_REPLY_TOKEN}\` and no other text.`,
-      `You may append a reason: \`${BOT_NO_REPLY_TOKEN}:<reason>\`, where reason is one of ${BOT_NO_REPLY_REASONS.filter((r) => r !== 'empty_completion').join(', ')}.`,
+      `You may append a reason: \`${BOT_NO_REPLY_TOKEN}:<reason>\`, where reason is one of ${BOT_NO_REPLY_REASONS.filter((r) => r !== 'empty_completion' && (standDown || r !== 'stand_down')).join(', ')}.`,
       'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
       `Announcing that you will stay out ("I'll leave this one to you", "这条我不接") is itself a reply and interrupts just the same: when you decide not to take part, end with \`${BOT_NO_REPLY_TOKEN}\` instead of saying so.`,
       ...(followup ? [followupHint(followup)] : []),
       ...(named
         ? [
-            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes. Say it once, briefly, then keep to it: do not apologise again or announce that you are staying out.`,
+            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes. Say it once, briefly, then keep to it: do not apologise again or announce that you are staying out.${standDown ? ' If they say you are interfering or should stay out, stand down (see <stand_down>).' : ''}`,
           ]
         : []),
       ...(duty
@@ -282,6 +293,21 @@ export const formatBotPlatformContext = ({
           : `- ${emoji.trim()}`,
       ),
       '</reply_emojis>',
+    );
+  }
+
+  if (standDown) {
+    lines.push(
+      '',
+      '<stand_down>',
+      `If people here tell you that you are interfering, talking over them, or should stay out of this conversation, step back: acknowledge it once, in one short sentence, and end your reply with a last line that is exactly \`${BOT_STAND_DOWN_TOKEN}\`. That line is not posted.`,
+      `For the next ${BOT_STAND_DOWN_MINUTES} minutes you are then woken here only when someone @-mentions you or replies to one of your messages. Do not stand down to dodge a question someone asked you.`,
+      ...(wakeKind === 'followup'
+        ? [
+            `To step back without posting anything, end with \`${BOT_NO_REPLY_TOKEN}:stand_down\` instead.`,
+          ]
+        : []),
+      '</stand_down>',
     );
   }
 

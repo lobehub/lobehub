@@ -11,8 +11,13 @@ const deny = (reason: string): WakePolicyResult => ({
 });
 
 /**
- * The bot owner's structured rules: scope, channel allow/deny lists, follow-up window, the
- * silent-wake budget and owner-presence suppression.
+ * The bot owner's structured rules: scope, channel allow/deny lists, a stand-down, follow-up
+ * window, the silent-wake budget and owner-presence suppression.
+ *
+ * A stand-down is the bot stepping back after people told it it was interfering. Until it ends,
+ * every wake nobody explicitly addressed to the bot is denied, its name in the text included:
+ * being mentioned in passing ("nasa 就在这瞎捣乱") is exactly what it stepped back from. An
+ * @-mention or a reply to it never reaches the policies (the fast path), so those still wake it.
  *
  * Owner presence keeps the bot from joining chatter on its own while the owner is around to
  * answer. A message that calls the bot by name asked for the bot, not the owner, so presence does
@@ -26,7 +31,8 @@ const deny = (reason: string): WakePolicyResult => ({
  *
  * Returns:
  * - `deny` with the first rule that matched (checked in a fixed order: scope, deny list, allow
- *   list, window, budget, owner presence; owner presence is skipped when the text names the bot)
+ *   list, stand-down (`stood-down`), window, budget, owner presence; owner presence is skipped when
+ *   the text names the bot)
  * - `allow` when the bot spoke within the follow-up window, the author is the person whose message
  *   woke it there, and nothing denied
  * - `abstain` otherwise: outside the window, or for someone else in it, the owner's rules have no
@@ -43,6 +49,10 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
     if (ids.some((id) => rules.denyChannels.includes(id))) return deny('channel-denied');
     if (rules.allowChannels.length > 0 && !ids.some((id) => rules.allowChannels.includes(id))) {
       return deny('channel-not-allowed');
+    }
+
+    if (channel?.standDownUntil !== undefined && channel.standDownUntil > now) {
+      return deny('stood-down');
     }
 
     const windowOpen =
@@ -93,5 +103,5 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
   id: OWNER_RULES_POLICY_ID,
   mode,
   requires: ['channel', 'conversation'],
-  version: 3,
+  version: 4,
 });

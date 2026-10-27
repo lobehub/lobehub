@@ -10,7 +10,7 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from '../createBotCompletionHook';
-import { detectNoReply } from '../noReply';
+import { detectNoReply, extractStandDown } from '../noReply';
 import { recordNoReplyLabel } from '../noReplyLabel';
 import type { BotReactionMode, BotReplyLocale, PlatformClient } from '../platforms';
 import {
@@ -335,13 +335,15 @@ export async function executeWithHooksLocalMode(
                   const lastChunkAttachments = hookEventAttachmentsToChatSdk(
                     event.attachments as any,
                   );
-                  const hasText = !!lastAssistantContent;
+                  // The stand-down marker is for the runtime, not the channel.
+                  const replyText = extractStandDown(lastAssistantContent).content;
+                  const hasText = !!replyText;
                   const hasAttachments = !!lastChunkAttachments?.length;
 
                   if (hasText || hasAttachments) {
                     let chunks: string[];
                     if (hasText) {
-                      const replyBody = renderFinalReply(lastAssistantContent!);
+                      const replyBody = renderFinalReply(replyText!);
                       const replyStats = {
                         elapsedMs: event.duration ?? getElapsedMs(),
                         llmCalls: event.llmCalls ?? 0,
@@ -392,7 +394,7 @@ export async function executeWithHooksLocalMode(
                       chunks.length,
                       lastChunkAttachments?.length ?? 0,
                     );
-                    resolve({ reply: lastAssistantContent ?? '', topicId: resolvedTopicId });
+                    resolve({ reply: replyText ?? '', topicId: resolvedTopicId });
 
                     // Fire-and-forget: summarize topic title in DB. Only when
                     // we have text to summarize on — image-only replies skip

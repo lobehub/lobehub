@@ -24,6 +24,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     applicationId,
     botWakeEnabled,
     bridge,
+    canStandDown,
     charLimit,
     client,
     commands,
@@ -295,6 +296,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           followup: initiation?.reason === 'followup-window' ? initiation.followup : undefined,
           named: wakeReason === 'named-in-text',
           ...replyVoiceFor(thread.id),
+          standDown: await canStandDown(thread),
           wakeKind,
         });
       } catch (error) {

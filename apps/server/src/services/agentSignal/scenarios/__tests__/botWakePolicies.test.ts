@@ -574,6 +574,54 @@ describe('createWakePolicySet', () => {
   });
 });
 
+// The bot stepped back after "nasa 就在这瞎捣乱", then was woken by its name two minutes later.
+describe('owner rules policy: a stand-down', () => {
+  const conversation = { botNames: ['Nasa'], recent: [] };
+  const policies = () =>
+    createWakePolicySet({ settings: { botWake: { enabled: true, mode: 'enforce' } } });
+  const decide = (s: Partial<WakeSignal>, c: Partial<WakeChannelState>, explicit = false) =>
+    aggregateWakeVerdictsAsync(policies(), signal(s), {
+      ...snapshot(c),
+      conversation,
+      explicitMention: explicit,
+    });
+  const inWindow = { botLastSpokeAt: NOW - 10_000, followupUntil: NOW + 60_000 };
+
+  it('denies every wake nobody addressed to the bot, its name in the text included', async () => {
+    const stoodDown = { ...inWindow, standDownUntil: NOW + 60_000 };
+
+    for (const message of ['那这个怎么处理?', '其他 agent 为啥不能来看和学习呢？nasa']) {
+      const decision = await decide({ message }, stoodDown);
+      expect([decision.verdict, decision.reason, decision.decidedBy]).toEqual([
+        'deny',
+        'stood-down',
+        OWNER_RULES_POLICY_ID,
+      ]);
+    }
+  });
+
+  it('still wakes for an explicit @-mention or reply: those never reach the policies', async () => {
+    const decision = await decide(
+      { message: 'Nasa 你来看下' },
+      { standDownUntil: NOW + 60_000 },
+      true,
+    );
+
+    expect(decision).toMatchObject({ fastPath: true, verdict: 'allow' });
+  });
+
+  it('ends when its time is up', async () => {
+    const over = { ...inWindow, standDownUntil: NOW - 1 };
+
+    expect((await decide({ message: 'Nasa 你怎么看' }, over)).reason).toBe('named-in-text');
+    expect(
+      (await decide({ message: '那这个怎么处理?' }, over)).records.find(
+        (record) => record.policyId === OWNER_RULES_POLICY_ID,
+      )?.reason,
+    ).toBe('inside-followup-window');
+  });
+});
+
 describe('policy set aggregation', () => {
   const classify = vi.fn<WakeClassify>(async () => ({
     addressedToBot: 0.1,

@@ -1550,6 +1550,7 @@ export default {
   'noReply.reason.not_addressed': 'Not addressed to me',
   'noReply.reason.nothing_to_add': 'Nothing to add',
   'noReply.reason.off_topic': 'Not relevant to me',
+  'noReply.reason.stand_down': 'Stepping back from this conversation',
   'noReply.title': 'Read the message and chose not to reply',
   'noAgentsYet': 'This group has no members yet. Click the + button to invite agents.',
   'noAvailableAgents': 'No members available to invite',

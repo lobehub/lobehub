@@ -316,6 +316,35 @@ describe('formatBotPlatformContext', () => {
     expect(formatBotPlatformContext(base)).not.toContain('<reply_emojis>');
   });
 
+  // "nasa 就在这瞎捣乱" → "我撤了", and two minutes later it replied again.
+  it('tells an agent that may stand down how to step back, and what it costs', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const mention = formatBotPlatformContext({ ...base, standDown: true, wakeKind: 'mention' });
+
+    expect(mention).toContain('<stand_down>');
+    expect(mention).toContain('you are interfering');
+    expect(mention).toContain('acknowledge it once');
+    expect(mention).toContain('a last line that is exactly `STAND_DOWN`');
+    expect(mention).toContain('For the next 30 minutes');
+    expect(mention).toContain('Do not stand down to dodge a question');
+    // Silence is for a follow-up wake only: a mention is always answered.
+    expect(mention).not.toContain('NO_REPLY:stand_down');
+
+    const named = formatBotPlatformContext({
+      ...base,
+      named: true,
+      standDown: true,
+      wakeKind: 'followup',
+    });
+    expect(named).toContain('NO_REPLY:stand_down');
+    expect(named).toContain('stand down (see <stand_down>)');
+
+    // Without it, nothing about standing down, not even the reason.
+    expect(formatBotPlatformContext({ ...base, named: true, wakeKind: 'followup' })).not.toContain(
+      'stand_down',
+    );
+  });
+
   it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
 

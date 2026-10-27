@@ -27,6 +27,8 @@ export interface BotPlatformContext {
   replyEmojis?: BotPlatformInfo['replyEmojis'];
   /** How the bot talks in this conversation (see `formatBotPlatformContext`). */
   replyStyle?: BotPlatformInfo['replyStyle'];
+  /** The agent may step back from the conversation (see `formatBotPlatformContext`). */
+  standDown?: boolean;
   supportsMarkdown: boolean;
   /** `followup` tells the agent it may stay silent (see `formatBotPlatformContext`). */
   wakeKind?: BotPlatformInfo['wakeKind'];

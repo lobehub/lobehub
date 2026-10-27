@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     mutateScheduler: vi.fn(),
     recordBotSpoke: vi.fn(),
     recordSilentWake: vi.fn(),
+    recordStandDown: vi.fn(),
     rememberMessages: vi.fn(),
   },
   isLocal: { value: false },
@@ -160,6 +161,25 @@ describe('wake scheduler wiring', () => {
       await recordWakeRunOutcome({ ...base, spoke: false, wakeKind: 'mention' });
 
       expect(mocks.botWake.recordSilentWake).not.toHaveBeenCalled();
+    });
+
+    it('steps back from the thread it replied in for 30 minutes when the agent stood down', async () => {
+      const before = Date.now();
+      await recordWakeRunOutcome({ ...base, spoke: true, standDown: true });
+
+      // The thread only: the rest of the channel is not what the bot was told to leave.
+      expect(mocks.botWake.recordStandDown).toHaveBeenCalledWith(
+        'discord:app:g:c:t',
+        expect.any(Number),
+      );
+      const until = mocks.botWake.recordStandDown.mock.calls[0][1] as number;
+      expect(until - before).toBeGreaterThanOrEqual(30 * 60 * 1000);
+      expect(until - Date.now()).toBeLessThanOrEqual(30 * 60 * 1000);
+
+      mocks.botWake.recordStandDown.mockClear();
+      await recordWakeRunOutcome({ ...base, spoke: false, wakeKind: 'followup' });
+      await recordWakeRunOutcome({ ...base, settings: {}, spoke: true, standDown: true });
+      expect(mocks.botWake.recordStandDown).not.toHaveBeenCalled();
     });
 
     describe('what the bot said', () => {

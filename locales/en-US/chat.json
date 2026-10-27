@@ -1859,6 +1859,7 @@
   "noReply.reason.not_addressed": "Not addressed to me",
   "noReply.reason.nothing_to_add": "Nothing to add",
   "noReply.reason.off_topic": "Not relevant to me",
+  "noReply.reason.stand_down": "Stepping back from this conversation",
   "noReply.title": "Read the message and chose not to reply",
   "noSelectedAgents": "No members selected yet",
   "opStatusTray.cost": "cost",

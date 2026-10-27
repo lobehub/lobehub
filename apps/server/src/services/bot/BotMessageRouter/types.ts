@@ -130,6 +130,11 @@ export interface BotHandlerContext {
   /** The bot has the bot-wake scenario enabled: it listens to unaddressed channel chatter. */
   botWakeEnabled: boolean;
   bridge: AgentBridgeService;
+  /**
+   * Whether the agent may step back from this conversation (`STAND_DOWN`): a group conversation
+   * of a bot whose wake rules enforce, once the rollout reaches it.
+   */
+  canStandDown: (thread: { isDM?: boolean }) => Promise<boolean>;
   charLimit?: number;
   client: PlatformClient;
   commands: BotCommand[];

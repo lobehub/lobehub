@@ -47,6 +47,8 @@ export interface BotWakeChannelFields {
   followupUntil?: number;
   ownerLastSpokeAt?: number;
   silentWakes: number;
+  /** Until when the bot stays out of this conversation unless explicitly addressed. */
+  standDownUntil?: number;
 }
 
 const toNumber = (value: string | undefined) => {
@@ -62,11 +64,13 @@ const parseFields = (hash: Record<string, string> | null | undefined): BotWakeCh
   followupUntil: toNumber(hash?.followupUntil),
   ownerLastSpokeAt: toNumber(hash?.ownerLastSpokeAt),
   silentWakes: toNumber(hash?.silentWakes) ?? 0,
+  standDownUntil: toNumber(hash?.standDownUntil),
 });
 
 /**
  * Merges the states of the keys a conversation is filed under (channel and Discord thread).
- * Times take the latest; the silent-wake count takes the highest, the stricter reading. The
+ * Times take the latest (a stand-down on any key holds); the silent-wake count takes the highest,
+ * the stricter reading. The
  * follow-up author comes from the key whose window ends last, the window it belongs to.
  */
 export const mergeBotWakeChannelFields = (
@@ -90,6 +94,7 @@ export const mergeBotWakeChannelFields = (
     followupUntil,
     ownerLastSpokeAt: max((field) => field.ownerLastSpokeAt),
     silentWakes: Math.max(0, ...fields.map((field) => field.silentWakes)),
+    standDownUntil: max((field) => field.standDownUntil),
   };
 };
 
@@ -289,6 +294,26 @@ export const botWake = {
       await pipeline.exec();
     } catch (error) {
       log('recordWakeAuthor failed: %O', error);
+    }
+  },
+
+  /**
+   * The bot stepped back from a conversation (people told it it is interfering): until `until`,
+   * only an explicit address wakes it there. On the conversation's own key, so a thread the bot
+   * left does not silence the rest of the channel.
+   */
+  async recordStandDown(key: string, until: number) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const channelKey = RedisKeys.botWake.channel(key);
+      const pipeline = redis.pipeline();
+      pipeline.hset(channelKey, 'standDownUntil', String(until));
+      pipeline.expire(channelKey, CHANNEL_TTL_SECONDS);
+      await pipeline.exec();
+    } catch (error) {
+      log('recordStandDown failed: %O', error);
     }
   },
 

@@ -59,7 +59,7 @@ import { buildWakeSignal, type WakeMessageLike } from '../wake/signal';
 const log = debug('lobe-server:bot:wake-decision');
 
 /** Revision of the bot-wake pipeline recorded on every decision. Bump when the judgement changes. */
-export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@2';
+export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@3';
 
 /** Policy id the router's own, pre-existing wake judgement is recorded under. */
 export const LEGACY_ROUTER_POLICY_ID = 'legacy-router';
@@ -420,6 +420,7 @@ const toChannelState = (fields: BotWakeChannelFields | undefined): WakeChannelSt
     followupUntil: fields.followupUntil,
     ownerLastSpokeAt: fields.ownerLastSpokeAt,
     silentWakes: fields.silentWakes,
+    standDownUntil: fields.standDownUntil,
   };
 
 /**

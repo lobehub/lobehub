@@ -1859,6 +1859,7 @@
   "noReply.reason.not_addressed": "不是对我说的",
   "noReply.reason.nothing_to_add": "没有要补充的",
   "noReply.reason.off_topic": "与我无关",
+  "noReply.reason.stand_down": "暂时退出这个对话",
   "noReply.title": "分析后决定不回复",
   "noSelectedAgents": "还未选择成员",
   "opStatusTray.cost": "花费",
