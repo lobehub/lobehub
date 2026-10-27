@@ -4,7 +4,7 @@ import type {
   MainAgentReduceCtx,
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
-import { reduceMainAgent } from '@lobechat/heterogeneous-agents';
+import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { createNanoId } from '@lobechat/utils';
@@ -35,6 +35,10 @@ const generateThreadId = () => `thd_${createNanoId(16)()}`;
 /** A `newStep` carrying `externalSignal` opens a signal turn (a background task's wake-up). */
 const opensSignalTurn = (event: AgentStreamEvent): boolean =>
   event.type === 'stream_start' && !!event.data?.newStep && !!event.data?.externalSignal;
+
+/** Subagent turns live in their thread; only main-agent step boundaries name a main assistant. */
+const isMainStreamStart = (event: AgentStreamEvent): boolean =>
+  event.type === 'stream_start' && getEventScope(event).kind === 'main';
 
 /** The raw text a CLI would have echoed into the answer for this failure. */
 const errorEchoText = (error: { body?: Record<string, unknown>; message?: string }): string => {
@@ -140,6 +144,9 @@ export class HeterogeneousPersistenceHandler {
       // would ack OK while DB state diverges from the renderer's view. Mark
       // only on success so a retry can complete the lost write.
       await this.handleEvent(state, event);
+      if (isMainStreamStart(event)) {
+        state.streamStartAssistantIds.set(key, state.main.currentAssistantId);
+      }
       state.processedKeys.add(key);
       state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
     }
@@ -168,9 +175,34 @@ export class HeterogeneousPersistenceHandler {
     return events.filter((event) => !state.publishedKeys.has(eventKey(event)));
   }
 
+  /**
+   * Wire `data` for an event about to be published.
+   *
+   * A main-agent `stream_start` carries the assistant row it resolved to as
+   * `assistantMessage.id`. CLI adapters never know the server's message ids,
+   * so without it a subscriber can only infer each step's row from where it
+   * started. A reconnect starts from `runningOperation.assistantMessageId`,
+   * the newest row, so its full replay wrote every earlier step onto that row.
+   * Without state (a retry on a cold replica) the event goes out unchanged
+   * and the client falls back to its DB lookup.
+   */
+  publishData(operationId: string, event: AgentStreamEvent): AgentStreamEvent['data'] {
+    const assistantId = operationStates
+      .get(operationId)
+      ?.streamStartAssistantIds.get(eventKey(event));
+    if (!assistantId) return event.data;
+
+    return { ...event.data, assistantMessage: { id: assistantId } };
+  }
+
   /** Latch an event as published so a batch retry skips its XADD. */
   markEventPublished(operationId: string, event: AgentStreamEvent): void {
-    operationStates.get(operationId)?.publishedKeys.add(eventKey(event));
+    const state = operationStates.get(operationId);
+    if (!state) return;
+
+    const key = eventKey(event);
+    state.publishedKeys.add(key);
+    state.streamStartAssistantIds.delete(key);
   }
 
   /**

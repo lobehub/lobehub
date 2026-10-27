@@ -177,6 +177,7 @@ export async function loadOrCreateState(
     notifiedInterventionTransitions: new Set(),
     processedKeys: new Set(),
     publishedKeys: new Set(),
+    streamStartAssistantIds: new Map(),
     toolMsgIdByCallId: new Map(),
     threadId: running?.threadId ?? undefined,
     topicId,
