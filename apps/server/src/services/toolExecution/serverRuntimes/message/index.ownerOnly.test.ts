@@ -42,6 +42,16 @@ vi.mock('@/server/services/bot/agentBotProviderSettings', () => ({
   assertWatchKeywordsWritable: vi.fn(),
   invalidateBotAfterUpdate: vi.fn().mockResolvedValue(undefined),
   mergeBotSettingsForPersist: vi.fn((_platform: string, settings: unknown) => settings),
+  mergeBotSettingsPatch: vi.fn(
+    (
+      _platform: string,
+      existing: Record<string, unknown> | null,
+      patch: Record<string, unknown>,
+    ) => ({
+      ...existing,
+      ...patch,
+    }),
+  ),
 }));
 
 const { messageRuntime } = await import('./index');
@@ -69,7 +79,7 @@ const BOT_ROW = {
   enabled: true,
   id: 'bot-1',
   platform: 'discord',
-  settings: { watchKeywords: [] },
+  settings: { dmPolicy: 'open', watchKeywords: [] },
   workspaceId: null,
 };
 
@@ -127,7 +137,10 @@ describe('messageRuntime: only the owner changes a bot from a bot conversation',
     const result = await runtime.updateBot({ botId: 'bot-1', settings });
 
     expect(result.success).toBe(true);
-    expect(mocks.update).toHaveBeenCalledWith('bot-1', { settings });
+    // Through the partial-update merge: keys the agent did not send keep their stored values.
+    expect(mocks.update).toHaveBeenCalledWith('bot-1', {
+      settings: { dmPolicy: 'open', watchKeywords: settings.watchKeywords },
+    });
   });
 
   it('leaves a run outside any bot conversation unchanged', async () => {
