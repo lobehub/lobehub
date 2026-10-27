@@ -104,6 +104,28 @@ describe('PlatformDetail saving', () => {
     expect(patch).not.toHaveProperty('applicationId');
   });
 
+  it('writes an operator’s mode override back untouched when it saves something else', async () => {
+    const override = { classifier: { mode: 'off' }, mode: 'shadow' };
+    render(
+      <PlatformDetail
+        agentId="agt"
+        platformDef={platformDef}
+        currentConfig={{
+          ...config,
+          settings: { ...config.settings, botWake: override, botWakeEnabled: true },
+        }}
+      />,
+    );
+
+    openTab(en['channel.tab.reply']);
+    fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWake).toEqual(override);
+  });
+
   it('shows a Save in each wake block and none on the replies', () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />);
 

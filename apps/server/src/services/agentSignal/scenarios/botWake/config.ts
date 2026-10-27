@@ -141,6 +141,36 @@ const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
   { key: BOT_WAKE_SETTING_KEYS.schedulerMode, path: ['scheduler', 'mode'] },
 ];
 
+/**
+ * The modes an operator can still set by hand in a nested `settings.botWake`: `mode` for the rules
+ * and `classifier.mode` for the classifier. The settings form has no control for them, so they are
+ * the one part of a nested config that stays nested: every other option is projected onto the flat
+ * keys the form edits, and the form writes the settings back whole.
+ */
+const readModeOverrides = (nested: Record<string, unknown>) => {
+  const mode = readPath(nested, ['mode']);
+  const classifierMode = readPath(nested, ['classifier', 'mode']);
+  if (!isChosen(mode) && !isChosen(classifierMode)) return undefined;
+
+  return {
+    ...(isChosen(classifierMode) ? { classifier: { mode: classifierMode } } : {}),
+    ...(isChosen(mode) ? { mode } : {}),
+  };
+};
+
+/** A nested config that holds nothing but the mode overrides, beside the flat options. */
+const isModeOverrideOnly = (nested: Record<string, unknown>) => {
+  const keys = Object.keys(nested);
+  const classifier = nested.classifier;
+
+  return (
+    keys.length > 0 &&
+    keys.every((key) => key === 'mode' || key === 'classifier') &&
+    (classifier === undefined ||
+      (isRecord(classifier) && Object.keys(classifier).every((key) => key === 'mode')))
+  );
+};
+
 const readPath = (source: unknown, path: string[]) =>
   path.reduce<unknown>((value, segment) => (isRecord(value) ? value[segment] : undefined), source);
 
@@ -183,8 +213,11 @@ export const flattenBotWakeSettings = (
   const rest = Object.fromEntries(
     Object.entries(settings).filter(([key]) => key !== 'botWake' && !flatKeys.has(key)),
   );
+  // An operator's mode override has no flat key, so it stays nested: the form writes this object
+  // back whole, and dropping it here would silently turn the override into the default.
+  const overrides = readModeOverrides(nested);
 
-  return { ...rest, ...flat };
+  return { ...rest, ...flat, ...(overrides ? { botWake: overrides } : {}) };
 };
 
 /**
@@ -194,16 +227,26 @@ export const flattenBotWakeSettings = (
  * the flat form keys are not looked at. Anything else reads the flat keys the settings form
  * writes. The two are never merged field by field: the form always saves its defaults, so a
  * merge would let an untouched default quietly switch off what a hand-written config enabled.
+ * The one exception is a nested object that holds only the mode overrides: it sits beside the
+ * flat options, which are read as usual, and applies its modes on top.
  */
 const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefined) => {
-  if (isRecord(settings?.botWake)) return settings.botWake;
+  const nested = settings?.botWake;
+  // A hand-written config is taken as it is. One that holds only the mode overrides is what a
+  // projected config looks like once the form has saved it: the options are in the flat keys.
+  if (isRecord(nested) && !isModeOverrideOnly(nested)) return nested;
 
   const flat = (key: string) => settings?.[key];
   const k = BOT_WAKE_SETTING_KEYS;
+  const overrides = isRecord(nested) ? readModeOverrides(nested) : undefined;
 
   return {
     ...chosen({ customInstructions: flat(k.customInstructions), enabled: flat(k.enabled) }),
-    classifier: chosen({ threshold: flat(k.classifierThreshold) }),
+    ...(overrides && 'mode' in overrides ? { mode: overrides.mode } : {}),
+    classifier: {
+      ...chosen({ threshold: flat(k.classifierThreshold) }),
+      ...overrides?.classifier,
+    },
     rules: chosen({
       allowChannels: flat(k.allowChannels),
       denyChannels: flat(k.denyChannels),

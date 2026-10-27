@@ -150,6 +150,13 @@ describe('settingsToSave', () => {
     });
   });
 
+  it('keeps what no block owns, such as an operator’s nested mode override', () => {
+    const override = { classifier: { mode: 'off' }, mode: 'shadow' };
+    const withOverride = { settings: { ...stored.settings, botWake: override } };
+
+    expect(settingsToSave(byId['wake-pace'], withOverride, withOverride).botWake).toEqual(override);
+  });
+
   it('writes the wake switch from the form, so a bot saved before the options existed gets it', () => {
     const values = { settings: { ...stored.settings, botWakeEnabled: true } };
 

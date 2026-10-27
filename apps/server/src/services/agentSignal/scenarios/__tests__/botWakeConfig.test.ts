@@ -353,3 +353,98 @@ describe('flattenBotWakeSettings', () => {
     expect(flattened).toEqual({ [K.enabled]: true, [K.scope]: 'none' });
   });
 });
+
+describe('an operator override of the modes', () => {
+  const K = BOT_WAKE_SETTING_KEYS;
+  const nested = {
+    classifier: { mode: 'off', threshold: 0.8 },
+    enabled: true,
+    mode: 'shadow',
+    rules: { scope: 'none', windowSeconds: 90 },
+  };
+
+  it('is kept when the settings are projected for the form, beside the flat options', () => {
+    const flattened = flattenBotWakeSettings({ botWake: nested, concurrency: 'burst' });
+
+    expect(flattened).toMatchObject({
+      botWake: { classifier: { mode: 'off' }, mode: 'shadow' },
+      concurrency: 'burst',
+      [K.classifierThreshold]: 0.8,
+      [K.enabled]: true,
+      [K.scope]: 'none',
+      [K.windowSeconds]: 90,
+    });
+    // Only the override stays nested: the options now live in the flat keys the form edits.
+    expect(Object.keys((flattened as { botWake: object }).botWake).sort()).toEqual([
+      'classifier',
+      'mode',
+    ]);
+    expect((flattened as { botWake: { classifier: object } }).botWake.classifier).toEqual({
+      mode: 'off',
+    });
+  });
+
+  it('reads the same after the projection as before it', () => {
+    const parsed = parseBotWakeSettings(flattenBotWakeSettings({ botWake: nested }));
+    const original = parseBotWakeSettings({ botWake: nested });
+
+    // What the pipeline acts on: the enabled switch, both modes, the rules and the scheduler.
+    expect({
+      enabled: parsed.config.enabled,
+      rules: parsed.rules,
+      ruleMode: parsed.ruleMode,
+      scheduler: parsed.scheduler,
+    }).toEqual({
+      enabled: original.config.enabled,
+      rules: original.rules,
+      ruleMode: original.ruleMode,
+      scheduler: original.scheduler,
+    });
+    expect(parsed.ruleMode).toBe('shadow');
+    expect(parsed.rules.classifier.mode).toBe('off');
+  });
+
+  it('survives the form saving an unrelated change, and the form’s own edits still count', () => {
+    const projected = flattenBotWakeSettings({ botWake: nested }) as Record<string, unknown>;
+    // What the form writes back: everything it was given, with one option edited.
+    const saved = { ...projected, [K.windowSeconds]: 60 };
+
+    const parsed = parseBotWakeSettings(saved);
+    expect(parsed.ruleMode).toBe('shadow');
+    expect(parsed.rules.classifier.mode).toBe('off');
+    expect(parsed.rules.windowSeconds).toBe(60);
+  });
+
+  it('applies to the flat options when the nested object is only the override', () => {
+    const parsed = parseBotWakeSettings({
+      botWake: { classifier: { mode: 'shadow' }, mode: 'off' },
+      [K.enabled]: true,
+      [K.scope]: 'bot-threads',
+    });
+
+    expect(parsed.config.enabled).toBe(true);
+    expect(parsed.rules.scope).toBe('bot-threads');
+    expect(parsed.ruleMode).toBe('off');
+    expect(parsed.rules.classifier.mode).toBe('shadow');
+  });
+
+  it('is not invented: a nested config without modes projects without a nested object', () => {
+    const flattened = flattenBotWakeSettings({
+      botWake: { enabled: true, rules: { scope: 'none' } },
+    });
+
+    expect(flattened).not.toHaveProperty('botWake');
+    expect(parseBotWakeSettings(flattened).ruleMode).toBe('enforce');
+  });
+
+  it('is not read from the flat keys an earlier form saved', () => {
+    const parsed = parseBotWakeSettings({
+      botWakeClassifierMode: 'off',
+      botWakeEnabled: true,
+      botWakeMode: 'shadow',
+    });
+
+    expect(parsed.ruleMode).toBe('enforce');
+    expect(parsed.rules.classifier.mode).toBe('enforce');
+  });
+});
