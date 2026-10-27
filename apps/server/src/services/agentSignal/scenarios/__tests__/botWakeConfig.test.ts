@@ -31,6 +31,8 @@ describe('parseBotWakeSettings', () => {
 
     expect(parsed.ruleMode).toBe('enforce');
     expect(parsed.rules.classifier.mode).toBe('enforce');
+    // A follow-up must be clearly for the bot: 0.5-0.7 is mostly someone talking to someone else.
+    expect(parsed.rules.classifier.threshold).toBe(0.7);
     expect(
       parseBotWakeSettings({ botWake: { classifier: { threshold: 0.8 } } }).rules.classifier,
     ).toEqual({ mode: 'enforce', threshold: 0.8 });

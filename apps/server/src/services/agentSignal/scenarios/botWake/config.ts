@@ -5,7 +5,9 @@ import type { BotWakeConfig, WakePolicyMode, WakeRules, WakeSchedulerConfig } fr
 
 export const DEFAULT_WAKE_RULES: WakeRules = {
   allowChannels: [],
-  classifier: { mode: 'enforce', threshold: 0.5 },
+  // A follow-up in the window is answered only when the classifier is fairly sure it is for the bot:
+  // in a thread with several people and bots, 0.5-0.7 is mostly the owner talking to someone else.
+  classifier: { mode: 'enforce', threshold: 0.7 },
   denyChannels: [],
   // Off until the bot has duties: without the text there is nothing to judge a message against.
   duties: { mode: 'enforce', threshold: 0.8 },
