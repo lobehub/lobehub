@@ -41,6 +41,7 @@
   "minimax.description": "Founded in 2021, MiniMax builds general-purpose AI with multimodal foundation models, including trillion-parameter MoE text models, speech models, and vision models, along with apps like Hailuo AI.",
   "minimaxcodingplan.description": "MiniMax Token Plan provides access to MiniMax models including M2.7 for coding tasks via a fixed-fee subscription.",
   "mistral.description": "Mistral offers advanced general, specialized, and research models for complex reasoning, multilingual tasks, and code generation, with function-calling for custom integrations.",
+  "mizumi.description": "Mizumi is an OpenAI-compatible API gateway that serves OpenAI and Gemini models through official API channels behind a single endpoint and one API key.",
   "modelscope.description": "ModelScope is Alibaba Cloud’s model-as-a-service platform, offering a wide range of AI models and inference services.",
   "moonshot.description": "Moonshot, from Moonshot AI (Beijing Moonshot Technology), offers multiple NLP models for use cases like content creation, research, recommendations, and medical analysis, with strong long-context and complex generation support.",
   "nebius.description": "Nebius provides high-performance infrastructure for global AI innovators via large-scale GPU clusters and a vertically integrated cloud platform.",

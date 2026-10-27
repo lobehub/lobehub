@@ -59,6 +59,9 @@ export const getLLMConfig = () => {
       ENABLED_MISTRAL: z.boolean(),
       MISTRAL_API_KEY: z.string().optional(),
 
+      ENABLED_MIZUMI: z.boolean(),
+      MIZUMI_API_KEY: z.string().optional(),
+
       ENABLED_GROQ: z.boolean(),
       GROQ_API_KEY: z.string().optional(),
 
@@ -302,6 +305,9 @@ export const getLLMConfig = () => {
 
       ENABLED_MISTRAL: !!process.env.MISTRAL_API_KEY,
       MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
+
+      ENABLED_MIZUMI: !!process.env.MIZUMI_API_KEY,
+      MIZUMI_API_KEY: process.env.MIZUMI_API_KEY,
 
       ENABLED_OPENROUTER: !!process.env.OPENROUTER_API_KEY,
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,

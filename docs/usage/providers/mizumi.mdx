@@ -1,0 +1,48 @@
+---
+title: Using Mizumi API Key in LobeHub
+description: >-
+  Learn how to integrate Mizumi's OpenAI-compatible API gateway into LobeHub.
+  Follow the steps to create a Mizumi API key and configure it in LobeHub to
+  start chatting with OpenAI and Gemini models.
+tags:
+  - Mizumi
+  - OpenAI compatible
+  - API gateway
+  - API key
+  - Web UI
+---
+
+# Using Mizumi in LobeHub
+
+[Mizumi](https://mizumi.co/) is an OpenAI-compatible API gateway that serves OpenAI and Gemini models through official API channels behind a single endpoint (`https://api.mizumi.co/v1`) and one API key.
+
+This guide will walk you through how to use Mizumi in LobeHub:
+
+<Steps>
+  ### Step 1: Sign Up and Log In to Mizumi
+
+  - Visit [mizumi.co](https://mizumi.co/) and create an account
+  - New accounts receive a free trial credit, no card required
+
+  ### Step 2: Create an API Key
+
+  - Open the Mizumi console, create an API key in the `sk-mizumi-...` format, and copy it
+
+  ### Step 3: Configure Mizumi in LobeHub
+
+  - Open **App Settings → AI Providers**
+
+  - In the provider list, select the `Mizumi` section
+
+  - Enable Mizumi and paste in your API key
+
+  - The model list is fetched live from the gateway; you can also click **Check** to verify connectivity with the default check model `gpt-4.1-mini`
+
+  - Choose a Mizumi model (for example `gpt-6.1-sol` or `gpt-6-luna`) for your assistant to start chatting
+
+  <Callout type={'warning'}>
+    You may need to pay for API usage. Please refer to [Mizumi's pricing](https://mizumi.co/docs/models) for more details.
+  </Callout>
+</Steps>
+
+That’s it! You’re now ready to chat with models served by Mizumi directly in LobeHub.

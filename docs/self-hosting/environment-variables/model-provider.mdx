@@ -909,4 +909,29 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; uses the built-in example model list with the examples disabled. This does not guarantee local availability or change existing saved model selections.
 - Example: `-all,+your-local-model-id=Local Model`
 
+## Mizumi
+
+OpenAI-compatible gateway serving OpenAI and Gemini models through one endpoint and one key. See [Using Mizumi in LobeHub](/docs/usage/providers/mizumi) for setup.
+
+### `MIZUMI_API_KEY`
+
+- Type: Optional
+- Description: The API key for the Mizumi gateway. A non-empty value enables the provider in server configuration. `ENABLED_MIZUMI` is derived from this key and is not an independent environment switch. Users can instead configure their own key in provider settings.
+- Default: Unset; no shared server key.
+- Example: `sk-mizumi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `MIZUMI_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL of the Mizumi gateway.
+- Default: `https://api.mizumi.co/v1`
+- Example: `https://api.mizumi.co/v1`
+
+### `MIZUMI_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas. Use IDs from the [Mizumi model catalog](https://mizumi.co/docs/models).
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+gpt-6.1-sol,+gpt-6-luna=GPT-6 Luna`
+
 [model-list]: /docs/self-hosting/advanced/model-list
