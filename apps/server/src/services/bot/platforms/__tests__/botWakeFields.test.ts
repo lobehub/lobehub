@@ -73,9 +73,28 @@ describe('bot-wake settings fields', () => {
       BOT_WAKE_SETTING_KEYS.collectSeconds,
       BOT_WAKE_SETTING_KEYS.cooldownSeconds,
     ]) {
-      expect(botWakeFields.find((field) => field.key === key)!.visibleWhen).toEqual({
+      expect(botWakeFields.find((field) => field.key === key)!.visibleWhen).toContainEqual({
         field: BOT_WAKE_SETTING_KEYS.schedulerMode,
         value: 'enforce',
+      });
+    }
+  });
+
+  it('show the pace numbers only for a custom pace: a preset sets them', () => {
+    const customOnly = [
+      BOT_WAKE_SETTING_KEYS.windowSeconds,
+      BOT_WAKE_SETTING_KEYS.classifierThreshold,
+      BOT_WAKE_SETTING_KEYS.maxSilentWakes,
+      BOT_WAKE_SETTING_KEYS.ownerPresenceSeconds,
+      BOT_WAKE_SETTING_KEYS.schedulerMode,
+      BOT_WAKE_SETTING_KEYS.collectSeconds,
+      BOT_WAKE_SETTING_KEYS.cooldownSeconds,
+    ];
+
+    for (const key of customOnly) {
+      expect(botWakeFields.find((field) => field.key === key)!.visibleWhen).toContainEqual({
+        field: BOT_WAKE_SETTING_KEYS.pace,
+        value: 'custom',
       });
     }
   });

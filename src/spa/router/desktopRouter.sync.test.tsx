@@ -86,6 +86,7 @@ async function readRouterSources() {
       'agentPageRoutes.tsx',
       'memoryRoutes.tsx',
       'onboardingRoute.tsx',
+      'collaborationRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }

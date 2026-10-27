@@ -1,0 +1,44 @@
+import type { ChannelMemberActorType } from '@lobechat/types';
+
+export interface ComposerMember {
+  actorType: ChannelMemberActorType;
+  avatar: string;
+  id: string;
+  name: string;
+}
+
+/**
+ * - `all`: no mentions on the main conversation, so every Agent replies.
+ * - `named`: the mentioned Agents, or the Thread's followers.
+ * - `peopleOnly`: only people are mentioned, which wakes no Agent.
+ * - `noFollowers`: a Thread nobody follows yet; a mention invites an Agent.
+ * - `noAgents`: the main conversation has no active Agent.
+ */
+export type ComposerRecipientKind = 'all' | 'named' | 'noAgents' | 'noFollowers' | 'peopleOnly';
+
+/**
+ * Who replies if the draft is sent now. Mirrors `sendMessage` in the Channel repository:
+ * mentioned Agents when anyone is mentioned, otherwise the default recipients (every active
+ * Agent on the main conversation, the followers inside a Thread).
+ */
+export const composerRecipients = ({
+  defaultRecipientIds,
+  inThread,
+  members,
+  mentionIds,
+}: {
+  defaultRecipientIds: string[];
+  inThread: boolean;
+  members: ComposerMember[];
+  mentionIds: string[];
+}): { agents: ComposerMember[]; kind: ComposerRecipientKind } => {
+  const agents = members.filter((member) => member.actorType === 'agent');
+  if (mentionIds.length) {
+    // In the order they were mentioned, so the preview names who the user typed first.
+    const mentioned = mentionIds.flatMap((id) => agents.filter((agent) => agent.id === id));
+    return { agents: mentioned, kind: mentioned.length ? 'named' : 'peopleOnly' };
+  }
+  const defaults = agents.filter((agent) => defaultRecipientIds.includes(agent.id));
+  if (!defaults.length) return { agents: [], kind: inThread ? 'noFollowers' : 'noAgents' };
+  return { agents: defaults, kind: !inThread && defaults.length > 1 ? 'all' : 'named' };
+};

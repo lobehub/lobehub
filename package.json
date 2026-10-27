@@ -249,6 +249,7 @@
     "@lobechat/builtin-tool-browser": "workspace:*",
     "@lobechat/builtin-tool-calculator": "workspace:*",
     "@lobechat/builtin-tool-canvas": "workspace:*",
+    "@lobechat/builtin-tool-channel": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",

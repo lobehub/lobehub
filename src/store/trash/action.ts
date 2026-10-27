@@ -10,6 +10,7 @@ import {
 } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { trashService, type TrashViewFilter } from '@/services/trash';
+import { channelActions } from '@/store/channel';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -216,15 +217,27 @@ export class TrashActionImpl {
       for (const failure of outcome.failed) if (failure.code === 'notFound') gone.add(failure.id);
       this.#dropRows(gone);
     });
+    const threadIds = outcome.restored
+      .filter((item) => item.resourceType === 'channelThread')
+      .map((item) => item.resourceId);
+    // The Channel store keeps hiding deleted threads; a restored one keeps its ID.
+    if (threadIds.length > 0) channelActions.forgetThreadRemovals(threadIds);
     if (outcome.restored.length > 0) void this.revalidateRestoredScopes();
     return outcome;
   };
 
+  /**
+   * Purge roots. Returns the server outcome: a root its owner cannot delete
+   * yet (a channel still stopping its replies) is `blocked` and stays listed.
+   */
   purge = async (ids: string[]) => {
+    let outcome: Awaited<ReturnType<typeof trashService.purge>> = { blocked: [], purged: 0 };
     await this.#withLoading(ids, async () => {
-      await trashService.purge(ids);
-      this.#dropRows(ids);
+      outcome = await trashService.purge(ids);
+      const blocked = new Set(outcome.blocked);
+      this.#dropRows(ids.filter((id) => !blocked.has(id)));
     });
+    return outcome;
   };
 
   /**
@@ -232,12 +245,16 @@ export class TrashActionImpl {
    * starts in. The filter and scope are fixed for the whole sweep: switching
    * the view (or the workspace) while batches run never widens what is
    * purged — a scope switch stops the sweep with `TrashEmptyScopeChangedError`.
+   * Returns how many roots had to stay in the bin for now.
    */
   emptyTrash = async (filter: TrashViewFilter) => {
     const scope = cacheScope.get();
     const workspaceId = getActiveWorkspaceId();
     const key = trashListKey(filter);
     const ids = this.#get().trashListMap[key]?.items.map((item) => item.id) ?? [];
+    // A blocked root stays listed, so later batches report it again: the largest
+    // batch count is the number left behind, not the sum.
+    let blocked = 0;
     await this.#withLoading(
       ids,
       async () => {
@@ -245,11 +262,14 @@ export class TrashActionImpl {
         // away on a large bin; keep going until it reports nothing left.
         for (;;) {
           if (cacheScope.get() !== scope) throw new TrashEmptyScopeChangedError();
-          const { hasMore } = await trashService.emptyTrash(filter, workspaceId);
-          if (!hasMore) break;
+          const batch = await trashService.emptyTrash(filter, workspaceId);
+          blocked = Math.max(blocked, batch.blocked);
+          if (!batch.hasMore) break;
         }
         // The view lives in the scope the sweep ran in; do not touch another's.
-        if (cacheScope.get() !== scope) return;
+        // Blocked roots are still in the bin: leave the rows to the refresh that
+        // follows instead of collapsing the view to empty.
+        if (cacheScope.get() !== scope || blocked > 0) return;
         // Its rows are gone from every other loaded view too (the same root can
         // sit under "All", its type and its project).
         this.#dropRows(ids);
@@ -271,6 +291,7 @@ export class TrashActionImpl {
       },
       { sweep: true },
     );
+    return { blocked };
   };
 
   /**

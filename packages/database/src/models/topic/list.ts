@@ -22,6 +22,7 @@ import {
 } from 'drizzle-orm';
 
 import { agentOperations, agents, chatGroups, messages, topics } from '../../schemas';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
 import type { TopicModelContext } from './context';
@@ -202,6 +203,7 @@ export const query = async (
     const whereCondition = and(
       ctx.ownership(),
       ctx.notShareVisitor(),
+      notChannelTopic(),
       eq(topics.groupId, groupId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -289,6 +291,7 @@ export const query = async (
     const agentWhere = and(
       ctx.ownership(),
       ctx.notShareVisitor(),
+      notChannelTopic(),
       agentCondition,
       editingTargetCondition,
       includeTriggerCondition,
@@ -365,6 +368,7 @@ export const query = async (
   const whereCondition = and(
     ctx.ownership(),
     ctx.notShareVisitor(),
+    notChannelTopic(),
     ctx.matchContainer(containerId),
     includeTriggerCondition,
     excludeTriggerCondition,
@@ -487,6 +491,7 @@ export const queryTopics = async (
   const where = and(
     ctx.ownership(),
     ctx.notShareVisitor(),
+    notChannelTopic(),
     visibleParentWhere,
     statuses && statuses.length > 0
       ? inArray(topics.status, statuses as ChatTopicStatus[])

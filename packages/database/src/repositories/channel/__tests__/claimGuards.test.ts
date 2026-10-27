@@ -41,7 +41,7 @@ const request = async (
 /** Claims and finishes a job with a published reply. */
 const answer = async (channelId: string, jobId: string) => {
   await execution.claim(channelId, jobId, lease);
-  await execution.accepted(channelId, jobId, { nativeSessionId: 's' });
+  await execution.accepted(channelId, jobId);
   await execution.saveDraft(channelId, jobId, 'Answer');
   await execution.publish(channelId, jobId);
   await execution.releaseWriter(channelId, jobId);
@@ -124,7 +124,7 @@ describe('claim guards', () => {
     expect((await jobById(job.id)).status).toBe('cancelled');
   });
 
-  it('gives a late-routed request the history up to itself', async () => {
+  it('gives a retried routing request the history up to itself', async () => {
     const { asMember, channel } = await fixture.createTeamChannel();
     const agent = await fixture.addAgent(channel.id, 'Coder');
     const unmentioned = await asMember.send(channel.id, {
@@ -132,10 +132,15 @@ describe('claim guards', () => {
       requestKey: 'unmentioned',
       routing: 'jev',
     });
+    await execution.resolveRouting(channel.id, unmentioned.id, 1, {
+      reason: 'Decision unavailable',
+      status: 'unassigned',
+    });
     const later = await request(asMember, channel.id, agent.id, 'later');
     await answer(channel.id, later.job.id);
 
-    await execution.resolveRouting(channel.id, unmentioned.id, 1, {
+    const retried = await asMember.retryRouting(channel.id, unmentioned.id);
+    await execution.resolveRouting(channel.id, unmentioned.id, retried.routingAttempt, {
       memberIds: [agent.id],
       reason: 'Coder can help',
       status: 'assigned',

@@ -222,7 +222,7 @@ describe('trashRouter project filter', () => {
     // A type that matches nothing in the project leaves everything in place.
     expect(
       await caller(member).emptyTrash({ projectId: team.id, resourceType: 'agent', workspaceId }),
-    ).toEqual({ hasMore: false, purged: 0 });
+    ).toEqual({ blocked: 0, hasMore: false, purged: 0 });
 
     let purged = 0;
     for (;;) {
@@ -247,6 +247,7 @@ describe('trashRouter project filter', () => {
 
     // …and emptying "no project" takes the agent root with its whole cascade.
     expect(await caller(member).emptyTrash({ projectId: null, workspaceId })).toEqual({
+      blocked: 0,
       hasMore: false,
       purged: 1,
     });
@@ -271,6 +272,7 @@ describe('trashRouter project filter', () => {
     expect(await testDB.select().from(trashItems)).toHaveLength(3);
 
     expect(await caller(personalCtx(ownerId)).emptyTrash({ workspaceId: null })).toEqual({
+      blocked: 0,
       hasMore: false,
       purged: roots.length,
     });

@@ -21,6 +21,7 @@ import {
 } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
   judgeExplicitMention,
+  resolveChannelKeys,
   resolveConversationLogKey,
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
@@ -31,6 +32,7 @@ import type {
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import {
   CLASSIFIER_POLICY_ID,
+  createClassifierPolicy,
   createProactivePolicy,
   createWakePolicySet,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
@@ -48,6 +50,7 @@ import type {
 import { redisService } from '@/server/services/redis';
 import type { BotWakeChannelFields } from '@/server/services/redis/botWake';
 
+import { getOriginMessageId, isReplayMessage } from '../mergeMessages';
 import { buildWakeSignal, type WakeMessageLike } from '../wake/signal';
 
 const log = debug('lobe-server:bot:wake-decision');
@@ -74,6 +77,7 @@ export type BotWakeEntryPoint = 'catchAll' | 'onNewMention' | 'onSubscribedMessa
 export type BotWakeReason =
   | 'access-gate-rejected'
   | 'addressed'
+  | 'classifier-confident'
   | 'command'
   | 'direct-message'
   | 'explicit-mention'
@@ -98,6 +102,7 @@ export type BotWakeReason =
 const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
   'access-gate-rejected': 'mention',
   'addressed': 'mention',
+  'classifier-confident': 'followup',
   'command': 'mention',
   'direct-message': 'mention',
   'explicit-mention': 'mention',
@@ -117,6 +122,7 @@ export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind => KIND_BY_RE
 const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'access-gate-rejected': 'blocked',
   'addressed': 'addressed',
+  'classifier-confident': 'confident',
   'command': 'command',
   'direct-message': 'dm',
   'explicit-mention': 'mention',
@@ -146,6 +152,8 @@ export interface BotWakeObservation {
 export interface WakeStatePort {
   countClassifierCall: (applicationId: string, utcHour: string) => Promise<number | undefined>;
   readChannel: (keys: readonly string[]) => Promise<BotWakeChannelFields | undefined>;
+  /** The wake `rememberInitiation` stored for a message; `undefined` when none or unreadable. */
+  readInitiation?: (applicationId: string, messageId: string) => Promise<string | undefined>;
   /** The newest `limit` messages of a conversation, oldest first, without `excludeId`. */
   readRecentMessages?: (
     key: string,
@@ -153,6 +161,8 @@ export interface WakeStatePort {
     excludeId?: string,
   ) => Promise<WakeConversationLine[] | undefined>;
   recordOwnerSpoke: (keys: readonly string[], at: number) => Promise<void>;
+  /** Keeps the wake decided for a message until its replay. */
+  rememberInitiation?: (applicationId: string, messageId: string, value: string) => Promise<void>;
   /** Adds messages to the shared log of every key given. */
   rememberMessages?: (
     keys: readonly string[],
@@ -166,7 +176,7 @@ const CONVERSATION_READ_LINES = 50;
 /** The reasons `initiate` can wake the bot for. */
 export type BotWakeInitiationReason = Extract<
   BotWakeReason,
-  'followup-window' | 'named-in-text' | 'proactive-help'
+  'classifier-confident' | 'followup-window' | 'named-in-text' | 'proactive-help'
 >;
 
 /**
@@ -181,6 +191,9 @@ export type BotWakeInitiationReason = Extract<
  * remember to list it.
  */
 const INITIATION_TRAITS: Record<BotWakeInitiationReason, { addressed: boolean }> = {
+  // The classifier is sure enough on its own that the message is for the bot: answered at once,
+  // like its name. It may still end in silence.
+  'classifier-confident': { addressed: true },
   'followup-window': { addressed: false },
   'named-in-text': { addressed: true },
   // Nobody asked: it waits in the scheduler like any other unaddressed wake, and may end in silence.
@@ -379,6 +392,28 @@ const summarizeConversation = (conversation?: WakeConversation) =>
     recentCount: conversation.recent.length,
   };
 
+/** The wake decided for a parked message, as kept for its replay. */
+interface RememberedInitiation {
+  reason: BotWakeInitiationReason;
+  verdicts: SignalDecisionVerdict[];
+}
+
+const isInitiationReason = (value: unknown): value is BotWakeInitiationReason =>
+  typeof value === 'string' && value in INITIATION_TRAITS;
+
+/** A stored decision, or `undefined` for none, a malformed one, or a reason this build lacks. */
+const parseRemembered = (raw: string | undefined): RememberedInitiation | undefined => {
+  if (!raw) return;
+  try {
+    const value = JSON.parse(raw) as Partial<RememberedInitiation>;
+    if (!isInitiationReason(value.reason)) return;
+
+    return { reason: value.reason, verdicts: Array.isArray(value.verdicts) ? value.verdicts : [] };
+  } catch {
+    return;
+  }
+};
+
 /** What `initiate` worked out, kept until the `record()` of the same message reuses it. */
 interface Evaluation {
   channel?: WakeChannelState;
@@ -429,6 +464,24 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     };
 
   const classify: WakeClassify | undefined = options.classify && budgeted(options.classify);
+
+  // Outside the follow-up window the classifier may start a wake on its own, but only past a
+  // stricter bar than the one it uses to confirm a follow-up. Only while it enforces.
+  const { initiateEnabled, initiateThreshold } = parsed.rules.classifier;
+  const confidentClassifierPolicy =
+    classify &&
+    parsed.rules.classifier.mode === 'enforce' &&
+    initiateEnabled &&
+    initiateThreshold > 0
+      ? createClassifierPolicy(
+          'enforce',
+          {
+            ...parsed.rules,
+            classifier: { ...parsed.rules.classifier, threshold: initiateThreshold },
+          },
+          classify,
+        )
+      : undefined;
 
   // Only the owner's switch turns it on; `initiate` is the one place it runs.
   const proactivePolicy =
@@ -540,8 +593,11 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   };
 
   const evaluations = new Map<string, Evaluation>();
+  // By channel, not thread: a Discord wake opens its reply thread after `initiate` and before
+  // `record()`, so the same message is recorded under the new thread's id. Keyed by thread, the
+  // evaluation was missed and the policies ran again on the new thread's empty log.
   const evaluationKey = (observation: BotWakeObservation) =>
-    `${observation.threadId}:${observation.message.id}`;
+    `${resolveChannelKeys(platform, applicationId, observation.threadId).channelKey}:${observation.message.id}`;
   const keepEvaluation = (observation: BotWakeObservation, evaluation: Evaluation) => {
     evaluations.set(evaluationKey(observation), evaluation);
     // A message that is never recorded must not pile up.
@@ -555,6 +611,28 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     evaluations.delete(key);
 
     return evaluation;
+  };
+
+  /**
+   * Starts a wake: keeps the evaluation for the `record()` that follows, and remembers the decision
+   * under the message's platform id so a replay of the parked message runs on it.
+   */
+  const initiated = async (
+    observation: BotWakeObservation,
+    reason: BotWakeInitiationReason,
+    evaluation: Evaluation,
+  ): Promise<BotWakeInitiation> => {
+    keepEvaluation(observation, evaluation);
+    await state.rememberInitiation?.(
+      applicationId,
+      getOriginMessageId(observation.message),
+      JSON.stringify({
+        reason,
+        verdicts: evaluation.verdicts ?? [],
+      } satisfies RememberedInitiation),
+    );
+
+    return initiationFor(reason);
   };
 
   const persist = async (observation: BotWakeObservation, observedAt: number) => {
@@ -579,7 +657,12 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       : undefined;
     // The state the policies read, so the decision can be replayed and explained later.
     const snapshot = buildSnapshot(observation, signal, channel, conversation);
-    const stateSnapshot = { ...snapshot, conversation: summarizeConversation(conversation) };
+    const stateSnapshot = {
+      ...snapshot,
+      // Who wrote it, so a decision can be read without the purged payload: an id, not a name.
+      author: signal.author && { id: signal.author.id, isOwner: signal.author.isOwner },
+      conversation: summarizeConversation(conversation),
+    };
 
     const verdicts = await buildWakeVerdicts(
       observation,
@@ -690,16 +773,28 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         ]);
         const snapshot = buildSnapshot(observation, signal, channel, conversation);
 
+        // A parked message's replay runs on the wake decided when it was parked. Judging it again
+        // can flip a borderline score (0.51 then 0.13) and drop a message the bot already took.
+        if (isReplayMessage(observation.message)) {
+          const remembered = parseRemembered(
+            await state.readInitiation?.(applicationId, getOriginMessageId(observation.message)),
+          );
+          if (remembered) {
+            keepEvaluation(observation, { channel, conversation, verdicts: remembered.verdicts });
+
+            return initiationFor(remembered.reason);
+          }
+        }
+
         const ruleDecision = await aggregateWakeVerdictsAsync(rulePolicies, signal, snapshot);
         if (!rulesEnforce || ruleDecision.verdict !== 'allow' || ruleDecision.fastPath) {
-          // Nothing addressed the bot. Its owner may still have raised something it can help with:
-          // only when no rule had an opinion either way, whatever the rules' mode. A deny (a
-          // channel list, the silent-wake budget) still keeps the bot out; an allow (its name,
-          // the follow-up window) belongs to the paths above.
+          // Nothing addressed the bot and no rule allowed it: not named, outside the follow-up
+          // window. Only when no rule had an opinion either way, whatever the rules' mode: a deny
+          // (a channel list, the silent-wake budget) still keeps the bot out.
           const undecided =
             !ruleDecision.fastPath &&
             ruleDecision.records.every((record) => record.verdict === 'abstain');
-          if (!proactivePolicy || !undecided) {
+          if (!undecided || (!confidentClassifierPolicy && !proactivePolicy)) {
             // An enforcing deny is what kept the bot quiet: keep its verdicts, so the row names the
             // rule that stopped the wake instead of replaying every policy as if it only watched.
             keepEvaluation(observation, {
@@ -710,17 +805,36 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
             return;
           }
 
-          const proactive = await aggregateWakeVerdictsAsync([proactivePolicy], signal, snapshot);
-          keepEvaluation(observation, {
-            channel,
-            conversation,
-            verdicts: [...ruleVerdicts(ruleDecision), ...ruleVerdicts(proactive)],
-          });
+          const verdicts = ruleVerdicts(ruleDecision);
+          const evaluation = { channel, conversation, verdicts };
 
-          // A shadow judge only scores; a degraded one abstains, so it never lands here.
-          return proactivePolicy.mode === 'enforce' && proactive.verdict === 'allow'
-            ? initiationFor('proactive-help')
-            : undefined;
+          // The message reads as meant for the bot although nobody called it ("我想知道明天杭州天
+          // 气" in a channel people use it in). Only with the rules enforcing, past the stricter bar.
+          if (rulesEnforce && confidentClassifierPolicy) {
+            const classified = await aggregateWakeVerdictsAsync(
+              [confidentClassifierPolicy],
+              signal,
+              snapshot,
+            );
+            verdicts.push(...ruleVerdicts(classified));
+            const degraded = classified.records.some((record) => record.tags.includes('degraded'));
+            if (classified.verdict === 'allow' && !degraded) {
+              return initiated(observation, 'classifier-confident', evaluation);
+            }
+          }
+
+          if (proactivePolicy) {
+            const proactive = await aggregateWakeVerdictsAsync([proactivePolicy], signal, snapshot);
+            verdicts.push(...ruleVerdicts(proactive));
+
+            // A shadow judge only scores; a degraded one abstains, so it never lands here.
+            if (proactivePolicy.mode === 'enforce' && proactive.verdict === 'allow') {
+              return initiated(observation, 'proactive-help', evaluation);
+            }
+          }
+
+          keepEvaluation(observation, evaluation);
+          return;
         }
 
         const verdicts = ruleVerdicts(ruleDecision);
@@ -728,9 +842,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
         // Said by name: no need to ask a model whether it was meant for the bot.
         if (ruleDecision.reason === 'named-in-text') {
-          keepEvaluation(observation, evaluation);
-
-          return initiationFor('named-in-text');
+          return initiated(observation, 'named-in-text', evaluation);
         }
 
         // Only the window is open. A classifier the owner enforces must confirm; one that only
@@ -745,11 +857,9 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           // relies on it, no answer is not a yes.
           const degraded = classified.records.some((record) => record.tags.includes('degraded'));
           if (classifier.mode === 'enforce' && (classified.verdict !== 'allow' || degraded)) return;
-        } else {
-          keepEvaluation(observation, evaluation);
         }
 
-        return initiationFor('followup-window');
+        return initiated(observation, 'followup-window', evaluation);
       } catch (error) {
         botWakeFailureCounter.add(1, { stage: 'initiate' });
         log('initiate failed: entry=%s %O', observation.entryPoint, error);

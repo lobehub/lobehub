@@ -143,6 +143,7 @@ describe('groupWakeFields', () => {
         'pace',
         [
           K.windowSeconds,
+          K.classifierThreshold,
           K.maxSilentWakes,
           K.ownerPresenceSeconds,
           K.schedulerMode,
@@ -150,16 +151,30 @@ describe('groupWakeFields', () => {
           K.cooldownSeconds,
         ],
       ],
-      ['judgement', [K.customInstructions, K.classifierThreshold]],
+      ['judgement', [K.customInstructions]],
     ]);
   });
 
-  it('keeps the prompt first in its section, so the large text area is what you land on', () => {
-    const section = groupWakeFields([K.classifierThreshold, K.customInstructions].map(field)).find(
-      (s) => s.key === 'judgement',
-    )!;
+  it('orders initiative as for me, for others, then the instructions, each switch above its dial', () => {
+    const section = groupWakeFields(
+      [
+        K.customInstructions,
+        K.classifierInitiateThreshold,
+        K.proactiveThreshold,
+        K.customInstructionsEnabled,
+        K.classifierInitiateEnabled,
+        K.proactiveEnabled,
+      ].map(field),
+    ).find((s) => s.key === 'judgement')!;
 
-    expect(section.fields[0].key).toBe(K.customInstructions);
+    expect(section.fields.map((f) => f.key)).toEqual([
+      K.proactiveEnabled,
+      K.proactiveThreshold,
+      K.classifierInitiateEnabled,
+      K.classifierInitiateThreshold,
+      K.customInstructionsEnabled,
+      K.customInstructions,
+    ]);
   });
 
   it('shows only the keywords until the rollout reaches the user', () => {

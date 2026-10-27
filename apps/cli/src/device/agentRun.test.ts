@@ -74,6 +74,7 @@ describe('spawnHeteroAgentRun', () => {
   afterEach(() => {
     spawnMock.mockReset();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it('does not hand the dispatched run an ancestor agent run identity or JWT file', () => {
@@ -371,6 +372,9 @@ describe('spawnHeteroAgentRun', () => {
   });
 
   it('removes the task registry entry on child exit when the PID still matches', async () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('process group exited'), { code: 'ESRCH' });
+    });
     const child = makeFakeChild();
     Object.defineProperty(child, 'pid', { value: 9988 });
     spawnMock.mockReturnValue(child);
@@ -389,6 +393,18 @@ describe('spawnHeteroAgentRun', () => {
 
     expect(getTaskMock).toHaveBeenCalledWith('op-exit-cleanup');
     expect(removeTaskMock).toHaveBeenCalledWith('op-exit-cleanup');
+  });
+
+  it('retains cancellation identity when descendants outlive the wrapper', async () => {
+    vi.spyOn(process, 'kill').mockReturnValue(true);
+    const child = Object.assign(makeFakeChild(), { pid: 9988 });
+    spawnMock.mockReturnValue(child);
+    getTaskMock.mockReturnValue({ pid: 9988 });
+    const ack = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-live-descendant' });
+    child.emit('spawn');
+    await ack;
+    child.emit('exit', 0, null);
+    expect(removeTaskMock).not.toHaveBeenCalled();
   });
 
   it('does not remove the registry entry on exit when a newer PID replaced it', async () => {

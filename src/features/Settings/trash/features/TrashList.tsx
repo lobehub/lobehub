@@ -249,10 +249,15 @@ const TrashList = () => {
       okButtonProps: { danger: true },
       okText: t('trash.actions.purge'),
       onOk: async () => {
+        let outcome: Awaited<ReturnType<typeof purge>>;
         try {
-          await purge([item.id]);
+          outcome = await purge([item.id]);
         } catch {
           reportFailure();
+          return;
+        }
+        if (outcome.blocked.length > 0) {
+          toast.warning(t('trash.purge.blocked', { count: outcome.blocked.length }));
           return;
         }
         toast.success(t('trash.purge.success'));
@@ -284,8 +289,9 @@ const TrashList = () => {
       okButtonProps: { danger: true },
       okText: emptyLabel(view, count),
       onOk: async () => {
+        let blocked: number;
         try {
-          await emptyTrash(view);
+          ({ blocked } = await emptyTrash(view));
         } catch (error) {
           if (error instanceof TrashEmptyScopeChangedError || isScopeChangedError(error)) {
             toast.error(t('trash.emptyStopped.scopeChanged'));
@@ -295,6 +301,10 @@ const TrashList = () => {
           } else {
             reportFailure();
           }
+          return;
+        }
+        if (blocked > 0) {
+          toast.warning(t('trash.purge.blocked', { count: blocked }));
           return;
         }
         toast.success(t('trash.purge.success'));

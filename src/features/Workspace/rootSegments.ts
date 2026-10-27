@@ -16,6 +16,7 @@ export const WORKSPACE_MIRRORED_ROOT_SEGMENTS: ReadonlySet<string> = new Set([
   'agent',
   'agents',
   'billing',
+  'channels',
   'community',
   'dashboard',
   'eval',

@@ -7,10 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { acceptanceComments, acceptances, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import {
-  ACCEPTANCE_COMMENT_RATE_LIMITED,
-  AcceptanceCommentModel,
-} from '../acceptanceComment';
+import { ACCEPTANCE_COMMENT_RATE_LIMITED, AcceptanceCommentModel } from '../acceptanceComment';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

@@ -23,6 +23,7 @@ import { briefRuntime } from './brief';
 import { browserRuntime } from './browser';
 import { calculatorRuntime } from './calculator';
 import { canvasRuntime } from './canvas';
+import { channelRuntime } from './channel';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { dashboardRuntime } from './dashboard';
@@ -68,6 +69,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,
   agentBuilderRuntime,

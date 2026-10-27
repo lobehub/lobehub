@@ -151,7 +151,8 @@ export const topicAgentViewResource = definePagedReplica<
   paging: topicPaging,
   query: ({ withDetails }) => ({ withDetails: Boolean(withDetails) }),
   storage: 'indexedDB',
-  version: 1,
+  // Older pages include Channel execution topics in their rows and total.
+  version: 2,
 });
 
 /** By-id topic detail cache (`topicDetailMap[topicId]`), for topics outside loaded lists. */

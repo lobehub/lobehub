@@ -1,4 +1,5 @@
 import {
+  BOT_WAKE_PACES,
   BOT_WAKE_SETTING_KEYS as KEY,
   DEFAULT_WAKE_RULES,
   MAX_BOT_WAKE_CHANNEL_LIST,
@@ -13,6 +14,8 @@ import type { FieldSchema } from './types';
 const FEATURE_FLAG = 'enableBotWake';
 
 const ENABLED = { field: KEY.enabled, value: true };
+/** The timings show only for a custom pace; a preset sets them. */
+const CUSTOM_PACE = [ENABLED, { field: KEY.pace, value: 'custom' }];
 
 /** Visible lines of the custom-instructions text area. */
 const CUSTOM_INSTRUCTIONS_ROWS = 10;
@@ -71,6 +74,8 @@ export const botWakeFields: FieldSchema[] = [
     label: 'channel.botWakeScope',
     type: 'string',
     visibleWhen: ENABLED,
+    choices: true,
+    enumRecommended: 'all',
     enum: ['all', 'bot-threads', 'none'],
     enumDescriptions: [
       'channel.botWakeScopeAllHint',
@@ -86,6 +91,30 @@ export const botWakeFields: FieldSchema[] = [
   channelList(KEY.allowChannels, 'channel.botWakeAllowChannels'),
   channelList(KEY.denyChannels, 'channel.botWakeDenyChannels'),
   {
+    key: KEY.pace,
+    default: 'balanced',
+    description: 'channel.botWakePaceHint',
+    featureFlag: FEATURE_FLAG,
+    label: 'channel.botWakePace',
+    type: 'string',
+    visibleWhen: ENABLED,
+    choices: true,
+    enum: [...BOT_WAKE_PACES],
+    enumDescriptions: [
+      'channel.botWakePaceCalmHint',
+      'channel.botWakePaceBalancedHint',
+      'channel.botWakePaceActiveHint',
+      'channel.botWakePaceCustomHint',
+    ],
+    enumLabels: [
+      'channel.botWakePaceCalm',
+      'channel.botWakePaceBalanced',
+      'channel.botWakePaceActive',
+      'channel.botWakePaceCustom',
+    ],
+    enumRecommended: 'balanced',
+  },
+  {
     key: KEY.windowSeconds,
     default: DEFAULT_WAKE_RULES.windowSeconds,
     description: 'channel.botWakeWindowSecondsHint',
@@ -94,7 +123,7 @@ export const botWakeFields: FieldSchema[] = [
     maximum: 86_400,
     minimum: 0,
     type: 'number',
-    visibleWhen: ENABLED,
+    visibleWhen: CUSTOM_PACE,
   },
   {
     key: KEY.maxSilentWakes,
@@ -105,7 +134,7 @@ export const botWakeFields: FieldSchema[] = [
     maximum: 100,
     minimum: 0,
     type: 'integer',
-    visibleWhen: ENABLED,
+    visibleWhen: CUSTOM_PACE,
   },
   {
     key: KEY.ownerPresenceSeconds,
@@ -116,7 +145,7 @@ export const botWakeFields: FieldSchema[] = [
     maximum: 86_400,
     minimum: 0,
     type: 'number',
-    visibleWhen: ENABLED,
+    visibleWhen: CUSTOM_PACE,
   },
   {
     key: KEY.classifierThreshold,
@@ -127,11 +156,31 @@ export const botWakeFields: FieldSchema[] = [
     maximum: 1,
     minimum: 0,
     type: 'number',
+    visibleWhen: CUSTOM_PACE,
+  },
+  {
+    key: KEY.classifierInitiateEnabled,
+    default: DEFAULT_WAKE_RULES.classifier.initiateEnabled,
+    description: 'channel.botWakeClassifierInitiateEnabledHint',
+    featureFlag: FEATURE_FLAG,
+    label: 'channel.botWakeClassifierInitiateEnabled',
+    type: 'boolean',
     visibleWhen: ENABLED,
   },
   {
+    key: KEY.classifierInitiateThreshold,
+    default: DEFAULT_WAKE_RULES.classifier.initiateThreshold,
+    description: 'channel.botWakeClassifierInitiateThresholdHint',
+    featureFlag: FEATURE_FLAG,
+    label: 'channel.botWakeClassifierInitiateThreshold',
+    maximum: 1,
+    minimum: 0,
+    type: 'number',
+    visibleWhen: { field: KEY.classifierInitiateEnabled, value: true },
+  },
+  {
     key: KEY.proactiveEnabled,
-    default: false,
+    default: true,
     description: 'channel.botWakeProactiveEnabledHint',
     featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeProactiveEnabled',
@@ -150,13 +199,23 @@ export const botWakeFields: FieldSchema[] = [
     visibleWhen: { field: KEY.proactiveEnabled, value: true },
   },
   {
+    key: KEY.customInstructionsEnabled,
+    default: false,
+    description: 'channel.botWakeCustomInstructionsEnabledHint',
+    featureFlag: FEATURE_FLAG,
+    label: 'channel.botWakeCustomInstructionsEnabled',
+    type: 'boolean',
+    visibleWhen: ENABLED,
+  },
+  {
     key: KEY.customInstructions,
     description: 'channel.botWakeCustomInstructionsHint',
     featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeCustomInstructions',
     placeholder: 'channel.botWakeCustomInstructionsPlaceholder',
     type: 'string',
-    visibleWhen: ENABLED,
+    // The large text area opens with its switch.
+    visibleWhen: { field: KEY.customInstructionsEnabled, value: true },
     // A prompt, not a label: the form gives it a text area instead of a one-line input.
     rows: CUSTOM_INSTRUCTIONS_ROWS,
     // Longer text is cut by the runtime, not rejected.
@@ -169,7 +228,7 @@ export const botWakeFields: FieldSchema[] = [
     featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeSchedulerMode',
     type: 'string',
-    visibleWhen: ENABLED,
+    visibleWhen: CUSTOM_PACE,
     enum: ['off', 'enforce'],
     enumDescriptions: ['channel.botWakeSchedulerOffHint', 'channel.botWakeSchedulerEnforceHint'],
     enumLabels: ['channel.botWakeSchedulerOff', 'channel.botWakeSchedulerEnforce'],
@@ -183,7 +242,7 @@ export const botWakeFields: FieldSchema[] = [
     maximum: 3600,
     minimum: MIN_COLLECT_SECONDS,
     type: 'number',
-    visibleWhen: { field: KEY.schedulerMode, value: 'enforce' },
+    visibleWhen: [...CUSTOM_PACE, { field: KEY.schedulerMode, value: 'enforce' }],
   },
   {
     key: KEY.cooldownSeconds,
@@ -194,6 +253,6 @@ export const botWakeFields: FieldSchema[] = [
     maximum: 3600,
     minimum: MIN_COOLDOWN_SECONDS,
     type: 'number',
-    visibleWhen: { field: KEY.schedulerMode, value: 'enforce' },
+    visibleWhen: [...CUSTOM_PACE, { field: KEY.schedulerMode, value: 'enforce' }],
   },
 ];

@@ -22,6 +22,8 @@ const getClient = () => getRedisServiceClient('botWake');
 const CHANNEL_TTL_SECONDS = 24 * 60 * 60;
 const SCHEDULER_TTL_SECONDS = 24 * 60 * 60;
 const CLASSIFIER_CALLS_TTL_SECONDS = 2 * 60 * 60;
+// As long as a parked message can wait for its replay (`deferredMessages` TTL).
+const INITIATION_TTL_SECONDS = 30 * 60;
 // A channel's recent messages are context for the next judgement, not an archive: an idle channel
 // loses them after three days, and an active one never holds more than the newest 200.
 const CONVERSATION_LOG_TTL_SECONDS = 3 * 24 * 60 * 60;
@@ -183,6 +185,35 @@ export const botWake = {
         .reverse();
     } catch (error) {
       log('readRecentMessages failed: %O', error);
+    }
+  },
+
+  /**
+   * Keeps the wake decided for a message, so the replay of a parked message reuses it. Never
+   * throws: without it the replay judges again, as it did before.
+   */
+  async rememberInitiation(applicationId: string, messageId: string, value: string) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      await redis.set(RedisKeys.botWake.initiation(applicationId, messageId), value, {
+        ex: INITIATION_TTL_SECONDS,
+      });
+    } catch (error) {
+      log('rememberInitiation failed: %O', error);
+    }
+  },
+
+  /** The wake decided for a message, as `rememberInitiation` stored it; `undefined` otherwise. */
+  async readInitiation(applicationId: string, messageId: string) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      return (await redis.get(RedisKeys.botWake.initiation(applicationId, messageId))) ?? undefined;
+    } catch (error) {
+      log('readInitiation failed: %O', error);
     }
   },
 

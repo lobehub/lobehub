@@ -62,7 +62,10 @@ const seedRound = async (
 };
 
 beforeEach(async () => {
-  await db.insert(users).values([{ id: owner }, { id: other }]).onConflictDoNothing();
+  await db
+    .insert(users)
+    .values([{ id: owner }, { id: other }])
+    .onConflictDoNothing();
   const acceptance = await seedAcceptance();
   acceptanceId = acceptance.id;
 });
@@ -90,9 +93,9 @@ describe('AcceptanceFlowModel · start guards', () => {
     const { flowId } = await model.publish(acceptanceId, singleCheck('Replay source'));
     const source = await seedRound(acceptanceId, { flowSnapshots: [], plan: [] });
 
-    await expect(
-      model.start(acceptanceId, flowId, undefined, source.id),
-    ).rejects.toThrow('Flow snapshot not found');
+    await expect(model.start(acceptanceId, flowId, undefined, source.id)).rejects.toThrow(
+      'Flow snapshot not found',
+    );
   });
 
   it('refuses to extend a round that has already left planning', async () => {
@@ -188,7 +191,6 @@ describe('AcceptanceFlowModel · record guards', () => {
           required: true,
           sourceFlowNode: { flowId: randomUUID(), nodeId: randomUUID() },
           title: 'Ready',
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ] as never,
       status: 'planned',

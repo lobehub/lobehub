@@ -14,6 +14,7 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
 
 /** The Thread a message belongs to, or null for the main channel. */
@@ -27,9 +28,21 @@ export const findThread = async (
   const [thread] = await tx
     .select()
     .from(channelThreads)
-    .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.id, threadId)));
+    .where(
+      and(
+        eq(channelThreads.channelId, channelId),
+        eq(channelThreads.id, threadId),
+        notTrashed(channelThreads.isDeleted),
+      ),
+    );
   if (!thread) throw new ChannelError('NOT_FOUND', 'Thread not found');
 
+  return thread;
+};
+
+/** Rejects a write into an archived Thread; it stays readable until an admin unarchives it. */
+export const assertThreadOpen = (thread: ChannelThreadItem | null) => {
+  if (thread?.status === 'archived') throw new ChannelError('CONFLICT', 'Thread is archived');
   return thread;
 };
 

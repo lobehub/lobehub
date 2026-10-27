@@ -3,6 +3,7 @@ export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
 export * from './botWakeClassifier';
 export * from './builderSuggestion';
+export * from './channelRouting';
 export * from './compressContext';
 export * from './expertise';
 export * from './followUpAction';

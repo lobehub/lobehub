@@ -25,6 +25,8 @@ export const CHANNEL_LIMITS = {
   attachments: 20,
   /** Characters in one message. */
   contentLength: 100_000,
+  /** Characters in a channel name. */
+  titleLength: 100,
 } as const;
 
 /** Display name for a person whose account was deleted; their member row stays. */
@@ -103,7 +105,7 @@ export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberCo
  * - `directed`: carried explicit @mentions; jobs were created in the send transaction.
  * - `pending`: waiting for Jev to pick responders.
  * - `assigned`: Jev (or the no-model fallback) picked at least one Agent.
- * - `unassigned`: Jev was unsure or failed; no Agent was woken and the user may retry.
+ * - `unassigned`: routing could not complete; no Agent was woken and the user may retry.
  * - `skipped`: Jev decided nobody needs to reply. Not a failure.
  * - `reply`: an Agent's published reply; replies never enter routing.
  */
@@ -137,6 +139,7 @@ export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
   | 'directory_locked'
+  | 'member_busy'
   | 'unavailable'
   | 'workspace_changed';
 
@@ -156,13 +159,42 @@ export interface ChannelContextMessage {
   threadId: string | null;
 }
 
+/** Read-only history of the current Channel operation; scope is never supplied by the model. */
+export interface ChannelReadMessagesParams {
+  /** Exclusive sequence cursor returned by the preceding page. */
+  beforeSequence?: number;
+  limit?: number;
+}
+
+export interface ChannelReadMessageParams {
+  messageId: string;
+  /** Character offset for reading a long message without flooding the context. */
+  offset?: number;
+}
+
+export interface ChannelHistoryMessage extends ChannelContextMessage {
+  contentLength: number;
+  truncated: boolean;
+}
+
+export interface ChannelHistoryPage {
+  cutoffSequence: number;
+  messages: ChannelHistoryMessage[];
+  nextBeforeSequence: number | null;
+}
+
+export interface ChannelHistoryMessageDetail {
+  attachments?: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
+  message: ChannelHistoryMessage;
+  nextOffset: number | null;
+  offset: number;
+}
+
 /**
- * A run's input, frozen at claim time as a cutoff rather than a copy of the messages: the run
- * receives new branch messages in (afterSequence, cutoffSequence], read on demand.
+ * Frozen conversation scope. Only requestMessageId is delivered eagerly; history tools may
+ * read the entire branch up to cutoffSequence.
  */
 export interface ChannelInputManifest {
-  /** Exclusive lower bound: already consumed public input in the continued topic. */
-  afterSequence: number;
   /** Immutable at claim time; later public messages belong to the next run. */
   cutoffSequence: number;
   /** The member that triggered this run; its user is the execution identity. */
@@ -177,3 +209,86 @@ export interface ChannelInputManifest {
 
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
+
+/** Public client projection. No execution configuration, private topic or draft fields. */
+export interface ChannelListItem {
+  /** Server-computed for the current member. */
+  canDelete: boolean;
+  createdAt: Date;
+  id: string;
+  sequence: number;
+  status: ChannelStatus;
+  title: string;
+  workspaceId: string | null;
+}
+
+export interface ChannelPublicMember {
+  actorType: ChannelMemberActorType;
+  agentId: string | null;
+  avatar: string | null;
+  description: string | null;
+  id: string;
+  joinedAt: Date;
+  name: string | null;
+  role: ChannelMemberRole | null;
+  status: ChannelMemberStatus;
+  userAvatar: string | null;
+  userId: string | null;
+  userName: string | null;
+  username: string | null;
+}
+
+export interface ChannelPublicMessage {
+  agentId: string | null;
+  author: {
+    avatar: string | null;
+    id: string | null;
+    name: string | null;
+    type: ChannelMemberActorType;
+  };
+  content: string;
+  createdAt: Date;
+  fileIds: string[];
+  id: string;
+  mentions: string[];
+  recipientMemberIds: string[];
+  replyToId: string | null;
+  routingStatus: ChannelMessageRoutingStatus;
+  sequence: number;
+  threadId: string | null;
+  userId: string | null;
+}
+
+export interface ChannelPublicJob {
+  blockedCode: ChannelJobBlockCode | null;
+  /** Server-computed for the current member: its requester or an admin. */
+  canStop: boolean;
+  /** Failure diagnostic only. */
+  errorMessage: string | null;
+  id: string;
+  memberId: string;
+  messageId: string;
+  publicationRevoked: boolean;
+  status: ChannelJobStatus;
+  threadId: string | null;
+  writerHeld: boolean;
+}
+
+export interface ChannelPublicThread {
+  followerMemberIds: string[];
+  id: string;
+  rootMessageId: string;
+  rootSequence: number;
+  status: ChannelThreadStatus;
+}
+
+export interface ChannelDetail {
+  attachments: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
+  channel: ChannelListItem;
+  hasMore: boolean;
+  jobs: ChannelPublicJob[];
+  members: ChannelPublicMember[];
+  messages: ChannelPublicMessage[];
+  rootMessage: ChannelPublicMessage | null;
+  threads: ChannelPublicThread[];
+}

@@ -18,6 +18,8 @@ export interface UserSystemAgentConfig {
    * depends on transcription stays hidden.
    */
   asr: SystemAgentItem;
+  /** Decision model selecting which Channel members should respond to an unmentioned message. */
+  channelRouting: SystemAgentItem;
   /** Model used to draft expertise domains and extract reusable experience from conversations. */
   expertise: SystemAgentItem;
   followUpAction: SystemAgentItem;

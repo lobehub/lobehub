@@ -22,6 +22,7 @@ export const HETERO_OPERATION_JWT_PURPOSE = 'hetero-operation';
 
 export type HeteroOperationCapability =
   | 'acceptance:evidence'
+  | 'channel:read'
   | 'goal:manage'
   | 'hetero:finish'
   | 'hetero:ingest'
@@ -224,6 +225,7 @@ export const validateHeteroOperationClaims = (
     !capabilities.every((capability) =>
       [
         'acceptance:evidence',
+        'channel:read',
         'goal:manage',
         'model:invoke',
         'hetero:ingest',

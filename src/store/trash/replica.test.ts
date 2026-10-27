@@ -286,7 +286,7 @@ describe('trash replicas', () => {
     });
     await waitFor(() => expect(itemIds('topic')).toEqual(['t1']));
 
-    vi.mocked(trashService.emptyTrash).mockResolvedValue({ hasMore: false, purged: 1 });
+    vi.mocked(trashService.emptyTrash).mockResolvedValue({ blocked: 0, hasMore: false, purged: 1 });
     vi.mocked(trashService.list).mockResolvedValue({ items: [], nextCursor: null });
 
     await act(() => useTrashStore.getState().emptyTrash({ resourceType: 'topic' }));

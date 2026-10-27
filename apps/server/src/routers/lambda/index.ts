@@ -47,6 +47,7 @@ import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
 import { canvasRouter } from './canvas';
 import { changelogRouter } from './changelog';
+import { channelRouter } from './channel';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
 import { composioRouter } from './composio';
@@ -138,6 +139,7 @@ export const lambdaRouter = router({
   agentSteerQueue: agentSteerQueueRouter,
   canvas: canvasRouter,
   changelog: changelogRouter,
+  channel: channelRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,

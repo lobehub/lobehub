@@ -404,7 +404,12 @@ export class HeterogeneousPersistenceHandler {
     const update: Record<string, any> = {};
     if (state.main.accContent) update.content = state.main.accContent;
     if (state.main.accReasoning) update.reasoning = { content: state.main.accReasoning };
-    if (Object.keys(state.main.turnMetadata).length > 0) update.metadata = state.main.turnMetadata;
+    // The first assistant is seeded before the heterogeneous operation exists.
+    // Stamp every durable main reply so ordinary completion lookups stay scoped to this run.
+    update.metadata = {
+      ...state.main.turnMetadata,
+      operationId: state.operationId,
+    };
     await this.deps.messageModel.update(state.main.currentAssistantId, update);
   }
 }

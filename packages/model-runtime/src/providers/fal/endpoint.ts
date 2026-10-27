@@ -3,7 +3,13 @@
  * other id with a `/` is a full fal endpoint id (`bytedance/seedance-2.5`,
  * `black-forest-labs/flux-2`, `<user>/<app>`) and is used verbatim.
  */
-const LEGACY_SHORT_ID_PREFIXES = ['flux/', 'flux-kontext/', 'flux-pro/', 'hunyuan-image/', 'imagen4/'];
+const LEGACY_SHORT_ID_PREFIXES = [
+  'flux/',
+  'flux-kontext/',
+  'flux-pro/',
+  'hunyuan-image/',
+  'imagen4/',
+];
 
 /**
  * Legacy short ids under an owner fal also uses at the top level: `bytedance/seedream/v4` meant

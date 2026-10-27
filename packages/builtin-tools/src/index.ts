@@ -21,6 +21,7 @@ import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CanvasManifest } from '@lobechat/builtin-tool-canvas';
+import { ChannelManifest } from '@lobechat/builtin-tool-channel';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
@@ -499,6 +500,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CalculatorManifest.identifier,
     manifest: CalculatorManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: ChannelManifest.identifier,
+    manifest: ChannelManifest,
     type: 'builtin',
   },
   {

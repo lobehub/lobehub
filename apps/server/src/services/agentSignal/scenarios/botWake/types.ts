@@ -21,6 +21,11 @@ export interface WakeSignal {
   message: string;
   platform?: string;
   platformThreadId?: string;
+  /**
+   * Platform user id of the author of the message this one replies to (Discord replies only).
+   * Absent when it is not a reply or the platform does not say.
+   */
+  replyToAuthorId?: string;
   timestamp: number;
 }
 
@@ -208,7 +213,16 @@ export interface WakeClassifierRules {
 export interface WakeRules {
   /** Raw platform channel/thread ids the bot may wake in; empty means anywhere. */
   allowChannels: string[];
-  classifier: WakeClassifierRules;
+  classifier: WakeClassifierRules & {
+    /**
+     * "Help others": outside the follow-up window the classifier may wake the bot on its own, for
+     * a message that reads as meant for it although nobody named or @-mentioned it. Only while
+     * the classifier enforces.
+     */
+    initiateEnabled: boolean;
+    /** The score that starts such a wake; stricter than `threshold`. 0 also turns it off. */
+    initiateThreshold: number;
+  };
   /** Free text handed to the classifier as context. Never compiled into a rule. */
   customInstructions?: string;
   /** Raw platform channel/thread ids the bot never wakes in. Wins over the allow list. */
@@ -238,9 +252,19 @@ export interface WakeSchedulerConfig {
  * and parsed defensively by {@link parseBotWakeSettings}: settings are user-edited JSON.
  */
 export interface BotWakeConfig {
-  classifier?: { mode?: WakePolicyMode; threshold?: number };
+  classifier?: {
+    initiateEnabled?: boolean;
+    initiateThreshold?: number;
+    mode?: WakePolicyMode;
+    threshold?: number;
+  };
   /** Free-text guidance for the classifier. */
   customInstructions?: string;
+  /**
+   * The settings switch for `customInstructions`. Off keeps the text but stops handing it to the
+   * classifier; absent (a config saved before the switch existed) counts as on.
+   */
+  customInstructionsEnabled?: boolean;
   enabled?: boolean;
   /**
    * Mode of the rule policies (internal rules and the owner's structured rules). `off` disables
@@ -248,9 +272,14 @@ export interface BotWakeConfig {
    */
   mode?: WakePolicyMode;
   /**
+   * How often the bot speaks up on its own (`calm` / `balanced` / `active`), or `custom` to read
+   * `rules` and `scheduler` as written. Absent reads as `custom`.
+   */
+  pace?: 'active' | 'balanced' | 'calm' | 'custom';
+  /**
    * Whether the bot may step in on its own when the owner raises something it can help with.
    * `enabled` is the settings switch (on = `enforce`); `mode` is an operator override, such as
-   * `shadow` to only score it. Off by default.
+   * `shadow` to only score it. On by default.
    */
   proactive?: { enabled?: boolean; mode?: WakePolicyMode; threshold?: number };
   rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions' | 'proactive'>>;

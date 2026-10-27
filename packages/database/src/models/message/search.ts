@@ -6,6 +6,7 @@ import { messages, topics } from '../../schemas';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { searchableMessage } from '../../utils/searchableMessage';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import type { MessageLookupQueries } from './lookup';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
@@ -210,6 +211,7 @@ export class MessageKeywordSearchQueries extends MessageScope {
       roles?.length ? inArray(messages.role, roles) : undefined,
       topicId ? eq(messages.topicId, topicId) : undefined,
       agentId ? await this.lookups.buildAgentCondition(agentId) : undefined,
+      notChannelTopic(),
       includeAutomatedPrompts
         ? undefined
         : or(

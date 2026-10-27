@@ -49,6 +49,15 @@ const isSystemMessage = (platform: string, raw: unknown): boolean => {
   return type !== undefined && !DISCORD_USER_MESSAGE_TYPES.has(type);
 };
 
+/** Who wrote the message a Discord reply points at; the gateway inlines it as `referenced_message`. */
+const readReplyToAuthorId = (platform: string, raw: unknown): string | undefined => {
+  if (platform !== 'discord' || typeof raw !== 'object' || raw === null) return undefined;
+  const id = (raw as { referenced_message?: { author?: { id?: unknown } } | null })
+    .referenced_message?.author?.id;
+
+  return typeof id === 'string' && id ? id : undefined;
+};
+
 /**
  * Normalizes a chat message into the fact the wake policies judge.
  *
@@ -86,6 +95,7 @@ export const buildWakeSignal = ({
     message: text,
     platform,
     platformThreadId,
+    replyToAuthorId: readReplyToAuthorId(platform, message.raw),
     timestamp,
   };
 };

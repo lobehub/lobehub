@@ -256,5 +256,7 @@ export const mobileWorkspaceRoutes: RouteObject[] = [
 
 /** Desktop-only surfaces (no mobile entry on desktop either) leave for home instead of being read as a workspace slug. */
 export const mobileUnsupportedRoutes: RouteObject[] = [
+  // Multi-agent Channels currently use the desktop home sidebar and conversation layout.
+  { element: redirectElement('..'), path: 'channels/*' },
   { element: redirectElement('..'), path: 'eval/*' },
 ];

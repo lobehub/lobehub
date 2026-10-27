@@ -92,7 +92,12 @@ const createHarness = () => {
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);
       if (!existing) return { success: false };
-      messages.set(id, { ...existing, ...patch });
+      messages.set(id, {
+        ...existing,
+        ...patch,
+        // MessageModel.update merges metadata patches into the stored row.
+        metadata: patch.metadata ? { ...existing.metadata, ...patch.metadata } : existing.metadata,
+      });
       return { success: true };
     }),
     updateToolMessage: vi.fn(async () => ({ success: true })),

@@ -66,6 +66,7 @@ export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = 
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
+  channelRouting: { enabled: false, model: 'jev-1.14.0', provider: 'typesafe' },
   expertise: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,

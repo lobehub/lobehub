@@ -14,6 +14,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
@@ -43,6 +44,7 @@ export interface RecentDbItem {
 // legacy `task_manager` trigger from the previous Task Manager panel.
 // System-trigger topics live in their own surfaces and would clutter Recent.
 const SYSTEM_TOPIC_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
   'cron',
   'eval',
   'task_manager',

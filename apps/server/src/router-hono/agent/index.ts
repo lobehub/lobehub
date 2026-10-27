@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
+import { channelAdvance, channelCallback } from './handlers/channel';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -40,6 +41,9 @@ app.post('/', qstashOrApiKeyAuth(), execAgent);
 // POST /api/agent/run — execute a single step (QStash signature)
 app.post('/run', qstashAuth(), runStep);
 app.get('/run', runStepHealth);
+
+app.post('/channel/advance', qstashAuth(), channelAdvance);
+app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);

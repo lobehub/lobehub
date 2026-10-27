@@ -11,7 +11,16 @@ import type {
 import { and, asc, count, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
 import type { NewTrashItemRow, TrashItemRow } from '../schemas';
-import { agents, dashboards, messages, topics, trashItems, widgets } from '../schemas';
+import {
+  agents,
+  channels,
+  channelThreads,
+  dashboards,
+  messages,
+  topics,
+  trashItems,
+  widgets,
+} from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -43,6 +52,12 @@ export interface TrashRegisterParams {
  */
 const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: any }> = {
   agent: { id: agents.id, isDeleted: agents.isDeleted, table: agents },
+  channel: { id: channels.id, isDeleted: channels.isDeleted, table: channels },
+  channelThread: {
+    id: channelThreads.id,
+    isDeleted: channelThreads.isDeleted,
+    table: channelThreads,
+  },
   dashboard: { id: dashboards.id, isDeleted: dashboards.isDeleted, table: dashboards },
   message: { id: messages.id, isDeleted: messages.isDeleted, table: messages },
   topic: { id: topics.id, isDeleted: topics.isDeleted, table: topics },

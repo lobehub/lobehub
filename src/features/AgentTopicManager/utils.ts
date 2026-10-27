@@ -5,6 +5,7 @@ import {
 } from '@lobechat/utils/client/topic';
 import dayjs from 'dayjs';
 
+import { TopicTrigger } from '@/const/topic';
 import type { ChatTopic } from '@/types/topic';
 
 import type {
@@ -51,6 +52,8 @@ export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
 };
 
 export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boolean => {
+  // Search can hydrate older cached results before the request revalidates.
+  if (topic.trigger === TopicTrigger.Channel) return false;
   if (triggers.length === 0) return true;
   const effective: TriggerFilter = (topic.trigger as TriggerFilter | null | undefined) ?? 'chat';
   return triggers.includes(effective);

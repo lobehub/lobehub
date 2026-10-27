@@ -225,6 +225,18 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
   });
 
+  it('should keep Channels off by default and enable them per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.channel).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableChannels).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ channel: true }).enableChannels).toBe(true);
+
+    const config = { channel: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableChannels).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableChannels).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableChannels).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,

@@ -54,6 +54,11 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-4o-mini-transcribe",
     "provider": "openai",
   },
+  "channelRouting": {
+    "enabled": false,
+    "model": "jev-1.14.0",
+    "provider": "typesafe",
+  },
   "enableAutoReply": true,
   "expertise": {
     "model": "gpt-5.6-luna",

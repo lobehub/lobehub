@@ -1,5 +1,5 @@
 import type { ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
-import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem, TopicItem } from '../../schemas';
@@ -9,10 +9,12 @@ import {
   channelMemberGrants,
   channelMembers,
   channelMessages,
+  channelThreads,
   devices,
 } from '../../schemas';
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
+import { notTrashed } from '../../utils/softDelete';
 import { resolveExecutionConfig } from './agent';
 import { findThread } from './delivery';
 import { buildManifest } from './manifest';
@@ -66,7 +68,7 @@ const block = async (
   await audit(tx, job.channelId, 'job_blocked', job.id, { code, reason });
 };
 
-/** Settles a job that must never run, e.g. its requester left or its environment changed. */
+/** Settles a job that must never run, e.g. its requester left or its branch was archived. */
 const cancel = async (tx: Transaction, job: ChannelJobItem, reason: string) => {
   await tx
     .update(channelJobs)
@@ -180,6 +182,47 @@ export const claimJob = async (
     );
   if (!job) return null;
 
+  // Archiving stops the work it covers; a job queued against it must never start.
+  if (channel.status === 'archived') {
+    await cancel(tx, job, 'channel_archived');
+    return null;
+  }
+  const thread = await findThread(tx, channel.id, job.threadId);
+  if (thread?.status === 'archived') {
+    await cancel(tx, job, 'thread_archived');
+    return null;
+  }
+
+  const [request] = await tx
+    .select()
+    .from(channelMessages)
+    .where(eq(channelMessages.id, job.messageId));
+  // An earlier undecided message may still enqueue this member. Checking only jobs
+  // would let an explicit follow-up overtake it while another worker routes it.
+  const [pendingRoute] = await tx
+    .select({ id: channelMessages.id })
+    .from(channelMessages)
+    .leftJoin(channelThreads, eq(channelThreads.id, channelMessages.threadId))
+    .where(
+      and(
+        eq(channelMessages.channelId, channel.id),
+        eq(channelMessages.routingStatus, 'pending'),
+        lt(channelMessages.sequence, request.sequence),
+        or(
+          isNull(channelMessages.threadId),
+          and(
+            notTrashed(channelThreads.isDeleted),
+            sql`${channelThreads.followerMemberIds} @> ${JSON.stringify([job.memberId])}::jsonb`,
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  if (pendingRoute) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier routing decision');
+    return null;
+  }
+
   // Each member answers in message order.
   const [head] = await tx
     .select({ id: channelJobs.id })
@@ -188,7 +231,10 @@ export const claimJob = async (
     .where(and(eq(channelJobs.memberId, job.memberId), eq(channelJobs.status, 'queued')))
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
     .limit(1);
-  if (head?.id !== job.id) return null;
+  if (head?.id !== job.id) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
 
   const [member] = await tx
     .select()
@@ -207,12 +253,11 @@ export const claimJob = async (
       ),
     )
     .limit(1);
-  if (busy) return null;
+  if (busy) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
 
-  const [request] = await tx
-    .select()
-    .from(channelMessages)
-    .where(eq(channelMessages.id, job.messageId));
   // The requester is the execution identity; without them there is nobody to run as.
   const [requester] = await tx
     .select({ id: channelMembers.id, userId: channelMembers.userId })
@@ -257,15 +302,13 @@ export const claimJob = async (
     return null;
   }
 
-  const thread = await findThread(tx, channel.id, job.threadId);
-
   const now = new Date();
   let claimed: Omit<ChannelClaim, 'member'>;
   try {
     // A savepoint, so losing the directory race to another channel keeps this transaction
     // and leaves no topic or operation behind.
     claimed = await tx.transaction(async (savepoint) => {
-      const { topic, afterSequence } = await resolveTopic(
+      const topic = await resolveTopic(
         savepoint,
         channel,
         job,
@@ -274,8 +317,10 @@ export const claimJob = async (
         request.sequence,
         executionConfig,
       );
-      const manifest = buildManifest({ afterSequence, job, member, request, thread });
-      const operationId = `op_${createNanoId(16)()}`;
+      const manifest = buildManifest({ job, member, request, thread });
+      // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
+      // derives the Agent and topic from the operation ID.
+      const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
       await savepoint.insert(agentOperations).values({
         id: operationId,
         userId: requester.userId!,

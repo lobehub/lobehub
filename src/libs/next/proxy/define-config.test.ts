@@ -177,3 +177,14 @@ describe('project deep links', () => {
     },
   );
 });
+
+describe('channel deep links', () => {
+  it.each(['/channels', '/channels/chn_123'])(
+    'keeps %s reachable after a full page reload',
+    async (path) => {
+      const request = new NextRequest(`http://localhost:3010${path}`);
+      expect(createRouteMatcher(proxyConfig.matcher)(request)).toBe(true);
+      expect(new URL((await run(request.url))!).pathname).toMatch(new RegExp(`/spa/[^/]+${path}$`));
+    },
+  );
+});

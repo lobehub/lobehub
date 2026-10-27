@@ -18,6 +18,7 @@ import {
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
 import { searchableMessageText } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
+import { notChannelTopic, notChannelTopicRef } from '../../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchAgentResult,
@@ -176,6 +177,7 @@ export async function searchTopics(
         // the scope predicate alone would surface a visitor's conversation in
         // the creator's command-menu search.
         notShareVisitorTopic(),
+        notChannelTopic(),
         agentId && !context.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
         timeRangeWhere(topics, timeRange),
         dialect.match(TOPIC_FIELDS, preparedQuery),
@@ -296,6 +298,7 @@ export async function searchMessages(
         // Twin of the topics guard: visitor messages inherit the creator's
         // userId and are only identifiable through their parent topic.
         notShareVisitorMessage(),
+        notChannelTopicRef(messages.topicId),
         agentId && !context.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
         timeRangeWhere(messages, timeRange),
         dialect.match(MESSAGE_FIELDS, preparedQuery),

@@ -269,6 +269,7 @@ export const statPath = async (params: { path: string }): Promise<StatPathResult
     const repoType = await detectRepoType(params.path);
     const repositoryUrl = await detectGitHubRepository(params.path);
     return {
+      canonicalPath: await realpath(params.path),
       exists: true,
       isDirectory: true,
       repoType,

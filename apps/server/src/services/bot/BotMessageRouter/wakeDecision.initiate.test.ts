@@ -117,14 +117,14 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     });
   });
 
-  it('does not initiate without a cue: not named, outside the window', async () => {
-    const classify = classifierAnswer(0.9);
+  it('does not initiate outside the window when the classifier is not sure the message is for it', async () => {
+    const classify = classifierAnswer(0.64);
     const recorder = make(WITH_CLASSIFIER('enforce'), fakeState(), { classify });
 
     await expect(
       recorder.initiate(observation({}, { text: 'anyone seen the deploy logs?' })),
     ).resolves.toBeUndefined();
-    expect(classify).not.toHaveBeenCalled();
+    expect(classify).toHaveBeenCalledOnce();
   });
 
   it('only watches while the rules are in shadow: naming the bot changes nothing', async () => {
@@ -312,7 +312,11 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
 
   it('follows the platform’s own name refresh: a renamed bot answers to the new name, not the old', async () => {
     const names = vi.fn(async () => ['Shadow Arvin']);
-    const recorder = make(ENFORCE, fakeState(), { botNames: names });
+    // Not sure the old name is for it: only the name can start the wake here.
+    const recorder = make(ENFORCE, fakeState(), {
+      botNames: names,
+      classify: classifierAnswer(0.1),
+    });
 
     await expect(recorder.initiate(observation())).resolves.toEqual({
       addressed: true,

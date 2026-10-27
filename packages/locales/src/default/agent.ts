@@ -463,6 +463,21 @@ export default {
   'channel.botWakeChannelIdLabel': 'Channel ID',
   'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
   'channel.channelListLimit': 'Lists hold at most {{max}} entries — remove one first.',
+  'channel.botWakePace': 'How often it joins',
+  'channel.botWakePaceHint':
+    'How often the bot speaks up on its own. Pick a preset, or Custom to set the numbers.',
+  'channel.botWakePaceCalm': 'Calm',
+  'channel.botWakePaceCalmHint':
+    'Joins rarely: a short follow-up window, quiet while you are around, and a burst of messages gets one reply.',
+  'channel.botWakePaceBalanced': 'Balanced',
+  'channel.botWakePaceBalancedHint':
+    'Follows up for 5 minutes after it speaks and stays quiet for 2 minutes after you do.',
+  'channel.botWakePaceActive': 'Active',
+  'channel.botWakePaceActiveHint':
+    'Keeps up for 10 minutes after it speaks and joins even while you are around.',
+  'channel.botWakePaceCustom': 'Custom',
+  'channel.botWakePaceCustomHint':
+    'Set the follow-up window, silence limit, owner presence and batching yourself.',
   'channel.botWakeWindowSeconds': 'Follow-up window (seconds)',
   'channel.botWakeWindowSecondsHint':
     'After the bot speaks, plain messages in the same place within this time count as a follow-up to it.',
@@ -472,16 +487,25 @@ export default {
   'channel.botWakeOwnerPresenceSeconds': 'Owner presence (seconds)',
   'channel.botWakeOwnerPresenceSecondsHint':
     "If the bot's owner posted in the channel within this time, the bot stays quiet. 0 turns this off.",
-  'channel.botWakeClassifierThreshold': 'Sensitivity',
+  'channel.botWakeClassifierThreshold': 'Follow-up sensitivity',
   'channel.botWakeClassifierThresholdHint':
-    'How sure the bot must be that a message is for it before it joins, from 0 to 1. A higher value makes it join less often.',
-  'channel.botWakeProactiveEnabled': 'Offer help unasked',
+    'Right after the bot replied, how sure it must be that a message is still for it before it joins, from 0 to 1. A higher value makes it join less often.',
+  'channel.botWakeClassifierInitiateThreshold': 'Help-others sensitivity',
+  'channel.botWakeClassifierInitiateThresholdHint':
+    'How sure the bot must be that a message nobody addressed to it is for it before it answers, from 0 to 1. A higher value makes it answer less often.',
+  'channel.botWakeProactiveEnabled': 'Help me',
   'channel.botWakeProactiveEnabledHint':
-    'When you raise something the bot could help with (a problem, a complaint, a plan) without addressing it, the bot judges whether to step in with a concrete proposal. Only your own messages count, and it may still stay silent.',
-  'channel.botWakeProactiveThreshold': 'Offer-help sensitivity',
+    'When you raise something the bot could help with (a problem, a complaint, a plan) without calling it, the bot judges whether to step in with a concrete proposal. Only your own messages count, and it may still stay silent.',
+  'channel.botWakeProactiveThreshold': 'Help-me sensitivity',
   'channel.botWakeProactiveThresholdHint':
     'How sure the bot must be that you would welcome its help before it steps in, from 0 to 1. A higher value makes it step in less often.',
-  'channel.botWakeCustomInstructions': 'Custom instructions',
+  'channel.botWakeClassifierInitiateEnabled': 'Help others',
+  'channel.botWakeClassifierInitiateEnabledHint':
+    'When someone asks the bot something without naming or @-mentioning it, for example in a channel people use it in, the bot answers if the message is plainly for it.',
+  'channel.botWakeCustomInstructionsEnabled': 'Custom instructions',
+  'channel.botWakeCustomInstructionsEnabledHint':
+    'Tell the bot in your own words whom to answer and what to leave alone. Turn on to write them.',
+  'channel.botWakeCustomInstructions': 'Instructions',
   'channel.botWakeCustomInstructionsHint':
     'Written to the bot like a prompt: who it should answer, what to leave alone, examples of each. It guides the judgement and is not a hard rule. Up to 4000 characters.',
   'channel.botWakeCustomInstructionsPlaceholder':
@@ -582,9 +606,9 @@ export default {
     'Where the bot may join a conversation nobody addressed to it.',
   'channel.wake.section.pace': 'Pace',
   'channel.wake.section.paceDesc': 'How soon, and how often, the bot speaks up on its own.',
-  'channel.wake.section.judgement': 'Judgement',
+  'channel.wake.section.judgement': 'Initiative',
   'channel.wake.section.judgementDesc':
-    'How the bot decides a message is meant for it. Write what it should answer and what it should leave alone, in your own words.',
+    'When the bot may speak up without being called: to help you, to help others, and the instructions it follows.',
   'channel.wake.section.more': 'More',
   'channel.tab.advanced': 'Advanced',
   'channel.tab.unsaved': 'Unsaved changes',

@@ -24,7 +24,7 @@ import {
 
 type ModelAssignmentItemKey = Exclude<
   UserServiceModelConfigKey,
-  'asr' | 'onboardingTaskRecommender' | 'onboardingUnderstanding'
+  'asr' | 'channelRouting' | 'onboardingTaskRecommender' | 'onboardingUnderstanding'
 >;
 
 interface SystemAgentModelItem {

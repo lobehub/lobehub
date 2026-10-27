@@ -321,7 +321,10 @@ export const falInputSchemaToVideoParameters = (
         default: fallback !== undefined && durations.includes(fallback) ? fallback : durations[0],
         enum: durations,
       };
-    } else if (typesOf(properties.duration).has('integer') || typesOf(properties.duration).has('number')) {
+    } else if (
+      typesOf(properties.duration).has('integer') ||
+      typesOf(properties.duration).has('number')
+    ) {
       const { max, min } = numberBounds(properties.duration);
       parameters.duration = {
         default: fallback ?? min ?? 5,
@@ -348,7 +351,10 @@ export const falInputSchemaToVideoParameters = (
  * Fit request values to the types the endpoint declares: fal takes many numeric options as string
  * enums (`duration: "5"` or `"8s"`), and rejects fields its schema does not define.
  */
-export const coerceFalInput = (input: Record<string, unknown>, schema: FalJsonSchema | undefined) => {
+export const coerceFalInput = (
+  input: Record<string, unknown>,
+  schema: FalJsonSchema | undefined,
+) => {
   const properties = schema?.properties;
   if (!properties) return input;
 

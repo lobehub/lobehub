@@ -196,6 +196,33 @@ beforeEach(() => {
   mocks.createOperationMetadata.mockResolvedValue(undefined);
 });
 
+describe('Channel history context', () => {
+  it.each([true, false])(
+    'passes history instructions only for a reserved Channel run (%s)',
+    async (channel) => {
+      const { deps } = createDeps();
+      const result = await dispatchHeteroAgent(
+        deps,
+        createCtx(
+          {
+            boundDeviceId: 'dev-1',
+            executionTarget: 'device',
+            heterogeneousProvider: { type: 'claude-code' },
+          },
+          { trigger: channel ? 'channel' : 'user' },
+        ),
+        createInput('claude-code', channel ? { reservedOperationId: 'op-channel' } : {}),
+      );
+      expect(result.success).toBe(true);
+      const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+      expect((dispatched.systemContext ?? '').includes('channel history --json')).toBe(channel);
+      expect((dispatched.systemContext ?? '').includes('Only the current request')).toBe(channel);
+      const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+      expect(signed.capabilities.includes('channel:read')).toBe(channel);
+    },
+  );
+});
+
 describe('dispatchHeteroAgent — preparation failures', () => {
   it('fails before dispatch when the operation JWT cannot be signed', async () => {
     mocks.signHeteroOperationJWT.mockRejectedValueOnce(new Error('no key'));

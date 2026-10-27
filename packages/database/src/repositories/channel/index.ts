@@ -1,32 +1,55 @@
-import type { ChannelMemberRole, ChannelVisibility } from '@lobechat/types';
+import type { ChannelMemberConfig, ChannelMemberRole, ChannelVisibility } from '@lobechat/types';
 import { and, desc, eq, isNull, or } from 'drizzle-orm';
 
+import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
-import { channelJobs, channelMembers, channelMessages, channels } from '../../schemas';
+import {
+  channelJobs,
+  channelMembers,
+  channelMessages,
+  channels,
+  channelThreads,
+} from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
-import { notTrashed } from '../../utils/softDelete';
+import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
-import { addAgentMember, requireChannelAgent } from './agent';
+import {
+  addAgentMember,
+  memberEnvironment,
+  requireAgentMember,
+  requireChannelAgent,
+} from './agent';
+import { findThread } from './delivery';
 import { ChannelError } from './error';
+import { addChannelUser, channelUserCandidates } from './people';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
-import { lockChannel } from './transaction';
+import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView } from './view';
 
 export type { ChannelAddAgentInput } from './agent';
+export {
+  CHANNEL_ROUTING_BATCH_SIZE,
+  CHANNEL_ROUTING_LEASE_MS,
+  ChannelRoutingRepository,
+} from './ChannelRoutingRepository';
 export type { ChannelClaim, ChannelClaimOptions } from './claim';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
+export { ChannelHistoryRepository } from './history';
 export type { ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelWriteOptions } from './types';
+
+/** Recycle-bin row title: the start of the thread's root message. */
+const CHANNEL_THREAD_TITLE_LENGTH = 120;
 
 const ROLE_RANK: Record<ChannelMemberRole, number> = { admin: 1, member: 0, owner: 2 };
 
@@ -113,14 +136,87 @@ export class ChannelRepository {
       minRole: 'admin',
     });
 
+  /** The channel-local device and directory of one Agent member. */
+  agentEnvironment = async (channelId: string, memberId: string) =>
+    this.write(
+      channelId,
+      async (tx) => {
+        const member = await requireAgentMember(tx, channelId, memberId);
+        // The device owner is routing data, not something the editor chooses.
+        const { deviceId, workingDirectory } = memberEnvironment(member.config);
+        return { agentId: member.agentId, deviceId, workingDirectory };
+      },
+      { minRole: 'admin' },
+    );
+
+  /**
+   * Replaces one Agent member's channel-local environment. Claimed jobs keep the
+   * environment frozen in their execution config; later claims use the new one.
+   */
+  updateAgentEnvironment = async (
+    channelId: string,
+    memberId: string,
+    config: ChannelMemberConfig,
+  ) =>
+    this.write(
+      channelId,
+      async (tx) => {
+        await requireAgentMember(tx, channelId, memberId);
+        const [member] = await tx
+          .update(channelMembers)
+          .set({ config: memberEnvironment(config) })
+          .where(eq(channelMembers.id, memberId))
+          .returning();
+        await audit(tx, channelId, 'member_environment_changed', memberId);
+        return member;
+      },
+      { minRole: 'admin' },
+    );
+
+  rename = async (channelId: string, title: string) =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const next = title.trim();
+        if (!next) throw new ChannelError('BAD_REQUEST', 'A channel name is required');
+        if (next === channel.title) return channel;
+        const [renamed] = await tx
+          .update(channels)
+          .set({ title: next })
+          .where(eq(channels.id, channelId))
+          .returning();
+        await audit(tx, channelId, 'renamed', channelId);
+        return renamed;
+      },
+      { minRole: 'admin' },
+    );
+
+  addUser = async (channelId: string, userId: string) =>
+    this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
+
+  userCandidates = async (channelId: string, search?: string) =>
+    this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
+      minRole: 'admin',
+    });
+
   detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) =>
     this.write(
       channelId,
-      async (tx, access) => ({
-        channel: access.channel,
-        ...(await readChannelView(tx, channelId, options)),
-      }),
-      { allowTrashed: true },
+      async (tx, access) => {
+        if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
+        const admin = hasRole(access.member.role, 'admin');
+        const view = await readChannelView(tx, channelId, options);
+        return {
+          channel: { ...access.channel, canDelete: admin },
+          ...view,
+          // Mirrors `stop`: the requester or an admin.
+          jobs: view.jobs.map(({ requesterMemberId, ...job }) => ({
+            ...job,
+            canStop: admin || requesterMemberId === access.member.id,
+          })),
+        };
+      },
+      { allowArchived: true, allowTrashed: true },
     );
 
   createThread = async (channelId: string, input: Parameters<typeof createChannelThread>[2]) =>
@@ -140,19 +236,22 @@ export class ChannelRepository {
           .where(eq(channelMembers.id, member.id));
         return lastReadSequence;
       },
-      { allowTrashed: true },
+      { allowArchived: true, allowTrashed: true },
     );
 
-  /** Active channels the caller belongs to in the current scope, newest first. */
-  list = async (): Promise<ChannelItem[]> => {
+  /**
+   * Channels the caller belongs to in the current scope, newest first. Archived ones are
+   * included with their `status`, so they stay readable outside the active list.
+   */
+  list = async (): Promise<Array<ChannelItem & { canDelete: boolean }>> => {
     const rows = await this.db
-      .select({ channel: channels })
+      .select({ channel: channels, role: channelMembers.role })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
-    return rows.map((row) => row.channel);
+    return rows.map(({ channel, role }) => ({ ...channel, canDelete: hasRole(role, 'admin') }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */
@@ -194,6 +293,8 @@ export class ChannelRepository {
         throw new ChannelError('FORBIDDEN', `Requires the ${minRole} role in this channel`);
       if (access.channel.isDeleted && !options.allowTrashed)
         throw new ChannelError('CONFLICT', 'Channel is in the trash');
+      if (access.channel.status === 'archived' && !options.allowArchived)
+        throw new ChannelError('CONFLICT', 'Channel is archived');
 
       return fn(tx, access);
     });
@@ -203,14 +304,16 @@ export class ChannelRepository {
     this.write(channelId, (tx, access) => sendMessage(tx, access, input));
 
   /**
-   * Stops one job (its requester or an admin) or a whole branch (admins). Returns the jobs
-   * whose writer is still held; the caller must stop them physically.
+   * Stops one job (its requester or an admin) or a branch: everything for admins, only the
+   * caller's own requests for members. Returns the jobs whose writer is still held; the
+   * caller must stop them physically.
    */
   stop = async (channelId: string, scope: ChannelStopScope): Promise<ChannelJobItem[]> =>
     this.write(
       channelId,
       async (tx, { member }) => {
-        if ('jobId' in scope && !hasRole(member.role, 'admin')) {
+        const admin = hasRole(member.role, 'admin');
+        if ('jobId' in scope && !admin) {
           const [job] = await tx
             .select({ requesterMemberId: channelJobs.requesterMemberId })
             .from(channelJobs)
@@ -218,9 +321,153 @@ export class ChannelRepository {
           if (job && job.requesterMemberId !== member.id)
             throw new ChannelError('FORBIDDEN', 'Only the requester or an admin can stop this job');
         }
-        return stopScope(tx, channelId, scope);
+        return stopScope(
+          tx,
+          channelId,
+          scope,
+          'threadId' in scope && !admin ? { memberId: member.id, userId: this.userId } : undefined,
+        );
       },
-      { allowTrashed: true, minRole: 'threadId' in scope ? 'admin' : 'member' },
+      { allowArchived: true, allowTrashed: true },
+    );
+
+  /**
+   * Archive: keep the channel for good, readable but closed to messages and Agent work. Stops
+   * everything in it like a deletion and keeps receipts until the coordinator confirms exit.
+   */
+  archive = async (channelId: string): Promise<ChannelJobItem[]> =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const writers = await stopScope(tx, channelId, { all: true });
+        if (channel.status !== 'archived') {
+          await tx.update(channels).set({ status: 'archived' }).where(eq(channels.id, channelId));
+          await audit(tx, channelId, 'archived', channelId);
+        }
+        return writers;
+      },
+      { allowArchived: true, minRole: 'admin' },
+    );
+
+  /** Reopens an archived channel. Work stopped by the archive stays stopped. */
+  unarchive = async (channelId: string): Promise<void> =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        if (channel.status === 'active') return;
+        await tx.update(channels).set({ status: 'active' }).where(eq(channels.id, channelId));
+        await audit(tx, channelId, 'unarchived', channelId);
+      },
+      { allowArchived: true, minRole: 'admin' },
+    );
+
+  /** Archive a branch: its history stays readable, but it takes no replies and leaves Agent context. */
+  archiveThread = async (channelId: string, threadId: string): Promise<ChannelJobItem[]> =>
+    this.write(
+      channelId,
+      async (tx) => {
+        const thread = await findThread(tx, channelId, threadId);
+        const writers = await stopScope(tx, channelId, { threadId });
+        if (thread?.status !== 'archived') {
+          await tx
+            .update(channelThreads)
+            .set({ status: 'archived' })
+            .where(eq(channelThreads.id, threadId));
+          await audit(tx, channelId, 'thread_archived', threadId);
+        }
+        return writers;
+      },
+      { minRole: 'admin' },
+    );
+
+  unarchiveThread = async (channelId: string, threadId: string): Promise<void> =>
+    this.write(
+      channelId,
+      async (tx) => {
+        const thread = await findThread(tx, channelId, threadId);
+        if (thread?.status === 'active') return;
+        await tx
+          .update(channelThreads)
+          .set({ status: 'active' })
+          .where(eq(channelThreads.id, threadId));
+        await audit(tx, channelId, 'thread_unarchived', threadId);
+      },
+      { minRole: 'admin' },
+    );
+
+  /** Soft-delete under the same lock as dispatch/publication; retain receipts until exit. */
+  remove = async (channelId: string): Promise<ChannelJobItem[]> =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const writers = await stopScope(tx, channelId, { all: true });
+        if (!channel.isDeleted) {
+          const deletedAt = new Date();
+          await tx.update(channels).set(trashStamp(deletedAt)).where(eq(channels.id, channelId));
+          await new TrashModel(this.db, this.userId, this.workspaceId ?? undefined).register(
+            {
+              deletedAt,
+              root: {
+                projectId: channel.projectId,
+                resourceId: channel.id,
+                resourceType: 'channel',
+                title: channel.title,
+              },
+            },
+            tx,
+          );
+          await audit(tx, channelId, 'trashed', channelId);
+        }
+        return writers;
+      },
+      { allowArchived: true, allowTrashed: true, minRole: 'admin' },
+    );
+
+  /**
+   * Move a branch to the recycle bin. Its messages and job receipts stay intact for restore;
+   * the thread is registered as its own root, like a message under a topic.
+   */
+  removeThread = async (channelId: string, threadId: string): Promise<void> =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const [row] = await tx
+          .select({ root: channelMessages.content, thread: channelThreads })
+          .from(channelThreads)
+          .innerJoin(
+            channelMessages,
+            and(
+              eq(channelMessages.channelId, channelThreads.channelId),
+              eq(channelMessages.id, channelThreads.rootMessageId),
+            ),
+          )
+          .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.id, threadId)));
+        if (!row) throw new ChannelError('NOT_FOUND', 'Thread not found');
+        // A retry after a scheduling failure must still be authorized, but must not
+        // repeat the stamp or release a writer before the coordinator confirms exit.
+        if (row.thread.isDeleted) return;
+        await stopScope(tx, channelId, { threadId });
+        const deletedAt = new Date();
+        await tx
+          .update(channelThreads)
+          .set(trashStamp(deletedAt))
+          .where(eq(channelThreads.id, threadId));
+        await new TrashModel(this.db, this.userId, this.workspaceId ?? undefined).register(
+          {
+            deletedAt,
+            root: {
+              meta: { parentTitle: channel.title },
+              projectId: channel.projectId,
+              resourceId: threadId,
+              resourceType: 'channelThread',
+              title: row.root.trim().slice(0, CHANNEL_THREAD_TITLE_LENGTH) || null,
+            },
+          },
+          tx,
+        );
+        await audit(tx, channelId, 'thread_trashed', threadId);
+      },
+      { minRole: 'admin' },
     );
 
   /** Sends an unassigned message back to Jev. Its author or an admin may retry. */

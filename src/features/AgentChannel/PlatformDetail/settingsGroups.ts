@@ -71,10 +71,12 @@ export interface WakeSection {
  *
  * - keywords: words that wake the bot with no @
  * - channels: where it may join a conversation nobody addressed to it
- * - pace: how soon and how often it speaks up on its own
- * - judgement: how it decides a message is for it. The prompt comes first: it is the part people
- *   write; the score threshold is the dial behind it. Offering help unasked follows: the same kind
- *   of judgement, about the owner's own remarks.
+ * - pace: how soon and how often it speaks up on its own, as a preset; `custom` opens the numbers
+ *   (and how sure it must be that a message right after its own reply is still for it)
+ * - judgement (shown as "initiative"): when it may speak up without being called. In the order a
+ *   person thinks about it: for me (the owner's own remarks), for others (a message plainly for
+ *   the bot that nobody addressed to it), then the custom instructions behind both. Each is a
+ *   switch with its dial or text area opening under it.
  */
 const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   ['keywords', ['watchKeywords']],
@@ -82,7 +84,9 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   [
     'pace',
     [
+      'botWakePace',
       'botWakeWindowSeconds',
+      'botWakeClassifierThreshold',
       'botWakeMaxSilentWakes',
       'botWakeOwnerPresenceSeconds',
       'botWakeSchedulerMode',
@@ -93,10 +97,12 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   [
     'judgement',
     [
-      'botWakeCustomInstructions',
-      'botWakeClassifierThreshold',
       'botWakeProactiveEnabled',
       'botWakeProactiveThreshold',
+      'botWakeClassifierInitiateEnabled',
+      'botWakeClassifierInitiateThreshold',
+      'botWakeCustomInstructionsEnabled',
+      'botWakeCustomInstructions',
     ],
   ],
 ];

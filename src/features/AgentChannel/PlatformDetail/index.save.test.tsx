@@ -74,7 +74,8 @@ const config: CurrentConfig = {
   enabled: true,
   id: 'provider-1',
   platform: 'discord',
-  settings: { botWakeEnabled: true, showUsageStats: false },
+  // A custom pace, so the numbers are on the page to edit.
+  settings: { botWakeEnabled: true, botWakePace: 'custom', showUsageStats: false },
 };
 
 const en = agentEn as Record<string, string>;
@@ -150,14 +151,14 @@ describe('PlatformDetail saving', () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />);
     openTab(en['channel.tab.wake']);
 
-    // Edit the silent-wake limit (Pace) and the sensitivity (Judgement).
+    // Edit the silent-wake limit (Pace) and the help-others sensitivity (Initiative).
     const limit = screen.getByRole('textbox', {
       name: new RegExp(en['channel.botWakeMaxSilentWakes']),
     });
     fireEvent.change(limit, { target: { value: '5' } });
     fireEvent.blur(limit);
     const sensitivity = screen.getByRole('textbox', {
-      name: new RegExp(en['channel.botWakeClassifierThreshold']),
+      name: new RegExp(en['channel.botWakeClassifierInitiateThreshold']),
     });
     fireEvent.change(sensitivity, { target: { value: '0.9' } });
     fireEvent.blur(sensitivity);
@@ -174,11 +175,11 @@ describe('PlatformDetail saving', () => {
     const [, , patch] = mocks.updateBotProvider.mock.calls[0];
     expect(patch.settings.botWakeMaxSilentWakes).toBe(5);
     // The sensitivity is edited but not saved: the write carries the stored value.
-    expect(patch.settings.botWakeClassifierThreshold).toBe(0.5);
+    expect(patch.settings.botWakeClassifierInitiateThreshold).toBe(0.65);
     expect(patch).not.toHaveProperty('credentials');
     expect(mocks.connectBot).not.toHaveBeenCalled();
 
-    // Judgement still has its unsaved edit.
+    // Initiative still has its unsaved edit.
     await waitFor(() => expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(1));
     expect(sensitivity).toHaveValue('0.9');
   });

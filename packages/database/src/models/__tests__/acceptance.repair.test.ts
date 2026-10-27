@@ -206,9 +206,11 @@ describe('AcceptanceModel · deletion', () => {
 
     await model.deleteBySubjects('task', []);
 
-    expect(await serverDB.query.acceptances.findFirst({
-      where: eq(acceptances.id, acceptance.id),
-    })).toBeTruthy();
+    expect(
+      await serverDB.query.acceptances.findFirst({
+        where: eq(acceptances.id, acceptance.id),
+      }),
+    ).toBeTruthy();
   });
 
   it('deletes the given subjects inside the caller scope only', async () => {

@@ -82,8 +82,11 @@ describe('ChannelExecutionRepository', () => {
       workingDirectory: '/repo',
       writerHeld: true,
     });
+    // Trace storage derives the Agent and topic from the operation ID, as for ordinary runs.
+    expect(claim?.job.operationId).toMatch(
+      new RegExp(`^op_\\d+_${agent.agentId}_${claim?.topic.id}_[\\dA-Za-z]{8}$`),
+    );
     expect(claim?.job.manifest).toEqual({
-      afterSequence: 0,
       cutoffSequence: 1,
       requestMessageId: message.id,
       requesterMemberId: member.id,
@@ -95,15 +98,9 @@ describe('ChannelExecutionRepository', () => {
       expect.objectContaining({ author: { id: fixture.memberId, name: 'mia', type: 'user' } }),
     ]);
 
-    await execution.accepted(channel.id, job.id, {
-      nativeSessionId: 'session-1',
-      nativeTurnId: 'turn-1',
-    });
+    await execution.accepted(channel.id, job.id);
     expect((await jobById(job.id)).acceptedAt).toBeInstanceOf(Date);
-    const [topic] = await db.select().from(topics).where(eq(topics.id, claim!.topic.id));
-    expect(topic.metadata?.heteroSessionId).toBe('session-1');
     expect(await operationOf(job.id)).toMatchObject({
-      metadata: { nativeTurnId: 'turn-1' },
       status: 'running',
       topicId: claim!.topic.id,
     });
@@ -143,7 +140,11 @@ describe('ChannelExecutionRepository', () => {
   it('continues the Agent topic and its hetero session with only new public input', async () => {
     const { agent, asMember, channel, job } = await mentionAgent();
     const first = (await execution.claim(channel.id, job.id, lease))!;
-    await execution.accepted(channel.id, job.id, { nativeSessionId: 'session-1' });
+    await db
+      .update(topics)
+      .set({ metadata: { heteroSessionId: 'session-1' } })
+      .where(eq(topics.id, first.topic.id));
+    await execution.accepted(channel.id, job.id);
     await execution.saveDraft(channel.id, job.id, 'Done');
     await execution.publish(channel.id, job.id);
     await execution.releaseWriter(channel.id, job.id);
@@ -169,12 +170,12 @@ describe('ChannelExecutionRepository', () => {
     const threadAgent = await fixture.addAgent(channel.id, 'Thread', nativeConfig);
     const send = (requestKey: string, input: Partial<ChannelSendInput> = {}) =>
       asMember.send(channel.id, { content: requestKey, requestKey, routing: 'jev', ...input });
-    const root = await send('root');
+    const root = await send('root', { mentions: [member.id] });
     const [thread] = await db
       .insert(channelThreads)
       .values({ channelId: channel.id, rootMessageId: root.id, rootSequence: root.sequence })
       .returning();
-    await send('main-after-root');
+    await send('main-after-root', { mentions: [member.id] });
     const mainRequest = await send('main-request', { mentions: [mainAgent.id] });
     const threadRequest = await send('thread-request', {
       mentions: [threadAgent.id],
@@ -193,7 +194,6 @@ describe('ChannelExecutionRepository', () => {
 
     // The job stores where its input ends, so its size does not grow with the branch.
     expect(mainClaim.job.manifest).toEqual({
-      afterSequence: 0,
       cutoffSequence: mainRequest.sequence,
       requestMessageId: mainRequest.id,
       requesterMemberId: member.id,
@@ -208,8 +208,8 @@ describe('ChannelExecutionRepository', () => {
     });
     const contents = async (jobId: string) =>
       (await execution.input(channel.id, jobId)).map((message) => message.content);
-    expect(await contents(mainJob.id)).toEqual(['root', 'main-after-root', 'main-request']);
-    expect(await contents(threadJob.id)).toEqual(['root', 'thread-request']);
+    expect(await contents(mainJob.id)).toEqual(['main-request']);
+    expect(await contents(threadJob.id)).toEqual(['thread-request']);
   });
 
   it('answers in message order and holds one writer per member', async () => {
@@ -223,12 +223,38 @@ describe('ChannelExecutionRepository', () => {
     const [nextJob] = await jobsOf(db, next.id);
 
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
+    expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: 'member_busy' });
     expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
+    expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: 'member_busy' });
 
-    await execution.fail(channel.id, job.id, { message: 'boom', notSubmitted: true });
+    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
     expect(await jobById(job.id)).toMatchObject({ status: 'failed', writerHeld: false });
     expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();
+    expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: null });
+  });
+
+  it('claims independent Agents concurrently while keeping a shared directory exclusive', async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const first = await fixture.addAgent(channel.id, 'First', deviceConfig());
+    const second = await fixture.addAgent(channel.id, 'Second', deviceConfig());
+    const native = await fixture.addAgent(channel.id, 'Native', nativeConfig);
+    const message = await asMember.send(channel.id, {
+      content: 'Together',
+      mentions: [first.id, second.id, native.id],
+      requestKey: 'parallel',
+      routing: 'jev',
+    });
+    const jobs = await jobsOf(db, message.id);
+    const claims = await Promise.all(jobs.map((job) => execution.claim(channel.id, job.id, lease)));
+    expect(claims.filter(Boolean)).toHaveLength(2);
+    expect(claims.some((claim) => claim?.member.id === native.id)).toBe(true);
+    const blocked = jobs[claims.findIndex((claim) => !claim)];
+    expect(await jobById(blocked.id)).toMatchObject({
+      blockedCode: 'directory_locked',
+      status: 'queued',
+      writerHeld: false,
+    });
   });
 
   it('blocks a job while another channel uses the same device directory', async () => {
@@ -317,7 +343,7 @@ describe('ChannelExecutionRepository', () => {
   it('fails the job when the writer ends without a reply', async () => {
     const { channel, job } = await mentionAgent();
     await execution.claim(channel.id, job.id, lease);
-    await execution.accepted(channel.id, job.id, { nativeSessionId: 's' });
+    await execution.accepted(channel.id, job.id);
 
     await execution.releaseWriter(channel.id, job.id);
 
@@ -345,9 +371,9 @@ describe('ChannelExecutionRepository', () => {
     });
 
     // A late receipt cannot revive it.
-    await expect(
-      execution.accepted(channel.id, job.id, { nativeSessionId: 's' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
     expect((await jobById(job.id)).acceptedAt).toBeNull();
 
     await execution.releaseWriter(channel.id, job.id);
@@ -370,9 +396,9 @@ describe('ChannelExecutionRepository', () => {
 
     await execution.executionUnknown(channel.id, job.id, 'receipt lost');
 
-    await expect(
-      execution.accepted(channel.id, job.id, { nativeSessionId: 's' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
     await expect(execution.publish(channel.id, job.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -381,7 +407,7 @@ describe('ChannelExecutionRepository', () => {
   it('fails an accepted draft whose execution became unknown', async () => {
     const { channel, job } = await mentionAgent();
     await execution.claim(channel.id, job.id, lease);
-    await execution.accepted(channel.id, job.id, { nativeSessionId: 's' });
+    await execution.accepted(channel.id, job.id);
     await execution.saveDraft(channel.id, job.id, 'Done');
     const { operationId } = await jobById(job.id);
     await db
@@ -428,7 +454,7 @@ describe('ChannelExecutionRepository', () => {
   it('ignores a late failure once the job published or settled', async () => {
     const { channel, job } = await mentionAgent();
     await execution.claim(channel.id, job.id, lease);
-    await execution.accepted(channel.id, job.id, { nativeSessionId: 's' });
+    await execution.accepted(channel.id, job.id);
     await execution.saveDraft(channel.id, job.id, 'Done');
     const replyId = await execution.publish(channel.id, job.id);
 
@@ -465,7 +491,7 @@ describe('ChannelExecutionRepository', () => {
   it('keeps an accepted draft publishable after the writer is released', async () => {
     const { channel, job } = await mentionAgent();
     await execution.claim(channel.id, job.id, lease);
-    await execution.accepted(channel.id, job.id, { nativeSessionId: 's' });
+    await execution.accepted(channel.id, job.id);
     await execution.saveDraft(channel.id, job.id, 'Done');
 
     await execution.releaseWriter(channel.id, job.id);
@@ -477,19 +503,19 @@ describe('ChannelExecutionRepository', () => {
 
   it('refuses unclaimed or revoked jobs and trashed channels', async () => {
     const { channel, job } = await mentionAgent();
-    await expect(
-      execution.accepted(channel.id, job.id, { nativeSessionId: 's' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
 
     await execution.claim(channel.id, job.id, lease);
     await expect(execution.publish(channel.id, job.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
 
-    await execution.fail(channel.id, job.id, { message: 'boom', notSubmitted: true });
-    await expect(
-      execution.accepted(channel.id, job.id, { nativeSessionId: 's' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
+    await expect(execution.accepted(channel.id, job.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
 
     await db
       .update(channels)
@@ -509,7 +535,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.heartbeat(job.id, lease)).toBe(true);
     expect(await execution.heartbeat(job.id, { ...lease, leaseOwner: 'other' })).toBe(false);
 
-    await execution.fail(channel.id, job.id, { message: 'boom', notSubmitted: true });
+    expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
     expect(await execution.heartbeat(job.id, lease)).toBe(false);
   });
 });

@@ -25,6 +25,11 @@ export type IFeatureFlagsState = {
    */
   enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
+  /**
+   * Multi-agent Channels (`channel`). Off by default: the sidebar section and Channel pages are
+   * hidden and the Channel APIs answer FORBIDDEN.
+   */
+  enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
    * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by

@@ -2,6 +2,7 @@ import type { TrashResourceType } from '@lobechat/types';
 import {
   BotIcon,
   ChartNoAxesColumnIcon,
+  GitBranchIcon,
   HashIcon,
   LayoutDashboardIcon,
   MessageSquareIcon,
@@ -10,6 +11,8 @@ import {
 /** Icon per recycle-bin resource kind — mirrors the sidebar / recents glyphs. */
 export const TRASH_TYPE_ICON: Record<TrashResourceType, typeof HashIcon> = {
   agent: BotIcon,
+  channel: HashIcon,
+  channelThread: GitBranchIcon,
   dashboard: LayoutDashboardIcon,
   message: MessageSquareIcon,
   topic: HashIcon,
@@ -23,4 +26,6 @@ export const TRASH_TYPE_ORDER: TrashResourceType[] = [
   'message',
   'widget',
   'dashboard',
+  'channel',
+  'channelThread',
 ];
