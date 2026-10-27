@@ -14,6 +14,7 @@ import { log } from '../../../utils/logger';
 import { assertReportLanguage, ingestLanguageFields, languageSummary } from '../language';
 import { projectEnsureInput, resolveAcceptanceProject, warnIfFiledElsewhere } from '../project';
 import {
+  type AcceptanceSubjectRef,
   type EvidenceType,
   findIdenticalLatestRound,
   interactionCostFromReportDir,
@@ -46,6 +47,8 @@ export interface IngestReportOptions {
   acceptance?: string;
   /** Run every local check, including the report language, then stop before publishing. */
   dryRun?: boolean;
+  /** Local publication's stable subject, used only without an authored subject. Not a CLI flag. */
+  fallbackSubject?: AcceptanceSubjectRef;
   goal?: string;
   json?: boolean | string;
   open?: boolean;
@@ -104,7 +107,8 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
     process.exit(1);
   }
 
-  // Explicit subject input wins, then result.json, then the authoring topic.
+  // Explicit subject input wins, then result.json, then the local publisher's
+  // stable identity (if any), then the authoring topic.
   // An external repository has none of those, so create a first-class
   // standalone subject instead of making the caller manufacture a Task ID.
   let subject = subjectFromResult(result);
@@ -122,10 +126,10 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
     log.error('result.json `subject` is malformed (expected "type:id" or {type,id})');
     process.exit(1);
   } else if (!requestedAcceptanceId && !subject) {
-    const ref = subjectFromEnv();
+    const ref = options.fallbackSubject ?? subjectFromEnv();
     if (ref) subject = { ref };
     // Only the ambient topic may be folded onto its Task; an explicit subject stays exact.
-    foldTaskRunTopic = Boolean(ref);
+    foldTaskRunTopic = !options.fallbackSubject && Boolean(ref);
   }
   if (!requestedAcceptanceId && !subject) {
     subject = {

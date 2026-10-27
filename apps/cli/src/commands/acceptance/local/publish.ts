@@ -164,7 +164,9 @@ export async function publishAction(target: string, options: PublishOptions) {
         ? { acceptance: remote.acceptanceId }
         : {
             requirement: info.requirement ?? undefined,
-            ...(subject.type === 'standalone' ? {} : { subject: `${subject.type}:${subject.id}` }),
+            ...(subject.type === 'standalone'
+              ? { fallbackSubject: { subjectId: info.id, subjectType: 'standalone' as const } }
+              : { subject: `${subject.type}:${subject.id}` }),
           }),
       quiet: true,
       source: options.source ?? 'agent-testing',

@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../../../utils/logger';
 import { registerVerifyCommand } from '../deprecatedVerify';
+import { registerAcceptanceCommands } from '../index';
+import { loadLocalAcceptance } from '../local/localAcceptance';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -162,6 +165,70 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       verifyRunId: 'run-new',
     });
   });
+
+  it.each([undefined, 'topic:authored-topic', { id: 'authored-task', type: 'task' }])(
+    'publishes local histories independently of the ambient topic, preserving authored subject %j',
+    async (authoredSubject) => {
+      const acceptances = new Map<string, { id: string; subjectId: string; subjectType: string }>();
+      mockTrpcClient.acceptance.ensure.mutate.mockImplementation(
+        async (input: { subjectId: string; subjectType: string }) => {
+          const acceptance = { ...input, id: `acceptance-${input.subjectId}`, status: 'delivered' };
+          acceptances.set(acceptance.id, acceptance);
+          return acceptance;
+        },
+      );
+      mockTrpcClient.acceptance.getBundle.query.mockImplementation(
+        async ({ id }: { id: string }) => ({
+          acceptance: acceptances.get(id),
+        }),
+      );
+      vi.stubEnv('HOME', dir);
+      vi.stubEnv('LOBEHUB_ACCEPTANCE_DOWNLOADS', path.join(dir, 'Downloads'));
+
+      const publishedIds = [];
+      // Same directory name in two projects must not collapse two independent histories.
+      for (const project of ['first', 'second']) {
+        const acceptanceDir = path.join(dir, project, 'standalone-demo');
+        for (const round of ['20260101-090000-first', '20260102-090000-second']) {
+          const roundDir = path.join(acceptanceDir, round);
+          await mkdir(roundDir, { recursive: true });
+          await writeFile(
+            path.join(roundDir, 'result.json'),
+            JSON.stringify({ cases: [], subject: authoredSubject, title: 'Local delivery' }),
+          );
+        }
+        const { info } = loadLocalAcceptance(acceptanceDir, { create: true });
+        const program = new Command();
+        program.exitOverride();
+        registerAcceptanceCommands(program);
+        await program.parseAsync([
+          'node',
+          'lh',
+          'acceptance',
+          'publish',
+          acceptanceDir,
+          '--no-reviews',
+          '--json',
+        ]);
+
+        const published = JSON.parse(String(consoleSpy.mock.calls.at(-1)![0]));
+        const expectedSubjectId = authoredSubject
+          ? typeof authoredSubject === 'string'
+            ? 'authored-topic'
+            : 'authored-task'
+          : info.id;
+        expect(published.acceptanceId).toBe(`acceptance-${expectedSubjectId}`);
+        expect(published.published).toHaveLength(2);
+        const stored = JSON.parse(
+          await readFile(path.join(acceptanceDir, 'acceptance.json'), 'utf8'),
+        );
+        expect(stored.remote.acceptanceId).toBe(published.acceptanceId);
+        expect(stored.remote.rounds).toHaveLength(2);
+        publishedIds.push(published.acceptanceId);
+      }
+      expect(new Set(publishedIds).size).toBe(authoredSubject ? 1 : 2);
+    },
+  );
 
   it('reuses the asset when the acceptance row is keyed by criterion rather than plan item', async () => {
     mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
