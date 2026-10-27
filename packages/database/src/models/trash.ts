@@ -156,7 +156,7 @@ const privateRootWhere = (): SQL =>
     ),
     // COALESCE: a NULL here would turn the whole OR, and its NOT, into NULL.
     sql`COALESCE((${trashItems.meta} ->> 'private') = 'true', false)`,
-    and(sql`(${trashItems.meta} -> 'private') IS NULL`, livePrivateWhere()),
+    and(sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`, livePrivateWhere()),
   ) as SQL;
 
 const toTrashItem = (row: TrashItemRow): TrashItem => ({
