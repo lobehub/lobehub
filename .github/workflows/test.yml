@@ -68,7 +68,6 @@ jobs:
             .github/scripts/size-gate-comment.test.cjs \
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
-            .github/scripts/gitWithRetry.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
