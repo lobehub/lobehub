@@ -71,6 +71,35 @@ describe('resolveMarkdownSnapshotContent', () => {
     );
   });
 
+  it('renders a body whose only formatting the snapshot dropped', () => {
+    expect(
+      resolveMarkdownSnapshotContent({
+        content: '@Lin **部署** 完成，_详见_ 链接',
+        editorData: snapshot(paragraph(mention('Lin', 'user_b'), text(' 部署 完成，详见 链接'))),
+      }),
+    ).toBe('<mention name="Lin" id="user_b" /> **部署** 完成，_详见_ 链接');
+  });
+
+  it('restores a mention at its own position, not at an earlier literal @Name', () => {
+    expect(
+      resolveMarkdownSnapshotContent({
+        content: '`@Lin` is syntax; @Lin review **this**',
+        editorData: snapshot(
+          paragraph(text('`@Lin` is syntax; '), mention('Lin', 'user_b'), text(' review this')),
+        ),
+      }),
+    ).toBe('`@Lin` is syntax; <mention name="Lin" id="user_b" /> review **this**');
+  });
+
+  it('keeps an editor snapshot whose body only escapes literal markers', () => {
+    expect(
+      resolveMarkdownSnapshotContent({
+        content: 'snake\\_case and 2 \\* 3 \\* 4\n\nfine',
+        editorData: snapshot(paragraph(text('snake_case and 2 * 3 * 4')), paragraph(text('fine'))),
+      }),
+    ).toBeUndefined();
+  });
+
   it('keeps a body that already serializes its mention tags', () => {
     const tagged = content.replace('@Arvin', '<mention name="Arvin" id="user_a" />');
 
