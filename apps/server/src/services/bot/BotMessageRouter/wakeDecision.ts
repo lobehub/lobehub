@@ -35,6 +35,7 @@ import {
   createDutyPolicy,
   createWakePolicySet,
   DUTY_POLICY_ID,
+  OWNER_RULES_POLICY_ID,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type {
@@ -846,10 +847,20 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         if (!rulesEnforce || ruleDecision.verdict !== 'allow' || ruleDecision.fastPath) {
           // Nothing addressed the bot and no rule allowed it: not named, outside the follow-up
           // window. Only when no rule had an opinion either way, whatever the rules' mode: a deny
-          // (a channel list, the silent-wake budget) still keeps the bot out.
+          // (a channel list, the silent-wake budget) still keeps the bot out. Owner presence is
+          // the exception: it keeps the bot out of chatter the owner can answer, not off its
+          // duties. Logging a feature request does not wait for the owner to go quiet.
+          const onlyOwnerPresent =
+            ruleDecision.verdict === 'deny' &&
+            ruleDecision.decidedBy === OWNER_RULES_POLICY_ID &&
+            ruleDecision.reason === 'owner-present' &&
+            ruleDecision.records.every(
+              (record) => record.policyId === OWNER_RULES_POLICY_ID || record.verdict === 'abstain',
+            );
           const undecided =
             !ruleDecision.fastPath &&
-            ruleDecision.records.every((record) => record.verdict === 'abstain');
+            (onlyOwnerPresent ||
+              ruleDecision.records.every((record) => record.verdict === 'abstain'));
           if (!undecided || !dutyPolicy) {
             // An enforcing deny is what kept the bot quiet: keep its verdicts, so the row names the
             // rule that stopped the wake instead of replaying every policy as if it only watched.

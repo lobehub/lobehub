@@ -212,6 +212,31 @@ describe('bot-wake recorder: a message within the bot duties', () => {
     expect(judge).not.toHaveBeenCalled();
   });
 
+  // The owner chatting in the channel kept every feature request in it from being logged.
+  it('still steps in on its duties while the owner is around, and nowhere else', async () => {
+    const ownerAround = () => fakeState({ ownerLastSpokeAt: Date.now() - 10_000 });
+    const judge = dutyJudge(0.9);
+
+    await expect(
+      make(DUTIES(), ownerAround(), { dutyJudge: judge }).initiate(request()),
+    ).resolves.toMatchObject({ reason: 'in-duty' });
+    expect(judge).toHaveBeenCalledOnce();
+
+    // Without duties, owner presence still keeps the bot out of the chatter.
+    await expect(
+      make({ mode: 'enforce' }, ownerAround()).initiate(request()),
+    ).resolves.toBeUndefined();
+    // A deny before presence (the budget) still wins over the duties.
+    await expect(
+      make(
+        DUTIES('enforce', { rules: { maxSilentWakes: 2 } }),
+        fakeState({ ownerLastSpokeAt: Date.now() - 10_000, silentWakes: 2 }),
+        { dutyJudge: judge },
+      ).initiate(request()),
+    ).resolves.toBeUndefined();
+    expect(judge).toHaveBeenCalledOnce();
+  });
+
   it('leaves its name and a confirmed follow-up to their own paths', async () => {
     const judge = dutyJudge(1);
     const named = make(DUTIES(), fakeState(), { dutyJudge: judge });

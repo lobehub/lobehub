@@ -63,8 +63,9 @@ const degraded = (reason: string): WakePolicyResult => ({
  *
  * Use when:
  * - Nothing else woke the bot: it was not named, not @-mentioned, outside the follow-up window,
- *   and no rule denied the message. The recorder's `initiate` runs it last; it is not part of the
- *   policy set the other paths evaluate.
+ *   and no rule denied the message but owner presence, which keeps the bot out of chatter, not
+ *   off its duties. The recorder's `initiate` runs it last; it is not part of the policy set the
+ *   other paths evaluate.
  *
  * Expects:
  * - `rules.duties.text` is set; without duties the recorder does not build this policy
