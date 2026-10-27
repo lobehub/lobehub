@@ -353,6 +353,30 @@ describe('TrashModel', () => {
         ['agt_private', 'chn_private', 'msg_private', 'tpc_private', privateWidget.id].sort(),
       );
     });
+
+    it('keeps a root whose source or project is gone off the public side', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB
+        .insert(agents)
+        .values({ id: 'agt_gone', userId, visibility: 'public', workspaceId });
+      await serverDB.insert(topics).values({ id: 'tpc_shared', userId, workspaceId });
+      for (const [resourceId, resourceType, projectId] of [
+        ['agt_gone', 'agent', null],
+        ['tpc_shared', 'topic', 'proj_removed'],
+      ] as const) {
+        await wsModel.register({
+          deletedAt: at('2026-08-01T00:00:00Z'),
+          root: { projectId, resourceId, resourceType },
+        });
+      }
+      // Removed outside the trash: the source row, and the recorded project.
+      await serverDB.delete(agents).where(eq(agents.id, 'agt_gone'));
+
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId).sort();
+      expect(await sideIds('public')).toEqual([]);
+      expect(await sideIds('private')).toEqual(['agt_gone', 'tpc_shared']);
+    });
   });
 
   describe('project filter', () => {

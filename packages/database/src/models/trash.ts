@@ -91,6 +91,21 @@ const privateChannel = (id: AnyPgColumn) =>
 const uuidResourceId = (type: TrashResourceType) =>
   sql`(CASE WHEN ${trashItems.resourceType} = ${type} THEN ${trashItems.resourceId}::uuid END)`;
 
+/** The root's source row is gone. */
+const missingSourceWhere = (): SQL =>
+  or(
+    ...(
+      Object.entries(ROOT_TABLES) as [TrashResourceType, (typeof ROOT_TABLES)[TrashResourceType]][]
+    ).map(([type, source]) =>
+      and(
+        eq(trashItems.resourceType, type),
+        type === 'widget' || type === 'dashboard'
+          ? sql`NOT EXISTS (SELECT 1 FROM ${source.table} WHERE ${source.id} = ${uuidResourceId(type)})`
+          : sql`NOT EXISTS (SELECT 1 FROM ${source.table} WHERE ${source.id} = ${trashItems.resourceId})`,
+      ),
+    ),
+  ) as SQL;
+
 /**
  * Whether a registry row is private in its workspace: the resource itself, or
  * an agent, group, project or channel it lives under, is visible to its creator
@@ -98,9 +113,19 @@ const uuidResourceId = (type: TrashResourceType) =>
  * Read from the source rows at query time — they stay in place while trashed —
  * so rows registered before this predicate existed are classified too, and a
  * root is never shown to the workspace because its snapshot missed a parent.
+ *
+ * It fails closed: a root whose source row, or recorded project, was removed
+ * outside the trash (a hard delete or an FK cascade) can no longer prove it
+ * was shared, so it stays on its deleter's private side until the sweep
+ * prunes it.
  */
 const privateRootWhere = (): SQL =>
   or(
+    missingSourceWhere(),
+    and(
+      sql`${trashItems.projectId} IS NOT NULL`,
+      sql`NOT EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${trashItems.projectId})`,
+    ),
     privateProject(trashItems.projectId),
     and(eq(trashItems.resourceType, 'agent'), privateAgent(trashItems.resourceId)),
     and(eq(trashItems.resourceType, 'topic'), privateTopic(trashItems.resourceId)),
