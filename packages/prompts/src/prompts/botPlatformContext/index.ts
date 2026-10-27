@@ -134,7 +134,7 @@ const followupHint = ({ participants = [], score }: NonNullable<BotPlatformInfo[
     participants.length > 0
       ? ` Also taking part lately: ${participants.map(describeParticipant).join(', ')}.`
       : '',
-    ` You are one participant among several, not the one everyone is talking to. If the message is addressed to someone else, or others are leading the discussion, end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. Speak only when the message is clearly for you, or the conversation needs something only you can add.`,
+    ` You are one participant among several, not the one everyone is talking to, and being woken is not a request to answer. Judge for yourself, the way a teammate who just spoke would: does this conversation need a reply from you right now? Reply when it does: the message is meant for you, or what you have to say changes something for the people here. If the message is addressed to someone else, only acknowledges you, or others are leading the discussion and it goes on fine without you, end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When unsure, stay silent. If someone is unhappy with something you did, that is for you: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes.`,
   ].join('');
 
 /**

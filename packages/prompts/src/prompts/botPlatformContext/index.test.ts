@@ -345,6 +345,22 @@ describe('formatBotPlatformContext', () => {
     );
   });
 
+  // "follow up 的激活区bug了。正常情况下不应该回复的": in the follow-up window the bot answered
+  // "yep" and "我试试" meant for others, staying silent on 10 of 42 wakes.
+  it('tells an agent woken by the follow-up window to reply only when it judges a reply is needed', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const result = formatBotPlatformContext({ ...base, followup: {}, wakeKind: 'followup' });
+
+    expect(result).toContain('being woken is not a request to answer. Judge for yourself');
+    expect(result).toContain('When unsure, stay silent');
+    expect(result).toContain('NO_REPLY:not_addressed');
+    expect(result).toContain('If someone is unhappy with something you did, that is for you');
+    expect(result).not.toContain('your name appears in the message');
+    expect(formatBotPlatformContext({ ...base, wakeKind: 'followup' })).not.toContain(
+      'being woken is not a request to answer',
+    );
+  });
+
   it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
 

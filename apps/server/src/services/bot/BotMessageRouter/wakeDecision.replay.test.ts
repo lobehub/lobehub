@@ -152,7 +152,7 @@ describe('bot-wake recorder: the replay of a parked message', () => {
     const classify = vi
       .fn<WakeClassify>()
       // Reported as 0.51 then 0.13, under the old 0.5 threshold; the flip is the point.
-      .mockResolvedValueOnce({ addressedToBot: 0.71, kind: 'request', reason: 'p=0.71' })
+      .mockResolvedValueOnce({ addressedToBot: 0.78, kind: 'request', reason: 'p=0.78' })
       .mockResolvedValueOnce({ addressedToBot: 0.13, kind: 'chitchat', reason: 'p=0.13' });
     const state = fakeState(spokeRecently());
     const recorder = make(ENFORCE, state, { classify });
@@ -162,7 +162,7 @@ describe('bot-wake recorder: the replay of a parked message', () => {
     });
     // With what the agent is told about it: the score it was woken on, not a new one.
     await expect(recorder.initiate(replay())).resolves.toMatchObject({
-      followup: { participants: [], score: 0.71 },
+      followup: { participants: [], score: 0.78 },
       reason: 'followup-window',
     });
     expect(classify).toHaveBeenCalledOnce();
@@ -172,7 +172,7 @@ describe('bot-wake recorder: the replay of a parked message', () => {
     await flush();
     expect(
       recorded()[0].verdicts.map((v: any) => [v.policyId, v.verdict, v.confidence]),
-    ).toContainEqual(['bot-wake:classifier', 'allow', 0.71]);
+    ).toContainEqual(['bot-wake:classifier', 'allow', 0.78]);
   });
 
   it('judges again when nothing was kept, or what was kept cannot be read', async () => {
