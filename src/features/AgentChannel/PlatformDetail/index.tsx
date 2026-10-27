@@ -30,7 +30,7 @@ import { BOT_RUNTIME_STATUSES, type BotRuntimeStatusSnapshot } from '@/types/bot
 import { platformCredentialBodyMap } from '../platform/registry';
 import { getSetupGuide } from '../quickSetup/guides';
 import { keepPendingConnectResult, toTestResult } from './actionResults';
-import Body from './Body';
+import Body, { type ModuleControls } from './Body';
 import { ChannelHero } from './ChannelHero';
 import { ChannelTabBar } from './ChannelTabBar';
 import {
@@ -54,6 +54,14 @@ import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext'
 import { QuickView } from './QuickView';
 import { hasPendingChanges, pickKeys, replyDiffers } from './replySettings';
 import { createSaveCoordinator } from './saveCoordinator';
+import {
+  dirtyModuleIds,
+  discardPatch,
+  resolveSaveModules,
+  type SaveModuleId,
+  settingsToSave,
+  tabOfModule,
+} from './saveModules';
 import { getSchemaFields, groupSettingsFields, REPLY_KEYS } from './settingsGroups';
 import { useNarrowLayout } from './useNarrowLayout';
 
@@ -226,6 +234,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const saveCoordinator = useMemo(() => createSaveCoordinator(), []);
 
     const [isDirty, setIsDirty] = useState(false);
+    // Which blocks hold a change that is not saved yet, and which one is being saved.
+    const [dirtyModules, setDirtyModules] = useState<SaveModuleId[]>([]);
+    const [savingModule, setSavingModule] = useState<SaveModuleId>();
+    const saveQueueRef = useRef<Promise<void>>(undefined);
     const form = useForm<ChannelFormValues>({
       initialValues: getFormValues(platformDef.schema, currentConfig, wakeReleased),
       onValuesChange: () => valuesChangedRef.current?.(),
@@ -245,6 +257,22 @@ const PlatformDetail = memo<PlatformDetailProps>(
     );
     const activeTab =
       pickedTab && tabs.includes(pickedTab) ? pickedTab : defaultTab(tabs, !!currentConfig);
+    // The blocks the page saves one by one. A platform with its own credential body (WeChat)
+    // connects through its own flow, so it has no credentials block.
+    const saveModules = useMemo(() => {
+      const credentialFields = getSchemaFields(platformDef.schema, 'credentials', featureFlags);
+      const hasCredentials =
+        !platformCredentialBodyMap[platformDef.id] &&
+        (credentialFields.length > 0 ||
+          platformDef.schema.some((field) => field.key === 'applicationId'));
+
+      return resolveSaveModules(
+        groupSettingsFields(getSchemaFields(platformDef.schema, 'settings', featureFlags)),
+        hasCredentials,
+        credentialFields.map((field) => field.key),
+      );
+    }, [featureFlags, platformDef.id, platformDef.schema]);
+    const pendingTabs = useMemo(() => [...new Set(dirtyModules.map(tabOfModule))], [dirtyModules]);
     const watchedValues = useWatch(form, (values) => values);
     // The open tab already shows its own problems; the dot is for the others.
     const tabIssues = useMemo(
@@ -425,6 +453,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
       form.reset(getFormValues(platformDef.schema, currentConfig, wakeReleased));
       setIsDirty(false);
+      setDirtyModules([]);
     }, [currentConfig, wakeReleased, form, platformDef.schema, isDirty]);
 
     // Reply settings are switches and choices whose effect is seen at once in
@@ -482,12 +511,21 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const handleValuesChange = useCallback(() => {
       const values = form.getValues();
       setIsDirty(hasPendingChanges(values, storedRef.current, replyKeys));
+      setDirtyModules(dirtyModuleIds(saveModules, values, storedRef.current));
 
       if (!currentConfig || writeDisabled || replyKeys.length === 0) return;
       if (!replyDiffers(values.settings, storedRef.current.settings, replyKeys)) return;
 
       saveCoordinator.scheduleAuto(saveReplySettings, 400);
-    }, [currentConfig, form, replyKeys, saveCoordinator, saveReplySettings, writeDisabled]);
+    }, [
+      currentConfig,
+      form,
+      replyKeys,
+      saveCoordinator,
+      saveModules,
+      saveReplySettings,
+      writeDisabled,
+    ]);
     useEffect(() => {
       valuesChangedRef.current = handleValuesChange;
     }, [handleValuesChange]);
@@ -755,6 +793,151 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
     const handleFormValuesChange = handleValuesChange;
 
+    // Put one block back as stored; every other block keeps its edits.
+    const discardModule = useCallback(
+      (id: SaveModuleId) => {
+        const block = saveModules.find((m) => m.id === id);
+        if (!block) return;
+        const stored = storedRef.current;
+
+        if (block.kind === 'credentials') {
+          form.setValues({
+            applicationId: stored.applicationId,
+            credentials: stored.credentials,
+          } as Partial<ChannelFormValues>);
+        } else {
+          form.setValues({
+            settings: {
+              ...form.getValues().settings,
+              ...(discardPatch(block, stored) as ChannelFormValues['settings']),
+            },
+          });
+        }
+        setSaveResult(undefined);
+        setTestResult(undefined);
+        valuesChangedRef.current?.();
+      },
+      [form, saveModules],
+    );
+
+    // Save one block. Only that block's options (or, for the credentials block, the application
+    // id and credentials) are written on top of what is stored, so another block's unsaved edits
+    // are neither saved nor lost. Saves run one at a time: each one writes the whole settings
+    // column, so two in flight would let the later one undo the earlier.
+    const saveModule = useCallback(
+      (id: SaveModuleId) => {
+        const block = saveModules.find((m) => m.id === id);
+        if (!block || !currentConfig || writeDisabled) return Promise.resolve();
+
+        const run = async () => {
+          await saveCoordinator.beginExplicit();
+          setSavingModule(id);
+
+          try {
+            const paths =
+              block.kind === 'credentials'
+                ? ['applicationId', ...block.keys.map((key) => `credentials.${key}`)]
+                : block.keys.map((key) => `settings.${key}`);
+            const { valid } = await form.validate(paths as never);
+            if (!valid) return;
+
+            const values = form.getValues();
+            const stored = storedRef.current;
+
+            if (block.kind === 'credentials') {
+              setSaving(true);
+              setSaveResult(undefined);
+              setConnectNotice(undefined);
+              setRuntimeHidden(true);
+              setTestResult(undefined);
+
+              const credentials = mergeCredentialsForSave(
+                currentConfig.credentials,
+                values.credentials,
+              );
+              // Telegram derives the application id from the bot token.
+              let applicationId = values.applicationId || '';
+              const botToken = (credentials as Record<string, string>).botToken;
+              if (!applicationId && botToken && botToken.includes(':')) {
+                applicationId = botToken.slice(0, botToken.indexOf(':'));
+              }
+
+              await updateBotProvider(currentConfig.id, agentId, { applicationId, credentials });
+              await postSaveRef.current?.({ applicationId });
+              storedRef.current = { ...stored, applicationId, credentials };
+              setSaveResult({ type: 'success' });
+              setTimeout(() => setSaveResult(undefined), 3000);
+              setSaving(false);
+              await connectCurrentBot(applicationId);
+              return;
+            }
+
+            const settings = mergeSettingsWithDefaults(
+              platformDef.schema,
+              omitUndefinedValues(settingsToSave(block, values, stored)),
+            );
+            // An over-cap list is dropped wholesale by the bot-wake parser, and for an allowlist
+            // that silently turns "restricted" into "unrestricted": refuse rather than persist it.
+            const overLimit = findOverLimitSettings(platformDef.schema, settings);
+            if (overLimit.length > 0) {
+              const max = Math.min(...overLimit.map((entry) => entry.max));
+              toast.error(t('channel.channelListLimit').replace('{{max}}', String(max)));
+              return;
+            }
+
+            await updateBotProvider(currentConfig.id, agentId, { settings });
+            storedRef.current = { ...stored, settings: settings as ChannelFormValues['settings'] };
+            toast.success(t('channel.saved'));
+          } catch (e: any) {
+            console.error(e);
+            if (block.kind === 'credentials') {
+              setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
+              setSaving(false);
+            } else {
+              toast.error(t('channel.updateFailed'));
+            }
+          } finally {
+            saveCoordinator.endExplicit();
+            setSavingModule(undefined);
+            valuesChangedRef.current?.();
+          }
+        };
+
+        const next = (saveQueueRef.current ?? Promise.resolve()).then(run, run);
+        saveQueueRef.current = next.catch(() => undefined);
+
+        return next;
+      },
+      [
+        agentId,
+        connectCurrentBot,
+        currentConfig,
+        form,
+        platformDef.schema,
+        saveCoordinator,
+        saveModules,
+        t,
+        updateBotProvider,
+        writeDisabled,
+      ],
+    );
+
+    // Each block's Save, once the bot exists. While one is being created, the setup steps save it
+    // all at once and there is nothing to save by block.
+    const moduleControls = useMemo<ModuleControls | undefined>(
+      () =>
+        currentConfig
+          ? {
+              dirty: dirtyModules,
+              ids: saveModules.map((module) => module.id),
+              onDiscard: discardModule,
+              onSave: (id) => void saveModule(id),
+              saving: savingModule,
+            }
+          : undefined,
+      [currentConfig, dirtyModules, discardModule, saveModule, saveModules, savingModule],
+    );
+
     const handlePaidFeatureUpgrade = useCallback(() => {
       navigate('/settings/plans');
     }, [navigate]);
@@ -822,6 +1005,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                   <ChannelTabBar
                     active={activeTab}
                     issues={tabIssues}
+                    pending={pendingTabs}
                     tabs={tabs}
                     onChange={setPickedTab}
                   />
@@ -842,6 +1026,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                   disabled={writeDisabled}
                   form={form}
                   hasConfig={!!currentConfig}
+                  moduleControls={moduleControls}
                   platformDef={platformDef}
                   quickSetupAppName={agentName}
                   quickSetupScope={agentId}
@@ -855,19 +1040,23 @@ const PlatformDetail = memo<PlatformDetailProps>(
                   disabled={readOnly}
                   form={form}
                   hasConfig={!!currentConfig}
-                  isDirty={isDirty}
+                  // A saved bot is saved block by block; the bar's Save and Discard are for creating one.
+                  isDirty={!currentConfig && isDirty}
                   platformDef={platformDef}
                   saving={saving}
                   testing={testing}
                   writeDisabled={writeDisabled}
-                  hideSave={footerSaveHidden({
-                    activeTab,
-                    hasConfig: !!currentConfig,
-                    // Platforms with their own credential body (WeChat, iMessage) have no steps.
-                    stepSave:
-                      !platformCredentialBodyMap[platformDef.id] &&
-                      !!getSetupGuide(platformDef.id, { appName: '' }),
-                  })}
+                  hideSave={
+                    !!currentConfig ||
+                    footerSaveHidden({
+                      activeTab,
+                      hasConfig: !!currentConfig,
+                      // Platforms with their own credential body (WeChat, iMessage) have no steps.
+                      stepSave:
+                        !platformCredentialBodyMap[platformDef.id] &&
+                        !!getSetupGuide(platformDef.id, { appName: '' }),
+                    })
+                  }
                   onCopied={() => toast.success(t('channel.copied'))}
                   onDelete={handleDelete}
                   onDiscard={handleDiscard}

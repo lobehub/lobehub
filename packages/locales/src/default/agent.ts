@@ -581,6 +581,9 @@ export default {
     'How the bot decides a message is meant for it. Write what it should answer and what it should leave alone, in your own words.',
   'channel.wake.section.more': 'More',
   'channel.tab.advanced': 'Advanced',
+  'channel.tab.unsaved': 'Unsaved changes',
+  'channel.module.save': 'Save',
+  'channel.module.unsaved': 'Unsaved changes',
   'channel.group.connection': 'Connection options',
   'channel.reply.instant':
     'Changes here take effect as soon as you make them. There is nothing to save.',

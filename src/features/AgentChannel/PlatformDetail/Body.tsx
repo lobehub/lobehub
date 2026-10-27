@@ -23,6 +23,8 @@ import { AccessSection } from './AccessSection';
 import type { ChannelTab } from './channelTabs';
 import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
+import { ModuleSaveBar } from './ModuleSaveBar';
+import type { SaveModuleId } from './saveModules';
 import { ApplicationIdField, SchemaField } from './SchemaField';
 import {
   getSchemaFields,
@@ -30,6 +32,19 @@ import {
   groupWakeFields,
   WAKE_KEY_PREFIX,
 } from './settingsGroups';
+
+/**
+ * What the page hands the body so each block can show its own Save: which blocks exist, which
+ * hold unsaved changes, and which one is being saved. Absent while a bot is still being created,
+ * when the setup steps save everything at once.
+ */
+export interface ModuleControls {
+  dirty: readonly SaveModuleId[];
+  ids: readonly SaveModuleId[];
+  onDiscard: (id: SaveModuleId) => void;
+  onSave: (id: SaveModuleId) => void;
+  saving?: SaveModuleId;
+}
 
 /** The wake blocks that say, under their title, what they are for. */
 const WAKE_SECTIONS_WITH_DESC = new Set(['channels', 'judgement', 'pace']);
@@ -66,6 +81,8 @@ interface BodyProps {
   disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig?: boolean;
+  /** Per-block save buttons; see {@link ModuleControls}. */
+  moduleControls?: ModuleControls;
   /** Saves and connects the credentials; resolves `false` when saving failed. */
   onAuthenticated?: (params: {
     applicationId: string;
@@ -90,6 +107,7 @@ const Body = memo<BodyProps>(
     form,
     hasConfig,
     currentConfig,
+    moduleControls,
     onAuthenticated,
     onSave,
     onValuesChange,
@@ -186,6 +204,18 @@ const Body = memo<BodyProps>(
       );
     };
 
+    // The Save in the corner of a block, when the page saves that block by itself.
+    const moduleExtra = (id: SaveModuleId) =>
+      moduleControls?.ids.includes(id) ? (
+        <ModuleSaveBar
+          dirty={moduleControls.dirty.includes(id)}
+          disabled={disabled}
+          saving={moduleControls.saving === id}
+          onDiscard={() => moduleControls.onDiscard(id)}
+          onSave={() => moduleControls.onSave(id)}
+        />
+      ) : undefined;
+
     // The fields of one settings block. The master switch is always on for the people who see the
     // wake options, so it is not shown.
     const renderSettingsFields = (fields: FieldSchema[]) =>
@@ -250,6 +280,7 @@ const Body = memo<BodyProps>(
                   collapsible={!!hasConfig || inlineKeys.size > 0}
                   defaultActive={!hasConfig && inlineKeys.size === 0}
                   desc={t('channel.group.credentialsDesc')}
+                  extra={moduleExtra('credentials')}
                   keyValue={`credentials-${platformDef.id}`}
                   variant={'filled'}
                   // The steps above ask for what is needed; what is left is optional.
@@ -309,6 +340,7 @@ const Body = memo<BodyProps>(
           {connectGroup && (
             <Form.Group
               collapsible={false}
+              extra={moduleExtra('connection')}
               keyValue={`settings-connect-${platformDef.id}`}
               title={t('channel.group.connection')}
               variant={'filled'}
@@ -347,6 +379,7 @@ const Body = memo<BodyProps>(
                 groupWakeFields(group.fields).map((section) => (
                   <Form.Group
                     collapsible={false}
+                    extra={moduleExtra(`wake-${section.key}`)}
                     key={section.key}
                     keyValue={`settings-wake-${section.key}-${platformDef.id}`}
                     title={t(`channel.wake.section.${section.key}`)}
@@ -363,8 +396,15 @@ const Body = memo<BodyProps>(
               ) : (
                 <Form.Group
                   collapsible={false}
+                  extra={moduleExtra(group.key as SaveModuleId)}
                   keyValue={`settings-${group.key}-${platformDef.id}`}
                   variant={'filled'}
+                  // A block with a Save in its corner needs a header to hold it.
+                  title={
+                    moduleControls?.ids.includes(group.key as SaveModuleId)
+                      ? t(`channel.tab.${group.key}`)
+                      : undefined
+                  }
                 >
                   {group.key === 'access' &&
                   group.fields.some((f) => f.key === 'dmPolicy' || f.key === 'groupPolicy') ? (
