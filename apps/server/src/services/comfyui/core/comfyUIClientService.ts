@@ -7,13 +7,14 @@
  */
 import { type ComfyUIKeyVault } from '@lobechat/types';
 import { type PromptBuilder } from '@saintno/comfyui-sdk';
-import { CallWrapper, ComfyApi } from '@saintno/comfyui-sdk';
+import { ComfyApi } from '@saintno/comfyui-sdk';
 import debug from 'debug';
 
 import { COMFYUI_DEFAULTS } from '@/server/services/comfyui/config/constants';
 import { ComfyUIAuthService } from '@/server/services/comfyui/core/comfyUIAuthService';
 import { ComfyUIConnectionService } from '@/server/services/comfyui/core/comfyUIConnectionService';
 import { ErrorHandlerService } from '@/server/services/comfyui/core/errorHandlerService';
+import { executeComfyUIWorkflow } from '@/server/services/comfyui/core/workflowExecution';
 import { ServicesError } from '@/server/services/comfyui/errors';
 import { TTLCacheManager } from '@/server/services/comfyui/utils/cacheManager';
 
@@ -99,6 +100,10 @@ export class ComfyUIClientService {
     return this.client.getPathImage(imageInfo);
   }
 
+  dispose(): void {
+    this.client.destroy();
+  }
+
   /**
    * Upload an image to ComfyUI server
    * @param file - The image data as Buffer or Blob
@@ -131,28 +136,7 @@ export class ComfyUIClientService {
   ): Promise<WorkflowResult> {
     log('🚀 Executing workflow...');
 
-    return new Promise<WorkflowResult>((resolve, reject) => {
-      new CallWrapper(this.client, workflow)
-        .onFinished((result: any) => {
-          log('✅ Workflow execution finished successfully');
-          log('🔍 Raw workflow result structure:', {
-            hasImages: 'images' in result,
-            hasRaw: '_raw' in result,
-            keys: Object.keys(result),
-            rawKeys: result._raw ? Object.keys(result._raw) : null,
-          });
-          resolve(result);
-        })
-        .onFailed((error: any) => {
-          log('❌ Workflow execution failed:', error?.message || error);
-          reject(error);
-        })
-        .onProgress((info: any) => {
-          log('⏳ Progress:', info);
-          onProgress?.(info);
-        })
-        .run();
-    });
+    return executeComfyUIWorkflow(this.client, workflow, onProgress);
   }
 
   /**

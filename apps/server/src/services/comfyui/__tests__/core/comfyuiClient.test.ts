@@ -9,7 +9,7 @@ import { type ComfyUIKeyVault } from '@/types/user/settings/keyVaults';
 
 // Mock the SDK
 vi.mock('@saintno/comfyui-sdk', () => ({
-  CallWrapper: vi.fn(),
+  // Execution behavior is covered against the real SDK event emitter in workflowExecution.test.ts.
   ComfyApi: vi.fn(),
 }));
 
@@ -225,112 +225,6 @@ describe('ComfyUIClientService', () => {
       // Verify
       expect(result).toBe('blob_upload.png');
       expect(mockClient.uploadImage).toHaveBeenCalledWith(mockBlob, 'blob.png');
-    });
-  });
-
-  describe('executeWorkflow', () => {
-    beforeEach(() => {
-      service = new ComfyUIClientService();
-    });
-
-    it('should execute workflow successfully', async () => {
-      // Import CallWrapper mock
-      const { CallWrapper } = await import('@saintno/comfyui-sdk');
-
-      // Setup mock workflow
-      const mockWorkflow = { id: 'test-workflow' };
-      const mockResult = {
-        images: {
-          images: [{ data: 'base64' }],
-        },
-      };
-
-      // Create CallWrapper mock instance
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
-
-      // Setup CallWrapper mock
-      vi.mocked(CallWrapper).mockImplementation(function () {
-        return mockCallWrapper as any;
-      });
-
-      // Simulate successful execution
-      mockCallWrapper.run.mockImplementation(function () {
-        const finishCallback = mockCallWrapper.onFinished.mock.calls[0][0];
-        finishCallback(mockResult);
-      });
-
-      // Execute
-      const result = await service.executeWorkflow(mockWorkflow as any);
-
-      // Verify
-      expect(result).toEqual(mockResult);
-      expect(CallWrapper).toHaveBeenCalledWith(mockClient, mockWorkflow);
-    });
-
-    it('should handle workflow execution failure', async () => {
-      const { CallWrapper } = await import('@saintno/comfyui-sdk');
-
-      const mockWorkflow = { id: 'test' };
-      const mockError = new Error('Workflow failed');
-
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
-
-      vi.mocked(CallWrapper).mockImplementation(function () {
-        return mockCallWrapper as any;
-      });
-
-      // Simulate failure
-      mockCallWrapper.run.mockImplementation(function () {
-        const failCallback = mockCallWrapper.onFailed.mock.calls[0][0];
-        failCallback(mockError);
-      });
-
-      // Execute and verify - executeWorkflow just passes through the error
-      await expect(service.executeWorkflow(mockWorkflow as any)).rejects.toThrow('Workflow failed');
-    });
-
-    it('should call progress callback', async () => {
-      const { CallWrapper } = await import('@saintno/comfyui-sdk');
-
-      const mockWorkflow = { id: 'test' };
-      const mockProgress = { step: 1, total: 10 };
-      const progressCallback = vi.fn();
-
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
-
-      vi.mocked(CallWrapper).mockImplementation(function () {
-        return mockCallWrapper as any;
-      });
-
-      // Simulate progress and completion
-      mockCallWrapper.run.mockImplementation(function () {
-        const progressCb = mockCallWrapper.onProgress.mock.calls[0][0];
-        progressCb(mockProgress);
-
-        const finishCb = mockCallWrapper.onFinished.mock.calls[0][0];
-        finishCb({ images: { images: [] } });
-      });
-
-      // Execute
-      await service.executeWorkflow(mockWorkflow as any, progressCallback);
-
-      // Verify
-      expect(progressCallback).toHaveBeenCalledWith(mockProgress);
     });
   });
 
