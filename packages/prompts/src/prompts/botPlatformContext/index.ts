@@ -170,7 +170,7 @@ export const formatBotPlatformContext = ({
       'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
       ...(named
         ? [
-            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Answer only when the message asks you to do or answer something. A remark or question about you aimed at the room is not for you: end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\` without looking anything up.`,
+            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and say what you will do differently.`,
           ]
         : []),
       ...(proactive

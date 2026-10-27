@@ -208,6 +208,9 @@ describe('formatBotPlatformContext', () => {
 
     expect(named).toContain('Why you were woken: your name appears in the message');
     expect(named).toContain('NO_REPLY:not_addressed');
+    expect(named).toContain('Decide the way a teammate in the room would');
+    // Criticism of the bot is answered, not let go.
+    expect(named).toContain('When someone is unhappy with something you did');
     expect(formatBotPlatformContext({ ...base, named: true })).not.toContain('<optional_reply>');
   });
 
