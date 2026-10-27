@@ -239,10 +239,15 @@ const botSettingsSchema = {
     },
     watchKeywords: {
       description:
-        'Channel-side keyword wake list. When a non-mention message in a non-DM channel contains any of these keywords (case-insensitive, whole-word), the bot wakes without an @mention. If the matched entry has an `instruction`, it is prepended to the user message as an extra prompt before being sent to the AI — so a bare trigger like "bug" can carry a directive ("Scan the recent thread and reply if there is a real bug report"). Empty/absent instructions just wake the bot with the raw user text. Same overwrite-replace semantics as allowFrom — read-modify-write via getBotDetail to add/remove entries.',
+        'Channel-side keyword wake list. When a non-mention message in a non-DM channel contains any of these keywords (case-insensitive, whole-word), the bot wakes without an @mention. If the matched entry has an `instruction`, it is prepended to the user message as an extra prompt before being sent to the AI — so a bare trigger like "bug" can carry a directive ("Scan the recent thread and reply if there is a real bug report"). Empty/absent instructions just wake the bot with the raw user text. Set `asName: true` on an entry to make the keyword one of the bot\'s names (a nickname or alias such as "canis" or "倏昱"): saying it calls the bot like its display name does. Same overwrite-replace semantics as allowFrom — read-modify-write via getBotDetail to add/remove entries.',
       items: {
         additionalProperties: false,
         properties: {
+          asName: {
+            description:
+              'Mark this keyword as a name the bot answers to (an alias or nickname). A message that says it is treated as calling the bot by name: answered right away, even while the owner is active in the channel. Omit (or false) for an ordinary trigger word like "bug" or "mobile". Its `instruction`, if any, still applies.',
+            type: 'boolean',
+          },
           instruction: {
             description:
               'Optional operator-authored prompt prepended to the user message when this keyword fires. Omit for "just wake the bot" behaviour.',

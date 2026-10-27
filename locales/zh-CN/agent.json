@@ -506,6 +506,8 @@
   "channel.wake.section.more": "更多",
   "channel.wake.section.pace": "节奏",
   "channel.wake.section.paceDesc": "机器人多快、多频繁地主动插话。",
+  "channel.watchKeywordAsNameHint": "把这个词当作机器人的名字：有人说到它就是在叫机器人，会立刻回应，即使你正在频道里发言。「bug」这类话题词不要勾选。",
+  "channel.watchKeywordAsNameLabel": "机器人名字",
   "channel.watchKeywordInstructionLabel": "指令",
   "channel.watchKeywordInstructionPlaceholder": "如 浏览近期消息，若发现可处理的 bug 报告则回复",
   "channel.watchKeywordLabel": "关键词",

@@ -1,8 +1,18 @@
 'use client';
 
 import { isMaskedBotCredential } from '@lobechat/const';
-import type { SelectOption } from '@lobehub/ui';
-import { ActionIcon, Button, Flexbox, InputNumber, Select, Switch, Tag, Text } from '@lobehub/ui';
+import type { CheckboxProps, SelectOption } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  Flexbox,
+  InputNumber,
+  Select,
+  Switch,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Form, useFormInstance, useWatch } from '@lobehub/ui/form';
 import { Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
@@ -329,6 +339,19 @@ const FormChoiceList = ({
   'value'?: string;
 }) => <ChoiceList {...props} value={value ?? ''} onChange={(next) => onChange?.(next)} />;
 
+/**
+ * {@link Checkbox} bound to a form field. A row saved before the property existed has no value;
+ * it reads as unchecked instead of leaving the checkbox uncontrolled.
+ */
+const FormCheckbox = ({
+  onChange,
+  value,
+  ...props
+}: Omit<CheckboxProps, 'checked' | 'onChange'> & {
+  onChange?: (checked: boolean) => void;
+  value?: boolean;
+}) => <Checkbox {...props} checked={value === true} onChange={(next) => onChange?.(next)} />;
+
 // --------------- Object-list field (e.g. allowFrom: [{id, name?}]) ---------------
 
 interface ObjectListFieldProps {
@@ -393,28 +416,46 @@ const ObjectListField = memo<ObjectListFieldProps>(
               )}
               {rows.map(({ index, key, name }) => (
                 <Flexbox horizontal align="center" gap={8} key={key}>
-                  {itemProps.map((sub, subIndex) => (
-                    <div key={sub.key} style={{ flex: subIndex === 0 ? 1 : 2, minWidth: 0 }}>
-                      <Form.Field
-                        bare
-                        name={`${name}.${sub.key}`}
-                        validate={
-                          sub.required
-                            ? (value?: string) => (value?.trim() ? undefined : t(sub.label))
-                            : undefined
-                        }
-                      >
-                        <FormInput
-                          disabled={editDisabled}
-                          placeholder={
-                            sub.placeholder
-                              ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
-                              : t(sub.label)
+                  {itemProps.map((sub, subIndex) =>
+                    // A per-row switch (e.g. "this keyword is one of the bot's names") sits after
+                    // the text inputs at its natural width, its explanation in the tooltip.
+                    sub.type === 'boolean' ? (
+                      <Flexbox horizontal align="center" flex="none" gap={4} key={sub.key}>
+                        <Form.Field bare name={`${name}.${sub.key}`}>
+                          <FormCheckbox disabled={editDisabled}>
+                            {t(sub.label as 'channel.watchKeywordAsNameLabel')}
+                          </FormCheckbox>
+                        </Form.Field>
+                        {sub.description && (
+                          <InfoTooltip
+                            size={'small'}
+                            title={t(sub.description as 'channel.watchKeywordAsNameHint')}
+                          />
+                        )}
+                      </Flexbox>
+                    ) : (
+                      <div key={sub.key} style={{ flex: subIndex === 0 ? 1 : 2, minWidth: 0 }}>
+                        <Form.Field
+                          bare
+                          name={`${name}.${sub.key}`}
+                          validate={
+                            sub.required
+                              ? (value?: string) => (value?.trim() ? undefined : t(sub.label))
+                              : undefined
                           }
-                        />
-                      </Form.Field>
-                    </div>
-                  ))}
+                        >
+                          <FormInput
+                            disabled={editDisabled}
+                            placeholder={
+                              sub.placeholder
+                                ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
+                                : t(sub.label)
+                            }
+                          />
+                        </Form.Field>
+                      </div>
+                    ),
+                  )}
                   <ActionIcon
                     aria-label={removeLabel}
                     disabled={disabled}

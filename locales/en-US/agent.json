@@ -506,6 +506,8 @@
   "channel.wake.section.more": "More",
   "channel.wake.section.pace": "Pace",
   "channel.wake.section.paceDesc": "How soon, and how often, the bot speaks up on its own.",
+  "channel.watchKeywordAsNameHint": "Saying this word calls the bot, like its own name: it answers right away, even while you're active in the channel. Leave it off for topic words like \"bug\".",
+  "channel.watchKeywordAsNameLabel": "Bot name",
   "channel.watchKeywordInstructionLabel": "Instruction",
   "channel.watchKeywordInstructionPlaceholder": "e.g. Scan the recent thread and reply if there is an actionable bug report",
   "channel.watchKeywordLabel": "Keyword",

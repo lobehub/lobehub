@@ -435,6 +435,9 @@ export default {
   'channel.watchKeywordInstructionLabel': 'Instruction',
   'channel.watchKeywordInstructionPlaceholder':
     'e.g. Scan the recent thread and reply if there is an actionable bug report',
+  'channel.watchKeywordAsNameLabel': 'Bot name',
+  'channel.watchKeywordAsNameHint':
+    'Saying this word calls the bot, like its own name: it answers right away, even while you\'re active in the channel. Leave it off for topic words like "bug".',
   'channel.watchKeywordsAdd': 'Add keyword',
   'channel.watchKeywordsEmpty':
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
