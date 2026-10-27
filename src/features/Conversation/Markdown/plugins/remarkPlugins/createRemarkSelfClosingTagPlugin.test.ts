@@ -344,4 +344,15 @@ describe('createRemarkSelfClosingTagPlugin', () => {
     expect(paragraphChildren[2].type).toBe('text');
     expect(paragraphChildren[2].value).toBe(' in your code.');
   });
+
+  it('keeps backtick-wrapped tags literal when inlineCode is disabled', () => {
+    const markdown = `Syntax: \`<${tagName} name="config.json" path="/app/config.json" />\``;
+    const processor = unified()
+      .use(remarkParse)
+      .use(createRemarkSelfClosingTagPlugin(tagName, { inlineCode: false }));
+    const tree: any = processor.runSync(processor.parse(markdown));
+
+    expect(collectNodesByType(tree, tagName)).toHaveLength(0);
+    expect(collectNodesByType(tree, 'inlineCode')).toHaveLength(1);
+  });
 });

@@ -70,14 +70,76 @@ describe('markTopicRead', () => {
    * @example A persisted project row still says unread, but a run started since
    * on another device: the server keeps `running`, so nothing writes `active`.
    */
-  it('never writes active itself and mirrors nothing when the server says the topic moved on', async () => {
+  it('never writes active itself and mirrors the server status when the topic moved on', async () => {
     vi.mocked(topicService.markTopicRead).mockResolvedValue(null);
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: TOPIC_ID,
+      status: 'running',
+    } as any);
     seedBucket('unread');
 
     await useChatStore.getState().markTopicRead({ agentId: AGENT_ID, topicId: TOPIC_ID });
 
     expect(topicService.updateTopic).not.toHaveBeenCalled();
+    expect(bucketStatus()).toBe('running');
+  });
+
+  /**
+   * @example The run's terminal `active` write landed after its `unread` one,
+   * so the server row is already read while this client still holds `unread`.
+   * A project page never refetches the agent's topic list, so without this the
+   * dot stayed on the conversation the user was reading.
+   */
+  it('drops a stale local unread when the server already has the topic read', async () => {
+    vi.mocked(topicService.markTopicRead).mockResolvedValue(null);
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: TOPIC_ID,
+      status: 'active',
+    } as any);
+    seedBucket('unread');
+
+    await useChatStore.getState().markTopicRead({ agentId: AGENT_ID, topicId: TOPIC_ID });
+
+    expect(topicService.getTopicDetail).toHaveBeenCalledWith(TOPIC_ID);
+    expect(bucketStatus()).toBe('active');
+  });
+
+  it('keeps the local unread when the server still reports it unread', async () => {
+    vi.mocked(topicService.markTopicRead).mockResolvedValue(null);
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: TOPIC_ID,
+      status: 'unread',
+    } as any);
+    seedBucket('unread');
+
+    await useChatStore.getState().markTopicRead({ agentId: AGENT_ID, topicId: TOPIC_ID });
+
     expect(bucketStatus()).toBe('unread');
+  });
+
+  /**
+   * @example The sidebar dot reads every loaded bucket, but the clear used to
+   * mirror only into the active agent/group bucket.
+   */
+  it('clears the topic in every loaded bucket, not only the active one', async () => {
+    const otherBucket = topicMapKey({ agentId: 'agent-2' });
+    useChatStore.setState({
+      topicDataMap: {
+        [otherBucket]: {
+          hasMore: false,
+          items: [{ id: TOPIC_ID, status: 'unread', title: 't' } as any],
+        } as any,
+      },
+    });
+
+    await useChatStore
+      .getState()
+      .markTopicRead({ agentId: AGENT_ID, status: 'unread', topicId: TOPIC_ID });
+
+    expect(
+      useChatStore.getState().topicDataMap[otherBucket]?.items?.find((t) => t.id === TOPIC_ID)
+        ?.status,
+    ).toBe('active');
   });
 
   /**

@@ -419,6 +419,8 @@ export interface RegisterCanvasWorkParams {
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
+  /** Checked under the Work row lock; 0 means this must be the first version. */
+  expectedVersion?: number;
   messageId?: string | null;
   metadata: CanvasWorkVersionMetadata;
   rootOperationId?: string | null;

@@ -15,7 +15,8 @@ const setup = (initial: {
   const loadEarlierMessages = vi.fn().mockResolvedValue(undefined);
   const props = { loadedCount: 10, ready: true, resolved: false, ...initial };
   const hook = renderHook(
-    (current: typeof props) => useDeepLinkHistoryBackfill({ ...current, loadEarlierMessages }),
+    (current: typeof props) =>
+      useDeepLinkHistoryBackfill({ ...current, loadPage: loadEarlierMessages }),
     { initialProps: props },
   );
 

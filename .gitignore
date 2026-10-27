@@ -160,6 +160,10 @@ apps/desktop/resources/cli-package.json
 # Superpowers plugin brainstorm/spec outputs (local only; do not commit)
 .superpowers/
 docs/superpowers/
+
+# Local Ryugi artifacts and specifications
+.ryugi/
+docs/ryugi/
 .heerogeneous-tracing
 
 # Kagura agent runtime

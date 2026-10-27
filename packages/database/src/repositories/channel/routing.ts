@@ -1,16 +1,18 @@
-import type { ChannelMessageRoutingStatus } from '@lobechat/types';
+import type { ChannelAuditDetails, ChannelMessageRoutingStatus } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
-import { channelMembers, channelMessages } from '../../schemas';
+import { channelMembers, channelMessages, channelThreads } from '../../schemas';
 import type { Transaction } from '../../type';
-import { candidateAgents, deliver, findThread } from './delivery';
+import { notTrashed } from '../../utils/softDelete';
+import { assertThreadOpen, candidateAgents, deliver, findThread } from './delivery';
 import { ChannelError } from './error';
 import { audit } from './transaction';
 
-export type ChannelRoutingDecision =
+export type ChannelRoutingDecision = (
   | { memberIds: string[]; reason: string; status: 'assigned' }
-  | { reason: string; status: Extract<ChannelMessageRoutingStatus, 'skipped' | 'unassigned'> };
+  | { reason: string; status: Extract<ChannelMessageRoutingStatus, 'skipped' | 'unassigned'> }
+) & { details?: ChannelAuditDetails };
 
 const findMessage = async (tx: Transaction, channelId: string, messageId: string) => {
   const [message] = await tx
@@ -53,7 +55,7 @@ export const resolveRouting = async (
             eq(channelMembers.channelId, channelId),
             eq(channelMembers.userId, message.userId),
             eq(channelMembers.actorType, 'user'),
-            eq(channelMembers.active, true),
+            eq(channelMembers.status, 'active'),
           ),
         )
     : [];
@@ -71,11 +73,31 @@ export const resolveRouting = async (
           : requester
             ? 'Chosen Agents are no longer available'
             : 'The message sender is no longer available',
-      routingSource: 'jev',
+      routingSource: message.routingSource === 'fallback' ? 'fallback' : 'jev',
       routingStatus: status,
     })
     .where(eq(channelMessages.id, messageId));
+  if (!message.threadId && delivered.length) {
+    // Branches opened before this decision could not inherit its responders yet.
+    // Keep members explicitly invited into those branches while routing was pending.
+    const threads = await tx
+      .select()
+      .from(channelThreads)
+      .where(
+        and(
+          eq(channelThreads.channelId, channelId),
+          eq(channelThreads.rootMessageId, messageId),
+          notTrashed(channelThreads.isDeleted),
+        ),
+      );
+    for (const branch of threads)
+      await tx
+        .update(channelThreads)
+        .set({ followerMemberIds: [...new Set([...branch.followerMemberIds, ...delivered])] })
+        .where(eq(channelThreads.id, branch.id));
+  }
   await audit(tx, channelId, 'routing_decided', messageId, {
+    ...decision.details,
     attempt,
     reason: decision.reason,
     recipients: delivered,
@@ -92,6 +114,7 @@ export const retryRouting = async (
   messageId: string,
 ): Promise<ChannelMessageItem> => {
   const message = await findMessage(tx, channelId, messageId);
+  assertThreadOpen(await findThread(tx, channelId, message.threadId));
   if (message.routingStatus !== 'unassigned')
     throw new ChannelError('CONFLICT', 'Only an unassigned message can be routed again');
 

@@ -1,9 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
-import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -16,30 +14,32 @@ import { log } from '../../../utils/logger';
 import { assertReportLanguage, ingestLanguageFields, languageSummary } from '../language';
 import { projectEnsureInput, resolveAcceptanceProject, warnIfFiledElsewhere } from '../project';
 import {
-  deriveReportVerdict,
+  type AcceptanceSubjectRef,
   type EvidenceType,
   findIdenticalLatestRound,
-  genericContextFromResult,
   interactionCostFromReportDir,
   metadataForReport,
   originFromEnv,
   parseSubjectRef,
-  planFromResult,
-  pullRequestFromBranch,
-  pullRequestFromResult,
   reuseSourceCriteria,
-  scenarioFromResult,
-  screenProgrammaticTestChecks,
   subjectFromEnv,
   subjectFromResult,
-  surfacesFromResult,
-  toVerdict,
   type Verdict,
-  visualizationMetadata,
 } from '../utils';
 import type { FailedReportEvidence } from './evidenceUpload';
 import { storageQuotaRecovery, uploadReportEvidence } from './evidenceUpload';
 import { ingestIntoPlanRound } from './planRound';
+import {
+  caseResult,
+  missingEvidenceLimitation,
+  publishedVerdictFor,
+  readReportRound,
+  type ReportRound,
+  ReportRoundError,
+  requiredEvidenceGaps,
+  settleReport,
+  unexecutedEvidenceGaps,
+} from './reportRound';
 
 // ── ingest-report (aggregate convenience over the atomic commands) ──
 
@@ -47,153 +47,68 @@ export interface IngestReportOptions {
   acceptance?: string;
   /** Run every local check, including the report language, then stop before publishing. */
   dryRun?: boolean;
+  /** Local publication's stable subject, used only without an authored subject. Not a CLI flag. */
+  fallbackSubject?: AcceptanceSubjectRef;
   goal?: string;
   json?: boolean | string;
   open?: boolean;
   operation?: string;
   project?: string;
+  /**
+   * Programmatic callers (`lh acceptance publish`): print nothing on success and
+   * return the summary `--json` would print. Not a command-line flag.
+   */
+  quiet?: boolean;
   requirement?: string;
   source?: string;
   subject?: string;
   title?: string;
 }
 
-export async function ingestReportAction(
-  reportDir: string,
-  options: IngestReportOptions,
-): Promise<void> {
+/** What a published authored round reports back (`--json`). */
+export type IngestReportSummary = Exclude<Awaited<ReturnType<typeof ingestReportAction>>, void>;
+
+export async function ingestReportAction(reportDir: string, options: IngestReportOptions) {
   const dir = path.resolve(reportDir);
   // The guarantee has to hold however the round got here — a project that never
   // ran `acceptance install`, or an agent that wrote the round by hand, still
   // must not leave evidence binaries untracked in someone's repo.
   ensureAcceptanceDirIgnoredFor(dir);
-  const resultPath = path.join(dir, 'result.json');
-  if (!existsSync(resultPath)) {
-    log.error(`result.json not found in ${dir}`);
-    process.exit(1);
-  }
-
-  let result: any;
+  let round: ReportRound;
   try {
-    result = JSON.parse(readFileSync(resultPath, 'utf8'));
-  } catch {
-    log.error('result.json is not valid JSON');
+    round = readReportRound(dir, { goal: options.goal, title: options.title });
+  } catch (error) {
+    if (!(error instanceof ReportRoundError)) throw error;
+    for (const line of error.lines) log.error(line);
     process.exit(1);
   }
-
-  // Unit tests, type-checks and lint gates are preconditions of shipping, not
-  // things a person accepts — a page full of them buries the checks that
-  // actually needed a human eye. Screen them out of both the plan and the cases
-  // before anything is published.
-  const { droppedIds, droppedLabels } = screenProgrammaticTestChecks(result);
-  const allCases: any[] = Array.isArray(result.cases) ? result.cases : [];
-  // Freeze each case's id BEFORE filtering: the fallback id is position-based
-  // (`case-N`), so dropping an earlier case would re-enumerate the survivors in
-  // the ingest loop — pairing them with the wrong plan items and publishing
-  // orphaned results into the immutable round.
-  const casesWithIds = allCases.map((c, index) => ({
-    case: c,
-    checkItemId: String(c?.id ?? c?.checkItemId ?? `case-${index + 1}`),
-  }));
-  const cases = casesWithIds.filter(({ checkItemId }) => !droppedIds.has(checkItemId));
-  // Every check was a gate: there is nothing here for a person to accept, and
-  // publishing an empty round would just create a verdict-less page. Fail before
-  // the first remote mutation, while the author can still fix the report.
-  if (cases.length === 0 && allCases.length > 0) {
-    log.error(
-      'every check in this round is a programmatic gate (tests / type-check / lint) — nothing here needs a human decision.',
-    );
-    log.error(
-      '  Verify what the delivery does, shows, or produces, and keep the gates as one line of report.md.',
-    );
-    process.exit(1);
-  }
-  // Validate every schemaless visualization before the first remote mutation.
-  // An ingest that cannot render must not create or attach a partial immutable round.
-  const caseMetadata = cases.map(({ case: item, checkItemId }) => {
-    try {
-      return visualizationMetadata(item);
-    } catch (error) {
-      throw new Error(
-        `case ${checkItemId}: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
-    }
-  });
-  const summary = result.summary ?? {};
-  const reportMdPath = path.join(dir, 'report.md');
-  const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
-
-  // What this round is, said to the person who has to accept it, in their
-  // language — the delivery's own note, not the verification write-up. It
-  // posts into the discussion as a message from whoever ran the ingest, so a
-  // reviewer reads it where the conversation already is rather than behind a
-  // report link.
-  const proposalMdPath = path.join(dir, 'proposal.md');
-  const proposal = (
-    existsSync(proposalMdPath)
-      ? readFileSync(proposalMdPath, 'utf8')
-      : typeof result.proposal === 'string'
-        ? result.proposal
-        : ''
-  ).trim();
-
-  // What kind of delivery this report verified (default: coding).
-  const scenario = scenarioFromResult(result);
-
-  // The scenario's context for the report's scope header. Coding lifts the
-  // well-known top-level fields (branch / commit / surfaces / PR); every
-  // other scenario passes result.json `context` through as its own bag.
-  // `pullRequest` is hoisted: the success output (text and --json) prints
-  // the PR link after the ingest, whatever the scenario resolved to.
-  let context: Record<string, unknown> | undefined;
-  let pullRequest: ReturnType<typeof pullRequestFromResult>;
-  // Only a PR the report names is a delivery claim; the branch lookup below is
-  // best-effort provenance and may find a long-lived branch's unrelated PR.
-  let authoredPullRequest: ReturnType<typeof pullRequestFromResult>;
-  if (scenario === 'coding') {
-    const branch = typeof result.branch === 'string' ? result.branch : undefined;
-    const surfaces = surfacesFromResult(result);
-    // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
-    // report links to it without the author having to remember the field.
-    authoredPullRequest = pullRequestFromResult(result);
-    pullRequest = authoredPullRequest ?? pullRequestFromBranch(branch);
-    const contextEntries = Object.entries({
-      branch,
-      commit: typeof result.commit === 'string' ? result.commit : undefined,
-      entry: typeof result.entry === 'string' ? result.entry : undefined,
-      pullRequest,
-      surfaces,
-      testedAt: typeof result.createdAt === 'string' ? result.createdAt : undefined,
-    }).filter(([, v]) => v !== undefined);
-    context = contextEntries.length > 0 ? Object.fromEntries(contextEntries) : undefined;
-  } else {
-    context = genericContextFromResult(result);
-  }
-
-  // What the run set out to check, written before it ran. Paired with the
-  // results by `id`, so the report can show a planned item that never ran.
-  let plan: VerifyCheckItem[] | undefined = planFromResult(result, droppedIds);
-
-  const goal = options.goal ?? (typeof result.focus === 'string' ? result.focus : undefined);
-  const title = options.title ?? result.title;
-  // The title is the run's identity in every list surface — an untitled
-  // run renders as a placeholder forever, so say so before it ships.
-  if (!title) {
-    log.warn(
-      'result.json has no "title" — the run will list as untitled; set result.title (or pass --title)',
-    );
-  }
+  const {
+    allCases,
+    authoredPullRequest,
+    caseMetadata,
+    cases,
+    conclusion,
+    content,
+    context,
+    droppedLabels,
+    goal,
+    proposal,
+    pullRequest,
+    result,
+    scenario,
+    summary,
+    title,
+  } = round;
+  let plan = round.plan;
 
   const requestedAcceptanceId = options.acceptance?.trim();
-  if (requestedAcceptanceId && (options.subject || result.subject)) {
-    log.error(
-      'Choose one acceptance target: pass --acceptance <id>, or use --subject/result.json `subject`.',
-    );
+  if (requestedAcceptanceId && options.subject) {
+    log.error('Choose one acceptance target: pass --acceptance <id>, or use --subject.');
     process.exit(1);
   }
 
-  // Explicit subject input wins, then result.json, then the authoring topic.
+  // Explicit subject input wins, then result.json, then the local publisher's
+  // stable identity (if any), then the authoring topic.
   // An external repository has none of those, so create a first-class
   // standalone subject instead of making the caller manufacture a Task ID.
   let subject = subjectFromResult(result);
@@ -211,10 +126,10 @@ export async function ingestReportAction(
     log.error('result.json `subject` is malformed (expected "type:id" or {type,id})');
     process.exit(1);
   } else if (!requestedAcceptanceId && !subject) {
-    const ref = subjectFromEnv();
+    const ref = options.fallbackSubject ?? subjectFromEnv();
     if (ref) subject = { ref };
     // Only the ambient topic may be folded onto its Task; an explicit subject stays exact.
-    foldTaskRunTopic = Boolean(ref);
+    foldTaskRunTopic = !options.fallbackSubject && Boolean(ref);
   }
   if (!requestedAcceptanceId && !subject) {
     subject = {
@@ -222,15 +137,6 @@ export async function ingestReportAction(
     };
   }
   const requirement = options.requirement ?? subject?.requirement;
-
-  // The overall conclusion, rendered at the top of the report page. Read up
-  // front so the duplicate check below compares what would land.
-  const conclusion =
-    typeof summary.conclusion === 'string'
-      ? summary.conclusion
-      : typeof summary.note === 'string'
-        ? summary.note
-        : undefined;
 
   const client = await getTrpcClient();
   // Before the first remote mutation: a round in the wrong language cannot be
@@ -316,6 +222,19 @@ export async function ingestReportAction(
   if (requestedAcceptanceId) {
     bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
     acceptance = bundle.acceptance;
+    // A round's authored `subject` may ride along with the acceptance that
+    // already holds it (`lh acceptance publish` appends later rounds by id);
+    // one naming another subject is a conflicting target, not a hint.
+    if (
+      result.subject &&
+      (subject?.ref.subjectType !== acceptance.subjectType ||
+        subject.ref.subjectId !== acceptance.subjectId)
+    ) {
+      log.error(
+        `result.json \`subject\` does not match acceptance "${acceptance.id}" (${acceptance.subjectType}:${acceptance.subjectId}). Drop --acceptance, or the subject.`,
+      );
+      process.exit(1);
+    }
     // ID-based reads can cross scopes, but creating a run uses the CLI's scope.
     // Reject before any writes instead of leaving an unattachable run behind.
     const currentWorkspaceId = resolveWorkspaceId();
@@ -471,28 +390,19 @@ export async function ingestReportAction(
   let evidenceCount = 0;
   let inlined = 0;
   const failedEvidence: (FailedReportEvidence & { checkItemId: string })[] = [];
+  // What landed, by authored position: a caller holding its own copy of the
+  // round (`lh acceptance publish`) maps its artifacts onto these by identity.
+  const publishedEvidence: { checkItemId: string; evidenceId: string; position: number }[] = [];
   const missingEvidence: { checkItemId: string; types: EvidenceType[] }[] = [];
   const publishedVerdicts: Verdict[] = [];
   for (const [index, { case: c, checkItemId }] of cases.entries()) {
     seenCheckItemIds.add(checkItemId);
-    const verdict = toVerdict(c.result ?? c.status ?? c.verdict);
-    const observation = c.keyObservation ?? c.observation ?? c.note;
     const checkInput = {
-      checkItemId,
-      checkItemIndex: index,
-      checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
-      metadata: caseMetadata[index],
-      required: c.required ?? true,
-      // The case's key observation is recorded as Toulmin evidence; a real
-      // remediation hint (if the report provides one) goes to `suggestion`.
-      // Absent → explicit `null`, so this immutable snapshot records the
-      // absence instead of relying on upsert defaults.
-      suggestion: typeof c.suggestion === 'string' ? c.suggestion : null,
-      toulmin: typeof observation === 'string' ? { evidence: observation } : null,
-      verdict,
+      ...caseResult(c, checkItemId, index, caseMetadata[index]),
       verifierType: 'agent' as const,
       verifyRunId: runId,
     };
+    const { verdict } = checkInput;
     const checkResult = await client.verify.ingestResult.mutate(checkInput);
     const uploaded = await uploadReportEvidence(client, {
       checkResultId: checkResult.id,
@@ -502,17 +412,13 @@ export async function ingestReportAction(
     evidenceCount += uploaded.count;
     inlined += uploaded.inlined;
     failedEvidence.push(...uploaded.failedEvidence.map((failure) => ({ ...failure, checkItemId })));
-    const config = plan?.find((item) => item.id === checkItemId)?.verifierConfig as
-      VerifyAgentPlanConfig | undefined;
-    const required = config?.requiredEvidence;
-    const gaps = [...new Set(required?.map((spec) => spec.type) ?? [])].filter(
-      (type) => !uploaded.types.has(type),
-    );
-    const publishedVerdict = gaps.length > 0 && verdict === 'passed' ? 'uncertain' : verdict;
+    publishedEvidence.push(...uploaded.published.map((item) => ({ ...item, checkItemId })));
+    const gaps = requiredEvidenceGaps(plan, checkItemId, uploaded.types);
+    const publishedVerdict = publishedVerdictFor(verdict, gaps);
     publishedVerdicts.push(publishedVerdict);
     if (gaps.length > 0) {
       missingEvidence.push({ checkItemId, types: gaps });
-      const limitation = `Required evidence not published: ${gaps.join(', ')}.`;
+      const limitation = missingEvidenceLimitation(gaps);
       log.warn(`${checkItemId}: ${limitation}`);
       await client.verify.ingestResult.mutate({
         ...checkInput,
@@ -523,10 +429,7 @@ export async function ingestReportAction(
   }
 
   const unexecuted = plan?.filter((item) => !seenCheckItemIds.has(item.id)) ?? [];
-  for (const item of unexecuted) {
-    const config = item.verifierConfig as VerifyAgentPlanConfig;
-    const types = [...new Set(config.requiredEvidence?.map((spec) => spec.type) ?? [])];
-    if (types.length === 0) continue;
+  for (const { item, types } of unexecutedEvidenceGaps(plan, seenCheckItemIds)) {
     missingEvidence.push({ checkItemId: item.id, types });
     // Count the gap without inventing an execution result for an unexecuted check.
     publishedVerdicts.push('uncertain');
@@ -535,39 +438,16 @@ export async function ingestReportAction(
 
   // 3. Write the report. `summary` is the overall conclusion (read above);
   //    `content` is the full markdown detail.
-  // A 0-100 quality score lands on overallConfidence (0-1); the report page
-  // surfaces it as the `score` stat.
-  const score =
-    typeof summary.score === 'number' ? Math.max(0, Math.min(1, summary.score / 100)) : undefined;
-  // The authored counts describe the report the author wrote. Once a
-  // programmatic-test check is screened out they no longer match what was
-  // published, so recount the landed cases and unexecuted evidence gaps — a
-  // stats block that disagrees with the visible check list is worse than no stats.
-  const recount = cases.length !== allCases.length || missingEvidence.length > 0;
-  const counted = (verdict: Verdict) => publishedVerdicts.filter((v) => v === verdict).length;
-  const derivedVerdict = deriveReportVerdict(publishedVerdicts.map((verdict) => ({ verdict })));
-  const reportVerdict =
-    summary.verdict && cases.length === allCases.length
-      ? toVerdict(summary.verdict)
-      : derivedVerdict;
   await client.verify.upsertReport.mutate({
-    content,
-    failedChecks: recount ? counted('failed') : summary.failed,
-    overallConfidence: score,
-    passedChecks: recount ? counted('passed') : summary.passed,
-    summary: conclusion,
-    totalChecks: recount ? publishedVerdicts.length : (summary.total ?? cases.length),
-    uncertainChecks: recount
-      ? counted('uncertain') || undefined
-      : (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
-    // Missing evidence cannot be overridden by an authored "passed" summary.
-    // Keep a real failure rather than hiding it behind an evidence warning.
-    verdict:
-      missingEvidence.length > 0
-        ? reportVerdict === 'failed' || derivedVerdict === 'failed'
-          ? 'failed'
-          : 'uncertain'
-        : reportVerdict,
+    ...settleReport({
+      allCasesCount: allCases.length,
+      casesCount: cases.length,
+      conclusion,
+      content,
+      missingEvidenceCount: missingEvidence.length,
+      publishedVerdicts,
+      summary,
+    }),
     verifyRunId: runId,
   });
 
@@ -641,35 +521,35 @@ export async function ingestReportAction(
     if (recovery) log.warn(recovery.message);
   }
 
+  const published = {
+    acceptanceId,
+    acceptanceUrl,
+    cases: cases.length,
+    droppedProgrammaticChecks: droppedLabels,
+    evidence: evidenceCount,
+    failedEvidence,
+    inlined,
+    missingEvidence,
+    origin,
+    planItems: plan?.length ?? 0,
+    proposalPosted,
+    publicationStatus: partial ? 'partial' : 'complete',
+    publishedEvidence,
+    pullRequest,
+    recovery,
+    roundIndex,
+    roundUrl,
+    scenario,
+    subject: subject!.ref,
+    unexecuted: unexecuted.map((item) => item.id),
+    unplanned,
+    unresolvedSupersedes,
+    verifyRunId: runId,
+  };
+  if (options.quiet) return published;
   if (options.json !== undefined) {
-    outputJson(
-      {
-        acceptanceId,
-        acceptanceUrl,
-        cases: cases.length,
-        droppedProgrammaticChecks: droppedLabels,
-        evidence: evidenceCount,
-        failedEvidence,
-        inlined,
-        missingEvidence,
-        origin,
-        planItems: plan?.length ?? 0,
-        proposalPosted,
-        publicationStatus: partial ? 'partial' : 'complete',
-        pullRequest,
-        recovery,
-        roundIndex,
-        roundUrl,
-        scenario,
-        subject: subject!.ref,
-        unexecuted: unexecuted.map((item) => item.id),
-        unplanned,
-        unresolvedSupersedes,
-        verifyRunId: runId,
-      },
-      typeof options.json === 'string' ? options.json : undefined,
-    );
-    return;
+    outputJson(published, typeof options.json === 'string' ? options.json : undefined);
+    return published;
   }
 
   console.log(
@@ -710,6 +590,7 @@ export async function ingestReportAction(
       console.log(`${pc.bold('round snapshot')}: ${roundUrl}`);
     }
   }
+  return published;
 }
 
 export function withIngestReportOptions(cmd: Command): Command {

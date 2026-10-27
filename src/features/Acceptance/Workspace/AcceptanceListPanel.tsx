@@ -628,6 +628,8 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     // to carry it on the row or the affiliation is simply not on screen.
     // Inside a project every row belongs to it, so naming the project again is noise.
     const showRowProject = !projectId && groupMode !== 'project';
+    // "Created by me" makes every row the viewer's own, so the avatar adds nothing.
+    const showRowCreator = scope !== 'created';
 
     const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items)
       .filter((item) => item.canManage)
@@ -884,6 +886,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                             active={item.id === acceptanceId}
                             item={item}
                             key={item.id}
+                            showCreator={showRowCreator}
                             showProject={showRowProject}
                             onChanged={mutate}
                             {...rowSelectionProps(item)}
@@ -904,6 +907,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                     active={item.id === acceptanceId}
                     item={item}
                     key={item.id}
+                    showCreator={showRowCreator}
                     showProject={showRowProject}
                     onChanged={mutate}
                     {...rowSelectionProps(item)}

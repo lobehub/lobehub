@@ -1,6 +1,7 @@
 import type {
   AcceptanceCheckGroup,
   AcceptanceMetadata,
+  AcceptanceRepairRequest,
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
@@ -325,7 +326,9 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
+    defaults?: Partial<
+      Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility'>
+    >,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -497,6 +500,56 @@ export class AcceptanceModel {
         metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
       })
       .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /** Claim before any external side effect: concurrent submissions share one handoff. */
+  claimRepair = async (id: string, request: AcceptanceRepairRequest) =>
+    this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const previous = row.metadata?.repair;
+      if (previous?.state === 'starting' || previous?.state === 'running') {
+        return { claimed: false, request: previous };
+      }
+      const next =
+        previous?.state === 'failed'
+          ? {
+              ...previous,
+              error: undefined,
+              operationId: undefined,
+              topicId: undefined,
+              state: 'starting' as const,
+            }
+          : request;
+      await tx
+        .update(acceptances)
+        .set({
+          metadata: { ...row.metadata, repair: next },
+        })
+        .where(eq(acceptances.id, id));
+      return { claimed: true, request: next };
+    });
+
+  /** Late dispatch callbacks cannot overwrite a newer handoff or unrelated metadata. */
+  patchRepair = async (id: string, requestId: string, patch: Partial<AcceptanceRepairRequest>) => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`jsonb_set(${acceptances.metadata}, '{repair}', (${acceptances.metadata}->'repair') || ${JSON.stringify(patch)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(acceptances.id, id),
+          this.ownership(),
+          sql`${acceptances.metadata}->'repair'->>'id' = ${requestId}`,
+        ),
+      )
       .returning();
     return row;
   };

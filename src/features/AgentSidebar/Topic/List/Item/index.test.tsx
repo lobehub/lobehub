@@ -52,6 +52,7 @@ vi.mock('../../useScopedTopics', () => ({ useScopedTopic: () => scopedTopicMock.
 vi.mock('@/const/version', () => ({ isDesktop: false }));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
+    actions,
     active,
     description,
     extra,
@@ -59,6 +60,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     icon,
     title,
   }: {
+    actions?: ReactNode | (() => ReactNode);
     active?: boolean;
     description?: ReactNode;
     extra?: ReactNode;
@@ -71,6 +73,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       {title}
       {description}
       {extra}
+      {typeof actions === 'function' ? actions() : actions}
     </div>
   ),
 }));
@@ -164,7 +167,9 @@ vi.mock('./metaCardData', () => {
   };
 });
 vi.mock('./Actions', () => ({
-  default: () => null,
+  default: ({ showInlineArchive }: { showInlineArchive?: boolean }) => (
+    <div data-show-inline-archive={String(!!showInlineArchive)} data-testid="topic-actions" />
+  ),
 }));
 vi.mock('./useDropdownMenu', () => ({
   useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
@@ -419,6 +424,35 @@ describe('TopicItem active state', () => {
 
     expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
     expect(screen.queryByText('02:37')).not.toBeInTheDocument();
+  });
+
+  it('hides the inline archive action while the topic is running', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" status="running" title="Topic" />);
+
+    expect(screen.getByTestId('topic-actions')).toHaveAttribute(
+      'data-show-inline-archive',
+      'false',
+    );
+  });
+
+  it('offers the inline archive action once the topic is idle', () => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    expect(screen.getByTestId('topic-actions')).toHaveAttribute('data-show-inline-archive', 'true');
   });
 
   it('keeps idle topics iconless', () => {

@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "“{{key}}” anahtarına sahip bir kimlik bilgisi zaten farklı bir türle ({{type}}) mevcut ve buradan değiştirilemez. Atlayın ve farklı bir anahtar altında talep edin.",
   "credsInput.notice.workspace": "Bu çalışma alanının kimlik bilgilerine şifrelenmiş olarak kaydedildi. Değerler doğrudan depolamaya gider ve asla yapay zekaya gösterilmez.",
   "credsInput.placeholder": "{{field}} girin",
+  "credsInput.proseConfirm": "Yine de kaydet",
+  "credsInput.proseWarning": "“{{fields}}” değeri bir cümle gibi görünüyor, bir sırdan ziyade (CJK metni veya bir bütün ifade içeriyor). Yanlışlıkla yapıştırıldıysa, kaydetmeden önce düzeltin; aksi takdirde “Yine de kaydet” ile onaylayın.",
   "credsInput.saveFailed": "Kimlik bilgisi kaydedilemedi. Lütfen tekrar deneyin.",
   "credsInput.skip": "Atla",
   "credsInput.submit": "Kaydet",

@@ -966,6 +966,38 @@ export function normalizeBotReactionMode(value: unknown): BotReactionMode {
 }
 
 /**
+ * Where a bot answers a message addressed to it at the top level of a channel:
+ *
+ * - `agent`  — the bot decides before it starts: a quick answer stays in the channel, work that
+ *              runs long or invites follow-ups moves into a thread it names. It also posts a short
+ *              acknowledgement first when the work takes a while.
+ * - `thread` — the previous behaviour: every @-mention and keyword wake opens a reply thread.
+ */
+export type BotReplyPlacementMode = 'agent' | 'thread';
+
+export const BOT_REPLY_PLACEMENT_MODES: readonly BotReplyPlacementMode[] = ['agent', 'thread'];
+
+export const DEFAULT_BOT_REPLY_PLACEMENT_MODE: BotReplyPlacementMode = 'agent';
+
+export const replyPlacementField: FieldSchema = {
+  key: 'replyPlacement',
+  default: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
+  description: 'channel.replyPlacementHint',
+  enum: [...BOT_REPLY_PLACEMENT_MODES],
+  enumDescriptions: ['channel.replyPlacementAgentHint', 'channel.replyPlacementThreadHint'],
+  enumLabels: ['channel.replyPlacementAgent', 'channel.replyPlacementThread'],
+  label: 'channel.replyPlacement',
+  type: 'string',
+};
+
+/** Rows saved before the field existed carry `undefined`; they get the schema default. */
+export function normalizeBotReplyPlacementMode(value: unknown): BotReplyPlacementMode {
+  return BOT_REPLY_PLACEMENT_MODES.includes(value as BotReplyPlacementMode)
+    ? (value as BotReplyPlacementMode)
+    : DEFAULT_BOT_REPLY_PLACEMENT_MODE;
+}
+
+/**
  * The moments at which the bridge / callback service may touch the reaction:
  * - `received` — webhook arrival ACK.
  * - `thinking` — hand-off to the agent runtime.

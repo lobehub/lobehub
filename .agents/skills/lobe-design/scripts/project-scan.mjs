@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { RN_NAV_DEPS, RN_UI_DEPS } from './platform.mjs';
 
 const skillDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SKILL_VERSION = readFileSync(join(skillDir, 'SKILL.md'), 'utf8').match(/^version:\s*(\S+)/m)?.[1] ?? '0.0.0';
@@ -34,6 +35,7 @@ const FRAMEWORK_DEPS = [
 ];
 
 const UI_DEPS = [
+  ...RN_UI_DEPS,
   '@lobehub/ui',
   'antd',
   '@ant-design/pro-components',
@@ -90,8 +92,7 @@ function listFiles(root, rel, max = 40) {
   const walk = (dir, prefix) => {
     if (out.length >= max) return;
     let entries;
-    // 按名字排序再截断：样本进指纹，不能依赖文件系统的 readdir 顺序
-    try { entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)); } catch { return; }
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       if (out.length >= max) break;
       if (e.name.startsWith('.') || e.name === 'node_modules') continue;
@@ -103,27 +104,6 @@ function listFiles(root, rel, max = 40) {
   walk(abs, '');
   return out.sort();
 }
-
-// 不设上限地列出源码文件：样本有上限，但指纹要靠全量的数量与相对路径才能发现增删和改名
-function allFiles(root, rel) {
-  const out = [];
-  const walk = (dir, prefix) => {
-    let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
-      const relPath = prefix ? `${prefix}/${e.name}` : e.name;
-      if (e.isDirectory()) walk(join(dir, e.name), relPath);
-      else if (/\.(tsx?|jsx?|vue|svelte)$/.test(e.name)) out.push(relPath);
-    }
-  };
-  walk(join(root, rel), '');
-  return out.sort();
-}
-const fileFacts = (root, rel) => {
-  const all = allFiles(root, rel);
-  return { fileCount: all.length, filesHash: createHash('sha256').update(all.join('\n')).digest('hex').slice(0, 12) };
-};
 
 function depsOf(pkg) {
   return {
@@ -153,15 +133,88 @@ export function detectStack(root) {
   }
   const uiLibs = UI_DEPS.filter((d) => all[d] || depNames.some((n) => n === d || n.startsWith(`${d}/`)));
   const scripts = Object.keys(pkg.scripts ?? {}).sort();
+  // 主平台：mobile 信号优先（RN 项目常同时依赖 web 工具链）
+  const platform = platforms.has('mobile') ? 'mobile' : platforms.has('desktop') && !platforms.has('web') ? 'desktop' : platforms.size ? 'web' : null;
+  const aliases = readAliases(root);
+  const rnUi = uiLibs.filter((d) => RN_UI_DEPS.includes(d));
+  // 项目内组件库：alias 名是 RN UI 库名（如 @lobehub/ui-rn → src/components），或依赖里有 ui-rn
+  for (const [name, target] of Object.entries(aliases)) {
+    if (RN_UI_DEPS.includes(name) && !rnUi.includes(name)) rnUi.unshift(name);
+  }
+  const domUi = uiLibs.filter((d) => !RN_UI_DEPS.includes(d));
+  const primaryUi = platform === 'mobile'
+    ? (rnUi[0] ? { name: rnUi[0], alias: aliases[rnUi[0]] ?? null, role: 'RN 原子层' } : null)
+    : (domUi[0] ? { name: domUi[0], alias: null, role: '原子层' } : null);
   return {
     name: pkg.name ?? null,
     description: pkg.description ?? null,
     frameworks,
     platforms: [...platforms].sort(),
-    uiLibs,
+    platform,
+    uiLibs: platform === 'mobile' ? [...new Set([...rnUi, ...uiLibs])] : uiLibs,
+    primaryUi,
+    // mobile 上 DOM 组件库（@lobehub/ui / antd）只是依赖，不是 RN 界面库
+    depOnlyUi: platform === 'mobile' ? domUi : [],
+    navigation: RN_NAV_DEPS.filter((d) => all[d]),
+    aliases,
     scripts,
     hasTypeScript: existsSync(join(root, 'tsconfig.json')) || depNames.includes('typescript'),
   };
+}
+
+/** tsconfig / jsconfig 的 paths：{ '@lobehub/ui-rn': 'src/components' }（去掉 /* 与 ./）。 */
+export function readAliases(root) {
+  const out = {};
+  for (const f of ['tsconfig.json', 'jsconfig.json']) {
+    const t = safeRead(join(root, f));
+    if (!t) continue;
+    let cfg;
+    try { cfg = JSON.parse(t.replace(/^\s*\/\/.*$/gm, '').replace(/,(\s*[}\]])/g, '$1')); } catch { continue; }
+    for (const [k, v] of Object.entries(cfg?.compilerOptions?.paths ?? {})) {
+      const name = k.replace(/\/\*$/, '');
+      const target = String(Array.isArray(v) ? v[0] : v).replace(/\/\*$/, '').replace(/^\.\//, '').replace(/\/index\.[jt]sx?$/, '');
+      if (name && target) out[name] = target;
+    }
+  }
+  return out;
+}
+
+// ---- Round 2 组件分类（平台感知）----
+export const COMPONENT_SCHEMES = {
+  web: ['薄包装', '与 lobe-ui 重复', '业务组件'],
+  mobile: ['项目原子层', '薄包装', '业务组件'],
+};
+const ATOM_NAME = /^\s*export\s+(?:default\s+)?(?:const|function)\s+(Button|Modal|Drawer|Table|Input|TextInput|Select|Checkbox|Radio|Switch|Tabs|Tooltip|Popover|Tag|Badge|Avatar|Skeleton|Divider|Progress|Spin|Empty|Text|Icon|ActionIcon|Sheet|BottomSheet|Toast|Card|List|ListItem|Flexbox|Center)\b/m;
+const RN_PRIMITIVE = /from\s*['"]react-native['"]/;
+const importsFrom = (text, names) => names.some((n) => new RegExp(`from\\s*['"]${n.replace(/[/.]/g, (c) => `\\${c}`)}(?:/[^'"]*)?['"]`).test(text));
+
+/** 单文件分类。platform = 'mobile' 时用「项目原子层 / 薄包装 / 业务组件」，不出现「改用 lobe-ui」。 */
+export function classifyComponent(rel, text, stack) {
+  const mobile = stack.platform === 'mobile';
+  const body = text.split('\n').filter((l) => l.trim() && !/^\s*(import|\/\/|\*|\/\*)/.test(l));
+  const ui = mobile ? [stack.primaryUi?.name, ...Object.keys(stack.aliases ?? {}).filter((a) => a === stack.primaryUi?.name)].filter(Boolean) : ['@lobehub/ui'];
+  const atomDir = mobile ? stack.primaryUi?.alias : null;
+  const inAtomDir = !!atomDir && (`${rel}/`).startsWith(`${atomDir}/`);
+  const thin = body.length <= 12 && importsFrom(text, ui) && !(mobile && RN_PRIMITIVE.test(text));
+  if (thin) return '薄包装';
+  if (mobile) {
+    if (inAtomDir || (ATOM_NAME.test(text) && RN_PRIMITIVE.test(text) && !/features?\//.test(rel))) return '项目原子层';
+    return '业务组件';
+  }
+  if (ATOM_NAME.test(text) && !importsFrom(text, ui)) return '与 lobe-ui 重复';
+  return '业务组件';
+}
+
+export function classifyComponents(root, stack, dirs, max = 80) {
+  const seen = new Set(), out = [];
+  for (const d of dirs) for (const f of listFiles(root, d.dir, 50)) {
+    const rel = `${d.dir}/${f}`;
+    if (seen.has(rel) || out.length >= max) continue;
+    seen.add(rel);
+    const text = safeRead(join(root, rel)) ?? '';
+    out.push({ file: rel, class: classifyComponent(rel, text, stack) });
+  }
+  return out;
 }
 
 export function detectRoutes(root) {
@@ -182,7 +235,7 @@ export function detectComponentDirs(root) {
     const files = listFiles(root, rel, 50);
     found.push({
       dir: rel,
-      ...fileFacts(root, rel),
+      fileCount: files.length,
       sampleFiles: files.slice(0, 20),
     });
   }
@@ -194,7 +247,7 @@ export function detectComponentDirs(root) {
       if (COMPONENT_DIR_CANDIDATES.includes(rel)) continue;
       if (!existsSync(join(root, rel))) continue;
       const files = listFiles(root, rel, 30);
-      found.push({ dir: rel, ...fileFacts(root, rel), sampleFiles: files.slice(0, 15) });
+      found.push({ dir: rel, fileCount: files.length, sampleFiles: files.slice(0, 15) });
     }
   }
   return found;
@@ -244,9 +297,8 @@ export function fingerprintOf(facts) {
     frameworks: facts.stack?.frameworks,
     platforms: facts.stack?.platforms,
     uiLibs: facts.stack?.uiLibs,
-    // 带上全量文件路径的哈希与路由子目录：文件数不变的改名 / 替换也要让指纹变化
-    componentDirs: (facts.components ?? []).map((c) => [c.dir, c.fileCount, c.filesHash]),
-    routeDirs: (facts.routes ?? []).map((r) => [r.dir, r.subdirs]),
+    componentDirs: (facts.components ?? []).map((c) => [c.dir, c.fileCount]),
+    routeDirs: (facts.routes ?? []).map((r) => r.dir),
     i18n: facts.docs?.i18nDirs,
   };
   return createHash('sha256').update(JSON.stringify(slim)).digest('hex').slice(0, 12);
@@ -267,7 +319,9 @@ export function scanProject(root) {
   };
   const productText = ux.product ? safeRead(join(uxRoot, PRODUCT_FILE)) : null;
   const componentsText = ux.components ? safeRead(join(uxRoot, COMPONENTS_FILE)) : null;
-  const facts = { root, skillVersion: SKILL_VERSION, stack, routes, components, docs, ux };
+  const scheme = COMPONENT_SCHEMES[stack.platform === 'mobile' ? 'mobile' : 'web'];
+  const componentClasses = classifyComponents(root, stack, components);
+  const facts = { root, skillVersion: SKILL_VERSION, stack, routes, components, componentScheme: scheme, componentClasses, docs, ux };
   const fingerprint = fingerprintOf(facts);
   facts.fingerprint = fingerprint;
   facts.productMeta = parseInitMeta(productText);
@@ -308,7 +362,12 @@ function renderHuman(facts) {
   if (facts.stack.description) lines.push(`描述：${facts.stack.description}`);
   lines.push(`平台：${facts.stack.platforms.join(', ') || '未判定'}`);
   lines.push(`框架：${facts.stack.frameworks.join(', ') || '未判定'}`);
-  lines.push(`UI 库：${facts.stack.uiLibs.join(', ') || '未发现'}`);
+  const pu = facts.stack.primaryUi;
+  lines.push(`UI 库：${pu ? `${pu.name}${pu.alias ? `（alias → ${pu.alias}）` : ''} · ${pu.role}` : facts.stack.uiLibs.join(', ') || '未发现'}`);
+  const others = facts.stack.uiLibs.filter((d) => d !== pu?.name && !facts.stack.depOnlyUi.includes(d));
+  if (others.length) lines.push(`  其他 UI 依赖：${others.join(', ')}`);
+  if (facts.stack.depOnlyUi.length) lines.push(`  仅依赖、不是 RN 界面库：${facts.stack.depOnlyUi.join(', ')}（DOM 组件库，RN 界面不从这里取原子层）`);
+  if (facts.stack.navigation.length) lines.push(`导航：${facts.stack.navigation.join(', ')}`);
   lines.push(`TypeScript：${facts.stack.hasTypeScript ? '是' : '否'}`);
   if (facts.docs.readmeTitle) lines.push(`README：${facts.docs.readmeTitle}`);
   if (facts.docs.readmeLead) lines.push(`  ${facts.docs.readmeLead}`);
@@ -326,6 +385,10 @@ function renderHuman(facts) {
     lines.push(`  ${c.dir}/  ~${c.fileCount} 文件`);
     if (c.sampleFiles.length) lines.push(`    样例：${c.sampleFiles.slice(0, 6).join(', ')}`);
   }
+  if (facts.componentClasses.length) {
+    const count = Object.fromEntries(facts.componentScheme.map((c) => [c, facts.componentClasses.filter((x) => x.class === c).length]));
+    lines.push(`组件初分（启发式，Round 2 复核）：${facts.componentScheme.map((c) => `${c} ${count[c]}`).join(' · ')}`);
+  }
   lines.push('');
   lines.push('项目层：');
   lines.push(`  ${UX_DIR}/${PRODUCT_FILE}：${facts.ux.product ? '有' : '缺'}`);
@@ -333,7 +396,7 @@ function renderHuman(facts) {
   lines.push('');
   lines.push('下一步（由 Agent 执行，本脚本不落盘）：');
   lines.push('  Round 1 → 写/更新 .agents/ux/product.md（平台、产品类型、用户、核心任务、适用性、copy-profile）');
-  lines.push('  Round 2 → 写/更新 .agents/ux/components.md（薄包装 / 重复 / 业务组件用法）');
+  lines.push(`  Round 2 → 写/更新 .agents/ux/components.md（${facts.componentScheme.join(' / ')}）${facts.stack.platform === 'mobile' ? '；mobile：项目组件库就是原子层，不要求改用 @lobehub/ui' : ''}`);
   lines.push(`  文件头写入：${renderInitMeta(facts.skillVersion, facts.fingerprint)}`);
   return lines.join('\n');
 }

@@ -1,4 +1,4 @@
-import type { Chat } from 'chat';
+import type { Chat, Message, MessageContext } from 'chat';
 
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -10,6 +10,9 @@ import type {
   PlatformClient,
   WatchKeywordEntry,
 } from '../platforms';
+import type { WakeMessageLike } from '../wake/signal';
+import type { FollowupGate } from './followupGate';
+import type { BotWakeEntryPoint, BotWakeInitiation, BotWakeReason } from './wakeDecision';
 
 export interface ResolvedAgentInfo {
   agentId: string;
@@ -117,6 +120,8 @@ export type BotAccessGate = (
 export interface BotHandlerContext {
   agentId: string;
   applicationId: string;
+  /** The bot has the bot-wake scenario enabled: it listens to unaddressed channel chatter. */
+  botWakeEnabled: boolean;
   bridge: AgentBridgeService;
   charLimit?: number;
   client: PlatformClient;
@@ -124,12 +129,68 @@ export interface BotHandlerContext {
   detectReplyLocale: (message: { author?: unknown }) => BotReplyLocale;
   displayToolCalls: boolean;
   dmSettings: DmSettings;
+  /** Last check before a follow-up wake (watch keyword) runs: enforced policies, then the scheduler. */
+  gateFollowup: FollowupGate;
+  /**
+   * Whether a message nobody addressed to the bot should wake it anyway (its name is in the text,
+   * or it spoke lately and the classifier agrees). `undefined` unless the rules are enforcing.
+   */
+  initiate: (
+    entryPoint: BotWakeEntryPoint,
+    message: WakeMessageLike,
+    thread: { id: string },
+    threadSubscribed?: boolean,
+  ) => Promise<BotWakeInitiation | undefined>;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
+  /** Records the wake decision a branch just made. Observation only; never throws. */
+  observe: (
+    entryPoint: BotWakeEntryPoint,
+    message: WakeMessageLike,
+    thread: { id: string },
+    outcome: 'defer' | 'skip' | 'wake',
+    reason: BotWakeReason,
+    threadSubscribed?: boolean,
+  ) => void;
+  /** Records a skipped burst: the merged latest message, and each other person's parked one. */
+  observeBurst: (
+    entryPoint: BotWakeEntryPoint,
+    message: Message,
+    context: MessageContext | undefined,
+    thread: { id: string },
+    threadSubscribed?: boolean,
+  ) => void;
   operatorUserId?: string;
   passGatesOrNotify: BotAccessGate;
   platform: string;
   reactionMode: BotReactionMode;
+  /** Keeps what people said, burst included, in the channel's shared log. Never throws. */
+  remember: (
+    entryPoint: BotWakeEntryPoint,
+    messages: WakeMessageLike[],
+    thread: { id: string },
+  ) => void;
   serverDB: LobeChatDatabase;
+  /**
+   * Opens the reply to a message that woke the bot (an acknowledgement, and the channel or a new
+   * thread), records the wake, and returns the acknowledgement it posted. Swaps `thread.id` when a
+   * thread opens. Call `release` once the bridge has taken the run: until then the channel stays
+   * claimed, so a concurrent opening does not pick it too.
+   */
+  startReply: (input: {
+    entryPoint: BotWakeEntryPoint;
+    /** The previous behaviour opened a reply thread here; kept when the bot does not decide. */
+    legacyOpensThread?: boolean;
+    message: WakeMessageLike;
+    rawMessage: unknown;
+    reason: BotWakeReason;
+    thread: {
+      id: string;
+      post: (message: string) => Promise<unknown>;
+      startTyping?: () => Promise<unknown>;
+    };
+    threadSubscribed?: boolean;
+    wakeKind: 'followup' | 'mention';
+  }) => Promise<{ openingReply?: string; release: () => void }>;
   userId: string;
   watchKeywordEntries: WatchKeywordEntry[];
   watchKeywords: ReadonlyArray<string>;

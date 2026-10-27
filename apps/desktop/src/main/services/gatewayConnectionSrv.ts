@@ -34,6 +34,7 @@ import type {
   GatewayEndpointInfo,
 } from '@lobechat/electron-client-ipc';
 import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
+import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
 import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
@@ -1311,42 +1312,38 @@ export default class GatewayConnectionService extends ServiceModule {
     request: ToolCallRequestMessage,
     client: GatewayClient,
   ) => {
-    const { requestId, toolCall } = request;
+    const { operationId, requestId, toolCall } = request;
     const { apiName, arguments: argsStr, identifier, params, type } = toolCall;
 
     logger.info(
       `Received tool call: apiName=${apiName}, requestId=${requestId}, type=${type ?? 'tool'}`,
     );
 
-    // Timed on THIS machine's clock, around both routes. The server can only
-    // observe the whole dispatch round trip, so without this number a slow tool
-    // and slow transport are indistinguishable — and desktop is where most
-    // device tool calls actually happen, so leaving it out here would bias the
-    // measurement toward the `lh connect` subset.
+    // Time execution on the device, including Native cancellation/draining.
     const startedAt = performance.now();
 
     try {
-      let result: ToolCallResult;
-
-      if (type === 'mcp') {
-        // Tunneled stdio MCP call: route to the local MCP client (spawns the
-        // stdio server). Routing is driven by the explicit `type` discriminator,
-        // not by sniffing the payload — the builtin local-system tool switch
-        // keys on `apiName` and has no MCP server context.
-        if (!this.mcpCallHandler) {
-          throw new Error('No MCP call handler configured');
+      const result = await executeDeviceOperation({ apiName, operationId }, async () => {
+        if (type === 'mcp') {
+          // Tunneled stdio MCP call: route to the local MCP client (spawns the
+          // stdio server). Routing is driven by the explicit `type` discriminator,
+          // not by sniffing the payload — the builtin local-system tool switch
+          // keys on `apiName` and has no MCP server context.
+          if (!this.mcpCallHandler) {
+            throw new Error('No MCP call handler configured');
+          }
+          if (!params) {
+            throw new Error('MCP tool call missing connection params');
+          }
+          return this.mcpCallHandler({ apiName, arguments: argsStr, identifier, params });
+        } else {
+          if (!this.toolCallHandler) {
+            throw new Error('No tool call handler configured');
+          }
+          const args = JSON.parse(argsStr);
+          return this.toolCallHandler(identifier, apiName, args);
         }
-        if (!params) {
-          throw new Error('MCP tool call missing connection params');
-        }
-        result = await this.mcpCallHandler({ apiName, arguments: argsStr, identifier, params });
-      } else {
-        if (!this.toolCallHandler) {
-          throw new Error('No tool call handler configured');
-        }
-        const args = JSON.parse(argsStr);
-        result = await this.toolCallHandler(identifier, apiName, args);
-      }
+      });
 
       // Forward the typed envelope unchanged. Critically, do NOT stringify the
       // whole result into `content` — that would bury the structured payload

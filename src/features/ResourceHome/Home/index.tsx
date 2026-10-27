@@ -17,8 +17,6 @@ import QuickActions from './QuickActions';
 const styles = stylex.create({
   content: {
     width: '100%',
-    maxWidth: '1200px',
-    marginInline: 'auto',
     paddingBlockStart: '24px',
     paddingBlockEnd: '64px',
     paddingInline: '32px',

@@ -31,6 +31,11 @@ import {
 } from '@lobechat/builtin-tool-browser/client';
 import { CanvasInspectors, CanvasManifest } from '@lobechat/builtin-tool-canvas/client';
 import {
+  ChannelInspectors,
+  ChannelManifest,
+  ChannelRenders,
+} from '@lobechat/builtin-tool-channel/client';
+import {
   ClaudeCodeApiName,
   ClaudeCodeIdentifier,
   ClaudeCodeInspectors,
@@ -262,6 +267,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [ChannelManifest.identifier]: ChannelRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
@@ -312,6 +318,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [ChannelManifest.identifier]: ChannelInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.
     // New manifests and execution routes only advertise lobe-computer-use.

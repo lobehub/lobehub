@@ -61,6 +61,8 @@ export interface ListProjectSkillsResult {
 }
 
 export interface StatPathResult {
+  /** Device-resolved path; aliases and symlinks share one execution-directory lock. */
+  canonicalPath?: string;
   exists: boolean;
   isDirectory: boolean;
   repositoryUrl?: string;

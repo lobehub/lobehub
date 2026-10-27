@@ -83,6 +83,10 @@ async function readRouterSources() {
       'taskWorkspaceRoutes.tsx',
       'workspaceSettingsRoutes.tsx',
       'resourceRoutes.tsx',
+      'agentPageRoutes.tsx',
+      'memoryRoutes.tsx',
+      'onboardingRoute.tsx',
+      'collaborationRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -382,7 +386,8 @@ describe('desktop router shared definition', () => {
     expect(electronPaths).not.toContain('/share/page');
     expect(electronPaths).not.toContain('/verify');
     expect(electronPaths).not.toContain('/acceptance');
-    expect(electronPaths).not.toContain('/onboarding');
+    // Electron runs account onboarding after its local first-run setup.
+    expect(electronPaths).toContain('/onboarding');
     expect(electronPaths).toContain('/desktop-onboarding');
   });
 
@@ -737,12 +742,13 @@ describe('desktop router shared definition', () => {
   });
 
   it('keeps business resource and task routes in the shared definition', async () => {
-    const [sharedSource, , , , , , resourceSource] = await readRouterSources();
+    const [sharedSource, , , , , , resourceSource, agentPageSource] = await readRouterSources();
 
     expect(sharedSource).toContain('resourceRoute,');
     expect(resourceSource).toContain('...BusinessResourceRoutes');
     expect(sharedSource).toContain("import('@/routes/(main)/(task-workspace)/_layout')");
-    expect(sharedSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
+    expect(sharedSource).toContain('...agentPageChildren,');
+    expect(agentPageSource).toContain("import('@/routes/(main)/agent/task/[taskId]')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/task-workspace/_layout')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/tasks/_layout')");
     expect(sharedSource).not.toContain("import('@/routes/(main)/task/_layout')");

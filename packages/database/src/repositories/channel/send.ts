@@ -8,10 +8,18 @@ import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { attachFiles, fileIdsByMessage } from './attachments';
-import { activeMembers, appendMessage, candidateAgents, deliver, findThread } from './delivery';
+import {
+  activeMembers,
+  appendMessage,
+  assertThreadOpen,
+  candidateAgents,
+  deliver,
+  findThread,
+} from './delivery';
 import { ChannelError } from './error';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
+import { createChannelThread } from './view';
 
 export interface ChannelSendInput {
   content: string;
@@ -20,6 +28,8 @@ export interface ChannelSendInput {
   mentions?: string[];
   /** Client retry key; a retry with the same key returns the original message. */
   requestKey: string;
+  /** Create/reuse a branch and send its first message in the same transaction. */
+  rootMessageId?: string;
   /** How to route a message without @mentioned Agents. */
   routing: ChannelRoutingMode;
   threadId?: string | null;
@@ -29,6 +39,8 @@ const sameList = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
 export const validateSendInput = (input: ChannelSendInput) => {
+  if (input.rootMessageId && input.threadId)
+    throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
   const fileIds = [...new Set(input.fileIds ?? [])];
   if (
     (!input.content.trim() && !fileIds.length) ||
@@ -59,7 +71,13 @@ export const sendMessage = async (
   input: ChannelSendInput,
 ): Promise<ChannelMessageItem> => {
   const { fileIds, mentions } = validateSendInput(input);
-  const threadId = input.threadId || null;
+  // Reopening an archived branch from its root must not post into it either.
+  const thread = assertThreadOpen(
+    input.rootMessageId
+      ? await createChannelThread(tx, channel.id, { rootMessageId: input.rootMessageId })
+      : await findThread(tx, channel.id, input.threadId || null),
+  );
+  const threadId = thread?.id ?? null;
 
   const [existing] = await tx
     .select()
@@ -84,7 +102,6 @@ export const sendMessage = async (
     return existing;
   }
 
-  const thread = await findThread(tx, channel.id, threadId);
   if (fileIds.length) {
     // Lock in a stable order so concurrent sends and file cleanup cannot deadlock.
     const accessible = await tx
@@ -118,19 +135,37 @@ export const sendMessage = async (
     ? []
     : await candidateAgents(tx, channel.id, channel.agentId ? null : thread);
   const direct = !!channel.agentId && candidates.length > 0;
+  const [pendingRoot] =
+    thread && !mentions.length && !direct
+      ? await tx
+          .select({ id: channelMessages.id })
+          .from(channelMessages)
+          .where(
+            and(
+              eq(channelMessages.id, thread.rootMessageId),
+              eq(channelMessages.routingStatus, 'pending'),
+            ),
+          )
+      : [];
   const routed = mentions.length
     ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
-    : !candidates.length
-      ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
-      : direct
-        ? ({ reason: 'Direct conversation', source: 'explicit', status: 'directed' } as const)
-        : input.routing === 'jev'
-          ? ({ reason: null, source: null, status: 'pending' } as const)
-          : ({
-              reason: 'No decision model configured',
-              source: 'fallback',
-              status: 'assigned',
-            } as const);
+    : pendingRoot
+      ? {
+          reason: 'Waiting for the root message routing decision',
+          source: input.routing === 'fallback' ? ('fallback' as const) : null,
+          status: 'pending' as const,
+        }
+      : !candidates.length
+        ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
+        : direct
+          ? ({ reason: 'Direct conversation', source: 'explicit', status: 'directed' } as const)
+          : input.routing === 'jev'
+            ? ({ reason: null, source: null, status: 'pending' } as const)
+            : ({
+                reason: 'No decision model configured',
+                source: 'fallback',
+                status: 'assigned',
+              } as const);
   const recipients = mentions.length
     ? mentionedAgents
     : direct || routed.status === 'assigned'

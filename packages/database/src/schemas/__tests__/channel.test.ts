@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { ChannelInputManifest, ChannelMemberConfig } from '@lobechat/types';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -79,7 +79,6 @@ const createMessage = async (channelId: string, authorMemberId: string, sequence
 };
 
 const manifest = (requesterMemberId: string, memberId: string): ChannelInputManifest => ({
-  afterSequence: 0,
   cutoffSequence: 1,
   requestMessageId: 'unused',
   requesterMemberId,
@@ -133,6 +132,22 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // Fixture writers never start a process. Release them first: the deletion guard refuses to
+  // cascade over a held writer, and a leftover row would block every later file's cleanup.
+  await serverDB
+    .update(channelJobs)
+    .set({ writerHeld: false })
+    .where(
+      inArray(
+        channelJobs.channelId,
+        serverDB
+          .select({ id: channels.id })
+          .from(channels)
+          .where(
+            or(eq(channels.workspaceId, workspaceId), inArray(channels.userId, [ownerId, otherId])),
+          ),
+      ),
+    );
   await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
   await serverDB.delete(users).where(inArray(users.id, [ownerId, otherId]));
 });
@@ -477,6 +492,14 @@ describe('channel schema', () => {
       const fixture = await createChannel();
       const [job] = await createClaimedJob(fixture, 1);
 
+      // A held writer blocks the cascade until its process is confirmed stopped.
+      await expect(
+        serverDB.delete(channels).where(eq(channels.id, fixture.channel.id)),
+      ).rejects.toThrow();
+      await serverDB
+        .update(channelJobs)
+        .set({ writerHeld: false })
+        .where(eq(channelJobs.id, job.id));
       await serverDB.delete(channels).where(eq(channels.id, fixture.channel.id));
 
       const members = await serverDB

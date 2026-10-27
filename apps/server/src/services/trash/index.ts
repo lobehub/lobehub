@@ -23,6 +23,7 @@ import {
   topicCascades,
   type TrashCascade,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './handlers';
 
@@ -38,6 +39,12 @@ export interface TrashOptions {
 export interface TrashRestoreOutcome {
   failed: { code: TrashRestoreErrorCode; id: string }[];
   restored: TrashItem[];
+}
+
+export interface TrashPurgeOutcome {
+  /** Registry ids whose handler refused for now; they stay in the bin. */
+  blocked: string[];
+  purged: number;
 }
 
 export interface TrashSweepOutcome {
@@ -279,15 +286,25 @@ export class TrashService {
 
   // ─────────────────────────── purge (hard delete) ───────────────────────────
 
-  /** Permanently delete roots by registry id (their cascade goes with them). */
-  purge = async (itemIds: string[]): Promise<{ purged: number }> => {
+  /**
+   * Permanently delete roots by registry id (their cascade goes with them). A
+   * root its handler cannot delete yet is reported in `blocked` and left in the
+   * bin; it does not stop the others.
+   */
+  purge = async (itemIds: string[]): Promise<TrashPurgeOutcome> => {
     const roots = (await this.trashModel.findByIds(itemIds)).filter((row) => !row.rootId);
-    let purged = 0;
+    const outcome: TrashPurgeOutcome = { blocked: [], purged: 0 };
     for (const root of roots) {
-      await this.purgeRoot(root);
-      purged += 1;
+      try {
+        await this.purgeRoot(root);
+        outcome.purged += 1;
+      } catch (error) {
+        if (!(error instanceof TrashPurgeBlockedError)) throw error;
+        log('purge blocked for %s:%s — %s', root.resourceType, root.resourceId, error.message);
+        outcome.blocked.push(root.id);
+      }
     }
-    return { purged };
+    return outcome;
   };
 
   /**
@@ -306,15 +323,20 @@ export class TrashService {
      * everything it is allowed to.
      */
     filter?: TrashRootFilter,
-  ): Promise<{ hasMore: boolean; purged: number }> => {
+  ): Promise<{ blocked: number; hasMore: boolean; purged: number }> => {
     const ids = await this.trashModel.listAllRootIds({
       ...filter,
       limit: TRASH_EMPTY_BATCH_SIZE + 1,
     });
-    const { purged } = await this.purge(ids.slice(0, TRASH_EMPTY_BATCH_SIZE));
+    const { blocked, purged } = await this.purge(ids.slice(0, TRASH_EMPTY_BATCH_SIZE));
     // `purged === 0` with rows left means nothing in reach could be purged;
-    // stop instead of letting the client spin.
-    return { hasMore: ids.length > TRASH_EMPTY_BATCH_SIZE && purged > 0, purged };
+    // stop instead of letting the client spin. Blocked roots stay listed, so a
+    // later batch sees them again and only counts what it actually removed.
+    return {
+      blocked: blocked.length,
+      hasMore: ids.length > TRASH_EMPTY_BATCH_SIZE && purged > 0,
+      purged,
+    };
   };
 
   private purgeRoot = async (root: TrashItemRow) => {

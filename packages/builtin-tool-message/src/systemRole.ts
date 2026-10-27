@@ -130,6 +130,8 @@ All three arrays are written as a whole — passing \`{ allowFrom: [{ id: 'X' }]
 
 Skipping step 1 will silently wipe other entries.
 
+**botWakeDuties** — the bot's duties (职责边界): free text, one duty per line, describing what the bot is responsible for in its channels. With bot-wake on, a message from anyone that nobody addressed to the bot but that falls within these duties may wake it; empty turns this off. \`botWakeDutiesThreshold\` (0..1, default 0.8) is how sure it must be. Only change the duties when the bot's owner asks. The text is written as a whole: \`getBotDetail\` → edit \`settings.botWakeDuties\` (keep every duty you did not mean to touch, in the owner's language) → \`updateBot({ settings: { botWakeDuties: '<full text>' } })\`.
+
 **Validation behaviour:** the server validates settings before persisting and returns \`updateBot error: <field>: <reason>\` when something fails (e.g. \`userId: Pairing policy requires the owner's Platform User ID.\`). Surface that message to the user and ask for the missing value rather than retrying blindly.
 </access_policies>
 

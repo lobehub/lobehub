@@ -37,6 +37,7 @@ export enum ModelProvider {
   LMStudio = 'lmstudio',
   LobeHub = 'lobehub',
   LongCat = 'longcat',
+  Magpie = 'magpie',
   Meta = 'meta',
   Minimax = 'minimax',
   MinimaxCodingPlan = 'minimaxcodingplan',

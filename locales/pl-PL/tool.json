@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "Poświadczenie z kluczem „{{key}}” już istnieje z innym typem ({{type}}) i nie może być zastąpione z tego miejsca. Pomiń i poproś o nie pod innym kluczem.",
   "credsInput.notice.workspace": "Zapisano zaszyfrowane w poświadczeniach tej przestrzeni roboczej. Wartości trafiają bezpośrednio do magazynu i nigdy nie są pokazywane AI.",
   "credsInput.placeholder": "Wprowadź {{field}}",
+  "credsInput.proseConfirm": "Zapisz mimo to",
+  "credsInput.proseWarning": "Wartość dla „{{fields}}” wygląda jak zdanie, a nie sekret (zawiera tekst CJK lub całe zdanie). Jeśli została wklejona przez pomyłkę, popraw ją przed zapisaniem; w przeciwnym razie potwierdź, klikając „Zapisz mimo to”.",
   "credsInput.saveFailed": "Nie udało się zapisać poświadczenia. Spróbuj ponownie.",
   "credsInput.skip": "Pomiń",
   "credsInput.submit": "Zapisz",

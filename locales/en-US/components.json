@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "This model supports video recognition",
   "ModelSelect.featureTag.vision": "This model supports visual recognition.",
   "ModelSelect.removed": "The model is not in the list. It will be automatically removed if deselected.",
+  "ModelSelect.routing": "Routing",
+  "ModelSelect.routingTooltip": "A routing group: several providers serve this model, and each request goes to whichever answers.",
   "ModelSelect.staleModel.current": "Current selection",
   "ModelSelect.staleModel.notEnabled.action": "Enable this model",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Failed to enable the model. Please try again.",

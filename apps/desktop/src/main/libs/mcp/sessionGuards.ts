@@ -1,3 +1,5 @@
+import { SdkError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+
 import type { MCPClientParams } from './types';
 
 /**
@@ -35,12 +37,13 @@ export const serializeMcpClientParams = (params: MCPClientParams): string =>
  *
  * The signal set is deliberately narrow and mirrors the server-side
  * `MCPClient.isNoValidSessionError` (src/libs/mcp/client.ts): only the
- * `MCPConnectionError` transport wrapper and the SDK's exact
+ * `MCPConnectionError` transport wrapper, HTTP 404, or the legacy
  * "No valid session ID provided" message qualify. Generic JSON-RPC `-32000`
  * errors are server-side application errors and do NOT trigger a retry.
  */
 export const isStaleSessionError = (error: unknown): boolean => {
   if (!error) return false;
+  if (SdkHttpError.isInstance(error) && error.status === 404) return true;
   if (error instanceof Error && error.name === 'MCPConnectionError') return true;
   const message = error instanceof Error ? error.message : String(error);
   return message.includes('No valid session ID provided');
@@ -48,21 +51,17 @@ export const isStaleSessionError = (error: unknown): boolean => {
 
 /**
  * Whether the failure means the pooled stdio subprocess is gone. The MCP
- * SDK surfaces a dead transport as `McpError(ErrorCode.ConnectionClosed)`
- * for requests that were in flight when the process exited, and as plain
- * "Connection closed" / "Not connected" errors for requests issued after
- * the transport closed (shared/protocol.js `_onclose` / `request`).
+ * SDK surfaces a dead transport as `SdkError(SdkErrorCode.ConnectionClosed)`
+ * for requests that were in flight when the process exited, and as
+ * `SdkError(SdkErrorCode.NotConnected)` for requests issued after close.
  *
  * Unlike `isStaleSessionError` this does NOT authorize a replay — the
  * request may have reached the server before the pipe died — but the dead
  * client must still be evicted from the pool, or every later same-key
  * acquisition would refresh and return the same unusable session forever.
- * Message matches are exact on purpose: a server-side application error
- * that merely contains those words must not get a healthy pooled session
- * killed.
+ * SDK error brands and codes keep server-side application errors from
+ * evicting a healthy pooled session.
  */
-export const isDeadTransportError = (error: unknown): boolean => {
-  if (!error) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  return message === 'Connection closed' || message === 'Not connected';
-};
+export const isDeadTransportError = (error: unknown): boolean =>
+  SdkError.isInstance(error) &&
+  (error.code === SdkErrorCode.ConnectionClosed || error.code === SdkErrorCode.NotConnected);

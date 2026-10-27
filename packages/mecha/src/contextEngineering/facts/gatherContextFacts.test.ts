@@ -19,6 +19,18 @@ const message = (content: string) =>
   ({ content, createdAt: 0, id: 'm', role: 'user', updatedAt: 0 }) as never;
 
 describe('gatherContextFacts', () => {
+  it('tells the agent its name, not only its title', async () => {
+    const named = await gatherContextFacts(
+      request({ agent: { description: '', name: 'Nasa', title: 'Shadow Arvin' } }),
+      {},
+    );
+    const unnamed = await gatherContextFacts(request(), {});
+
+    expect(named.variables).toMatchObject({ agent_name: 'Nasa', agent_title: 'Shadow Arvin' });
+    // Without a name the label is the title, the same as the product shows.
+    expect(unnamed.variables).toMatchObject({ agent_name: 'Helper', agent_title: 'Helper' });
+  });
+
   it('yields no facts and never throws when the host provides nothing', async () => {
     const facts = await gatherContextFacts(request(), {});
 
@@ -265,6 +277,19 @@ describe('gatherContextFacts', () => {
       expect(ctx.availableAgentsHasMore).toBe(true);
       expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
       expect(ctx.availablePlugins).toBeUndefined();
+    });
+
+    it('carries each agent’s name beside its title, for itself and the others', async () => {
+      const facts = await gatherContextFacts(
+        request({ agent: { name: 'Nasa', title: 'Shadow Arvin' } }),
+        { listRecentAgents: async () => [{ id: 'agt_2', name: 'Tiko', title: 'Reviewer' }] },
+      );
+
+      const ctx = facts.step.agentManagementContext!;
+      expect(ctx.currentAgent).toStrictEqual({ id: 'agt_1', name: 'Nasa', title: 'Shadow Arvin' });
+      expect(ctx.availableAgents).toStrictEqual([
+        { description: undefined, id: 'agt_2', name: 'Tiko', title: 'Reviewer' },
+      ]);
     });
 
     it('adds providers and the plugin catalog only when the tool is enabled', async () => {

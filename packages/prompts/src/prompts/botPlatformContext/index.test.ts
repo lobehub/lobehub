@@ -168,4 +168,90 @@ describe('formatBotPlatformContext', () => {
 
     expect(result).toMatchSnapshot();
   });
+  it('tells a followup wake it may stay silent, with the token and the reasons', () => {
+    const result = formatBotPlatformContext({
+      platformName: 'Discord',
+      supportsMarkdown: true,
+      wakeKind: 'followup',
+    });
+
+    expect(result).toContain('<optional_reply>');
+    expect(result).toContain('`NO_REPLY`');
+    expect(result).toContain('NO_REPLY:<reason>');
+    expect(result).toContain(
+      'not_addressed, off_topic, nothing_to_add, duplicate, already_handled',
+    );
+    // The reason the runtime assigns itself is not offered to the agent.
+    expect(result).not.toContain('empty_completion');
+  });
+
+  it('tells an agent woken by its duties which duty, and to act on it or stay silent', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const duty = formatBotPlatformContext({
+      ...base,
+      duty: { matched: 'Assess <feature> requests' },
+      wakeKind: 'followup',
+    });
+
+    expect(duty).toContain('the message falls within the duties your owner gave you');
+    // The matched duty is named, escaped like any owner-written text.
+    expect(duty).toContain('(the duty: "Assess &lt;feature&gt; requests")');
+    expect(duty).toContain('carry it out');
+    expect(duty).toContain('NO_REPLY:off_topic');
+    expect(duty).toContain('NO_REPLY:already_handled');
+    // Without a matched duty the hint still says why, without an empty quote.
+    const unnamed = formatBotPlatformContext({ ...base, duty: {}, wakeKind: 'followup' });
+    expect(unnamed).toContain('the duties your owner gave you.');
+    expect(unnamed).not.toContain('(the duty:');
+    expect(formatBotPlatformContext({ ...base, wakeKind: 'followup' })).not.toContain(
+      'Why you were woken',
+    );
+    // A duty without a followup wake has nothing to qualify.
+    expect(formatBotPlatformContext({ ...base, duty: { matched: 'x' } })).not.toContain(
+      '<optional_reply>',
+    );
+  });
+
+  // "Nasa 咋被激活了": someone asking the room why the bot woke up. It looked up its own config and
+  // explained, instead of staying silent.
+  it('tells an agent woken by its name in the text that people often talk about it, not to it', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const named = formatBotPlatformContext({ ...base, named: true, wakeKind: 'followup' });
+
+    expect(named).toContain('Why you were woken: your name appears in the message');
+    expect(named).toContain('NO_REPLY:not_addressed');
+    expect(named).toContain('Decide the way a teammate in the room would');
+    // Criticism of the bot is answered, not let go.
+    expect(named).toContain('When someone is unhappy with something you did');
+    expect(formatBotPlatformContext({ ...base, named: true })).not.toContain('<optional_reply>');
+  });
+
+  it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+
+    expect(formatBotPlatformContext({ ...base, wakeKind: 'mention' })).toBe(
+      formatBotPlatformContext(base),
+    );
+    expect(formatBotPlatformContext(base)).not.toContain('NO_REPLY');
+  });
+
+  it('tells the agent the acknowledgement it already posted, so it does not acknowledge twice', () => {
+    const result = formatBotPlatformContext({
+      openingReply: '收到，我先翻下昨天的报错 <日志>',
+      platformName: 'Discord',
+      supportsMarkdown: true,
+    });
+
+    expect(result).toContain('<opening_reply>');
+    expect(result).toContain('"收到，我先翻下昨天的报错 &lt;日志&gt;"');
+    expect(result).toContain('Do not acknowledge again');
+  });
+
+  it('adds no opening block when nothing was posted before the run', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+
+    expect(formatBotPlatformContext({ ...base, openingReply: '  ' })).toBe(
+      formatBotPlatformContext(base),
+    );
+  });
 });

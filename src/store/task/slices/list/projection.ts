@@ -1,3 +1,4 @@
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 
 import { defineReplica, type ReplicaEntityAdapter, stableQueryKey } from '@/libs/replica';
@@ -28,6 +29,8 @@ export interface TaskListQuery {
   automated?: boolean;
   /** Every page walked (the Tasks list view), or the first server page. */
   complete?: boolean;
+  /** Completed / canceled tasks closed outside this window are left out server-side. */
+  completedWithin?: TaskCompletedWindow;
   /** Archived tasks are hidden unless the "Show archived" option is on. */
   includeArchived?: boolean;
   /** One server page of a paginated collection (scheduled / "My tasks"); ignored by `complete`. */
@@ -52,6 +55,8 @@ export interface TaskListValue {
 export interface TaskGroupListQuery {
   agentId?: string;
   automated?: boolean;
+  /** Completed / canceled cards closed outside this window are left out server-side. */
+  completedWithin?: TaskCompletedWindow;
   /** Sorted. */
   excludeStatuses?: TaskStatus[];
   groupBy: TaskKanbanGroupBy;
@@ -144,7 +149,7 @@ export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskG
     if (!current) return data;
     let next = fn(current);
     if (next === current) return data;
-    // A card whose new status the board hides (`hideCompleted`) leaves it, even
+    // A card whose new status the board hides ("Completed tasks: None") leaves it, even
     // though the server still returns the hidden status's empty column.
     if (next && data.excludeStatuses?.includes(next.status as TaskStatus)) next = undefined;
 

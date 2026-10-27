@@ -12,19 +12,24 @@ const READ_PREFIX =
 export interface MCPErrorLogMetadata {
   code?: number;
   name: string;
+  status?: number;
 }
 
 /**
  * Error messages and objects are untrusted remote data, so MCP logs only keep fixed metadata.
+ * SDK HTTP errors carry the HTTP status in `status`; their `code` is an SDK string.
  */
 export const getMCPErrorLogMetadata = (error: unknown): MCPErrorLogMetadata => {
   const errorRecord = isRecord(error) ? error : undefined;
   const rawCode = errorRecord?.code;
   const code = typeof rawCode === 'number' ? rawCode : undefined;
+  const rawStatus = errorRecord?.status;
+  const status = typeof rawStatus === 'number' ? rawStatus : undefined;
 
   return {
     code,
     name: error instanceof Error ? 'Error' : typeof error,
+    ...(status !== undefined && { status }),
   };
 };
 

@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "Anmeldedaten mit dem Schlüssel „{{key}}“ existieren bereits mit einem anderen Typ ({{type}}) und können von hier aus nicht ersetzt werden. Überspringen Sie dies und fragen Sie nach einem anderen Schlüssel.",
   "credsInput.notice.workspace": "Verschlüsselt in den Anmeldedaten dieses Arbeitsbereichs gespeichert. Die Werte werden direkt im Speicher abgelegt und niemals der KI angezeigt.",
   "credsInput.placeholder": "{{field}} eingeben",
+  "credsInput.proseConfirm": "Trotzdem speichern",
+  "credsInput.proseWarning": "Der Wert für „{{fields}}“ sieht eher wie ein Satz als ein Geheimnis aus (er enthält CJK-Text oder eine ganze Phrase). Wenn er versehentlich eingefügt wurde, korrigieren Sie ihn vor dem Speichern; andernfalls bestätigen Sie mit „Trotzdem speichern“.",
   "credsInput.saveFailed": "Die Anmeldedaten konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
   "credsInput.skip": "Überspringen",
   "credsInput.submit": "Speichern",

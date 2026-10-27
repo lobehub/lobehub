@@ -22,7 +22,7 @@ const flush = async () => {
   });
 };
 
-const setup = () => {
+const setup = (onVisibleChange?: (visible: boolean) => void) => {
   const pane = document.createElement('div');
   const content = document.createElement('div');
   pane.append(content);
@@ -31,8 +31,14 @@ const setup = () => {
   Object.defineProperty(pane, 'scrollHeight', { configurable: true, value: 2000 });
   setBody(content, '<h1>Intro</h1><h2>Usage</h2><h2>FAQ</h2>');
 
-  render(<TableOfContents contentRef={{ current: content }} scrollRef={{ current: pane }} />);
-  return { content, pane };
+  const view = render(
+    <TableOfContents
+      contentRef={{ current: content }}
+      scrollRef={{ current: pane }}
+      onVisibleChange={onVisibleChange}
+    />,
+  );
+  return { content, pane, view };
 };
 
 const activeText = () =>
@@ -148,5 +154,25 @@ describe('TableOfContents', () => {
     });
 
     expect(activeText()).toBe('Usage');
+  });
+
+  // The editor reserves room for the rail only while it is shown, so wide
+  // tables stop short of it instead of running underneath.
+  it('reports whether the rail is shown', async () => {
+    const onVisibleChange = vi.fn();
+    const { content, view } = setup(onVisibleChange);
+    await flush();
+    expect(onVisibleChange).toHaveBeenLastCalledWith(true);
+
+    setBody(content, '<h1>Only one heading</h1>');
+    await flush();
+    expect(onVisibleChange).toHaveBeenLastCalledWith(false);
+
+    setBody(content, '<h1>Intro</h1><h2>Usage</h2>');
+    await flush();
+    expect(onVisibleChange).toHaveBeenLastCalledWith(true);
+
+    view.unmount();
+    expect(onVisibleChange).toHaveBeenLastCalledWith(false);
   });
 });

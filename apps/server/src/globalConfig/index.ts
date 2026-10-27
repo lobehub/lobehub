@@ -82,6 +82,9 @@ const getAiProviderSpecificConfig = () => {
     lmstudio: {
       fetchOnClient: getServerFetchOnClientOverride('lmstudio'),
     },
+    magpie: {
+      fetchOnClient: getServerFetchOnClientOverride('magpie'),
+    },
     ollama: {
       enabled: isDesktop ? true : undefined,
       fetchOnClient: getServerFetchOnClientOverride('ollama'),

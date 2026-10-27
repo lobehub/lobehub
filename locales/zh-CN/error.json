@@ -34,6 +34,8 @@
   "otherScope.title": "该内容在另一个空间",
   "pluginSettings.desc": "请完成以下配置，即可启用该技能",
   "pluginSettings.title": "{{name}} 技能配置",
+  "requestBodyTooLarge.desc": "这次请求超过了模型提供商允许的大小，通常是对话里的大图或文件太多。压缩上下文会把历史总结成文字，然后重新发送。如果大文件就在刚发的消息里，请先编辑消息删掉一部分。",
+  "requestBodyTooLarge.title": "请求内容过大",
   "response.400": "请求参数有误，请检查后重试",
   "response.401": "未通过身份验证或权限不足，请登录或更新凭证后重试",
   "response.403": "你没有访问权限",

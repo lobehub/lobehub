@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, channelMembers, channelMessages, channels, users } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -31,7 +32,7 @@ const publish = async (channelId: string, messageId: string) => {
   const [job] = await jobsOf(db, messageId);
   const claim = (await execution.claim(channelId, job.id, lease))!;
   expect(claim).not.toBeNull();
-  await execution.accepted(channelId, job.id, {});
+  await execution.accepted(channelId, job.id);
   await execution.saveDraft(channelId, job.id, 'Answer');
   const replyId = await execution.publish(channelId, job.id);
   await execution.releaseWriter(channelId, job.id);
@@ -193,8 +194,8 @@ describe('direct Channel identity', () => {
       mentions: [nextAgent.id],
     });
     const [nextJob] = await jobsOf(db, next.id);
-    await execution.claim(group.channel.id, nextJob.id, lease);
-    expect(await execution.input(group.channel.id, nextJob.id)).toEqual(
+    const nextClaim = (await execution.claim(group.channel.id, nextJob.id, lease))!;
+    expect(await readManifestMessages(db, group.channel.id, nextClaim.job.manifest!)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: replyId,
@@ -230,7 +231,7 @@ describe('direct message sender references', () => {
       .update(channelMembers)
       .set({ agentId: replacement.id })
       .where(eq(channelMembers.id, member.id));
-    await execution.accepted(team.channel.id, job.id, {});
+    await execution.accepted(team.channel.id, job.id);
     await execution.saveDraft(team.channel.id, job.id, 'Original answer');
     const replyId = await execution.publish(team.channel.id, job.id);
     const [reply] = await db.select().from(channelMessages).where(eq(channelMessages.id, replyId));
@@ -266,7 +267,7 @@ describe('direct message sender references', () => {
       else
         await db
           .update(channelMembers)
-          .set({ active: false })
+          .set({ status: 'left' })
           .where(
             and(
               eq(channelMembers.channelId, team.channel.id),

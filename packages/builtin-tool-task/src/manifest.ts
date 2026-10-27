@@ -196,7 +196,8 @@ export const TaskManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'Comment content to add to the task.',
+            description:
+              'Comment content to add to the task (markdown). To notify a workspace member who needs to act, mention them with <mention name="Name" id="user_xxx" />, resolving the id with listWorkspaceMembers first (never guess it); a plain "@Name" is only text.',
             type: 'string',
           },
           identifier: {
@@ -220,7 +221,8 @@ export const TaskManifest: BuiltinToolManifest = {
             type: 'string',
           },
           content: {
-            description: 'Updated comment content.',
+            description:
+              'Updated comment content (markdown). Newly added <mention name="Name" id="user_xxx" /> tags notify those members; resolve ids with listWorkspaceMembers.',
             type: 'string',
           },
         },

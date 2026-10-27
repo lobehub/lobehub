@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "Ошибка платформы",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "Несоответствие схемы",
   "builtins.lobe-agent.apiName.vent.rejected": "Не записано",
+  "builtins.lobe-agent.subAgent.backgroundHint": "Результат будет отправлен в этот разговор, когда он завершится.",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "Работает в фоновом режиме",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} токенов",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} инструментов",
   "builtins.lobe-agent.subAgent.stopped": "Остановлено до завершения",

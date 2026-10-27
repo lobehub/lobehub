@@ -69,6 +69,10 @@ scope: 项目接入；AGENTS.md 探测、托管块、产品画像与组件盘点
 | `node scripts/bootstrap.mjs --check` | 只检查，不写；块缺失或版本落后即失败；项目层缺失 / 过期打 WARN | 0 / 1 |
 | `node scripts/bootstrap.mjs --print` | 打印将要写入的块，不落盘 | 0 |
 | `node scripts/bootstrap.mjs --root <dir>` | 指定项目根目录（默认当前目录） | — |
+| `node scripts/bootstrap.mjs --compact \| --full` | 精简块（~16 行：入口、先读项目层、平台、优先级、lint、沉淀、升级；**默认**）\| 完整块（含自迭代与回流细则，中文） | 0 |
+| `node scripts/bootstrap.mjs --lang zh\|en` | 精简块的语言；默认按宿主 `AGENTS.md`（块外、去掉代码后中文字符多于英文单词 → zh），内容不足时看 `README.md`，都判不了用 zh | 0 / 2 |
+
+**默认与沿用（5.6.0）**：托管块每次会话都会加载，所以默认写精简块，并用宿主的语言，避免在英文的 `AGENTS.md` 里塞几十行中文。块内第一行记下 `<!-- lobe-design:mode=<compact|full> lang=<zh|en> -->`；之后不带参数重跑会沿用它（幂等），显式 `--compact` / `--full` / `--lang` 覆盖并改写这一行。≤ 5.5.0 写入的旧块没有这一行，重跑时按默认换成精简块；首尾 `BEGIN` / `END` 标记不变，旧安装照常识别、整块替换。自迭代与回流的细则在精简模式下由 skill 自己的 `learnings/README.md`、`CONTRIBUTING.md` 承载。
 
 `node scripts/project-scan.mjs`（只读，不落盘）：
 
@@ -89,7 +93,7 @@ scope: 项目接入；AGENTS.md 探测、托管块、产品画像与组件盘点
 - `bootstrap.mjs` **不写** `.agents/ux/` 下的内容（只探测是否存在）；`product.md` / `components.md` 由 05-init 的 Agent 两轮写入（I-07 / I-08）。
 - **不改应用代码、不跑 build、不记录组件实现细节**——只写设计规则与用法指引。
 - 不在没有写权限或用户没确认时落盘。
-- **已安装的 skill 目录保持通用**：项目画像与组件盘点不写进 `$LOBE_DESIGN/`，重装 / `install.sh --copy` 不会冲掉项目层。
+- **已安装的 skill 目录保持通用**：项目画像与组件盘点不写进 `$LOBE_DESIGN/`，重装 / 仓库根的 `./install.sh --copy` 不会冲掉项目层。
 
 ## I-06 项目层规范指针（`.agents/ux/`）
 
@@ -109,12 +113,12 @@ scope: 项目接入；AGENTS.md 探测、托管块、产品画像与组件盘点
 
 | 字段 | 写什么 |
 | --- | --- |
-| 平台 | `web` / `desktop` / `mobile` / `mix`（可多选，说明主次） |
+| 平台 | 一行机读：`平台：web` / `desktop` / `mobile` / `mix`（可多选，第一个为主）。`lint-lobe.mjs`、`bootstrap.mjs` 读这一行决定规则集与托管块（I-10） |
 | 产品类型 | 消费级聊天、管理后台、开发者平台、评测/训练控制台、营销站、文档站… |
 | 用户 | 角色、权限边界、使用频率 |
 | 核心任务 | 3–7 条动词开头的主路径 |
-| 适用性 | 哪些 P-xx 原型 / 规则**强调**、哪些**不适用**（例：触控为主 → hover-only 交互 N/A；高密度后台 → P-01 强调） |
-| 文案 profile | 一行机读：`copy-profile: <consumer\|saas\|admin\|devtool>`，可按路由分区（`copy-profile: consumer; /admin → admin`）；再写人称（无主语 / 你 / 您）与术语表位置。75-copy 据此只加载一份 profile；判断不了时写 `copy-profile: 待确认` |
+| 适用性 | 哪些 P-xx 原型 / 规则**强调**、哪些**不适用**（例：触控为主 → hover-only 交互 N/A；高密度后台 → P-01 强调）。**一行一条**写成表格行或 `lint-off: LOBE-XXX, D-01` 行；标「不适用 / N/A」那一行里的规则编号（含区间 `C-01..C-11`）和 lint id 会被 `lint-lobe.mjs` 关掉，所以不要把「强调」和「不适用」写在同一行 |
+| 文案 profile | 一行机读：`copy-profile: <consumer\|saas\|admin\|devtool>`，可按路由分区（`copy-profile: consumer; /admin → admin`；按路径段匹配，`/api-keys` 命中 `/:wsSlug/api-keys`，也可写 `/*/api-keys`，见 75-copy）；再写人称（无主语 / 你 / 您）与术语表位置。75-copy 据此只加载一份 profile；判断不了时写 `copy-profile: 待确认` |
 
 文件头必须带 init meta（供 `--check` 判过期）：
 
@@ -126,7 +130,9 @@ scope: 项目接入；AGENTS.md 探测、托管块、产品画像与组件盘点
 
 ## I-08 第二轮：组件盘点（Round 2）
 
-在 Round 1 之后，扫描项目自己的组件目录（`src/components`、`features`、shared UI、对 lobe-ui 的包装等），写入 `.agents/ux/components.md`：
+在 Round 1 之后，扫描项目自己的组件目录（`src/components`、`features`、shared UI、对 lobe-ui 的包装等），写入 `.agents/ux/components.md`。`project-scan.mjs` 会按平台给出分类方案和逐文件初分（启发式，需复核）。
+
+**web / desktop**：
 
 | 分类 | 判据 | 写法 |
 | --- | --- | --- |
@@ -134,16 +140,44 @@ scope: 项目接入；AGENTS.md 探测、托管块、产品画像与组件盘点
 | 与 lobe-ui 重复 | 自建原子层（Button/Modal/Table…） | 标注「改用 lobe-ui」，不要扩写实现 |
 | 业务组件 | 带领域语义、值得保留 | **场景 + 注意点**（何时用、何时不用、和别的件怎么配合）；**不写**内部实现、props 清单、源码路径细节 |
 
+**mobile（React Native）**：项目自己的组件库就是原子层，**不出现「改用 lobe-ui」**（`@lobehub/ui` 是 DOM 库，RN 里用不了）。
+
+| 分类 | 判据 | 写法 |
+| --- | --- | --- |
+| 项目原子层 | 项目 RN 组件库（如 `@lobehub/ui-rn`，常经 alias 指向 `src/components`）里基于 `react-native` 原语的件 | 列出可用件与选型注意点；新界面从这里取，不自建同名件 |
+| 薄包装 | 几乎只是透传项目原子层 | 标注「优先用原子层件」 |
+| 业务组件 | 带领域语义、值得保留（列表行、会话卡片…） | 同上：场景 + 注意点 |
+
+另记导航（`expo-router` / `@react-navigation/*`）与平台原生能力（`Alert.alert`、ActionSheet、Haptics）的用法约定。
+
 同样带 init meta；可顺手把项目层规则里与组件选型相关的强调写进 `lobe-design-rules.md`（续编号，不改 skill）。重跑更新，不重复追加。
 
 ## I-09 触发、升级与过期
 
 | 时机 | 做什么 |
 | --- | --- |
-| 首次 `install.sh` / 拷贝安装之后 | install 输出提示跑 bootstrap + 对 Agent 说「初始化」；05 写托管块并完成两轮 |
+| 首次安装（skill 仓库根目录的 `./install.sh`，即 `~/lobe-design/install.sh` 这类 clone 路径；它不在 `skills/lobe-design/` 里）/ 拷贝安装之后 | install 输出提示跑 bootstrap + 对 Agent 说「初始化」；05 写托管块并完成两轮 |
 | skill 升级之后（版本号变了） | 重跑 bootstrap（更新托管块）+ 重跑两轮（刷新 meta 里的 version） |
 | 仓库结构大变（新框架、大目录搬迁） | `project-scan` 指纹变 → `--check` WARN → 重跑两轮 |
 | 日常 UI 任务 | **不**重跑两轮；只**读**已有 `product.md` / `components.md` |
 
 `bootstrap.mjs --check` 在托管块 OK 时仍会打印项目层缺失 / 过期的 WARN（不因此单独把已接入判成 FAIL）。
 `project-scan.mjs --check`：缺文件 → exit 1；仅过期 → WARN + exit 0。
+
+## I-10 平台门控与优先级（5.5.0）
+
+Round 1 写下的平台不只是描述，它决定脚本和托管块的行为：
+
+| 来源（由强到弱） | 读法 |
+| --- | --- |
+| `lint-lobe.mjs --platform <p>` / 文件内 `lobe-design-platform: mobile` 注释 / `*.native|ios|android.tsx` | 显式指定 |
+| `.agents/ux/product.md` 的 `平台：…` 行 | 第一个为主平台 |
+| `package.json` 依赖 | `react-native` / `expo` / `@lobehub/ui-rn` → mobile；`electron` / tauri → desktop；其余 web |
+
+- **lint**：每条规则声明 `platforms`（`--rules` 可见）。mobile 跳过 web 专属规则（antd / `@lobehub/ui` 导入入口、`createStyles`→`createStaticStyles`、CSS 注释与 `.ant-` 类名、主题变量覆盖、`REIMPLEMENT-ATOM`、`font-family`、`outline`、`<img alt>`、`div onClick`、`backdrop-filter`、光晕阴影、渐变文字、eyebrow、侧边竖条、`gradientAnimation`），另跑 RN 专属的 `LOBE-RN-DOM-UI`；`RAW-COLOR` 照常报，但修法指向项目主题 token；K-07 图标按钮接受 `accessibilityLabel`。
+- **适用性**：`product.md` 里标「不适用 / N/A」的行中出现的规则编号（含区间）与 lint id，以及 `lint-off:` 行，关掉对应 lint 规则（按 lint id 或其引用的规则编号）。
+- **按路径放行（5.6.0）**：`lint-allow: <规则 id…> <glob…>`（可多行），例如 `lint-allow: LOBE-RN-DOM-UI src/components/hooks/**, src/components/styles/**`。glob 相对项目根，`**` 跨目录、`*` 不跨，以 `/` 结尾表示整个目录；只关列出的规则，行内没有规则 id 时整行忽略（不支持「全部规则」）。
+- **`LOBE-RN-DOM-UI` 只报组件导入（5.6.0）**：从 `@lobehub/ui` 根入口、已知组件子入口（`/form`、`/pro-table`、`/dashboard`、`/mobile`…）或 `@lobehub/ui/es/<Component>` 导入 PascalCase 名字（具名 / 默认 / 命名空间）才报；`hooks/`、`Markdown/plugins/`、`styles`、`utils`、`types`、`locale` 等平台无关的工具子路径与 `useTheme` 这类小写导出不报。
+- **托管块**：mobile 时加「平台：mobile」一节，lint 指令改为按 mobile 规则集、按项目主题修；不出现要求改用 `@lobehub/ui` / `cssVar` 的指令。
+- **优先级**：项目层的平台与适用性 **优先于** skill 的通用规则；其余冲突以 skill 为准。项目层要违背通用原则（可达性、P-xx 原型）时必须在项目层写明理由——「不适用」改的是**写法**，不是原则（例如 RN 仍要 `accessibilityLabel`）。
+- **Round 2**：分类方案与「UI 库」字段按平台（I-08）；mobile 时 `project-scan` 把 RN 组件库（含 tsconfig alias）列为主 UI 库，`@lobehub/ui` 等 DOM 库标为「仅依赖」。

@@ -97,7 +97,12 @@ export const createHarness = (params: {
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);
       if (!existing) return { success: false };
-      messages.set(id, { ...existing, ...patch });
+      messages.set(id, {
+        ...existing,
+        ...patch,
+        // MessageModel.update merges metadata patches into the stored row.
+        metadata: patch.metadata ? { ...existing.metadata, ...patch.metadata } : existing.metadata,
+      });
       return { success: true };
     }),
     updateToolMessage: vi.fn(
@@ -119,10 +124,18 @@ export const createHarness = (params: {
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     getLatestSpineMessageId: vi.fn(
-      async ({ threadId }: { threadId?: string | null; topicId: string }) => {
+      async ({
+        operationId,
+        threadId,
+      }: {
+        operationId?: string;
+        threadId?: string | null;
+        topicId: string;
+      }) => {
         const match = [...messages.values()].findLast(
           (m) =>
             m.role !== 'tool' &&
+            (!operationId || m.metadata?.operationId === operationId) &&
             (m.threadId ?? null) === (threadId ?? null) &&
             !(m as any).metadata?.signal,
         );

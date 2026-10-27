@@ -7,6 +7,7 @@ import { messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { MessageAnalyticsQueries } from './analytics';
 import { MessageAnnotationMutations } from './annotation';
+import { MessageBackgroundSubAgentQueries } from './backgroundSubAgent';
 import { MessageBranchSnapshots } from './branchSnapshots';
 import { MessageDeleteMutations } from './delete';
 import { MessageLookupQueries } from './lookup';
@@ -16,6 +17,7 @@ import { MessageByIdsQueries } from './queryByIds';
 import { MessagePageQueries } from './queryWithWhere';
 import { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
+import { MessageKeywordSearchQueries } from './search';
 import { MessageSpineQueries } from './spine';
 import { MessageToolMutations } from './tool';
 import { MessageTrashMutations } from './trash';
@@ -41,6 +43,7 @@ export class MessageModel {
   queryBySessionId: MessageLookupQueries['queryBySessionId'];
   queryByKeyword: MessageLookupQueries['queryByKeyword'];
   searchInTopic: MessageLookupQueries['searchInTopic'];
+  searchByKeyword: MessageKeywordSearchQueries['searchByKeyword'];
 
   queryByIds: MessageByIdsQueries['queryByIds'];
 
@@ -114,6 +117,10 @@ export class MessageModel {
   softDeleteTopicless: MessageTrashMutations['softDeleteTopicless'];
   purgeMessages: MessageTrashMutations['purgeMessages'];
 
+  listBackgroundSubAgentCalls: MessageBackgroundSubAgentQueries['listBackgroundSubAgentCalls'];
+  claimBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['claimBackgroundSubAgentDelivery'];
+  releaseBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['releaseBackgroundSubAgentDelivery'];
+
   private readonly annotations: MessageAnnotationMutations;
 
   constructor(
@@ -126,6 +133,7 @@ export class MessageModel {
     const args: MessageScopeArgs = [db, userId, workspaceId, ftsSearchCandidateSource, options];
 
     const lookups = new MessageLookupQueries(...args);
+    const keywordSearch = new MessageKeywordSearchQueries(args, { lookups });
     const relations = new MessageRelationQueries(...args);
     const byIds = new MessageByIdsQueries(args, { relations });
     const page = new MessagePageQueries(args, { relations, byIds });
@@ -134,6 +142,7 @@ export class MessageModel {
     const writes = new MessageWriteMutations(...args);
     const plugins = new MessagePluginStore(args, { lookups });
     const tools = new MessageToolMutations(...args);
+    const backgroundSubAgents = new MessageBackgroundSubAgentQueries(...args);
     const spine = new MessageSpineQueries(...args);
     const annotations = new MessageAnnotationMutations(args, { lookups });
     const snapshots = new MessageBranchSnapshots(...args);
@@ -154,6 +163,7 @@ export class MessageModel {
     this.queryBySessionId = lookups.queryBySessionId;
     this.queryByKeyword = lookups.queryByKeyword;
     this.searchInTopic = lookups.searchInTopic;
+    this.searchByKeyword = keywordSearch.searchByKeyword;
     this.queryByIds = byIds.queryByIds;
     this.queryWithWhere = page.queryWithWhere;
     this.queryLastUserMessageByTopics = conversation.queryLastUserMessageByTopics;
@@ -198,6 +208,9 @@ export class MessageModel {
     this.findToolMessageIdByToolCallId = plugins.findToolMessageIdByToolCallId;
     this.updateToolMessage = tools.updateToolMessage;
     this.updateToolArguments = tools.updateToolArguments;
+    this.listBackgroundSubAgentCalls = backgroundSubAgents.listBackgroundSubAgentCalls;
+    this.claimBackgroundSubAgentDelivery = backgroundSubAgents.claimBackgroundSubAgentDelivery;
+    this.releaseBackgroundSubAgentDelivery = backgroundSubAgents.releaseBackgroundSubAgentDelivery;
     this.getLastMainThreadSpineMessageId = spine.getLastMainThreadSpineMessageId;
     this.isMessageDescendantOf = spine.isMessageDescendantOf;
     this.getLatestSpineMessageId = spine.getLatestSpineMessageId;
@@ -242,5 +255,11 @@ export class MessageModel {
 }
 
 export { HumanApprovalAlreadyResolvedError } from './plugin';
+export type {
+  MessageKeywordSearchItem,
+  MessageKeywordSearchParams,
+  MessageKeywordSearchResult,
+} from './search';
+export { MESSAGE_KEYWORD_SEARCH_MAX_LIMIT } from './search';
 export * from './types';
 export { redactCreatorPrivateBlob, sanitizeVisitorError, toVisitorMessage } from './visitor';

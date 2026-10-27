@@ -32,6 +32,8 @@ const AcceptanceFocusWorkspace = () => {
   const turnChecks = data ? checksForTurn(data, turn) : [];
   const focusedCheck = turnChecks.find((check) => check.id === params.checkId);
   if (!data || !focusedCheck) return null;
+  const subjectType = data.subject.type;
+  const canAuthor = data.isOwner && subjectType !== 'site';
 
   const orderedChecks = [...turnChecks].sort((a, b) => a.seq - b.seq);
   const standing = (data.acceptance.config?.checklist ?? []).filter(
@@ -39,7 +41,8 @@ const AcceptanceFocusWorkspace = () => {
   );
 
   const saveStanding = async (checklist: typeof standing) => {
-    await verifyService.saveAcceptanceChecklist(data.subject.type, data.subject.id, checklist);
+    if (subjectType === 'site') return;
+    await verifyService.saveAcceptanceChecklist(subjectType, data.subject.id, checklist);
     await mutate();
     void globalMutate(isAcceptanceListKey);
     toast.success(t('acceptance.checkCreate.saved'));
@@ -77,7 +80,7 @@ const AcceptanceFocusWorkspace = () => {
       // Checklist authoring writes through the subject — creator-only until that
       // path is reviewer-aware. Reviewing the checks themselves is not.
       onAddChecks={
-        data.isOwner
+        canAuthor
           ? () =>
               openAddCheckModal({
                 existingIds: (data.acceptance.config?.checklist ?? []).map((item) => item.id),
@@ -87,7 +90,7 @@ const AcceptanceFocusWorkspace = () => {
           : undefined
       }
       onEditStandingCheck={
-        data.isOwner
+        canAuthor
           ? async (item) => {
               const { openCheckEditModal } =
                 await import('@/features/Conversation/ChatInput/VerifyTray/EditModal');

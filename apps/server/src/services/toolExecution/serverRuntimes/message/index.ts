@@ -27,11 +27,13 @@ import { agents } from '@/database/schemas';
 import { notTrashed } from '@/database/utils/softDelete';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
+  mergeBotSettingsPatch,
 } from '@/server/services/bot/agentBotProviderSettings';
 import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
 import {
@@ -474,7 +476,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
           id: bot.id,
           platform: bot.platform,
           runtimeStatus: status.status,
-          settings: (bot.settings as Record<string, unknown>) ?? undefined,
+          // As the settings form shows them, so the agent reads the keys `updateBot` writes
+          // (`botWakeDuties`) even for a bot configured with a nested `botWake` object.
+          settings: flattenBotWakeSettings(bot.settings as Record<string, unknown>) ?? undefined,
         };
       },
       listBots: async () => {
@@ -551,7 +555,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {};
         if (params.credentials !== undefined) value.credentials = params.credentials;
         if (params.settings !== undefined) {
-          const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
+          // A partial update: the keys the agent did not send keep their stored values.
+          const merged = mergeBotSettingsPatch(
+            existing.platform,
+            existing.settings as Record<string, unknown> | null,
+            params.settings,
+          );
           assertBotAccessSettings(merged);
           await assertWatchKeywordsWritable({
             applicationId: existing.applicationId,

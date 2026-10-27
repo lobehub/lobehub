@@ -229,6 +229,13 @@ describe('RecentModel', () => {
             updatedAt: now(),
           },
           {
+            id: 'topic-channel',
+            userId,
+            agentId: 'agent-inbox',
+            trigger: 'channel',
+            updatedAt: now(),
+          },
+          {
             id: 'topic-chat',
             userId,
             agentId: 'agent-inbox',

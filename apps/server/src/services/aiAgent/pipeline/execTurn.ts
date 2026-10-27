@@ -191,6 +191,19 @@ export const execAgentTurn = async (
   // Determine the identifier to use (agentId takes precedence)
   const identifier = agentId || slug!;
 
+  if (params.reservedOperationId) {
+    const reserved = await deps.agentOperationModel.findById(params.reservedOperationId);
+    if (
+      !reserved ||
+      reserved.status !== 'idle' ||
+      reserved.agentId !== agentId ||
+      reserved.topicId !== appContext?.topicId ||
+      reserved.userId !== deps.userId ||
+      (reserved.workspaceId ?? undefined) !== deps.workspaceId
+    )
+      throw new Error('The reserved operation does not match this execution');
+  }
+
   log('execAgent: identifier=%s, prompt=%s', identifier, prompt.slice(0, 50));
 
   const operationTaskId = await deps.resolveOperationTaskId(taskId ?? appContext?.taskId);
@@ -252,6 +265,7 @@ export const execAgentTurn = async (
       {
         appContext,
         chatConfigOverride,
+        agentConfigSnapshot: params.agentConfigSnapshot,
         identifier,
         instructions,
         modelOverride,
@@ -514,6 +528,7 @@ export const execAgentTurn = async (
         memberDeviceOverride,
         operationTaskId,
         onOperationCreated: params.onOperationCreated,
+        reservedOperationId: params.reservedOperationId,
         parentOperationId,
         pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
         pinnedHeterogeneousTopicSources: turn.pinnedHeterogeneousTopicSources,
@@ -567,7 +582,9 @@ export const execAgentTurn = async (
 
   // 15. Generate operation ID: op_{timestamp}_{agentId}_{topicId}_{random}
   const operationId =
-    continuationOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+    params.reservedOperationId ??
+    continuationOperationId ??
+    `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
   // Stages 5–18 — the run's init: the tool surface, the message/context
   // assembly, and the human decision a resumed approval turns into the first
@@ -585,6 +602,7 @@ export const execAgentTurn = async (
     disableTools: params.disableTools,
     ephemeralUserMessage,
     exclusivePluginIds,
+    existingMessageIds,
     files,
     functionTools,
     globalMemoryEnabled,
@@ -593,17 +611,21 @@ export const execAgentTurn = async (
     localDeviceId,
     mentionedAgents,
     parentMessageId,
+    prompt,
+    requestedTopicId: appContext?.topicId ?? undefined,
     requestTrigger: requestTriggerMetadata.trigger,
     requestedDeviceId: turn.requestedDeviceId,
     resumeApproval,
     resumeApprovalPlugin,
     resumeApprovals,
+    resume,
     resumeFromHistory: runFromHistory,
     resumeToolResult: resolvedToolResult,
     runAttachments,
     selectedSkillIds,
     selectedToolIds,
     topicBoundDeviceId: turn.topicBoundDeviceId,
+    viewedGoal: appContext?.viewedGoal,
   });
 
   const { discovery, initialContext, prep } = await traceSendStage('operation_init', () =>
@@ -732,6 +754,7 @@ export const execAgentTurn = async (
         providedApprovalResolutionRequestId,
         queueRetries,
         queueRetryDelay,
+        reservedOperation: !!params.reservedOperationId,
         signal,
         stream,
         clientProtocol: params.clientProtocol,

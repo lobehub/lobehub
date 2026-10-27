@@ -18,6 +18,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService } from '@/server/services/canvas';
 import { createCanvasAgentRuntime } from '@/server/services/canvas/agentRuntime';
 import { buildCanvasPublishBundle } from '@/server/services/canvas/publish';
+import { saveCanvas } from '@/server/services/canvas/save';
 
 const canvasProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -29,6 +30,11 @@ const canvasProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 });
 
 export const canvasRouter = router({
+  getPublishContext: canvasProcedure.query(({ ctx }) => ({
+    canPublish: isCanvasPublishEnabled(),
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId ?? null,
+  })),
   getProject: canvasProcedure
     .input(z.object({ canvasId: z.string(), version: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
@@ -77,7 +83,14 @@ export const canvasRouter = router({
 
   publish: canvasProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
-    .input(z.object({ canvasId: z.string() }))
+    .input(
+      z.object({
+        canvasId: z.string(),
+        deploymentId: z.string().optional(),
+        requestedSlug: z.string().trim().min(1).max(255).optional(),
+        version: z.number().int().positive().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       if (!isCanvasPublishEnabled()) {
         throw new TRPCError({
@@ -87,9 +100,14 @@ export const canvasRouter = router({
       }
 
       const current = await ctx.workModel.findCanvas(input.canvasId);
-      const canvas = current?.version.metadata?.canvas;
-      if (!current || !canvas) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND' });
       if (current.work.userId !== ctx.userId) throw new TRPCError({ code: 'FORBIDDEN' });
+      const version =
+        input.version && input.version !== current.version.version
+          ? await ctx.workModel.findCanvasVersion(current.work.id, input.version)
+          : current.version;
+      const canvas = version?.metadata?.canvas;
+      if (!version || !canvas) throw new TRPCError({ code: 'NOT_FOUND' });
 
       const runtimeUrl = await getCanvasPublishRuntimeUrl(canvas.runtimeMajor).catch((cause) => {
         throw new TRPCError({
@@ -115,18 +133,26 @@ export const canvasRouter = router({
         bundle,
         canvasId: input.canvasId,
         db: ctx.serverDB,
-        deploymentId: current.work.metadata?.canvasPublish?.deploymentId,
-        title: current.work.title ?? input.canvasId,
+        deploymentId: input.deploymentId ?? current.work.metadata?.canvasPublish?.deploymentId,
+        requestedSlug: input.requestedSlug,
+        title: version.title ?? current.work.title ?? input.canvasId,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
-      await ctx.workModel.recordCanvasPublish(input.canvasId, {
-        deploymentId: site.deploymentId,
-        publishedVersion: current.version.version,
-        url: site.url,
-      });
+      if (!input.deploymentId) {
+        await ctx.workModel.recordCanvasPublish(input.canvasId, {
+          deploymentId: site.deploymentId,
+          publishedVersion: version.version,
+          url: site.url,
+        });
+      }
 
-      return { publishedVersion: current.version.version, url: site.url };
+      return {
+        deploymentId: site.deploymentId,
+        publishedVersion: version.version,
+        ...(site.subdomainLabel ? { subdomainLabel: site.subdomainLabel } : {}),
+        url: site.url,
+      };
     }),
 
   runAgentTool: canvasProcedure
@@ -200,4 +226,24 @@ export const canvasRouter = router({
         version: item.version,
       }));
     }),
+
+  save: canvasProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
+    .input(
+      z.object({
+        canvasId: z.string().max(128).optional(),
+        expectedVersion: z.number().int().nonnegative(),
+        html: z.string().max(512 * 1024),
+        requestId: z.string().uuid(),
+        title: z.string().trim().min(1).max(200),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      saveCanvas(input, {
+        storage: createCanvasStorageService(ctx.serverDB, ctx.userId, ctx.workspaceId),
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
 });

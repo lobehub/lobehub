@@ -35,6 +35,7 @@ const createTopicForwardModalMock = vi.hoisted(() => vi.fn());
 const commitWorkingDirectoryMock = vi.hoisted(() => vi.fn());
 // Stands in for whatever card a downstream build installs into the business slot.
 const businessSlot = vi.hoisted(() => ({ render: false }));
+const resourceAccessMock = vi.hoisted(() => ({ canUseResource: true }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
 const businessErrorContentMock = vi.hoisted(() =>
   vi.fn(() => ({
@@ -110,21 +111,21 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     error,
     onDismiss,
     onRetry,
-    onTransfer,
+    onHandoff,
     workingDirectoryReset,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
     onRetry?: () => void;
-    onTransfer?: () => void;
+    onHandoff?: () => void;
     workingDirectoryReset?: { name?: string; onReset: () => Promise<void> };
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
       {onRetry && <button onClick={onRetry}>guide-retry</button>}
-      {onTransfer && <button onClick={onTransfer}>transfer</button>}
+      {onHandoff && <button onClick={onHandoff}>handoff</button>}
       {workingDirectoryReset && (
         <button onClick={() => void workingDirectoryReset.onReset()}>
           {`reset-to:${workingDirectoryReset.name}`}
@@ -146,6 +147,10 @@ vi.mock('@/services/electron/binary', () => ({
 
 vi.mock('@/features/Conversation/MessageForward/TopicForwardModal', () => ({
   createTopicForwardModal: createTopicForwardModalMock,
+}));
+
+vi.mock('@/features/Conversation/hooks/useConversationResourceAccess', () => ({
+  useConversationResourceAccess: () => resourceAccessMock,
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({
@@ -217,6 +222,7 @@ describe('ErrorMessageExtra', () => {
     detectHeterogeneousAgentCommandMock.mockResolvedValue({ available: true });
     missingTranslationKeys.clear();
     businessSlot.render = false;
+    resourceAccessMock.canUseResource = true;
     serverConfigMock.enableBusinessFeatures = false;
     shareContextMock.topicShareId = '';
     transcriptSourceMock.value = 'chat';
@@ -517,6 +523,64 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('dynamic')).toBeInTheDocument();
   });
 
+  it('offers context compaction for an oversized request body', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'msg-request-too-large',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith({
+      canCompact: true,
+      id: 'msg-request-too-large',
+      reason: 'requestBodyTooLarge',
+    });
+  });
+
+  it('withholds context compaction from members who can only view the conversation', () => {
+    resourceAccessMock.canUseResource = false;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'msg-request-too-large',
+        }}
+      />,
+    );
+
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ canCompact: false, reason: 'requestBodyTooLarge' }),
+    );
+  });
+
+  it('lets context compaction retry the group parent when the error is a nested block', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RequestBodyTooLarge' }}
+        retryScopeId="group-parent"
+        data={{
+          error: { type: AgentRuntimeErrorType.RequestBodyTooLarge } as any,
+          id: 'group-child-block',
+        }}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith({
+      canCompact: true,
+      id: 'group-child-block',
+      parentId: 'group-parent',
+      reason: 'requestBodyTooLarge',
+    });
+  });
+
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(
       <ErrorMessageExtra
@@ -617,7 +681,7 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('transfer'));
+    fireEvent.click(screen.getByText('handoff'));
     expect(createTopicForwardModalMock).toHaveBeenCalledWith({
       cancelSourceContinuation: true,
       sourceAgentId: 'source-agent',
@@ -663,7 +727,7 @@ describe('ErrorMessageExtra', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('transfer'));
+    fireEvent.click(screen.getByText('handoff'));
     expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
 
     const props = createTopicForwardModalMock.mock.calls[0][0];

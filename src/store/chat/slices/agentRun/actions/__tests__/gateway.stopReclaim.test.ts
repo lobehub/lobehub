@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
-import { aiAgentService } from '@/services/aiAgent';
+import { aiAgentService, type ExecAgentResult } from '@/services/aiAgent';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
@@ -162,8 +162,26 @@ afterEach(() => {
 
 const context = { agentId: 'agent-1', scope: 'main' as const, threadId: null, topicId: 'topic-1' };
 
+const serverResult: ExecAgentResult = {
+  agentId: 'agent-1',
+  assistantMessageId: 'ast-1',
+  autoStarted: true,
+  createdAt: new Date().toISOString(),
+  message: 'ok',
+  operationId: 'server-op',
+  status: 'created',
+  success: true,
+  timestamp: new Date().toISOString(),
+  token: 'test-token',
+  topicId: 'topic-1',
+  userMessageId: 'usr-1',
+};
+
 /** Start a Gateway run and return its registered cancel hook. */
-const startRun = async (interrupt: { deviceCancellationConfirmed?: boolean }) => {
+const startRun = async (
+  interrupt: { deviceCancellationConfirmed?: boolean },
+  stoppedApproval?: ExecAgentResult,
+) => {
   const onOperationCancel = vi.fn();
   const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
   const set = vi.fn((updater: any) => {
@@ -172,7 +190,10 @@ const startRun = async (interrupt: { deviceCancellationConfirmed?: boolean }) =>
   const get = vi.fn(() => ({
     ...state,
     associateMessageWithOperation: vi.fn(),
+    completeOperation: vi.fn(),
     connectToGateway: vi.fn(),
+    getOperationAbortSignal: vi.fn(() => AbortSignal.abort()),
+    internal_pinTopicStatus: vi.fn(),
     internal_dispatchTopic: vi.fn(),
     moveQueuedMessages: vi.fn(),
     moveVoiceMessages: vi.fn(),
@@ -193,21 +214,18 @@ const startRun = async (interrupt: { deviceCancellationConfirmed?: boolean }) =>
     operationId: 'server-op',
     success: true,
   });
-  vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
-    agentId: 'agent-1',
-    assistantMessageId: 'ast-1',
-    autoStarted: true,
-    createdAt: new Date().toISOString(),
-    message: 'ok',
-    operationId: 'server-op',
-    status: 'created',
-    success: true,
-    timestamp: new Date().toISOString(),
-    token: 'test-token',
-    topicId: 'topic-1',
-    userMessageId: 'usr-1',
-  });
+  vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(serverResult);
 
+  if (stoppedApproval) {
+    await action.executeGatewayAgent({
+      context,
+      message: '',
+      parentMessageId: 'tool-1',
+      parentOperationId: 'approve-op',
+      precreatedResult: stoppedApproval,
+    });
+    return { get, handler: undefined as never };
+  }
   await action.executeGatewayAgent({ context, message: 'Hello' });
   const [, handler] = onOperationCancel.mock.calls[0];
   return { get, handler: handler as () => Promise<void> };
@@ -234,5 +252,25 @@ describe('stopping a Gateway run', () => {
     await expect(handler()).rejects.toThrow();
 
     expect(reclaimServerQueuedMessages).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  //
+  // Approving a tool claims it on the server, which already starts the resumed
+  // run. A Stop pressed while that claim was in flight made the run start
+  // throw before it looked at the precreated run, so the run kept going.
+  //
+  // Before: an aborted start abandoned the precreated run.
+  // After: it falls through to the late interrupt, which stops that run.
+  it('interrupts the run an approval claim already started', async () => {
+    await startRun({}, { ...serverResult, operationId: 'claimed-op' });
+
+    expect(aiAgentService.execAgentTask).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(aiAgentService.interruptTask).toHaveBeenCalledWith({
+        operationId: 'claimed-op',
+        topicId: 'topic-1',
+      }),
+    );
   });
 });

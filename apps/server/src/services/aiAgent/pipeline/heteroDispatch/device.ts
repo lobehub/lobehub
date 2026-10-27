@@ -1,9 +1,11 @@
+import { claudeCodeAgentEnvPicksLogin } from '@lobechat/heterogeneous-agents/quota';
 import type { ExecAgentResult } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
+import { AgentQuotaService } from '@/server/services/agentQuota';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
@@ -21,6 +23,37 @@ import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types
 import { failHeteroDispatch } from './utils';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * The Claude Code account the agent's Manage-accounts choice routes this run
+ * to. The device maps it to one of its own logins: without it the device
+ * always spawned on its default login, whatever account the user picked.
+ * An agent whose env picks its own login, or the quota service failing, means
+ * no routing — the run must not be blocked by account bookkeeping.
+ */
+const resolveClaudeAccountRouting = async (
+  deps: HeteroDispatchDeps,
+  params: {
+    agentId: string;
+    heteroType: HeteroDispatchInput['heteroType'];
+    heterogeneousProvider: HeteroDispatchInput['heterogeneousProvider'];
+  },
+) => {
+  if (params.heteroType !== 'claude-code') return;
+  if (claudeCodeAgentEnvPicksLogin(params.heterogeneousProvider?.env)) return;
+
+  try {
+    const routing = await new AgentQuotaService(
+      deps.db,
+      deps.userId,
+      deps.workspaceId,
+    ).planDeviceRouting(params.agentId, { provider: 'claude-code' });
+    return routing ?? undefined;
+  } catch (err) {
+    log('execAgent: Claude Code account routing failed: %O', err);
+    return;
+  }
+};
 
 /**
  * Dispatch a local CLI hetero agent to the device its execution plan routed it
@@ -169,6 +202,12 @@ export const dispatchToCliDevice = async (
         })
       : undefined;
 
+  const claudeAccountRouting = await resolveClaudeAccountRouting(deps, {
+    agentId: resolvedAgentId,
+    heteroType,
+    heterogeneousProvider,
+  });
+
   const authorizationError = await resolveDeviceDispatchAuthorizationFailure(
     deps.db,
     deps.userId,
@@ -182,6 +221,7 @@ export const dispatchToCliDevice = async (
         agentId: resolvedAgentId,
         // Only a live client advertising the native protocol receives these wrapper flags.
         args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
+        ...(claudeAccountRouting && { claudeAccountRouting }),
         clientKinds: nativeCodex?.clientKinds,
         cwd: deviceCwd,
         deviceId: dispatchDeviceId,

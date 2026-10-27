@@ -162,6 +162,22 @@ export interface WidgetEnvInject {
 }
 
 /**
+ * The user's standing approval to dry-run widget scripts with some access:
+ * a draft whose connectors and hosts all fall inside one grant of its own
+ * level runs without asking again. Stored in the user's tool settings.
+ */
+export interface WidgetDryRunGrant {
+  /** Connectors the approved scripts may read, e.g. ['github']. */
+  connectors: string[];
+  /** ISO time the user gave it. */
+  grantedAt: string;
+  /** Hosts the approved scripts may call, exactly as declared in `network.allow`. */
+  hosts: string[];
+  /** Workspace the grant holds in; `null` for the personal space. */
+  workspaceId: string | null;
+}
+
+/**
  * Declarative contract stored beside the script: what it needs to run and how
  * the platform should treat its output.
  */
@@ -249,7 +265,7 @@ export const WIDGET_RUN_OUTPUT_STATUSES = [
 ] as const satisfies readonly WidgetRunFinalStatus[];
 
 export interface WidgetRunError {
-  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'NON_ZERO_EXIT'. */
+  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'SANDBOX_BUSY', 'NON_ZERO_EXIT'. */
   code: string;
   message: string;
 }

@@ -1,3 +1,6 @@
+import type { BotWakeKind } from '@lobechat/types';
+import { BOT_NO_REPLY_REASONS, BOT_NO_REPLY_TOKEN } from '@lobechat/types';
+
 /** One prior topic (session) from the same IM channel. */
 export interface RecentChannelTopic {
   /** Topic creation time as a UTC ISO-8601 string. */
@@ -47,10 +50,31 @@ export interface BotPlatformInfo {
   canReadHistory?: boolean;
   /** Identifiers of the conversation this run is replying in. */
   currentChannel?: CurrentBotChannel;
+  /**
+   * The bot woke on its own because a message nobody addressed to it falls within its duties (a
+   * `followup` wake). `matched` names the duty, when the judgement said which. The agent is told
+   * why, so it acts on the duty or stays silent.
+   */
+  duty?: { matched?: string };
+  /**
+   * The bot woke only because its name is in the text, with no @-mention or reply (a `followup`
+   * wake). The agent is told people often talk about it rather than to it.
+   */
+  named?: boolean;
+  /**
+   * The short acknowledgement already posted to the user before this run started ("Got it, I'll
+   * check the logs first"). The agent continues from it instead of acknowledging again.
+   */
+  openingReply?: string;
   platformName: string;
   /** Pre-injected recent same-channel history (cross-session). */
   recentChannelHistory?: RecentChannelHistory;
   supportsMarkdown: boolean;
+  /**
+   * How the bot was woken. On `followup` the agent is told it may stay silent; on `mention` (or
+   * when omitted) it must answer, so the prompt is unchanged.
+   */
+  wakeKind?: BotWakeKind;
   /** Non-fatal warnings from message processing (e.g. file too large, parse failure) */
   warnings?: string[];
 }
@@ -75,9 +99,13 @@ const sanitize = (text: string) =>
 export const formatBotPlatformContext = ({
   canReadHistory = true,
   currentChannel,
+  duty,
+  named,
+  openingReply,
   platformName,
   recentChannelHistory,
   supportsMarkdown,
+  wakeKind,
   warnings,
 }: BotPlatformInfo): string => {
   const lines = [
@@ -136,6 +164,39 @@ export const formatBotPlatformContext = ({
       'NEVER ask the user for a chat / channel / group ID, and never call `listChannels` to look up the current one — it is right here.',
       'When a `lobe-message` send targets this conversation, omit `botId` / `messengerInstallationId` — the runtime already knows which connection this conversation uses.',
       '</current_conversation>',
+    );
+  }
+
+  if (openingReply?.trim()) {
+    lines.push(
+      '',
+      '<opening_reply>',
+      'You already posted this acknowledgement to the user, before starting:',
+      `"${sanitize(openingReply.trim())}"`,
+      'Do not acknowledge again or repeat it. Do the work it announced and reply with the result.',
+      '</opening_reply>',
+    );
+  }
+
+  if (wakeKind === 'followup') {
+    lines.push(
+      '',
+      '<optional_reply>',
+      'You were woken by the conversation itself, not by someone addressing you directly. Speaking is optional.',
+      `If you have nothing worth adding — the message is not for you, is off topic, repeats something already answered, or was already handled — end your turn with exactly \`${BOT_NO_REPLY_TOKEN}\` and no other text.`,
+      `You may append a reason: \`${BOT_NO_REPLY_TOKEN}:<reason>\`, where reason is one of ${BOT_NO_REPLY_REASONS.filter((r) => r !== 'empty_completion').join(', ')}.`,
+      'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
+      ...(named
+        ? [
+            `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and say what you will do differently.`,
+          ]
+        : []),
+      ...(duty
+        ? [
+            `Why you were woken: nobody addressed you, but the message falls within the duties your owner gave you${duty.matched?.trim() ? ` (the duty: "${sanitize(duty.matched.trim())}")` : ''}. Read the conversation first. If the duty applies, carry it out the way a teammate holding it would: do the work it describes, and say what you did or will do. If on a closer look it does not apply, end with \`${BOT_NO_REPLY_TOKEN}:off_topic\`; if someone is already handling it, with \`${BOT_NO_REPLY_TOKEN}:already_handled\`.`,
+          ]
+        : []),
+      '</optional_reply>',
     );
   }
 

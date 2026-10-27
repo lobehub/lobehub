@@ -14,7 +14,8 @@ export const SANDBOX_ENVIRONMENT_RAN_LINE = '__lobe_environment_ran';
 
 /**
  * What a working directory is initialized from: an environment's repository
- * and setup, and nothing else of it. Nothing is tracked once it has run, in
+ * and setup, plus the variables both of them — and every command the
+ * conversation runs afterwards — see. Nothing is tracked once it has run, in
  * the database or in the folder.
  */
 export interface SandboxInitialization {
@@ -37,8 +38,9 @@ const ENV_NAME = /^[A-Z_]\w*$/i;
 
 /**
  * The initialization an environment asks for, or `undefined` when it asks for
- * nothing — no repository and no setup — so picking an empty definition runs
- * nothing.
+ * nothing — no repository, no setup and no variables — so picking an empty
+ * definition runs nothing. One that only declares variables is kept: they are
+ * exported into every command, even with nothing to clone or set up.
  *
  * Only git sources: a `files` source belongs to the release before folders on
  * the drive replaced it, and has no meaning in a folder that already is one.
@@ -61,16 +63,46 @@ export const toSandboxInitialization = (environment: {
       : [],
   );
   const bootstrapCommand = configuration.bootstrapCommand?.trim() || undefined;
-  if (sources.length === 0 && !bootstrapCommand) return undefined;
+  const env =
+    configuration.env && Object.keys(configuration.env).length > 0 ? configuration.env : undefined;
+  if (sources.length === 0 && !bootstrapCommand && !env) return undefined;
 
   return {
     environmentId: environment.id,
     name: environment.name,
     sources,
     ...(bootstrapCommand && { bootstrapCommand }),
-    ...(configuration.env &&
-      Object.keys(configuration.env).length > 0 && { env: configuration.env }),
+    ...(env && { env }),
   };
+};
+
+/** Whether applying the environment does anything to the folder: a clone or a setup to run. */
+export const hasEnvironmentInitWork = (init: SandboxInitialization): boolean =>
+  init.sources.length > 0 || !!init.bootstrapCommand;
+
+const toExports = (env: Record<string, string> | undefined): string[] =>
+  Object.entries(env ?? {})
+    .filter(([key]) => ENV_NAME.test(key))
+    .map(([key, value]) => `export ${key}=${shellQuote(value)}`);
+
+/**
+ * A conversation's shell command with the environment's variables exported in
+ * front of it.
+ *
+ * Every tool call starts a fresh shell, so the variables are put in front of
+ * each command rather than set once: a value exported by the initializer, or
+ * by an earlier call, is gone by the next one. In front, so the command can
+ * still override one for itself. The command is unchanged when the
+ * environment declares none.
+ */
+export const withEnvironmentVariables = (
+  command: string,
+  env: Record<string, string> | undefined,
+): string => {
+  const exports = toExports(env);
+  if (exports.length === 0) return command;
+
+  return `${exports.join('\n')}\n${command}`;
 };
 
 /** A destination inside the working directory, or `undefined` for a path that would leave it. */
@@ -97,15 +129,14 @@ const safeDestination = (path: string | undefined): string | undefined => {
  * so it is not retried on every call either. The record goes with the
  * sandbox — and so do global installs — so a new sandbox initializes again.
  *
- * The variables are exported in a subshell, so they reach clone and setup and
- * not the commands the conversation runs afterwards.
+ * The variables are exported in a subshell, so they reach clone and setup
+ * here; the commands the conversation runs afterwards get them from
+ * {@link withEnvironmentVariables}, not from this shell.
  */
 export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization): string => {
   const label = shellQuote(init.name);
 
-  const exports = Object.entries(init.env ?? {})
-    .filter(([key]) => ENV_NAME.test(key))
-    .map(([key, value]) => `export ${key}=${shellQuote(value)}`);
+  const exports = toExports(init.env);
 
   const clones = init.sources.map((source, index) => {
     const destination = safeDestination(source.path);

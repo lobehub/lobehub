@@ -30,6 +30,7 @@ import { DOWNLOAD_URL } from '@/const/url';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useLocalSandboxCapability } from '@/features/ChatInput/hooks/useLocalSandboxCapability';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceLoadMeter';
 import {
   devicePoolForAgent,
   ExecutionTargetIcon,
@@ -474,12 +475,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isWorkspacePreferenceLoading,
   ]);
 
-  if (!canShowExecutionTarget) return null;
-
   const boundDevice =
     canShowExecutionTargetSelector && executionTarget === 'device'
       ? devices?.find((d) => d.deviceId === boundDeviceId)
       : undefined;
+  // Only a picked remote device; the local machine is the one already in front of the user.
+  const load = useDeviceLoad(topicDeviceUnknown ? undefined : boundDevice);
+
+  if (!canShowExecutionTarget) return null;
 
   // The picker splits by whether the caller is inside a workspace agent:
   // - **Personal agent** — flat list of the caller's personal-scope devices
@@ -828,6 +831,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     <div className={cx(styles.button, !canShowExecutionTargetSelector && styles.buttonReadonly)}>
       {chipIcon}
       <span className={styles.buttonLabel}>{chipLabel}</span>
+      {load && <DeviceLoadMeter load={load} />}
       {canShowExecutionTargetSelector ? <Icon icon={ChevronDownIcon} size={12} /> : null}
     </div>
   );
@@ -854,7 +858,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       trigger="click"
       onOpenChange={setOpen}
     >
-      {chip}
+      {/* A stable wrapper, so adding the load tooltip never swaps the popover's anchor. */}
+      <div>{open || !load ? chip : <Tooltip title={load.summary}>{chip}</Tooltip>}</div>
     </Popover>
   );
 });

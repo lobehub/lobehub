@@ -163,17 +163,30 @@ export const TopicForwardContent = ({
         </Flexbox>
         <TextArea
           autoSize={{ maxRows: 4, minRows: 2 }}
-          placeholder={t('messageForward.modal.notePlaceholder')}
           resize={false}
           value={note}
+          placeholder={t(
+            cancelSourceContinuation
+              ? 'messageForward.topic.handoff.notePlaceholder'
+              : 'messageForward.modal.notePlaceholder',
+          )}
           onChange={(event) => setNote(event.target.value)}
         />
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button onClick={close}>{t('messageForward.bar.cancel')}</Button>
           <Button disabled={selectedIds.length === 0} type={'primary'} onClick={handleForward}>
             {selectedIds.length > 0
-              ? t('messageForward.modal.sendCount', { count: selectedIds.length })
-              : t('messageForward.bar.forward')}
+              ? t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submitCount'
+                    : 'messageForward.modal.sendCount',
+                  { count: selectedIds.length },
+                )
+              : t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submit'
+                    : 'messageForward.bar.forward',
+                )}
           </Button>
         </Flexbox>
       </Flexbox>

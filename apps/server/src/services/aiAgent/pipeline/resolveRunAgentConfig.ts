@@ -27,6 +27,7 @@ export interface ResolveRunAgentConfigDeps {
 }
 
 export interface ResolveRunAgentConfigInput {
+  agentConfigSnapshot?: InternalExecAgentParams['agentConfigSnapshot'];
   appContext?: InternalExecAgentParams['appContext'];
   chatConfigOverride?: InternalExecAgentParams['chatConfigOverride'];
   /** Agent id or slug (agentId takes precedence at the call site). */
@@ -177,13 +178,26 @@ export const resolveRunAgentConfig = async (
   } = input;
 
   // --- gather the snapshot ---
-  const row = await deps.resolveAgentConfigOrThrow(identifier);
+  const current = await deps.resolveAgentConfigOrThrow(identifier);
+  // Keep current identity/access metadata, but use the settings the dispatcher claimed.
+  const row = input.agentConfigSnapshot
+    ? {
+        ...current,
+        ...structuredClone(input.agentConfigSnapshot),
+        id: current.id,
+        userId: current.userId,
+        workspaceId: current.workspaceId,
+        visibility: current.visibility,
+      }
+    : current;
   const resolvedAgentId = row.id;
   const agentWorkspaceId = row.workspaceId ?? deps.workspaceId;
   const isPublicWorkspaceAgent = !!agentWorkspaceId && row.visibility !== 'private';
 
   const [overrides, canManageAgent, userLocale] = await Promise.all([
-    loadWorkspaceMemberOverrides(deps, resolvedAgentId),
+    input.agentConfigSnapshot
+      ? Promise.resolve({} as WorkspaceMemberOverrides)
+      : loadWorkspaceMemberOverrides(deps, resolvedAgentId),
     resolveCanManage(deps, row, agentWorkspaceId, isPublicWorkspaceAgent),
     // A share visitor replies in their own language, not the owner's.
     loadUserLocale(deps, shareVisitorUserId ?? deps.userId),

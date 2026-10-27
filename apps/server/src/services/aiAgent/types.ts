@@ -6,6 +6,7 @@ import type {
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
+  LobeAgentConfig,
   MessageMetadata,
   RuntimeMentionedAgent,
   UserInterventionConfig,
@@ -108,6 +109,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   acceptsMemberRuntimeEnd?: boolean;
   /** Additional plugin IDs to inject (e.g., task tool during task execution) */
   additionalPluginIds?: string[];
+  /** Trusted settings frozen by a durable dispatcher, never accepted from a client. */
+  agentConfigSnapshot?: LobeAgentConfig;
   /**
    * Server-authored generic intervention claim id. When present, the message
    * claim stores this exact id so a retry after dispatch-but-before-publish can
@@ -228,6 +231,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   parentMessageId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
+  reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
   /**

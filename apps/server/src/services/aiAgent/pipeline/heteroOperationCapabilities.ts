@@ -22,9 +22,10 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  */
 export const heteroOperationCapabilities = (
   prompt: unknown,
-  options: { taskId?: string } = {},
+  options: { channel?: boolean; taskId?: string } = {},
 ): HeteroOperationCapability[] => [
   'hetero:ingest',
+  ...(options.channel ? (['channel:read'] as const) : []),
   'hetero:finish',
   'hetero:intervention:read',
   ...(isGoalPrompt(prompt) ? (['goal:manage'] as const) : []),

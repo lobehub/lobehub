@@ -44,7 +44,8 @@ describe('CanvasExecutionRuntime', () => {
 
     expect(result.success).toBe(true);
     expect(result.content).toContain('### <lobe-stat>');
-    expect(result.content).toContain('Conclusion first');
+    expect(result.content).toContain('There is no fixed template');
+    expect(result.content).not.toContain('Conclusion first');
     expect(result.state).toEqual({ guideRead: true });
   });
 

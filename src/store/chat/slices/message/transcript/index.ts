@@ -36,6 +36,7 @@ import {
 } from '@/store/chat/utils/interventionSync';
 import { type StoreSetter } from '@/store/types';
 
+import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 import { bucketOfKey, createTranscriptLens } from './lens';
 import { type HeadRequestBoundary, mergeFetchedMessagesWithLocalState } from './mergeFetched';
 
@@ -402,15 +403,21 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
         .filter((message) => operationSelectors.isMessageCreating(message.id)(chat))
         .map((message) => message.id),
     );
-    const mergedMessages = isStreaming
-      ? reconcileStreamingInterventions(prevDbMessages, incoming)
-      : mergeFetchedMessagesWithLocalState(
-          incoming,
-          prevDbMessages,
-          activeVoiceMessageIds,
-          creatingMessageIds,
-          boundary,
-        );
+    // A poll ahead of the stream appends tool rows the stream has not
+    // delivered while keeping their local owner, whose tools[] has not caught
+    // up yet. Re-link them like every other bucket write does, or they render
+    // as orphans until the next refresh (see reconcileAssistantToolLinks).
+    const mergedMessages = reconcileAssistantToolLinks(
+      isStreaming
+        ? reconcileStreamingInterventions(prevDbMessages, incoming)
+        : mergeFetchedMessagesWithLocalState(
+            incoming,
+            prevDbMessages,
+            activeVoiceMessageIds,
+            creatingMessageIds,
+            boundary,
+          ),
+    );
     const dropped = isStreaming && mergedMessages === prevDbMessages;
 
     headResolutions.set(incoming, {
@@ -469,7 +476,11 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
   /**
    * Write a conversation's rows (memory only). An unchanged id sequence keeps
    * the entry's paging; so does `preservePaging` (a reducer edit of the same
-   * window). Anything else is a fresh, unpaged transcript.
+   * window). Rows that changed only after an unchanged oldest row (a run step
+   * adding its assistant and tool rows) keep what is known about the history
+   * before it: re-assuming more there would page a reached topic start again
+   * on every scroll to the top while the run goes on. Anything else is a
+   * fresh, unpaged transcript.
    */
   const commit = (
     context: TranscriptContext,
@@ -484,13 +495,22 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     if (clientCreatedId) noteClientWrite(clientCreatedId);
     return slice.update(
       key,
-      (current) =>
-        current &&
-        (preservePaging ||
+      (current) => {
+        if (!current) return transcriptOf(messages);
+        if (
+          preservePaging ||
           (current.items.length === messages.length &&
-            current.items.every((item, index) => item.id === messages[index].id)))
-          ? { ...current, items: messages }
-          : transcriptOf(messages),
+            current.items.every((item, index) => item.id === messages[index].id))
+        )
+          return { ...current, items: messages };
+        const keepsOlderEdge =
+          context.messageReadMode !== 'forward' &&
+          current.items.length > 0 &&
+          current.items[0].id === messages[0]?.id;
+        return keepsOlderEdge
+          ? { ...transcriptOf(messages), hasMore: current.hasMore, nextCursor: current.nextCursor }
+          : transcriptOf(messages);
+      },
       { persist: false },
     );
   };

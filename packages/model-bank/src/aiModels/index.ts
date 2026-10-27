@@ -38,6 +38,7 @@ import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
+import { default as magpie } from './magpie';
 import { default as meta } from './meta';
 import { default as minimax } from './minimax';
 import { default as minimaxcodingplan } from './minimaxCodingPlan';
@@ -151,6 +152,7 @@ const staticModelMap: ModelsMap = {
   kimicodingplan,
   lmstudio,
   longcat,
+  magpie,
   meta,
   minimax,
   minimaxcodingplan,
@@ -270,6 +272,7 @@ export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
+export { default as magpie } from './magpie';
 export { default as meta } from './meta';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';

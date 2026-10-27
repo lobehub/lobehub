@@ -111,6 +111,8 @@ const ERROR_HINTS: Record<string, string> = {
     'The script reported an incomplete result (meta.complete=false). Fine if intended; otherwise fix the failing source.',
   SANDBOX_BAD_REQUEST:
     'The sandbox rejected the request; check runtime and manifest.timeoutMs (max 120000). "secret_not_found" means a LobeHub Market connector is not connected on Market for this account: ask the user to reconnect it.',
+  SANDBOX_BUSY:
+    "The account's sandbox slots stayed busy with other widget runs (already retried for a while). Not a script problem: wait a minute and dry-run again; do not change the script.",
   SANDBOX_ERROR: 'The sandbox itself failed, not the script. Retry the dry run once.',
   SANDBOX_NOT_CONFIGURED:
     'Script execution is not configured on this server. Tell the user; do not retry.',

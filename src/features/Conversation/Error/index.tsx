@@ -233,6 +233,7 @@ const getErrorAlertConfig = (
     case AgentRuntimeErrorType.ModelNotFound:
     case AgentRuntimeErrorType.QuotaLimitReached:
     case AgentRuntimeErrorType.ExceededContextWindow:
+    case AgentRuntimeErrorType.RequestBodyTooLarge:
     case AgentRuntimeErrorType.LocationNotSupportError: {
       return {
         type: 'secondary',
@@ -463,9 +464,6 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
               console.error('[ErrorMessageExtra] Failed to cancel scheduled continuation:', error);
               toast.error(t('heteroRateLimit.cancelFailed'));
             }),
-          // Same fallback as the retry button: `onRegenerate` is absent on the
-          // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
-          onRunNow: handleManualRetry,
           onSchedule: () =>
             void scheduleHeteroContinuation({
               failedAssistantMessageId: data.id,
@@ -484,16 +482,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         autoRetry,
         error: sessionErrorBody,
         onDismiss: () => void updateMessageError(data.id, null),
-        onOpenSystemTools: () =>
-          navigate(
-            isDesktop
-              ? '/settings/system-tools'
-              : activeAgentId
-                ? `/agent/${activeAgentId}/profile`
-                : '/settings/credential',
-          ),
-        onRetry: () => void handleHeterogeneousRetry(),
-        onTransfer:
+        onHandoff:
           isRateLimitError && conversationAgentId && conversationTopicId
             ? () =>
                 createTopicForwardModal({
@@ -503,6 +492,15 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
                   topicTitle: conversationTopic?.title || '',
                 })
             : undefined,
+        onOpenSystemTools: () =>
+          navigate(
+            isDesktop
+              ? '/settings/system-tools'
+              : activeAgentId
+                ? `/agent/${activeAgentId}/profile`
+                : '/settings/credential',
+          ),
+        onRetry: () => void handleHeterogeneousRetry(),
         schedule,
       };
 
@@ -588,7 +586,24 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         }
 
         case AgentRuntimeErrorType.ExceededContextWindow: {
-          return <ExceededContextWindowError id={data.id} />;
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+            />
+          );
+        }
+
+        case AgentRuntimeErrorType.RequestBodyTooLarge: {
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+              reason={'requestBodyTooLarge'}
+            />
+          );
         }
 
         case AgentRuntimeErrorType.NoOpenAIAPIKey: {

@@ -3,6 +3,7 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 
 import {
   extractErrorMessage,
+  getErrorCodeSpec,
   isEmptyModelCompletion,
   isModelRefusalFinishReason,
   ModelEmptyError,
@@ -38,8 +39,25 @@ const getReasoningContent = (data: OnFinishData | undefined) =>
 const streamErrorMessage = (error: unknown): string =>
   (error instanceof Error ? error.message : extractErrorMessage(error)) ?? String(error);
 
+/**
+ * The code a stream error payload already carries, when it is a specific one. Provider stream
+ * adapters emit typed errors such as `ProviderContentPolicyViolation` for a Gemini `SAFETY`
+ * finish; wrapping them as `StreamChunkError` recorded content-policy blocks as harness stream
+ * failures. Fallback buckets carry no classification of their own, so they keep the wrapper.
+ */
+const classifiedStreamErrorType = (error: unknown) => {
+  if (!error || typeof error !== 'object') return;
+  const { errorType, type } = error as { errorType?: unknown; type?: unknown };
+  const code =
+    typeof errorType === 'string' ? errorType : typeof type === 'string' ? type : undefined;
+  if (!code || code === AgentRuntimeErrorType.StreamChunkError) return;
+  const spec = getErrorCodeSpec(code);
+  return spec && !spec.isFallback ? spec.code : undefined;
+};
+
 const createStreamChunkError = (error: unknown, provider: string) => {
   const message = streamErrorMessage(error);
+  const errorType = classifiedStreamErrorType(error) ?? AgentRuntimeErrorType.StreamChunkError;
 
   return Object.assign(
     new Error(message, { cause: error }),
@@ -49,7 +67,7 @@ const createStreamChunkError = (error: unknown, provider: string) => {
         message,
         name: 'StreamChunkError',
       },
-      errorType: AgentRuntimeErrorType.StreamChunkError,
+      errorType,
       provider,
     }),
     { name: 'StreamChunkError' },

@@ -1,6 +1,14 @@
 'use client';
 
-import { Button, createStaticStyles, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  Button,
+  createStaticStyles,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -11,7 +19,9 @@ import { createSkillStoreModal } from '@/features/SkillStore';
 import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 
+import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
 
@@ -42,9 +52,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 260px;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  tooltipAnchor: css`
+    display: inline-flex;
+  `,
 }));
 
 interface LeftPanelProps {
+  /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
+  fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
   selectedIdentifier?: string;
@@ -52,7 +67,7 @@ interface LeftPanelProps {
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
+  ({ fullWidth, onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
     const { t } = useTranslation('setting');
     const [showAddConnector, setShowAddConnector] = useState(false);
 
@@ -61,10 +76,15 @@ const LeftPanel = memo<LeftPanelProps>(
     }, []);
 
     const isConnectorView = viewMode === 'connector';
+    // Adding a workspace connector follows the same member policy as editing one.
+    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
 
     return (
       <>
-        <div className={styles.root}>
+        <div
+          className={styles.root}
+          style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
+        >
           <div className={styles.header}>
             <Text strong style={{ fontSize: 14 }}>
               {isConnectorView
@@ -75,15 +95,26 @@ const LeftPanel = memo<LeftPanelProps>(
             <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
               {isConnectorView ? (
                 // Connector view: single action to add a custom OAuth connector.
-                <Button
-                  icon={Grid2x2Plus}
-                  size="small"
-                  title={t('connector.add.title', {
-                    defaultValue: 'Add Custom Connector',
-                    ns: 'tool',
-                  })}
-                  onClick={() => setShowAddConnector(true)}
-                />
+                <Tooltip
+                  title={
+                    canAddConnector || isPolicyPending
+                      ? t('connector.add.title', {
+                          defaultValue: 'Add Custom Connector',
+                          ns: 'tool',
+                        })
+                      : t('tools.connectorFeedback.manageOnly')
+                  }
+                >
+                  {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
+                  <span className={styles.tooltipAnchor}>
+                    <Button
+                      disabled={!canAddConnector}
+                      icon={Grid2x2Plus}
+                      size="small"
+                      onClick={() => setShowAddConnector(true)}
+                    />
+                  </span>
+                </Tooltip>
               ) : (
                 // Skill view: import a skill from a URL, GitHub, or a zip upload.
                 <DropdownMenu
@@ -137,6 +168,8 @@ const LeftPanel = memo<LeftPanelProps>(
               <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
             </div>
           </div>
+
+          {isConnectorView && <ConnectorManagePolicy />}
 
           <div className={styles.body}>
             <SkillList

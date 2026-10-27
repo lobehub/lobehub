@@ -25,6 +25,11 @@ export type IFeatureFlagsState = {
    */
   enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
+  /**
+   * Multi-agent Channels (`channel`). Off by default: the sidebar section and Channel pages are
+   * hidden and the Channel APIs answer FORBIDDEN.
+   */
+  enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
    * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by
@@ -44,6 +49,11 @@ export type IFeatureFlagsState = {
    * protocol-v2 payloads; independent from `enableGatewayMux`.
    */
   enableGatewayMuxMobile: boolean | undefined;
+  /**
+   * Rollout gate for the bot-wake pipeline (`bot_wake`), evaluated for the bot's owner. Read only
+   * by the server; it is part of the state because the two flag types must not drift apart.
+   */
+  enableBotWake: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   /**
    * Rollout gate for relaying LLM calls of device-only model providers to the

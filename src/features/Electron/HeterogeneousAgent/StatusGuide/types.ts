@@ -21,12 +21,11 @@ export interface HeterogeneousAgentAutoRetryState {
  * View-model for the rate-limit guide's "continue after reset" scheduling. When
  * present, the card can hand the continuation off to the backend instead of
  * requiring a manual retry. `isScheduled` toggles between the unscheduled entry
- * (schedule / retry-now) and the scheduled state (run-now / cancel).
+ * (schedule / retry-now) and the scheduled state (cancel).
  */
 export interface HeterogeneousAgentScheduleState {
   isScheduled: boolean;
   onCancel: () => void;
-  onRunNow: () => void;
   onSchedule: () => void;
   /** Epoch seconds when the rate-limit window resets (for the "~X h" copy). */
   resetsAt?: number;
@@ -43,9 +42,9 @@ export interface HeterogeneousAgentStatusGuideProps {
   autoRetry?: HeterogeneousAgentAutoRetryState;
   error?: HeterogeneousAgentSessionError | null;
   onDismiss?: () => void;
+  onHandoff?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
-  onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant?: HeterogeneousAgentStatusGuideVariant;
   /**
@@ -73,9 +72,9 @@ export interface HeterogeneousAgentGuideStateProps {
   config: HeterogeneousAgentGuideConfig;
   error?: HeterogeneousAgentSessionError | null;
   onDismiss?: () => void;
+  onHandoff?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
-  onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant: HeterogeneousAgentStatusGuideVariant;
   workingDirectoryReset?: HeterogeneousAgentWorkingDirectoryResetState;

@@ -185,6 +185,18 @@ const botSettingsSchema = {
       },
       type: 'array',
     },
+    botWakeDuties: {
+      description:
+        'The bot\'s duties (职责边界): free text, one duty per line, saying what the bot is responsible for in its channels (e.g. "When someone describes a feature request, assess it; for easy ones create a task for dario"). When bot-wake is on (botWakeEnabled), a message from anyone that nobody addressed to the bot but that falls within these duties may wake it. Empty string turns this off. Overwrite-replace: to add or change one duty, read the current text with getBotDetail, edit it, and write the whole text back. Only change it when the bot\'s owner asks; up to 4000 characters.',
+      type: 'string',
+    },
+    botWakeDutiesThreshold: {
+      description:
+        'How sure the bot must be that a message falls within botWakeDuties before it steps in, 0..1 (default 0.8). Higher = steps in less often.',
+      maximum: 1,
+      minimum: 0,
+      type: 'number',
+    },
     dmPolicy: {
       description:
         'Direct-message gate. open=accept DMs from anyone (default); allowlist=only users in allowFrom can DM, fails closed if list is empty; pairing=non-listed senders get a one-time code and the owner runs /approve <code> to add them; disabled=ignore all DMs. pairing requires settings.userId (owner platform ID).',
@@ -918,7 +930,7 @@ export const MessageManifest: BuiltinToolManifest = {
           settings: {
             ...botSettingsSchema,
             description:
-              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords).',
+              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords, botWakeDuties, botWakeDutiesThreshold).',
           },
         },
         required: ['botId'],

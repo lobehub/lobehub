@@ -115,6 +115,18 @@ export interface ChatListProps {
    */
   onForwardPagingUnsupported?: () => void;
   /**
+   * Print the loaded transcript, without the app chrome, when the page prints.
+   * Opt in on the page's main conversation only: a side panel (thread portal,
+   * copilot, floating chat) must not replace what its host page prints.
+   */
+  printable?: boolean;
+  /**
+   * Reopen the conversation where the reader stopped last time (e.g. a shared
+   * topic), paging in history until that message is loaded. Ignored while a
+   * message deep link is present.
+   */
+  rememberReadingPosition?: boolean;
+  /**
    * Force showing welcome component even when messages exist
    */
   showWelcome?: boolean;
@@ -141,6 +153,8 @@ const ChatList = memo<ChatListProps>(
     itemContent,
     messageDeepLink,
     onForwardPagingUnsupported,
+    printable,
+    rememberReadingPosition,
     showWelcome,
   }) => {
     // The chat store owns the transcript; this view keeps its sync mounted.
@@ -302,7 +316,7 @@ const ChatList = memo<ChatListProps>(
     useDeepLinkHistoryBackfill({
       deepLinkKey: messageDeepLink?.navigationKey,
       loadedCount: dbMessages.length,
-      loadEarlierMessages,
+      loadPage: loadEarlierMessages,
       ready: messagesInit && paging === 'backward',
       resolved: !!resolvedMessageDeepLink || deepLinkTargetLoaded,
     });
@@ -383,6 +397,8 @@ const ChatList = memo<ChatListProps>(
               itemContent={itemContent ?? defaultItemContent}
               messageDeepLink={resolvedMessageDeepLink}
               paging={paging}
+              printable={printable}
+              rememberReadingPosition={rememberReadingPosition}
             />
           </BackgroundRunHintContext>
         </MessageActionProvider>

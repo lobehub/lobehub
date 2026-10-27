@@ -9,6 +9,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { electronStylish } from '@/styles/electron';
 
 import { type ResolvedTab } from './hooks/useResolvedTabs';
@@ -257,7 +258,9 @@ const TabItem = memo<TabItemProps>(
 
     const indicator = (
       <span className={styles.avatarWrapper}>
-        {meta.avatar ? (
+        {meta.avatarSeed ? (
+          <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+        ) : meta.avatar ? (
           <Avatar
             emojiScaleWithBackground
             avatar={meta.avatar}

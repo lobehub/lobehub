@@ -31,13 +31,17 @@ interface StopCandidate {
  * job that has not both published and released its writer. Pending routing in a branch is
  * closed and its attempt bumped, so a late Jev answer is ignored.
  *
+ * `requester` narrows a branch stop to that member's own requests and pending routing; admins
+ * stop the whole branch.
+ *
  * Returns the jobs whose writer is still held: the caller must stop them physically, and
  * only that confirmation releases them.
  */
 export const stopScope = async (
   tx: Transaction,
   channelId: string,
-  scope: ChannelStopScope,
+  scope: ChannelStopScope | { all: true },
+  requester?: { memberId: string; userId: string },
 ): Promise<ChannelJobItem[]> => {
   let jobs: StopCandidate[];
 
@@ -47,10 +51,13 @@ export const stopScope = async (
       .from(channelJobs)
       .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, scope.jobId)));
   } else {
-    await findThread(tx, channelId, scope.threadId);
-    const inBranch = scope.threadId
-      ? eq(channelMessages.threadId, scope.threadId)
-      : isNull(channelMessages.threadId);
+    if ('threadId' in scope) await findThread(tx, channelId, scope.threadId);
+    const inBranch =
+      'threadId' in scope
+        ? scope.threadId
+          ? eq(channelMessages.threadId, scope.threadId)
+          : isNull(channelMessages.threadId)
+        : undefined;
     await tx
       .update(channelMessages)
       .set({
@@ -63,6 +70,7 @@ export const stopScope = async (
           eq(channelMessages.channelId, channelId),
           eq(channelMessages.routingStatus, 'pending'),
           inBranch,
+          requester ? eq(channelMessages.userId, requester.userId) : undefined,
         ),
       );
 
@@ -72,7 +80,12 @@ export const stopScope = async (
       .where(
         and(
           eq(channelJobs.channelId, channelId),
-          scope.threadId ? eq(channelJobs.threadId, scope.threadId) : isNull(channelJobs.threadId),
+          'threadId' in scope
+            ? scope.threadId
+              ? eq(channelJobs.threadId, scope.threadId)
+              : isNull(channelJobs.threadId)
+            : undefined,
+          requester ? eq(channelJobs.requesterMemberId, requester.memberId) : undefined,
         ),
       );
   }

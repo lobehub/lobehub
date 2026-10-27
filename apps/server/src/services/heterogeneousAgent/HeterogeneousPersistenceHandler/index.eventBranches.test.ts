@@ -57,7 +57,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
 
       expect(h.messageModel.update).toHaveBeenCalledWith(
         h.assistantMessageId,
-        expect.objectContaining({ metadata: { usage } }),
+        expect.objectContaining({ metadata: { operationId: h.operationId, usage } }),
       );
     });
 
@@ -174,6 +174,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       // Text is flushed to DB at end of each batch (multi-replica fix)
       expect(h.messageModel.update).toHaveBeenCalledWith(h.assistantMessageId, {
         content: 'hi there',
+        metadata: { operationId: h.operationId },
       });
     });
 

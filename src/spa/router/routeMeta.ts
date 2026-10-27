@@ -9,7 +9,16 @@ export interface StaticRouteMeta {
 }
 
 export interface DynamicRouteMeta {
-  avatar?: string;
+  /**
+   * `null` means the entity loaded and has no avatar, which clears a cached
+   * one; `undefined` means it is not known yet, which keeps the cache.
+   */
+  avatar?: string | null;
+  /**
+   * Name a generated avatar is seeded from, for an entity that draws one when it
+   * has no image of its own (a project). Unset keeps the initials fallback.
+   */
+  avatarSeed?: string;
   backgroundColor?: string;
   title?: string;
 }
@@ -38,6 +47,7 @@ export interface RouteHandle {
 
 export interface ResolvedRouteMeta {
   avatar?: string;
+  avatarSeed?: string;
   backgroundColor?: string;
   icon?: LucideIcon;
   title: string;

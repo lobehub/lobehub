@@ -5,6 +5,7 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
+import { botWakeFields } from '../botWakeFields';
 import {
   allowFromField,
   displayToolCallsField,
@@ -13,6 +14,7 @@ import {
   makeServerIdField,
   makeUserIdField,
   reactionModeField,
+  replyPlacementField,
   watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
@@ -111,6 +113,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      replyPlacementField,
       displayToolCallsField,
       reactionModeField,
       {
@@ -126,6 +129,7 @@ export const schema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...botWakeFields,
     ],
     type: 'object',
   },

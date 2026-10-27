@@ -314,6 +314,7 @@ export class GatewayActionImpl {
       // A one-shot relay channel (a single LLM call outside any run) is not a
       // run of this user's: nothing in the feed is about it.
       if (isLlmRelayChannelId(lifecycle.operationId)) return;
+      const previousStatus = this.#get().gatewayFeed[lifecycle.operationId]?.status;
       this.#set(
         (state) => ({
           gatewayFeed: {
@@ -328,7 +329,72 @@ export class GatewayActionImpl {
         false,
         'gateway/lifecycle',
       );
+      // The hub repeats a status on every stored change; act on transitions only.
+      if (lifecycle.status !== previousStatus) this.#followUnownedRun(lifecycle);
     });
+  };
+
+  /**
+   * React to a run this tab is not streaming. The hub announces every op the
+   * user owns, and for a run the server started on its own — a background
+   * sub-agent's result waking its parent, a run from another tab — that notice
+   * is the only signal this tab gets.
+   *
+   * - A top-level run starting: refetch its topic so the row carries the run's
+   *   `runningOperation` marker; the conversation's `useGatewayReconnect` then
+   *   attaches to it exactly as on a page load.
+   * - A child run starting or ending: refetch the topic's threads so it shows
+   *   up as a sub-agent (right panel, the result message's thread link); when
+   *   its parent is not streaming here (a background sub-agent), refetch the
+   *   messages on its end too so its tool card settles.
+   * - A top-level run ending that this tab did not follow: refetch the topic's
+   *   messages and row, in case the live attach missed a short run.
+   */
+  #followUnownedRun = (lifecycle: MuxOpLifecycleMessage): void => {
+    const { agentId, groupId, parentOperationId, topicId } = lifecycle.meta ?? {};
+    if (!agentId || !topicId) return;
+
+    const state = this.#get();
+    if (state.gatewayConnections[lifecycle.operationId]) return;
+
+    if (lifecycle.status === 'running' && !parentOperationId) {
+      // A run this tab just started is announced before its own connection is
+      // registered (even before its runtime operation exists — only the send
+      // is in flight); following it would open a second, resuming stream that
+      // leaves the original run's spinner on forever. Such a turn is already
+      // in progress on the topic here — a server-started run (a wake-up after
+      // the parent's turn ended) is not.
+      if (operationSelectors.isInputLoadingByContext({ agentId, topicId })(state)) return;
+
+      state.refreshTopic(topicMapKey({ agentId, groupId })).catch(console.error);
+      return;
+    }
+
+    const ended =
+      lifecycle.status === 'completed' ||
+      lifecycle.status === 'error' ||
+      lifecycle.status === 'interrupted';
+
+    // The running notice can beat the topic's running marker to the database,
+    // and a short wake-up may finish before anything else refetches the topic
+    // — so its end converges the conversation even if the live attach missed.
+    if (!parentOperationId) {
+      // A turn of this tab still finishing settles through its own stream.
+      if (ended && !operationSelectors.isInputLoadingByContext({ agentId, topicId })(state)) {
+        state.refreshMessages({ agentId, topicId }).catch(console.error);
+        state.refreshTopic(topicMapKey({ agentId, groupId })).catch(console.error);
+      }
+      return;
+    }
+
+    // The parent's stream carries the child's result but never the topic's
+    // thread list, so the sub-agent list refreshes either way.
+    if (lifecycle.status === 'running' || ended) {
+      state.refreshThreads(topicId).catch(console.error);
+    }
+    if (ended && !state.gatewayConnections[parentOperationId]) {
+      state.refreshMessages({ agentId, topicId }).catch(console.error);
+    }
   };
 
   /**
@@ -1050,13 +1116,13 @@ export class GatewayActionImpl {
         : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
-    // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
-    // is still running, so the ChatInput stop button is active. Forward the
-    // abort into the round-trip wait (never into the fetch itself, see
-    // `awaitStartRequest`): the send rejects at once and the run the server
-    // still creates is interrupted when its result arrives. If the server has
-    // already persisted the turn, interrupt generation but still reconcile the
-    // message locally before returning.
+    // execAgentTask round-trip the caller's loading state is still running, so
+    // the ChatInput stop button is active. Forward the abort into the
+    // round-trip wait (never into the fetch itself, see `awaitStartRequest`):
+    // the send rejects at once and the run the server still creates is
+    // interrupted when its result arrives, as is a run the intervention claim
+    // already precreated. If the server has already persisted the turn,
+    // interrupt generation but still reconcile the message locally.
     const abortSignal = parentOperationId
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
@@ -1069,7 +1135,7 @@ export class GatewayActionImpl {
     );
     const userInterventionConfig = resolveUserInterventionConfig();
 
-    if (abortSignal?.aborted) {
+    if (abortSignal?.aborted && !precreatedResult) {
       throw abortSignal.reason ?? new DOMException('Aborted', 'AbortError');
     }
 
@@ -1823,11 +1889,10 @@ export class GatewayActionImpl {
       });
     });
 
-    // Get a fresh JWT token (original expired after 5 min). The server throws
-    // TRPCError NOT_FOUND when it has no running operation on this topic — our
-    // local marker is stale (e.g. an error run cleared the server marker but not
-    // the store). Clear it and bail silently so the reconnect SWR fetcher resolves
-    // and does not retry the 404 forever.
+    // Get a fresh JWT token (original expired after 5 min). NOT_FOUND: no running
+    // operation on this topic, so the local marker is stale — clear it. FORBIDDEN:
+    // a workspace teammate's live run the gateway only streams to its starter —
+    // keep the marker. Both bail silently so the reconnect SWR fetcher resolves.
     let token: string;
     try {
       // Share visitors have no owner-scoped access to `aiAgentService.refreshGatewayToken`
@@ -1851,6 +1916,7 @@ export class GatewayActionImpl {
         this.clearLocalRunningOperation({ operationId, topicId });
         return;
       }
+      if (isTrpcErrorCode(error, 'FORBIDDEN')) return;
       throw error;
     }
 

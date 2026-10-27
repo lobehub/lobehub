@@ -3,9 +3,17 @@
     color-scheme: light dark;
   }
 
+  /* The host owns the side gutter and the centered reading width. Models write
+     `body { margin: 0; padding: 4px 2px }`, which left content touching the edge and a
+     published page stretched across the whole window; a layered !important outranks
+     unlayered page CSS. */
   body {
+    box-sizing: border-box;
+    max-width: 1024px;
     margin: 0;
+    margin-inline: auto !important;
     padding: 24px;
+    padding-inline: 24px !important;
     font-family: var(--lobe-font-family);
     font-size: var(--lobe-font-size);
     line-height: var(--lobe-line-height);
@@ -122,6 +130,33 @@
 
   [data-lobe-canvas-slot] {
     display: contents;
+  }
+
+  [data-lobe-canvas-card-body] > [data-lobe-canvas-flow] > :first-child {
+    margin-block-start: 0;
+  }
+
+  [data-lobe-canvas-card-body] > [data-lobe-canvas-flow] > :last-child {
+    margin-block-end: 0;
+  }
+
+  /* macOS overlay scrollbars stay hidden until scrolled, so a wide table or diagram read
+     as clipped. Styling the scrollbar switches Chromium to an always-visible one. */
+  :is(lobe-table, lobe-mermaid, lobe-code, pre) ::-webkit-scrollbar,
+  :is([data-lobe-canvas-mermaid], pre)::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  :is(lobe-table, lobe-mermaid, lobe-code, pre) ::-webkit-scrollbar-thumb,
+  :is([data-lobe-canvas-mermaid], pre)::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: var(--lobe-color-fill);
+  }
+
+  :is(lobe-table, lobe-mermaid, lobe-code, pre) ::-webkit-scrollbar-track,
+  :is([data-lobe-canvas-mermaid], pre)::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   [hidden] {

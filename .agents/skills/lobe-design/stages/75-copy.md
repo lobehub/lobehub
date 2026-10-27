@@ -26,7 +26,7 @@
 
 ## 选 profile（渐进式披露）
 
-1. 读 `product.md` 的 `copy-profile:`。可以有多个，用路由区分：`copy-profile: consumer; /admin → admin`。按当前页面所在路由取一个。
+1. 读 `product.md` 的 `copy-profile:`。可以有多个，用路由区分：`copy-profile: consumer; /admin → admin`。按当前页面所在路由取一个。路由按**路径段**匹配，不是字符串前缀：`/api-keys` 命中 `/:wsSlug/api-keys`、`/acme/api-keys/new`，不命中 `/api-keys-legacy`；`/*/api-keys` 的 `*` 恰好一段，`/admin/**` 任意多段，`^/admin` 只从根匹配；多条命中取字面段多的。`refs.mjs --page <路由>` 可直接指定当前页面。
 2. 没写 → 按 product.md 的「产品类型」推断：消费级聊天 / 社区 → `consumer`；团队协作 / SaaS / 专业工具 → `saas`；管理后台 / 运营 / 审批 / ops → `admin`；开发者平台 / API 控制台 → `devtool`。
 3. 没有 product.md → 问一句「这页的主要用户是：个人用户 / 团队用户 / 内部运营 / 开发者？」。不能问时按路由和页面内容推断，在输出里写明「profile 为推断」，并记 `遗留 → 05`。
 4. `node scripts/refs.mjs "<指令>" --stage 75-copy [--profile <id> | --root <项目根>]` 列出要读的文件：copy-core 与 copy 整份，profile 文件**只读选中的那一份**，其余跳过。

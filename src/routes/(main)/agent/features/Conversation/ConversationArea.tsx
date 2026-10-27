@@ -160,6 +160,7 @@ const Conversation = memo(() => {
             <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
           ) : (
             <ChatList
+              printable
               headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
               messageDeepLink={messageDeepLink}
               welcome={<AgentHome />}

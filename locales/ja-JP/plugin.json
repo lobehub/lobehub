@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "プラットフォームのバグ",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "スキーマの不一致",
   "builtins.lobe-agent.apiName.vent.rejected": "記録されていない",
+  "builtins.lobe-agent.subAgent.backgroundHint": "結果は完了次第、この会話に送信されます。",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "バックグラウンドで実行中",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} トークン",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} ツール",
   "builtins.lobe-agent.subAgent.stopped": "終了する前に停止しました",

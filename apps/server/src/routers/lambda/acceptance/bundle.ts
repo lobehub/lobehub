@@ -8,7 +8,9 @@ import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ScmChangeRequestModel } from '@/database/models/scm';
+import { TaskModel } from '@/database/models/task';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { users } from '@/database/schemas';
 import { acceptances } from '@/database/schemas/verify';
 import { isUuid } from '@/database/utils/uuid';
@@ -24,8 +26,11 @@ import {
 } from '@/server/services/verify';
 import { listAcceptancePullRequests } from '@/server/services/verify/acceptancePullRequests';
 
+import { resolveAcceptanceCommentAccess } from '../_helpers/acceptanceCommentAccess';
+import { readAcceptanceRepair } from '../_helpers/acceptanceFeedbackRepair';
+import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import { canManageAcceptance } from '../_helpers/acceptanceWriteScope';
-import { canReadAcceptance, publicAcceptanceProcedure } from './procedures';
+import { publicAcceptanceProcedure } from './procedures';
 
 /** Cap on concurrent evidence/attachment file lookups while building one bundle. */
 const FILE_META_RESOLVE_CONCURRENCY = 5;
@@ -58,7 +63,10 @@ export const bundleRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
-      const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
+      const isOwner =
+        acceptance.subjectType !== 'site' &&
+        Boolean(ctx.userId) &&
+        ctx.userId === acceptance.userId;
       if (!isOwner && !(await canReadAcceptance(ctx, acceptance))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
@@ -70,6 +78,7 @@ export const bundleRouter = router({
       // back — the same widening `resolveAcceptanceForReject` applies to the
       // write — and talk to the agent bound to it. The owner holds both already.
       const collaborationGranted =
+        acceptance.subjectType !== 'site' &&
         !isOwner &&
         Boolean(ctx.userId) &&
         (await new AcceptanceCommentModel(ctx.serverDB).hasAccessGrant(
@@ -246,8 +255,76 @@ export const bundleRouter = router({
         ? await ownerService.resolveOrigin(runs)
         : null;
       const repairDispatchAvailable = isOwner
-        ? Boolean(origin?.topic)
-        : Boolean(collaboratorOrigin?.topic);
+        ? Boolean(origin?.topic) || Boolean(acceptance.projectId)
+        : Boolean(collaboratorOrigin?.topic) || Boolean(canReview && acceptance.projectId);
+      const canRequestRepair =
+        acceptance.subjectType === 'site'
+          ? (await resolveAcceptanceCommentAccess(ctx.serverDB, ctx.userId, acceptance.id))
+              .canComment
+          : canReview || collaborationGranted;
+      const storedRepair =
+        canRequestRepair || acceptance.subjectType === 'site'
+          ? await readAcceptanceRepair(ctx, acceptance)
+          : undefined;
+      const task =
+        storedRepair?.taskId && ctx.userId
+          ? await new TaskModel(
+              ctx.serverDB,
+              ctx.userId,
+              acceptance.workspaceId ?? undefined,
+            ).resolve(storedRepair.taskId)
+          : null;
+      const repairDelivery =
+        task && storedRepair?.deliveryAcceptanceId
+          ? await ctx.serverDB.query.acceptances.findFirst({
+              where: eq(acceptances.id, storedRepair.deliveryAcceptanceId),
+            })
+          : null;
+      const repairRuns = repairDelivery
+        ? await new VerifyRunModel(
+            ctx.serverDB,
+            repairDelivery.userId,
+            repairDelivery.workspaceId ?? undefined,
+          ).listByAcceptance(repairDelivery.id)
+        : storedRepair && !storedRepair.taskId
+          ? runs.filter((run) => run.createdAt.getTime() >= Date.parse(storedRepair.requestedAt))
+          : [];
+      const repairRound = repairRuns.at(-1);
+      const repair = storedRepair
+        ? {
+            commentIds: storedRepair.commentIds,
+            comment: storedRepair.comment,
+            error: storedRepair.error,
+            requestedAt: storedRepair.requestedAt,
+            state: storedRepair.state,
+            deliveryRunStatus: repairRound?.status,
+            deliveryStatus:
+              repairDelivery?.status ?? (!storedRepair.taskId ? acceptance.status : undefined),
+            previewUrl: repairRound?.metadata?.previewUrl,
+            ...(task
+              ? {
+                  taskId: task.id,
+                  deliveryAcceptanceId: storedRepair.deliveryAcceptanceId,
+                }
+              : {}),
+            ...(isOwner && !storedRepair.taskId
+              ? { topicId: storedRepair.topicId, agentId: storedRepair.agentId }
+              : {}),
+          }
+        : null;
+      // The raw handoff includes private topic/operation ids and frozen feedback.
+      const {
+        repair: _privateRepair,
+        repairSource: source,
+        ...publicMetadata
+      } = acceptance.metadata ?? {};
+      const sourceAcceptance = source
+        ? await ctx.serverDB.query.acceptances.findFirst({
+            where: eq(acceptances.id, source.acceptanceId),
+          })
+        : null;
+      const repairSource =
+        sourceAcceptance && (await canReadAcceptance(ctx, sourceAcceptance)) ? source : null;
       const collaboration =
         collaboratorOrigin?.topic && collaboratorOrigin.agent
           ? {
@@ -324,7 +401,10 @@ export const bundleRouter = router({
             })),
           })),
         })),
-        acceptance,
+        acceptance: { ...acceptance, metadata: publicMetadata },
+        canRequestRepair,
+        repair,
+        repairSource,
         canCollaborate: collaborationGranted,
         canReject: canReview || collaborationGranted,
         canReview,

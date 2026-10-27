@@ -1,5 +1,5 @@
 import type { ChannelMemberConfig, ChannelMemberRole, ChannelRuntime } from '@lobechat/types';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -70,6 +70,20 @@ export const createChannelFixture = (db: LobeChatDatabase, prefix: string) => {
   };
 
   const cleanup = async () => {
+    // Storage fixtures never start a physical process. Release their simulated writers first;
+    // production cascades deliberately refuse to erase a live writer lock.
+    await db
+      .update(channelJobs)
+      .set({ writerHeld: false })
+      .where(
+        inArray(
+          channelJobs.channelId,
+          db
+            .select({ id: channels.id })
+            .from(channels)
+            .where(or(inArray(channels.userId, userIds), eq(channels.workspaceId, workspaceId))),
+        ),
+      );
     // Raw user deletion preserves Channel history; remove fixture-owned personal Channels too.
     await db.delete(channels).where(inArray(channels.userId, userIds));
     // Operations outlive their channel by design; drop the ones this fixture ran.

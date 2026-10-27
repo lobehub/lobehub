@@ -3,7 +3,7 @@
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
 import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
@@ -33,7 +33,7 @@ import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
-import TableOfContents from './TableOfContents';
+import TableOfContents, { TOC_RAIL_GUTTER } from './TableOfContents';
 import TitleSection from './TitleSection';
 import { usePageEditable } from './usePageEditable';
 
@@ -102,8 +102,15 @@ const overrideStyles = createStaticStyles(({ css }) => ({
 
       position: relative;
       box-sizing: border-box;
-      width: 100cqi;
+
+      /* Tables bleed to the pane edge; stop short of the TOC rail when it is shown. */
+      width: calc(100cqi - var(--lobe-pageeditor-toc-gutter, 0px));
       margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
+
+      /* The TOC rail is hidden at this width (see TableOfContents). */
+      @media (width <= 1024px) {
+        width: 100cqi;
+      }
     }
 
     .lobe-editor-table-scroll-wrapper .editor_table {
@@ -171,9 +178,11 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const tableBleedInline = wideScreen
     ? `${TABLE_BASE_BLEED}px`
     : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;
+  const [tocVisible, setTocVisible] = useState(false);
   const editorContentStyle = {
     ...styles.editorContent,
     '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
+    '--lobe-pageeditor-toc-gutter': tocVisible ? `${TOC_RAIL_GUTTER}px` : '0px',
   } as CSSProperties;
   const resizeFrameRef = useRef<number | undefined>(undefined);
   const restoreScrollFrameRef = useRef<number | undefined>(undefined);
@@ -428,7 +437,11 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
         )}
       </Flexbox>
       {!isHtmlPage && (
-        <TableOfContents contentRef={editorContentRef} scrollRef={contentWrapperRef} />
+        <TableOfContents
+          contentRef={editorContentRef}
+          scrollRef={contentWrapperRef}
+          onVisibleChange={setTocVisible}
+        />
       )}
       {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
     </Flexbox>

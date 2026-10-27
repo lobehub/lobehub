@@ -1060,6 +1060,33 @@ describe('ProjectModel', () => {
     });
   });
 
+  it("carries each agent's heterogeneous provider type on its project topics", async () => {
+    const project = await createProject(model, { name: 'External runtime' });
+    const [external] = await serverDB
+      .insert(agents)
+      .values({
+        agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+        title: 'Claude Code',
+        userId,
+      })
+      .returning();
+    const topicModel = new TopicModel(serverDB, userId);
+    await topicModel.create({ agentId: external.id, projectId: project.id, title: 'External' });
+    await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      projectId: project.id,
+      title: 'Built-in',
+    });
+
+    const list = await model.listTopics(project.id);
+    expect(list.find((t) => t.agentId === external.id)).toMatchObject({
+      agentHeterogeneousProviderType: 'claude-code',
+    });
+    expect(list.find((t) => t.agentId === project.coordinatorAgentId)).toMatchObject({
+      agentHeterogeneousProviderType: null,
+    });
+  });
+
   it('keeps agentless conversations visible in project listings', async () => {
     const project = await createProject(model, { name: 'Agentless host' });
     const topic = await new TopicModel(serverDB, userId).create({

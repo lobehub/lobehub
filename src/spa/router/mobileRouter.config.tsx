@@ -11,21 +11,32 @@ import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
-import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
-import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
-import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { groupRouteMeta } from '@/routes/(main)/group/features/routeMeta';
-import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
-import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
-import { agentGroupAccessLoader } from '@/spa/router/resourceAccessLoader';
+import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
+import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
+import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
-const mobileChatElement = dynamicElement(
-  () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/chat')),
-  'Mobile > Chat',
-  { preloadId: 'mobile-agent' },
+// One element per shape, shared by every tab: switching tabs keeps the page
+// mounted instead of swapping in a new lazy component.
+const settingsTabElement = dynamicElement(
+  () => import('@/routes/(main)/settings'),
+  'Mobile > Settings > Tab',
+  { preloadId: 'mobile-settings' },
 );
+const settingsTabSubElement = dynamicElement(
+  () => import('@/routes/(main)/settings'),
+  'Mobile > Settings > Tab > Sub',
+  { preloadId: 'mobile-settings' },
+);
+
+const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(SettingsTabs))]
+  .filter((tab) => tab !== SettingsTabs.Provider && tab !== SettingsTabs.Creds)
+  .flatMap((tab) => [
+    { element: settingsTabElement, handle: { settingsTab: tab }, path: tab },
+    { element: settingsTabSubElement, handle: { settingsTab: tab }, path: `${tab}/:sub` },
+  ]);
 
 // Mobile owns its home layout; it has no persistent desktop Home outside the outlet.
 const mobileHomeRoute: RouteObject = {
@@ -50,81 +61,8 @@ const mobileHomeRoute: RouteObject = {
  * mirrors the subset of routes it actually supports — settings / me stay personal-only.
  */
 export const sharedMainAreaChildren: RouteObject[] = [
-  // Chat routes
-  {
-    children: [
-      {
-        element: redirectElement('..'),
-        index: true,
-      },
-      {
-        children: [
-          {
-            element: mobileChatElement,
-            handle: { meta: agentRouteMeta },
-            index: true,
-            loader: agentChatTopicListLoader,
-          },
-          {
-            element: mobileChatElement,
-            handle: { meta: agentRouteMeta },
-            loader: agentChatTopicListLoader,
-            path: ':topicId',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(mobile)/chat/settings'),
-              'Mobile > Chat > Settings',
-            ),
-            handle: { meta: mobileAgentSettingsRouteMeta },
-            path: 'settings',
-          },
-        ],
-        element: dynamicLayout(
-          () => import('@/routes/(mobile)/chat/_layout'),
-          'Mobile > Chat > Layout',
-          { preloadId: 'mobile-agent' },
-        ),
-        errorElement: <ErrorBoundary />,
-        path: ':aid',
-      },
-    ],
-    path: 'agent',
-  },
-
-  {
-    path: 'group',
-    children: [
-      { index: true, element: redirectElement('..') },
-      {
-        path: ':gid',
-        loader: agentGroupAccessLoader,
-        element: dynamicLayout(
-          () => import('@/routes/(mobile)/group/_layout'),
-          'Mobile > Group > Layout',
-          { preloadId: 'mobile-group' },
-        ),
-        handle: { meta: groupRouteMeta },
-        errorElement: <ErrorBoundary />,
-        children: [
-          {
-            index: true,
-            element: dynamicElement(
-              () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/group')),
-              'Mobile > Group',
-            ),
-          },
-          {
-            path: ':topicId',
-            element: dynamicElement(
-              () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(mobile)/group')),
-              'Mobile > Group > Topic',
-            ),
-          },
-        ],
-      },
-    ],
-  },
+  mobileAgentRoute,
+  mobileGroupRoute,
 
   // Discover routes with nested structure
   {
@@ -189,6 +127,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
           },
           {
             element: dynamicElement(
+              () => import('@/routes/(main)/community/(list)/skill'),
+              'Mobile > Discover > List > Skill',
+            ),
+            path: 'skill',
+          },
+          {
+            element: dynamicElement(
               () =>
                 import('@/routes/(main)/community/(detail)/workspace').then(
                   (m) => m.MobileWorkspaceDetailPage,
@@ -247,6 +192,24 @@ export const sharedMainAreaChildren: RouteObject[] = [
           {
             element: dynamicElement(
               () =>
+                import('@/routes/(main)/community/(detail)/skill').then((m) => m.MobileSkillPage),
+              'Mobile > Discover > Detail > Skill',
+            ),
+            path: 'skill/:slug',
+          },
+          {
+            element: dynamicElement(
+              () =>
+                import('@/routes/(main)/community/(detail)/group_agent').then(
+                  (m) => m.MobileGroupAgentDetailPage,
+                ),
+              'Mobile > Discover > Detail > Group Agent',
+            ),
+            path: 'group_agent/:slug',
+          },
+          {
+            element: dynamicElement(
+              () =>
                 import('@/routes/(main)/community/(detail)/user').then(
                   (m) => m.MobileUserDetailPage,
                 ),
@@ -295,72 +258,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'agents',
   },
 
-  // Task workspace routes (cross-agent)
-  {
-    children: [
-      {
-        children: [
-          {
-            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks', {
-              preloadId: 'mobile-tasks',
-            }),
-            index: true,
-          },
-        ],
-        errorElement: <ErrorBoundary resetPath=".." />,
-        path: 'tasks',
-      },
-      {
-        children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/task/[taskId]'),
-              'Mobile > Task Detail',
-            ),
-            // Optional readable title tail; `:taskId` alone resolves the task.
-            path: ':taskId/:slug?',
-          },
-        ],
-        errorElement: <ErrorBoundary resetPath="../tasks" />,
-        path: 'task',
-      },
-      {
-        children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/agent/task/[taskId]'),
-              'Mobile > Agent Task Detail',
-            ),
-            path: ':aid/task/:taskId/:slug?',
-          },
-        ],
-        errorElement: <ErrorBoundary resetPath="../tasks" />,
-        path: 'agent',
-      },
-    ],
-    element: dynamicLayout(
-      () => import('@/routes/(main)/(task-workspace)/_layout'),
-      'Mobile > Task Workspace > Layout',
-      { preloadId: 'mobile-tasks' },
-    ),
-  },
-
-  // Page detail. Mobile has no page list, so `/page` itself goes home; without
-  // these routes `/page/:id` fell through to the `*` redirect.
-  {
-    children: [
-      {
-        element: redirectElement('..'),
-        index: true,
-      },
-      {
-        element: dynamicElement(() => import('@/routes/(mobile)/page/[id]'), 'Mobile > Page'),
-        path: ':id',
-      },
-    ],
-    errorElement: <ErrorBoundary />,
-    path: 'page',
-  },
+  // Tasks, goals, projects, resources, memory, pages, generation, dashboards
+  ...mobileWorkspaceRoutes,
+  ...mobileUnsupportedRoutes,
 
   ...BusinessMobileRoutesWithMainLayout,
 ];
@@ -417,23 +317,13 @@ export const mobileRoutes: RouteObject[] = [
             element: redirectElement('/settings/credential'),
             path: 'creds',
           },
+          // Every known tab gets a static segment: `/settings/memory` and
+          // `/:workspaceSlug/memory` (or `/agent`, `/image`, …) tie on route
+          // score, and the workspace tree would read `settings` as a slug.
+          ...personalSettingsTabRoutes,
           // Other settings tabs (common, agent, memory, tts, about, etc.)
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/settings'),
-              'Mobile > Settings > Tab',
-              { preloadId: 'mobile-settings' },
-            ),
-            path: ':tab',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/settings'),
-              'Mobile > Settings > Tab > Sub',
-              { preloadId: 'mobile-settings' },
-            ),
-            path: ':tab/:sub',
-          },
+          { element: settingsTabElement, path: ':tab' },
+          { element: settingsTabSubElement, path: ':tab/:sub' },
         ],
         element: dynamicLayout(
           () => import('@/routes/(mobile)/settings/_layout'),
@@ -510,200 +400,7 @@ export const mobileRoutes: RouteObject[] = [
           // settings chrome (header + content wrapper) for now; a dedicated
           // mobile workspace sidebar is follow-up work.
           {
-            children: [
-              { element: redirectElement('general'), index: true },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/general'),
-                  'Mobile > Workspace > Settings > General',
-                ),
-                path: 'general',
-              },
-              // Account-level tabs mirrored inside the workspace (see the
-              // desktop router); the pages are the personal settings pages.
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/profile'),
-                  'Mobile > Workspace > Settings > Profile',
-                ),
-                path: 'profile',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/appearance'),
-                  'Mobile > Workspace > Settings > Appearance',
-                ),
-                path: 'appearance',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/hotkey'),
-                  'Mobile > Workspace > Settings > Hotkey',
-                ),
-                path: 'hotkey',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/chat-preference'),
-                  'Mobile > Workspace > Settings > Chat Preference',
-                ),
-                path: 'chat-preference',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-                  'Mobile > Workspace > Settings > Messenger',
-                ),
-                path: 'messenger',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
-                  'Mobile > Workspace > Settings > Messenger > Platform',
-                ),
-                path: 'messenger/:sub',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/advanced'),
-                  'Mobile > Workspace > Settings > Advanced',
-                ),
-                path: 'advanced',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/labs'),
-                  'Mobile > Workspace > Settings > Labs',
-                ),
-                path: 'labs',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/about'),
-                  'Mobile > Workspace > Settings > About',
-                ),
-                path: 'about',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/members'),
-                  'Mobile > Workspace > Settings > Members',
-                ),
-                path: 'members',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/teams'),
-                  'Mobile > Workspace > Settings > Teams',
-                ),
-                path: 'teams',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/teams'),
-                  'Mobile > Workspace > Settings > Teams > Detail',
-                ),
-                path: 'teams/:teamId',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
-                  'Mobile > Workspace > Settings > Notification',
-                ),
-                path: 'notification',
-              },
-              // Channel detail level of the two-level notification settings —
-              // the page reads the channel id from the `sub` route param.
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/notification'),
-                  'Mobile > Workspace > Settings > Notification > Channel',
-                ),
-                path: 'notification/:sub',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/labels'),
-                  'Mobile > Workspace > Settings > Labels',
-                ),
-                path: 'labels',
-              },
-              {
-                element: dynamicElement(
-                  () =>
-                    import('@/routes/(main)/[workspaceSlug]/settings/provider').then(
-                      (m) => m.WorkspaceProviderSettingMobile,
-                    ),
-                  'Mobile > Workspace > Settings > Provider',
-                ),
-                path: 'provider',
-              },
-              // Path-shaped provider deep-links (`/:slug/settings/provider/:id`)
-              // redirect to the query form the workspace provider page uses, so
-              // they don't fall through to the catch-all and leave the workspace.
-              // Static element: the redirect is tiny and lazy-loading it would
-              // flash the generic brand loader before redirecting.
-              {
-                element: <WorkspaceProviderRedirect />,
-                path: 'provider/:providerId',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/plans'),
-                  'Mobile > Workspace > Settings > Plans',
-                ),
-                path: 'plans',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/billing'),
-                  'Mobile > Workspace > Settings > Billing',
-                ),
-                path: 'billing',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/budget'),
-                  'Mobile > Workspace > Settings > Budget',
-                ),
-                path: 'budget',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/credits'),
-                  'Mobile > Workspace > Settings > Credits',
-                ),
-                path: 'credits',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/usage'),
-                  'Mobile > Workspace > Settings > Usage',
-                ),
-                path: 'usage',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/audit-log'),
-                  'Mobile > Workspace > Settings > Audit Log',
-                ),
-                path: 'audit-log',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
-                  'Mobile > Workspace > Settings > OAuth Apps',
-                ),
-                path: 'oauth-apps',
-              },
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
-                  'Mobile > Workspace > Settings > OAuth App Detail',
-                ),
-                path: 'oauth-apps/:sub',
-              },
-            ],
+            children: mobileWorkspaceSettingsChildren,
             element: dynamicLayout(
               () => import('@/routes/(mobile)/settings/_layout'),
               'Mobile > Workspace > Settings > Layout',

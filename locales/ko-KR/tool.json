@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "키 “{{key}}”를 가진 자격 증명이 이미 다른 유형({{type}})으로 존재하며 여기에서 대체할 수 없습니다. 건너뛰고 다른 키로 요청하세요.",
   "credsInput.notice.workspace": "이 작업 공간의 자격 증명에 암호화되어 저장되었습니다. 값은 직접 저장소로 전송되며 AI에 표시되지 않습니다.",
   "credsInput.placeholder": "{{field}} 입력",
+  "credsInput.proseConfirm": "그래도 저장",
+  "credsInput.proseWarning": "“{{fields}}”의 값이 비밀 정보라기보다는 문장처럼 보입니다(CJK 텍스트 또는 전체 구를 포함). 실수로 붙여넣은 경우 저장하기 전에 수정하세요. 그렇지 않으면 “그래도 저장”을 눌러 확인하세요.",
   "credsInput.saveFailed": "자격 증명을 저장할 수 없습니다. 다시 시도해 주세요.",
   "credsInput.skip": "건너뛰기",
   "credsInput.submit": "저장",

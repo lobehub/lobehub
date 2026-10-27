@@ -1,4 +1,14 @@
 export default {
+  'builtins.lobe-channel.title': 'Channel history',
+  'builtins.lobe-channel.apiName.readMessages': 'Read Channel history',
+  'builtins.lobe-channel.messageCount': 'Messages: {{count}}',
+  'builtins.lobe-channel.readError': 'Could not read this conversation',
+  'builtins.lobe-channel.chunk': 'Characters {{start}}–{{end}} of {{total}}',
+  'builtins.lobe-channel.excerpt': 'Message excerpt',
+  'builtins.lobe-channel.moreHistory': 'Earlier messages are available',
+  'builtins.lobe-channel.empty': 'No messages are visible in this conversation.',
+  'builtins.lobe-channel.apiName.readMessage': 'Read Channel message',
+
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
   'builtins.lobe-attachments.title': 'Attachments',
   'builtins.lobe-goal-supervisor.apiName.inspectGoal': 'Inspect goal',
@@ -88,6 +98,9 @@ export default {
   'builtins.lobe-agent.apiName.analyzeMedia.result':
     'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
+  'builtins.lobe-agent.subAgent.backgroundHint':
+    'The result will be sent to this conversation when it finishes.',
+  'builtins.lobe-agent.subAgent.backgroundRunning': 'Running in background',
   'builtins.lobe-agent.subAgent.stats.tokens': '{{count}} tokens',
   'builtins.lobe-agent.subAgent.stats.tools': '{{count}} tools',
   'builtins.lobe-agent.subAgent.stopped': 'Stopped before finishing',

@@ -6,6 +6,7 @@ import type {
   UserKeyVaults,
   UserPreference,
   UserSettings,
+  WidgetDryRunGrant,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
@@ -364,6 +365,28 @@ export class UserModel {
           tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || jsonb_build_object(
             'humanIntervention',
             coalesce(${userSettings.tool}->'humanIntervention', '{}'::jsonb) || ${approvalModePatch} || ${allowListPatch}
+          )`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  /**
+   * Append one standing widget dry-run grant to `tool.widgetDryRunGrants` in
+   * a single statement, so a concurrent writer of another `tool` key (or of
+   * another grant) is never clobbered by a stale client snapshot.
+   */
+  appendWidgetDryRunGrant = async (grant: WidgetDryRunGrant) => {
+    const item = JSON.stringify([grant]);
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: { widgetDryRunGrants: [grant] } })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || jsonb_build_object(
+            'widgetDryRunGrants',
+            coalesce(${userSettings.tool}->'widgetDryRunGrants', '[]'::jsonb) || ${item}::jsonb
           )`,
         },
         target: userSettings.id,

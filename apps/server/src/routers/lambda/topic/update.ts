@@ -16,6 +16,7 @@ import {
   assertCanUseConversationTargets,
   assertCanUseTopicTargets,
 } from '../_helpers/conversationResourceGuard';
+import { isOperationOwnedByAnotherUser } from '../_helpers/operationReadGuard';
 import { resolveContext } from '../_helpers/resolveContext';
 import { assertCreatorTopicTargets } from '../_helpers/shareVisitorTargetGuard';
 import { guardCtx, topicProcedure } from './procedures';
@@ -184,6 +185,21 @@ export const updateRouter = router({
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       // Same visitor guard as `batchMoveTopics`/`cloneTopic` above.
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+
+      // Only the member who started the run may report its end. A teammate's
+      // tab watching the same workspace topic has no stream to learn the end
+      // from (the gateway refuses it), so any terminal it reports is a guess;
+      // the in-flight check below does not cover `idle` / `waiting_for_human`,
+      // where such a guess would drop a live run's marker.
+      if (
+        await isOperationOwnedByAnotherUser({
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        })
+      ) {
+        return { activeOperationId: input.operationId, status: 'not_owner' as const };
+      }
 
       // Client-reported end: never clear the marker of a run the server is still
       // driving (an early / mirrored terminal event would otherwise drop the

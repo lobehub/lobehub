@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:report": "NODE_ENV=production vite build -c vite.config.report.mts",
     "build:rr": "react-router build -c vite.config.rr.mts",
     "deploy": "bun scripts/deploy.ts",
     "deploy:rr": "wrangler deploy --dry-run",

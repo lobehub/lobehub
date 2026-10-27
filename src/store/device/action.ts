@@ -1,11 +1,17 @@
-import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
+import type { DeviceListItem, DeviceMetricSeries, WorkingDirEntry } from '@lobechat/types';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
 
 import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
-import { DEVICE_LIST_KEY, type DeviceListParams, deviceListResource } from './projection';
+import {
+  DEVICE_LIST_KEY,
+  type DeviceListParams,
+  deviceListResource,
+  type DeviceMetricSeriesParams,
+  deviceMetricSeriesResource,
+} from './projection';
 import { deviceSelectors } from './selectors';
 import { type DeviceStore } from './store';
 
@@ -20,6 +26,11 @@ const LIST_PARAMS = {} as DeviceListParams;
  * post-write revalidation and polling still go out.
  */
 const DEVICE_LIST_DEDUPING_INTERVAL = 10_000;
+
+/** Devices upload every 5 minutes; polling faster only re-reads the same samples. */
+const METRIC_SERIES_REFRESH_INTERVAL = 5 * 60_000;
+/** The chip, the hover panel and the detail page mount one device's series together; let them share one request. */
+const METRIC_SERIES_DEDUPING_INTERVAL = 30_000;
 
 type UpdateDeviceInput = Parameters<typeof deviceService.updateDevice>[0];
 
@@ -39,6 +50,7 @@ export const deviceSlice = (set: Setter, get: () => DeviceStore, _api?: unknown)
 export class DeviceActionImpl {
   readonly #get: () => DeviceStore;
   readonly #list;
+  readonly #metricSeries;
 
   constructor(set: Setter, get: () => DeviceStore, _api?: unknown) {
     void _api;
@@ -50,6 +62,14 @@ export class DeviceActionImpl {
       set,
       stateKey: 'deviceListReplica',
       view: recordLens<DeviceStore, DeviceListItem[]>('deviceListMap'),
+    });
+    this.#metricSeries = createReplicaSlice(deviceMetricSeriesResource, {
+      actionPrefix: 'device/metricSeries',
+      fetcher: ({ deviceId, scope }) => deviceService.getMetricSeries(deviceId, scope),
+      get,
+      set,
+      stateKey: 'deviceMetricSeriesReplica',
+      view: recordLens<DeviceStore, DeviceMetricSeries>('deviceMetricSeriesMap'),
     });
   }
 
@@ -220,6 +240,21 @@ export class DeviceActionImpl {
       dedupingInterval: DEVICE_LIST_DEDUPING_INTERVAL,
       enabled,
       ...schedule,
+    });
+
+  /**
+   * Fetch orchestration for one device's health series; read it with
+   * `deviceSelectors.getMetricSeries`. `enabled: false` (an off-screen card,
+   * an offline device) stops fetching and keeps what the store holds.
+   */
+  useFetchDeviceMetricSeries = (
+    params: DeviceMetricSeriesParams,
+    enabled = true,
+  ): ReplicaSyncResult =>
+    this.#metricSeries.useSync(params, {
+      dedupingInterval: METRIC_SERIES_DEDUPING_INTERVAL,
+      enabled,
+      refreshInterval: METRIC_SERIES_REFRESH_INTERVAL,
     });
 }
 

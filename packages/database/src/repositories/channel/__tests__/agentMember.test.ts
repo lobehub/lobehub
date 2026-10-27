@@ -64,6 +64,27 @@ describe('adding an Agent to a Channel', () => {
     expect(added).toMatchObject({ agentId: agent.id, config: {}, name: 'Current Agent name' });
   });
 
+  // Retrying a batch that partly succeeded resubmits the members that already joined.
+  it('returns the existing member when the same Agent is added again', async () => {
+    const team = await fixture.createTeamChannel();
+    const [agent] = await db
+      .insert(agents)
+      .values({ userId: fixture.ownerId, workspaceId: fixture.workspaceId })
+      .returning();
+    const first = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
+    const retried = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
+
+    expect(retried.id).toBe(first.id);
+    expect(
+      await db
+        .select()
+        .from(channelMembers)
+        .where(
+          and(eq(channelMembers.channelId, team.channel.id), eq(channelMembers.agentId, agent.id)),
+        ),
+    ).toHaveLength(1);
+  });
+
   it('permits an owner’s private Agent but checks the actual requester again at claim', async () => {
     const team = await fixture.createTeamChannel();
     const [agent] = await db

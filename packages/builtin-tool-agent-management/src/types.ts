@@ -285,6 +285,11 @@ export interface CallAgentParams {
    */
   instruction: string;
   /**
+   * Start the agent and return right away instead of waiting for its reply,
+   * which reaches the caller later as a message from that agent.
+   */
+  runInBackground?: boolean;
+  /**
    * If true (and in a group context), skip calling supervisor after agent responds.
    * Only relevant when used within agent groups. Default: false
    */

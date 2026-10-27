@@ -40,7 +40,33 @@ describe('UserAvatar', () => {
     // labelled with the username, not an <img />
     const fallback = screen.getByRole('img', { name: mockUsername });
     expect(fallback.tagName.toLowerCase()).toBe('svg');
+    // A person draws the pixel variant: a grid of 10×10 cells
+    expect(fallback.querySelectorAll('rect[width="10"][height="10"]').length).toBeGreaterThan(0);
     expect(screen.queryByAltText(mockUsername)).not.toBeInTheDocument();
+  });
+
+  it('updates a mounted personal avatar when the profile picture changes', () => {
+    act(() => {
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { avatar: 'https://example.com/old.png', id: 'self', username: 'Profile update' },
+      });
+    });
+    render(<UserAvatar size={36} />);
+    expect(screen.getByAltText('Profile update')).toHaveAttribute(
+      'src',
+      'https://example.com/old.png',
+    );
+
+    act(() => {
+      useUserStore.setState({
+        user: { avatar: 'https://example.com/new.png', id: 'self', username: 'Profile update' },
+      });
+    });
+    expect(screen.getByAltText('Profile update')).toHaveAttribute(
+      'src',
+      'https://example.com/new.png',
+    );
   });
 
   it('should show LobeChat and default avatar when the user is not logged in', () => {

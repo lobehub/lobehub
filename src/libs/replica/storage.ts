@@ -3,7 +3,7 @@ import {
   LocalStorageReplicaStorage,
   type ReplicaRow,
   type ReplicaRowCodec,
-} from '@lobechat/replica';
+} from 'local-replica';
 import superjson from 'superjson';
 
 import { localDatabase } from '@/libs/localDatabase';

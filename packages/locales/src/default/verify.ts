@@ -249,6 +249,22 @@ export default {
   'acceptance.error.title': 'Unable to load acceptance',
   'acceptance.notFound.description': 'It may have been deleted, or it was never shared with you.',
   'acceptance.notFound.title': 'Acceptance not found',
+  'acceptance.local.allSaved': 'All reviews saved',
+  'acceptance.local.badge': 'Local report',
+  'acceptance.local.badgeHint': 'Rendered on this computer. Nothing was uploaded.',
+  'acceptance.local.copied': 'Command copied',
+  'acceptance.local.copy': 'Copy command',
+  'acceptance.local.downloaded': 'Reviews saved to Downloads',
+  'acceptance.local.externalMedia': 'External media is not loaded in local reports.',
+  'acceptance.local.noReviews': 'Not reviewed yet',
+  'acceptance.local.openExternalMedia': 'Open external media',
+  'acceptance.local.save': 'Save reviews',
+  'acceptance.local.saved': 'Saved {{file}}. Tell your agent you have finished reviewing.',
+  'acceptance.local.share': 'Share',
+  'acceptance.local.shareHint':
+    'Comments, mentions and a shareable link need LobeHub. Ask your agent to publish this acceptance, or run:',
+  'acceptance.local.shareTitle': 'Review with your team',
+  'acceptance.local.unsaved': '{{count}} unsaved review(s)',
   'acceptance.comments.title': 'Discussion',
   'acceptance.comments.moreActions': 'More actions',
   'acceptance.comments.placeholder': 'Comment on this delivery…',
@@ -1077,4 +1093,38 @@ export default {
   'acceptance.collaboration.sendFailed': "Couldn't send the message. Try again.",
   'acceptance.collaboration.agentFallback': 'the agent',
   'acceptance.access.submit': 'Send request',
+  'acceptance.repair.description':
+    'The project Agent will create and run a repair task for the unresolved feedback at submission time. Later feedback stays for the next handoff. You confirm the fixes after reviewing the delivery.',
+  'acceptance.repair.originDescription':
+    'The publishing Agent will continue in the original conversation with the unresolved feedback at submission time. You confirm the fixes after reviewing the next delivery.',
+  'acceptance.repair.start': 'Ask Agent to fix feedback',
+  'acceptance.repair.retry': 'Retry repair',
+  'acceptance.repair.instructions': 'Additional repair instructions',
+  'acceptance.repair.placeholder': 'For example, fix the menu contrast first',
+  'acceptance.repair.starting': 'Preparing the repair task…',
+  'acceptance.repair.running': 'Agent is working on the submitted feedback',
+  'acceptance.repair.finished': 'This Agent run has ended. Review the delivery to check the fixes.',
+  'acceptance.repair.failed': 'The repair could not continue',
+  'acceptance.repair.failureHint':
+    'Open the task or original conversation to check the cause, then retry.',
+  'acceptance.repair.startError':
+    'The repair could not start. Your feedback is saved; check the task or Agent permissions and retry.',
+  'acceptance.repair.refreshError':
+    'Progress could not refresh. Refresh to check the latest repair status.',
+  'acceptance.repair.openTask': 'Open repair task',
+  'acceptance.repair.openDelivery': 'Review repair delivery',
+  'acceptance.repair.openPreview': 'Open repaired preview',
+  'acceptance.repair.source': 'Back to source feedback',
+  'acceptance.repair.verifying': 'The repaired delivery is being verified',
+  'acceptance.repair.verificationFailed':
+    'Verification needs attention. Open the delivery to review the failed or uncertain checks.',
+  'acceptance.repair.awaitingDelivery':
+    'This Agent run ended without a verified delivery. Open the task or original conversation to continue.',
+  'acceptance.repair.awaitingPreview':
+    'Verification passed. Waiting for an accessible repaired preview.',
+  'acceptance.repair.ready':
+    'The repaired delivery is ready for your review. Confirm the original feedback after checking it.',
+  'acceptance.repair.retryDescription':
+    'Retry the same submitted feedback and instructions ({{count}} comments and replies). Later feedback stays for the next handoff.',
+  'acceptance.repair.submittedFeedback': 'Submitted feedback {{number}}',
 };

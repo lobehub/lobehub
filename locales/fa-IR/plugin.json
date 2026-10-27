@@ -222,6 +222,8 @@
   "builtins.lobe-agent.apiName.vent.category.platform_bug": "اشکال پلتفرم",
   "builtins.lobe-agent.apiName.vent.category.schema_mismatch": "عدم تطابق طرح‌واره",
   "builtins.lobe-agent.apiName.vent.rejected": "ثبت نشده",
+  "builtins.lobe-agent.subAgent.backgroundHint": "نتیجه پس از اتمام به این گفتگو ارسال خواهد شد.",
+  "builtins.lobe-agent.subAgent.backgroundRunning": "در حال اجرا در پس‌زمینه",
   "builtins.lobe-agent.subAgent.stats.tokens": "{{count}} توکن",
   "builtins.lobe-agent.subAgent.stats.tools": "{{count}} ابزار",
   "builtins.lobe-agent.subAgent.stopped": "قبل از اتمام متوقف شد",

@@ -15,8 +15,9 @@ import { router } from '@/libs/trpc/lambda';
 import { FileService } from '@/server/services/file';
 import { AcceptanceService } from '@/server/services/verify';
 
+import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import { agentNotifyRouter } from '../agentNotify';
-import { acceptanceProcedure, canReadAcceptance } from './procedures';
+import { acceptanceProcedure } from './procedures';
 
 /** One message to the bound agent; long enough for a detailed brief, not a dump. */
 const COLLABORATOR_MESSAGE_MAX_LENGTH = 4000;

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import PortalMoreMenu from '@/features/Portal/components/PortalMoreMenu';
 
 import CanvasFrame from './CanvasFrame';
+import CanvasShareButton from './CanvasShareButton';
 import { useCanvasMoreMenu } from './useCanvasMoreMenu';
 import { useAwaitingCanvasSave, useCanvasTabView, useCanvasVersion } from './useCanvasVersion';
 import { usePendingCanvasUpdate } from './usePendingCanvasUpdate';
@@ -103,7 +104,12 @@ const CanvasPane = memo<CanvasPaneProps>(({ canvasId }) => {
         <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
           {data.title}
         </Text>
-        <PortalMoreMenu config={moreMenu} outdent={'end'} />
+        {/* Two ghost icon buttons: their own padding is the separation, so the
+            flex gap only needs to keep the hover washes from touching. */}
+        <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+          <CanvasShareButton data={data} onShared={() => mutate()} />
+          <PortalMoreMenu config={moreMenu} outdent={'end'} />
+        </Flexbox>
       </Flexbox>
       {showPending && (
         <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.pill)}>

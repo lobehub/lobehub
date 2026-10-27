@@ -4,7 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 
-import { groupListSchema, listSchema } from '../_helpers/taskListSchemas';
+import { groupListSchema, listSchema, resolveClosedAfter } from '../_helpers/taskListSchemas';
 import { idInput, resolveOrThrow, taskProcedure } from './procedures';
 
 export const queriesRouter = router({
@@ -124,9 +124,10 @@ export const queriesRouter = router({
   groupList: taskProcedure.input(groupListSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const { scope, ...query } = input;
+      const { completedWithin, scope, ...query } = input;
       const groups = await model.groupList({
         ...query,
+        closedAfter: resolveClosedAfter(completedWithin),
         ...(scope === 'assigned' ? { assigneeUserId: ctx.userId } : {}),
         ...(scope === 'created' ? { createdByUserId: ctx.userId } : {}),
       });
@@ -143,7 +144,7 @@ export const queriesRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const { parentIdentifier, scope, ...query } = input;
+      const { completedWithin, parentIdentifier, scope, ...query } = input;
       let parentTaskId = query.parentTaskId;
 
       if (parentIdentifier) {
@@ -160,6 +161,7 @@ export const queriesRouter = router({
 
       const result = await model.list({
         ...query,
+        closedAfter: resolveClosedAfter(completedWithin),
         ...(scope === 'assigned' ? { assigneeUserId: ctx.userId } : {}),
         ...(scope === 'created' ? { createdByUserId: ctx.userId } : {}),
         parentTaskId,

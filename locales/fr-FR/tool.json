@@ -136,6 +136,8 @@
   "credsInput.notice.typeMismatch": "Une information d'identification avec la clé « {{key}} » existe déjà avec un type différent ({{type}}) et ne peut pas être remplacée depuis ici. Passez, et demandez-la sous une clé différente.",
   "credsInput.notice.workspace": "Enregistré de manière chiffrée dans les informations d'identification de cet espace de travail. Les valeurs vont directement dans le stockage et ne sont jamais montrées à l'IA.",
   "credsInput.placeholder": "Entrez {{field}}",
+  "credsInput.proseConfirm": "Enregistrer quand même",
+  "credsInput.proseWarning": "La valeur pour « {{fields}} » ressemble à une phrase plutôt qu'à un secret (elle contient du texte CJC ou une phrase entière). Si elle a été collée par erreur, corrigez-la avant de l'enregistrer ; sinon, confirmez avec « Enregistrer quand même ».",
   "credsInput.saveFailed": "Impossible d'enregistrer les informations d'identification. Veuillez réessayer.",
   "credsInput.skip": "Passer",
   "credsInput.submit": "Enregistrer",

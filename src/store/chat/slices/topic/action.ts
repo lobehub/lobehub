@@ -548,10 +548,9 @@ export class ChatTopicActionImpl {
   };
 
   markTopicCompleted = async (id: string): Promise<void> => {
-    await this.#get().internal_updateTopic(id, {
-      completedAt: new Date(),
-      status: 'completed',
-    });
+    await this.#get().internal_updateTopic(id, { completedAt: new Date(), status: 'completed' });
+    // Like deleting it, archiving the topic the user is on opens a new one.
+    if (this.#get().activeTopicId === id) this.#get().switchTopic(null);
   };
 
   unmarkTopicCompleted = async (id: string): Promise<void> => {
@@ -962,26 +961,26 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Persist the topic's status. Optimistically patches the in-memory map so
-   * the sidebar reflects the change immediately; persistence runs
-   * fire-and-forget so a transient network blip never tears down the agent
-   * run that owns the write.
+   * Persist the topic's status. Optimistically patches the in-memory map so the
+   * sidebar reflects it at once; persistence is fire-and-forget so a network
+   * blip never tears down the agent run that owns the write.
    *
-   * Pass `agentId`/`groupId` when the call originates from an agent run
-   * rather than the active UI — without them, the lookup falls back to the
-   * currently active agent, and a status write arriving after the user has
-   * switched agents lands in the wrong bucket. The DB write is unconditional
-   * so even if no bucket is loaded for this topic, the next refetch picks
-   * up the persisted status.
+   * Pass `agentId`/`groupId` when the call originates from an agent run rather
+   * than the active UI — without them, the lookup falls back to the currently
+   * active agent, and a write arriving after the user switched agents lands in
+   * the wrong bucket. The DB write is unconditional so even if no bucket is
+   * loaded for this topic, the next refetch picks up the persisted status.
    */
   updateTopicStatus = async (params: {
     agentId?: string;
+    /** Write even when the local row already reads `status`; the server's may differ. */
+    force?: boolean;
     groupId?: string;
     scope?: TopicMapScope;
     status: ChatTopicStatus;
     topicId: string;
   }): Promise<void> => {
-    const { topicId, status, agentId, groupId, scope } = params;
+    const { agentId, force, groupId, scope, status, topicId } = params;
     const state = this.#get();
     const scopedAgentId = scope ? agentId : (agentId ?? state.activeAgentId);
     const scopedGroupId = scope ? groupId : (groupId ?? state.activeGroupId);
@@ -993,7 +992,7 @@ export class ChatTopicActionImpl {
     const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
 
     // Already at the target status — both the in-memory and DB writes are no-ops.
-    if (topic?.status === status) return;
+    if (!force && topic?.status === status) return;
 
     this.internal_pinTopicStatus(params);
 
@@ -1071,27 +1070,19 @@ export class ChatTopicActionImpl {
    * Unlike {@link internal_pinTopicStatus} it never pins: the clear's response
    * may already be stale when it lands (a run started meanwhile, here or on
    * another device), so a newer pending write wins and the next fetch stays
-   * authoritative. Only a loaded row that is still unread follows.
+   * authoritative. Only loaded copies that are still unread follow — every one
+   * of them, since the sidebar's unread dot reads all loaded buckets.
+   *
+   * `status` is the server's current status when the clear found the row
+   * already moved on; it defaults to the `active` the clear itself wrote.
    */
-  internal_settleTopicRead = (params: { agentId?: string; groupId?: string; topicId: string }) => {
-    const { agentId, groupId, topicId } = params;
+  internal_settleTopicRead = (params: { status?: ChatTopicStatus; topicId: string }) => {
+    const { status = 'active', topicId } = params;
     if (!this.#pendingTopicStatusWrites.settle(topicId, 'unread')) return;
 
-    const state = this.#get();
-    const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
-    });
-    const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
-    if (topic?.status !== 'unread') return;
-
-    state.internal_dispatchTopic({
-      type: 'updateTopic',
-      id: topicId,
-      value: { status: 'active' },
-      agentId,
-      groupId,
-    });
+    this.#topicEntity.update(topicId, (topic) =>
+      topic.status === 'unread' ? { ...topic, status } : topic,
+    );
   };
 
   #getTopicUpdatedAt = (topic: RunningTopicForWatchdog): number | undefined => {

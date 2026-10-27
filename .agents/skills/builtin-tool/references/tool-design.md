@@ -194,7 +194,7 @@ When planning work:
 - **Disambiguate confusable APIs explicitly** (`runTask` vs `updateTaskStatus`).
 - **Push toward batched APIs** ("Prefer this when…").
 - **End with a numbered workflow** if the tool has a typical sequence.
-- **For tools with multiple environments** (e.g. desktop vs cloud), keep variants in `systemRole.ts` and `systemRole.desktop.ts` and pick at the manifest level. See `builtin-tool-local-system`.
+- **For tools with multiple environments** (e.g. desktop vs cloud), variants in `systemRole.ts` + `systemRole.desktop.ts` picked at the manifest level are fine — but only while the content genuinely differs. `builtin-tool-local-system` forked them for image reads; once every runtime could upload images the fork held nothing but drift, so it was merged back.
 
 ### Dynamic system prompts
 

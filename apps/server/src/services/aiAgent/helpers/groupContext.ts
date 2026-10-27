@@ -1,4 +1,5 @@
 import type { AgentGroupConfig } from '@lobechat/context-engine';
+import { agentIdentityLabel } from '@lobechat/types';
 
 /**
  * Format error for storage in thread metadata
@@ -35,7 +36,12 @@ export function formatErrorForMetadata(error: unknown): Record<string, any> | un
 export const buildGroupAgentContext = (
   currentAgentId: string,
   group: { content?: string | null; title?: string | null } | undefined,
-  roster: Array<{ agentId: string; role: string | null; title: string | null }>,
+  roster: Array<{
+    agentId: string;
+    name?: string | null;
+    role: string | null;
+    title: string | null;
+  }>,
 ): AgentGroupConfig | undefined => {
   if (roster.length === 0) return undefined;
 
@@ -46,7 +52,8 @@ export const buildGroupAgentContext = (
 
   for (const member of roster) {
     const role = member.role === 'supervisor' ? 'supervisor' : 'participant';
-    const name = member.title?.trim() || 'Untitled Agent';
+    // "Nasa (Shadow Arvin)": the name people call it by, and its role.
+    const name = agentIdentityLabel(member, 'Untitled Agent');
     agentMap[member.agentId] = { name, role };
     members.push({ id: member.agentId, name, role });
 
@@ -74,11 +81,16 @@ export const buildGroupAgentContext = (
  */
 export const buildBotConversationGroupContext = (
   currentAgentId: string,
-  agentConfig: { description?: unknown; title?: unknown } | undefined,
+  agentConfig: { description?: unknown; name?: unknown; title?: unknown } | undefined,
 ): AgentGroupConfig => {
-  const title = agentConfig?.title;
+  const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
   const description = agentConfig?.description;
-  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Current Agent';
+  // This block replaces `<agent_identity>` (suppressed whenever a group context is set), so it must
+  // carry the agent's name, not only its title: people call the bot by its name.
+  const name = agentIdentityLabel(
+    { name: text(agentConfig?.name), title: text(agentConfig?.title) },
+    'Current Agent',
+  );
 
   return {
     agentMap: { [currentAgentId]: { name, role: 'participant' } },

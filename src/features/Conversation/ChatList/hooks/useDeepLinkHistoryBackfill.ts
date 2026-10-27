@@ -1,29 +1,31 @@
 import { useEffect, useRef } from 'react';
 
-/** Upper bound of older pages one deep link may pull in before giving up. */
+/** Upper bound of pages one deep link may pull in before giving up. */
 export const MAX_DEEP_LINK_BACKFILL_PAGES = 50;
 
 interface UseDeepLinkHistoryBackfillOptions {
   /** Changes with every navigation to a deep link, even to the same message. */
   deepLinkKey?: string;
-  loadEarlierMessages: () => Promise<void>;
-  /** Rows loaded so far; a page that adds none means the topic start was reached. */
+  /** Rows loaded so far; a page that adds none means the end of the topic was reached. */
   loadedCount: number;
-  /** The first page has settled and the list pages backward. */
+  /** Loads the next page toward the target: earlier history, or later rounds when reading forward. */
+  loadPage: () => Promise<void>;
+  /** The first page has settled. */
   ready: boolean;
   /** The target is among the loaded rows. */
   resolved: boolean;
 }
 
 /**
- * A deep link (a search hit, a `#<messageId>` URL) can point at a message older
- * than the loaded window. Page older history in, one page per settled load,
- * until the target is loaded, a page adds nothing, or the page budget is spent.
+ * A deep link (a search hit, a `#<messageId>` URL, a saved reading position)
+ * can point at a message outside the loaded window. Page history in, one page
+ * per settled load, until the target is loaded, a page adds nothing, or the
+ * page budget is spent.
  */
 export const useDeepLinkHistoryBackfill = ({
   deepLinkKey,
   loadedCount,
-  loadEarlierMessages,
+  loadPage,
   ready,
   resolved,
 }: UseDeepLinkHistoryBackfillOptions) => {
@@ -40,6 +42,6 @@ export const useDeepLinkHistoryBackfill = ({
 
     progress.lastCount = loadedCount;
     progress.pages += 1;
-    void loadEarlierMessages();
-  }, [deepLinkKey, loadedCount, loadEarlierMessages, ready, resolved]);
+    void loadPage();
+  }, [deepLinkKey, loadedCount, loadPage, ready, resolved]);
 };

@@ -37,3 +37,11 @@ export interface UpdateApiKeyParams {
 }
 
 export type WorkspaceApiKeyMemberCreation = 'admins_only' | 'all_members';
+
+/**
+ * Who may connect, re-authorize, sync or remove the workspace's shared
+ * connectors. Workspace owners and admins always can; `all_members` (the
+ * default) lets every member co-maintain them. Reading or rewriting another
+ * member's stored credentials stays with that creator and the workspace owner.
+ */
+export type WorkspaceConnectorMemberManage = 'admins_only' | 'all_members';

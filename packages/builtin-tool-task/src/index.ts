@@ -1,4 +1,11 @@
-export { MISSING_TASK_NAME_ERROR, TASK_STATUSES, UNFINISHED_TASK_STATUSES } from './constants';
+export type { TaskCompletedWindow } from './constants';
+export {
+  MISSING_TASK_NAME_ERROR,
+  TASK_COMPLETED_WINDOW_MS,
+  TASK_COMPLETED_WINDOWS,
+  TASK_STATUSES,
+  UNFINISHED_TASK_STATUSES,
+} from './constants';
 export {
   DEFAULT_LIST_TASK_LIMIT,
   normalizeListTasksParams,

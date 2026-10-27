@@ -25,6 +25,7 @@ import {
   createRuntimeProbeCache,
   type RuntimeProbeCache,
 } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
+import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
 import type { Command } from 'commander';
 
 import { createLambdaClient } from '../api/client';
@@ -1061,8 +1062,8 @@ function bindGatewayClientHandlers(
     // round trip, so reporting this back is what separates a slow tool from
     // slow transport.
     const startedAt = performance.now();
-    const result = await maintenance
-      .run(() =>
+    const result = await executeDeviceOperation({ apiName: toolCall.apiName, operationId }, () =>
+      maintenance.run(() =>
         // Computer Use's `runCommand` shares its apiName with the shell tool, and
         // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
         toolCall.identifier === COMPUTER_USE_IDENTIFIER
@@ -1070,13 +1071,13 @@ function bindGatewayClientHandlers(
           : toolCall.identifier === BROWSER_IDENTIFIER
             ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
             : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getAuth()),
-      )
-      .catch((err: Error) => ({
-        content: '',
-        error: err.message,
-        state: undefined,
-        success: false,
-      }));
+      ),
+    ).catch((err: Error) => ({
+      content: '',
+      error: err.message,
+      state: undefined,
+      success: false,
+    }));
     const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
@@ -1139,6 +1140,7 @@ function bindGatewayClientHandlers(
             agentType: request.agentType,
             assistantMessageId: request.assistantMessageId,
             args: request.args,
+            claudeAccountRouting: request.claudeAccountRouting,
             cwd: request.cwd,
             imageList: request.imageList,
             jwt: request.jwt,
