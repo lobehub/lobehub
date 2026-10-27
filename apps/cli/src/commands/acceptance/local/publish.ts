@@ -14,7 +14,7 @@ import { outputJson } from '../../../utils/format';
 import { log } from '../../../utils/logger';
 import { ingestReportAction, type IngestReportSummary } from '../run/ingest';
 import { ReportRoundError } from '../run/reportRound';
-import { writeAcceptanceInfo } from './acceptanceDir';
+import { localEvidenceId, writeAcceptanceInfo } from './acceptanceDir';
 import { loadLocalAcceptance, type LocalAcceptanceRead } from './localAcceptance';
 
 export interface PublishOptions {
@@ -28,6 +28,8 @@ export interface PublishOptions {
 type RemoteBundle = Awaited<ReturnType<TrpcClient['acceptance']['getBundle']['query']>>;
 
 interface ReviewCarry {
+  /** Decisions that landed this time, recorded so a re-publish skips them. */
+  carried: string[];
   skipped: { checkId: string; reason: string }[];
   uploaded: number;
 }
@@ -37,16 +39,29 @@ interface ReviewCarry {
  * collaborators open it where the local review left off. Only the current
  * verdict of each check moves (a reject a later round consumed stays local
  * history), and a circled region is re-pointed at the same artifact's upload.
+ * Each decision moves once: replaying it on a later publish would overwrite
+ * whatever a collaborator decided online since.
  */
 async function carryReviews(
   client: TrpcClient,
   read: LocalAcceptanceRead,
   remote: LocalAcceptanceRemote,
 ): Promise<ReviewCarry> {
-  const carry: ReviewCarry = { skipped: [], uploaded: 0 };
+  const carry: ReviewCarry = { carried: [], skipped: [], uploaded: 0 };
+  const done = new Set(remote.carriedReviews);
   const local = assembleLocalAcceptance(read.source);
-  const standing = local.checks.filter((check) => check.userReview && !check.userReview.stale);
-  const groupFeedback = local.rounds.at(-1)?.run.decisionDetail?.groupFeedback ?? [];
+  const checkKey = (check: (typeof local.checks)[number]) => check.planItem?.id ?? check.id;
+  const standing = local.checks
+    .filter((check) => check.userReview && !check.userReview.stale)
+    .map((check) => ({ check, key: `check:${checkKey(check)}@${check.userReview!.createdAt}` }))
+    .filter(({ key }) => !done.has(key));
+  const latestRoundIndex = local.rounds.at(-1)?.run.roundIndex;
+  const groupFeedback = read.source.reviews.filter(
+    (event): event is Extract<typeof event, { kind: 'group' }> =>
+      event.kind === 'group' &&
+      event.roundIndex === latestRoundIndex &&
+      !done.has(`group:${event.id}`),
+  );
   if (standing.length === 0 && groupFeedback.length === 0) return carry;
 
   const bundle: RemoteBundle = await client.acceptance.getBundle.query({
@@ -56,41 +71,27 @@ async function carryReviews(
   const remoteCheck = new Map(
     bundle.checks.map((check) => [check.planItem?.id ?? check.id, check]),
   );
-  const remoteRunByDir = new Map(remote.rounds.map((round) => [round.dir, round.verifyRunId]));
-  const dirByLocalRun = new Map(read.source.rounds.map((round) => [round.run.id, round.dir]));
+  // Matched by identity: a failed upload leaves no entry rather than shifting the rest.
+  const remoteEvidence = new Map(
+    remote.rounds.flatMap((round) => Object.entries(round.evidence ?? {})),
+  );
 
-  /** A local artifact → the same artifact's upload: its round, its check, its position. */
-  const remoteEvidenceId = (evidenceId: string): string | undefined => {
-    for (const check of local.checks) {
-      for (const entry of check.timeline) {
-        const position = entry.evidence.findIndex((item) => item.id === evidenceId);
-        if (position === -1) continue;
-        const runId = remoteRunByDir.get(dirByLocalRun.get(entry.verifyRunId) ?? '');
-        const target = bundle.checks
-          .find((item) => item.planItem?.id === (check.planItem?.id ?? check.id))
-          ?.timeline.find((step) => step.verifyRunId === runId);
-        return target?.evidence[position]?.id;
-      }
-    }
-    return undefined;
-  };
-
-  for (const check of standing) {
+  for (const { check, key } of standing) {
     const review = check.userReview!;
-    const target = remoteCheck.get(check.planItem?.id ?? check.id);
+    const target = remoteCheck.get(checkKey(check));
     if (!target?.result) {
       carry.skipped.push({ checkId: check.id, reason: 'not on the published acceptance' });
       continue;
     }
     const annotations = (review.annotations ?? []).flatMap(
       (annotation): AcceptanceReviewAnnotation[] => {
-        const evidenceId = remoteEvidenceId(annotation.evidenceId);
+        const evidenceId = remoteEvidence.get(annotation.evidenceId);
         return evidenceId ? [{ ...annotation, evidenceId }] : [];
       },
     );
     // A region on an artifact that failed to upload cannot be placed; keep its words.
     const lostNotes = (review.annotations ?? [])
-      .filter((annotation) => !remoteEvidenceId(annotation.evidenceId) && annotation.comment)
+      .filter((annotation) => !remoteEvidence.has(annotation.evidenceId) && annotation.comment)
       .map((annotation) => annotation.comment!);
     const comment = [review.comment, ...lostNotes].filter(Boolean).join('\n') || undefined;
     try {
@@ -101,6 +102,7 @@ async function carryReviews(
         comment,
         id: remote.acceptanceId,
       });
+      carry.carried.push(key);
       carry.uploaded++;
     } catch (error) {
       carry.skipped.push({
@@ -117,6 +119,7 @@ async function carryReviews(
         comment: entry.comment,
         id: remote.acceptanceId,
       });
+      carry.carried.push(`group:${entry.id}`);
       carry.uploaded++;
     } catch (error) {
       carry.skipped.push({
@@ -169,11 +172,22 @@ export async function publishAction(target: string, options: PublishOptions) {
     if (!summary) throw new Error(`${round.dir} was not published as an authored round`);
     results.push({ dir: round.dir, summary });
     remote = {
+      ...remote,
       acceptanceId: summary.acceptanceId,
       acceptanceUrl: summary.acceptanceUrl,
       rounds: [
         ...(remote?.rounds ?? []),
-        { dir: round.dir, roundIndex: summary.roundIndex, verifyRunId: summary.verifyRunId },
+        {
+          dir: round.dir,
+          evidence: Object.fromEntries(
+            summary.publishedEvidence.map((item) => [
+              localEvidenceId(info.id, round.dir, item.checkItemId, item.position),
+              item.evidenceId,
+            ]),
+          ),
+          roundIndex: summary.roundIndex,
+          verifyRunId: summary.verifyRunId,
+        },
       ],
     };
     // Recorded per round: an interrupted publish resumes after the last one that landed.
@@ -185,12 +199,16 @@ export async function publishAction(target: string, options: PublishOptions) {
     process.exit(1);
   }
 
-  const reviews =
+  const { carried, ...reviews } =
     options.reviews === false
-      ? { skipped: [], uploaded: 0 }
+      ? { carried: [], skipped: [], uploaded: 0 }
       : await carryReviews(client, read, remote);
   for (const skipped of reviews.skipped)
     log.warn(`review of ${skipped.checkId} not carried over: ${skipped.reason}`);
+  if (carried.length > 0) {
+    remote = { ...remote, carriedReviews: [...(remote.carriedReviews ?? []), ...carried] };
+    writeAcceptanceInfo(acceptanceDir, { ...info, remote });
+  }
 
   const partial = results.some(({ summary }) => summary.publicationStatus === 'partial');
   if (partial) process.exitCode = 1;
@@ -200,7 +218,12 @@ export async function publishAction(target: string, options: PublishOptions) {
     alreadyPublished: [...published],
     published: results.map(({ dir, summary }) => ({
       dir,
+      // A partial round is recorded as published and never re-ingested: what
+      // repairs it is retrying these artifacts, not publishing again.
+      failedEvidence: summary.failedEvidence,
+      missingEvidence: summary.missingEvidence,
       publicationStatus: summary.publicationStatus,
+      recovery: summary.recovery,
       roundIndex: summary.roundIndex,
       verifyRunId: summary.verifyRunId,
     })),
@@ -217,6 +240,14 @@ export async function publishAction(target: string, options: PublishOptions) {
       `${published.size > 0 ? pc.dim(` (${published.size} already published)`) : ''}` +
       `${reviews.uploaded > 0 ? `, ${reviews.uploaded} review decision(s) carried over` : ''}`,
   );
+  for (const { dir, summary } of results) {
+    for (const failure of summary.failedEvidence) {
+      console.log(`${pc.yellow('retry (POSIX shell)')} ${pc.dim(dir)}: ${failure.retryCommand}`);
+      console.log(
+        `${pc.dim('retryArgs (lh, shell disabled)')}: ${JSON.stringify(failure.retryArgs)}`,
+      );
+    }
+  }
   console.log(`${pc.bold('acceptance')}: ${remote.acceptanceUrl}`);
 }
 

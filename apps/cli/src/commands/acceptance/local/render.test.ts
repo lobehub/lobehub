@@ -9,7 +9,11 @@ import { renderReportAction } from './render';
 import { renderReportHtml } from './reportTemplate';
 import { createLocalAcceptance, firstRound } from './testUtils';
 
-const { outputJson } = vi.hoisted(() => ({ outputJson: vi.fn() }));
+const { outputJson, spawn } = vi.hoisted(() => ({
+  outputJson: vi.fn(),
+  spawn: vi.fn(() => ({ unref: () => {} })),
+}));
+vi.mock('node:child_process', () => ({ spawn }));
 vi.mock('../../../utils/format', async (original) => ({
   ...(await original<typeof Format>()),
   outputJson,
@@ -91,6 +95,24 @@ describe('lh acceptance run render', () => {
       '20260102-090000-second',
     ]);
     expect(outputJson.mock.calls.at(-1)![0]).toMatchObject({ roundIndex: 2, rounds: 2 });
+  });
+
+  it('opens the page on Windows without handing its path to a shell', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
+    const roundDir = path.join(fixture.acceptanceDir, '20260101-090000-first');
+    try {
+      await renderReportAction(roundDir, { json: true, open: true });
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
+
+    const reportPath = path.join(fixture.acceptanceDir, 'report.html');
+    expect(spawn).toHaveBeenCalledWith(
+      'rundll32',
+      ['url.dll,FileProtocolHandler', reportPath],
+      expect.objectContaining({ detached: true }),
+    );
   });
 });
 

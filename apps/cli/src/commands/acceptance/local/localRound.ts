@@ -29,7 +29,7 @@ import {
   reportEvidence,
   type Verdict,
 } from '../utils';
-import { localId, roundCreatedAt } from './acceptanceDir';
+import { localEvidenceId, localId, roundCreatedAt } from './acceptanceDir';
 import { readImageSize } from './imageSize';
 
 /**
@@ -131,7 +131,7 @@ export function readLocalRound(params: {
         fileName: path.basename(file),
         fileUrl: content === null ? pageUrl(acceptanceDir, file) : null,
         fileWidth: size?.width ?? null,
-        id: localId(acceptanceId, 'evidence', dir, checkItemId, String(position)),
+        id: localEvidenceId(acceptanceId, dir, checkItemId, position),
         metadata: metadata ?? null,
         type,
       });

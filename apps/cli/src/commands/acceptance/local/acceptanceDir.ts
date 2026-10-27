@@ -63,6 +63,17 @@ export const localId = (...parts: string[]) => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
 
+/**
+ * A local artifact's id: its round, its check, its place in the authored
+ * `evidence` list — the coordinates `ingest` reports each upload by.
+ */
+export const localEvidenceId = (
+  acceptanceId: string,
+  dir: string,
+  checkItemId: string,
+  position: number,
+) => localId(acceptanceId, 'evidence', dir, checkItemId, String(position));
+
 const readJson = (file: string): unknown => {
   try {
     return JSON.parse(readFileSync(file, 'utf8'));

@@ -298,6 +298,51 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
   );
 
   it.each([
+    { authored: 'task:T-12', name: 'the acceptance it already names', published: true },
+    { authored: 'task:T-99', name: 'another subject', published: false },
+  ])(
+    'with --acceptance, accepts an authored subject only when it is $name',
+    async ({ authored, published }) => {
+      // `lh acceptance publish` appends a local acceptance's later rounds by
+      // id; their result.json keeps the subject the first round was filed under.
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        acceptance: {
+          id: 'acceptance-existing',
+          status: 'delivered',
+          subjectId: 'T-12',
+          subjectType: 'task',
+        },
+      });
+      writeFileSync(
+        path.join(dir, 'result.json'),
+        JSON.stringify({ cases: [], subject: authored }),
+      );
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit ${code}`);
+      }) as never);
+      try {
+        const ingest = run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+        if (published) await ingest;
+        else await expect(ingest).rejects.toThrow('process.exit 1');
+      } finally {
+        exitSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
+
+      expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      if (published) {
+        expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+          acceptanceId: 'acceptance-existing',
+          verifyRunId: 'run-new',
+        });
+      } else {
+        expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each([
     { effectiveWorkspace: null, name: 'revoked workspace membership' },
     { effectiveWorkspace: { id: 'workspace-other' }, name: 'a different server workspace' },
     { effectiveWorkspace: new Error('Workspace lookup unavailable'), name: 'a failed lookup' },

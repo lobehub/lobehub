@@ -21,13 +21,17 @@ export interface RenderReportOptions {
   reviews?: string;
 }
 
-/** Open a file in the default browser, without waiting on it. */
+/**
+ * Open a file in the default browser, without waiting on it. Never through a
+ * shell: the path is whatever directory the acceptance lives in, and `cmd`
+ * would parse its `&` or `^`.
+ */
 const openInBrowser = (file: string) => {
   const [command, args] =
     process.platform === 'darwin'
       ? ['open', [file]]
       : process.platform === 'win32'
-        ? ['cmd', ['/c', 'start', '', file]]
+        ? ['rundll32', ['url.dll,FileProtocolHandler', file]]
         : ['xdg-open', [file]];
   try {
     spawn(command, args, { detached: true, stdio: 'ignore' }).unref();

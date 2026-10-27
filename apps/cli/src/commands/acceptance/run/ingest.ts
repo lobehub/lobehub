@@ -99,10 +99,8 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
   let plan = round.plan;
 
   const requestedAcceptanceId = options.acceptance?.trim();
-  if (requestedAcceptanceId && (options.subject || result.subject)) {
-    log.error(
-      'Choose one acceptance target: pass --acceptance <id>, or use --subject/result.json `subject`.',
-    );
+  if (requestedAcceptanceId && options.subject) {
+    log.error('Choose one acceptance target: pass --acceptance <id>, or use --subject.');
     process.exit(1);
   }
 
@@ -220,6 +218,19 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
   if (requestedAcceptanceId) {
     bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
     acceptance = bundle.acceptance;
+    // A round's authored `subject` may ride along with the acceptance that
+    // already holds it (`lh acceptance publish` appends later rounds by id);
+    // one naming another subject is a conflicting target, not a hint.
+    if (
+      result.subject &&
+      (subject?.ref.subjectType !== acceptance.subjectType ||
+        subject.ref.subjectId !== acceptance.subjectId)
+    ) {
+      log.error(
+        `result.json \`subject\` does not match acceptance "${acceptance.id}" (${acceptance.subjectType}:${acceptance.subjectId}). Drop --acceptance, or the subject.`,
+      );
+      process.exit(1);
+    }
     // ID-based reads can cross scopes, but creating a run uses the CLI's scope.
     // Reject before any writes instead of leaving an unattachable run behind.
     const currentWorkspaceId = resolveWorkspaceId();
@@ -375,6 +386,9 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
   let evidenceCount = 0;
   let inlined = 0;
   const failedEvidence: (FailedReportEvidence & { checkItemId: string })[] = [];
+  // What landed, by authored position: a caller holding its own copy of the
+  // round (`lh acceptance publish`) maps its artifacts onto these by identity.
+  const publishedEvidence: { checkItemId: string; evidenceId: string; position: number }[] = [];
   const missingEvidence: { checkItemId: string; types: EvidenceType[] }[] = [];
   const publishedVerdicts: Verdict[] = [];
   for (const [index, { case: c, checkItemId }] of cases.entries()) {
@@ -394,6 +408,7 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
     evidenceCount += uploaded.count;
     inlined += uploaded.inlined;
     failedEvidence.push(...uploaded.failedEvidence.map((failure) => ({ ...failure, checkItemId })));
+    publishedEvidence.push(...uploaded.published.map((item) => ({ ...item, checkItemId })));
     const gaps = requiredEvidenceGaps(plan, checkItemId, uploaded.types);
     const publishedVerdict = publishedVerdictFor(verdict, gaps);
     publishedVerdicts.push(publishedVerdict);
@@ -515,6 +530,7 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
     planItems: plan?.length ?? 0,
     proposalPosted,
     publicationStatus: partial ? 'partial' : 'complete',
+    publishedEvidence,
     pullRequest,
     recovery,
     roundIndex,

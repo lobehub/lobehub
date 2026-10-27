@@ -78,8 +78,19 @@ export interface LocalAcceptanceInfo {
 export interface LocalAcceptanceRemote {
   acceptanceId: string;
   acceptanceUrl: string;
+  /**
+   * Local review decisions already carried onto the published acceptance, so a
+   * re-publish never replays one over a collaborator's newer decision online.
+   */
+  carriedReviews?: string[];
   /** Round directories already published, oldest first, with the run each became. */
-  rounds: { dir: string; roundIndex: number | null; verifyRunId: string }[];
+  rounds: {
+    dir: string;
+    /** Local evidence id → its upload's id. An artifact that failed to upload is absent. */
+    evidence?: Record<string, string>;
+    roundIndex: number | null;
+    verifyRunId: string;
+  }[];
 }
 
 export interface LocalRunSource {
