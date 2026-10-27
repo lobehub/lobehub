@@ -314,20 +314,21 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     .option('--json [fields]', 'Output JSON')
     .action(async (idOrSubject: string, options: { json?: boolean | string; reviews?: string }) => {
       const local = localAcceptanceTarget(idOrSubject);
-      const bundle: RemoteBundle = local
-        ? (readLocalBundle(local, { reviewsFile: options.reviews })
-            .bundle as unknown as RemoteBundle)
-        : await (
-            await getTrpcClient()
-          ).acceptance.getBundle.query({
-            id: await resolveAcceptanceId(idOrSubject),
-          });
+      let bundle: RemoteBundle;
+      if (local) {
+        bundle = readLocalBundle(local, { reviewsFile: options.reviews })
+          .bundle as unknown as RemoteBundle;
+      } else {
+        const id = await resolveAcceptanceId(idOrSubject);
+        const client = await getTrpcClient();
+        bundle = await client.acceptance.getBundle.query({ id });
+        if (options.json !== undefined) {
+          bundle = withUrl(bundle, await resolveUrlBuilder(client), resourcePath.acceptance(id));
+        }
+      }
 
       if (options.json !== undefined) {
-        outputJson(
-          withUrl(bundle, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
-          typeof options.json === 'string' ? options.json : undefined,
-        );
+        outputJson(bundle, typeof options.json === 'string' ? options.json : undefined);
         return;
       }
 
