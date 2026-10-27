@@ -1,5 +1,8 @@
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
-import { hasPassiveListeningRule } from '@/server/services/agentSignal/scenarios/botWake/config';
+import {
+  flattenBotWakeSettings,
+  hasPassiveListeningRule,
+} from '@/server/services/agentSignal/scenarios/botWake/config';
 import { GatewayService } from '@/server/services/gateway';
 
 import { getBotMessageRouter } from './BotMessageRouter';
@@ -27,6 +30,30 @@ export function mergeBotSettingsForPersist(
   const definition = platformRegistry.getPlatform(platform);
   if (!definition) return settings;
   return mergeWithDefaults(definition.schema, settings);
+}
+
+/**
+ * The settings to persist for a partial update: the keys in `patch` over the stored settings, then
+ * the schema defaults for anything still missing. The settings column is replaced whole on write,
+ * so merging only `patch` with the defaults reset every key the caller did not send (the owner's
+ * user id, the access lists, the bot-wake switch) to its default.
+ *
+ * The stored settings go through the same projection the settings form reads
+ * (`flattenBotWakeSettings`): a hand-written nested `botWake` becomes the flat keys, so a flat key
+ * in `patch` (`botWakeDuties`) is what the runtime reads, not shadowed by the nested object.
+ *
+ * Use when:
+ * - A caller sends only the keys it changes (the AI `updateBot` tool), not the whole form
+ *
+ * Expects:
+ * - `patch` is key-level: a key it carries replaces the stored value whole, arrays included
+ */
+export function mergeBotSettingsPatch(
+  platform: string | undefined,
+  existing: Record<string, unknown> | null | undefined,
+  patch: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  return mergeBotSettingsForPersist(platform, { ...flattenBotWakeSettings(existing), ...patch });
 }
 
 /**

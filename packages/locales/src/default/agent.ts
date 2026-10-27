@@ -490,18 +490,14 @@ export default {
   'channel.botWakeClassifierThreshold': 'Follow-up sensitivity',
   'channel.botWakeClassifierThresholdHint':
     'Right after the bot replied, how sure it must be that a message is still for it before it joins, from 0 to 1. A higher value makes it join less often.',
-  'channel.botWakeClassifierInitiateThreshold': 'Help-others sensitivity',
-  'channel.botWakeClassifierInitiateThresholdHint':
-    'How sure the bot must be that a message nobody addressed to it is for it before it answers, from 0 to 1. A higher value makes it answer less often.',
-  'channel.botWakeProactiveEnabled': 'Help me',
-  'channel.botWakeProactiveEnabledHint':
-    'When you raise something the bot could help with (a problem, a complaint, a plan) without calling it, the bot judges whether to step in with a concrete proposal. Only your own messages count, and it may still stay silent.',
-  'channel.botWakeProactiveThreshold': 'Help-me sensitivity',
-  'channel.botWakeProactiveThresholdHint':
-    'How sure the bot must be that you would welcome its help before it steps in, from 0 to 1. A higher value makes it step in less often.',
-  'channel.botWakeClassifierInitiateEnabled': 'Help others',
-  'channel.botWakeClassifierInitiateEnabledHint':
-    'When someone asks the bot something without naming or @-mentioning it, for example in a channel people use it in, the bot answers if the message is plainly for it.',
+  'channel.botWakeDuties': 'What the bot handles',
+  'channel.botWakeDutiesHint':
+    "What the bot is responsible for in its channels, in your own words, one duty per line. When anyone's message falls within them, the bot may step in without being called, and may still stay silent. Leave empty to turn this off. You can also ask the bot to keep this up to date itself. Up to 4000 characters.",
+  'channel.botWakeDutiesPlaceholder':
+    'When someone describes a feature request, assess it; for easy ones, create a task for dario.\nOnce the PR is up, tell the person who asked for it.',
+  'channel.botWakeDutiesThreshold': 'Duty sensitivity',
+  'channel.botWakeDutiesThresholdHint':
+    'How sure the bot must be that a message falls within its duties before it steps in, from 0 to 1. A higher value makes it step in less often.',
   'channel.botWakeCustomInstructionsEnabled': 'Custom instructions',
   'channel.botWakeCustomInstructionsEnabledHint':
     'Tell the bot in your own words whom to answer and what to leave alone. Turn on to write them.',
@@ -606,9 +602,9 @@ export default {
     'Where the bot may join a conversation nobody addressed to it.',
   'channel.wake.section.pace': 'Pace',
   'channel.wake.section.paceDesc': 'How soon, and how often, the bot speaks up on its own.',
-  'channel.wake.section.judgement': 'Initiative',
+  'channel.wake.section.judgement': 'Duties',
   'channel.wake.section.judgementDesc':
-    'When the bot may speak up without being called: to help you, to help others, and the instructions it follows.',
+    'What the bot is responsible for, so it can step in without being called, and the instructions it follows.',
   'channel.wake.section.more': 'More',
   'channel.tab.advanced': 'Advanced',
   'channel.tab.unsaved': 'Unsaved changes',

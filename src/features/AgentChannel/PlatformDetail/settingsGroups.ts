@@ -69,11 +69,10 @@ export interface WakeSection {
  * them. The strings are the keys of `BOT_WAKE_SETTING_KEYS` (a test keeps the two in step); they
  * are spelled out here so the page does not pull the server's settings parser into the bundle.
  *
- * - judgement (shown as "initiative"), first: the decision a person makes before any other, when
- *   the bot may speak up without being called. In the order a person thinks about it: for me (the
- *   owner's own remarks), for others (a message plainly for the bot that nobody addressed to it),
- *   then the custom instructions behind both. Each is a switch with its dial or text area opening
- *   under it.
+ * - judgement (shown as "duties"), first: the decision a person makes before any other, what the
+ *   bot is responsible for, so it may speak up without being called when a message falls within
+ *   it. The duties text area with its dial under it, then the custom instructions (a switch with
+ *   its text area opening under it) that guide every judgement.
  * - keywords: words that wake the bot with no @
  * - channels: where it may join a conversation nobody addressed to it
  * - pace: how soon and how often it speaks up on its own, as a preset; `custom` opens the numbers
@@ -83,10 +82,8 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   [
     'judgement',
     [
-      'botWakeProactiveEnabled',
-      'botWakeProactiveThreshold',
-      'botWakeClassifierInitiateEnabled',
-      'botWakeClassifierInitiateThreshold',
+      'botWakeDuties',
+      'botWakeDutiesThreshold',
       'botWakeCustomInstructionsEnabled',
       'botWakeCustomInstructions',
     ],

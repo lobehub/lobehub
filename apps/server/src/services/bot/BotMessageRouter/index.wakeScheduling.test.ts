@@ -30,7 +30,9 @@ vi.mock('../wake/scheduler', () => ({
 }));
 vi.mock('../wake/classify', () => ({
   createWakeClassify: () => vi.fn(),
-  createWakeProactiveJudge: () => vi.fn(),
+}));
+vi.mock('../wake/dutyJudge', () => ({
+  createWakeDutyJudge: () => vi.fn(),
 }));
 vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());

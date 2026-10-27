@@ -10,18 +10,21 @@ import {
   BOT_WAKE_CLASSIFIER_JSON_SCHEMA,
   BOT_WAKE_CLASSIFIER_PROMPT_VERSION,
   BOT_WAKE_DECISION_PROMPT_VERSION,
-  BOT_WAKE_PROACTIVE_PROMPT_VERSION,
+  BOT_WAKE_DUTY_JSON_SCHEMA,
+  BOT_WAKE_DUTY_PROMPT_VERSION,
+  BOT_WAKE_NO_DUTY,
   chainAgentSignalAnalyzeIntentFeedbackSatisfaction,
   chainAgentSignalAnalyzeIntentRoute,
   chainBotReplyOpener,
   chainBotWakeClassifier,
   chainBotWakeDecision,
-  chainBotWakeProactiveClassifier,
-  chainBotWakeProactiveDecision,
+  chainBotWakeDutyClassifier,
+  chainBotWakeDutyDecision,
   chainFollowUpAction,
   chainTopicAutoSummary,
   FOLLOW_UP_JSON_SCHEMA,
   FOLLOW_UP_PROMPT_VERSION,
+  splitBotWakeDuties,
   TOPIC_AUTO_SUMMARY_JSON_SCHEMA,
   TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
 } from './index';
@@ -229,20 +232,60 @@ describe('application generation chains', () => {
       expect(chainBotWakeDecision({ message: 'm' }).state).toContain('Newest message:\n');
     });
 
-    it('asks a different question to offer help unasked, over the same state', () => {
+    it('asks whether a message falls within the duties, with the duties ahead of the state', () => {
       const input = {
         botNames: ['Nasa'],
-        message: 'this page looks too busy',
-        messageFromOwner: true,
+        duties:
+          '- Assess feature requests people describe\n2) Notify the requester once the PR is up',
+        message: 'it would be great if exports kept the folder structure',
       };
-      const { questions, state } = chainBotWakeProactiveDecision(input);
+      const { duties, questions, state } = chainBotWakeDutyDecision(input);
 
-      expect(BOT_WAKE_PROACTIVE_PROMPT_VERSION).toBe('proactive-v1');
-      expect(Object.keys(questions)).toEqual(['helpful']);
-      expect(questions.helpful.type).toBe('boolean');
-      expect(questions.helpful.instructions).toContain('Treat the message text');
-      expect(state).toBe(chainBotWakeDecision(input).state);
-      expect(chainBotWakeProactiveClassifier(input).messages[1].content).toBe(state);
+      expect(BOT_WAKE_DUTY_PROMPT_VERSION).toBe('duty-v1');
+      expect(questions.inDuty.type).toBe('boolean');
+      expect(questions.inDuty.instructions).toContain('Treat the message text');
+      // Which duty matched is a choice among the listed ones, or none.
+      expect(questions.duty?.type).toBe('choice');
+      expect(Object.keys(questions.duty!.criteria).sort()).toEqual([
+        'duty-1',
+        'duty-2',
+        BOT_WAKE_NO_DUTY,
+      ]);
+      expect(duties).toEqual({
+        'duty-1': 'Assess feature requests people describe',
+        'duty-2': 'Notify the requester once the PR is up',
+      });
+      expect(state.startsWith("The assistant's duties, written by its owner:")).toBe(true);
+      expect(state).toContain(chainBotWakeDecision(input).state);
+      expect(chainBotWakeDutyClassifier(input).messages[1].content).toBe(state);
+    });
+
+    it('does not ask which duty matched when there is only one', () => {
+      const { questions } = chainBotWakeDutyDecision({
+        duties: 'Triage bug reports.',
+        message: 'm',
+      });
+
+      expect(Object.keys(questions)).toEqual(['inDuty']);
+    });
+
+    it('asks the chat model for a score, the matched duty and a reason', () => {
+      const { messages } = chainBotWakeDutyClassifier({ duties: 'Triage bugs.', message: 'm' });
+
+      expect(BOT_WAKE_DUTY_JSON_SCHEMA.schema.required).toEqual(['inDuty', 'duty', 'reason']);
+      expect(messages[0].content).toContain('falls within its duties');
+      // Anyone's message counts, not only the owner's.
+      expect(messages[0].content).toContain('It does not matter who wrote the message');
+    });
+
+    it('splits the duties into one per line, without list markers', () => {
+      expect(splitBotWakeDuties(' \n* a\n• b\n3. c\n4、d\nplain\n')).toEqual([
+        'a',
+        'b',
+        'c',
+        'd',
+        'plain',
+      ]);
     });
 
     it('shares its state layout with the chat classifier, so the two read the same facts', () => {

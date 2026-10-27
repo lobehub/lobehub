@@ -161,14 +161,14 @@ describe('PlatformDetail saving', () => {
     });
     openTab(en['channel.tab.wake']);
 
-    // Edit the silent-wake limit (Pace) and the help-others sensitivity (Initiative).
+    // Edit the silent-wake limit (Pace) and the duty sensitivity (Duties).
     const limit = screen.getByRole('textbox', {
       name: new RegExp(en['channel.botWakeMaxSilentWakes']),
     });
     fireEvent.change(limit, { target: { value: '5' } });
     fireEvent.blur(limit);
     const sensitivity = screen.getByRole('textbox', {
-      name: new RegExp(en['channel.botWakeClassifierInitiateThreshold']),
+      name: new RegExp(en['channel.botWakeDutiesThreshold']),
     });
     fireEvent.change(sensitivity, { target: { value: '0.9' } });
     fireEvent.blur(sensitivity);
@@ -185,11 +185,11 @@ describe('PlatformDetail saving', () => {
     const [, , patch] = mocks.updateBotProvider.mock.calls[0];
     expect(patch.settings.botWakeMaxSilentWakes).toBe(5);
     // The sensitivity is edited but not saved: the write carries the stored value.
-    expect(patch.settings.botWakeClassifierInitiateThreshold).toBe(0.8);
+    expect(patch.settings.botWakeDutiesThreshold).toBe(0.8);
     expect(patch).not.toHaveProperty('credentials');
     expect(mocks.connectBot).not.toHaveBeenCalled();
 
-    // Initiative still has its unsaved edit.
+    // Duties still has its unsaved edit.
     await waitFor(() => expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(1));
     expect(sensitivity).toHaveValue('0.9');
   });

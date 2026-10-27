@@ -47,7 +47,9 @@ vi.mock('../wake/scheduler', () => ({
 }));
 vi.mock('../wake/classify', () => ({
   createWakeClassify: () => vi.fn(),
-  createWakeProactiveJudge: () => vi.fn(),
+}));
+vi.mock('../wake/dutyJudge', () => ({
+  createWakeDutyJudge: () => vi.fn(),
 }));
 vi.mock('../wake/opener', () => ({ createReplyOpener: () => mocks.opener }));
 vi.mock('../wake/identity', () => ({

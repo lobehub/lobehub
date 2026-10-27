@@ -12,13 +12,13 @@ export interface BotPlatformContext {
   canReadHistory?: boolean;
   /** Identifiers of the conversation this run replies in (`lobe-message` args). */
   currentChannel?: BotPlatformInfo['currentChannel'];
+  /** The bot woke on its own because a message falls within its duties (see `formatBotPlatformContext`). */
+  duty?: BotPlatformInfo['duty'];
   /** The bot woke only because its name is in the text (see `formatBotPlatformContext`). */
   named?: boolean;
   /** Acknowledgement already posted before the run (see `formatBotPlatformContext`). */
   openingReply?: BotPlatformInfo['openingReply'];
   platformName: string;
-  /** The bot woke on its own to offer its owner help (see `formatBotPlatformContext`). */
-  proactive?: boolean;
   /** Pre-injected recent same-channel history for platforms without history-read. */
   recentChannelHistory?: BotPlatformInfo['recentChannelHistory'];
   supportsMarkdown: boolean;

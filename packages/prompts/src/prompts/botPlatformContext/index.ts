@@ -51,6 +51,12 @@ export interface BotPlatformInfo {
   /** Identifiers of the conversation this run is replying in. */
   currentChannel?: CurrentBotChannel;
   /**
+   * The bot woke on its own because a message nobody addressed to it falls within its duties (a
+   * `followup` wake). `matched` names the duty, when the judgement said which. The agent is told
+   * why, so it acts on the duty or stays silent.
+   */
+  duty?: { matched?: string };
+  /**
    * The bot woke only because its name is in the text, with no @-mention or reply (a `followup`
    * wake). The agent is told people often talk about it rather than to it.
    */
@@ -61,11 +67,6 @@ export interface BotPlatformInfo {
    */
   openingReply?: string;
   platformName: string;
-  /**
-   * The bot woke on its own to offer its owner help nobody asked for (a `followup` wake). The agent
-   * is told why, so it speaks only with something concrete to offer.
-   */
-  proactive?: boolean;
   /** Pre-injected recent same-channel history (cross-session). */
   recentChannelHistory?: RecentChannelHistory;
   supportsMarkdown: boolean;
@@ -98,10 +99,10 @@ const sanitize = (text: string) =>
 export const formatBotPlatformContext = ({
   canReadHistory = true,
   currentChannel,
+  duty,
   named,
   openingReply,
   platformName,
-  proactive,
   recentChannelHistory,
   supportsMarkdown,
   wakeKind,
@@ -190,9 +191,9 @@ export const formatBotPlatformContext = ({
             `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and say what you will do differently.`,
           ]
         : []),
-      ...(proactive
+      ...(duty
         ? [
-            'Why you were woken: your owner, the person you work for, raised something you may be able to help with, without asking you. Step in only with something concrete — a proposal, a finding, a draft — that moves it forward, the way a capable teammate would. Read the conversation first; if you would only restate the problem or ask what they mean, stay silent.',
+            `Why you were woken: nobody addressed you, but the message falls within the duties your owner gave you${duty.matched?.trim() ? ` (the duty: "${sanitize(duty.matched.trim())}")` : ''}. Read the conversation first. If the duty applies, carry it out the way a teammate holding it would: do the work it describes, and say what you did or will do. If on a closer look it does not apply, end with \`${BOT_NO_REPLY_TOKEN}:off_topic\`; if someone is already handling it, with \`${BOT_NO_REPLY_TOKEN}:already_handled\`.`,
           ]
         : []),
       '</optional_reply>',

@@ -185,17 +185,29 @@ describe('formatBotPlatformContext', () => {
     expect(result).not.toContain('empty_completion');
   });
 
-  it('tells an agent woken to offer help unasked why, so it only speaks with something concrete', () => {
+  it('tells an agent woken by its duties which duty, and to act on it or stay silent', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
-    const proactive = formatBotPlatformContext({ ...base, proactive: true, wakeKind: 'followup' });
+    const duty = formatBotPlatformContext({
+      ...base,
+      duty: { matched: 'Assess <feature> requests' },
+      wakeKind: 'followup',
+    });
 
-    expect(proactive).toContain('Why you were woken: your owner');
-    expect(proactive).toContain('stay silent');
+    expect(duty).toContain('the message falls within the duties your owner gave you');
+    // The matched duty is named, escaped like any owner-written text.
+    expect(duty).toContain('(the duty: "Assess &lt;feature&gt; requests")');
+    expect(duty).toContain('carry it out');
+    expect(duty).toContain('NO_REPLY:off_topic');
+    expect(duty).toContain('NO_REPLY:already_handled');
+    // Without a matched duty the hint still says why, without an empty quote.
+    const unnamed = formatBotPlatformContext({ ...base, duty: {}, wakeKind: 'followup' });
+    expect(unnamed).toContain('the duties your owner gave you.');
+    expect(unnamed).not.toContain('(the duty:');
     expect(formatBotPlatformContext({ ...base, wakeKind: 'followup' })).not.toContain(
       'Why you were woken',
     );
-    // Proactive without a followup wake has nothing to qualify.
-    expect(formatBotPlatformContext({ ...base, proactive: true })).not.toContain(
+    // A duty without a followup wake has nothing to qualify.
+    expect(formatBotPlatformContext({ ...base, duty: { matched: 'x' } })).not.toContain(
       '<optional_reply>',
     );
   });

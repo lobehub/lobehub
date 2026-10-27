@@ -117,14 +117,16 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     });
   });
 
-  it('does not initiate outside the window when the classifier is not sure the message is for it', async () => {
-    const classify = classifierAnswer(0.64);
+  // Outside the window only the duties may start a wake: the classifier's "is it for me?" no
+  // longer does, however sure it is.
+  it('does not initiate outside the window, and does not ask the classifier there', async () => {
+    const classify = classifierAnswer(0.99);
     const recorder = make(WITH_CLASSIFIER('enforce'), fakeState(), { classify });
 
     await expect(
       recorder.initiate(observation({}, { text: 'anyone seen the deploy logs?' })),
     ).resolves.toBeUndefined();
-    expect(classify).toHaveBeenCalledOnce();
+    expect(classify).not.toHaveBeenCalled();
   });
 
   it('only watches while the rules are in shadow: naming the bot changes nothing', async () => {

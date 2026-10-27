@@ -135,6 +135,11 @@ export interface WakePolicyContext<TKey extends WakeStateKey = WakeStateKey> {
 export interface WakePolicyResult {
   /** 0..1, how sure the policy is about its verdict. */
   confidence: number;
+  /**
+   * What the policy matched, when the woken agent should hear it: the duty a message falls within.
+   * Kept on the record for the wake; not part of the stored verdict, whose `reason` says it too.
+   */
+  matched?: string;
   reason: string;
   tags: readonly string[];
   verdict: WakeVerdict;
@@ -218,26 +223,20 @@ export interface WakeClassifierRules {
 export interface WakeRules {
   /** Raw platform channel/thread ids the bot may wake in; empty means anywhere. */
   allowChannels: string[];
-  classifier: WakeClassifierRules & {
-    /**
-     * "Help others": outside the follow-up window the classifier may wake the bot on its own, for
-     * a message that reads as meant for it although nobody named or @-mentioned it. Only while
-     * the classifier enforces.
-     */
-    initiateEnabled: boolean;
-    /** The score that starts such a wake; stricter than `threshold`. 0 also turns it off. */
-    initiateThreshold: number;
-  };
-  /** Free text handed to the classifier as context. Never compiled into a rule. */
+  classifier: WakeClassifierRules;
+  /** Free text handed to the classifier and the duty judge as context. Never compiled into a rule. */
   customInstructions?: string;
   /** Raw platform channel/thread ids the bot never wakes in. Wins over the allow list. */
   denyChannels: string[];
+  /**
+   * The bot's duties: what its owner made it responsible for, as free text. A message nobody
+   * addressed to the bot that falls within them may wake it. Without `text` the judge is not run.
+   */
+  duties: WakeClassifierRules & { text?: string };
   /** Follow-up wakes without the bot speaking before it stays quiet; 0 = no limit. */
   maxSilentWakes: number;
   /** The owner posted in the channel within this many seconds: stay quiet. 0 disables. */
   ownerPresenceSeconds: number;
-  /** Offering the owner help nobody asked for. Uses `classifier`-style mode and threshold. */
-  proactive: WakeClassifierRules;
   scope: WakeRuleScope;
   /** How long after the bot speaks plain messages count as a follow-up to it. */
   windowSeconds: number;
@@ -257,19 +256,20 @@ export interface WakeSchedulerConfig {
  * and parsed defensively by {@link parseBotWakeSettings}: settings are user-edited JSON.
  */
 export interface BotWakeConfig {
-  classifier?: {
-    initiateEnabled?: boolean;
-    initiateThreshold?: number;
-    mode?: WakePolicyMode;
-    threshold?: number;
-  };
-  /** Free-text guidance for the classifier. */
+  classifier?: { mode?: WakePolicyMode; threshold?: number };
+  /** Free-text guidance for the classifier and the duty judge. */
   customInstructions?: string;
   /**
    * The settings switch for `customInstructions`. Off keeps the text but stops handing it to the
    * classifier; absent (a config saved before the switch existed) counts as on.
    */
   customInstructionsEnabled?: boolean;
+  /**
+   * What the bot is responsible for (`text`) and how sure the judge must be that a message falls
+   * within it (`threshold`). `mode` is an operator override, such as `shadow` to only score it.
+   * Off while there is no text.
+   */
+  duties?: { mode?: WakePolicyMode; text?: string; threshold?: number };
   enabled?: boolean;
   /**
    * Mode of the rule policies (internal rules and the owner's structured rules). `off` disables
@@ -281,12 +281,6 @@ export interface BotWakeConfig {
    * `rules` and `scheduler` as written. Absent reads as `custom`.
    */
   pace?: 'active' | 'balanced' | 'calm' | 'custom';
-  /**
-   * Whether the bot may step in on its own when the owner raises something it can help with.
-   * `enabled` is the settings switch (on = `enforce`); `mode` is an operator override, such as
-   * `shadow` to only score it. On by default.
-   */
-  proactive?: { enabled?: boolean; mode?: WakePolicyMode; threshold?: number };
-  rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions' | 'proactive'>>;
+  rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions' | 'duties'>>;
   scheduler?: WakeSchedulerConfig;
 }

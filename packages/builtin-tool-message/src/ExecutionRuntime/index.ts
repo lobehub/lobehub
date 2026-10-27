@@ -835,7 +835,7 @@ export class MessageExecutionRuntime {
         return { content: `Bot not found: ${params.botId}`, success: false };
       }
       return {
-        content: `Bot ${bot.id}:\n- Platform: ${bot.platform}\n- App ID: ${bot.applicationId}\n- Enabled: ${bot.enabled}\n- Status: ${bot.runtimeStatus ?? 'unknown'}`,
+        content: `Bot ${bot.id}:\n- Platform: ${bot.platform}\n- App ID: ${bot.applicationId}\n- Enabled: ${bot.enabled}\n- Status: ${bot.runtimeStatus ?? 'unknown'}${bot.settings ? `\n- Settings: ${JSON.stringify(bot.settings)}` : ''}`,
         state: bot satisfies GetBotDetailState,
         success: true,
       };

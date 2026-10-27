@@ -273,8 +273,8 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           openingReply,
           reactionMode,
           replyLocale,
+          duty: initiation?.reason === 'in-duty' ? { matched: initiation.duty } : undefined,
           named: initiation?.reason === 'named-in-text',
-          proactive: initiation?.reason === 'proactive-help',
           wakeKind,
         });
       } catch (error) {

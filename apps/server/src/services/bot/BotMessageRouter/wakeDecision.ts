@@ -28,13 +28,13 @@ import {
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
 import type {
   WakeClassify,
-  WakeProactiveJudge,
+  WakeDutyJudge,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import {
   CLASSIFIER_POLICY_ID,
-  createClassifierPolicy,
-  createProactivePolicy,
+  createDutyPolicy,
   createWakePolicySet,
+  DUTY_POLICY_ID,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type {
@@ -56,7 +56,7 @@ import { buildWakeSignal, type WakeMessageLike } from '../wake/signal';
 const log = debug('lobe-server:bot:wake-decision');
 
 /** Revision of the bot-wake pipeline recorded on every decision. Bump when the judgement changes. */
-export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@1';
+export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@2';
 
 /** Policy id the router's own, pre-existing wake judgement is recorded under. */
 export const LEGACY_ROUTER_POLICY_ID = 'legacy-router';
@@ -73,20 +73,22 @@ export type BotWakeEntryPoint = 'catchAll' | 'onNewMention' | 'onSubscribedMessa
 /**
  * Why the router woke the bot, or why it did not. Mirrors the branches the handlers already take;
  * recording them adds no new branch.
+ *
+ * Stored as a plain string (`finalReason`), so rows written for a reason that no longer exists
+ * (`classifier-confident`, `proactive-help`) stay readable; this build only stops writing them.
  */
 export type BotWakeReason =
   | 'access-gate-rejected'
   | 'addressed'
-  | 'classifier-confident'
   | 'command'
   | 'direct-message'
   | 'explicit-mention'
   | 'followup-window'
+  | 'in-duty'
   | 'monitoring-not-allowed'
   | 'named-in-text'
   | 'not-addressed'
   | 'policy-denied'
-  | 'proactive-help'
   | 'scheduled'
   | 'solo-conversation'
   | 'watch-keyword';
@@ -94,7 +96,7 @@ export type BotWakeReason =
 /**
  * Whether a wake may end in silence, for every reason the router records. Only a wake nobody asked
  * for with an @ — a watch keyword in a thread the bot was not addressed in, its name in the text,
- * or a message inside the follow-up window — is `followup`. A DM, @mention, command, or a 1:1 that
+ * a message inside the follow-up window, or one within its duties — is `followup`. A DM, @mention, command, or a 1:1 that
  * reads as private is a direct address and keeps the always-answer behaviour.
  *
  * A table, not a list of the followups: a new reason does not compile until it says which it is.
@@ -102,16 +104,15 @@ export type BotWakeReason =
 const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
   'access-gate-rejected': 'mention',
   'addressed': 'mention',
-  'classifier-confident': 'followup',
   'command': 'mention',
   'direct-message': 'mention',
   'explicit-mention': 'mention',
   'followup-window': 'followup',
+  'in-duty': 'followup',
   'monitoring-not-allowed': 'mention',
   'named-in-text': 'followup',
   'not-addressed': 'mention',
   'policy-denied': 'mention',
-  'proactive-help': 'followup',
   'scheduled': 'mention',
   'solo-conversation': 'mention',
   'watch-keyword': 'followup',
@@ -122,16 +123,15 @@ export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind => KIND_BY_RE
 const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'access-gate-rejected': 'blocked',
   'addressed': 'addressed',
-  'classifier-confident': 'confident',
   'command': 'command',
   'direct-message': 'dm',
   'explicit-mention': 'mention',
   'followup-window': 'followup',
+  'in-duty': 'duty',
   'monitoring-not-allowed': 'blocked',
   'named-in-text': 'named',
   'not-addressed': 'ignored',
   'policy-denied': 'blocked',
-  'proactive-help': 'proactive',
   'scheduled': 'scheduled',
   'solo-conversation': 'solo',
   'watch-keyword': 'keyword',
@@ -180,7 +180,7 @@ const CONVERSATION_READ_LINES = 50;
 /** The reasons `initiate` can wake the bot for. */
 export type BotWakeInitiationReason = Extract<
   BotWakeReason,
-  'classifier-confident' | 'followup-window' | 'named-in-text' | 'proactive-help'
+  'followup-window' | 'in-duty' | 'named-in-text'
 >;
 
 /**
@@ -195,24 +195,24 @@ export type BotWakeInitiationReason = Extract<
  * remember to list it.
  */
 const INITIATION_TRAITS: Record<BotWakeInitiationReason, { addressed: boolean }> = {
-  // The classifier is sure enough on its own that the message is for the bot: answered at once,
-  // like its name. It may still end in silence.
-  'classifier-confident': { addressed: true },
   'followup-window': { addressed: false },
-  'named-in-text': { addressed: true },
   // Nobody asked: it waits in the scheduler like any other unaddressed wake, and may end in silence.
-  'proactive-help': { addressed: false },
+  'in-duty': { addressed: false },
+  'named-in-text': { addressed: true },
 };
 
 /** A wake the recorder started on its own: the rule that started it, and what that implies. */
 export interface BotWakeInitiation {
   /** See {@link INITIATION_TRAITS}. */
   addressed: boolean;
+  /** `in-duty` only: the duty the message falls within, when the judge named one. */
+  duty?: string;
   reason: BotWakeInitiationReason;
 }
 
-const initiationFor = (reason: BotWakeInitiationReason): BotWakeInitiation => ({
+const initiationFor = (reason: BotWakeInitiationReason, duty?: string): BotWakeInitiation => ({
   ...INITIATION_TRAITS[reason],
+  ...(duty && { duty }),
   reason,
 });
 
@@ -231,6 +231,12 @@ export interface BotWakeRecorderOptions {
   classify?: WakeClassify;
   db: LobeChatDatabase;
   /**
+   * Model call for the duty policy (a message nobody addressed to the bot that falls within its
+   * duties); without it, without duties, or with `botWake.duties.mode` off, the bot never steps in
+   * on its own.
+   */
+  dutyJudge?: WakeDutyJudge;
+  /**
    * Who the bot's agent is and what the owner is called, so the classifier can tell the assistant
    * from the person who set it up. Called lazily; the loader is expected to cache.
    */
@@ -242,11 +248,6 @@ export interface BotWakeRecorderOptions {
   /** The bot owner's user id on this platform (`settings.userId`). */
   operatorUserId?: string;
   platform: string;
-  /**
-   * Model call for the proactive policy (offering the owner help nobody asked for); without it, or
-   * with `botWake.proactive.mode` off, the bot never steps in on its own.
-   */
-  proactiveJudge?: WakeProactiveJudge;
   /**
    * Whether the `bot_wake` rollout flag is on for this bot's owner. Defaults to the runtime
    * feature flag; injectable for tests. Off means the recorder does nothing at all.
@@ -273,17 +274,18 @@ export interface BotWakeRecorder {
   conversation: (observation: BotWakeObservation) => Promise<WakeConversation | undefined>;
   /**
    * Decides whether to wake the bot for a message nobody addressed to it. The internal and owner
-   * rules start a wake only when the owner switched them to `enforce`; the proactive judge only
-   * when its own mode is `enforce` (it scores in `shadow`, and is not built when `off`).
+   * rules start a wake only when the owner switched them to `enforce`; the duty judge only when
+   * the bot has duties and its own mode is `enforce` (it scores in `shadow`, and is not built when
+   * `off` or without duties).
    *
    * Returns:
    * - `{ reason: 'named-in-text', addressed: true }` when the text calls the bot by name (no model
    *   call)
    * - `{ reason: 'followup-window', addressed: false }` when the bot spoke lately and an enforcing
    *   classifier agrees (a shadow or absent classifier does not stand in the way)
-   * - `{ reason: 'proactive-help', addressed: false }` when the owner raised something the bot can
-   *   help with: no rule had an opinion, and the enforcing proactive judge scored it over its
-   *   threshold
+   * - `{ reason: 'in-duty', addressed: false, duty }` when the message, whoever wrote it, falls
+   *   within the bot's duties: no rule had an opinion, and the enforcing duty judge scored it over
+   *   its threshold. `duty` is the duty it named
    * - `undefined` for everything else, including a degraded classifier and any failure
    *
    * The evaluation is remembered, so the `record()` that follows does not judge the message again.
@@ -405,6 +407,8 @@ const summarizeConversation = (conversation?: WakeConversation) =>
 
 /** The wake decided for a parked message, as kept for its replay. */
 interface RememberedInitiation {
+  /** See {@link BotWakeInitiation.duty}. */
+  duty?: string;
   reason: BotWakeInitiationReason;
   verdicts: SignalDecisionVerdict[];
 }
@@ -412,14 +416,21 @@ interface RememberedInitiation {
 const isInitiationReason = (value: unknown): value is BotWakeInitiationReason =>
   typeof value === 'string' && value in INITIATION_TRAITS;
 
-/** A stored decision, or `undefined` for none, a malformed one, or a reason this build lacks. */
+/**
+ * A stored decision, or `undefined` for none, a malformed one, or a reason this build lacks (one
+ * kept by an earlier build, such as `proactive-help`: the replay is judged again).
+ */
 const parseRemembered = (raw: string | undefined): RememberedInitiation | undefined => {
   if (!raw) return;
   try {
     const value = JSON.parse(raw) as Partial<RememberedInitiation>;
     if (!isInitiationReason(value.reason)) return;
 
-    return { reason: value.reason, verdicts: Array.isArray(value.verdicts) ? value.verdicts : [] };
+    return {
+      duty: typeof value.duty === 'string' ? value.duty : undefined,
+      reason: value.reason,
+      verdicts: Array.isArray(value.verdicts) ? value.verdicts : [],
+    };
   } catch {
     return;
   }
@@ -447,7 +458,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   const enabled = isBotWakeEnabled(options.botWakeConfig ?? parsed.config);
 
   // Spend bound: a busy channel must not turn every message into a model call. The addressed
-  // classifier and the proactive judge share one hourly budget.
+  // classifier and the duty judge share one hourly budget.
   const budgeted =
     <TInput, TOutput>(call: (input: TInput, abortSignal: AbortSignal) => Promise<TOutput>) =>
     async (input: TInput, abortSignal: AbortSignal): Promise<TOutput> => {
@@ -476,28 +487,10 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
   const classify: WakeClassify | undefined = options.classify && budgeted(options.classify);
 
-  // Outside the follow-up window the classifier may start a wake on its own, but only past a
-  // stricter bar than the one it uses to confirm a follow-up. Only while it enforces.
-  const { initiateEnabled, initiateThreshold } = parsed.rules.classifier;
-  const confidentClassifierPolicy =
-    classify &&
-    parsed.rules.classifier.mode === 'enforce' &&
-    initiateEnabled &&
-    initiateThreshold > 0
-      ? createClassifierPolicy(
-          'enforce',
-          {
-            ...parsed.rules,
-            classifier: { ...parsed.rules.classifier, threshold: initiateThreshold },
-          },
-          classify,
-        )
-      : undefined;
-
-  // Only the owner's switch turns it on; `initiate` is the one place it runs.
-  const proactivePolicy =
-    options.proactiveJudge && parsed.rules.proactive.mode !== 'off'
-      ? createProactivePolicy(parsed.rules, budgeted(options.proactiveJudge))
+  // Only duties the owner wrote turn it on; `initiate` is the one place it runs.
+  const dutyPolicy =
+    options.dutyJudge && parsed.rules.duties.text && parsed.rules.duties.mode !== 'off'
+      ? createDutyPolicy(parsed.rules, budgeted(options.dutyJudge))
       : undefined;
 
   const rolledOut = options.rollout ?? createBotWakeRolloutProbe(userId);
@@ -632,18 +625,45 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     observation: BotWakeObservation,
     reason: BotWakeInitiationReason,
     evaluation: Evaluation,
+    duty?: string,
   ): Promise<BotWakeInitiation> => {
     keepEvaluation(observation, evaluation);
     await state.rememberInitiation?.(
       applicationId,
       getOriginMessageId(observation.message),
       JSON.stringify({
+        duty,
         reason,
         verdicts: evaluation.verdicts ?? [],
       } satisfies RememberedInitiation),
     );
 
-    return initiationFor(reason);
+    return initiationFor(reason, duty);
+  };
+
+  /**
+   * Asks the duty judge, after everything else declined: does the message, whoever wrote it, fall
+   * within the bot's duties ("要是导出能保留文件夹结构就好了" for a bot that assesses feature
+   * requests)? Adds its verdict to `evaluation` and keeps it for `record()`.
+   */
+  const judgeDuty = async (
+    observation: BotWakeObservation,
+    signal: WakeSignal,
+    snapshot: WakeStateSnapshot,
+    evaluation: Evaluation & { verdicts: SignalDecisionVerdict[] },
+  ): Promise<BotWakeInitiation | undefined> => {
+    if (!dutyPolicy) return;
+
+    const judged = await aggregateWakeVerdictsAsync([dutyPolicy], signal, snapshot);
+    evaluation.verdicts.push(...ruleVerdicts(judged));
+
+    // A shadow judge only scores; a degraded one abstains, so it never lands here.
+    if (dutyPolicy.mode === 'enforce' && judged.verdict === 'allow') {
+      const record = judged.records.find((entry) => entry.policyId === DUTY_POLICY_ID);
+      return initiated(observation, 'in-duty', evaluation, record?.matched);
+    }
+
+    keepEvaluation(observation, evaluation);
   };
 
   const persist = async (observation: BotWakeObservation, observedAt: number) => {
@@ -792,7 +812,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
         const rulePolicies = policies.filter((policy) => policy.id !== CLASSIFIER_POLICY_ID);
         const rulesEnforce = rulePolicies.some((policy) => policy.mode === 'enforce');
-        if (!rulesEnforce && !proactivePolicy) return;
+        if (!rulesEnforce && !dutyPolicy) return;
 
         const signal = signalFor(observation, observedAt);
         const [channel, conversation] = await Promise.all([
@@ -810,7 +830,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           if (remembered) {
             keepEvaluation(observation, { channel, conversation, verdicts: remembered.verdicts });
 
-            return initiationFor(remembered.reason);
+            return initiationFor(remembered.reason, remembered.duty);
           }
         }
 
@@ -822,7 +842,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           const undecided =
             !ruleDecision.fastPath &&
             ruleDecision.records.every((record) => record.verdict === 'abstain');
-          if (!undecided || (!confidentClassifierPolicy && !proactivePolicy)) {
+          if (!undecided || !dutyPolicy) {
             // An enforcing deny is what kept the bot quiet: keep its verdicts, so the row names the
             // rule that stopped the wake instead of replaying every policy as if it only watched.
             keepEvaluation(observation, {
@@ -833,36 +853,11 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
             return;
           }
 
-          const verdicts = ruleVerdicts(ruleDecision);
-          const evaluation = { channel, conversation, verdicts };
-
-          // The message reads as meant for the bot although nobody called it ("我想知道明天杭州天
-          // 气" in a channel people use it in). Only with the rules enforcing, past the stricter bar.
-          if (rulesEnforce && confidentClassifierPolicy) {
-            const classified = await aggregateWakeVerdictsAsync(
-              [confidentClassifierPolicy],
-              signal,
-              snapshot,
-            );
-            verdicts.push(...ruleVerdicts(classified));
-            const degraded = classified.records.some((record) => record.tags.includes('degraded'));
-            if (classified.verdict === 'allow' && !degraded) {
-              return initiated(observation, 'classifier-confident', evaluation);
-            }
-          }
-
-          if (proactivePolicy) {
-            const proactive = await aggregateWakeVerdictsAsync([proactivePolicy], signal, snapshot);
-            verdicts.push(...ruleVerdicts(proactive));
-
-            // A shadow judge only scores; a degraded one abstains, so it never lands here.
-            if (proactivePolicy.mode === 'enforce' && proactive.verdict === 'allow') {
-              return initiated(observation, 'proactive-help', evaluation);
-            }
-          }
-
-          keepEvaluation(observation, evaluation);
-          return;
+          return await judgeDuty(observation, signal, snapshot, {
+            channel,
+            conversation,
+            verdicts: ruleVerdicts(ruleDecision),
+          });
         }
 
         const verdicts = ruleVerdicts(ruleDecision);
@@ -882,9 +877,14 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           keepEvaluation(observation, evaluation);
 
           // A classifier that failed or ran out of budget passes in `degraded`: when the owner
-          // relies on it, no answer is not a yes.
+          // relies on it, no answer is not a yes. Not a follow-up to the bot, the message may still
+          // fall within its duties.
           const degraded = classified.records.some((record) => record.tags.includes('degraded'));
-          if (classifier.mode === 'enforce' && (classified.verdict !== 'allow' || degraded)) return;
+          if (classifier.mode === 'enforce' && (classified.verdict !== 'allow' || degraded)) {
+            return dutyPolicy
+              ? await judgeDuty(observation, signal, snapshot, evaluation)
+              : undefined;
+          }
         }
 
         return initiated(observation, 'followup-window', evaluation);

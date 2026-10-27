@@ -4,6 +4,7 @@ import {
   DEFAULT_WAKE_RULES,
   MAX_BOT_WAKE_CHANNEL_LIST,
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
+  MAX_DUTIES_LENGTH,
   MIN_COLLECT_SECONDS,
   MIN_COOLDOWN_SECONDS,
 } from '@/server/services/agentSignal/scenarios/botWake/config';
@@ -17,7 +18,7 @@ const ENABLED = { field: KEY.enabled, value: true };
 /** The timings show only for a custom pace; a preset sets them. */
 const CUSTOM_PACE = [ENABLED, { field: KEY.pace, value: 'custom' }];
 
-/** Visible lines of the custom-instructions text area. */
+/** Visible lines of the custom-instructions and duties text areas. */
 const CUSTOM_INSTRUCTIONS_ROWS = 10;
 
 const channelList = (key: string, label: string): FieldSchema => ({
@@ -159,44 +160,28 @@ export const botWakeFields: FieldSchema[] = [
     visibleWhen: CUSTOM_PACE,
   },
   {
-    key: KEY.classifierInitiateEnabled,
-    default: DEFAULT_WAKE_RULES.classifier.initiateEnabled,
-    description: 'channel.botWakeClassifierInitiateEnabledHint',
+    key: KEY.duties,
+    description: 'channel.botWakeDutiesHint',
     featureFlag: FEATURE_FLAG,
-    label: 'channel.botWakeClassifierInitiateEnabled',
-    type: 'boolean',
+    label: 'channel.botWakeDuties',
+    placeholder: 'channel.botWakeDutiesPlaceholder',
+    type: 'string',
     visibleWhen: ENABLED,
+    // A prompt, not a label: empty means the bot has no duties and never steps in on its own.
+    rows: CUSTOM_INSTRUCTIONS_ROWS,
+    // Longer text is cut by the runtime, not rejected.
+    maximum: MAX_DUTIES_LENGTH,
   },
   {
-    key: KEY.classifierInitiateThreshold,
-    default: DEFAULT_WAKE_RULES.classifier.initiateThreshold,
-    description: 'channel.botWakeClassifierInitiateThresholdHint',
+    key: KEY.dutiesThreshold,
+    default: DEFAULT_WAKE_RULES.duties.threshold,
+    description: 'channel.botWakeDutiesThresholdHint',
     featureFlag: FEATURE_FLAG,
-    label: 'channel.botWakeClassifierInitiateThreshold',
+    label: 'channel.botWakeDutiesThreshold',
     maximum: 1,
     minimum: 0,
     type: 'number',
-    visibleWhen: { field: KEY.classifierInitiateEnabled, value: true },
-  },
-  {
-    key: KEY.proactiveEnabled,
-    default: true,
-    description: 'channel.botWakeProactiveEnabledHint',
-    featureFlag: FEATURE_FLAG,
-    label: 'channel.botWakeProactiveEnabled',
-    type: 'boolean',
     visibleWhen: ENABLED,
-  },
-  {
-    key: KEY.proactiveThreshold,
-    default: DEFAULT_WAKE_RULES.proactive.threshold,
-    description: 'channel.botWakeProactiveThresholdHint',
-    featureFlag: FEATURE_FLAG,
-    label: 'channel.botWakeProactiveThreshold',
-    maximum: 1,
-    minimum: 0,
-    type: 'number',
-    visibleWhen: { field: KEY.proactiveEnabled, value: true },
   },
   {
     key: KEY.customInstructionsEnabled,

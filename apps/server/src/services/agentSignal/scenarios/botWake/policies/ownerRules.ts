@@ -69,8 +69,8 @@ export const createOwnerRulesPolicy = (mode: WakePolicyMode, rules: WakeRules): 
     }
 
     // The window follows up on the person the bot answered. Anyone else speaking in it, the owner
-    // included, is more likely answering that person than the bot; the classifier's stricter bar
-    // (`classifier-confident`) may still wake it.
+    // included, is more likely answering that person than the bot; the duty judge may still wake
+    // it, for a message within the bot's duties.
     const partner = channel?.followupAuthorId;
     const followsUp = !partner || !signal.author || signal.author.id === partner;
 

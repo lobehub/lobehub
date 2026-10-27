@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { assertWatchKeywordsWritable, invalidateBotAfterUpdate } from '../agentBotProviderSettings';
+import {
+  assertWatchKeywordsWritable,
+  invalidateBotAfterUpdate,
+  mergeBotSettingsPatch,
+} from '../agentBotProviderSettings';
 
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
@@ -216,5 +220,62 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
     expect(mockStopClient).not.toHaveBeenCalled();
     expect(mockInvalidateBot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mergeBotSettingsPatch', () => {
+  const stored = {
+    allowFrom: [{ id: 'u-1', name: 'Ada' }],
+    botWakeEnabled: true,
+    botWakeScope: 'bot-threads',
+    dmPolicy: 'pairing',
+    userId: 'owner-1',
+    watchKeywords: [{ keyword: 'bug' }],
+  };
+
+  // The agent maintains its own duties through `updateBot`: one key in, every other key kept.
+  it('writes the duties without resetting the settings the caller did not send', () => {
+    const merged = mergeBotSettingsPatch('discord', stored, {
+      botWakeDuties: '评估群里描述的需求',
+      botWakeDutiesThreshold: 0.7,
+    });
+
+    expect(merged).toMatchObject({
+      ...stored,
+      botWakeDuties: '评估群里描述的需求',
+      botWakeDutiesThreshold: 0.7,
+    });
+  });
+
+  it('replaces a key it carries whole, arrays included, and fills schema defaults', () => {
+    const merged = mergeBotSettingsPatch('discord', stored, { allowFrom: [] });
+
+    expect(merged?.allowFrom).toEqual([]);
+    expect(merged?.userId).toBe('owner-1');
+    // A field neither stored nor sent still gets its schema default.
+    expect(merged?.botWakeDutiesThreshold).toBe(0.8);
+  });
+
+  it('writes a flat key the runtime reads, even for a bot configured with a nested botWake', () => {
+    const merged = mergeBotSettingsPatch(
+      'discord',
+      { botWake: { enabled: true, rules: { scope: 'bot-threads' } }, userId: 'owner-1' },
+      { botWakeDuties: 'Triage bug reports.' },
+    );
+
+    expect(merged).toMatchObject({
+      botWakeDuties: 'Triage bug reports.',
+      botWakeEnabled: true,
+      botWakeScope: 'bot-threads',
+      userId: 'owner-1',
+    });
+    expect(merged?.botWake).toBeUndefined();
+  });
+
+  it('starts from the defaults when nothing is stored', () => {
+    expect(mergeBotSettingsPatch('discord', null, { botWakeDuties: 'x' })).toMatchObject({
+      botWakeDuties: 'x',
+      botWakeEnabled: false,
+    });
   });
 });
