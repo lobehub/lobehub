@@ -1,3 +1,4 @@
+import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
 import { SdkError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,6 +52,57 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  it.each([undefined, 'My server description'])(
+    'keeps stdio descriptions as metadata (%s)',
+    async (description) => {
+      const instance = {
+        ...makeClientInstance('tools-only'),
+        listManifests: vi.fn().mockResolvedValue({
+          prompts: undefined,
+          resources: undefined,
+          tools: [{ inputSchema: { type: 'object' }, name: 'hello' }],
+        }),
+      };
+      mcpClientMocks.mockReturnValue(instance);
+
+      const result = await ctr.getStdioMcpServerManifest(
+        serializeMcpIpcPayload({
+          command: 'test-command',
+          metadata: { description },
+          name: 'tools-only',
+        }),
+      );
+      const manifest = deserializeMcpIpcPayload<{ api: unknown[]; meta: { description?: string } }>(
+        result,
+      );
+
+      expect(manifest.api).toHaveLength(1);
+      expect(manifest.meta.description).toBe(description);
+    },
+  );
+
+  it.each([undefined, 'My server description'])(
+    'keeps HTTP descriptions as metadata (%s)',
+    async (description) => {
+      const instance = { ...makeClientInstance('http'), listTools: vi.fn().mockResolvedValue([]) };
+      mcpClientMocks.mockReturnValue(instance);
+
+      const result = await ctr.getStreamableMcpServerManifest(
+        serializeMcpIpcPayload({
+          identifier: 'empty-server',
+          metadata: { description },
+          url: 'http://localhost/mcp',
+        }),
+      );
+      const manifest = deserializeMcpIpcPayload<{ api: unknown[]; meta: { description?: string } }>(
+        result,
+      );
+
+      expect(manifest.api).toEqual([]);
+      expect(manifest.meta.description).toBe(description);
+    },
+  );
 
   it('reuses one stdio session across consecutive tool calls (state survives)', async () => {
     const instance = makeClientInstance('first');

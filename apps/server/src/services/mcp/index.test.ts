@@ -260,6 +260,7 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      listManifests: vi.fn(),
       listPrompts: vi.fn(),
       listResources: vi.fn(),
       listTools: vi.fn(),
@@ -267,6 +268,43 @@ describe('MCPService', () => {
 
     // Mock getClient 方法返回 mock 客户端
     getClientSpy = vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
+  });
+
+  describe('manifest descriptions', () => {
+    it.each([undefined, 'My server description'])(
+      'keeps stdio descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listManifests.mockResolvedValue({
+          prompts: undefined,
+          resources: undefined,
+          tools: [{ inputSchema: { type: 'object' }, name: 'hello' }],
+        });
+
+        const manifest = await mcpService.getStdioMcpServerManifest(
+          { command: 'test-command', name: 'tools-only' },
+          { description },
+        );
+
+        expect(manifest.api).toHaveLength(1);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
+
+    it.each([undefined, 'My server description'])(
+      'keeps HTTP descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listTools.mockResolvedValue([]);
+
+        const manifest = await mcpService.getStreamableMcpServerManifest(
+          'empty-server',
+          'https://mcp.example.com',
+          { description },
+        );
+
+        expect(manifest.api).toEqual([]);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
   });
 
   describe('callTool', () => {

@@ -510,13 +510,7 @@ export default class McpCtr extends ControllerModule {
         identifier,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
-          description:
-            input.metadata?.description ||
-            `${identifier} MCP server has ` +
-              Object.entries(manifest)
-                .filter(([key]) => ['tools', 'prompts', 'resources'].includes(key))
-                .map(([key, item]) => `${(item as Array<any>)?.length} ${key}`)
-                .join(','),
+          description: input.metadata?.description,
           title: input.metadata?.name || identifier,
         },
         ...manifest,
@@ -577,9 +571,7 @@ export default class McpCtr extends ControllerModule {
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
-          description:
-            input.metadata?.description ||
-            `${identifier} MCP server has ${tools.length} tools, like "${tools[0]?.name}"`,
+          description: input.metadata?.description,
           title: identifier,
         },
         type: 'mcp' as any,

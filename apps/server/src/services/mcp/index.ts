@@ -374,9 +374,7 @@ export class MCPService {
       mcpParams,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description:
-          metadata?.description ||
-          `${identifier} MCP server has ${tools.length} tools, like "${tools[0]?.name}"`,
+        description: metadata?.description,
         title: identifier,
       },
       // TODO: temporary
@@ -407,13 +405,7 @@ export class MCPService {
       identifier,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description:
-          metadata?.description ||
-          `${identifier} MCP server has ` +
-            Object.entries(manifest)
-              .filter(([key]) => ['tools', 'prompts', 'resources'].includes(key))
-              .map(([key, item]) => `${(item as Array<any>)?.length} ${key}`)
-              .join(','),
+        description: metadata?.description,
         title: metadata?.name || identifier,
       },
       ...manifest,
