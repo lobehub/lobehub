@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { executeToolWithRetry } from '@lobechat/agent-runtime';
 import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
-import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -863,13 +863,13 @@ describe('ToolExecutionService', () => {
 
     const unauthorized = () =>
       new TRPCError({
-        cause: new StreamableHTTPError(
-          401,
+        cause: new SdkHttpError(
+          SdkErrorCode.ClientHttpNotImplemented,
           'Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
+          { status: 401 },
         ),
         code: 'INTERNAL_SERVER_ERROR',
-        message:
-          'Streamable HTTP error: Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
+        message: 'Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
       });
 
     const run = (over: Record<string, unknown> = {}, error: unknown = unauthorized()) => {
@@ -909,13 +909,13 @@ describe('ToolExecutionService', () => {
       const result = await run(
         { agentShareVisitor: { shareId: 'share-1' } },
         new TRPCError({
-          cause: new StreamableHTTPError(500, 'boom'),
+          cause: new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'boom', { status: 500 }),
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Streamable HTTP error: boom',
+          message: 'boom',
         }),
       );
 
-      expect(result.content).toBe('Streamable HTTP error: boom');
+      expect(result.content).toBe('boom');
       expect(result.error).toMatchObject({ code: 'MCP_EXECUTION_ERROR', kind: 'replan' });
     });
   });

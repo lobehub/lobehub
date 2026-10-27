@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process';
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import {
-  getDefaultEnvironment,
-  StdioClientTransport,
-} from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { type Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { type Progress } from '@modelcontextprotocol/sdk/types.js';
+  Client,
+  SdkError,
+  SdkErrorCode,
+  SdkHttpError,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
+import { type Progress, type Transport } from '@modelcontextprotocol/client';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
 import {
@@ -253,9 +254,8 @@ export class MCPClient {
       console.error('MCP connection failed:', getMCPErrorLogMetadata(e));
 
       if (this.params.type === 'http') {
-        // StreamableHTTPError carries the status in code, not necessarily in its message.
-        const error = e as Error & { code?: number };
-        if (error.code === 401) throw createMCPError('AUTHORIZATION_ERROR', error.message);
+        if (SdkHttpError.isInstance(e) && e.status === 401)
+          throw createMCPError('AUTHORIZATION_ERROR', e.message);
 
         throw e;
       }
@@ -280,7 +280,7 @@ export class MCPClient {
       }
 
       // For other connection types or when pre-check doesn't provide more information
-      if ((e as any).code === -32_000) {
+      if (SdkError.isInstance(e) && e.code === SdkErrorCode.ConnectionClosed) {
         throw createMCPError(
           'CONNECTION_FAILED',
           'Failed to connect to MCP server, please check your configuration',
@@ -310,31 +310,23 @@ export class MCPClient {
   }
 
   async disconnect() {
-    log('Disconnecting MCP connection...');
-    // Assuming the mcp client has a disconnect method
-    if (this.mcp && typeof (this.mcp as any).disconnect === 'function') {
-      await (this.mcp as any).disconnect();
-      log('MCP connection disconnected.');
-    } else {
-      log('MCP client does not have a disconnect method or is not initialized.');
-      // Depending on the transport, we might need specific cleanup
-      if (this.transport && typeof (this.transport as any).close === 'function') {
-        (this.transport as any).close();
-        log('Transport closed.');
-      }
-    }
+    await this.mcp.close();
+    log('MCP connection disconnected.');
   }
 
   /**
    * Detect the StreamableHTTP "session expired" error.
    *
    * Happens when the remote MCP server restarts: the cached client still sends
-   * the old session id and the server rejects it with `-32000 / No valid
-   * session ID provided`. Callers (e.g. MCPService) surface this as a dedicated
+   * the old session id and the server rejects it with HTTP 404. The legacy
+   * example-server message is also recognized. Callers (e.g. MCPService) surface this as a dedicated
    * `NoValidSessionId` error and retry with a freshly-initialized session.
    */
   private static isNoValidSessionError(e: unknown): boolean {
-    return e instanceof Error && e.message.includes('No valid session ID provided');
+    return (
+      (SdkHttpError.isInstance(e) && e.status === 404) ||
+      (e instanceof Error && e.message.includes('No valid session ID provided'))
+    );
   }
 
   async listTools() {
@@ -417,9 +409,12 @@ export class MCPClient {
   async callTool(toolName: string, args: any): Promise<ToolCallResult> {
     log('Calling MCP tool: %O', { timeout: MCP_TOOL_TIMEOUT, toolName });
     try {
-      const result = await this.mcp.callTool({ arguments: args, name: toolName }, undefined, {
-        timeout: MCP_TOOL_TIMEOUT,
-      });
+      const result = await this.mcp.callTool(
+        { arguments: args, name: toolName },
+        {
+          timeout: MCP_TOOL_TIMEOUT,
+        },
+      );
       log('MCP tool call completed: %O', {
         contentBlockCount: Array.isArray(result.content) ? result.content.length : 0,
         isError: result.isError === true,

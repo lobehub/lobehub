@@ -1,14 +1,16 @@
 import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
-  getDefaultEnvironment,
-  StdioClientTransport,
-} from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { Progress } from '@modelcontextprotocol/sdk/types.js';
+  Client,
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkError,
+  SdkErrorCode,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 import { getDesktopEnv } from '@/env';
 
@@ -25,16 +27,14 @@ export {
 
 /**
  * The SDK surfaces a stdio process that died without completing the MCP
- * handshake as a bare "Connection closed" (JSON-RPC error -32000). This is
+ * handshake as `SdkError(SdkErrorCode.ConnectionClosed)`. This is
  * the only failure class the diagnostic re-spawn can improve: when the
  * server rejected the handshake for a protocol/configuration reason instead,
  * re-running the same command adds a five-second probe window and a
  * temporary duplicate server process without producing new information.
  */
 export function isBareConnectionClosedError(error: unknown): boolean {
-  if ((error as { code?: unknown })?.code !== -32_000) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('Connection closed');
+  return SdkError.isInstance(error) && error.code === SdkErrorCode.ConnectionClosed;
 }
 
 /**
@@ -660,12 +660,7 @@ export class MCPClient {
   }
 
   private isMethodNotFoundError(error: unknown) {
-    const err = error as any;
-    if (!err) return false;
-
-    if (err.code === -32601) return true;
-    if (typeof err.message === 'string' && err.message.includes('Method not found')) return true;
-    return false;
+    return ProtocolError.isInstance(error) && error.code === ProtocolErrorCode.MethodNotFound;
   }
 
   async initialize(options: { onProgress?: (progress: Progress) => void } = {}) {
@@ -713,14 +708,7 @@ export class MCPClient {
   }
 
   async disconnect() {
-    if (typeof (this.mcp as any).disconnect === 'function') {
-      await (this.mcp as any).disconnect();
-      return;
-    }
-
-    if (this.transport && typeof (this.transport as any).close === 'function') {
-      (this.transport as any).close();
-    }
+    await this.mcp.close();
   }
 
   async listTools() {
@@ -761,9 +749,12 @@ export class MCPClient {
   }
 
   async callTool(toolName: string, args: any): Promise<ToolCallResult> {
-    const result = await this.mcp.callTool({ arguments: args, name: toolName }, undefined, {
-      timeout: getDesktopEnv().MCP_TOOL_TIMEOUT,
-    });
+    const result = await this.mcp.callTool(
+      { arguments: args, name: toolName },
+      {
+        timeout: getDesktopEnv().MCP_TOOL_TIMEOUT,
+      },
+    );
     return result as ToolCallResult;
   }
 }

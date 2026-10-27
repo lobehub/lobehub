@@ -1,4 +1,5 @@
 import { toRecord } from '@lobechat/utils/object';
+import { SdkHttpError, UnauthorizedError } from '@modelcontextprotocol/client';
 
 /** Bounds the `cause` walk so a self-referencing error cannot loop forever. */
 const MAX_CAUSE_DEPTH = 5;
@@ -6,11 +7,9 @@ const MAX_CAUSE_DEPTH = 5;
 /**
  * Whether an MCP call failed because the server rejected its credentials.
  *
- * The SDK transports (`StreamableHTTPError`, `SseError`) carry the HTTP status
- * only in `.code`; the message is the response body (e.g.
- * `{"error":"Unauthorized: Invalid or expired token"}`) and usually omits
- * "401". `MCPService` then wraps the transport error in a `TRPCError` whose
- * `cause` holds it, so walk the chain instead of matching message text.
+ * SDK HTTP errors carry the status in `.status`; OAuth failures use
+ * `UnauthorizedError`. MCPService wraps these in a TRPCError, so inspect
+ * the bounded cause chain instead of matching message text.
  * `MCPClient.initialize` may also have already mapped it to an
  * `AUTHORIZATION_ERROR`.
  */
@@ -19,7 +18,11 @@ export const isMcpAuthorizationError = (error: unknown): boolean => {
   for (let depth = 0; depth < MAX_CAUSE_DEPTH && current; depth++) {
     const record = toRecord(current);
     if (!record) return false;
-    if (record.code === 401) return true;
+    if (
+      (SdkHttpError.isInstance(current) && current.status === 401) ||
+      UnauthorizedError.isInstance(current)
+    )
+      return true;
     if (toRecord(record.data)?.type === 'AUTHORIZATION_ERROR') return true;
     current = record.cause;
   }

@@ -1,7 +1,12 @@
 import { inspect } from 'node:util';
 
 import type * as LobeConst from '@lobechat/const';
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import {
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkError,
+  SdkErrorCode,
+} from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -490,8 +495,8 @@ describe('MCPService', () => {
       expect(mockClient.callTool).toHaveBeenCalledTimes(4);
     });
 
-    it('should NOT retry tool-level McpError and return it as a failed tool result', async () => {
-      const mcpError = new McpError(ErrorCode.InvalidParams, 'tool blew up');
+    it('should NOT retry tool-level ProtocolError and return it as a failed tool result', async () => {
+      const mcpError = new ProtocolError(ProtocolErrorCode.InvalidParams, 'tool blew up');
       mockClient.callTool.mockRejectedValue(mcpError);
 
       const result = await mcpService.callTool({
@@ -503,9 +508,24 @@ describe('MCPService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe(mcpError);
       expect(result.state.isError).toBe(true);
-      // McpError is a tool result, not a session error → must not retry
+      // ProtocolError is a tool result, not a session error → must not retry
       expect(mockClient.callTool).toHaveBeenCalledTimes(1);
     });
+
+    it.each([SdkErrorCode.RequestTimeout, SdkErrorCode.ConnectionClosed])(
+      'returns SDK %s as a failed result without retry',
+      async (code) => {
+        const error = new SdkError(code, 'transport failed');
+        mockClient.callTool.mockRejectedValue(error);
+        const result = await mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'testTool',
+          argsStr: '{}',
+        });
+        expect(result).toMatchObject({ success: false, error, state: { isError: true } });
+        expect(mockClient.callTool).toHaveBeenCalledTimes(1);
+      },
+    );
 
     it('should bail immediately on client initialization failure without retrying', async () => {
       // getClient throws (e.g. bad URL/token, stdio spawn error) — not a stale session

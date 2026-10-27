@@ -8,7 +8,7 @@ import {
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { type DeploymentOption } from '@lobehub/market-sdk';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
 import debug from 'debug';
@@ -56,6 +56,11 @@ export interface MCPToolCallProcessedResult {
 }
 
 // Removed MCPConnection interface as it's no longer needed
+
+const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
+  ProtocolError.isInstance(error) ||
+  (SdkError.isInstance(error) &&
+    (error.code === SdkErrorCode.RequestTimeout || error.code === SdkErrorCode.ConnectionClosed));
 
 export class MCPService {
   // Store instances of the custom MCPClient, keyed by serialized MCPClientParams
@@ -243,14 +248,12 @@ export class MCPService {
         if ((error as Error).message === 'NoValidSessionId') throw error;
 
         // Tool-level MCP errors are returned as a failed tool result, not thrown
-        if (error instanceof McpError) {
-          const mcpError = error as McpError;
-
+        if (isMcpToolFailure(error)) {
           return {
-            content: mcpError.message,
+            content: error.message,
             error,
             state: {
-              content: [{ text: mcpError.message, type: 'text' }],
+              content: [{ text: error.message, type: 'text' }],
               isError: true,
             },
             success: false,
