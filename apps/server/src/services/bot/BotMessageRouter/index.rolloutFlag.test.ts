@@ -118,6 +118,15 @@ describe('BotMessageRouter bot_wake rollout flag', () => {
       expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({ wakeKind: 'mention' });
       expect(mockRecordSignalDecision).not.toHaveBeenCalled();
     });
+
+    it('answers a channel keyword wake through the catch-all as before', async () => {
+      await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
+
+      await catchAllHandler()(thread(), message({ id: 'm7', text: 'please deploy now' }));
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(mockHandleMention.mock.calls[0][2]).not.toMatchObject({ wakeKind: 'followup' });
+    });
   });
 
   describe('flag on', () => {
@@ -133,6 +142,31 @@ describe('BotMessageRouter bot_wake rollout flag', () => {
 
       expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({ wakeKind: 'followup' });
       expect(mockRecordSignalDecision).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a channel keyword wake through the catch-all end in silence, as in a subscribed thread', async () => {
+      flag.on = true;
+      await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
+
+      await catchAllHandler()(thread(), message({ id: 'm8', text: 'please deploy now' }));
+      await flush();
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+        named: false,
+        wakeKind: 'followup',
+      });
+    });
+
+    it('always answers a DM through the catch-all, keyword or not', async () => {
+      flag.on = true;
+      await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
+
+      await catchAllHandler()(thread({ isDM: true }), message({ id: 'm9', text: 'deploy now' }));
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      expect(mockHandleMention.mock.calls[0][2]).not.toMatchObject({ wakeKind: 'followup' });
+      expect(mockHandleMention.mock.calls[0][1].text).toBe('deploy now');
     });
 
     it('still answers an @mention without any chance of silence', async () => {

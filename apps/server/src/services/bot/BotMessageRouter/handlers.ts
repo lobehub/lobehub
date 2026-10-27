@@ -22,7 +22,6 @@ import {
   getBotReplyLocale,
   type GroupSettings,
   type GuestSettings,
-  messageMatchesWatchKeyword,
   normalizeBotReactionMode,
   normalizeBotReplyLocale,
   normalizeBotReplyPlacementMode,
@@ -50,6 +49,7 @@ import { createReplyOpening } from './replyOpening';
 import type { BotCommand, BotHandlerContext, ResolvedAgentInfo } from './types';
 import {
   applyWatchKeywordInstructions,
+  burstMatchesWatchKeyword,
   dispatchTextCommand,
   mergeSkippedMessages,
   summarizeMessageAttachments,
@@ -112,6 +112,13 @@ export function registerHandlers(
    */
   const watchKeywordEntries = extractWatchKeywordEntries(info.settings);
   const watchKeywords: ReadonlyArray<string> = watchKeywordEntries.map((e) => e.keyword);
+  /**
+   * Keywords the owner marked as the bot's names (`asName`). Saying one calls the bot: the wake is
+   * `named-in-text`, answered at once, and bot-wake counts them among the bot's names.
+   */
+  const nameKeywords: ReadonlyArray<string> = watchKeywordEntries
+    .filter((e) => e.asName)
+    .map((e) => e.keyword);
 
   /**
    * Watch-keyword wakes ride on passive channel monitoring, which is a
@@ -252,6 +259,7 @@ export function registerHandlers(
       workspaceId: workspaceId ?? undefined,
     }),
     identity: createWakeIdentityLoader({ agentId, db: serverDB, userId }),
+    nameKeywords,
     operatorUserId,
     platform,
     settings: info.settings,
@@ -611,12 +619,10 @@ export function registerHandlers(
     // subscribed group thread. Skipped (debounced) siblings are inspected
     // too so a keyword queued behind a non-trigger still fires — same
     // pattern as the mention check above.
-    const matchesWatchKeyword =
-      watchKeywords.length > 0 &&
-      (messageMatchesWatchKeyword(message.text, watchKeywords) ||
-        getSameSenderMessages(message, context?.skipped).some((m) =>
-          messageMatchesWatchKeyword(m.text, watchKeywords),
-        ) === true);
+    const matchesWatchKeyword = burstMatchesWatchKeyword(message, context?.skipped, watchKeywords);
+    // A keyword the owner marked as the bot's name calls the bot rather than just waking it.
+    const calledByKeywordName =
+      matchesWatchKeyword && burstMatchesWatchKeyword(message, context?.skipped, nameKeywords);
 
     // Nobody addressed the bot. With the rules enforcing it may still speak up: its name is in the
     // text, or it spoke lately and the classifier agrees. Judged on the whole burst, as it would run.
@@ -756,7 +762,9 @@ export function registerHandlers(
         : isSoloBotConversation
           ? 'solo-conversation'
           : matchesWatchKeyword && !isCommand
-            ? 'watch-keyword'
+            ? calledByKeywordName
+              ? 'named-in-text'
+              : 'watch-keyword'
             : (initiation?.reason ?? 'addressed');
     // Only a wake nobody asked for may end in silence; a DM, @mention, command or solo
     // conversation is always answered, exactly as before. Until the bot-wake rollout reaches this
@@ -767,9 +775,9 @@ export function registerHandlers(
       (await gateFollowup({
         entryPoint: 'onSubscribedMessage',
         merged,
-        // Already judged by `initiate`: do not judge again. A message addressed to the bot does
-        // not wait for the scheduler's collect window.
-        immediate: initiation?.addressed,
+        // Already judged by `initiate`: do not judge again. A message addressed to the bot (by
+        // name, keyword names included) does not wait for the scheduler's collect window.
+        immediate: initiation?.addressed || wakeReason === 'named-in-text',
         initiated: !!initiation,
         parked: [...(context?.skipped ?? []), message],
         thread,
@@ -883,7 +891,9 @@ export function registerHandlers(
     dmSettings,
     gateFollowup,
     initiate,
+    isBotWakeRolledOut: wakeRecorder.isRolledOut,
     isMessageMonitoringAllowed,
+    nameKeywords,
     observeBurst,
     operatorUserId,
     passGatesOrNotify,

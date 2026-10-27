@@ -245,6 +245,11 @@ export interface BotWakeRecorderOptions {
     agentTitle?: string;
     ownerNames?: readonly string[];
   }>;
+  /**
+   * Watch keywords the owner marked as names the bot answers to (`asName`: "canis", "倏昱"). Read
+   * as names wherever `botNames` are, and kept when the platform lookup fails.
+   */
+  nameKeywords?: readonly string[];
   /** The bot owner's user id on this platform (`settings.userId`). */
   operatorUserId?: string;
   platform: string;
@@ -522,13 +527,14 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   // No cache here: the platform client owns the names and refreshes them on its own schedule, so
   // a renamed bot answers to the new name and stops answering to the old one. A failed lookup is
   // retried on the next message.
+  const nameKeywords = options.nameKeywords ?? [];
   const resolveBotNames = async (platformThreadId: string): Promise<readonly string[]> => {
     try {
-      return (await options.botNames?.(platformThreadId)) ?? [];
+      return [...((await options.botNames?.(platformThreadId)) ?? []), ...nameKeywords];
     } catch (error) {
       log('bot name lookup failed: %O', error);
 
-      return [];
+      return nameKeywords;
     }
   };
 

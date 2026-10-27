@@ -206,6 +206,54 @@ describe('BotMessageRouter follow-up scheduling', () => {
       expect(mocks.submit).not.toHaveBeenCalled();
     });
 
+    it('answers a keyword the owner marked as the bot name at once, as a named wake', async () => {
+      await boot({
+        ...settings,
+        watchKeywords: [
+          { keyword: 'bug' },
+          { asName: true, instruction: 'Reply as the team helper.', keyword: 'canis' },
+        ],
+      });
+
+      await subscribed()(thread(), message({ text: 'canis, are you there?' }));
+      await catchAll()(
+        thread({ id: 'telegram:group-9' }),
+        message({ id: 'msg-9', text: 'canis, are you there?' }),
+      );
+      await flush();
+
+      expect(mocks.submit).not.toHaveBeenCalled();
+      expect(mocks.defer).not.toHaveBeenCalled();
+      expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({
+        named: true,
+        wakeKind: 'followup',
+      });
+      expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+        named: true,
+        wakeKind: 'followup',
+      });
+      // The name still carries its instruction, like any keyword.
+      expect(mockHandleMention.mock.calls[0][1].text).toBe(
+        'Reply as the team helper.\n\ncanis, are you there?',
+      );
+      expect(decisions().map((d) => [d.outcome, d.finalReason])).toEqual([
+        ['wake', 'named-in-text'],
+        ['wake', 'named-in-text'],
+      ]);
+    });
+
+    it('still parks an unflagged keyword next to a keyword name', async () => {
+      await boot({
+        ...settings,
+        watchKeywords: [{ keyword: 'bug' }, { asName: true, keyword: 'canis' }],
+      });
+
+      await subscribed()(thread(), message());
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mocks.defer).toHaveBeenCalledTimes(1);
+    });
+
     it('parks a catch-all keyword wake before a reply thread is opened for it', async () => {
       await boot(settings);
 

@@ -409,16 +409,19 @@ export const platformsModule = async () => ({
   // gate and the instruction-injection branch.
   extractWatchKeywordEntries: (
     settings: Record<string, unknown> | null | undefined,
-  ): Array<{ instruction?: string; keyword: string }> => {
+  ): Array<{ asName?: boolean; instruction?: string; keyword: string }> => {
     const raw = settings?.watchKeywords;
-    const byKeyword = new Map<string, { instruction?: string; keyword: string }>();
+    const byKeyword = new Map<
+      string,
+      { asName?: boolean; instruction?: string; keyword: string }
+    >();
     if (Array.isArray(raw)) {
       for (const entry of raw) {
         if (typeof entry === 'string') {
           const k = entry.trim().toLowerCase();
           if (k && !byKeyword.has(k)) byKeyword.set(k, { keyword: k });
         } else if (entry && typeof entry === 'object' && 'keyword' in entry) {
-          const obj = entry as { instruction?: unknown; keyword?: unknown };
+          const obj = entry as { asName?: unknown; instruction?: unknown; keyword?: unknown };
           if (typeof obj.keyword !== 'string') continue;
           const k = obj.keyword.trim().toLowerCase();
           if (!k) continue;
@@ -427,7 +430,12 @@ export const platformsModule = async () => ({
               ? obj.instruction.trim()
               : undefined;
           const existing = byKeyword.get(k);
-          if (!existing) byKeyword.set(k, { instruction, keyword: k });
+          if (!existing)
+            byKeyword.set(k, {
+              instruction,
+              keyword: k,
+              ...(obj.asName === true && { asName: true }),
+            });
           else if (!existing.instruction && instruction) existing.instruction = instruction;
         }
       }

@@ -4,16 +4,16 @@ import debug from 'debug';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { buildBotContext } from '../buildBotContext';
-import { getSameSenderMessages } from '../mergeMessages';
-import { messageMatchesWatchKeyword } from '../platforms';
 import { renderInlineError } from '../replyTemplate';
 import type { BotHandlerContext } from './types';
 import {
   applyWatchKeywordInstructions,
+  burstMatchesWatchKeyword,
   dispatchTextCommand,
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
+import { botWakeKindFor, type BotWakeReason } from './wakeDecision';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -32,7 +32,9 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     dmSettings,
     gateFollowup,
     initiate,
+    isBotWakeRolledOut,
     isMessageMonitoringAllowed,
+    nameKeywords,
     observe,
     observeBurst,
     operatorUserId,
@@ -89,10 +91,10 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       const matchesWatchKeyword =
         !isDM &&
         keywordCatchAllEnabled &&
-        (messageMatchesWatchKeyword(message.text, watchKeywords) ||
-          getSameSenderMessages(message, context?.skipped).some((m) =>
-            messageMatchesWatchKeyword(m.text, watchKeywords),
-          ) === true);
+        burstMatchesWatchKeyword(message, context?.skipped, watchKeywords);
+      // A keyword the owner marked as the bot's name calls the bot rather than just waking it.
+      const calledByKeywordName =
+        matchesWatchKeyword && burstMatchesWatchKeyword(message, context?.skipped, nameKeywords);
 
       // If neither path applies, return so the regex doesn't act as a
       // channel-wide hijack. DMs still need the dmCatchAllEnabled gate
@@ -193,15 +195,23 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         }
       }
 
+      const wakeReason: BotWakeReason =
+        initiation?.reason ??
+        (matchesWatchKeyword
+          ? calledByKeywordName
+            ? 'named-in-text'
+            : 'watch-keyword'
+          : 'direct-message');
+
       // Last check before a keyword wake runs: enforced policies, then the scheduler. Before the
       // reply below is opened, so a parked message does not leave an empty thread behind.
       if (
         (matchesWatchKeyword || initiation) &&
         (await gateFollowup({
           entryPoint: 'catchAll',
-          // Already judged by `initiate`: do not judge again. A message addressed to the bot
-          // does not wait for the scheduler's collect window.
-          immediate: initiation?.addressed,
+          // Already judged by `initiate`: do not judge again. A message addressed to the bot (by
+          // name, keyword names included) does not wait for the scheduler's collect window.
+          immediate: initiation?.addressed || wakeReason === 'named-in-text',
           initiated: !!initiation,
           merged,
           parked: [...(context?.skipped ?? []), message],
@@ -211,9 +221,14 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         return;
       }
 
-      // A wake the bot started itself may end in silence (`NO_REPLY`) and holds back its
-      // reactions and typing until it decides to speak.
-      const wakeKind = initiation ? 'followup' : 'mention';
+      // Only a wake nobody asked for (a keyword, or one the bot started itself) may end in silence
+      // (`NO_REPLY`), holding back its reactions and typing until it decides to speak; and only
+      // once the bot-wake rollout reaches this bot's owner, exactly as in a subscribed thread. A DM
+      // is always answered and never asks.
+      const wakeKind =
+        wakeReason !== 'direct-message' && (await isBotWakeRolledOut())
+          ? botWakeKindFor(wakeReason)
+          : 'mention';
       // Where the reply goes and what is said before the run (see `startReply`). Keyword and name
       // wakes in a channel used to get their own reply thread, since the chat-sdk Discord adapter
       // only auto-creates one on @-mention; that stays the behaviour when the bot does not decide.
@@ -222,7 +237,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         legacyOpensThread: matchesWatchKeyword || !!initiation,
         message: merged,
         rawMessage: (message as { raw?: unknown }).raw,
-        reason: initiation?.reason ?? (matchesWatchKeyword ? 'watch-keyword' : 'direct-message'),
+        reason: wakeReason,
         thread,
         wakeKind,
       });
@@ -274,7 +289,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           reactionMode,
           replyLocale,
           duty: initiation?.reason === 'in-duty' ? { matched: initiation.duty } : undefined,
-          named: initiation?.reason === 'named-in-text',
+          named: wakeReason === 'named-in-text',
           wakeKind,
         });
       } catch (error) {

@@ -141,7 +141,14 @@ export interface BotHandlerContext {
     thread: { id: string },
     threadSubscribed?: boolean,
   ) => Promise<BotWakeInitiation | undefined>;
+  /**
+   * The `bot_wake` rollout flag for this bot's owner. Until it is on, every wake is answered, as
+   * it was before the pipeline existed.
+   */
+  isBotWakeRolledOut: () => Promise<boolean>;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
+  /** Watch keywords the owner marked as the bot's names (`asName`); a subset of `watchKeywords`. */
+  nameKeywords: ReadonlyArray<string>;
   /** Records the wake decision a branch just made. Observation only; never throws. */
   observe: (
     entryPoint: BotWakeEntryPoint,
