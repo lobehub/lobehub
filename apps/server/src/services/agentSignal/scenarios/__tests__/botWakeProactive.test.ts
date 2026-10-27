@@ -48,6 +48,20 @@ describe('proactive policy', () => {
     expect(judge).not.toHaveBeenCalled();
   });
 
+  // "你忘记我上半年让你搞onboarding Bench 那个了么", the owner replying to a teammate: the model
+  // read "你" as the assistant and the bot stepped in.
+  it('stays out of a reply to someone else, but not of a reply to itself or to the owner', async () => {
+    const judge = judgeScoring(1);
+    const reply = (replyToAuthorId: string) =>
+      run(judge, signal({ applicationId: 'bot-app', replyToAuthorId }));
+
+    expect(await reply('teammate')).toMatchObject({ reason: 'reply-to-other', verdict: 'abstain' });
+    expect(judge).not.toHaveBeenCalled();
+
+    expect((await reply('bot-app')).verdict).toBe('allow');
+    expect((await reply('o1')).verdict).toBe('allow');
+  });
+
   it('does not ask about a message too short to act on', async () => {
     const judge = judgeScoring(1);
 

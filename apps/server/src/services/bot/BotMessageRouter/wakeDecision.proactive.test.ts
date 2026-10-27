@@ -146,6 +146,31 @@ describe('bot-wake recorder: offering the owner help nobody asked for', () => {
     expect(judge).toHaveBeenCalledOnce();
   });
 
+  // Discord opens the reply thread between `initiate` and `record()`: the wake is recorded under
+  // the new thread. The row must keep the verdict that woke the bot, not re-run the policies on
+  // the new thread's empty log (a shadow classifier scored 0.88 there for a 0.45 proactive wake).
+  it('records the verdict that woke it when the reply moved to a new thread', async () => {
+    const judge = proactiveJudge(0.85);
+    const classify = classifierAnswer(0.05);
+    const recorder = make(PROACTIVE('enforce'), fakeState(), { classify, proactiveJudge: judge });
+
+    await expect(recorder.initiate(musing())).resolves.toMatchObject({ reason: 'proactive-help' });
+    const classifierCalls = vi.mocked(classify).mock.calls.length;
+    recorder.record(
+      observation(
+        { outcome: 'wake', reason: 'proactive-help', threadId: 'discord:g1:c1:t-reply' },
+        { text: MUSING },
+      ),
+    );
+    await flush();
+
+    const policyIds = recorded()[0].verdicts.map((verdict: any) => verdict.policyId);
+    expect(policyIds).toContain('bot-wake:proactive');
+    // Nothing was judged again for the row.
+    expect(judge).toHaveBeenCalledOnce();
+    expect(classify).toHaveBeenCalledTimes(classifierCalls);
+  });
+
   it('works while the other rules only watch: the owner can try it on its own', async () => {
     const recorder = make(PROACTIVE('enforce', { mode: 'shadow' }), fakeState(), {
       proactiveJudge: proactiveJudge(0.9),

@@ -21,6 +21,11 @@ export interface WakeSignal {
   message: string;
   platform?: string;
   platformThreadId?: string;
+  /**
+   * Platform user id of the author of the message this one replies to (Discord replies only).
+   * Absent when it is not a reply or the platform does not say.
+   */
+  replyToAuthorId?: string;
   timestamp: number;
 }
 

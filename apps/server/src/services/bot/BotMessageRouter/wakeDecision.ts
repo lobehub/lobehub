@@ -21,6 +21,7 @@ import {
 } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
   judgeExplicitMention,
+  resolveChannelKeys,
   resolveConversationLogKey,
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
@@ -592,8 +593,11 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   };
 
   const evaluations = new Map<string, Evaluation>();
+  // By channel, not thread: a Discord wake opens its reply thread after `initiate` and before
+  // `record()`, so the same message is recorded under the new thread's id. Keyed by thread, the
+  // evaluation was missed and the policies ran again on the new thread's empty log.
   const evaluationKey = (observation: BotWakeObservation) =>
-    `${observation.threadId}:${observation.message.id}`;
+    `${resolveChannelKeys(platform, applicationId, observation.threadId).channelKey}:${observation.message.id}`;
   const keepEvaluation = (observation: BotWakeObservation, evaluation: Evaluation) => {
     evaluations.set(evaluationKey(observation), evaluation);
     // A message that is never recorded must not pile up.

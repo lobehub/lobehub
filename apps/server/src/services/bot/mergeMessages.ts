@@ -66,6 +66,13 @@ export function getSourceMessages(message: Message): Message[] {
 const REPLAY_ID_SUFFIX = /:replay:\d+:\d+$/;
 
 /**
+ * Every replay suffix on an id. A replay that is parked again used to keep its replay id, so the
+ * next replay stacked another suffix on it (`<id>:replay:1:0:replay:2:1`); those are still in the
+ * deferred-message store until they expire.
+ */
+const REPLAY_ID_SUFFIXES = /(?::replay:\d+:\d+)+$/;
+
+/**
  * The id a message carried before {@link buildReplayMessages} rewrote it.
  *
  * A replay gets a fresh id so the Chat SDK does not drop it as a duplicate, but the rest of the
@@ -73,7 +80,7 @@ const REPLAY_ID_SUFFIX = /:replay:\d+:\d+$/;
  * it has to match the original id rather than the replay one.
  */
 export const getOriginMessageId = (message: Pick<Message, 'id'>): string =>
-  message.id.replace(REPLAY_ID_SUFFIX, '');
+  message.id.replace(REPLAY_ID_SUFFIXES, '');
 
 /** Whether {@link buildReplayMessages} produced this message from a parked one. */
 export const isReplayMessage = (message: Pick<Message, 'id'>): boolean =>
@@ -84,11 +91,16 @@ export const isReplayMessage = (message: Pick<Message, 'id'>): boolean =>
  *
  * The replayed message gets a fresh id: the Chat SDK dedupes inbound messages
  * by `<adapter>:<id>` for 10 minutes, and the originals already went through
- * `processMessage` once when they were deferred.
+ * `processMessage` once when they were deferred. A message parked again by its own replay keeps
+ * its replay id, so the fresh id is built from the origin id: suffixes never stack, and the id
+ * still matches the one the wake scheduler released.
  */
 export function buildReplayMessages(entries: DeferredBotMessage[]): Message[] {
   const now = Date.now();
   return entries.map((entry, index) => {
-    return Message.fromJSON({ ...entry, id: `${entry.id}:replay:${now}:${index}` });
+    return Message.fromJSON({
+      ...entry,
+      id: `${getOriginMessageId(entry)}:replay:${now}:${index}`,
+    });
   });
 }

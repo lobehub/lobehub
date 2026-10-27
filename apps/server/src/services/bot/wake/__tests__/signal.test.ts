@@ -75,6 +75,16 @@ describe('buildWakeSignal', () => {
     ).toBeUndefined();
   });
 
+  it('reads who a Discord reply points at, and nothing elsewhere', () => {
+    const raw = { referenced_message: { author: { id: 'teammate' } }, type: 19 };
+
+    expect(build({ raw }).replyToAuthorId).toBe('teammate');
+    expect(build({ raw: { referenced_message: null, type: 0 } }).replyToAuthorId).toBeUndefined();
+    expect(
+      build({ raw }, { platform: 'slack', platformThreadId: 'slack:c:1' }).replyToAuthorId,
+    ).toBeUndefined();
+  });
+
   it('carries channel keys, attachments and the clock', () => {
     const signal = build({ attachments: [{}] });
 

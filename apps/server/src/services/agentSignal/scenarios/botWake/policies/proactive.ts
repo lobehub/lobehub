@@ -48,7 +48,9 @@ const degraded = (reason: string): WakePolicyResult => ({
  *   policy set the other paths evaluate.
  *
  * Returns:
- * - `abstain` without a model call for anyone but the owner, and for a message too short to act on
+ * - `abstain` without a model call for anyone but the owner, for a message too short to act on,
+ *   and for a reply to someone else: the owner is answering that person, and the model, which
+ *   only sees the text, reads the "你" in it as the assistant
  * - `abstain` tagged `degraded` when the model errors or answers late: no answer is not a yes
  * - Otherwise `allow` when the score reaches `rules.proactive.threshold`, else `deny`;
  *   `confidence` is the score
@@ -61,6 +63,13 @@ export const createProactivePolicy = (
   costly: true,
   evaluate: async ({ signal, state }) => {
     if (!signal.author?.isOwner) return abstain('not-owner');
+    if (
+      signal.replyToAuthorId &&
+      signal.replyToAuthorId !== signal.applicationId &&
+      signal.replyToAuthorId !== signal.author.id
+    ) {
+      return abstain('reply-to-other');
+    }
     if (
       isEmptyOrEmojiOnly(signal.message, signal.hasAttachments) ||
       signal.message.trim().length < MIN_PROACTIVE_MESSAGE_LENGTH
