@@ -1,19 +1,21 @@
-import {
-  discoverAuthorizationServerMetadata,
-  discoverOAuthProtectedResourceMetadata,
-  exchangeAuthorization,
-  extractResourceMetadataUrl,
-  refreshAuthorization,
-  registerClient,
-  startAuthorization,
-} from '@modelcontextprotocol/sdk/client/auth.js';
-import { InvalidClientError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import type {
   AuthorizationServerMetadata,
   OAuthClientInformationFull,
   OAuthClientInformationMixed,
   OAuthTokens,
-} from '@modelcontextprotocol/sdk/shared/auth.js';
+} from '@modelcontextprotocol/client';
+import {
+  discoverAuthorizationServerMetadata,
+  discoverOAuthProtectedResourceMetadata,
+  exchangeAuthorization,
+  extractResourceMetadataUrl,
+  IssuerMismatchError,
+  OAuthError,
+  OAuthErrorCode,
+  refreshAuthorization,
+  registerClient,
+  startAuthorization,
+} from '@modelcontextprotocol/client';
 import debug from 'debug';
 
 import type { OIDCConfig } from '@/database/schemas';
@@ -74,9 +76,20 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
   }
 
   // Fallback: assume the authorization server lives at the MCP server origin.
-  if (!authorizationServerUrl) authorizationServerUrl = new URL(mcpServerUrl).origin;
+  if (!authorizationServerUrl) authorizationServerUrl = new URL('/', mcpServerUrl).href;
 
-  const metadata = await discoverAuthorizationServerMetadata(authorizationServerUrl);
+  let metadata: AuthorizationServerMetadata | undefined;
+  try {
+    metadata = await discoverAuthorizationServerMetadata(authorizationServerUrl);
+  } catch (error) {
+    if (IssuerMismatchError.isInstance(error)) {
+      throw new Error(
+        'OAuth authorization server issuer does not match its discovery URL. Check the connector authorization server configuration.',
+        { cause: error },
+      );
+    }
+    throw error;
+  }
   if (!metadata) {
     throw new Error(`Failed to discover OAuth metadata for ${authorizationServerUrl}`);
   }
@@ -231,7 +244,9 @@ const withClientAuthFallback = async (
     return { tokens: await request(clientInformation) };
   } catch (error) {
     const other =
-      error instanceof InvalidClientError && alternateSecretMethod(clientInformation, metadata);
+      OAuthError.isInstance(error) &&
+      error.code === OAuthErrorCode.InvalidClient &&
+      alternateSecretMethod(clientInformation, metadata);
     if (!other) throw error;
     log('token endpoint rejected client auth, retrying with %s', other);
     const tokens = await request({ ...clientInformation, token_endpoint_auth_method: other });
@@ -245,6 +260,7 @@ export const exchangeConnectorCode = async (params: {
   authorizationServerUrl: string;
   clientInformation: OAuthClientInformationMixed;
   codeVerifier: string;
+  iss?: string;
   metadata: AuthorizationServerMetadata;
   redirectUri: string;
   resource?: string;
@@ -254,6 +270,7 @@ export const exchangeConnectorCode = async (params: {
       authorizationCode: params.authorizationCode,
       clientInformation,
       codeVerifier: params.codeVerifier,
+      iss: params.iss,
       metadata: params.metadata,
       redirectUri: params.redirectUri,
       resource: params.resource ? new URL(params.resource) : undefined,

@@ -1,4 +1,7 @@
-import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/sdk/client/auth.js';
+import {
+  discoverAuthorizationServerMetadata,
+  IssuerMismatchError,
+} from '@modelcontextprotocol/client';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
@@ -90,6 +93,7 @@ export const GET = async (req: NextRequest) => {
   const searchParams = req.nextUrl.searchParams;
   const code = searchParams.get('code');
   const state = searchParams.get('state');
+  const iss = searchParams.get('iss') ?? undefined;
   const oauthError = searchParams.get('error');
 
   if (oauthError) {
@@ -137,6 +141,7 @@ export const GET = async (req: NextRequest) => {
       authorizationServerUrl: payload.authorizationServerUrl,
       clientInformation: toClientInformation(oidc),
       codeVerifier: payload.codeVerifier,
+      iss,
       metadata,
       redirectUri: oidc.redirectUri!,
       resource: connector.mcpServerUrl ?? undefined,
@@ -178,6 +183,7 @@ export const GET = async (req: NextRequest) => {
 
     return renderResultPage({ connectorId: payload.connectorId, success: true, synced });
   } catch (err) {
+    if (IssuerMismatchError.isInstance(err)) return renderFailure('issuer_mismatch', err);
     const message = err instanceof Error ? err.message : 'internal_error';
     return renderFailure(message, err);
   }

@@ -1,5 +1,5 @@
-import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/sdk/client/auth.js';
-import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { OAuthTokens } from '@modelcontextprotocol/client';
+import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -85,8 +85,12 @@ export const ensureFreshConnectorToken = async (
     });
 
     return { ...connector, credentials };
-  } catch {
-    log('token refresh failed for connector=%s', connector.id);
+  } catch (error) {
+    log(
+      'token refresh failed for connector=%s errorType=%s',
+      connector.id,
+      error instanceof Error ? error.name : typeof error,
+    );
     return reloadIfRotatedElsewhere(connector, connectorModel);
   }
 };
