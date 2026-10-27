@@ -3,6 +3,7 @@ import type { MiddlewareHandler } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import { verifyAcceptanceReviewJWT } from '@/libs/oidc-provider/jwt';
 import type { ReviewAccess } from '@/server/services/acceptanceReview/access';
 import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
@@ -27,6 +28,18 @@ export interface ReviewEnv {
   };
 }
 
+// Browsers omit Origin on same-origin GETs, which is every read the toolbar
+// makes when the reviewed site is the LobeHub app itself.
+const requestOrigin = (origin: string | undefined, fetchSite: string | undefined) => {
+  if (origin) return origin;
+  if (fetchSite !== 'same-origin' || !appEnv.APP_URL) return undefined;
+  try {
+    return new URL(appEnv.APP_URL).origin;
+  } catch {
+    return undefined;
+  }
+};
+
 export const reviewAuth: MiddlewareHandler<ReviewEnv> = async (c, next) => {
   const token = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1];
   if (!token) return reviewError(c, 401, 'UNAUTHORIZED', 'Missing token');
@@ -43,7 +56,7 @@ export const reviewAuth: MiddlewareHandler<ReviewEnv> = async (c, next) => {
   const db = await getServerDB();
 
   if (claims.site) {
-    const origin = c.req.header('origin');
+    const origin = requestOrigin(c.req.header('origin'), c.req.header('sec-fetch-site'));
     if (!origin || !siteOriginMatches(claims.site.origin, origin)) {
       return reviewError(c, 403, 'FORBIDDEN', 'Origin not allowed for this token');
     }
