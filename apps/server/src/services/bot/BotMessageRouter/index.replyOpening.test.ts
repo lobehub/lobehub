@@ -265,6 +265,22 @@ describe('BotMessageRouter: the bot opens its own reply', () => {
     expect(opts).toMatchObject({ openingReply: undefined, wakeKind: 'followup' });
   });
 
+  it('a watch-keyword wake in the channel also answers there, so a silent run leaves no empty thread', async () => {
+    await boot({ watchKeywords: [{ keyword: 'deploy' }, { asName: true, keyword: 'canis' }] });
+
+    await catchAll()(thread(), message({ isMention: false, text: 'the deploy is stuck' }));
+    await catchAll()(thread(), message({ id: 'msg-2', isMention: false, text: 'canis 在吗' }));
+    await flush();
+
+    expect(mocks.opener).not.toHaveBeenCalled();
+    expect(mockOpenThreadForChannelWake).not.toHaveBeenCalled();
+    const [[keywordThread, , keywordOpts], [nameThread, , nameOpts]] = mockHandleMention.mock.calls;
+    expect(keywordThread.id).toBe(CHANNEL);
+    expect(keywordOpts).toMatchObject({ named: false, wakeKind: 'followup' });
+    expect(nameThread.id).toBe(CHANNEL);
+    expect(nameOpts).toMatchObject({ named: true, wakeKind: 'followup' });
+  });
+
   describe('when the owner keeps "always open a thread"', () => {
     it('lets the adapter open @-mention threads and never asks the model', async () => {
       await boot({ replyPlacement: 'thread' });
