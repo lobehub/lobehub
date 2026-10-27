@@ -5,7 +5,7 @@ import type { BotWakeConfig, WakePolicyMode, WakeRules, WakeSchedulerConfig } fr
 
 export const DEFAULT_WAKE_RULES: WakeRules = {
   allowChannels: [],
-  classifier: { initiateEnabled: true, initiateThreshold: 0.65, mode: 'enforce', threshold: 0.5 },
+  classifier: { initiateEnabled: true, initiateThreshold: 0.8, mode: 'enforce', threshold: 0.5 },
   denyChannels: [],
   maxSilentWakes: 3,
   ownerPresenceSeconds: 120,

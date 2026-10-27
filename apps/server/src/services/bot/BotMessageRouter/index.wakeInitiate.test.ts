@@ -159,7 +159,7 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     await flush();
 
     expect(mockHandleMention).toHaveBeenCalledTimes(1);
-    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ wakeKind: 'followup' });
+    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ named: true, wakeKind: 'followup' });
     expect(decisions().map((d) => [d.outcome, d.finalReason, d.toTag])).toEqual([
       ['wake', 'named-in-text', 'named'],
     ]);

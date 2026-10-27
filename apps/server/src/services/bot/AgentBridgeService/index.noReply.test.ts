@@ -325,6 +325,19 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
       expect(execParams().botPlatformContext.proactive).toBeUndefined();
     });
 
+    it('tells a followup agent woken by its name why, and only a followup', async () => {
+      runHooks({ onComplete: { lastAssistantContent: 'NO_REPLY', reason: 'done' } });
+      const { client } = createClient();
+
+      await subscribed(createThread().thread, client, { named: true, wakeKind: 'followup' });
+      expect(execParams().botPlatformContext.named).toBe(true);
+
+      mockExecAgent.mockClear();
+      AgentBridgeService.clearActiveThread(THREAD_ID);
+      await subscribed(createThread().thread, client, { named: true });
+      expect(execParams().botPlatformContext.named).toBeUndefined();
+    });
+
     it('a catch-all wake the bot started itself shows nothing until the agent acts', async () => {
       runHooks({
         onComplete: { lastAssistantContent: 'NO_REPLY', operationId: 'op-1', reason: 'done' },

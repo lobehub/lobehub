@@ -29,6 +29,11 @@ export interface BridgeHandlerOpts {
   client?: PlatformClient;
   displayToolCalls?: boolean;
   /**
+   * The bot woke only because its name is in the text (a `followup` wake): people often talk about
+   * it rather than to it, and the agent is told so. See `formatBotPlatformContext`.
+   */
+  named?: boolean;
+  /**
    * The bot woke on its own to offer its owner help nobody asked for (a `followup` wake); the
    * agent is told why. See `formatBotPlatformContext`.
    */

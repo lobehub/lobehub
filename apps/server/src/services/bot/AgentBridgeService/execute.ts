@@ -59,6 +59,8 @@ export async function executeWithCallback(
     charLimit?: number;
     client?: PlatformClient;
     displayToolCalls?: boolean;
+    /** The bot woke only because its name is in the text; told to the agent with a `followup`. */
+    named?: boolean;
     /** The bot woke on its own to offer its owner help; told to the agent with a `followup`. */
     proactive?: boolean;
     reactionMode?: BotReactionMode;
@@ -292,6 +294,7 @@ export async function executeWithCallback(
   // Tell the agent it may stay silent; see `formatBotPlatformContext`.
   if (deferFeedback && botPlatformContext) {
     botPlatformContext.wakeKind = wakeKind;
+    if (opts.named) botPlatformContext.named = true;
     if (opts.proactive) botPlatformContext.proactive = true;
   }
 

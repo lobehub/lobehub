@@ -200,6 +200,17 @@ describe('formatBotPlatformContext', () => {
     );
   });
 
+  // "Nasa 咋被激活了": someone asking the room why the bot woke up. It looked up its own config and
+  // explained, instead of staying silent.
+  it('tells an agent woken by its name in the text that people often talk about it, not to it', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const named = formatBotPlatformContext({ ...base, named: true, wakeKind: 'followup' });
+
+    expect(named).toContain('Why you were woken: your name appears in the message');
+    expect(named).toContain('NO_REPLY:not_addressed');
+    expect(formatBotPlatformContext({ ...base, named: true })).not.toContain('<optional_reply>');
+  });
+
   it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
 

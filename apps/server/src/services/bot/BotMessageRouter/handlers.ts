@@ -747,6 +747,7 @@ export function registerHandlers(
         charLimit,
         client,
         displayToolCalls,
+        named: wakeReason === 'named-in-text',
         proactive: wakeReason === 'proactive-help',
         reactionMode,
         replyLocale,

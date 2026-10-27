@@ -28,7 +28,7 @@ describe('parseBotWakeSettings', () => {
     expect(parsed.rules.classifier.mode).toBe('enforce');
     expect(
       parseBotWakeSettings({ botWake: { classifier: { threshold: 0.8 } } }).rules.classifier,
-    ).toEqual({ initiateEnabled: true, initiateThreshold: 0.65, mode: 'enforce', threshold: 0.8 });
+    ).toEqual({ initiateEnabled: true, initiateThreshold: 0.8, mode: 'enforce', threshold: 0.8 });
   });
 
   it('lets the owner switch helping others off, keeping the threshold', () => {
@@ -76,11 +76,11 @@ describe('parseBotWakeSettings', () => {
     ).toBeUndefined();
   });
 
-  it('lets a confident classifier start a wake outside the window from 0.65, and 0 turns it off', () => {
+  it('lets a confident classifier start a wake outside the window from 0.8, and 0 turns it off', () => {
     const K = BOT_WAKE_SETTING_KEYS;
 
     expect(parseBotWakeSettings({ [K.enabled]: true }).rules.classifier.initiateThreshold).toBe(
-      0.65,
+      0.8,
     );
     expect(
       parseBotWakeSettings({ [K.enabled]: true, [K.classifierInitiateThreshold]: 0 }).rules
@@ -89,7 +89,7 @@ describe('parseBotWakeSettings', () => {
     expect(
       parseBotWakeSettings({ [K.classifierInitiateThreshold]: 2 }).rules.classifier
         .initiateThreshold,
-    ).toBe(0.65);
+    ).toBe(0.8);
   });
 
   it('ignores a mode an earlier form saved: the settings page no longer offers one', () => {
@@ -282,7 +282,7 @@ describe('parseBotWakeSettings from the settings form', () => {
       allowChannels: ['c1', '22'],
       classifier: {
         initiateEnabled: true,
-        initiateThreshold: 0.65,
+        initiateThreshold: 0.8,
         mode: 'enforce',
         threshold: 0.7,
       },

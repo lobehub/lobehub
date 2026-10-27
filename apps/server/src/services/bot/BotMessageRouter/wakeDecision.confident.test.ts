@@ -121,12 +121,12 @@ describe('bot-wake recorder: a confident classifier outside the follow-up window
     });
   });
 
-  it('starts from 0.65, a stricter bar than the 0.5 that confirms a follow-up', async () => {
+  it('starts from 0.8, a stricter bar than the 0.5 that confirms a follow-up', async () => {
     const at = (score: number) =>
       make(ENFORCE, fakeState(), { classify: classifierAnswer(score) }).initiate(weather());
 
-    await expect(at(0.68)).resolves.toMatchObject({ reason: 'classifier-confident' });
-    await expect(at(0.6)).resolves.toBeUndefined();
+    await expect(at(0.82)).resolves.toMatchObject({ reason: 'classifier-confident' });
+    await expect(at(0.75)).resolves.toBeUndefined();
   });
 
   it('records the classifier at the bar it was held to', async () => {

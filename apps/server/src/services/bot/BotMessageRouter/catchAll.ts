@@ -297,6 +297,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           // A wake the bot started itself may end in silence (`NO_REPLY`) and holds back its
           // reactions and typing until it decides to speak.
           wakeKind: initiation ? 'followup' : undefined,
+          named: initiation?.reason === 'named-in-text',
           proactive: initiation?.reason === 'proactive-help',
         });
       } catch (error) {
