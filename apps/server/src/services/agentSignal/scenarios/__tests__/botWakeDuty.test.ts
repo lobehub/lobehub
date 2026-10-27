@@ -110,7 +110,7 @@ describe('duty policy', () => {
     const judge = judgeScoring(1);
     const after = (line: Partial<WakeConversationLine>, at = NOW - 30_000) =>
       createDutyPolicy(rules(), judge).evaluate({
-        signal: signal(),
+        signal: signal({ applicationId: 'bot-app' }),
         state: {
           conversation: {
             botNames: ['Nasa'],
@@ -127,6 +127,13 @@ describe('duty policy', () => {
     expect((await after({}, NOW - 5 * 60_000)).verdict).toBe('allow');
     expect((await after({ authorId: 'bot-app', isBot: true })).verdict).toBe('allow');
     expect((await after({ authorId: 'bob' })).verdict).toBe('allow');
+
+    // Another agent in the thread: the owner is answering it, not asking this bot.
+    expect(await after({ authorId: 'other-agent', isBot: true })).toMatchObject({
+      reason: 'answering-other',
+      verdict: 'abstain',
+    });
+    expect(judge).toHaveBeenCalledTimes(3);
   });
 
   it('does not ask about a message too short to act on', async () => {
@@ -182,7 +189,7 @@ describe('duty policy', () => {
       costly: true,
       id: DUTY_POLICY_ID,
       mode: 'enforce',
-      version: 1,
+      version: 2,
     });
   });
 });
