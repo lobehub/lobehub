@@ -271,7 +271,7 @@ export interface ProviderFetchOnClientConfig {
  * server never relays a call the client did not prepare for (or the reverse).
  *
  * 1. A provider that disables browser requests always runs on the server.
- * 2. Local providers (Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
+ * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
  * 3. Neither a base URL nor an API key: the server's own configuration.
  * 4. Only a base URL: an endpoint the server may not reach, so the device.
  * 5. Otherwise `fetchOnClient`, default the server.

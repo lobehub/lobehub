@@ -11,14 +11,13 @@ const Magpie: ModelProviderCard = {
   chatModels: [],
   description:
     'magpie is an LLM gateway: every model and subscription you have there is served on one endpoint.',
-  enabled: true,
   id: 'magpie',
   name: 'magpie',
   settings: {
-    // magpie may run on the user's machine or on a host the deployment reaches,
-    // so which side sends the request is the user's call. The switch is offered
-    // either way; requests default to the server like any other provider, and a
-    // local gateway the server cannot reach needs it turned on.
+    // magpie is a desktop app on the user's own machine, so on the web the
+    // browser sends the requests and the switch starts on; it is offered either
+    // way, and a deployment reaching a magpie elsewhere sets `MAGPIE_PROXY_URL`
+    // to have the server send them instead.
     defaultShowBrowserRequest: true,
     proxyUrl: {
       // A base URL the user gives is used as it stands, `/v1` included, so the

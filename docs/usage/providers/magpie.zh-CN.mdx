@@ -63,7 +63,7 @@ tags:
   - 启用需要的模型
 
   <Callout type={'info'}>
-    magpie 返回的模型 id 形如 `provider/model`（例如 `deepseek/deepseek-chat`），或路由组的 `group/<id>`。LobeHub 会按 id 中是否含 `group/` 前缀来标记路由组。
+    magpie 返回的模型 id 形如 `provider/model`（例如 `deepseek/deepseek-chat`）。路由组有两种 id：自建组是 `group/<id>`，magpie 自动发现的是 `auto/<model>`，两者都会显示路由标记。
   </Callout>
 </Steps>
 

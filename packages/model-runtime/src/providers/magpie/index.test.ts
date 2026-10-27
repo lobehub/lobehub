@@ -179,6 +179,45 @@ describe('the model list magpie serves', () => {
     expect(cards[0].functionCall).toBe(true);
   });
 
+  it('takes the reasoning parameter from model-bank, which is what makes a level selectable', async () => {
+    const cards = await load([
+      model({ id: 'moonshot/kimi-k3', reasoning_levels: ['low', 'medium', 'high'] }),
+    ]);
+
+    // magpie's levels say the model thinks; the parameter that turns the
+    // strength differs by model family, and only model-bank names it.
+    expect(cards[0].reasoning).toBe(true);
+    expect(cards[0].settings?.extendParams).toEqual(['kimiK3ReasoningEffort']);
+  });
+
+  it('leaves the settings empty for a model model-bank does not know', async () => {
+    const cards = await load([model({ id: 'somelab/experimental-llm-v0' })]);
+
+    expect(cards[0].settings).toBeUndefined();
+  });
+
+  it('offers no thinking strength once the user turned thinking off in magpie', async () => {
+    const cards = await load([
+      model({ id: 'moonshot/kimi-k3', reasoning: false, reasoning_levels: ['low', 'high'] }),
+    ]);
+
+    // A level beside `reasoning: false` would let a choice be made that the
+    // gateway pushes back up to its lowest thinking level.
+    expect(cards[0].reasoning).toBe(false);
+    expect(cards[0].settings?.extendParams).toBeUndefined();
+  });
+
+  it('carries the params the vendor refuses, so the settings page hides them', async () => {
+    const cards = await load([model({ id: 'moonshot/kimi-k3' })]);
+
+    expect(cards[0].settings?.disabledParams).toEqual([
+      'frequency_penalty',
+      'presence_penalty',
+      'temperature',
+      'top_p',
+    ]);
+  });
+
   it('reaches a model-bank entry through the dot magpie spells as a dash', async () => {
     // `kimi-k3.1` is moonshot's; magpie serves it as `kimi-k3-1`.
     const cards = await load([model({ id: 'workbuddy/kimi-k3-1' })]);
@@ -187,11 +226,19 @@ describe('the model list magpie serves', () => {
   });
 
   it('reaches model-bank for a routing group too, the group serving that one model', async () => {
-    // A group magpie found for kimi-k3: what model-bank says of the model is
-    // what each of the group's providers serves, tool calls included.
-    const cards = await load([model({ id: 'group/auto-moonshot-kimi-k3' })]);
+    // A group magpie found for kimi-k3, under the id it hands out. Asserting the
+    // reasoning param rather than tool calls keeps this about the lookup: tool
+    // calls also come out true from the vendor keyword alone, so they pass
+    // whether or not model-bank was reached.
+    const cards = await load([model({ id: 'auto/kimi-k3' })]);
 
-    expect(cards[0].functionCall).toBe(true);
+    expect(cards[0].settings?.extendParams).toContain('kimiK3ReasoningEffort');
+  });
+
+  it('finds no model-bank entry for a group of the user’s own, leaving the settings empty', async () => {
+    const cards = await load([model({ id: 'group/my-fastest' })]);
+
+    expect(cards[0].settings).toBeUndefined();
   });
 
   it('takes the name alone, the tag saying what a group is', async () => {
@@ -214,8 +261,13 @@ describe('the model list magpie serves', () => {
     expect(cards[0].displayName).toBe('experimental-llm-v0');
   });
 
-  it('tells two vendors’ models of one name apart by the provider magpie puts after it', async () => {
+  it('keeps the provider magpie puts after the name, two vendors serving one model', async () => {
     const cards = await load([
+      model({
+        display_name: 'GPT-5.6 Sol',
+        id: 'openai/gpt-5.6-sol',
+        magpie_label: 'GPT-5.6 Sol · OpenAI',
+      }),
       model({
         display_name: 'GPT-5.6 Sol',
         id: 'workbuddy/gpt-5.6-sol',
@@ -223,7 +275,12 @@ describe('the model list magpie serves', () => {
       }),
     ]);
 
-    expect(cards[0].displayName).toBe('GPT-5.6 Sol');
+    // Both rows sit under magpie, so the provider is the only thing telling the
+    // two apart in the picker.
+    expect(cards.map((c) => c.displayName)).toEqual([
+      'GPT-5.6 Sol · OpenAI',
+      'GPT-5.6 Sol · WorkBuddy',
+    ]);
   });
 
   it('lists a model once though magpie repeats its row', async () => {

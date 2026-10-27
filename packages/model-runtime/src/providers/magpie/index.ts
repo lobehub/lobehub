@@ -1,11 +1,16 @@
 import { CURRENT_VERSION } from '@lobechat/const';
 import type { ChatModelCard } from '@lobechat/types';
-import { loadModels, ModelProvider } from 'model-bank';
+import { loadModels, MODEL_REASONING_EXTEND_PARAMS, ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+
+type ModelSettings = NonNullable<ChatModelCard['settings']>;
+
+/** The params that set how hard a model thinks, which a `reasoning: false` card must not offer. */
+const REASONING_PARAMS = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
 
 /**
  * One row of magpie's `GET /v1/models`.
@@ -67,7 +72,7 @@ export const magpieModelKey = (id: string): string => {
 
   // A version's dot, or Fireworks' `p` standing for one (`deepseek-v4p1`), as a
   // dash. Only between two digits, so `gpt-4o` keeps its name and `kimi-k3.1`
-  // becomes `kimi-k3-1` — the id magpie serves that model under.
+  // becomes `kimi-k3-1`, the id magpie serves that model under.
   key = key.replaceAll(/(?<=\d)[.p](?=\d)/g, '-');
 
   key = key.replace(/[-@]\d{8}$/, '');
@@ -127,10 +132,6 @@ const fromMagpie = (model: MagpieModelCard): Partial<ChatModelCard> => {
     model.reasoning === undefined ? (levels?.length ? true : undefined) : model.reasoning;
 
   return {
-    // A routing group's `magpie_label` ends in `· routing group` and a model two
-    // vendors serve ends in `· provider`. LobeHub says the first itself, from the
-    // id, and tells the second by the provider each row is under, so the name
-    // alone is what it shows.
     displayName: plainName(model),
     ...(contextWindow ? { contextWindowTokens: contextWindow } : {}),
     ...(model.max_output_tokens ? { maxOutput: model.max_output_tokens } : {}),
@@ -139,19 +140,63 @@ const fromMagpie = (model: MagpieModelCard): Partial<ChatModelCard> => {
   };
 };
 
+/** What magpie appends to a routing group's label, which LobeHub says by its tag. */
+const ROUTING_GROUP_SUFFIX = ' · routing group';
+
 /**
- * The name magpie gives a model without the `· …` it adds: a routing group's
- * `· routing group`, and a `· provider` that tells two vendors' models of one
- * name apart. Both are magpie's own wording for what the row is, which LobeHub
- * says in its own way; `display_name` is the name on its own.
+ * The name magpie gives a model, without the `· routing group` it appends: the
+ * tag says that, drawn from the id.
+ *
+ * A `· provider` suffix stays. Two vendors serving one model are both listed
+ * under magpie, so the row alone cannot tell them apart. Without the suffix the
+ * picker shows two entries of one name with nothing to choose between them.
  */
 const plainName = (model: MagpieModelCard): string | undefined => {
   const label = model.magpie_label;
   if (!label) return model.display_name;
 
-  const cut = label.lastIndexOf(' · ');
+  return label.endsWith(ROUTING_GROUP_SUFFIX)
+    ? label.slice(0, -ROUTING_GROUP_SUFFIX.length)
+    : label;
+};
 
-  return cut > 0 ? label.slice(0, cut) : label;
+/**
+ * model-bank's settings for one model, limited to the parts magpie leaves unsaid.
+ *
+ * `reasoning_levels` says a model thinks, not which parameter turns the
+ * strength, and that parameter differs by model family (`gpt5_6ReasoningEffort`,
+ * `kimiK3ReasoningEffort`, …), so the one this entry names is what puts the
+ * choice in the chat settings at all.
+ *
+ * The reasoning params go when the user turned thinking off in magpie: the
+ * card says `reasoning: false`, and offering a strength beside it would let a
+ * choice be made for a model the gateway then pushes back up to its lowest
+ * thinking level.
+ *
+ * `disabledParams` hides controls the vendor refuses. It never reaches a
+ * request, since magpie drops what an upstream rejects, but the settings page
+ * would otherwise offer a slider that does nothing. `searchImpl` and
+ * `searchProvider` stay out: magpie's search is its own, not the vendor's
+ * way of implementing it.
+ */
+const knownSettings = (
+  known: any,
+  thinks: boolean | undefined,
+): Pick<ChatModelCard, 'settings'> => {
+  const extendParams: ModelSettings['extendParams'] = known?.settings?.extendParams;
+  const disabledParams: ModelSettings['disabledParams'] = known?.settings?.disabledParams;
+
+  const usable =
+    thinks === false ? extendParams?.filter((param) => !REASONING_PARAMS.has(param)) : extendParams;
+
+  if (!usable?.length && !disabledParams) return {};
+
+  return {
+    settings: {
+      ...(usable?.length ? { extendParams: usable } : {}),
+      ...(disabledParams ? { disabledParams } : {}),
+    },
+  };
 };
 
 /**
@@ -173,14 +218,18 @@ const fetchMagpieModels = async (client: OpenAI): Promise<ChatModelCard[]> => {
 
   const prepared = rows.map((row) => {
     const known = findKnownModel(row.id, index, byId);
+    const card = fromMagpie(row);
 
     return {
       id: row.id,
-      ...fromMagpie(row),
+      ...card,
       // What magpie never says anything about, and only model-bank knows.
       ...(known?.abilities?.functionCall === undefined
         ? {}
         : { functionCall: known.abilities.functionCall }),
+      // `card.reasoning` is magpie's own answer, so a model it reports as not
+      // thinking offers no strength to choose.
+      ...knownSettings(known, card.reasoning),
     };
   });
 
