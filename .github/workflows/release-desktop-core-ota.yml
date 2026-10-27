@@ -272,7 +272,7 @@ jobs:
         run: |
           set -euo pipefail
           : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
-          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
+          cloud_ref=$(bash "$GITHUB_WORKSPACE/.github/scripts/gitWithRetry.sh" -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
           if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Unable to resolve Cloud revision"
             exit 1
