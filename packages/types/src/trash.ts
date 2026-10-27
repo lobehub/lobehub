@@ -56,6 +56,12 @@ export interface TrashItemMeta {
   /** Human readable parent title (agent name for a topic, folder for a page …) */
   parentTitle?: string | null;
   /**
+   * Workspace roots: whether the resource was private when it was trashed,
+   * snapshotted by `TrashModel` so a later visibility change of a still-live
+   * parent does not move it to the other side of the bin.
+   */
+  private?: boolean;
+  /**
    * Topic-only: the user asked for the topic's attachments to go with it.
    * Files are not trash-aware yet, so they stay live while the topic sits in
    * the bin and are removed (with their storage objects) when it is purged.

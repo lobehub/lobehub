@@ -354,6 +354,37 @@ describe('TrashModel', () => {
       );
     });
 
+    it('keeps the side a root had when it was trashed', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB
+        .insert(agents)
+        .values({ id: 'agt_flip', userId, visibility: 'private', workspaceId });
+      await serverDB
+        .insert(topics)
+        .values({ agentId: 'agt_flip', id: 'tpc_flip', userId, workspaceId });
+      const root = await wsModel.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: {
+          meta: { parentTitle: 'Flip' },
+          projectId: null,
+          resourceId: 'tpc_flip',
+          resourceType: 'topic',
+        },
+      });
+      expect(root.meta).toEqual({ parentTitle: 'Flip', private: true });
+
+      // The still-live agent is made public after its topic was trashed.
+      await serverDB.update(agents).set({ visibility: 'public' }).where(eq(agents.id, 'agt_flip'));
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId);
+      expect(await sideIds('public')).toEqual([]);
+      expect(await sideIds('private')).toEqual(['tpc_flip']);
+
+      // A row registered before the snapshot existed follows the live parent.
+      await serverDB.update(trashItems).set({ meta: null }).where(eq(trashItems.id, root.id));
+      expect(await sideIds('public')).toEqual(['tpc_flip']);
+    });
+
     it('keeps a root whose source or project is gone off the public side', async () => {
       const wsModel = new TrashModel(serverDB, userId, workspaceId);
       await serverDB

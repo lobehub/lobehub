@@ -107,25 +107,13 @@ const missingSourceWhere = (): SQL =>
   ) as SQL;
 
 /**
- * Whether a registry row is private in its workspace: the resource itself, or
- * an agent, group, project or channel it lives under, is visible to its creator
- * (or, for a channel, its members) only.
- * Read from the source rows at query time — they stay in place while trashed —
- * so rows registered before this predicate existed are classified too, and a
- * root is never shown to the workspace because its snapshot missed a parent.
- *
- * It fails closed: a root whose source row, or recorded project, was removed
- * outside the trash (a hard delete or an FK cascade) can no longer prove it
- * was shared, so it stays on its deleter's private side until the sweep
- * prunes it.
+ * Whether a registry row's resource is private right now: the resource itself,
+ * or an agent, group, project or channel it lives under, is visible to its
+ * creator (or, for a channel, its members) only. Read from the source rows —
+ * they stay in place while trashed.
  */
-const privateRootWhere = (): SQL =>
+const livePrivateWhere = (): SQL =>
   or(
-    missingSourceWhere(),
-    and(
-      sql`${trashItems.projectId} IS NOT NULL`,
-      sql`NOT EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${trashItems.projectId})`,
-    ),
     privateProject(trashItems.projectId),
     and(eq(trashItems.resourceType, 'agent'), privateAgent(trashItems.resourceId)),
     and(eq(trashItems.resourceType, 'topic'), privateTopic(trashItems.resourceId)),
@@ -146,6 +134,29 @@ const privateRootWhere = (): SQL =>
       eq(trashItems.resourceType, 'dashboard'),
       sql`EXISTS (SELECT 1 FROM ${dashboards} WHERE ${dashboards.id} = ${uuidResourceId('dashboard')} AND (${dashboards.visibility} = 'private' OR ${privateAgent(dashboards.agentId)} OR ${privateProject(dashboards.projectId)}))`,
     ),
+  ) as SQL;
+
+/**
+ * Whether a registry row sits on the private side of its workspace bin. A root
+ * keeps the side it had when it was trashed (`meta.private`, snapshotted by
+ * `registerMany`), so making a still-live parent public later does not expose
+ * it; rows registered before the snapshot existed fall back to the live check.
+ *
+ * It fails closed: a root whose source row, or recorded project, was removed
+ * outside the trash (a hard delete or an FK cascade) can no longer prove it
+ * was shared, so it stays on its deleter's private side until the sweep
+ * prunes it.
+ */
+const privateRootWhere = (): SQL =>
+  or(
+    missingSourceWhere(),
+    and(
+      sql`${trashItems.projectId} IS NOT NULL`,
+      sql`NOT EXISTS (SELECT 1 FROM ${projects} WHERE ${projects.id} = ${trashItems.projectId})`,
+    ),
+    // COALESCE: a NULL here would turn the whole OR, and its NOT, into NULL.
+    sql`COALESCE((${trashItems.meta} ->> 'private') = 'true', false)`,
+    and(sql`(${trashItems.meta} -> 'private') IS NULL`, livePrivateWhere()),
   ) as SQL;
 
 const toTrashItem = (row: TrashItemRow): TrashItem => ({
@@ -288,6 +299,22 @@ export class TrashModel {
           })
           .returning();
         for (const row of rows) rootsByKey.set(key(row.resourceType, row.resourceId), row);
+      }
+
+      // Snapshot each workspace root's side while its parents still describe
+      // it; the upsert above replaced `meta`, so a retry re-snapshots too.
+      if (this.workspaceId) {
+        const rootIds = [...rootsByKey.values()].map((row) => row.id);
+        for (let i = 0; i < rootIds.length; i += REGISTER_CHUNK_SIZE) {
+          const rows = await tx
+            .update(trashItems)
+            .set({
+              meta: sql`coalesce(${trashItems.meta}, '{}'::jsonb) || jsonb_build_object('private', ${livePrivateWhere()})`,
+            })
+            .where(inArray(trashItems.id, rootIds.slice(i, i + REGISTER_CHUNK_SIZE)))
+            .returning();
+          for (const row of rows) rootsByKey.set(key(row.resourceType, row.resourceId), row);
+        }
       }
 
       const childValues: NewTrashItemRow[] = params.cascades.flatMap(({ children, root }) => {
