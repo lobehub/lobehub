@@ -9,7 +9,7 @@ import {
   TabsTab,
 } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -118,6 +118,8 @@ interface AgentTasksPageProps {
    * shows tasks across all agents.
    */
   agentId?: string;
+  /** Extra header actions of the task list, e.g. a project's Linear sync. */
+  headerActions?: ReactNode;
   /** When provided, shows the complete task workspace scoped to one project. */
   projectId?: string;
 }
@@ -203,7 +205,7 @@ export const resolveTaskCollectionView = (
   viewMode: TaskViewMode,
 ): 'board' | 'list' => (collection !== 'scheduled' && viewMode === 'kanban' ? 'board' : 'list');
 
-const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
+const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, projectId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
@@ -456,6 +458,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {isOrdinaryCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
+            {isOrdinaryCollection && headerActions}
             {isOrdinaryCollection && (inlineCollapsed || viewMode === 'kanban') && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}

@@ -111,8 +111,14 @@ export class TaskService {
    * `parentTaskId` if it's an identifier, and snapshots the assignee agent's
    * current model/provider into `task.config` so later changes to the agent's
    * default model don't silently affect this task.
+   *
+   * Inside a caller's transaction pass `maxRetries: 1`: an identifier clash
+   * aborts the transaction, so only the caller can retry it as a whole.
    */
-  async createTask(input: CreateTaskInput): Promise<TaskItem> {
+  async createTask(
+    input: CreateTaskInput,
+    options: { maxRetries?: number } = {},
+  ): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
 
     const taskInput = input;
@@ -193,10 +199,10 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    const task = await this.createTaskWithAssigneeLock({
-      ...createData,
-      ...armScheduleOnCreate(createData),
-    });
+    const task = await this.createTaskWithAssigneeLock(
+      { ...createData, ...armScheduleOnCreate(createData) },
+      options.maxRetries,
+    );
 
     return task;
   }
@@ -650,10 +656,13 @@ export class TaskService {
 
   private async createTaskWithAssigneeLock(
     createData: CreateTaskInput & { config?: Record<string, unknown>; status?: TaskStatus },
+    insertRetries?: number,
   ): Promise<TaskItem> {
     if (!createData.assigneeUserId || !this.workspaceId) {
       await this.assertAssigneeUserAssignable(createData.assigneeUserId);
-      return this.taskModel.create(createData);
+      return insertRetries === undefined
+        ? this.taskModel.create(createData)
+        : this.taskModel.create(createData, { maxRetries: insertRetries });
     }
 
     // TaskModel's normal retry loop cannot continue after a unique violation
