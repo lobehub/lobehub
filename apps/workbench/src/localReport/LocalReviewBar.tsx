@@ -17,6 +17,7 @@ import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
+import { isCustomBranding } from '@/const/version';
 
 import { getLocalReport } from './localReportData';
 
@@ -88,7 +89,7 @@ export const LocalReviewBar = () => {
 
   return (
     <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
-      <ProductLogo size={22} />
+      <ProductLogo size={22} type={isCustomBranding ? 'text' : 'flat'} />
       <div {...stylex.props(styles.divider)} />
       <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.title)}>
         {/* A phone has room for the badge; the page heading names the delivery. */}

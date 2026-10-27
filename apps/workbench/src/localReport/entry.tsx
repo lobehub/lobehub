@@ -1,4 +1,5 @@
 import '@/styles/stylex.css';
+import 'katex/dist/katex.min.css';
 
 import { Center, Empty } from '@lobehub/ui';
 import dayjs from 'dayjs';
@@ -34,7 +35,7 @@ const render = async () => {
   createRoot(document.getElementById('root')!).render(
     <BootErrorBoundary>
       <NextThemeProvider>
-        <WorkbenchShell locale={locale} resources={resources}>
+        <WorkbenchShell enableCustomFonts={false} locale={locale} resources={resources}>
           {/* The viewer's filters and links read a router; the page has one URL. */}
           <MemoryRouter>
             {acceptanceId ? (

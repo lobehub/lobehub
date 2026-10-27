@@ -2,6 +2,12 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <!-- The report runs from disk; only adjacent evidence and embedded assets may load. -->
+    <!-- Bundled code may compile JS/Wasm (Zod/diagrams), but cannot load script URLs. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src 'self' file: data: blob:; media-src 'self' file: data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <!--ACCEPTANCE_LOCAL_TITLE-->

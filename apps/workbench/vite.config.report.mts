@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import type { Plugin, PluginOption } from 'vite';
@@ -24,6 +25,8 @@ import { reportStubSurfaceGaps } from './app/stubs/surface';
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const stubDir = path.resolve(import.meta.dirname, 'src/localReport/stubs');
 const appStubDir = path.resolve(import.meta.dirname, 'app/stubs');
+// Use the exact KaTeX installed for the Markdown renderer, not a CDN version.
+const uiRequire = createRequire(createRequire(import.meta.url).resolve('@lobehub/ui'));
 
 const stubs: Record<string, string> = {
   '@/libs/trpc/client': path.resolve(appStubDir, 'trpcClient.ts'),
@@ -45,9 +48,15 @@ const ALERT_ICONS = ['alert', 'info', 'light-bulb', 'report', 'stop'];
 /** The reaction picker's emoji set: comments are a shared-acceptance feature. */
 const EMOJI_DATA = '\0acceptance-report:emoji-data';
 
+/** Only this host replaces Markdown's remote media with explicit links. */
+const LOCAL_MARKDOWN = '\0acceptance-report:markdown';
+const localMarkdown = path.resolve(import.meta.dirname, 'src/localReport/LocalMarkdown.tsx');
+
 const localReportStubs = (): Plugin => ({
   enforce: 'pre',
   load(id) {
+    if (id === LOCAL_MARKDOWN)
+      return `export { LocalMarkdown as default } from ${JSON.stringify(localMarkdown)};`;
     if (id === EMOJI_DATA)
       return 'export default { aliases: {}, categories: [], emojis: {}, natives: {}, sheet: { cols: 0, rows: 0 } };';
     if (!id.startsWith(OCTICONS)) return;
@@ -66,6 +75,11 @@ const localReportStubs = (): Plugin => ({
   name: 'acceptance-report-stubs',
   async resolveId(source, importer, options) {
     if (stubs[source]) return stubs[source];
+    if (source === 'katex/dist/katex.min.css') return uiRequire.resolve(source);
+    // lobeUiImports resolves the root barrel's Markdown export to this entry.
+    // The wrapper itself must still reach the original component.
+    if (source === '@lobehub/ui/es/Markdown/Markdown' && importer !== localMarkdown)
+      return LOCAL_MARKDOWN;
     if (source === '@emoji-mart/data') return EMOJI_DATA;
     if (source === '@primer/octicons') {
       const real = await this.resolve(source, importer, { ...options, skipSelf: true });
@@ -80,6 +94,8 @@ const localReportStubs = (): Plugin => ({
 const stubSurfaceGuard = (): Plugin => ({
   apply: 'build',
   buildEnd() {
+    if (!this.getModuleInfo(localMarkdown))
+      this.error('The local report must use LocalMarkdown to keep external media offline.');
     const stubEntries = Object.entries(stubs).map(([specifier, file]) => ({
       source: readFileSync(file, 'utf8'),
       specifier,
@@ -151,46 +167,55 @@ const escapeInlineScript = (code: string) =>
  * the whole bundle is on disk, so CSS appended by later `generateBundle` hooks
  * (StyleX) is included too.
  */
-const singleFile = (outDir: string): Plugin => ({
-  apply: 'build',
-  closeBundle() {
-    const htmlPath = path.join(outDir, 'report.html');
-    let html = readFileSync(htmlPath, 'utf8');
-    const inlined = new Set<string>([htmlPath]);
-    const read = (url: string) => {
-      const file = path.resolve(outDir, url);
-      inlined.add(file);
-      return readFileSync(file, 'utf8');
-    };
+const singleFile = (outDir: string): Plugin => {
+  let written = false;
+  return {
+    apply: 'build',
+    closeBundle() {
+      // Do not mask a compilation error with a missing-output error.
+      if (!written) return;
+      const htmlPath = path.join(outDir, 'report.html');
+      let html = readFileSync(htmlPath, 'utf8');
+      const inlined = new Set<string>([htmlPath]);
+      const read = (url: string) => {
+        const file = path.resolve(outDir, url);
+        inlined.add(file);
+        return readFileSync(file, 'utf8');
+      };
 
-    html = html.replaceAll(
-      /<script type="module" crossorigin src="([^"]+)"><\/script>/g,
-      (_tag, url: string) => `<script type="module">${escapeInlineScript(read(url))}</script>`,
-    );
-    html = html.replaceAll(
-      /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
-      (_tag, url: string) => `<style>${read(url)}</style>`,
-    );
-    const files = readdirSync(outDir, { recursive: true, withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => path.join(entry.parentPath, entry.name));
-    const unlinkedCss = files.filter((file) => file.endsWith('.css') && !inlined.has(file));
-    if (unlinkedCss.length > 0) {
-      const css = unlinkedCss.map((file) => read(path.relative(outDir, file))).join('\n');
-      html = html.replace('</head>', () => `<style>${css}</style></head>`);
-    }
-
-    const leftovers = files.filter((file) => !inlined.has(file));
-    if (leftovers.length > 0)
-      throw new Error(
-        `The report must be one file; not inlined: ${leftovers.map((file) => path.relative(outDir, file)).join(', ')}`,
+      html = html.replaceAll(
+        /<script type="module" crossorigin src="([^"]+)"><\/script>/g,
+        (_tag, url: string) => `<script type="module">${escapeInlineScript(read(url))}</script>`,
       );
-    for (const file of inlined) rmSync(file);
-    for (const entry of readdirSync(outDir)) rmSync(path.join(outDir, entry), { recursive: true });
-    writeFileSync(path.join(outDir, 'acceptance-report.html'), html);
-  },
-  name: 'acceptance-report-single-file',
-});
+      html = html.replaceAll(
+        /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
+        (_tag, url: string) => `<style>${read(url)}</style>`,
+      );
+      const files = readdirSync(outDir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => path.join(entry.parentPath, entry.name));
+      const unlinkedCss = files.filter((file) => file.endsWith('.css') && !inlined.has(file));
+      if (unlinkedCss.length > 0) {
+        const css = unlinkedCss.map((file) => read(path.relative(outDir, file))).join('\n');
+        html = html.replace('</head>', () => `<style>${css}</style></head>`);
+      }
+
+      const leftovers = files.filter((file) => !inlined.has(file));
+      if (leftovers.length > 0)
+        throw new Error(
+          `The report must be one file; not inlined: ${leftovers.map((file) => path.relative(outDir, file)).join(', ')}`,
+        );
+      for (const file of inlined) rmSync(file);
+      for (const entry of readdirSync(outDir))
+        rmSync(path.join(outDir, entry), { recursive: true });
+      writeFileSync(path.join(outDir, 'acceptance-report.html'), html);
+    },
+    name: 'acceptance-report-single-file',
+    writeBundle() {
+      written = true;
+    },
+  };
+};
 
 /** Shared renderer plugins that emit files a report page never loads. */
 const UNUSED_PLUGINS = new Set(['lobe-canvas-runtime', 'lobe-completion-sounds']);
