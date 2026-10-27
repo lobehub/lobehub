@@ -11,7 +11,7 @@ export const DEFAULT_WAKE_RULES: WakeRules = {
   ownerPresenceSeconds: 120,
   // On by default, like helping others: it only reads the owner's own remarks, and the bot may
   // still stay silent.
-  proactive: { mode: 'enforce', threshold: 0.7 },
+  proactive: { mode: 'enforce', threshold: 0.8 },
   scope: 'all',
   windowSeconds: 300,
 };

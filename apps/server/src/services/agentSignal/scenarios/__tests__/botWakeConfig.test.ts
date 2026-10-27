@@ -300,15 +300,15 @@ describe('parseBotWakeSettings from the settings form', () => {
   it('offers the owner help by default, until they switch it off', () => {
     expect(parseBotWakeSettings({ [K.enabled]: true }).rules.proactive).toEqual({
       mode: 'enforce',
-      threshold: 0.7,
+      threshold: 0.8,
     });
     expect(
       parseBotWakeSettings({ [K.enabled]: true, [K.proactiveEnabled]: false }).rules.proactive,
-    ).toEqual({ mode: 'off', threshold: 0.7 });
+    ).toEqual({ mode: 'off', threshold: 0.8 });
     expect(
       parseBotWakeSettings({ [K.proactiveEnabled]: 'yes', [K.proactiveThreshold]: 3 }).rules
         .proactive,
-    ).toEqual({ mode: 'enforce', threshold: 0.7 });
+    ).toEqual({ mode: 'enforce', threshold: 0.8 });
   });
 
   it('lets an operator only score offering help, beside the form options', () => {
