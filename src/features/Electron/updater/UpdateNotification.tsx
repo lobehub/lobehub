@@ -269,7 +269,14 @@ export const UpdateNotification: React.FC = () => {
         <span>
           {tElectron('updater.rendererUpdated', { version: formatCoreVersion(appliedVersion) })}
         </span>
-        <BaseButton size={'small'} type={'text'} onClick={() => setAppliedVersion(null)}>
+        <BaseButton
+          size={'small'}
+          type={'text'}
+          onClick={() => {
+            setAppliedVersion(null);
+            rendererOtaService.dismissAppliedNotice().catch(console.error);
+          }}
+        >
           {tElectron('updater.ignore')}
         </BaseButton>
       </div>
