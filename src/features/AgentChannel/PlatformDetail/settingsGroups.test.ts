@@ -119,7 +119,7 @@ describe('groupWakeFields', () => {
   const keysOf = (fields: FieldSchema[]) =>
     groupWakeFields(fields).map((section) => [section.key, section.fields.map((f) => f.key)]);
 
-  it('splits the wake options into keywords, channels, pace and judgement, in that order', () => {
+  it('splits the wake options into judgement, keywords, channels and pace, in that order', () => {
     // Deliberately shuffled: the sections decide the order, not the schema.
     const fields = [
       K.customInstructions,
@@ -137,6 +137,7 @@ describe('groupWakeFields', () => {
     ].map(field);
 
     expect(keysOf(fields)).toEqual([
+      ['judgement', [K.customInstructions]],
       ['keywords', ['watchKeywords']],
       ['channels', [K.scope, K.allowChannels, K.denyChannels]],
       [
@@ -151,7 +152,6 @@ describe('groupWakeFields', () => {
           K.cooldownSeconds,
         ],
       ],
-      ['judgement', [K.customInstructions]],
     ]);
   });
 

@@ -221,13 +221,13 @@ describe('channel settings form: bot-wake options', () => {
     expect(screen.queryByText('Record only')).not.toBeInTheDocument();
   });
 
-  it('groups the options into keywords, channels, pace and judgement, each under its own title', () => {
+  it('groups the options into judgement, keywords, channels and pace, each under its own title', () => {
     state.copy = en;
     state.featureFlags = { enableBotWake: true };
 
     render(<Harness settings={{ botWakeEnabled: true }} />);
 
-    const titles = ['keywords', 'channels', 'pace', 'judgement'].map((key) =>
+    const titles = ['judgement', 'keywords', 'channels', 'pace'].map((key) =>
       screen.getByText(en[`channel.wake.section.${key}`]),
     );
     // Titles come in page order.
@@ -332,8 +332,8 @@ describe('channel settings form: bot-wake options', () => {
       expect(enabled).toHaveLength(1);
       fireEvent.click(enabled[0]);
       expect(onSave).toHaveBeenCalledWith('wake-pace');
-      // It sits in the Pace block, between the channels and the judgement.
-      expect(saveButtons().indexOf(enabled[0])).toBe(2);
+      // It sits in the Pace block, the last one, after the judgement, keywords and channels.
+      expect(saveButtons().indexOf(enabled[0])).toBe(3);
     });
 
     it('discards one block’s changes by id', () => {

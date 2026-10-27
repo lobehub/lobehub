@@ -37,10 +37,10 @@ describe('resolveSaveModules', () => {
       'credentials',
       'connection',
       'access',
+      'wake-judgement',
       'wake-keywords',
       'wake-channels',
       'wake-pace',
-      'wake-judgement',
       'advanced',
     ]);
   });
