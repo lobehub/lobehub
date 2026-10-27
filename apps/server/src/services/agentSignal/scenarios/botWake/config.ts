@@ -9,10 +9,48 @@ export const DEFAULT_WAKE_RULES: WakeRules = {
   denyChannels: [],
   maxSilentWakes: 3,
   ownerPresenceSeconds: 120,
-  // Off until the owner switches it on: it wakes the bot on messages nobody meant for it.
-  proactive: { mode: 'off', threshold: 0.7 },
+  // On by default, like helping others: it only reads the owner's own remarks, and the bot may
+  // still stay silent.
+  proactive: { mode: 'enforce', threshold: 0.7 },
   scope: 'all',
   windowSeconds: 300,
+};
+
+/**
+ * How often the bot speaks up on its own, as one choice instead of seven numbers. `custom` keeps
+ * the numbers the owner set; a config without a pace (saved before it existed, or written by hand)
+ * reads as `custom`, so nothing an owner tuned is overridden.
+ */
+export const BOT_WAKE_PACES = ['calm', 'balanced', 'active', 'custom'] as const;
+export type BotWakePace = (typeof BOT_WAKE_PACES)[number];
+
+export interface BotWakePacePreset {
+  maxSilentWakes: number;
+  ownerPresenceSeconds: number;
+  scheduler: Required<WakeSchedulerConfig>;
+  windowSeconds: number;
+}
+
+/** `balanced` is the defaults, so a bot that never touched the numbers keeps behaving the same. */
+export const BOT_WAKE_PACE_PRESETS: Record<Exclude<BotWakePace, 'custom'>, BotWakePacePreset> = {
+  active: {
+    maxSilentWakes: 5,
+    ownerPresenceSeconds: 0,
+    scheduler: { collectSeconds: 20, cooldownSeconds: 60, mode: 'off' },
+    windowSeconds: 600,
+  },
+  balanced: {
+    maxSilentWakes: 3,
+    ownerPresenceSeconds: 120,
+    scheduler: { collectSeconds: 20, cooldownSeconds: 60, mode: 'off' },
+    windowSeconds: 300,
+  },
+  calm: {
+    maxSilentWakes: 1,
+    ownerPresenceSeconds: 300,
+    scheduler: { collectSeconds: 30, cooldownSeconds: 180, mode: 'enforce' },
+    windowSeconds: 120,
+  },
 };
 
 /** Spec: a burst is collected for at least 20s, and a run is followed by at least 60s of cooldown. */
@@ -74,9 +112,11 @@ const SettingsSchema = z
     customInstructionsEnabled: z.boolean().optional().catch(undefined),
     enabled: z.boolean().catch(false),
     mode: mode.catch('enforce'),
+    pace: z.enum(BOT_WAKE_PACES).optional().catch(undefined),
     proactive: z
       .object({
-        enabled: z.boolean().catch(false),
+        // Malformed reads as unset, which is on.
+        enabled: z.boolean().optional().catch(undefined),
         // No default: absent means "follow `enabled`" (see `parseBotWakeSettings`).
         mode: mode.optional().catch(undefined),
         threshold: z.number().min(0).max(1).catch(DEFAULT_WAKE_RULES.proactive.threshold),
@@ -127,6 +167,7 @@ export const BOT_WAKE_SETTING_KEYS = {
   enabled: 'botWakeEnabled',
   maxSilentWakes: 'botWakeMaxSilentWakes',
   ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
+  pace: 'botWakePace',
   proactiveEnabled: 'botWakeProactiveEnabled',
   proactiveThreshold: 'botWakeProactiveThreshold',
   schedulerMode: 'botWakeSchedulerMode',
@@ -165,6 +206,7 @@ const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
     key: BOT_WAKE_SETTING_KEYS.classifierInitiateThreshold,
     path: ['classifier', 'initiateThreshold'],
   },
+  { key: BOT_WAKE_SETTING_KEYS.pace, path: ['pace'] },
   { key: BOT_WAKE_SETTING_KEYS.proactiveEnabled, path: ['proactive', 'enabled'] },
   { key: BOT_WAKE_SETTING_KEYS.proactiveThreshold, path: ['proactive', 'threshold'] },
   { key: BOT_WAKE_SETTING_KEYS.allowChannels, path: ['rules', 'allowChannels'] },
@@ -220,6 +262,33 @@ const readPath = (source: unknown, path: string[]) =>
  * on), so the form must show the switch on. Left at the form's default, the next save would write
  * `false` and silently stop handing them to the classifier.
  */
+/**
+ * The pace a stored config shows in the form. Saved, it is what it says. Without one, the numbers
+ * decide: the defaults read as `balanced`, anything an owner tuned as `custom`, so the form neither
+ * hides the numbers nor lets a save replace them with a preset.
+ */
+const withPace = (
+  settings: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null | undefined => {
+  const k = BOT_WAKE_SETTING_KEYS;
+  if (!settings || isChosen(settings[k.pace])) return settings;
+  // Only a bot with bot-wake options has a pace to show.
+  if (!Object.keys(settings).some((key) => key !== 'botWake' && key.startsWith('botWake'))) {
+    return settings;
+  }
+
+  const { balanced } = BOT_WAKE_PACE_PRESETS;
+  const read = (key: string, fallback: unknown) =>
+    isChosen(settings[key]) ? settings[key] : fallback;
+  const untouched =
+    read(k.windowSeconds, balanced.windowSeconds) === balanced.windowSeconds &&
+    read(k.maxSilentWakes, balanced.maxSilentWakes) === balanced.maxSilentWakes &&
+    read(k.ownerPresenceSeconds, balanced.ownerPresenceSeconds) === balanced.ownerPresenceSeconds &&
+    read(k.schedulerMode, balanced.scheduler.mode) === balanced.scheduler.mode;
+
+  return { ...settings, [k.pace]: untouched ? 'balanced' : 'custom' };
+};
+
 const withInstructionsSwitch = (
   settings: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null | undefined => {
@@ -255,7 +324,7 @@ const withInstructionsSwitch = (
 export const flattenBotWakeSettings = (
   settings: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null | undefined => {
-  if (!isRecord(settings?.botWake)) return withInstructionsSwitch(settings);
+  if (!isRecord(settings?.botWake)) return withPace(withInstructionsSwitch(settings));
 
   const nested = settings.botWake;
   const flat = Object.fromEntries(
@@ -274,7 +343,9 @@ export const flattenBotWakeSettings = (
   // back whole, and dropping it here would silently turn the override into the default.
   const overrides = readModeOverrides(nested);
 
-  return withInstructionsSwitch({ ...rest, ...flat, ...(overrides ? { botWake: overrides } : {}) });
+  return withPace(
+    withInstructionsSwitch({ ...rest, ...flat, ...(overrides ? { botWake: overrides } : {}) }),
+  );
 };
 
 /**
@@ -306,6 +377,7 @@ const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefi
       customInstructions: flat(k.customInstructions),
       customInstructionsEnabled: flat(k.customInstructionsEnabled),
       enabled: flat(k.enabled),
+      pace: flat(k.pace),
     }),
     ...(overrides && 'mode' in overrides ? { mode: overrides.mode } : {}),
     classifier: {
@@ -362,9 +434,17 @@ export const parseBotWakeSettings = (
   const parsed = SettingsSchema.safeParse(gatherBotWakeSettings(settings));
   const raw = parsed.success ? parsed.data : {};
 
+  // A pace other than `custom` sets the timings; the numbers saved beside it are not read.
+  const preset = raw.pace && raw.pace !== 'custom' ? BOT_WAKE_PACE_PRESETS[raw.pace] : undefined;
+
   const rules: WakeRules = {
     ...DEFAULT_WAKE_RULES,
     ...raw.rules,
+    ...(preset && {
+      maxSilentWakes: preset.maxSilentWakes,
+      ownerPresenceSeconds: preset.ownerPresenceSeconds,
+      windowSeconds: preset.windowSeconds,
+    }),
     classifier: { ...DEFAULT_WAKE_RULES.classifier, ...raw.classifier },
     // Switched off, the text stays in the settings but is not handed to the classifier.
     customInstructions:
@@ -373,12 +453,12 @@ export const parseBotWakeSettings = (
         : raw.customInstructions?.trim().slice(0, MAX_CUSTOM_INSTRUCTIONS_LENGTH) || undefined,
     // The switch turns it on (`enforce`); an operator's mode override (`shadow`) wins over it.
     proactive: {
-      mode: raw.proactive?.mode ?? (raw.proactive?.enabled ? 'enforce' : 'off'),
+      mode: raw.proactive?.mode ?? (raw.proactive?.enabled === false ? 'off' : 'enforce'),
       threshold: raw.proactive?.threshold ?? DEFAULT_WAKE_RULES.proactive.threshold,
     },
   };
 
-  const schedulerRaw: WakeSchedulerConfig = raw.scheduler ?? {};
+  const schedulerRaw: WakeSchedulerConfig = preset?.scheduler ?? raw.scheduler ?? {};
 
   return {
     config: { ...raw, rules },

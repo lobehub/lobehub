@@ -267,9 +267,14 @@ export interface BotWakeConfig {
    */
   mode?: WakePolicyMode;
   /**
+   * How often the bot speaks up on its own (`calm` / `balanced` / `active`), or `custom` to read
+   * `rules` and `scheduler` as written. Absent reads as `custom`.
+   */
+  pace?: 'active' | 'balanced' | 'calm' | 'custom';
+  /**
    * Whether the bot may step in on its own when the owner raises something it can help with.
    * `enabled` is the settings switch (on = `enforce`); `mode` is an operator override, such as
-   * `shadow` to only score it. Off by default.
+   * `shadow` to only score it. On by default.
    */
   proactive?: { enabled?: boolean; mode?: WakePolicyMode; threshold?: number };
   rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions' | 'proactive'>>;

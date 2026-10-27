@@ -47,7 +47,19 @@ export interface PlatformAccessMeta {
  * - Server: validation + default value extraction
  * - Frontend: auto-generated form (type → component mapping)
  */
+/** One condition of {@link FieldSchema.visibleWhen}. */
+export interface FieldVisibleWhen {
+  field: string;
+  value: unknown;
+}
+
 export interface FieldSchema {
+  /**
+   * Render an `enum` as a list of choices, each with its description under it, instead of a
+   * dropdown. For a few options whose consequences need a sentence each (who may DM the bot, where
+   * it may join).
+   */
+  choices?: boolean;
   /** Default value */
   default?: unknown;
   description?: string;
@@ -59,6 +71,8 @@ export interface FieldSchema {
   enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
+  /** The `enum` value the product suggests; a `choices` list tags it. */
+  enumRecommended?: string;
   /**
    * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
    * `enableBotWake`). The form hides the field unless that flag is on for the signed-in user.
@@ -118,10 +132,11 @@ export interface FieldSchema {
   type: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'password' | 'string';
   /**
    * Conditional visibility: show only when another field matches a value. Pass
-   * an array to match any of several values, e.g. a window size that applies to
-   * both the `burst` and `debounce` concurrency strategies.
+   * an array as `value` to match any of several values, e.g. a window size that
+   * applies to both the `burst` and `debounce` concurrency strategies. Pass a
+   * list of conditions to require all of them.
    */
-  visibleWhen?: { field: string; value: unknown };
+  visibleWhen?: FieldVisibleWhen | FieldVisibleWhen[];
 }
 
 // --------------- Bot Message Attachment ---------------

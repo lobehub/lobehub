@@ -71,8 +71,8 @@ export interface WakeSection {
  *
  * - keywords: words that wake the bot with no @
  * - channels: where it may join a conversation nobody addressed to it
- * - pace: how soon and how often it speaks up on its own, and how sure it must be that a message
- *   right after its own reply is still for it
+ * - pace: how soon and how often it speaks up on its own, as a preset; `custom` opens the numbers
+ *   (and how sure it must be that a message right after its own reply is still for it)
  * - judgement (shown as "initiative"): when it may speak up without being called. In the order a
  *   person thinks about it: for me (the owner's own remarks), for others (a message plainly for
  *   the bot that nobody addressed to it), then the custom instructions behind both. Each is a
@@ -84,6 +84,7 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   [
     'pace',
     [
+      'botWakePace',
       'botWakeWindowSeconds',
       'botWakeClassifierThreshold',
       'botWakeMaxSilentWakes',

@@ -74,7 +74,8 @@ const config: CurrentConfig = {
   enabled: true,
   id: 'provider-1',
   platform: 'discord',
-  settings: { botWakeEnabled: true, showUsageStats: false },
+  // A custom pace, so the numbers are on the page to edit.
+  settings: { botWakeEnabled: true, botWakePace: 'custom', showUsageStats: false },
 };
 
 const en = agentEn as Record<string, string>;

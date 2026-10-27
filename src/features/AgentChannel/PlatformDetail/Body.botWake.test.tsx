@@ -136,9 +136,39 @@ describe('channel settings form: bot-wake options', () => {
     expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeAllowChannels'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeCustomInstructionsEnabled'])).toBeInTheDocument();
-    expect(screen.getByText(en['channel.botWakeSchedulerMode'])).toBeInTheDocument();
-    // Batching timings stay out of the way until batching is on.
+    // The pace is one choice; its numbers stay out of the way until it is custom.
+    expect(screen.getByText(en['channel.botWakePace'])).toBeInTheDocument();
+    expect(screen.queryByText(en['channel.botWakeSchedulerMode'])).not.toBeInTheDocument();
     expect(screen.queryByText(en['channel.botWakeCollectSeconds'])).not.toBeInTheDocument();
+  });
+
+  it('lists where it may join, and the pace, as choices that each say what they do', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness settings={{ botWakeEnabled: true }} />);
+
+    const scope = screen.getByRole('radiogroup', { name: en['channel.botWakeScope'] });
+    expect(scope).toHaveTextContent(en['channel.botWakeScopeBotThreadsHint']);
+    expect(
+      screen.getByRole('radio', { name: new RegExp(en['channel.botWakeScopeAll']) }),
+    ).toHaveAttribute('aria-checked', 'true');
+    const pace = screen.getByRole('radiogroup', { name: en['channel.botWakePace'] });
+    expect(pace).toHaveTextContent(en['channel.botWakePaceCalm']);
+    expect(pace).toHaveTextContent(en['channel.access.recommended']);
+  });
+
+  it('opens the numbers when the pace is set to custom', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness settings={{ botWakeEnabled: true }} />);
+    fireEvent.click(
+      screen.getByRole('radio', { name: new RegExp(en['channel.botWakePaceCustom']) }),
+    );
+
+    expect(screen.getByText(en['channel.botWakeWindowSeconds'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.botWakeSchedulerMode'])).toBeInTheDocument();
   });
 
   it('explains what the options do, since there is no switch to read', () => {
@@ -154,7 +184,15 @@ describe('channel settings form: bot-wake options', () => {
     state.copy = en;
     state.featureFlags = { enableBotWake: true };
 
-    render(<Harness settings={{ botWakeEnabled: true, botWakeSchedulerMode: 'enforce' }} />);
+    // A bot with tuned numbers: the server projection opens them under a custom pace.
+    render(
+      <Harness
+        settings={flattenBotWakeSettings({
+          botWakeEnabled: true,
+          botWakeSchedulerMode: 'enforce',
+        })!}
+      />,
+    );
 
     expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeCollectSeconds'])).toBeInTheDocument();
@@ -167,7 +205,7 @@ describe('channel settings form: bot-wake options', () => {
 
     render(<Harness settings={{ botWakeEnabled: true }} />);
 
-    expect(screen.getByText('跟进窗口（秒）')).toBeInTheDocument();
+    expect(screen.getByText('插话频率')).toBeInTheDocument();
     expect(screen.getByText('自定义说明')).toBeInTheDocument();
     expect(screen.queryByText('channel.botWakeScope')).not.toBeInTheDocument();
   });
@@ -199,7 +237,7 @@ describe('channel settings form: bot-wake options', () => {
       ).toBeTruthy();
     }
     // Each option sits in its own section: the list of channels after the "Channels" title and
-    // before "Pace", the follow-up window after "Pace".
+    // before "Pace", the pace choice after "Pace".
     const position = (node: HTMLElement) => (a: HTMLElement) =>
       node.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING;
     const channelsTitle = screen.getByText(en['channel.wake.section.channels']);
@@ -208,7 +246,7 @@ describe('channel settings form: bot-wake options', () => {
       position(channelsTitle)(screen.getByText(en['channel.botWakeAllowChannels'])),
     ).toBeTruthy();
     expect(position(screen.getByText(en['channel.botWakeAllowChannels']))(paceTitle)).toBeTruthy();
-    expect(position(paceTitle)(screen.getByText(en['channel.botWakeWindowSeconds']))).toBeTruthy();
+    expect(position(paceTitle)(screen.getByText(en['channel.botWakePace']))).toBeTruthy();
   });
 
   it('gives the custom instructions a text area of their own, large enough to write a prompt', () => {

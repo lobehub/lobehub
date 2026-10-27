@@ -60,7 +60,7 @@ describe('parseBotWakeSettings', () => {
   it('shows the instructions switch on in the form only for text written before it existed', () => {
     const K = BOT_WAKE_SETTING_KEYS;
 
-    expect(flattenBotWakeSettings({ [K.customInstructions]: 'billing only' })).toEqual({
+    expect(flattenBotWakeSettings({ [K.customInstructions]: 'billing only' })).toMatchObject({
       [K.customInstructions]: 'billing only',
       [K.customInstructionsEnabled]: true,
     });
@@ -71,7 +71,9 @@ describe('parseBotWakeSettings', () => {
         [K.customInstructionsEnabled]: false,
       })?.[K.customInstructionsEnabled],
     ).toBe(false);
-    expect(flattenBotWakeSettings({ [K.enabled]: true })).toEqual({ [K.enabled]: true });
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true })?.[K.customInstructionsEnabled],
+    ).toBeUndefined();
   });
 
   it('lets a confident classifier start a wake outside the window from 0.65, and 0 turns it off', () => {
@@ -247,6 +249,7 @@ describe('parseBotWakeSettings from the settings form', () => {
       enabled: 'botWakeEnabled',
       maxSilentWakes: 'botWakeMaxSilentWakes',
       ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
+      pace: 'botWakePace',
       proactiveEnabled: 'botWakeProactiveEnabled',
       proactiveThreshold: 'botWakeProactiveThreshold',
       schedulerMode: 'botWakeSchedulerMode',
@@ -294,18 +297,18 @@ describe('parseBotWakeSettings from the settings form', () => {
     expect(scheduler).toEqual({ collectMs: 40_000, cooldownMs: 90_000, mode: 'enforce' });
   });
 
-  it('keeps offering help unasked off until the owner switches it on', () => {
+  it('offers the owner help by default, until they switch it off', () => {
     expect(parseBotWakeSettings({ [K.enabled]: true }).rules.proactive).toEqual({
-      mode: 'off',
+      mode: 'enforce',
       threshold: 0.7,
     });
     expect(
-      parseBotWakeSettings({ [K.enabled]: true, [K.proactiveEnabled]: true }).rules.proactive,
-    ).toEqual({ mode: 'enforce', threshold: 0.7 });
+      parseBotWakeSettings({ [K.enabled]: true, [K.proactiveEnabled]: false }).rules.proactive,
+    ).toEqual({ mode: 'off', threshold: 0.7 });
     expect(
       parseBotWakeSettings({ [K.proactiveEnabled]: 'yes', [K.proactiveThreshold]: 3 }).rules
         .proactive,
-    ).toEqual({ mode: 'off', threshold: 0.7 });
+    ).toEqual({ mode: 'enforce', threshold: 0.7 });
   });
 
   it('lets an operator only score offering help, beside the form options', () => {
@@ -377,10 +380,15 @@ describe('parseBotWakeSettings from the settings form', () => {
 });
 
 describe('flattenBotWakeSettings', () => {
-  it('leaves settings without a nested botWake untouched', () => {
+  it('leaves settings without a nested botWake as they are, but for the pace the form shows', () => {
     const settings = { concurrency: 'queue', [BOT_WAKE_SETTING_KEYS.enabled]: true };
 
-    expect(flattenBotWakeSettings(settings)).toBe(settings);
+    expect(flattenBotWakeSettings(settings)).toEqual({
+      ...settings,
+      [BOT_WAKE_SETTING_KEYS.pace]: 'balanced',
+    });
+    const other = { concurrency: 'queue' };
+    expect(flattenBotWakeSettings(other)).toBe(other);
     expect(flattenBotWakeSettings(null)).toBeNull();
     expect(flattenBotWakeSettings(undefined)).toBeUndefined();
     for (const botWake of ['yes', [], 7]) {
@@ -420,12 +428,44 @@ describe('flattenBotWakeSettings', () => {
       [K.enabled]: true,
       [K.maxSilentWakes]: 1,
       [K.ownerPresenceSeconds]: 60,
+      // Tuned numbers: the form shows them under a custom pace.
+      [K.pace]: 'custom',
       [K.schedulerMode]: 'enforce',
       [K.scope]: 'bot-threads',
       [K.windowSeconds]: 240,
     });
     // The nested object is dropped so a save from the form migrates the row.
     expect(flattened).not.toHaveProperty('botWake');
+  });
+
+  it('shows untouched numbers as the balanced pace and tuned ones as custom', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+
+    expect(flattenBotWakeSettings({ [K.enabled]: true })?.[K.pace]).toBe('balanced');
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.schedulerMode]: 'enforce' })?.[K.pace],
+    ).toBe('custom');
+    expect(flattenBotWakeSettings({ [K.pace]: 'calm' })?.[K.pace]).toBe('calm');
+  });
+
+  it('runs a preset pace on its own numbers, and a custom or absent one on the saved numbers', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+    const tuned = { [K.enabled]: true, [K.schedulerMode]: 'enforce', [K.windowSeconds]: 90 };
+
+    const calm = parseBotWakeSettings({ ...tuned, [K.pace]: 'calm' });
+    expect(calm.rules).toMatchObject({
+      maxSilentWakes: 1,
+      ownerPresenceSeconds: 300,
+      windowSeconds: 120,
+    });
+    expect(calm.scheduler).toEqual({ collectMs: 30_000, cooldownMs: 180_000, mode: 'enforce' });
+
+    expect(parseBotWakeSettings({ ...tuned, [K.pace]: 'active' }).scheduler.mode).toBe('off');
+    for (const pace of ['custom', undefined]) {
+      const parsed = parseBotWakeSettings({ ...tuned, [K.pace]: pace });
+      expect(parsed.rules.windowSeconds).toBe(90);
+      expect(parsed.scheduler.mode).toBe('enforce');
+    }
   });
 
   it('keeps the migrated row reading the same as the nested one', () => {
@@ -438,9 +478,12 @@ describe('flattenBotWakeSettings', () => {
       },
     };
 
-    expect(parseBotWakeSettings(flattenBotWakeSettings(nested))).toEqual(
-      parseBotWakeSettings(nested),
+    // Read the same: the projection only adds what the form shows (a custom pace here).
+    const { config: _migratedConfig, ...migrated } = parseBotWakeSettings(
+      flattenBotWakeSettings(nested),
     );
+    const { config: _nestedConfig, ...original } = parseBotWakeSettings(nested);
+    expect(migrated).toEqual(original);
   });
 
   it('lets the nested values win over stale flat keys', () => {
@@ -454,7 +497,7 @@ describe('flattenBotWakeSettings', () => {
 
     // The stale flat keys are dropped too: the nested object never mentioned them, so leaving
     // them behind would switch the migrated row off on the next read.
-    expect(flattened).toEqual({ [K.enabled]: true, [K.scope]: 'none' });
+    expect(flattened).toEqual({ [K.enabled]: true, [K.pace]: 'balanced', [K.scope]: 'none' });
   });
 });
 
