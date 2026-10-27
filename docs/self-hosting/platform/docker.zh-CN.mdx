@@ -26,6 +26,10 @@ tags:
   存储服务](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
 </Callout>
 
+<Callout type="warning">
+  LobeHub 2.3 及以上需要 Agent Gateway 才能运行智能体。部署或升级前请先配置好，参见 [升级到 LobeHub 2.3：配置 Agent Gateway](/zh/docs/self-hosting/migration/v2/agent-gateway)。
+</Callout>
+
 ## 在 Linux 服务器上部署
 
 以下是在 Linux 服务器上部署 LobeHub 的流程：
@@ -44,7 +48,7 @@ tags:
   上述指令会创建一个名为 `my-postgres`，并且网络为 `pg` 的 Postgres 实例，其中 `paradedb/paradedb:latest-pg17` 是一个 Postgres 17 的镜像，且默认安装并启用了 `pgvector` 和 `pg_search` 插件。
 
   <Callout type="info">
-    ParadeDB 镜像包含了 pgvector（向量搜索）和 pg\_search（全文搜索）插件，是 LobeHub 实现 RAG 和知识库搜索的重要构件。
+    ParadeDB 镜像包含了 pgvector（向量搜索）和 pg_search（全文搜索）插件，是 LobeHub 实现 RAG 和知识库搜索的重要构件。
   </Callout>
 
   <Callout type="warning">

@@ -40,7 +40,7 @@ export const useTerminalTarget = (topicKey: string, agentId?: string): TerminalT
   const setTerminalDevice = useChatTerminalStore((s) => s.setTerminalDevice);
 
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled();
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

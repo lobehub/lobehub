@@ -57,7 +57,7 @@ Given('用户有多个对话历史', async function (this: CustomWorld) {
   // Keep the search fixture self-contained. Without a deterministic title,
   // the generic mock response becomes the topic title and the search scenario
   // only passes when another scenario happened to rename a topic on this worker.
-  llmMockManager.setResponseContaining('测试对话内容', '测试对话');
+  await llmMockManager.setResponseContaining('测试对话内容', '测试对话');
 
   // Create first conversation
   const chatInputs = this.page.locator('[data-testid="chat-input"]');

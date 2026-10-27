@@ -41,13 +41,13 @@ Given(
   { timeout: 45_000 },
   async function (this: CustomWorld) {
     console.log('   📍 Step: 设置快速 LLM mock...');
-    llmMockManager.clearResponses();
+    await llmMockManager.clearResponses();
     llmMockManager.setConfig({
       responseDelay: 0,
       streamChunkSize: 1024,
       streamDelay: 0,
     });
-    llmMockManager.setResponse('cold route home message', 'cold route response');
+    await llmMockManager.setResponse('cold route home message', 'cold route response');
     await llmMockManager.setup(this.page);
 
     console.log('   📍 Step: 注册冷路由脚本延迟...');
@@ -132,6 +132,6 @@ Then(
 
 After({ tags: '@chat-input' }, async function (this: CustomWorld) {
   llmMockManager.resetConfig();
-  llmMockManager.clearResponses();
+  await llmMockManager.clearResponses();
   this.testContext.delayColdAgentScripts = false;
 });

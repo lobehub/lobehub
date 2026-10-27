@@ -3,6 +3,7 @@ import type {
   AgentStreamSessionCompletion,
 } from '@lobechat/agent-gateway-client';
 import { type ExecAgentResult, RequestTrigger } from '@lobechat/types';
+import { t } from 'i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
@@ -213,17 +214,18 @@ describe('GatewayActionImpl', () => {
       };
     };
 
-    it('returns true when backend enables Gateway mode and the agent does not disable it', () => {
+    it('returns true when the backend configures and enables Gateway mode', () => {
       const { action } = createTestAction();
       setServerConfig({
         agentGatewayUrl: 'https://gateway.test.com',
         enableGatewayMode: true,
       });
 
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
+      expect(action.isGatewayModeEnabled()).toBe(true);
     });
 
-    it('returns false when the current agent disables Gateway mode', () => {
+    // Regression: no browser runtime to fall back to, so a legacy disableGatewayMode is ignored.
+    it('ignores a per-agent disableGatewayMode: true', () => {
       const { action } = createTestAction();
       setServerConfig({
         agentGatewayUrl: 'https://gateway.test.com',
@@ -234,10 +236,10 @@ describe('GatewayActionImpl', () => {
         agentMap: { 'agent-1': { chatConfig: { disableGatewayMode: true } } },
       };
 
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+      expect(action.isGatewayModeEnabled()).toBe(true);
     });
 
-    it('falls back to the app-level default agent config', () => {
+    it('ignores a user-default disableGatewayMode: true', () => {
       const { action } = createTestAction();
       setServerConfig({
         agentGatewayUrl: 'https://gateway.test.com',
@@ -245,7 +247,7 @@ describe('GatewayActionImpl', () => {
       });
       mockUserDefaultConfig.disableGatewayMode = true;
 
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+      expect(action.isGatewayModeEnabled()).toBe(true);
     });
 
     it('returns false when the backend does not enable Gateway mode', () => {
@@ -255,7 +257,7 @@ describe('GatewayActionImpl', () => {
         enableGatewayMode: false,
       });
 
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+      expect(action.isGatewayModeEnabled()).toBe(false);
     });
 
     it('reads serverConfig from the module store when window.global_serverConfigStore is missing', () => {
@@ -270,7 +272,7 @@ describe('GatewayActionImpl', () => {
         },
       } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
 
-      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
+      expect(action.isGatewayModeEnabled()).toBe(true);
     });
   });
 
@@ -1313,11 +1315,11 @@ describe('GatewayActionImpl', () => {
       },
       {
         disableGatewayMode: true,
-        expectedEnabled: false,
+        expectedEnabled: true,
         expectedUrl: 'https://module-gateway.test.com',
         hasWindow: true,
         moduleEnabled: true,
-        name: 'explicit execution with the user default disabled',
+        name: 'a legacy user-default disableGatewayMode (ignored)',
       },
     ])(
       'executes and reconnects using $name',
@@ -1362,7 +1364,7 @@ describe('GatewayActionImpl', () => {
         });
         vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({ token: 'resume-token' });
 
-        expect(action.isGatewayModeEnabled('agent-1')).toBe(expectedEnabled);
+        expect(action.isGatewayModeEnabled()).toBe(expectedEnabled);
         await action.executeGatewayAgent({
           context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
           message: 'Run Codex on the bound device',
@@ -1425,15 +1427,13 @@ describe('GatewayActionImpl', () => {
           } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
         }
 
-        expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+        expect(action.isGatewayModeEnabled()).toBe(false);
         await expect(
           action.executeGatewayAgent({
             context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
             message: 'Run Codex on the bound device',
           }),
-        ).rejects.toThrow(
-          '[Gateway] Cannot execute agent: serverConfig.agentGatewayUrl is missing',
-        );
+        ).rejects.toThrow(t('gateway.notConfigured', { ns: 'chat' }));
         await expect(
           action.reconnectToGatewayOperation({
             agentId: 'agent-1',

@@ -132,8 +132,7 @@ export interface LLMTrace {
 
 /**
  * Streams a model completion. Server adapter wraps `initModelRuntimeFromDB` +
- * `ModelRuntime.chat` + `consumeStreamUntilDone`; the client adapter wraps
- * `chatService.createAssistantMessageStream`.
+ * `ModelRuntime.chat` + `consumeStreamUntilDone`.
  *
  * Generalizes today's primitive `Agent.modelRuntime` hook. The adapter maps the
  * runtime payload to its provider format, so the package stays free of

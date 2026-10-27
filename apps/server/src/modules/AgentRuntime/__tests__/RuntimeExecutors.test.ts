@@ -5,6 +5,7 @@ import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime
 import type * as ModelBank from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as FeatureFlagsModule from '@/server/featureFlags';
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { HookDispatcher } from '@/server/services/agentRuntime/hooks';
@@ -13,6 +14,22 @@ import * as ClientToolDispatch from '../dispatchClientTool';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 import type { StreamEvent } from '../StreamEventManager';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+
+// These tests cover the server-side model call itself. `agent_llm_relay` is on
+// by default and would first look the provider up in the (mocked) database to
+// decide whether to relay it to a browser tab; keep the relay out of the way.
+vi.mock('@/server/featureFlags', async (importOriginal) => {
+  const actual = await importOriginal<typeof FeatureFlagsModule>();
+  return {
+    ...actual,
+    getServerFeatureFlagsStateFromRuntimeConfig: async (
+      ...args: Parameters<typeof actual.getServerFeatureFlagsStateFromRuntimeConfig>
+    ) => ({
+      ...(await actual.getServerFeatureFlagsStateFromRuntimeConfig(...args)),
+      enableLlmRelay: false,
+    }),
+  };
+});
 
 type PublishedStreamEvent = Omit<StreamEvent, 'operationId' | 'timestamp'>;
 type PublishStreamEventCall = [string, PublishedStreamEvent];

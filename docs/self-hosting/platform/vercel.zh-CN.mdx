@@ -23,6 +23,10 @@ tags:
   - 配置服务端数据库所需要的环境变量时，需全部填入后再进行部署，否则可能遭遇数据库迁移问题！
 </Callout>
 
+<Callout type="warning">
+  LobeHub 2.3 及以上需要 Agent Gateway 才能运行智能体，在 Vercel 上还需要开启队列模式（Upstash QStash 和 Redis）。部署或升级前请先配置好，参见 [升级到 LobeHub 2.3：配置 Agent Gateway](/zh/docs/self-hosting/migration/v2/agent-gateway)。
+</Callout>
+
 ## 一、 配置数据库
 
 <Steps>

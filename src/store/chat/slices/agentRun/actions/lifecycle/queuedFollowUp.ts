@@ -73,7 +73,7 @@ export const scheduleQueuedFollowUp = (
     }
 
     sendQueuedMessages(get, execContext, remainingQueued).catch((error: unknown) => {
-      console.error('[executeClientAgent] sendMessage for queued content failed:', error);
+      console.error('[queuedFollowUp] sendMessage for queued content failed:', error);
     });
   }, 100);
 };

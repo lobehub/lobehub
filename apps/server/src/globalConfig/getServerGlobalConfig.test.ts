@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 interface MockGlobalConfigOptions {
   agentGatewayProtocol?: number;
+  agentGatewayServiceToken?: string;
   agentGatewayUrl?: string;
   appUrl?: string;
   enableAgentGateway?: boolean;
@@ -45,6 +46,9 @@ const mockGlobalConfigDependencies = (
         ? {}
         : { AGENT_GATEWAY_PROTOCOL: options.agentGatewayProtocol }),
       ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
+      ...(options.agentGatewayServiceToken
+        ? { AGENT_GATEWAY_SERVICE_TOKEN: options.agentGatewayServiceToken }
+        : {}),
       ...(options.appUrl ? { APP_URL: options.appUrl } : {}),
       ...(options.enableAgentGateway === undefined
         ? {}
@@ -182,6 +186,7 @@ describe('getServerGlobalConfig', () => {
   it('should enable gateway mode for self-hosted builds only when explicitly enabled with a gateway url', async () => {
     await expect(
       loadServerConfig(false, {
+        agentGatewayServiceToken: 'secret',
         agentGatewayUrl: 'https://gateway.test.com',
         enableAgentGateway: true,
       }),
@@ -205,12 +210,27 @@ describe('getServerGlobalConfig', () => {
     });
   });
 
+  // Without the service token the server never wraps its stream manager with the
+  // Gateway notifier, so a Gateway-mode run would start but never reach the client.
+  it('should keep gateway mode off for self-hosted builds missing the service token', async () => {
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: false,
+    });
+  });
+
   it('should declare gateway protocol 2 only where the v2 socket exists', async () => {
     // The business gateway serves `/v2/ws`; `lobehub/lobehub-gateway`, which is
     // what a self-hosted deployment runs, serves only `/ws`.
     await expect(loadServerConfig(true)).resolves.toMatchObject({ agentGatewayProtocol: 2 });
     await expect(
       loadServerConfig(false, {
+        agentGatewayServiceToken: 'secret',
         agentGatewayUrl: 'https://gateway.test.com',
         enableAgentGateway: true,
       }),
@@ -221,6 +241,7 @@ describe('getServerGlobalConfig', () => {
     await expect(
       loadServerConfig(false, {
         agentGatewayProtocol: 2,
+        agentGatewayServiceToken: 'secret',
         agentGatewayUrl: 'https://gateway.test.com',
         enableAgentGateway: true,
       }),

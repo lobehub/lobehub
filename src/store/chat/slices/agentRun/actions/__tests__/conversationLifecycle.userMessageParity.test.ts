@@ -4,11 +4,10 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { aiChatService } from '@/services/aiChat';
 import { getSessionStoreState } from '@/store/session';
 
 import { useChatStore } from '../../../../store';
-import { createMockAgentConfig, createMockMessage, TEST_IDS } from './fixtures';
+import { createMockAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
 vi.mock('@/libs/trpc/client', () => ({
@@ -29,34 +28,12 @@ const editorData = {
 
 /**
  * Run settings travel beside the user message on the gateway request (the
- * server derives and validates them itself), so they are the only metadata a
- * client-runtime row may carry that the gateway `userMessage` does not.
+ * server derives and validates them itself), so they are the only metadata of
+ * a send the `userMessage` payload does not have to carry.
  */
 const RUN_SETTING_KEYS = new Set<keyof MessageMetadata>(['steer', 'trigger']);
 
 type SendParams = Parameters<ReturnType<typeof useChatStore.getState>['sendMessage']>[0];
-
-const sendThroughClientRuntime = async (params: SendParams) => {
-  const { result } = renderHook(() => useChatStore());
-  const sendMessageInServer = vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-    assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-    messages: [
-      createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-      createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-    ],
-    topicId: TEST_IDS.TOPIC_ID,
-    userMessageId: TEST_IDS.USER_MESSAGE_ID,
-  } as any);
-  act(() => {
-    useChatStore.setState({ executeClientAgent: vi.fn(), isGatewayModeEnabled: () => false });
-  });
-
-  await act(async () => {
-    await result.current.sendMessage(params);
-  });
-
-  return sendMessageInServer.mock.calls[0][0].newUserMessage;
-};
 
 const sendThroughGateway = async (params: SendParams) => {
   const { result } = renderHook(() => useChatStore());
@@ -89,17 +66,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('sendMessage: the gateway persists the user message a client-runtime send persists', () => {
+describe('sendMessage: the gateway request carries the whole composer user message', () => {
   // ROOT CAUSE:
   //
-  // A gateway send never calls `sendMessageInServer`: the server builds the user
-  // row from the `execAgent` request, which carried only the fields someone had
-  // remembered to wire one by one. Attached quotes, then queued follow-ups'
-  // quotes and rich text, were each dropped there, and the persisted row
-  // replaced an optimistic one that still showed them.
+  // The server builds the user row from the `execAgent` request, which carried
+  // only the fields someone had remembered to wire one by one. Attached quotes,
+  // then queued follow-ups' quotes and rich text, were each dropped there, and
+  // the persisted row replaced an optimistic one that still showed them.
   //
-  // Both transports now take the user message from the same metadata object, so
-  // this compares them field by field instead of listing fields.
+  // The request now takes the user message from the same metadata object the
+  // composer produces, so every key it carries must have a gateway path and
+  // reach the payload unchanged. (The browser client runtime that used to
+  // persist the row itself is gone, so there is no second transport to compare
+  // against.)
   it.each<[string, SendParams]>([
     [
       'a composer send with an attached quote and rich text',
@@ -115,29 +94,27 @@ describe('sendMessage: the gateway persists the user message a client-runtime se
       },
     ],
   ])('%s', async (_label, params) => {
-    const clientRow = await sendThroughClientRuntime(params);
-    vi.restoreAllMocks();
-    resetTestEnvironment();
-    setupMockSelectors();
-    spyOnMessageService();
-    vi.spyOn(getSessionStoreState(), 'triggerSessionUpdate').mockResolvedValue(undefined);
-    vi.spyOn(agentService, 'getAgentConfigById').mockResolvedValue(createMockAgentConfig() as any);
     const gatewayRequest = await sendThroughGateway(params);
 
-    const clientMetadata = (clientRow.metadata ?? {}) as MessageMetadata;
     const gatewayMetadata = (gatewayRequest.userMessage?.metadata ?? {}) as MessageMetadata;
+    const metadataGiven = (params.metadata ?? {}) as MessageMetadata;
 
-    // Every field the client-runtime row carries reaches the gateway row,
-    // unless it is a run setting the request carries separately.
-    for (const key of Object.keys(clientMetadata) as (keyof MessageMetadata)[]) {
+    // Every metadata key the send carries has a gateway path, unless it is a
+    // run setting the request carries separately.
+    for (const key of new Set<keyof MessageMetadata>([
+      ...(Object.keys(gatewayMetadata) as (keyof MessageMetadata)[]),
+      ...(Object.keys(metadataGiven) as (keyof MessageMetadata)[]),
+    ])) {
       if (RUN_SETTING_KEYS.has(key)) continue;
       expect(COMPOSER_USER_MESSAGE_METADATA_KEYS, `metadata.${key} has no gateway path`).toContain(
         key,
       );
-      expect(gatewayMetadata[key], `metadata.${key}`).toEqual(clientMetadata[key]);
     }
-    expect(gatewayRequest.userMessage?.editorData).toEqual(clientRow.editorData);
-    expect(gatewayMetadata.contextSelections?.length).toBe(1);
+    // What the user attached reaches the row the server persists.
+    expect(gatewayRequest.userMessage?.editorData).toEqual(editorData);
+    expect(gatewayMetadata.contextSelections).toEqual(
+      params.contextSelections ?? metadataGiven.contextSelections,
+    );
   });
 
   it('sends no user message payload for a plain-text send', async () => {

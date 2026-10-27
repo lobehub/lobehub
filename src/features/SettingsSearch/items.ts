@@ -13,7 +13,6 @@ export interface SettingsSearchContext {
   disableEmailPassword: boolean;
   enableBusinessFeatures: boolean;
   enableComposio: boolean;
-  enableGatewayMode: boolean;
   /** Workspaces are available to this user */
   enableWorkspace: boolean;
   /** Whether the signed-in user has an email on their profile */
@@ -433,14 +432,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['developer', 'debug', 'dev mode'],
     labelKey: 'settingCommon.devMode.title',
     tab: SettingsTabs.Advanced,
-  },
-  {
-    anchor: 'advanced-gateway-mode',
-    descKey: 'tab.advanced.gatewayMode.desc',
-    keywords: ['gateway', 'agent runtime'],
-    labelKey: 'tab.advanced.gatewayMode.title',
-    tab: SettingsTabs.Advanced,
-    visible: (ctx) => ctx.enableGatewayMode,
   },
   {
     anchor: 'advanced-update-channel',

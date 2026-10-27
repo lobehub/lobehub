@@ -193,6 +193,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  // Regression: with the browser runtime removed, relaying is the only path to a
+  // device-only provider, so a deployment that sets nothing must have it on.
+  it('should enable the LLM relay by default and still allow turning it off', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_llm_relay).toBe(true);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableLlmRelay).toBe(true);
+    expect(
+      mapFeatureFlagsEnvToState({ ...DEFAULT_FEATURE_FLAGS, agent_llm_relay: false }, 'user-1')
+        .enableLlmRelay,
+    ).toBe(false);
+  });
+
   it('should gate the mobile gateway mux independently from the Web flag', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(

@@ -1,11 +1,4 @@
-import { PLUGIN_SCHEMA_API_MD5_PREFIX, PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const';
-import { ToolNameResolver } from '@lobechat/context-engine';
-import type {
-  BuiltinToolContext,
-  ChatToolPayload,
-  MessageToolCall,
-  UIChatMessage,
-} from '@lobechat/types';
+import type { BuiltinToolContext, ChatToolPayload, UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -473,209 +466,51 @@ describe('ChatPluginAction', () => {
       expect(capturedContext?.toolCallId).toBe('tool-call-1');
     });
 
-    describe('registerAfterCompletion with Tool Store executor', () => {
-      it('should create registerAfterCompletion when root execAgentRuntime operation exists', async () => {
-        // Mock hasExecutor to return true
-        const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
-        vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);
+    it('should not inject removed client-runtime hooks into the tool context', async () => {
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);
 
-        // Setup: Create operation hierarchy
-        // execAgentRuntime -> toolCalling -> executeToolCall
-        const { result } = renderHook(() => useChatStore());
+      const { result } = renderHook(() => useChatStore());
+      const messageId = 'tool-message-id';
 
-        let execAgentRuntimeOpId: string;
-        let toolCallingOpId: string;
-        let executeToolOpId: string;
-        const messageId = 'tool-message-id';
+      act(() => {
+        const rootOperationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1' },
+        }).operationId;
 
-        act(() => {
-          // Create root operation
-          execAgentRuntimeOpId = result.current.startOperation({
-            type: 'execAgentRuntime',
-            context: { agentId: 'session1' },
-          }).operationId;
+        const toolOperationId = result.current.startOperation({
+          type: 'executeToolCall',
+          context: { messageId },
+          parentOperationId: rootOperationId,
+        }).operationId;
 
-          // Create toolCalling child
-          toolCallingOpId = result.current.startOperation({
-            type: 'toolCalling',
-            parentOperationId: execAgentRuntimeOpId,
-          }).operationId;
-
-          // Create executeToolCall grandchild
-          executeToolOpId = result.current.startOperation({
-            type: 'executeToolCall',
-            context: { messageId },
-            parentOperationId: toolCallingOpId,
-          }).operationId;
-
-          // Associate message with executeToolCall operation
-          result.current.associateMessageWithOperation(messageId, executeToolOpId);
-        });
-
-        // Verify the operation hierarchy is set up correctly
-        expect(result.current.operations[execAgentRuntimeOpId!].type).toBe('execAgentRuntime');
-        expect(result.current.operations[toolCallingOpId!].parentOperationId).toBe(
-          execAgentRuntimeOpId!,
-        );
-        expect(result.current.operations[executeToolOpId!].parentOperationId).toBe(
-          toolCallingOpId!,
-        );
-
-        // Mock Tool Store's invokeBuiltinTool to capture the context
-        let capturedContext: any;
-        vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
-          async (_id, _api, _params, ctx) => {
-            capturedContext = ctx;
-            return { success: true };
-          },
-        );
-
-        const payload = {
-          identifier: 'lobe-group-management',
-          apiName: 'speak',
-          arguments: JSON.stringify({ agentId: 'agent-1' }),
-          type: 'builtin',
-        } as ChatToolPayload;
-
-        await act(async () => {
-          await result.current.invokeBuiltinTool(messageId, payload);
-        });
-
-        // Verify registerAfterCompletion was passed to Tool Store
-        expect(capturedContext).toBeDefined();
-        expect(capturedContext.registerAfterCompletion).toBeDefined();
-        expect(typeof capturedContext.registerAfterCompletion).toBe('function');
-
-        // Call registerAfterCompletion and verify it registers to root operation
-        const mockCallback = vi.fn();
-        act(() => {
-          capturedContext.registerAfterCompletion(mockCallback);
-        });
-
-        // The callback should be registered on the root execAgentRuntime operation
-        const rootOp = result.current.operations[execAgentRuntimeOpId!];
-        expect(rootOp).toBeDefined();
-        expect(rootOp.metadata.runtimeHooks?.afterCompletionCallbacks).toHaveLength(1);
-        expect(rootOp.metadata.runtimeHooks?.afterCompletionCallbacks?.[0]).toBe(mockCallback);
+        result.current.associateMessageWithOperation(messageId, toolOperationId);
       });
 
-      it('should not pass registerAfterCompletion when no root operation exists', async () => {
-        // Mock hasExecutor to return true
-        const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
-        vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);
+      let capturedContext: Record<string, unknown> | undefined;
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        async (_id, _api, _params, ctx) => {
+          capturedContext = ctx as unknown as Record<string, unknown>;
+          return { success: true };
+        },
+      );
 
-        const { result } = renderHook(() => useChatStore());
-        const messageId = 'tool-message-id';
+      const payload = {
+        identifier: 'lobe-group-management',
+        apiName: 'speak',
+        arguments: JSON.stringify({ agentId: 'agent-1' }),
+        type: 'builtin',
+      } as ChatToolPayload;
 
-        // No operations created - simulate standalone tool invocation
-
-        // Mock Tool Store's invokeBuiltinTool to capture the context
-        let capturedContext: any;
-        vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
-          async (_id, _api, _params, ctx) => {
-            capturedContext = ctx;
-            return { success: true };
-          },
-        );
-
-        const payload = {
-          identifier: 'lobe-group-management',
-          apiName: 'speak',
-          arguments: JSON.stringify({ agentId: 'agent-1' }),
-          type: 'builtin',
-        } as ChatToolPayload;
-
-        await act(async () => {
-          await result.current.invokeBuiltinTool(messageId, payload);
-        });
-
-        // registerAfterCompletion should be undefined when no operation context
-        expect(capturedContext).toBeDefined();
-        expect(capturedContext.registerAfterCompletion).toBeUndefined();
+      await act(async () => {
+        await result.current.invokeBuiltinTool(messageId, payload);
       });
 
-      it('should find root operation through multiple levels of hierarchy', async () => {
-        // Mock hasExecutor to return true
-        const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
-        vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);
-
-        const { result } = renderHook(() => useChatStore());
-
-        let execAgentRuntimeOpId: string;
-        let level1OpId: string;
-        let level2OpId: string;
-        let level3OpId: string;
-        const messageId = 'deep-tool-message-id';
-
-        act(() => {
-          // Create deep hierarchy: execAgentRuntime -> level1 -> level2 -> level3
-          execAgentRuntimeOpId = result.current.startOperation({
-            type: 'execAgentRuntime',
-            context: { agentId: 'session1' },
-          }).operationId;
-
-          level1OpId = result.current.startOperation({
-            type: 'callLLM',
-            parentOperationId: execAgentRuntimeOpId,
-          }).operationId;
-
-          level2OpId = result.current.startOperation({
-            type: 'toolCalling',
-            parentOperationId: level1OpId,
-          }).operationId;
-
-          level3OpId = result.current.startOperation({
-            type: 'executeToolCall',
-            context: { messageId },
-            parentOperationId: level2OpId,
-          }).operationId;
-
-          result.current.associateMessageWithOperation(messageId, level3OpId);
-        });
-
-        let capturedContext: any;
-        vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
-          async (_id, _api, _params, ctx) => {
-            capturedContext = ctx;
-            return { success: true };
-          },
-        );
-
-        const payload = {
-          identifier: 'lobe-group-management',
-          apiName: 'speak',
-          arguments: JSON.stringify({ agentId: 'agent-1' }),
-          type: 'builtin',
-        } as ChatToolPayload;
-
-        await act(async () => {
-          await result.current.invokeBuiltinTool(messageId, payload);
-        });
-
-        // Should still find the root operation
-        expect(capturedContext.registerAfterCompletion).toBeDefined();
-
-        const mockCallback = vi.fn();
-        act(() => {
-          capturedContext.registerAfterCompletion(mockCallback);
-        });
-
-        // Callback should be on root execAgentRuntime, not any intermediate level
-        expect(result.current.operations[execAgentRuntimeOpId!]).toBeDefined();
-        expect(
-          result.current.operations[execAgentRuntimeOpId!].metadata.runtimeHooks
-            ?.afterCompletionCallbacks,
-        ).toHaveLength(1);
-        expect(
-          result.current.operations[level1OpId!].metadata.runtimeHooks?.afterCompletionCallbacks,
-        ).toBeUndefined();
-        expect(
-          result.current.operations[level2OpId!].metadata.runtimeHooks?.afterCompletionCallbacks,
-        ).toBeUndefined();
-        expect(
-          result.current.operations[level3OpId!].metadata.runtimeHooks?.afterCompletionCallbacks,
-        ).toBeUndefined();
-      });
+      expect(capturedContext).toBeDefined();
+      expect(capturedContext).not.toHaveProperty('registerAfterCompletion');
+      expect(capturedContext).not.toHaveProperty('groupOrchestration');
+      expect(capturedContext).not.toHaveProperty('subAgent');
     });
   });
 
@@ -729,174 +564,6 @@ describe('ChatPluginAction', () => {
       //   expect.objectContaining({ tools: expect.any(Array) }),
       // );
       expect(result.current.refreshMessages).toHaveBeenCalled();
-    });
-  });
-
-  describe('internal_transformToolCalls', () => {
-    it('should transform tool calls correctly', () => {
-      const toolCalls: MessageToolCall[] = [
-        {
-          id: 'tool1',
-          function: {
-            name: ['plugin1', 'api1', 'default'].join(PLUGIN_SCHEMA_SEPARATOR),
-            arguments: '{}',
-          },
-          type: 'function',
-        },
-        {
-          id: 'tool2',
-          function: {
-            name: ['plugin2', 'api2', 'markdown'].join(PLUGIN_SCHEMA_SEPARATOR),
-            arguments: '{}',
-          },
-          type: 'function',
-        },
-      ];
-
-      const { result } = renderHook(() => useChatStore());
-
-      const transformed = result.current.internal_transformToolCalls(toolCalls);
-
-      expect(transformed).toEqual([
-        {
-          id: 'tool1',
-          identifier: 'plugin1',
-          apiName: 'api1',
-          type: 'default',
-          arguments: '{}',
-        },
-        {
-          id: 'tool2',
-          identifier: 'plugin2',
-          apiName: 'api2',
-          type: 'markdown',
-          arguments: '{}',
-        },
-      ]);
-    });
-
-    it('should handle MD5 hashed API names', () => {
-      const resolver = new ToolNameResolver();
-      // Generate a very long name to force MD5 hashing
-      const longApiName =
-        'very-long-action-name-that-will-cause-the-total-length-to-exceed-64-characters';
-      const toolName = resolver.generate('plugin1', longApiName, 'default');
-
-      // Extract the MD5 part from the generated name
-      const parts = toolName.split(PLUGIN_SCHEMA_SEPARATOR);
-      const md5Hash = parts[1].replace(PLUGIN_SCHEMA_API_MD5_PREFIX, '');
-
-      const toolCalls: MessageToolCall[] = [
-        {
-          id: 'tool1',
-          function: {
-            name: ['plugin1', PLUGIN_SCHEMA_API_MD5_PREFIX + md5Hash, 'default'].join(
-              PLUGIN_SCHEMA_SEPARATOR,
-            ),
-            arguments: '{}',
-          },
-          type: 'function',
-        },
-      ];
-
-      act(() => {
-        useToolStore.setState({
-          installedPlugins: [
-            {
-              type: 'plugin',
-              identifier: 'plugin1',
-              manifest: {
-                identifier: 'plugin1',
-                api: [
-                  {
-                    name: longApiName,
-                    parameters: { type: 'object', properties: {} },
-                    description: 'abc',
-                  },
-                ],
-                type: 'default',
-              } as any,
-            },
-          ],
-        });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      const transformed = result.current.internal_transformToolCalls(toolCalls);
-
-      expect(transformed[0].apiName).toBe(longApiName);
-    });
-
-    it('should repair malformed JSON arguments with escaped string issue', () => {
-      // This is the malformed data from haiku-4.5 model
-      // The entire JSON got stuffed into the "description" field with escaped quotes
-      const malformedArguments = JSON.stringify({
-        description:
-          'Synthesize all 10 batch analyses into 10 most important themes for product builders", "instruction": "You have access to 10 batch analysis files", "runInClient": true, "timeout": 120000}',
-      });
-
-      const toolCalls: MessageToolCall[] = [
-        {
-          id: 'tool1',
-          function: {
-            name: ['lobe-agent', 'callSubAgent', 'default'].join(PLUGIN_SCHEMA_SEPARATOR),
-            arguments: malformedArguments,
-          },
-          type: 'function',
-        },
-      ];
-
-      // Setup builtin tool manifest with schema that has required fields
-      act(() => {
-        useToolStore.setState({
-          builtinTools: [
-            {
-              type: 'builtin',
-              identifier: 'lobe-agent',
-              manifest: {
-                identifier: 'lobe-agent',
-                api: [
-                  {
-                    name: 'callSubAgent',
-                    description: 'Dispatch a sub-agent',
-                    parameters: {
-                      type: 'object',
-                      required: ['description', 'instruction'],
-                      properties: {
-                        description: { type: 'string' },
-                        instruction: { type: 'string' },
-                        runInClient: { type: 'boolean' },
-                        timeout: { type: 'number' },
-                      },
-                    },
-                  },
-                ],
-                type: 'builtin',
-              } as any,
-            },
-          ],
-        });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      const transformed = result.current.internal_transformToolCalls(toolCalls);
-
-      // Parse the transformed arguments
-      const repairedArgs = JSON.parse(transformed[0].arguments);
-
-      // Verify all fields are correctly extracted
-      expect(repairedArgs).toHaveProperty('description');
-      expect(repairedArgs).toHaveProperty('instruction');
-      expect(repairedArgs).toHaveProperty('runInClient', true);
-      expect(repairedArgs).toHaveProperty('timeout', 120000);
-
-      // Verify description is the correct short value, not the entire malformed string
-      expect(repairedArgs.description).toBe(
-        'Synthesize all 10 batch analyses into 10 most important themes for product builders',
-      );
-      expect(repairedArgs.instruction).toBe('You have access to 10 batch analysis files');
     });
   });
 

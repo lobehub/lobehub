@@ -186,10 +186,6 @@ describe('task run terminal reconciliation', () => {
     vi.useFakeTimers();
     const root = await reconnect();
     const send = vi.spyOn(useChatStore.getState(), 'sendMessage').mockResolvedValue(undefined);
-    const hook = vi.fn();
-    useChatStore
-      .getState()
-      .updateOperationMetadata(root.id, { runtimeHooks: { afterCompletionCallbacks: [hook] } });
     useChatStore.getState().enqueueMessage(messageMapKey(context), {
       content: 'queued follow-up',
       createdAt: Date.now(),
@@ -210,7 +206,7 @@ describe('task run terminal reconciliation', () => {
       runScope: 'top_level',
       runtimeType: 'gateway',
     });
-    await lifecycle.completeRun({
+    const { requeued } = await lifecycle.completeRun({
       context,
       operationId: root.id,
       runId: root.id,
@@ -218,7 +214,7 @@ describe('task run terminal reconciliation', () => {
       runtimeType: 'gateway',
       status: 'completed',
     });
-    expect(hook).not.toHaveBeenCalled();
+    expect(requeued).toBe(false);
     expect(send).toHaveBeenCalledOnce();
   });
 

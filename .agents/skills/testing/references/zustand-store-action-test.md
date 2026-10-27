@@ -25,7 +25,7 @@ beforeEach(() => {
   act(() => {
     useChatStore.setState({
       refreshMessages: vi.fn(),
-      internal_coreProcessMessage: vi.fn(),
+      executeGatewayAgent: vi.fn().mockResolvedValue({ operationId: 'gateway-op' }),
     });
   });
 });
@@ -40,29 +40,30 @@ afterEach(() => {
 ### 1. Spy Direct Dependencies Only
 
 ```typescript
-// ✅ Good: Spy on direct dependency
-const fetchAIChatSpy = vi.spyOn(result.current, 'internal_fetchAIChatMessage')
-  .mockResolvedValue({ isFunctionCall: false, content: 'AI response' });
+// ✅ Good: stub the store action the code under test calls directly.
+// `sendMessage` hands every agent run to `executeGatewayAgent`.
+const executeGatewayAgent = vi.fn().mockResolvedValue({ operationId: 'gateway-op' });
+act(() => {
+  useChatStore.setState({ executeGatewayAgent, isGatewayModeEnabled: () => true });
+});
 
-// ❌ Bad: Spy on lower-level implementation
-const streamSpy = vi.spyOn(chatService, 'createAssistantMessageStream')
-  .mockImplementation(...);
+// ❌ Bad: mock what sits below it (the tRPC service, the WebSocket client)
+vi.spyOn(aiAgentService, 'execAgentTask').mockImplementation(...);
 ```
 
 ### 2. Minimize Global Spies
 
 ```typescript
 // ✅ Spy only when needed
-it('should process message', async () => {
-  const streamSpy = vi.spyOn(chatService, 'createAssistantMessageStream')
-    .mockImplementation(...);
+it('should start a gateway run', async () => {
+  const execSpy = vi.spyOn(aiAgentService, 'execAgentTask').mockResolvedValue(...);
   // test logic
-  streamSpy.mockRestore();
+  execSpy.mockRestore();
 });
 
 // ❌ Don't setup all spies globally
 beforeEach(() => {
-  vi.spyOn(chatService, 'createAssistantMessageStream').mockResolvedValue({});
+  vi.spyOn(aiAgentService, 'execAgentTask').mockResolvedValue({} as any);
   vi.spyOn(fileService, 'uploadFile').mockResolvedValue({});
 });
 ```
@@ -98,26 +99,48 @@ describe('sendMessage', () => {
 });
 ```
 
-## Streaming Response Mock
+## Agent Run Mock (gateway)
+
+Every agent run executes on the server and streams back over the Agent Gateway, so a
+chat-store test stubs `executeGatewayAgent` at the store boundary. Keep the stub true to
+the contract the caller relies on: complete the parent operation and echo the client ids.
 
 ```typescript
-it('should handle streaming chunks', async () => {
-  const { result } = renderHook(() => useChatStore());
+const mockGatewayAgent = (impl?: (params: any) => Promise<any>) => {
+  const executeGatewayAgent = vi.fn(
+    impl ??
+      (async (params: any) => {
+        useChatStore.getState().completeOperation(params.parentOperationId);
+        return {
+          assistantMessageId: params.clientIds.assistantMessageId,
+          operationId: 'gateway-op',
+          topicId: params.clientIds.topicId ?? params.context.topicId ?? undefined,
+          userMessageId: params.clientIds.userMessageId,
+        };
+      }),
+  );
+  act(() => {
+    useChatStore.setState({ executeGatewayAgent, isGatewayModeEnabled: () => true });
+  });
+  return executeGatewayAgent;
+};
 
-  const streamSpy = vi.spyOn(chatService, 'createAssistantMessageStream')
-    .mockImplementation(async ({ onMessageHandle, onFinish }) => {
-      await onMessageHandle?.({ type: 'text', text: 'Hello' } as any);
-      await onMessageHandle?.({ type: 'text', text: ' World' } as any);
-      await onFinish?.('Hello World', {});
-    });
+it('hands the turn to the gateway', async () => {
+  const { result } = renderHook(() => useChatStore());
+  const executeGatewayAgent = mockGatewayAgent();
 
   await act(async () => {
-    await result.current.internal_fetchAIChatMessage({...});
+    await result.current.sendMessage({ message: 'Hello', context: { agentId, topicId: null } });
   });
 
-  streamSpy.mockRestore();
+  expect(executeGatewayAgent).toHaveBeenCalledOnce();
 });
 ```
+
+- Full helper: `mockGatewayAgent` in `src/store/chat/slices/agentRun/actions/__tests__/conversationLifecycle.test.ts`
+- Streamed events (text chunks, tool calls, `uiMessages` snapshots) are handled by the gateway
+  transport; test that layer in `src/store/chat/slices/agentRun/actions/__tests__/gateway.test.ts`
+  by feeding events, not by mocking an LLM stream in the browser
 
 ## Fetch Hook Testing
 

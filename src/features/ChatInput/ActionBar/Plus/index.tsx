@@ -6,7 +6,6 @@ import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   CheckIcon,
   ChevronRight,
-  Cloud,
   FileUp,
   LibraryBig,
   PlusIcon,
@@ -18,9 +17,7 @@ import type { ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { imageUrl } from '@/const/url';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
-import { useIsDark } from '@/hooks/useIsDark';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
@@ -28,19 +25,14 @@ import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import {
-  featureFlagsSelectors,
-  serverConfigSelectors,
-  useServerConfigStore,
-} from '@/store/serverConfig';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
-import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
@@ -98,39 +90,6 @@ const countChip = css`
   color: ${cssVar.colorTextSecondary};
 
   background: ${cssVar.colorFillSecondary};
-`;
-
-const gatewayModeInfoCard = css`
-  overflow: hidden;
-  width: 280px;
-  border-radius: 8px;
-
-  .cover {
-    display: block;
-
-    width: 100%;
-    height: 148px;
-
-    object-fit: cover;
-    background: ${cssVar.colorFillTertiary};
-  }
-
-  .body {
-    padding: 12px;
-  }
-
-  .title {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.35;
-  }
-
-  .desc {
-    margin-block-start: 6px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  }
 `;
 
 type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
@@ -230,20 +189,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
-  const isDark = useIsDark();
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
 
   // Goal creation is lab-gated while the product surface is being rolled out.
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
-  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
-  const defaultDisableGatewayMode = useUserStore(
-    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
-  );
 
   const { model, provider } = useEffectiveModel(agentId);
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
@@ -259,10 +212,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
-  const disableGatewayMode = useAgentStore(
-    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
-  );
-  const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
@@ -291,13 +240,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     marketItems: skillItems,
     pinnedCount: skillPinnedCount,
   } = useToolsControls({ closeDropdown });
-
-  const handleToggleGatewayMode = useCallback(
-    async (checked: boolean) => {
-      await updateAgentChatConfig({ disableGatewayMode: checked ? false : true });
-    },
-    [updateAgentChatConfig],
-  );
 
   const handleToggleParams = useCallback(() => {
     close();
@@ -328,20 +270,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       ) : (
         label
       );
-
-    const gatewayModeInfo = (
-      <div className={cx(gatewayModeInfoCard)}>
-        <img
-          alt=""
-          className="cover"
-          src={imageUrl(isDark ? 'agent_gateway_dark.webp' : 'agent_gateway_light.webp')}
-        />
-        <div className="body">
-          <div className="title">{t('gatewayMode.cardTitle')}</div>
-          <div className="desc">{t('gatewayMode.desc')}</div>
-        </div>
-      </div>
-    );
 
     // The row detail card and the "..." policy menu anchor to the same right edge,
     // so leaving hover live lets a neighbouring row's card open on top of the menu
@@ -419,30 +347,13 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
           ]
         : [];
 
-    // Agent Gateway sits below the formatting toolbar (grouped with advanced
-    // params), gated on the resource-configuration permission.
-    const gatewayItem: ActionDropdownMenuItems =
-      canConfigureResource && enableGatewayMode
-        ? [
-            {
-              checked: isGatewayModeEnabled,
-              icon: Cloud,
-              key: 'gateway-mode',
-              // Brand name — same in every language, so no i18n.
-              label: <PopoverLabel label={'Agent Gateway'} popoverContent={gatewayModeInfo} />,
-              onCheckedChange: handleToggleGatewayMode,
-              type: 'switch',
-            } as ActionDropdownMenuItems[number],
-          ]
-        : [];
-
     // Memory and web search are activation entries of the Tools popover now: they
     // live in its "Auto" group, can be disabled there, and carry their own settings,
     // so this menu only owns the route to them.
     const coreItems: ActionDropdownMenuItems = canConfigureResource ? [...toolsItems] : [];
 
-    // Formatting toolbar is always available; Agent Gateway + advanced params
-    // only when the user can configure resources.
+    // Formatting toolbar is always available; advanced params only when the
+    // user can configure resources.
     const formatItems: ActionDropdownMenuItems = [
       // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
       {
@@ -453,8 +364,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
         type: 'switch',
       },
-      // Agent Gateway directly below the formatting toolbar.
-      ...gatewayItem,
       // Advanced parameter settings — only when resources can be configured.
       ...(canConfigureResource
         ? [
@@ -520,7 +429,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       : [];
 
     // Grouped with a single divider only between non-empty groups:
-    // [attachments] | [memory · search · skills] | [set goal] | [formatting · gateway · params]
+    // [attachments] | [memory · search · skills] | [set goal] | [formatting · params]
     const menuGroups: ActionDropdownMenuItems[] = [
       attachmentsItems,
       coreItems,
@@ -539,13 +448,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     canUploadAudio,
     editor,
     enableFC,
-    enableGatewayMode,
     enableKnowledgeBase,
-    handleToggleGatewayMode,
     handleToggleParams,
     isAgentModeEnabled,
-    isDark,
-    isGatewayModeEnabled,
     isParamsPanelActive,
     isSkillPolicyMenuOpen,
     knowledgeEnabledCount,

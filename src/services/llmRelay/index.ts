@@ -68,8 +68,8 @@ const waitForProviderRuntimeState = () => {
  * request.
  */
 export const oneShotRelay = new OneShotRelay({
-  // `llmRelayAvailable`: the server can relay (gateway + Redis); otherwise it
-  // would call a device-only provider itself, so keep the browser path.
+  // `llmRelayAvailable`: the server can relay (gateway + Redis); otherwise the
+  // server calls a device-only provider itself (there is no browser path).
   isAvailable: () => {
     const serverConfig = getConfigState()?.serverConfig;
     return (

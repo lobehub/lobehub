@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
-import * as agentStore from '@/store/agent';
 import * as serverConfigStore from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
 
 import {
   readConversationMessageListPage,
   readConversationMessages,
 } from './conversationMessageRead';
 
-const mockGatewayMode = ({
-  gatewayMode,
+const mockServerConfig = ({
+  gatewayMode = true,
   protocolV2 = true,
 }: {
-  gatewayMode: boolean;
+  gatewayMode?: boolean;
   protocolV2?: boolean;
 }) => {
   vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
@@ -24,16 +22,11 @@ const mockGatewayMode = ({
       ...(gatewayMode && { agentGatewayUrl: 'https://gateway.test', enableGatewayMode: true }),
     },
   } as unknown as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
-  vi.spyOn(agentStore, 'getAgentStoreState').mockReturnValue({
-    activeAgentId: 'agent-1',
-    agentMap: { 'agent-1': { chatConfig: {} } },
-  } as unknown as ReturnType<typeof agentStore.getAgentStoreState>);
-  useUserStore.setState({ settings: {} } as never);
 };
 
 describe('readConversationMessages', () => {
-  it('asks for projected tool payloads when the run executes on the server', async () => {
-    mockGatewayMode({ gatewayMode: true });
+  it('asks for projected tool payloads inside the protocol-v2 rollout', async () => {
+    mockServerConfig({});
     const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
 
     await readConversationMessages({ agentId: 'agent-1', topicId: 'topic-1' });
@@ -46,7 +39,7 @@ describe('readConversationMessages', () => {
   });
 
   it('keeps whole payloads outside the protocol-v2 rollout', async () => {
-    mockGatewayMode({ gatewayMode: true, protocolV2: false });
+    mockServerConfig({ protocolV2: false });
     const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
 
     await readConversationMessages({ agentId: 'agent-1', topicId: 'topic-1' });
@@ -56,17 +49,17 @@ describe('readConversationMessages', () => {
     );
   });
 
-  it('keeps whole payloads when the run can execute in the browser', async () => {
-    // The browser assembles its LLM context from this very list, so a projected
-    // tool result would silently disappear from the model's view.
-    mockGatewayMode({ gatewayMode: false });
+  it('gates projection on protocol v2 alone, not on gateway mode', async () => {
+    // There is no browser runtime that assembles an LLM context from this
+    // list any more, so gateway mode no longer holds the projection back.
+    mockServerConfig({ gatewayMode: false });
     const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
 
     await readConversationMessages({ agentId: 'agent-1', topicId: 'topic-1' });
 
     expect(getMessages).toHaveBeenCalledWith({
       agentId: 'agent-1',
-      projectToolPayloads: false,
+      projectToolPayloads: true,
       topicId: 'topic-1',
     });
   });
@@ -74,7 +67,7 @@ describe('readConversationMessages', () => {
 
 describe('readConversationMessageListPage', () => {
   it('applies the same projection gate to the paged list read', async () => {
-    mockGatewayMode({ gatewayMode: true });
+    mockServerConfig({});
     const getPage = vi.spyOn(messageService, 'getMessageListPage').mockResolvedValue([]);
 
     await readConversationMessageListPage({ agentId: 'agent-1', topicId: 'topic-1' });

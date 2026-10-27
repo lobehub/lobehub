@@ -38,7 +38,7 @@ const useRunsInSandbox = (agentId: string): boolean => {
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const topicId = useTopicId();
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled();
 
   return (
     resolveExecutionTarget(agencyConfig, {

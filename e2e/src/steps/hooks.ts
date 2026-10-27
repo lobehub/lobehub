@@ -2,6 +2,7 @@ import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, Status } from '@
 import { type Cookie, request } from 'playwright';
 
 import { mockManager } from '../mocks';
+import { ensureLLMMockServer, LLM_MOCK_URL } from '../mocks/llm/server';
 import { seedTestUser, TEST_USER } from '../support/seedTestUser';
 import { startWebServer, stopWebServer } from '../support/webServer';
 import { closeSharedBrowser, type CustomWorld } from '../support/world';
@@ -24,6 +25,11 @@ BeforeAll({ timeout: 600_000 }, async function () {
 
   // Seed test user before starting web server
   await seedTestUser();
+
+  // Agent runs call the model from the server; it is pointed at this endpoint
+  // (`DEEPSEEK_PROXY_URL`), so it must be up before the first scenario sends.
+  await ensureLLMMockServer();
+  console.log(`LLM mock endpoint: ${LLM_MOCK_URL}`);
 
   // Start web server if not using external BASE_URL
   if (!process.env.BASE_URL) {

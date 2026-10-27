@@ -57,7 +57,6 @@ beforeEach(() => {
 
   act(() => {
     useChatStore.setState({
-      executeClientAgent: vi.fn(),
       mainInputEditor: null,
       refreshMessages: vi.fn(),
       refreshTopic: vi.fn(),

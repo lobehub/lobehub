@@ -47,7 +47,6 @@ export const continueHeteroAfterError = async (
     boundDeviceId: agencyConfig?.boundDeviceId,
     executionTarget: agencyConfig?.executionTarget,
     heterogeneousProvider,
-    isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
     isWorkspaceAgent,
     workspaceScoped,
   });

@@ -15,7 +15,7 @@ The same change must work across every surface this product ships to. Authors (a
 | Theme          | light / dark (`cssVar.*` tokens handle both; hardcoded colors break one)                                            |
 | Platform       | desktop app (Electron) / web desktop / web mobile / React Native                                                    |
 | Client version | released desktop/mobile clients keep calling old endpoints after the server deploys                                 |
-| Agent runtime  | client-side runtime vs server runtime (gateway enabled or not)                                                      |
+| Agent runtime  | server runtime over the Agent Gateway (in-process vs queue) vs desktop heterogeneous runtime; no-gateway deploys    |
 | Deployment     | Vercel (serverless: no local fs persistence, execution time limits) vs Docker (long-lived process)                  |
 | Edition        | open-source self-hosted (business slots return safe no-op defaults) vs cloud (commercial overrides active)          |
 | Tenancy        | personal context (`workspaceId === null`) vs workspace context (workspace-scoped data, permissions, member sharing) |

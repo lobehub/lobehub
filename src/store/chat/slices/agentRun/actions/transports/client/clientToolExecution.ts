@@ -217,9 +217,8 @@ export class ClientToolExecutionActionImpl {
         });
 
         // Drain the Work-registration intent the builtin executor stashed during
-        // `invokeExecutor` and relay it on the result — mirrors
-        // `ClientToolTransport.run`, which attaches the drained intent to the
-        // result whenever one exists (success OR failure). The server registers
+        // `invokeExecutor` and relay it on the result whenever one exists
+        // (success OR failure). The server registers
         // the Work version from it once cumulative cost is known; the tool
         // message persist path never writes this field.
         const workRegistration = takeWorkIntent(toolCallId);

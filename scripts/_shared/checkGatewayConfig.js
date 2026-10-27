@@ -1,7 +1,7 @@
 /**
  * Startup check for the Gateway Mode wiring of Docker Compose deployments.
  * Used by startServer.js (Docker runtime). It only warns: an incomplete setup
- * still runs, with agent runs falling back to the browser.
+ * still starts, but agents cannot run until it is fixed.
  *
  * IMPORTANT: Keep this file as CommonJS (.js) for compatibility with startServer.js
  */
@@ -106,7 +106,7 @@ function collectGatewayConfigIssues(env = process.env) {
   if (missing.length > 0) {
     issues.push({
       message:
-        'docker-compose.yml enables Gateway Mode, but .env is missing its settings. The gateway container cannot start and agent runs fall back to the browser. Add the variables to .env, then run `docker compose up -d --force-recreate`.',
+        'docker-compose.yml enables Gateway Mode, but .env is missing its settings. The gateway container cannot start and agents cannot run until this is fixed. Add the variables to .env, then run `docker compose up -d --force-recreate`.',
       name: 'Gateway Mode is not configured',
       vars: missing,
     });

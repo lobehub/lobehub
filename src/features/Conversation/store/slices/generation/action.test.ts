@@ -1,4 +1,3 @@
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,8 +31,6 @@ const mockStartOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
 const mockCompleteOperation = vi.fn();
 const mockAssociateMessageWithOperation = vi.fn();
 const mockFailOperation = vi.fn();
-const mockExecuteClientAgent = vi.fn();
-const mockIsGatewayModeEnabled = vi.fn(() => false);
 const mockExecuteGatewayAgent = vi.fn();
 const mockUpdateTopicMetadata = vi.fn();
 const mockUpdateTopicStatus = vi.fn();
@@ -70,9 +67,8 @@ vi.mock('@/store/chat', () => ({
       associateMessageWithOperation: mockAssociateMessageWithOperation,
       completeOperation: mockCompleteOperation,
       failOperation: mockFailOperation,
-      executeClientAgent: mockExecuteClientAgent,
-      isGatewayModeEnabled: mockIsGatewayModeEnabled,
       executeGatewayAgent: mockExecuteGatewayAgent,
+      isGatewayModeEnabled: () => true,
       internal_dispatchTopic: vi.fn(),
       openThreadCreator: mockOpenThreadCreator,
       updateTopicMetadata: mockUpdateTopicMetadata,
@@ -308,8 +304,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       } as any);
     };
 
@@ -343,7 +339,7 @@ describe('Generation Actions', () => {
       expect(deleteDBMessage).not.toHaveBeenCalled();
       // The turn is replaced instead: delete-then-regenerate from the user turn.
       expect(mockDeleteMessage).toHaveBeenCalledWith('group-1', { operationId: 'test-op-id' });
-      expect(mockExecuteClientAgent).toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).toHaveBeenCalled();
     });
 
     it('continues in place when the turn has earlier steps to keep', async () => {
@@ -379,7 +375,7 @@ describe('Generation Actions', () => {
         context: { ...context, messageId: 'group-1' },
         type: 'continue',
       });
-      expect(mockExecuteClientAgent).toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).toHaveBeenCalled();
     });
 
     it('falls back to replacing the turn when continuing turns out to be impossible', async () => {
@@ -432,7 +428,7 @@ describe('Generation Actions', () => {
         context: { ...context, messageId: 'group-1' },
         type: 'regenerate',
       });
-      expect(mockExecuteClientAgent).toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).toHaveBeenCalled();
     });
 
     it('routes a heterogeneous status error to the session-resuming path', async () => {
@@ -496,8 +492,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       } as any);
 
       const context: ConversationContext = {
@@ -570,11 +566,11 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: vi.fn().mockImplementation(() => {
-          callOrder.push('executeClientAgent');
+        isGatewayModeEnabled: () => true,
+        executeGatewayAgent: vi.fn().mockImplementation(() => {
+          callOrder.push('executeGatewayAgent');
           return Promise.resolve();
         }),
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
       } as any);
 
       const context: ConversationContext = {
@@ -604,17 +600,17 @@ describe('Generation Actions', () => {
         await store.getState().delAndRegenerateMessage('msg-2');
       });
 
-      // CRITICAL: deleteMessage must be called BEFORE switchMessageBranch and executeClientAgent
+      // CRITICAL: deleteMessage must be called BEFORE switchMessageBranch and executeGatewayAgent
       // If regeneration (which calls switchMessageBranch) happens first, the message
       // won't be found in displayMessages and deletion will fail silently.
       expect(callOrder[0]).toBe('deleteMessage');
       expect(callOrder).toContain('switchMessageBranch');
-      expect(callOrder).toContain('executeClientAgent');
+      expect(callOrder).toContain('executeGatewayAgent');
 
       // Verify deleteMessage is called before any regeneration-related calls
       const deleteIndex = callOrder.indexOf('deleteMessage');
       const switchIndex = callOrder.indexOf('switchMessageBranch');
-      const execIndex = callOrder.indexOf('executeClientAgent');
+      const execIndex = callOrder.indexOf('executeGatewayAgent');
 
       expect(deleteIndex).toBeLessThan(switchIndex);
       expect(deleteIndex).toBeLessThan(execIndex);
@@ -686,8 +682,8 @@ describe('Generation Actions', () => {
         }),
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       };
       chatState.deleteMessage = vi.fn().mockImplementation(async () => {
         chatState.operations['outer-op-id'] = { id: 'outer-op-id', status: 'cancelled' };
@@ -721,14 +717,14 @@ describe('Generation Actions', () => {
       expect(chatState.deleteMessage).toHaveBeenCalledWith('msg-2', {
         operationId: 'outer-op-id',
       });
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
           parentMessageId: 'msg-1',
+          // The inner wrapper op is handed off to the gateway, which settles it
           parentOperationId: 'inner-op-id',
         }),
       );
-      expect(mockCompleteOperation).toHaveBeenCalledWith('inner-op-id');
       expect(mockCompleteOperation).toHaveBeenCalledWith('outer-op-id');
     });
 
@@ -774,9 +770,9 @@ describe('Generation Actions', () => {
           chatState.dbMessagesMap[oldContextKey] = [oldUserMessage];
           chatState.messagesMap[oldContextKey] = [oldUserMessage];
         }),
-        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
         failOperation: mockFailOperation,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         switchMessageBranch: mockSwitchMessageBranch,
@@ -807,12 +803,11 @@ describe('Generation Actions', () => {
       expect(mockSwitchMessageBranch).toHaveBeenCalledWith('user-old', 0, {
         operationId: 'test-op-id',
       });
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           context: oldContext,
-          messages: [oldUserMessage],
+          message: 'old prompt',
           parentMessageId: 'user-old',
-          parentMessageType: 'user',
         }),
       );
       expect(store.getState().context).toEqual(currentContext);
@@ -822,7 +817,7 @@ describe('Generation Actions', () => {
     it('settles the wrapper op via failOperation when regeneration throws (no stuck loading)', async () => {
       const { useChatStore } = await import('@/store/chat');
       let operationCount = 0;
-      const executeClientAgent = vi.fn().mockRejectedValue(new Error('boom'));
+      const executeGatewayAgent = vi.fn().mockRejectedValue(new Error('boom'));
       const chatState: any = {
         dbMessagesMap: {},
         messagesMap: {},
@@ -841,8 +836,8 @@ describe('Generation Actions', () => {
         }),
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        isGatewayModeEnabled: () => true,
+        executeGatewayAgent,
       };
       vi.mocked(useChatStore.getState).mockReturnValue(chatState);
 
@@ -894,8 +889,8 @@ describe('Generation Actions', () => {
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       } as any);
 
       const context: ConversationContext = {
@@ -951,8 +946,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       } as any);
 
       const context: ConversationContext = {
@@ -994,59 +989,6 @@ describe('Generation Actions', () => {
       });
     });
 
-    it('should pass context to executeClientAgent', async () => {
-      // Re-setup mock with all required properties
-      const { useChatStore } = await import('@/store/chat');
-      vi.mocked(useChatStore.getState).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-
-        cancelOperations: mockCancelOperations,
-        cancelOperation: mockCancelOperation,
-        deleteMessage: mockDeleteMessage,
-        switchMessageBranch: mockSwitchMessageBranch,
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
-      } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: 'topic-1',
-        threadId: null,
-        groupId: 'group-1',
-      };
-
-      const store = createStore({ context });
-
-      // Set displayMessages after store creation
-      act(() => {
-        store.setState({
-          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().regenerateUserMessage('msg-1');
-      });
-
-      // Should pass full context to executeClientAgent
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context,
-          parentMessageId: 'msg-1',
-          parentMessageType: 'user',
-          parentOperationId: 'test-op-id',
-        }),
-      );
-    });
-
     it('should bail out if the interim op was cancelled during preflight (Stop pressed)', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
@@ -1066,8 +1008,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       } as any);
 
       const context: ConversationContext = {
@@ -1096,7 +1038,7 @@ describe('Generation Actions', () => {
       });
       // ...but because Stop cancelled it during preflight, the run must NOT start.
       expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
     });
 
     it('should bail out if the interim op was cancelled during switchMessageBranch (Stop pressed)', async () => {
@@ -1117,9 +1059,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        isGatewayModeEnabled: () => true,
       };
       chatState.switchMessageBranch = vi.fn().mockImplementation(async () => {
         chatState.operations = { 'test-op-id': { id: 'test-op-id', status: 'cancelled' } };
@@ -1147,11 +1088,12 @@ describe('Generation Actions', () => {
       // The branch switch ran (preflight passed), but the Stop during it must
       // stop the runtime from starting.
       expect(chatState.switchMessageBranch).toHaveBeenCalled();
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
       expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
     });
 
-    it('should restore mention-based initialContext when regenerating a user message', async () => {
+    // Regression: the removed client retry path re-derived the turn's tool picks
+    // and @-mentions from its editor state; the gateway request dropped them.
+    it('re-sends the turn tool picks and mentioned agents when regenerating', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         dbMessagesMap: {},
@@ -1159,54 +1101,40 @@ describe('Generation Actions', () => {
         operations: {},
         operationsByMessage: {},
         topicDataMap: {},
-
-        cancelOperations: mockCancelOperations,
-        cancelOperation: mockCancelOperation,
-        deleteMessage: mockDeleteMessage,
-        switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
+        switchMessageBranch: mockSwitchMessageBranch,
       } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: 'topic-1',
-        threadId: null,
-      };
-
-      const store = createStore({ context });
-
-      act(() => {
-        store.setState({
-          displayMessages: [
+      const editorData = {
+        root: {
+          children: [
             {
-              id: 'msg-1',
-              role: 'user',
-              content: '<mention name="Agent A" id="agent-a" /> hello',
-              editorData: {
-                root: {
-                  type: 'root',
-                  children: [
-                    {
-                      type: 'paragraph',
-                      children: [
-                        {
-                          type: 'mention',
-                          label: 'Agent A',
-                          metadata: { id: 'agent-a', type: 'agent' },
-                        },
-                        { type: 'text', text: ' hello' },
-                      ],
-                    },
-                  ],
+              children: [
+                { label: 'Writer', metadata: { id: 'agt-writer', type: 'agent' }, type: 'mention' },
+                { text: ' and ', type: 'text' },
+                {
+                  actionCategory: 'tool',
+                  actionLabel: 'Notebook',
+                  actionType: 'lobe-notebook',
+                  type: 'action-tag',
                 },
-              },
+              ],
+              type: 'paragraph',
             },
           ],
+          type: 'root',
+        },
+      };
+      const store = createStore({
+        context: { agentId: 'session-1', threadId: null, topicId: 'topic-1' },
+      });
+      act(() => {
+        store.setState({
+          displayMessages: [{ content: 'Hello', editorData, id: 'msg-1', role: 'user' }],
         } as any);
       });
 
@@ -1214,20 +1142,53 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('msg-1');
       });
 
-      expect(mockExecuteClientAgent).toHaveBeenCalledWith(
+      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          initialContext: {
-            initialContext: {
-              mentionedAgents: [{ id: 'agent-a', name: 'Agent A' }],
-              selectedTools: [{ identifier: AgentManagementIdentifier, name: 'Agent Management' }],
-            },
-            phase: 'init',
-          },
+          mentionedAgents: [expect.objectContaining({ id: 'agt-writer' })],
+          selectedToolIds: ['lobe-notebook'],
         }),
       );
     });
 
-    it('should use executeGatewayAgent when gateway mode is enabled', async () => {
+    // Regression: with Gateway mode switched off (ENABLE_AGENT_GATEWAY=0 while
+    // AGENT_GATEWAY_URL stays set) a retry must not push the run to the gateway.
+    it('fails the retry instead of dispatching when gateway mode is off', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        dbMessagesMap: {},
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        topicDataMap: {},
+        startOperation: mockStartOperation,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => false,
+        switchMessageBranch: mockSwitchMessageBranch,
+      } as any);
+      const store = createStore({
+        context: { agentId: 'session-1', threadId: null, topicId: 'topic-1' },
+      });
+      act(() => {
+        store.setState({
+          displayMessages: [{ content: 'Hello', id: 'msg-1', role: 'user' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await expect(store.getState().regenerateUserMessage('msg-1')).rejects.toThrow();
+      });
+
+      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
+      expect(mockFailOperation).toHaveBeenCalledWith(
+        'test-op-id',
+        expect.objectContaining({ type: 'RegenerateError' }),
+      );
+    });
+
+    it('regenerates through executeGatewayAgent', async () => {
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         dbMessagesMap: {},
@@ -1240,9 +1201,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        isGatewayModeEnabled: vi.fn(() => true),
         executeGatewayAgent: mockExecuteGatewayAgent,
-        executeClientAgent: mockExecuteClientAgent,
+        isGatewayModeEnabled: () => true,
         switchMessageBranch: mockSwitchMessageBranch,
       } as any);
 
@@ -1286,9 +1246,6 @@ describe('Generation Actions', () => {
         }),
       );
 
-      // Should NOT call client-mode executeClientAgent
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
-
       // The flow itself must not settle the wrapper — phase-1 handoff belongs
       // to executeGatewayAgent (mocked here), and double-settling would mask a
       // missing handoff.
@@ -1313,8 +1270,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        isGatewayModeEnabled: vi.fn(() => true),
         executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
         switchMessageBranch: mockSwitchMessageBranch,
       } as any);
 
@@ -1344,50 +1301,6 @@ describe('Generation Actions', () => {
       const onComplete = mockExecuteGatewayAgent.mock.calls[0][0].onComplete;
       onComplete();
       expect(onRegenerateComplete).toHaveBeenCalledWith('msg-1');
-    });
-
-    it('should fall back to client mode when gateway is disabled', async () => {
-      const { useChatStore } = await import('@/store/chat');
-      vi.mocked(useChatStore.getState).mockReturnValue({
-        dbMessagesMap: {},
-        messagesMap: {},
-        operations: {},
-        operationsByMessage: {},
-        topicDataMap: {},
-
-        startOperation: mockStartOperation,
-        associateMessageWithOperation: mockAssociateMessageWithOperation,
-        completeOperation: mockCompleteOperation,
-        failOperation: mockFailOperation,
-        isGatewayModeEnabled: vi.fn(() => false),
-        executeGatewayAgent: mockExecuteGatewayAgent,
-        executeClientAgent: mockExecuteClientAgent,
-        switchMessageBranch: mockSwitchMessageBranch,
-      } as any);
-
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: 'topic-1',
-        threadId: null,
-      };
-
-      const store = createStore({ context });
-
-      act(() => {
-        store.setState({
-          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
-        } as any);
-      });
-
-      await act(async () => {
-        await store.getState().regenerateUserMessage('msg-1');
-      });
-
-      // Should NOT call executeGatewayAgent
-      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
-
-      // Should call client-mode executeClientAgent
-      expect(mockExecuteClientAgent).toHaveBeenCalled();
     });
 
     it('should not regenerate if the message already has a running regenerate op', async () => {
@@ -1455,8 +1368,8 @@ describe('Generation Actions', () => {
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
         switchMessageBranch: mockSwitchMessageBranch,
-        executeClientAgent: mockExecuteClientAgent,
-        isGatewayModeEnabled: mockIsGatewayModeEnabled,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
       } as any);
 
       const context: ConversationContext = {
@@ -1481,7 +1394,7 @@ describe('Generation Actions', () => {
         context: { ...context, messageId: 'msg-1' },
         type: 'regenerate',
       });
-      expect(mockExecuteClientAgent).toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).toHaveBeenCalled();
     });
   });
 
@@ -1522,12 +1435,11 @@ describe('Generation Actions', () => {
         startOperation: mockHeteroStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        isGatewayModeEnabled: vi.fn(() => false),
         switchMessageBranch: mockSwitchMessageBranch,
         refreshMessages: mockRefreshMessages,
         associateMessageWithOperation: mockAssociateMessageWithOperation,
-        executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: () => true,
         ...overrides,
       } as any);
 
@@ -1951,9 +1863,8 @@ describe('Generation Actions', () => {
         associateMessageWithOperation: mockAssociateMessageWithOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        executeClientAgent: mockExecuteClientAgent,
         executeGatewayAgent: mockExecuteGatewayAgent,
-        isGatewayModeEnabled: vi.fn(() => false),
+        isGatewayModeEnabled: () => true,
       } as any);
 
       const context: ConversationContext = {
@@ -1976,7 +1887,6 @@ describe('Generation Actions', () => {
 
       // Hetero short-circuits BEFORE creating the continue operation.
       expect(mockStartOperation).not.toHaveBeenCalled();
-      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
       expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
     });
   });

@@ -3,6 +3,7 @@ import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import path from 'node:path';
 
+import { LLM_MOCK_URL } from '../mocks/llm/server';
 import { createTestOidcJwks } from './oidcTestKey';
 
 let serverProcess: ChildProcess | null = null;
@@ -140,6 +141,13 @@ export async function startWebServer(options: WebServerOptions): Promise<void> {
 
       // Disable email verification for e2e
       AUTH_EMAIL_VERIFICATION: '0',
+
+      // Agent runs execute on the server: the default provider is answered by
+      // the E2E LLM mock endpoint (`e2e/src/mocks/llm/server.ts`). Running an
+      // agent also needs an Agent Gateway (`AGENT_GATEWAY_URL`,
+      // `ENABLE_AGENT_GATEWAY=1`, `AGENT_GATEWAY_SERVICE_TOKEN`); see e2e/README.md.
+      DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || 'e2e-mock-key',
+      DEEPSEEK_PROXY_URL: process.env.DEEPSEEK_PROXY_URL || `${LLM_MOCK_URL}/v1`,
 
       // E2E test secret keys
       AUTH_SECRET: 'e2e-test-secret-key-for-better-auth-32chars!',

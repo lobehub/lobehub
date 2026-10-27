@@ -80,8 +80,7 @@ const isLocalSystemEnabledById = (agentId: string) => (s: AgentStoreState) =>
 /**
  * The agent's effective execution target. On web a bound `local` target only
  * surfaces as `device` (not `sandbox`) when Gateway mode is effectively
- * enabled and can route to the device; the gate derives from this selector's
- * own state so it re-evaluates on `disableGatewayMode` changes. Workspace
+ * enabled and can route to the device. Workspace
  * agents never execute on the current member's own client — their stored
  * `local` coerces away (see `workspaceScoped`).
  */
@@ -90,7 +89,7 @@ const getExecutionTargetById =
   (s: AgentStoreState): DeviceExecutionTarget =>
     resolveExecutionTarget(agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig, {
       clientExecutionAvailable: isDesktop,
-      deviceRoutingAvailable: resolveGatewayModeEnabled(s, agentId),
+      deviceRoutingAvailable: resolveGatewayModeEnabled(),
       workspaceScoped: !!s.agentMap[agentId]?.workspaceId,
     });
 
