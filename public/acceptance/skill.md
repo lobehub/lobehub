@@ -1,8 +1,6 @@
 # Install Acceptance
 
 Acceptance lets a coding agent verify a delivery and collect evidence for human review.
-Installation and local reports do not require a LobeHub account or sign-in.
-Sign in only when the user wants to share reports or collaborate in LobeHub.
 Run the following setup from the root of the project the user wants to verify.
 
 ## 1. Install the CLI
@@ -12,8 +10,6 @@ Install or update the LobeHub CLI (requires Node.js 22.15 or later):
 ```sh
 npm install -g @lobehub/cli
 ```
-
-Do not ask the user to sign in as part of installation.
 
 ## 2. Install the Acceptance skill
 
@@ -37,13 +33,11 @@ Reload skills or start a new coding-agent session so the installed skill is avai
 
 Tell the user which project was configured and whether installation completed.
 The user can then invoke `/acceptance` in their coding agent to verify a delivery.
-Without signing in, Acceptance renders reports locally under `.acceptances/` and
-uploads nothing.
+Reports and evidence are saved under `.acceptances/` in the project.
 
-## Optional: Share reports and collaborate
+## Share reports and collaborate
 
-Only when the user wants to share a report or collaborate with others in LobeHub,
-run:
+To share a report or collaborate with others in LobeHub, sign in:
 
 ```sh
 lh login
