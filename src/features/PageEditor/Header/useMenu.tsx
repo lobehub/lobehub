@@ -8,6 +8,7 @@ import {
   EyeOffIcon,
   Link2,
   Maximize2,
+  ScanTextIcon,
   Trash2,
   UsersIcon,
 } from 'lucide-react';
@@ -71,6 +72,9 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
+  // Document review is workspace-scoped: its sessions live on the document's
+  // workspace, so a personal page has nowhere to store one.
+  const isWorkspaceScopedPage = usePageEditorStore((s) => s.isWorkspaceScopedPage);
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Visibility toggles are creator-only — the backend rejects non-owner writes,
@@ -293,6 +297,19 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
               },
             } as DropdownItem,
           ]),
+      ...(isWorkspaceScopedPage && !isHtmlPage
+        ? [
+            {
+              icon: <Icon icon={ScanTextIcon} />,
+              key: 'document-review',
+              label: t('pageEditor.review.entry'),
+              onClick: () => {
+                setRightPanelMode('review');
+                togglePageAgentPanel(true);
+              },
+            } as DropdownItem,
+          ]
+        : []),
       {
         danger: true,
         disabled: !canEditPage,
@@ -370,6 +387,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     return items;
   }, [
     isHtmlPage,
+    isWorkspaceScopedPage,
     lastUpdatedTime,
     authorName,
     canCreatePage,

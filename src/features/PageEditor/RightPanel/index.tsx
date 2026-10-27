@@ -19,6 +19,7 @@ import {
 } from '@/utils/motion/panelSlideMotion';
 
 import Conversation from '../Copilot/Conversation';
+import DocumentReviewPanel from '../DocumentReview';
 import HistoryPanel from '../History';
 import { selectors, usePageEditorStore } from '../store';
 import { usePageAgentPanelControl } from './OverrideContext';
@@ -68,14 +69,25 @@ const PageEditorRightPanelContent = memo(() => {
   const directionRef = useRef<PanelSlideMotionDirection>(0);
 
   if (previousModeRef.current !== rightPanelMode) {
-    directionRef.current = rightPanelMode === 'history' ? 1 : -1;
+    // Modes sit in one strip (copilot → review → history); the slide follows
+    // that order rather than a boolean "is history".
+    const order: Record<string, number> = { copilot: 0, history: 2, review: 1 };
+    directionRef.current =
+      (order[rightPanelMode] ?? 0) > (order[previousModeRef.current] ?? 0) ? 1 : -1;
     previousModeRef.current = rightPanelMode;
   }
 
   const activeContent = useMemo(
     () => ({
       key: rightPanelMode,
-      node: rightPanelMode === 'history' ? <HistoryPanel /> : <Conversation />,
+      node:
+        rightPanelMode === 'history' ? (
+          <HistoryPanel />
+        ) : rightPanelMode === 'review' ? (
+          <DocumentReviewPanel />
+        ) : (
+          <Conversation />
+        ),
     }),
     [rightPanelMode],
   );
@@ -117,8 +129,10 @@ const PageEditorRightPanel = memo(() => {
   // edit lock: a conflicting write is now rejected server-side (CONFLICT) rather
   // than clobbering their edits, so there's no reason to hide it on a locked /
   // read-only page. We only hide it from members without edit permission (a
-  // document-editing agent is useless to them); History stays available.
-  const effectiveExpand = expand && (rightPanelMode === 'history' || hasEditPermission);
+  // document-editing agent is useless to them). History and review are
+  // read-only surfaces, so viewers keep them.
+  const effectiveExpand =
+    expand && (rightPanelMode === 'history' || rightPanelMode === 'review' || hasEditPermission);
 
   return (
     <RightPanel

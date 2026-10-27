@@ -223,6 +223,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),
+  // review sessions/rules live on the document; the model-driven passes are
+  // gated per procedure below
+  documentReview: rw('knowledge:read', 'knowledge:write'),
   // code environment definitions: the same agent domain as the project
   // environments they are bound to; what is built from them on the drive stays
   // behind `sandboxStorage`
@@ -435,6 +438,14 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'userMemory.requestMemoryFromChatTopic': ['model:invoke'],
   // persists crawled pages as `documents` rows — a knowledge write
   'webBrowsing.upsertCrawledDocument': ['knowledge:write'],
+  // document review: every one of these runs an LLM pass over the document
+  // (impact analysis, rule proposal, checklist runs, fix suggestion), so a
+  // knowledge-write key must not start them
+  'documentReview.analyzeImpacts': ['model:invoke'],
+  'documentReview.proposeRules': ['model:invoke'],
+  'documentReview.recheckChecks': ['model:invoke'],
+  'documentReview.runChecks': ['model:invoke'],
+  'documentReview.suggestFix': ['model:invoke'],
 };
 
 /**

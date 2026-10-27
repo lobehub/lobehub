@@ -30,6 +30,46 @@ describe('PageEditorStore - commentsPanelOpen', () => {
   });
 });
 
+describe('PageEditorStore - review panel', () => {
+  it('defaults to the impact list, no status filter and no open rules', () => {
+    const store = createStore();
+
+    expect(store.getState().reviewTab).toBe('impacts');
+    expect(store.getState().reviewCheckFilter).toBe('all');
+    expect(store.getState().reviewExpandedIds).toEqual([]);
+  });
+
+  it('switches tab, filters by status and toggles one rule open and closed', () => {
+    const store = createStore();
+
+    store.getState().setReviewTab('rules');
+    store.getState().setReviewCheckFilter('needs_recheck');
+    store.getState().toggleReviewCheckExpanded('res-1');
+    store.getState().toggleReviewCheckExpanded('res-2');
+
+    expect(store.getState().reviewTab).toBe('rules');
+    expect(store.getState().reviewCheckFilter).toBe('needs_recheck');
+    expect(store.getState().reviewExpandedIds).toEqual(['res-1', 'res-2']);
+
+    store.getState().toggleReviewCheckExpanded('res-1');
+    expect(store.getState().reviewExpandedIds).toEqual(['res-2']);
+  });
+
+  it('drops open rules when the document changes', () => {
+    const store = createStore({
+      documentId: 'docs_1',
+      reviewExpandedIds: ['res-1'],
+      reviewTab: 'rules',
+    });
+
+    store.getState().setDocumentId('docs_2');
+
+    expect(store.getState().reviewExpandedIds).toEqual([]);
+    // The chosen tab is a panel preference, not document content.
+    expect(store.getState().reviewTab).toBe('rules');
+  });
+});
+
 describe('PageEditorStore - setDocumentId', () => {
   it('closes the comments panel when the document actually changes', () => {
     const store = createStore({ commentsPanelOpen: true, documentId: 'docs_1' });

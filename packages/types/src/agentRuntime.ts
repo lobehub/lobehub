@@ -28,6 +28,8 @@ export enum RequestTrigger {
   /** Context compression summary that replaces older messages in a conversation. */
   ContextCompression = 'context_compression',
   Cron = 'cron',
+  /** Document review: change-impact analysis and rule checks on a document. */
+  DocumentReview = 'document_review',
   Eval = 'eval',
   /** Agent self-evolution: expertise ingestion, domain drafts and consolidation. */
   Expertise = 'expertise',

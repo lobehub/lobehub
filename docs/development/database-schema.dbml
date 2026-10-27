@@ -1677,6 +1677,114 @@ table document_likes {
   }
 }
 
+table document_review_check_results {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  session_id text [not null]
+  rule_id uuid [not null]
+  workspace_id text [not null]
+  status text [not null, default: 'unchecked']
+  explanation text
+  evidence jsonb
+  suggestion jsonb
+  checked_at "timestamp with time zone"
+  applied_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (session_id, rule_id) [name: 'document_review_check_results_session_id_rule_id_unique', unique]
+    rule_id [name: 'document_review_check_results_rule_id_idx']
+    workspace_id [name: 'document_review_check_results_workspace_id_idx']
+  }
+}
+
+table document_review_impacts {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  session_id text [not null]
+  workspace_id text [not null]
+  kind text [not null]
+  category text [not null]
+  severity text [not null, default: 'medium']
+  status text [not null, default: 'open']
+  title text [not null]
+  trigger text
+  reason text [not null]
+  confidence real
+  source_anchor jsonb
+  related_anchor jsonb
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (session_id, sort_order) [name: 'document_review_impacts_session_id_sort_order_idx']
+    workspace_id [name: 'document_review_impacts_workspace_id_idx']
+  }
+}
+
+table document_review_rule_sets {
+  id text [pk, not null]
+  document_id text [not null]
+  workspace_id text [not null]
+  user_id text
+  title text [not null]
+  description text
+  status text [not null, default: 'draft']
+  confirmed_at "timestamp with time zone"
+  confirmed_by_user_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    document_id [name: 'document_review_rule_sets_document_id_idx']
+    workspace_id [name: 'document_review_rule_sets_workspace_id_idx']
+    user_id [name: 'document_review_rule_sets_user_id_idx']
+    confirmed_by_user_id [name: 'document_review_rule_sets_confirmed_by_user_id_idx']
+  }
+}
+
+table document_review_rules {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  rule_set_id text [not null]
+  workspace_id text [not null]
+  title text [not null]
+  instruction text [not null]
+  severity text [not null, default: 'medium']
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (rule_set_id, sort_order) [name: 'document_review_rules_rule_set_id_sort_order_idx']
+    workspace_id [name: 'document_review_rules_workspace_id_idx']
+  }
+}
+
+table document_review_sessions {
+  id text [pk, not null]
+  document_id text [not null]
+  workspace_id text [not null]
+  user_id text
+  rule_set_id text
+  title text
+  status text [not null, default: 'active']
+  base_history_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (document_id, created_at) [name: 'document_review_sessions_document_id_created_at_idx']
+    workspace_id [name: 'document_review_sessions_workspace_id_idx']
+    rule_set_id [name: 'document_review_sessions_rule_set_id_idx']
+    user_id [name: 'document_review_sessions_user_id_idx']
+  }
+}
+
 table document_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   document_id varchar(255) [not null]

@@ -11,6 +11,7 @@ export const TRACING_SCENARIOS = {
   AgentWelcome: 'agent_welcome',
   BotWakeClassifier: 'bot_wake_classifier',
   BuilderSuggestion: 'builder_suggestion',
+  DocumentReviewImpact: 'document_review_impact',
   DocumentToSkillMeta: 'document_to_skill_meta',
   ExpertiseConsolidation: 'expertise_consolidation',
   ExpertiseDomainDraft: 'expertise_domain_draft',

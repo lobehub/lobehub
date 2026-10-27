@@ -17,6 +17,7 @@ const resourcePermissionMock = vi.hoisted(() => ({
 }));
 const wsNavigateMock = vi.hoisted(() => vi.fn());
 const documentStoreMock = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const pageEditorStoreMock = vi.hoisted(() => ({ isWorkspaceScopedPage: true }));
 const menuActionMocks = vi.hoisted(() => ({
   handleCopyLink: vi.fn(),
   handleDelete: vi.fn(),
@@ -154,6 +155,7 @@ vi.mock('../store', () => ({
   usePageEditorStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       documentId: 'doc-1',
+      isWorkspaceScopedPage: pageEditorStoreMock.isWorkspaceScopedPage,
       setRightPanelMode: menuActionMocks.setRightPanelMode,
     }),
   useStoreApi: () => ({
@@ -173,6 +175,7 @@ const getMenuItem = (items: ReturnType<typeof useMenu>['menuItems'], key: string
 
 describe('PageEditor header menu', () => {
   beforeEach(() => {
+    pageEditorStoreMock.isWorkspaceScopedPage = true;
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     resourcePermissionMock.canManage = false;
@@ -236,6 +239,23 @@ describe('PageEditor header menu', () => {
     expect(getMenuItem(items, 'copy-link')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'version-history')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'export')).not.toMatchObject({ disabled: true });
+  });
+
+  it('opens the review panel from the document menu', () => {
+    const { result } = renderHook(() => useMenu());
+
+    (getMenuItem(result.current.menuItems, 'document-review') as { onClick: () => void }).onClick();
+
+    expect(menuActionMocks.setRightPanelMode).toHaveBeenCalledWith('review');
+    expect(menuActionMocks.togglePageAgentPanel).toHaveBeenCalledWith(true);
+  });
+
+  it('hides the review entry on a personal page, where reviews cannot be stored', () => {
+    pageEditorStoreMock.isWorkspaceScopedPage = false;
+
+    const { result } = renderHook(() => useMenu());
+
+    expect(getMenuItem(result.current.menuItems, 'document-review')).toBeUndefined();
   });
 
   it('uses surface-specific actions when provided', async () => {

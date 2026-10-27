@@ -116,7 +116,13 @@ export const createDocumentHeadlessEditor = () =>
 
 let headlessEditorTail: Promise<void> = Promise.resolve();
 
-const withHeadlessEditorLock = async <T>(run: () => Promise<T> | T): Promise<T> => {
+/**
+ * Serialize every headless-editor lifecycle. The headless Lexical runtime keeps
+ * process-global node state, so two concurrent hydrations can observe each
+ * other's partial state. Exported for other server features (e.g. document
+ * review) that must hydrate/export the same editor outside this service.
+ */
+export const withHeadlessEditorLock = async <T>(run: () => Promise<T> | T): Promise<T> => {
   const previous = headlessEditorTail;
   let release: () => void = () => {};
   headlessEditorTail = new Promise<void>((resolve) => {

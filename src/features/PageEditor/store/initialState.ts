@@ -1,10 +1,16 @@
-import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
+import type { DocumentCommentSelectionAnchor, DocumentReviewCheckStatus } from '@lobechat/types';
 import { type IEditor } from '@lobehub/editor';
 
 import { type EditLockHealth } from '@/features/EditLock';
 
 export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
-export type RightPanelMode = 'copilot' | 'history';
+export type RightPanelMode = 'copilot' | 'history' | 'review';
+
+/** Which half of the review panel is showing. */
+export type ReviewTab = 'impacts' | 'rules';
+
+/** Checklist filter; `all` keeps every status visible. */
+export type ReviewCheckFilter = 'all' | DocumentReviewCheckStatus;
 
 /** A captured body selection, tagged with the document it was taken from. */
 export interface PendingCommentAnchor {
@@ -94,6 +100,10 @@ export interface State extends PublicState {
    * the caret again on every pick).
    */
   pendingCommentAnchorVersion: number;
+  /** Review panel: which list is shown, its status filter, and open rules. */
+  reviewCheckFilter: ReviewCheckFilter;
+  reviewExpandedIds: string[];
+  reviewTab: ReviewTab;
   rightPanelMode: RightPanelMode;
 }
 
@@ -117,5 +127,8 @@ export const initialState: State = {
   pendingCommentAnchor: undefined,
   pendingCommentAnchorVersion: 0,
   rightPanelMode: 'copilot',
+  reviewCheckFilter: 'all',
+  reviewExpandedIds: [],
+  reviewTab: 'impacts',
   title: undefined,
 };

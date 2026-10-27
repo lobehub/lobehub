@@ -22,6 +22,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
+import { DocumentReviewModel } from '@/database/models/documentReview';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
@@ -844,6 +845,19 @@ export class DocumentService {
         const committedVersion = await documentModel.update(id, updates as Partial<DocumentItem>);
         if (!committedVersion) throw new Error(`Document not found: ${id}`);
         updatedAt = committedVersion;
+      }
+
+      // Every body write — autosave, agent edit, an applied review suggestion —
+      // makes previously checked verdicts stale. Doing it here (the central
+      // writer) means no caller can forget: `invalidateDocumentChecks` drops any
+      // checked result in the document's active sessions to `needs_recheck`
+      // without touching `unchecked` rows.
+      if (contentChanged && this.workspaceId) {
+        await new DocumentReviewModel(
+          transactionDb,
+          this.userId,
+          this.workspaceId,
+        ).invalidateDocumentChecks(id);
       }
 
       const savedAt = historyAppended ? updatedAt : undefined;

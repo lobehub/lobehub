@@ -25,6 +25,7 @@ export default {
   'table.columns.trigger.enums.cli': 'CLI',
   'table.columns.trigger.enums.context_compression': 'Context Compression',
   'table.columns.trigger.enums.cron': 'Scheduled Task',
+  'table.columns.trigger.enums.document_review': 'Document Review',
   'table.columns.trigger.enums.eval': 'Benchmark Eval',
   'table.columns.trigger.enums.expertise': 'Agent Self-Evolution',
   'table.columns.trigger.enums.file_embedding': 'File Embedding',

@@ -63,7 +63,8 @@ const Header = memo(() => {
   // surface, so viewers can't open it; History is read-only and stays available
   // to everyone. Without this guard the button toggles the store, then disappears
   // via `hideWhenExpanded` while the panel refuses to open — a no-op control.
-  const canExpandRightPanel = hasEditPermission || rightPanelMode === 'history';
+  const canExpandRightPanel =
+    hasEditPermission || rightPanelMode === 'history' || rightPanelMode === 'review';
   // Comments exist only for workspace documents with a comments panel to show
   // them in; the provider is absent otherwise.
   const comments = useDocumentComments();
