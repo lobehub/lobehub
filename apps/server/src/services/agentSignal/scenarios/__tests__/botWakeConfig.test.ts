@@ -185,7 +185,7 @@ describe('parseBotWakeSettings from the settings form', () => {
       enabled: 'botWakeEnabled',
       maxSilentWakes: 'botWakeMaxSilentWakes',
       ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
-      proactiveMode: 'botWakeProactiveMode',
+      proactiveEnabled: 'botWakeProactiveEnabled',
       proactiveThreshold: 'botWakeProactiveThreshold',
       schedulerMode: 'botWakeSchedulerMode',
       scope: 'botWakeScope',
@@ -204,7 +204,7 @@ describe('parseBotWakeSettings from the settings form', () => {
       [K.enabled]: true,
       [K.maxSilentWakes]: 1,
       [K.ownerPresenceSeconds]: 15,
-      [K.proactiveMode]: 'shadow',
+      [K.proactiveEnabled]: true,
       [K.proactiveThreshold]: 0.8,
       [K.schedulerMode]: 'enforce',
       [K.scope]: 'bot-threads',
@@ -220,26 +220,41 @@ describe('parseBotWakeSettings from the settings form', () => {
       denyChannels: ['c9'],
       maxSilentWakes: 1,
       ownerPresenceSeconds: 15,
-      proactive: { mode: 'shadow', threshold: 0.8 },
+      proactive: { mode: 'enforce', threshold: 0.8 },
       scope: 'bot-threads',
       windowSeconds: 60,
     });
     expect(scheduler).toEqual({ collectMs: 40_000, cooldownMs: 90_000, mode: 'enforce' });
   });
 
-  it('keeps offering help unasked off until the owner turns it on', () => {
+  it('keeps offering help unasked off until the owner switches it on', () => {
     expect(parseBotWakeSettings({ [K.enabled]: true }).rules.proactive).toEqual({
       mode: 'off',
       threshold: 0.7,
     });
     expect(
-      parseBotWakeSettings({ botWake: { enabled: true, proactive: { mode: 'enforce' } } }).rules
-        .proactive,
+      parseBotWakeSettings({ [K.enabled]: true, [K.proactiveEnabled]: true }).rules.proactive,
     ).toEqual({ mode: 'enforce', threshold: 0.7 });
     expect(
-      parseBotWakeSettings({ [K.proactiveMode]: 'loud', [K.proactiveThreshold]: 3 }).rules
+      parseBotWakeSettings({ [K.proactiveEnabled]: 'yes', [K.proactiveThreshold]: 3 }).rules
         .proactive,
     ).toEqual({ mode: 'off', threshold: 0.7 });
+  });
+
+  it('lets an operator only score offering help, beside the form options', () => {
+    const settings = {
+      [K.enabled]: true,
+      [K.proactiveEnabled]: true,
+      [K.proactiveThreshold]: 0.6,
+      botWake: { proactive: { mode: 'shadow' } },
+    };
+
+    expect(parseBotWakeSettings(settings).rules.proactive).toEqual({
+      mode: 'shadow',
+      threshold: 0.6,
+    });
+    // The override has no flat key, so the form's projection keeps it nested.
+    expect(flattenBotWakeSettings(settings)?.botWake).toEqual({ proactive: { mode: 'shadow' } });
   });
 
   it('treats an untouched form field as no choice, not as zero or empty', () => {

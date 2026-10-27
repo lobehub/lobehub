@@ -173,7 +173,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
       recorder.initiate(
         observation({}, { author: { isBot: false, isMe: false, userId: 'someone-else' } }),
       ),
-    ).resolves.toEqual({ reason: 'named-in-text' });
+    ).resolves.toEqual({ addressed: true, reason: 'named-in-text' });
   });
 
   it('never wakes on its own message or another bot, even naming itself', async () => {

@@ -198,10 +198,11 @@ describe('bot-wake recorder: offering the owner help nobody asked for', () => {
   it('leaves its name and the follow-up window to their own paths', async () => {
     const judge = proactiveJudge(1);
     const named = make(PROACTIVE('enforce'), fakeState(), { proactiveJudge: judge });
+    // The classifier enforces by default: inside the window it is what confirms the wake.
     const inWindow = make(
       PROACTIVE('enforce'),
       fakeState({ botLastSpokeAt: Date.now() - 10_000, silentWakes: 0 }),
-      { proactiveJudge: judge },
+      { classify: classifierAnswer(0.9), proactiveJudge: judge },
     );
 
     await expect(named.initiate(musing({ text: `${BOT_NAME} ${MUSING}` }))).resolves.toMatchObject({
