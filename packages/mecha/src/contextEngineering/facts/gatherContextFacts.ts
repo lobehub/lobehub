@@ -29,6 +29,7 @@ import {
   type TopicReferenceItem,
   type WorkspaceContext,
 } from '@lobechat/context-engine';
+import { agentDisplayName } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -523,6 +524,7 @@ export const gatherContextFacts = async (
       CREDS_LIST: credentials ? generateCredsList(credentials) : '',
       agent_description: request.agent.description ?? '',
       agent_id: request.agentId ?? '',
+      agent_name: agentDisplayName(request.agent) ?? '',
       agent_title: request.agent.title ?? '',
       // A credential is reachable whenever the dedicated sandbox tool is
       // exposed for 'auto' (independent of device routing) or no device is

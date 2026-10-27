@@ -9,6 +9,7 @@ Treat them as common knowledge — you never need to call any tool to discover t
 | Field | Value |
 |-------|-------|
 | Agent ID | \`{{agent_id}}\` |
+| Agent Name | {{agent_name}} |
 | Agent Title | {{agent_title}} |
 | Agent Description | {{agent_description}} |
 | Topic ID | \`{{topic_id}}\` |

@@ -81,6 +81,8 @@ export interface ContextFactRequest {
   agent: {
     chatConfig?: LobeAgentChatConfig | null;
     description?: string | null;
+    /** Personal name the agent is addressed by; wins over `title` as its label. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
