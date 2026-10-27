@@ -20,6 +20,7 @@ import {
 import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
 import { AccessSection } from './AccessSection';
+import styles from './Body.module.css';
 import type { ChannelTab } from './channelTabs';
 import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
@@ -277,6 +278,7 @@ const Body = memo<BodyProps>(
             fold away; a new bot has nothing else to do but fill them in. */}
               {(groupCredentialFields.length > 0 || showApplicationId || showExtras) && (
                 <Form.Group
+                  className={styles.moduleGroup}
                   collapsible={!!hasConfig || inlineKeys.size > 0}
                   defaultActive={!hasConfig && inlineKeys.size === 0}
                   desc={t('channel.group.credentialsDesc')}
@@ -339,6 +341,7 @@ const Body = memo<BodyProps>(
           )}
           {connectGroup && (
             <Form.Group
+              className={styles.moduleGroup}
               collapsible={false}
               extra={moduleExtra('connection')}
               keyValue={`settings-connect-${platformDef.id}`}
@@ -378,6 +381,7 @@ const Body = memo<BodyProps>(
                 // list of options reads as four decisions.
                 groupWakeFields(group.fields).map((section) => (
                   <Form.Group
+                    className={styles.moduleGroup}
                     collapsible={false}
                     extra={moduleExtra(`wake-${section.key}`)}
                     key={section.key}
@@ -395,6 +399,7 @@ const Body = memo<BodyProps>(
                 ))
               ) : (
                 <Form.Group
+                  className={styles.moduleGroup}
                   collapsible={false}
                   extra={moduleExtra(group.key as SaveModuleId)}
                   keyValue={`settings-${group.key}-${platformDef.id}`}

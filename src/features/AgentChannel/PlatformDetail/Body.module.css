@@ -1,0 +1,13 @@
+/*
+ * A settings block with a Save in the corner of its header. The group header sizes its title to the
+ * text and never wraps it, so a long description pushed the Save out of the card; let the title give
+ * way instead. Scoped plain CSS because the header is the form library's own DOM.
+ */
+.moduleGroup :global(.lobe-form-form__group-header) {
+  gap: 12px;
+}
+
+.moduleGroup :global(.lobe-form-form__group-header) > :global(.lobe-form-form__group-title) {
+  flex: 1 1 0;
+  min-width: 0;
+}
