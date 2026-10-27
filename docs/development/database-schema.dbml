@@ -1292,7 +1292,7 @@ table channel_members {
   description text [not null, default: '']
   config jsonb
   metadata jsonb [default: `{}`]
-  active boolean [not null, default: true]
+  status text [not null, default: 'active']
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -1362,6 +1362,7 @@ table channel_threads {
   root_message_id uuid [not null]
   root_sequence integer [not null]
   follower_member_ids jsonb [not null, default: `[]`]
+  status text [not null, default: 'active']
   metadata jsonb [default: `{}`]
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -1382,6 +1383,7 @@ table channels {
   agent_id text
   title text [not null]
   sequence integer [not null, default: 0]
+  status text [not null, default: 'active']
   visibility text [not null, default: 'private']
   metadata jsonb [default: `{}`]
   deleted_at "timestamp with time zone"

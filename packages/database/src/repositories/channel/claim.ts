@@ -193,7 +193,7 @@ export const claimJob = async (
   const [member] = await tx
     .select()
     .from(channelMembers)
-    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.active, true)));
+    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
   if (!member?.config) return null;
 
   const [busy] = await tx
@@ -221,7 +221,7 @@ export const claimJob = async (
       and(
         eq(channelMembers.id, job.requesterMemberId),
         eq(channelMembers.actorType, 'user'),
-        eq(channelMembers.active, true),
+        eq(channelMembers.status, 'active'),
         isNotNull(channelMembers.userId),
       ),
     );

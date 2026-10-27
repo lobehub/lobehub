@@ -34,10 +34,37 @@ export const CHANNEL_DELETED_AGENT_NAME = 'Deleted agent';
 /** Discoverability inside a workspace. Ignored for personal channels (`workspace_id IS NULL`). */
 export type ChannelVisibility = 'private' | 'public';
 
+/**
+ * Channel lifecycle. Orthogonal to the recycle bin: archiving keeps a channel for good, while
+ * a trashed one is purged once its retention expires.
+ * - `active`: listed and open to messages and Agent work.
+ * - `archived`: finished but kept. Readable and searchable, out of the active list, closed to
+ *   messages and Agent work until an admin unarchives it.
+ */
+export type ChannelStatus = 'active' | 'archived';
+
+/**
+ * Thread lifecycle, orthogonal to the recycle bin like `ChannelStatus`.
+ * - `active`: open to replies and Agent work.
+ * - `archived`: readable history, out of Agent context. It still holds its root message, so
+ *   unarchiving brings the same Thread back.
+ */
+export type ChannelThreadStatus = 'active' | 'archived';
+
 export type ChannelMemberActorType = 'agent' | 'user';
 
 /** Role of a human member. Agent members carry no role. */
 export type ChannelMemberRole = 'admin' | 'member' | 'owner';
+
+/**
+ * Membership state. A former member keeps its row, so jobs, mentions, Thread followers and
+ * authored messages still resolve.
+ * - `active`: in the channel.
+ * - `left`: the person left on their own.
+ * - `removed`: an admin removed the person or Agent.
+ * Either former state can be added back.
+ */
+export type ChannelMemberStatus = 'active' | 'left' | 'removed';
 
 /** Channel-specific execution environment; Agent settings always come from the Agent. */
 export interface ChannelMemberConfig {

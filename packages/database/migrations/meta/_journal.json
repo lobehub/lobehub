@@ -1330,6 +1330,13 @@
       "when": 1793075261489,
       "tag": "0189_channel_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1793084535893,
+      "tag": "0190_channel_status",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -67,7 +67,6 @@ export const readChannelView = async (
   const [members, reversed, threads, jobs] = await Promise.all([
     tx
       .select({
-        active: channelMembers.active,
         actorType: channelMembers.actorType,
         agentId: channelMembers.agentId,
         avatar: agents.avatar,
@@ -75,6 +74,7 @@ export const readChannelView = async (
         id: channelMembers.id,
         name: channelMembers.name,
         role: channelMembers.role,
+        status: channelMembers.status,
         userId: channelMembers.userId,
         userName: users.fullName,
         username: users.username,

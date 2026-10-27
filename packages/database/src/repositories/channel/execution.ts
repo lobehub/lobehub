@@ -236,7 +236,7 @@ export class ChannelExecutionRepository {
       const [member] = await tx
         .select({ id: channelMembers.id })
         .from(channelMembers)
-        .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.active, true)));
+        .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
       if (!member) throw new ChannelError('CONFLICT', 'The member left the channel');
 
       // The member may have been rebound since claim; attribute the reply to its frozen Agent.

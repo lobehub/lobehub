@@ -107,7 +107,7 @@ describe('ChannelRepository', () => {
       await addPerson(channel.id, memberId, 'member');
       await serverDB
         .update(channelMembers)
-        .set({ active: false })
+        .set({ status: 'left' })
         .where(eq(channelMembers.userId, memberId));
 
       expect(
@@ -210,7 +210,7 @@ describe('ChannelRepository', () => {
           async (tx) => {
             await tx
               .update(channelMembers)
-              .set({ active: false })
+              .set({ status: 'removed' })
               .where(eq(channelMembers.userId, memberId));
             removed();
             await released;

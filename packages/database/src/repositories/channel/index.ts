@@ -260,7 +260,7 @@ export class ChannelRepository {
     return and(
       eq(channelMembers.actorType, 'user'),
       eq(channelMembers.userId, this.userId),
-      eq(channelMembers.active, true),
+      eq(channelMembers.status, 'active'),
       or(isNull(channels.agentId), eq(channels.userId, this.userId)),
       this.workspaceId ? eq(channels.workspaceId, this.workspaceId) : isNull(channels.workspaceId),
     );

@@ -48,7 +48,7 @@ export const activeMembers = async (
     .where(
       and(
         eq(channelMembers.channelId, channelId),
-        eq(channelMembers.active, true),
+        eq(channelMembers.status, 'active'),
         inArray(channelMembers.id, unique),
       ),
     );
@@ -74,7 +74,7 @@ export const candidateAgents = async (
       and(
         eq(channelMembers.channelId, channelId),
         eq(channelMembers.actorType, 'agent'),
-        eq(channelMembers.active, true),
+        eq(channelMembers.status, 'active'),
       ),
     );
 

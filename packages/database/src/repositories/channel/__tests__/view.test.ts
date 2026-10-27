@@ -55,7 +55,10 @@ describe('Channel public view', () => {
     await expect(
       new ChannelRepository(db, fixture.ownerId).detail(channel.id),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await db.update(channelMembers).set({ active: false }).where(eq(channelMembers.id, member.id));
+    await db
+      .update(channelMembers)
+      .set({ status: 'removed' })
+      .where(eq(channelMembers.id, member.id));
     await expect(asMember.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 

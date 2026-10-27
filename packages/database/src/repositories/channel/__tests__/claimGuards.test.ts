@@ -118,7 +118,7 @@ describe('claim guards', () => {
     const agent = await fixture.addAgent(channel.id, 'Coder');
     const { job } = await request(asMember, channel.id, agent.id, 'req');
 
-    await db.update(channelMembers).set({ active: false }).where(eq(channelMembers.id, member.id));
+    await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, member.id));
 
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
     expect((await jobById(job.id)).status).toBe('cancelled');

@@ -36,10 +36,14 @@ vi.mock('../../../settings', () => ({
 
 describe('verify ingest-report — every run is an immutable acceptance round', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
   let dir: string;
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // This repository declares a project in `.agents/acceptance/config.json`;
+    // run outside it so no suite files its acceptance under that project.
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
     vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     const verify = mockTrpcClient.verify as Record<string, any>;
@@ -62,6 +66,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    cwdSpy.mockRestore();
     vi.unstubAllEnvs();
     delete process.env.LOBEHUB_TOPIC_ID;
     rmSync(dir, { force: true, recursive: true });

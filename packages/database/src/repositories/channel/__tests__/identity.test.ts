@@ -266,7 +266,7 @@ describe('direct message sender references', () => {
       else
         await db
           .update(channelMembers)
-          .set({ active: false })
+          .set({ status: 'left' })
           .where(
             and(
               eq(channelMembers.channelId, team.channel.id),

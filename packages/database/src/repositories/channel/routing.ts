@@ -53,7 +53,7 @@ export const resolveRouting = async (
             eq(channelMembers.channelId, channelId),
             eq(channelMembers.userId, message.userId),
             eq(channelMembers.actorType, 'user'),
-            eq(channelMembers.active, true),
+            eq(channelMembers.status, 'active'),
           ),
         )
     : [];
