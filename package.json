@@ -330,7 +330,7 @@
     "@lobehub/icons": "^6.13.0",
     "@lobehub/market-sdk": "0.43.0",
     "@lobehub/ui": "^6.9.0",
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/client": "~2.4.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.3.0",
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
