@@ -67,7 +67,7 @@ export class DictationPrefetcher {
     const connection = await Promise.race([
       entry.ready,
       new Promise<undefined>((resolve) => {
-        timer = setTimeout(resolve, PREFETCH_TAKE_TIMEOUT_MS);
+        timer = setTimeout(() => resolve(undefined), PREFETCH_TAKE_TIMEOUT_MS);
       }),
     ]);
     clearTimeout(timer);
