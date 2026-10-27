@@ -420,4 +420,86 @@ describe('verifyRouter evidence writes', () => {
       ).rejects.toThrow('Provide exactly one of `content` or `fileId`.');
     });
   });
+
+  describe.each(['uploadEvidence', 'submitCheckEvidence'] as const)(
+    '%s inline evidence content limit',
+    (procedure) => {
+      const submit = (
+        content: string,
+        type: 'text' | 'markdown' | 'transcript' | 'dom_snapshot' | 'terminal' = 'text',
+      ) =>
+        procedure === 'uploadEvidence'
+          ? createCaller().uploadEvidence({ checkResultId: 'result-1', content, type })
+          : createCaller().submitCheckEvidence({
+              checkItemId: 'item-1',
+              evidence: [{ content, type }],
+              verdict: 'passed',
+              verifyRunId: 'run-1',
+            });
+
+      it.each([
+        { label: 'CLI threshold', content: 'x'.repeat(5000) },
+        { label: 'server boundary', content: 'x'.repeat(6000) },
+        { label: 'Chinese boundary', content: '中'.repeat(6000) },
+        { label: 'UTF-16 boundary', content: '😀'.repeat(3000) },
+      ])('preserves $label content without truncation', async ({ content }) => {
+        if (procedure === 'uploadEvidence') {
+          modelMocks.findResultById.mockResolvedValueOnce({ id: 'result-1' });
+          modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+        } else {
+          modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1', plan: [] });
+          modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+          modelMocks.createManyEvidence.mockResolvedValueOnce([{ id: 'evidence-1' }]);
+        }
+
+        await submit(content);
+
+        const row =
+          procedure === 'uploadEvidence'
+            ? modelMocks.createEvidence.mock.calls[0][0]
+            : modelMocks.createManyEvidence.mock.calls[0][0][0];
+        expect(row.content).toBe(content);
+      });
+
+      it.each(['text', 'markdown', 'transcript', 'dom_snapshot', 'terminal'] as const)(
+        'rejects oversized %s evidence before any lookup or write',
+        async (type) => {
+          await expect(submit('x'.repeat(6001), type)).rejects.toMatchObject({
+            code: 'BAD_REQUEST',
+            message: expect.stringContaining('6000'),
+          });
+          expect(modelMocks.findResultById).not.toHaveBeenCalled();
+          expect(modelMocks.findRunById).not.toHaveBeenCalled();
+          expect(modelMocks.findFileById).not.toHaveBeenCalled();
+          expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+          expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+          expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
+        },
+      );
+
+      it('counts surrogate pairs consistently with the CLI', async () => {
+        await expect(submit('😀'.repeat(3001))).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringContaining('6000'),
+        });
+      });
+    },
+  );
+
+  it('rejects a batch containing oversized evidence before persisting any result', async () => {
+    await expect(
+      createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [
+          { content: 'valid', type: 'text' },
+          { content: 'x'.repeat(6001), type: 'text' },
+        ],
+        verdict: 'passed',
+        verifyRunId: 'run-1',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('6000') });
+
+    expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
+  });
 });

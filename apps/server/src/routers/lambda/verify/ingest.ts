@@ -52,12 +52,22 @@ const toulminSchema = z.object({
 const statusForVerdict = (verdict: 'passed' | 'failed' | 'uncertain') =>
   verdict === 'passed' ? ('passed' as const) : ('failed' as const);
 
+// The CLI inlines fewer than 5000 UTF-16 code units. Leave 20% headroom at
+// the API boundary; larger evidence must go through file storage.
+const MAX_INLINE_EVIDENCE_CONTENT_LENGTH = 6000;
+const inlineEvidenceContentSchema = z
+  .string()
+  .min(1)
+  .refine((content) => content.length <= MAX_INLINE_EVIDENCE_CONTENT_LENGTH, {
+    message: `Inline evidence content must not exceed ${MAX_INLINE_EVIDENCE_CONTENT_LENGTH} UTF-16 code units. Upload larger evidence as a file and provide fileId instead.`,
+  });
+
 const uploadEvidenceInputSchema = z
   .object({
     capturedBy: evidenceCapturedBySchema.optional(),
     // Exactly one of `content` (inline text) or `fileId` (already-uploaded artifact).
     checkResultId: z.string(),
-    content: z.string().min(1).optional(),
+    content: inlineEvidenceContentSchema.optional(),
     description: z.string().optional(),
     fileId: z.string().min(1).optional(),
     metadata: z.unknown().optional(),
@@ -183,7 +193,7 @@ export const ingestRouter = router({
               z
                 .object({
                   capturedBy: evidenceCapturedBySchema.optional(),
-                  content: z.string().min(1).optional(),
+                  content: inlineEvidenceContentSchema.optional(),
                   description: z.string().optional(),
                   fileId: z.string().min(1).optional(),
                   metadata: z.unknown().optional(),
