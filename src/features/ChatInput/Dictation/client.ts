@@ -1,7 +1,7 @@
 import { type RealtimeAudioCapture, stopMediaStream } from './audio';
 import { toClientError } from './clientErrors';
 import type { DictationConnection, RealtimeAsrWebSocket } from './connection';
-import { closeDictationSocket, connectDictationSession } from './connection';
+import { closeDictationSocket, closeUnadoptedSocket, connectDictationSession } from './connection';
 import type {
   RealtimeAsrClientTimings,
   RealtimeAsrSessionResponse,
@@ -19,7 +19,7 @@ import { BoundedWebSocketFrameQueue } from './frameQueue';
 import { attachDictationLifecycle } from './lifecycle';
 import { DictationPrefetcher } from './prefetch';
 import type { RealtimeDictationTiming, RealtimeDictationTimingStage } from './timing';
-import { clearPerformanceMarks, getMonotonicNow, markPerformance } from './timing';
+import { clearPerformanceMarks, getMonotonicNow, markPerformance, reportTiming } from './timing';
 import { DictationTranscript } from './transcript';
 
 export type { RealtimeAsrWebSocket } from './connection';
@@ -45,6 +45,7 @@ const IDLE_SNAPSHOT: RealtimeDictationSnapshot = {
 };
 
 const SOCKET_OPEN = 1;
+const LEGACY_PREROLL_FRAMES = 2;
 
 export class RealtimeDictationClient {
   readonly #dependencies: RealtimeDictationDependencies;
@@ -135,7 +136,7 @@ export class RealtimeDictationClient {
       if (runId === this.#runId) this.#activate(connected);
       else closeDictationSocket(connected.socket);
     });
-    activation.catch(() => undefined);
+    activation.catch(() => closeUnadoptedSocket(connection, (socket) => socket === this.#socket));
 
     try {
       const capture = await Promise.race([
@@ -254,6 +255,10 @@ export class RealtimeDictationClient {
     this.#deferred = deferred;
     this.#transcript = new DictationTranscript({ ...this.#anchor!, sessionId: session.sessionId });
     this.#socket = socket;
+    if (socket.readyState !== SOCKET_OPEN) {
+      void this.#fail('NETWORK_DISCONNECTED', true);
+      return;
+    }
     socket.addEventListener('message', this.#handleMessage);
     socket.addEventListener('error', this.#handleSocketError);
     socket.addEventListener('close', this.#handleClose);
@@ -271,11 +276,11 @@ export class RealtimeDictationClient {
         ? REALTIME_ASR_DEFERRED_LIMITS.maxPrerollFrames
         : session.limits.maxBufferedFrames,
     });
-    // A legacy Gateway paces from the first frame it sees and only tolerates a
-    // short burst, so it receives just the most recent buffered audio.
+    // A legacy Gateway paces from its first frame and rejects a burst that
+    // fills its queue before live frames follow.
     const pending = deferred
       ? this.#pendingFrames
-      : this.#pendingFrames.slice(-session.limits.maxBufferedFrames);
+      : this.#pendingFrames.slice(-LEGACY_PREROLL_FRAMES);
     this.#pendingFrames = [];
     this.#recordTiming('ws_ready');
     this.#resolveActivation?.();
@@ -368,7 +373,9 @@ export class RealtimeDictationClient {
 
   #startFinalTimer() {
     if (this.#finalTimer) clearTimeout(this.#finalTimer);
-    const timeoutMs = this.#session?.limits.finalTimeoutMs ?? 5000;
+    const limits = this.#session?.limits;
+    const providerPendingMs = limits && this.#connectTimer ? limits.providerConnectTimeoutMs : 0;
+    const timeoutMs = (limits?.finalTimeoutMs ?? 5000) + providerPendingMs;
     this.#finalTimer = setTimeout(() => void this.#fail('FINAL_TIMEOUT', true), timeoutMs);
   }
 
@@ -414,17 +421,7 @@ export class RealtimeDictationClient {
 
   #recordTiming(stage: RealtimeDictationTimingStage) {
     if (this.#startedAt === undefined) return;
-
-    markPerformance(stage);
-    const timing = {
-      durationMs: Math.max(0, Math.round(this.#now() - this.#startedAt)),
-      stage,
-    } satisfies RealtimeDictationTiming;
-    try {
-      this.#dependencies.onTiming?.(timing);
-    } catch (error) {
-      void error;
-    }
+    reportTiming(stage, this.#now() - this.#startedAt, this.#dependencies.onTiming);
   }
 
   async #fail(code: RealtimeDictationErrorCode, retryable: boolean) {

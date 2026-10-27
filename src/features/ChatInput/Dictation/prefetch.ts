@@ -18,6 +18,9 @@ const PREFETCH_EXPIRY_MARGIN_MS = 10_000;
 // amplified by every open composer; a real press never waits on this.
 const PREFETCH_RETRY_BASE_MS = 30_000;
 const PREFETCH_RETRY_MAX_MS = 600_000;
+// A press waits this long for a prefetch still in flight, then connects on its
+// own, so a hung admission request cannot block every later press.
+const PREFETCH_TAKE_TIMEOUT_MS = 3000;
 
 export class DictationPrefetcher {
   readonly #connect: (signal: AbortSignal) => Promise<DictationConnection>;
@@ -60,7 +63,14 @@ export class DictationPrefetcher {
   async take(): Promise<DictationConnection | undefined> {
     const entry = this.#entry;
     if (!entry) return;
-    const connection = await entry.ready;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const connection = await Promise.race([
+      entry.ready,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(resolve, PREFETCH_TAKE_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
     if (this.#entry !== entry) return;
     if (
       connection &&

@@ -139,3 +139,16 @@ export const connectDictationSession = async (
     signal.addEventListener('abort', handleAbort, { once: true });
   });
 };
+
+// A connection that resolved after its run failed has no owner left to close it.
+export const closeUnadoptedSocket = (
+  connection: Promise<DictationConnection>,
+  isAdopted: (socket: RealtimeAsrWebSocket) => boolean,
+) => {
+  void connection.then(
+    ({ socket }) => {
+      if (!isAdopted(socket)) closeDictationSocket(socket);
+    },
+    () => undefined,
+  );
+};

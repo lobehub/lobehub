@@ -106,7 +106,7 @@ const sentControls = (socket: FakeSocket) =>
     .filter((data): data is string => typeof data === 'string')
     .map((data) => JSON.parse(data) as Record<string, unknown>);
 
-const createFixture = () => {
+const createFixture = (microphone?: () => Promise<MediaStream>) => {
   const socket = new FakeSocket();
   let onFrame: ((frame: ArrayBuffer) => void) | undefined;
   const capture: RealtimeAudioCapture = {
@@ -135,7 +135,7 @@ const createFixture = () => {
     createSession,
     createWebSocket,
     editor,
-    requestMicrophone: vi.fn().mockResolvedValue(stream),
+    requestMicrophone: microphone ?? vi.fn().mockResolvedValue(stream),
   });
 
   const handshake = async (event: RealtimeAsrServerEvent = accepted()) => {
@@ -162,6 +162,7 @@ const createFixture = () => {
     onUserEdit: () => onUserEdit?.(),
     socket,
     start,
+    stream,
     track,
   };
 };
@@ -759,6 +760,7 @@ describe('RealtimeDictationClient', () => {
     vi.useFakeTimers();
     const fixture = createFixture();
     await fixture.start();
+    fixture.socket.serverEvent(ready(2));
     await fixture.client.stop();
 
     await vi.advanceTimersByTimeAsync(REALTIME_ASR_LIMITS.finalTimeoutMs);
@@ -768,6 +770,52 @@ describe('RealtimeDictationClient', () => {
       retryable: true,
       status: 'error',
     });
+  });
+
+  it('waits for the Provider before timing out a release that came before session.ready', async () => {
+    vi.useFakeTimers();
+    const fixture = createFixture();
+    await fixture.start();
+    await fixture.client.stop();
+
+    await vi.advanceTimersByTimeAsync(REALTIME_ASR_LIMITS.finalTimeoutMs);
+    expect(fixture.client.getSnapshot().status).toBe('finalizing');
+  });
+
+  it('fails at once when the held connection closed while the microphone prompt was open', async () => {
+    let grant!: (stream: MediaStream) => void;
+    const fixture = createFixture(
+      () =>
+        new Promise<MediaStream>((resolve) => {
+          grant = resolve;
+        }),
+    );
+    const starting = fixture.client.start();
+    await fixture.handshake();
+    fixture.socket.readyState = 3;
+    grant(fixture.stream);
+    await starting;
+
+    expect(fixture.client.getSnapshot()).toMatchObject({ errorCode: 'NETWORK_DISCONNECTED' });
+    expect(sentControls(fixture.socket).map(({ type }) => type)).not.toContain('session.start');
+  });
+
+  it('closes a connection that resolved before the microphone was denied', async () => {
+    let deny!: (error: Error) => void;
+    const fixture = createFixture(
+      () =>
+        new Promise<MediaStream>((_, reject) => {
+          deny = reject;
+        }),
+    );
+    const starting = fixture.client.start();
+    await fixture.handshake();
+    deny(new DOMException('denied', 'NotAllowedError'));
+    await starting;
+
+    await vi.waitFor(() =>
+      expect(fixture.socket.close).toHaveBeenCalledWith(1000, 'dictation_finished'),
+    );
   });
 
   it('fails instead of growing the send queue without bound', async () => {
@@ -883,8 +931,6 @@ describe('RealtimeDictationClient', () => {
     await starting;
 
     expect(sentControls(legacy).map(({ type }) => type)).toEqual(['session.auth']);
-    expect(legacy.sent.filter((data) => data instanceof ArrayBuffer)).toHaveLength(
-      REALTIME_ASR_LIMITS.maxBufferedFrames,
-    );
+    expect(legacy.sent.filter((data) => data instanceof ArrayBuffer)).toHaveLength(2);
   });
 });

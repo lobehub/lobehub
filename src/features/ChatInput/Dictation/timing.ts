@@ -40,3 +40,16 @@ export const markPerformance = (stage: RealtimeDictationTimingStage | 'start') =
     void error;
   }
 };
+
+export const reportTiming = (
+  stage: RealtimeDictationTimingStage,
+  elapsedMs: number,
+  onTiming?: (timing: RealtimeDictationTiming) => void,
+) => {
+  markPerformance(stage);
+  try {
+    onTiming?.({ durationMs: Math.max(0, Math.round(elapsedMs)), stage });
+  } catch (error) {
+    void error;
+  }
+};

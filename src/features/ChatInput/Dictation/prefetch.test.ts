@@ -114,4 +114,19 @@ describe('DictationPrefetcher backoff', () => {
     expect(connect).toHaveBeenCalledTimes(2);
     prefetcher.discard();
   });
+
+  it('gives up on a prefetch still in flight so a press can connect on its own', async () => {
+    vi.useFakeTimers();
+    const connect = vi.fn(() => new Promise<DictationConnection>(() => {}));
+    const prefetcher = new DictationPrefetcher({ connect, now: () => 0, random: () => 1 });
+
+    void prefetcher.prefetch();
+    const taking = prefetcher.take();
+    await vi.advanceTimersByTimeAsync(3000);
+
+    await expect(taking).resolves.toBeUndefined();
+    void prefetcher.prefetch();
+    expect(connect).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });
