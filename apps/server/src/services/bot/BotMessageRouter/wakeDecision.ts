@@ -82,20 +82,31 @@ export type BotWakeReason =
   | 'solo-conversation'
   | 'watch-keyword';
 
-const FOLLOWUP_REASONS: ReadonlySet<BotWakeReason> = new Set([
-  'followup-window',
-  'named-in-text',
-  'watch-keyword',
-]);
-
 /**
- * Whether a wake may end in silence. Only a wake nobody asked for with an @ — a watch keyword in a
- * thread the bot was not addressed in, its name in the text, or a message inside the follow-up
- * window — is `followup`. A DM, @mention, command, or a 1:1 that reads as private is a direct
- * address and keeps the always-answer behaviour.
+ * Whether a wake may end in silence, for every reason the router records. Only a wake nobody asked
+ * for with an @ — a watch keyword in a thread the bot was not addressed in, its name in the text,
+ * or a message inside the follow-up window — is `followup`. A DM, @mention, command, or a 1:1 that
+ * reads as private is a direct address and keeps the always-answer behaviour.
+ *
+ * A table, not a list of the followups: a new reason does not compile until it says which it is.
  */
-export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind =>
-  FOLLOWUP_REASONS.has(reason) ? 'followup' : 'mention';
+const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
+  'access-gate-rejected': 'mention',
+  'addressed': 'mention',
+  'command': 'mention',
+  'direct-message': 'mention',
+  'explicit-mention': 'mention',
+  'followup-window': 'followup',
+  'monitoring-not-allowed': 'mention',
+  'named-in-text': 'followup',
+  'not-addressed': 'mention',
+  'policy-denied': 'mention',
+  'scheduled': 'mention',
+  'solo-conversation': 'mention',
+  'watch-keyword': 'followup',
+};
+
+export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind => KIND_BY_REASON[reason];
 
 const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'access-gate-rejected': 'blocked',
@@ -145,10 +156,36 @@ export interface WakeStatePort {
 /** How many of a conversation's newest messages are read to find the bot's last words. */
 const CONVERSATION_READ_LINES = 50;
 
-/** A wake the recorder started on its own, and the rule that started it. */
+/** The reasons `initiate` can wake the bot for. */
+export type BotWakeInitiationReason = Extract<BotWakeReason, 'followup-window' | 'named-in-text'>;
+
+/**
+ * What each way of starting a wake on its own means for how the wake is handled.
+ *
+ * - `addressed`: the message is meant for the bot (it says the bot's name), so it is answered at
+ *   once like an @mention. The scheduler's collect window is for merging a burst of chatter nobody
+ *   addressed; making someone who called the bot wait for it only makes the bot look dead.
+ *
+ * Declared here, where the reason is decided, and read by the handlers as a fact about the
+ * initiation: a new reason does not compile until it says what it is, and no call site has to
+ * remember to list it.
+ */
+const INITIATION_TRAITS: Record<BotWakeInitiationReason, { addressed: boolean }> = {
+  'followup-window': { addressed: false },
+  'named-in-text': { addressed: true },
+};
+
+/** A wake the recorder started on its own: the rule that started it, and what that implies. */
 export interface BotWakeInitiation {
-  reason: Extract<BotWakeReason, 'followup-window' | 'named-in-text'>;
+  /** See {@link INITIATION_TRAITS}. */
+  addressed: boolean;
+  reason: BotWakeInitiationReason;
 }
+
+const initiationFor = (reason: BotWakeInitiationReason): BotWakeInitiation => ({
+  ...INITIATION_TRAITS[reason],
+  reason,
+});
 
 export interface BotWakeRecorderOptions {
   agentId: string;
@@ -200,9 +237,10 @@ export interface BotWakeRecorder {
    * only as a veto.
    *
    * Returns:
-   * - `{ reason: 'named-in-text' }` when the text calls the bot by name (no model call)
-   * - `{ reason: 'followup-window' }` when the bot spoke lately and an enforcing classifier agrees
-   *   (a shadow or absent classifier does not stand in the way)
+   * - `{ reason: 'named-in-text', addressed: true }` when the text calls the bot by name (no model
+   *   call)
+   * - `{ reason: 'followup-window', addressed: false }` when the bot spoke lately and an enforcing
+   *   classifier agrees (a shadow or absent classifier does not stand in the way)
    * - `undefined` for everything else, including a degraded classifier and any failure
    *
    * The evaluation is remembered, so the `record()` that follows does not judge the message again.
@@ -629,7 +667,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         if (ruleDecision.reason === 'named-in-text') {
           keepEvaluation(observation, evaluation);
 
-          return { reason: 'named-in-text' };
+          return initiationFor('named-in-text');
         }
 
         // Only the window is open. A classifier the owner enforces must confirm; one that only
@@ -648,7 +686,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           keepEvaluation(observation, evaluation);
         }
 
-        return { reason: 'followup-window' };
+        return initiationFor('followup-window');
       } catch (error) {
         botWakeFailureCounter.add(1, { stage: 'initiate' });
         log('initiate failed: entry=%s %O', observation.entryPoint, error);

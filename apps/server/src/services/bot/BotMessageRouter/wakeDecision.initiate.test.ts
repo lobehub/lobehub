@@ -101,14 +101,20 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     const state = fakeState(spokeRecently());
     const recorder = make(WITH_CLASSIFIER('enforce'), state, { classify });
 
-    await expect(recorder.initiate(observation())).resolves.toEqual({ reason: 'named-in-text' });
+    await expect(recorder.initiate(observation())).resolves.toEqual({
+      addressed: true,
+      reason: 'named-in-text',
+    });
     expect(classify).not.toHaveBeenCalled();
   });
 
   it('wakes on the name even when the bot has not spoken lately', async () => {
     const recorder = make(ENFORCE, fakeState());
 
-    await expect(recorder.initiate(observation())).resolves.toEqual({ reason: 'named-in-text' });
+    await expect(recorder.initiate(observation())).resolves.toEqual({
+      addressed: true,
+      reason: 'named-in-text',
+    });
   });
 
   it('does not initiate without a cue: not named, outside the window', async () => {
@@ -179,6 +185,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
       });
 
       await expect(recorder.initiate(observation({}, plain))).resolves.toEqual({
+        addressed: false,
         reason: 'followup-window',
       });
     });
@@ -207,6 +214,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
       const recorder = make(WITH_CLASSIFIER('shadow'), fakeState(spokeRecently()), { classify });
 
       await expect(recorder.initiate(observation({}, plain))).resolves.toEqual({
+        addressed: false,
         reason: 'followup-window',
       });
       expect(classify).toHaveBeenCalledTimes(1);
@@ -269,6 +277,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
       });
 
       await expect(recorder.initiate(observation({}, plain))).resolves.toEqual({
+        addressed: false,
         reason: 'followup-window',
       });
       expect((classify as any).mock.calls[0][0].conversation.agent).toBeUndefined();
@@ -292,7 +301,10 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     const names = vi.fn(async () => ['Shadow Arvin']);
     const recorder = make(ENFORCE, fakeState(), { botNames: names });
 
-    await expect(recorder.initiate(observation())).resolves.toEqual({ reason: 'named-in-text' });
+    await expect(recorder.initiate(observation())).resolves.toEqual({
+      addressed: true,
+      reason: 'named-in-text',
+    });
 
     // The platform client refreshed its names (the bot was renamed).
     names.mockResolvedValue(['Arvin Prime']);
@@ -302,7 +314,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     ).resolves.toBeUndefined();
     await expect(
       recorder.initiate(observation({}, { id: 'm-3', text: 'Arvin Prime 听得到吗' })),
-    ).resolves.toEqual({ reason: 'named-in-text' });
+    ).resolves.toEqual({ addressed: true, reason: 'named-in-text' });
   });
 
   it('records the decision it made without asking the classifier a second time', async () => {
@@ -311,7 +323,10 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     const recorder = make(WITH_CLASSIFIER('enforce'), state, { classify });
     const message = observation({}, { text: '那这个怎么处理?' });
 
-    expect(await recorder.initiate(message)).toEqual({ reason: 'followup-window' });
+    expect(await recorder.initiate(message)).toEqual({
+      addressed: false,
+      reason: 'followup-window',
+    });
     recorder.record({ ...message, outcome: 'wake', reason: 'followup-window' });
     await flush();
 
@@ -328,7 +343,10 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     const state = fakeState(spokeRecently());
     const recorder = make(ENFORCE, state);
 
-    expect(await recorder.initiate(observation())).toEqual({ reason: 'named-in-text' });
+    expect(await recorder.initiate(observation())).toEqual({
+      addressed: true,
+      reason: 'named-in-text',
+    });
     recorder.record({ ...observation(), outcome: 'wake', reason: 'named-in-text' });
     await flush();
 
