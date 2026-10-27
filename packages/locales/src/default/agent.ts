@@ -643,7 +643,7 @@ export default {
     'Quick answers stay in the channel; longer work moves into a thread under the message. When the work takes a while, it first posts a short note on what it will do.',
   'channel.replyPlacementThread': 'Always open a thread',
   'channel.replyPlacementThreadHint':
-    'Every message that wakes the bot in a channel gets its own thread',
+    'Every message that wakes the bot in a channel gets its own thread.',
   'channel.historyLimit': 'History Message Limit',
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
   'channel.serverId': 'Default Server ID',

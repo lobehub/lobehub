@@ -396,3 +396,31 @@ describe('channel settings form: bot-wake options', () => {
     });
   });
 });
+
+describe('channel settings form: reply placement', () => {
+  it('lists where to reply as choices that each say what they do, like who may DM it', () => {
+    state.copy = zh;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness activeTab="reply" />);
+
+    const placement = screen.getByRole('radiogroup', { name: zh['channel.replyPlacement'] });
+    // Both consequences are readable without opening a dropdown.
+    expect(placement).toHaveTextContent(zh['channel.replyPlacementAgentHint']);
+    expect(placement).toHaveTextContent(zh['channel.replyPlacementThreadHint']);
+    expect(placement).toHaveTextContent(zh['channel.access.recommended']);
+    expect(screen.queryByRole('combobox', { name: zh['channel.replyPlacement'] })).toBeNull();
+
+    const agent = screen.getByRole('radio', {
+      name: new RegExp(zh['channel.replyPlacementAgent']),
+    });
+    const thread = screen.getByRole('radio', {
+      name: new RegExp(zh['channel.replyPlacementThread']),
+    });
+    expect(agent).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(thread);
+    expect(thread).toHaveAttribute('aria-checked', 'true');
+    expect(agent).toHaveAttribute('aria-checked', 'false');
+  });
+});

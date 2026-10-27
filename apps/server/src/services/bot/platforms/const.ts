@@ -1002,11 +1002,13 @@ export const DEFAULT_BOT_REPLY_PLACEMENT_MODE: BotReplyPlacementMode = 'agent';
 
 export const replyPlacementField: FieldSchema = {
   key: 'replyPlacement',
+  choices: true,
   default: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
   description: 'channel.replyPlacementHint',
   enum: [...BOT_REPLY_PLACEMENT_MODES],
   enumDescriptions: ['channel.replyPlacementAgentHint', 'channel.replyPlacementThreadHint'],
   enumLabels: ['channel.replyPlacementAgent', 'channel.replyPlacementThread'],
+  enumRecommended: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
   label: 'channel.replyPlacement',
   type: 'string',
 };

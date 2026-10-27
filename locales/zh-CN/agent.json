@@ -433,7 +433,7 @@
   "channel.replyPlacementAgentHint": "简单的问题直接在频道里回复，需要较长时间处理的事情会在这条消息下开一个消息串回复。处理需要一段时间时，会先回一句接下来要做什么。",
   "channel.replyPlacementHint": "在频道里叫到 Bot 时，它在哪里回复。已经在消息串或私信里的消息，就在原处回复。",
   "channel.replyPlacementThread": "总是开消息串",
-  "channel.replyPlacementThreadHint": "在频道里每次叫到 Bot，都会开一个新的消息串回复",
+  "channel.replyPlacementThreadHint": "在频道里每次叫到 Bot，都会开一个新的消息串回复。",
   "channel.resultDetail.hide": "收起详情",
   "channel.resultDetail.show": "查看详情",
   "channel.runtimeDisconnected": "机器人已断开连接",
