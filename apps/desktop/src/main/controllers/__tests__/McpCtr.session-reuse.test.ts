@@ -53,7 +53,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([undefined, 'My server description'])(
+  it.each(['My server description'])(
     'keeps stdio descriptions as metadata (%s)',
     async (description) => {
       const instance = {
@@ -82,7 +82,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     },
   );
 
-  it.each([undefined, 'My server description'])(
+  it.each(['My server description'])(
     'keeps HTTP descriptions as metadata (%s)',
     async (description) => {
       const instance = { ...makeClientInstance('http'), listTools: vi.fn().mockResolvedValue([]) };
@@ -103,6 +103,54 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
       expect(manifest.meta.description).toBe(description);
     },
   );
+
+  it.each([
+    {
+      capabilities: { tools: [{ name: 'hello' }] },
+      summary: '1 tool',
+    },
+    {
+      capabilities: { prompts: [], resources: [], tools: [] },
+      summary: 'no tools, prompts, or resources',
+    },
+    {
+      capabilities: {
+        prompts: [{ name: 'greet' }],
+        resources: [{ name: 'readme' }],
+        tools: [{ name: 'hello' }],
+      },
+      summary: '1 prompt, 1 resource, 1 tool',
+    },
+  ])('persists the automatic stdio description: $summary', async ({ capabilities, summary }) => {
+    const instance = makeClientInstance('automatic');
+    instance.listManifests.mockResolvedValue(capabilities);
+    mcpClientMocks.mockReturnValue(instance);
+
+    const result = await ctr.getStdioMcpServerManifest(
+      serializeMcpIpcPayload({ command: 'test-command', name: 'automatic' }),
+    );
+    const manifest = deserializeMcpIpcPayload<{ meta: { description: string } }>(result);
+
+    expect(manifest.meta.description).toBe(`automatic MCP server has ${summary}`);
+    expect(manifest.meta.description).not.toContain('undefined');
+  });
+
+  it.each([
+    { tools: [], summary: 'no tools, prompts, or resources' },
+    { tools: [{ name: 'hello' }], summary: '1 tool, like "hello"' },
+  ])('persists the automatic HTTP description: $summary', async ({ tools, summary }) => {
+    mcpClientMocks.mockReturnValue({
+      ...makeClientInstance('automatic'),
+      listTools: vi.fn().mockResolvedValue(tools),
+    });
+    const result = await ctr.getStreamableMcpServerManifest(
+      serializeMcpIpcPayload({ identifier: 'automatic', url: 'http://localhost/mcp' }),
+    );
+    const manifest = deserializeMcpIpcPayload<{ meta: { description: string } }>(result);
+
+    expect(manifest.meta.description).toBe(`automatic MCP server has ${summary}`);
+    expect(manifest.meta.description).not.toContain('undefined');
+  });
 
   it('reuses one stdio session across consecutive tool calls (state survives)', async () => {
     const instance = makeClientInstance('first');

@@ -271,7 +271,7 @@ describe('MCPService', () => {
   });
 
   describe('manifest descriptions', () => {
-    it.each([undefined, 'My server description'])(
+    it.each(['My server description'])(
       'keeps stdio descriptions as metadata (%s)',
       async (description) => {
         mockClient.listManifests.mockResolvedValue({
@@ -290,7 +290,7 @@ describe('MCPService', () => {
       },
     );
 
-    it.each([undefined, 'My server description'])(
+    it.each(['My server description'])(
       'keeps HTTP descriptions as metadata (%s)',
       async (description) => {
         mockClient.listTools.mockResolvedValue([]);

@@ -6,6 +6,7 @@ import {
   type McpIpcPayload,
   serializeMcpIpcPayload,
 } from '@lobechat/utils/mcpIpcPayload';
+import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
@@ -510,7 +511,7 @@ export default class McpCtr extends ControllerModule {
         identifier,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
-          description: input.metadata?.description,
+          description: input.metadata?.description || getMcpServerDescription(identifier, manifest),
           title: input.metadata?.name || identifier,
         },
         ...manifest,
@@ -571,7 +572,9 @@ export default class McpCtr extends ControllerModule {
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
-          description: input.metadata?.description,
+          description:
+            input.metadata?.description ||
+            getMcpServerDescription(identifier, { tools }, { includeToolExample: true }),
           title: identifier,
         },
         type: 'mcp' as any,

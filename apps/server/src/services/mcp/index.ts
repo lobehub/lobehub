@@ -7,6 +7,7 @@ import {
   type ToolManifestSettings,
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
+import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 import { type DeploymentOption } from '@lobehub/market-sdk';
 import { ProtocolError, SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
@@ -374,7 +375,9 @@ export class MCPService {
       mcpParams,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description: metadata?.description,
+        description:
+          metadata?.description ||
+          getMcpServerDescription(identifier, { tools }, { includeToolExample: true }),
         title: identifier,
       },
       // TODO: temporary
@@ -405,7 +408,7 @@ export class MCPService {
       identifier,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description: metadata?.description,
+        description: metadata?.description || getMcpServerDescription(identifier, manifest),
         title: metadata?.name || identifier,
       },
       ...manifest,
