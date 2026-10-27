@@ -217,6 +217,8 @@ export interface WakeRules {
   maxSilentWakes: number;
   /** The owner posted in the channel within this many seconds: stay quiet. 0 disables. */
   ownerPresenceSeconds: number;
+  /** Offering the owner help nobody asked for. Uses `classifier`-style mode and threshold. */
+  proactive: WakeClassifierRules;
   scope: WakeRuleScope;
   /** How long after the bot speaks plain messages count as a follow-up to it. */
   windowSeconds: number;
@@ -245,6 +247,12 @@ export interface BotWakeConfig {
    * the scenario like `enabled: false`. Defaults to `shadow`.
    */
   mode?: WakePolicyMode;
-  rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions'>>;
+  /**
+   * Whether the bot may step in on its own when the owner raises something it can help with.
+   * `enabled` is the settings switch (on = `enforce`); `mode` is an operator override, such as
+   * `shadow` to only score it. Off by default.
+   */
+  proactive?: { enabled?: boolean; mode?: WakePolicyMode; threshold?: number };
+  rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions' | 'proactive'>>;
   scheduler?: WakeSchedulerConfig;
 }

@@ -59,6 +59,8 @@ export async function executeWithCallback(
     charLimit?: number;
     client?: PlatformClient;
     displayToolCalls?: boolean;
+    /** The bot woke on its own to offer its owner help; told to the agent with a `followup`. */
+    proactive?: boolean;
     reactionMode?: BotReactionMode;
     replyLocale: BotReplyLocale;
     topicId?: string;
@@ -288,7 +290,10 @@ export async function executeWithCallback(
     : undefined;
 
   // Tell the agent it may stay silent; see `formatBotPlatformContext`.
-  if (deferFeedback && botPlatformContext) botPlatformContext.wakeKind = wakeKind;
+  if (deferFeedback && botPlatformContext) {
+    botPlatformContext.wakeKind = wakeKind;
+    if (opts.proactive) botPlatformContext.proactive = true;
+  }
 
   // Attach file warnings to botPlatformContext for injection via context engine
   if (fileWarnings?.length && botPlatformContext) {

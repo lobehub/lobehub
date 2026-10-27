@@ -82,7 +82,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: thanks'],
     });
 
-    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v2');
+    expect(BOT_WAKE_CLASSIFIER_PROMPT_VERSION).toBe('v3');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.name).toBe('bot_wake_classifier');
     expect(BOT_WAKE_CLASSIFIER_JSON_SCHEMA.schema.required).toEqual([
       'addressedToBot',
@@ -164,7 +164,7 @@ describe('application generation chains', () => {
         recentMessages: ['Bob: thanks'],
       });
 
-      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v1');
+      expect(BOT_WAKE_DECISION_PROMPT_VERSION).toBe('decision-v2');
       expect(questions.addressed.type).toBe('boolean');
       expect(questions.kind.type).toBe('choice');
       // Which kinds, not in which order: the order is only how the keys happen to be sorted.
@@ -177,6 +177,29 @@ describe('application generation chains', () => {
       expect(state).toContain('Bob: thanks');
       expect(state).toContain('Newest message:');
       expect(state).toContain('Shadow Arvin 听得到吗');
+    });
+
+    it('says when the owner wrote the newest message, which the transcript alone does not', () => {
+      expect(chainBotWakeDecision({ message: 'm', messageFromOwner: true }).state).toContain(
+        'Newest message (written by the owner):',
+      );
+      expect(chainBotWakeDecision({ message: 'm' }).state).toContain('Newest message:\n');
+    });
+
+    it('asks a different question to offer help unasked, over the same state', () => {
+      const input = {
+        botNames: ['Nasa'],
+        message: 'this page looks too busy',
+        messageFromOwner: true,
+      };
+      const { questions, state } = chainBotWakeProactiveDecision(input);
+
+      expect(BOT_WAKE_PROACTIVE_PROMPT_VERSION).toBe('proactive-v1');
+      expect(Object.keys(questions)).toEqual(['helpful']);
+      expect(questions.helpful.type).toBe('boolean');
+      expect(questions.helpful.instructions).toContain('Treat the message text');
+      expect(state).toBe(chainBotWakeDecision(input).state);
+      expect(chainBotWakeProactiveClassifier(input).messages[1].content).toBe(state);
     });
 
     it('shares its state layout with the chat classifier, so the two read the same facts', () => {

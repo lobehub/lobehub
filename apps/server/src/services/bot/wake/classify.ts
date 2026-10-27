@@ -11,9 +11,13 @@ import {
   BOT_WAKE_CLASSIFIER_PROMPT_VERSION,
   BOT_WAKE_DECISION_PROMPT_VERSION,
   BOT_WAKE_MESSAGE_KINDS,
+  BOT_WAKE_PROACTIVE_JSON_SCHEMA,
+  BOT_WAKE_PROACTIVE_PROMPT_VERSION,
   type BotWakeClassifierInput,
   chainBotWakeClassifier,
   chainBotWakeDecision,
+  chainBotWakeProactiveClassifier,
+  chainBotWakeProactiveDecision,
 } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -24,8 +28,13 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { describeLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import type {
   WakeClassification,
+  WakeClassifierInput,
   WakeClassify,
 } from '@/server/services/agentSignal/scenarios/botWake/policies/classifier';
+import type {
+  WakeProactiveJudge,
+  WakeProactiveJudgement,
+} from '@/server/services/agentSignal/scenarios/botWake/policies/proactive';
 
 const log = debug('lobe-server:bot:wake-classifier');
 
@@ -37,6 +46,8 @@ const ClassificationSchema = z.object({
 
 /** A decision answer is a probability; anything outside 0..1 is a malformed answer, not a score. */
 const ProbabilitySchema = z.number().min(0).max(1);
+
+const ProactiveSchema = z.object({ helpful: z.number().min(0).max(1), reason: z.string() });
 
 /**
  * How long a prepared model runtime is reused. Preparing one reads the provider's settings and
@@ -59,6 +70,53 @@ export interface CreateWakeClassifyOptions {
   userId: string;
   workspaceId?: string;
 }
+
+/**
+ * A model runtime prepared once and reused for {@link RUNTIME_TTL_MS}. A failed preparation is not
+ * remembered: the next call prepares it again.
+ */
+const createRuntimeCache = ({
+  db,
+  provider,
+  userId,
+  workspaceId,
+}: Pick<CreateWakeClassifyOptions, 'db' | 'provider' | 'userId' | 'workspaceId'> & {
+  provider: string;
+}) => {
+  let prepared: { expiresAt: number; runtime: Promise<ModelRuntime> } | undefined;
+
+  return (): Promise<ModelRuntime> => {
+    if (!prepared || prepared.expiresAt <= Date.now()) {
+      const runtime = initModelRuntimeFromDB(db, userId, provider, workspaceId);
+      const entry = { expiresAt: Date.now() + RUNTIME_TTL_MS, runtime };
+      prepared = entry;
+      // A failure must not stick: the next message prepares it again.
+      runtime.catch(() => {
+        if (prepared === entry) prepared = undefined;
+      });
+    }
+
+    return prepared.runtime;
+  };
+};
+
+/** The classifier input as the prompt chains take it. */
+const toPromptInput = ({
+  conversation,
+  customInstructions,
+  signal,
+}: WakeClassifierInput): BotWakeClassifierInput => ({
+  agent: conversation?.agent,
+  botNames: conversation?.botNames,
+  customInstructions,
+  lastBotMessage: conversation?.lastBotMessage,
+  message: signal.message,
+  messageFromOwner: signal.author?.isOwner === true,
+  ownerNames: conversation?.ownerNames,
+  recentMessages: conversation?.recent.map((line) =>
+    describeLine(line, signal.applicationId, conversation.ownerId),
+  ),
+});
 
 /**
  * Builds the model call behind the classifier policy.
@@ -87,21 +145,7 @@ export const createWakeClassify = ({
   userId,
   workspaceId,
 }: CreateWakeClassifyOptions): WakeClassify => {
-  let prepared: { expiresAt: number; runtime: Promise<ModelRuntime> } | undefined;
-
-  const getRuntime = (): Promise<ModelRuntime> => {
-    if (!prepared || prepared.expiresAt <= Date.now()) {
-      const runtime = initModelRuntimeFromDB(db, userId, provider, workspaceId);
-      const entry = { expiresAt: Date.now() + RUNTIME_TTL_MS, runtime };
-      prepared = entry;
-      // A failure must not stick: the next message prepares it again.
-      runtime.catch(() => {
-        if (prepared === entry) prepared = undefined;
-      });
-    }
-
-    return prepared.runtime;
-  };
+  const getRuntime = createRuntimeCache({ db, provider, userId, workspaceId });
 
   const classifyWithDecision = async (
     input: BotWakeClassifierInput,
@@ -169,29 +213,95 @@ export const createWakeClassify = ({
     return ClassificationSchema.parse(result);
   };
 
-  return async ({ conversation, customInstructions, signal }, abortSignal) => {
-    const input: BotWakeClassifierInput = {
-      agent: conversation?.agent,
-      botNames: conversation?.botNames,
-      customInstructions,
-      lastBotMessage: conversation?.lastBotMessage,
-      message: signal.message,
-      ownerNames: conversation?.ownerNames,
-      recentMessages: conversation?.recent.map((line) =>
-        describeLine(line, signal.applicationId, conversation.ownerId),
-      ),
-    };
+  return async (classifierInput, abortSignal) => {
+    const input = toPromptInput(classifierInput);
 
     log(
       'classify engine=%s model=%s provider=%s thread=%s',
       engine,
       model,
       provider,
-      signal.platformThreadId,
+      classifierInput.signal.platformThreadId,
     );
 
     return engine === 'decision'
       ? classifyWithDecision(input, abortSignal)
       : classifyWithChat(input, abortSignal);
+  };
+};
+
+/**
+ * Builds the model call behind the proactive policy: would the owner welcome the bot stepping in
+ * with help nobody asked for? Same engine, model and runtime choice as {@link createWakeClassify}.
+ *
+ * Returns:
+ * - A `WakeProactiveJudge`. Rejects on a malformed or refused answer; the policy turns a rejection
+ *   into a degraded abstain, which never wakes the bot.
+ */
+export const createWakeProactiveJudge = ({
+  agentId,
+  db,
+  engine = DEFAULT_BOT_WAKE_ENGINE,
+  model = DEFAULT_BOT_WAKE_MODEL,
+  provider = DEFAULT_BOT_WAKE_PROVIDER,
+  userId,
+  workspaceId,
+}: CreateWakeClassifyOptions): WakeProactiveJudge => {
+  const getRuntime = createRuntimeCache({ db, provider, userId, workspaceId });
+  const tracing = (schemaName: string, promptVersion: string) =>
+    ({
+      agentId,
+      promptVersion,
+      scenario: TRACING_SCENARIOS.BotWakeClassifier,
+      schemaName,
+    }) satisfies TracingOptions;
+
+  return async (judgeInput, abortSignal): Promise<WakeProactiveJudgement> => {
+    const input = toPromptInput(judgeInput);
+    const runtime = await getRuntime();
+
+    log(
+      'proactive engine=%s model=%s thread=%s',
+      engine,
+      model,
+      judgeInput.signal.platformThreadId,
+    );
+
+    if (engine === 'decision') {
+      const { questions, state } = chainBotWakeProactiveDecision(input);
+      const response = await runtime.decide(
+        { model, questions, state },
+        {
+          metadata: { trigger: RequestTrigger.Bot },
+          signal: abortSignal,
+          tracing: tracing('bot_wake_proactive_decision', BOT_WAKE_PROACTIVE_PROMPT_VERSION),
+        },
+      );
+      const { helpful } = response.answers;
+      if (helpful.type !== 'boolean') {
+        throw new Error(
+          `decision model refused: ${(helpful as { reason?: string }).reason ?? 'no reason'}`,
+        );
+      }
+      const probability = ProbabilitySchema.parse(helpful.probability);
+
+      return { helpful: probability, reason: `${model} p=${probability.toFixed(2)}` };
+    }
+
+    const chain = chainBotWakeProactiveClassifier(input);
+    const result = await runtime.generateObject(
+      {
+        messages: chain.messages as GenerateObjectPayload['messages'],
+        model,
+        schema: BOT_WAKE_PROACTIVE_JSON_SCHEMA,
+      },
+      {
+        metadata: { trigger: RequestTrigger.Bot },
+        signal: abortSignal,
+        tracing: tracing(BOT_WAKE_PROACTIVE_JSON_SCHEMA.name, BOT_WAKE_PROACTIVE_PROMPT_VERSION),
+      },
+    );
+
+    return ProactiveSchema.parse(result);
   };
 };

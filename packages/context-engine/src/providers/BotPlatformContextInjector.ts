@@ -13,6 +13,8 @@ export interface BotPlatformContext {
   /** Identifiers of the conversation this run replies in (`lobe-message` args). */
   currentChannel?: BotPlatformInfo['currentChannel'];
   platformName: string;
+  /** The bot woke on its own to offer its owner help (see `formatBotPlatformContext`). */
+  proactive?: boolean;
   /** Pre-injected recent same-channel history for platforms without history-read. */
   recentChannelHistory?: BotPlatformInfo['recentChannelHistory'];
   supportsMarkdown: boolean;

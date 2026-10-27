@@ -40,7 +40,7 @@ describe('createWakeClassify', () => {
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'v2',
+      promptVersion: 'v3',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_classifier',
     });
@@ -169,7 +169,7 @@ describe('createWakeClassify with a decision model (the default)', () => {
 
     expect(mockDecide.mock.calls[0][1].tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'decision-v1',
+      promptVersion: 'decision-v2',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_decision',
     });

@@ -352,11 +352,16 @@ export class AgentBridgeService {
     // startTyping / addReaction) throws on a transient platform network error.
     AgentBridgeService.activeThreads.add(thread.id);
 
+    // A wake the bot started itself (catch-all initiation) may end in silence, so nothing the user
+    // can see is shown until the agent starts acting — the same as `handleSubscribedMessage`.
+    const wakeKind = opts.wakeKind ?? 'mention';
+    const deferFeedback = wakeKind === 'followup';
+
     try {
       // Immediate feedback: mark as received + show typing. Both are
       // non-essential UX niceties; a transient platform network error here
       // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
-      if (shouldApplyReaction(reactionMode, 'received')) {
+      if (!deferFeedback && shouldApplyReaction(reactionMode, 'received')) {
         await this.setReaction(thread, message, client, RECEIVED_REACTION_EMOJI, botContext);
       }
 
@@ -366,7 +371,7 @@ export class AgentBridgeService {
         await safeSideEffect(() => thread.subscribe(), 'subscribe');
       }
 
-      await safeSideEffect(() => thread.startTyping(), 'startTyping');
+      if (!deferFeedback) await safeSideEffect(() => thread.startTyping(), 'startTyping');
 
       // Fetch channel context for Discord context injection
       const channelContext = await this.fetchChannelContext(thread);
@@ -375,7 +380,7 @@ export class AgentBridgeService {
       // the agent runtime. The first afterStep hook fires only after the
       // first LLM call completes (often 5-10s), so without this swap the
       // user would see 👀 for the entire duration of the first LLM call.
-      if (shouldApplyReaction(reactionMode, 'thinking')) {
+      if (!deferFeedback && shouldApplyReaction(reactionMode, 'thinking')) {
         await this.setReaction(thread, message, client, THINKING_REACTION_EMOJI, botContext);
       }
 
@@ -389,9 +394,11 @@ export class AgentBridgeService {
           charLimit,
           client,
           displayToolCalls,
+          proactive: opts.proactive,
           reactionMode,
           replyLocale,
           trigger: RequestTrigger.Bot,
+          wakeKind,
         });
         queueHandoffSucceeded = queueMode;
 
@@ -579,6 +586,7 @@ export class AgentBridgeService {
           client: opts.client,
           displayToolCalls,
           reactionMode,
+          proactive: opts.proactive,
           replyLocale,
           topicId,
           trigger: RequestTrigger.Bot,

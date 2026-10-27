@@ -51,6 +51,11 @@ export interface BotPlatformInfo {
   /** Identifiers of the conversation this run is replying in. */
   currentChannel?: CurrentBotChannel;
   platformName: string;
+  /**
+   * The bot woke on its own to offer its owner help nobody asked for (a `followup` wake). The agent
+   * is told why, so it speaks only with something concrete to offer.
+   */
+  proactive?: boolean;
   /** Pre-injected recent same-channel history (cross-session). */
   recentChannelHistory?: RecentChannelHistory;
   supportsMarkdown: boolean;
@@ -84,6 +89,7 @@ export const formatBotPlatformContext = ({
   canReadHistory = true,
   currentChannel,
   platformName,
+  proactive,
   recentChannelHistory,
   supportsMarkdown,
   wakeKind,
@@ -156,6 +162,11 @@ export const formatBotPlatformContext = ({
       `If you have nothing worth adding — the message is not for you, is off topic, repeats something already answered, or was already handled — end your turn with exactly \`${BOT_NO_REPLY_TOKEN}\` and no other text.`,
       `You may append a reason: \`${BOT_NO_REPLY_TOKEN}:<reason>\`, where reason is one of ${BOT_NO_REPLY_REASONS.filter((r) => r !== 'empty_completion').join(', ')}.`,
       'Stay silent rather than posting filler. If you do have something useful to say, just reply normally.',
+      ...(proactive
+        ? [
+            'Why you were woken: your owner, the person you work for, raised something you may be able to help with, without asking you. Step in only with something concrete — a proposal, a finding, a draft — that moves it forward, the way a capable teammate would. Read the conversation first; if you would only restate the problem or ask what they mean, stay silent.',
+          ]
+        : []),
       '</optional_reply>',
     );
   }

@@ -475,6 +475,12 @@ export default {
   'channel.botWakeClassifierThreshold': 'Sensitivity',
   'channel.botWakeClassifierThresholdHint':
     'How sure the bot must be that a message is for it before it joins, from 0 to 1. A higher value makes it join less often.',
+  'channel.botWakeProactiveEnabled': 'Offer help unasked',
+  'channel.botWakeProactiveEnabledHint':
+    'When you raise something the bot could help with (a problem, a complaint, a plan) without addressing it, the bot judges whether to step in with a concrete proposal. Only your own messages count, and it may still stay silent.',
+  'channel.botWakeProactiveThreshold': 'Offer-help sensitivity',
+  'channel.botWakeProactiveThresholdHint':
+    'How sure the bot must be that you would welcome its help before it steps in, from 0 to 1. A higher value makes it step in less often.',
   'channel.botWakeCustomInstructions': 'Custom instructions',
   'channel.botWakeCustomInstructionsHint':
     'Written to the bot like a prompt: who it should answer, what to leave alone, examples of each. It guides the judgement and is not a hard rule. Up to 4000 characters.',

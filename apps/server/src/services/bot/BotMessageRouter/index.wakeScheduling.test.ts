@@ -28,7 +28,10 @@ vi.mock('../wake/scheduler', () => ({
   resolveWakeScheduler: (_platform: string, _app: string, settings: any) =>
     settings?.botWake?.scheduler?.mode === 'enforce' ? { submit: mocks.submit } : undefined,
 }));
-vi.mock('../wake/classify', () => ({ createWakeClassify: () => vi.fn() }));
+vi.mock('../wake/classify', () => ({
+  createWakeClassify: () => vi.fn(),
+  createWakeProactiveJudge: () => vi.fn(),
+}));
 vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>

@@ -9,6 +9,8 @@ export const DEFAULT_WAKE_RULES: WakeRules = {
   denyChannels: [],
   maxSilentWakes: 3,
   ownerPresenceSeconds: 120,
+  // Off until the owner switches it on: it wakes the bot on messages nobody meant for it.
+  proactive: { mode: 'off', threshold: 0.7 },
   scope: 'all',
   windowSeconds: 300,
 };
@@ -65,6 +67,15 @@ const SettingsSchema = z
     customInstructions: z.string().catch(''),
     enabled: z.boolean().catch(false),
     mode: mode.catch('enforce'),
+    proactive: z
+      .object({
+        enabled: z.boolean().catch(false),
+        // No default: absent means "follow `enabled`" (see `parseBotWakeSettings`).
+        mode: mode.optional().catch(undefined),
+        threshold: z.number().min(0).max(1).catch(DEFAULT_WAKE_RULES.proactive.threshold),
+      })
+      .partial()
+      .catch({}),
     rules: z
       .object({
         allowChannels: idList,
@@ -106,6 +117,8 @@ export const BOT_WAKE_SETTING_KEYS = {
   enabled: 'botWakeEnabled',
   maxSilentWakes: 'botWakeMaxSilentWakes',
   ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
+  proactiveEnabled: 'botWakeProactiveEnabled',
+  proactiveThreshold: 'botWakeProactiveThreshold',
   schedulerMode: 'botWakeSchedulerMode',
   scope: 'botWakeScope',
   windowSeconds: 'botWakeWindowSeconds',
@@ -130,6 +143,8 @@ const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
   { key: BOT_WAKE_SETTING_KEYS.enabled, path: ['enabled'] },
   { key: BOT_WAKE_SETTING_KEYS.customInstructions, path: ['customInstructions'] },
   { key: BOT_WAKE_SETTING_KEYS.classifierThreshold, path: ['classifier', 'threshold'] },
+  { key: BOT_WAKE_SETTING_KEYS.proactiveEnabled, path: ['proactive', 'enabled'] },
+  { key: BOT_WAKE_SETTING_KEYS.proactiveThreshold, path: ['proactive', 'threshold'] },
   { key: BOT_WAKE_SETTING_KEYS.allowChannels, path: ['rules', 'allowChannels'] },
   { key: BOT_WAKE_SETTING_KEYS.denyChannels, path: ['rules', 'denyChannels'] },
   { key: BOT_WAKE_SETTING_KEYS.maxSilentWakes, path: ['rules', 'maxSilentWakes'] },
@@ -142,32 +157,36 @@ const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
 ];
 
 /**
- * The modes an operator can still set by hand in a nested `settings.botWake`: `mode` for the rules
- * and `classifier.mode` for the classifier. The settings form has no control for them, so they are
+ * The modes an operator can still set by hand in a nested `settings.botWake`: `mode` for the rules,
+ * `classifier.mode` for the classifier and `proactive.mode` for offering help (`shadow` to only
+ * score it). The settings form has no control for them, so they are
  * the one part of a nested config that stays nested: every other option is projected onto the flat
  * keys the form edits, and the form writes the settings back whole.
  */
 const readModeOverrides = (nested: Record<string, unknown>) => {
   const mode = readPath(nested, ['mode']);
   const classifierMode = readPath(nested, ['classifier', 'mode']);
-  if (!isChosen(mode) && !isChosen(classifierMode)) return undefined;
+  const proactiveMode = readPath(nested, ['proactive', 'mode']);
+  if (!isChosen(mode) && !isChosen(classifierMode) && !isChosen(proactiveMode)) return undefined;
 
   return {
     ...(isChosen(classifierMode) ? { classifier: { mode: classifierMode } } : {}),
     ...(isChosen(mode) ? { mode } : {}),
+    ...(isChosen(proactiveMode) ? { proactive: { mode: proactiveMode } } : {}),
   };
 };
 
 /** A nested config that holds nothing but the mode overrides, beside the flat options. */
 const isModeOverrideOnly = (nested: Record<string, unknown>) => {
   const keys = Object.keys(nested);
-  const classifier = nested.classifier;
+  const modeOnly = (value: unknown) =>
+    value === undefined || (isRecord(value) && Object.keys(value).every((key) => key === 'mode'));
 
   return (
     keys.length > 0 &&
-    keys.every((key) => key === 'mode' || key === 'classifier') &&
-    (classifier === undefined ||
-      (isRecord(classifier) && Object.keys(classifier).every((key) => key === 'mode')))
+    keys.every((key) => key === 'mode' || key === 'classifier' || key === 'proactive') &&
+    modeOnly(nested.classifier) &&
+    modeOnly(nested.proactive)
   );
 };
 
@@ -239,6 +258,10 @@ const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefi
   const flat = (key: string) => settings?.[key];
   const k = BOT_WAKE_SETTING_KEYS;
   const overrides = isRecord(nested) ? readModeOverrides(nested) : undefined;
+  const proactive = {
+    ...chosen({ enabled: flat(k.proactiveEnabled), threshold: flat(k.proactiveThreshold) }),
+    ...overrides?.proactive,
+  };
 
   return {
     ...chosen({ customInstructions: flat(k.customInstructions), enabled: flat(k.enabled) }),
@@ -247,6 +270,8 @@ const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefi
       ...chosen({ threshold: flat(k.classifierThreshold) }),
       ...overrides?.classifier,
     },
+    // Only when set: a row saved before the option existed reads the same as its nested form.
+    ...(Object.keys(proactive).length > 0 ? { proactive } : {}),
     rules: chosen({
       allowChannels: flat(k.allowChannels),
       denyChannels: flat(k.denyChannels),
@@ -297,6 +322,11 @@ export const parseBotWakeSettings = (
     classifier: { ...DEFAULT_WAKE_RULES.classifier, ...raw.classifier },
     customInstructions:
       raw.customInstructions?.trim().slice(0, MAX_CUSTOM_INSTRUCTIONS_LENGTH) || undefined,
+    // The switch turns it on (`enforce`); an operator's mode override (`shadow`) wins over it.
+    proactive: {
+      mode: raw.proactive?.mode ?? (raw.proactive?.enabled ? 'enforce' : 'off'),
+      threshold: raw.proactive?.threshold ?? DEFAULT_WAKE_RULES.proactive.threshold,
+    },
   };
 
   const schedulerRaw: WakeSchedulerConfig = raw.scheduler ?? {};

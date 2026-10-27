@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   channel: { current: undefined as Record<string, unknown> | undefined },
   classify: vi.fn(),
   logs: new Map<string, any[]>(),
+  proactive: vi.fn(),
   record: vi.fn(),
 }));
 
@@ -45,7 +46,10 @@ vi.mock('../wake/scheduler', () => ({
   resolveWakeScheduler: (_platform: string, _app: string, settings: any) =>
     settings?.botWake?.scheduler?.mode === 'enforce' ? { submit: mocks.submit } : undefined,
 }));
-vi.mock('../wake/classify', () => ({ createWakeClassify: () => mocks.classify }));
+vi.mock('../wake/classify', () => ({
+  createWakeClassify: () => mocks.classify,
+  createWakeProactiveJudge: () => mocks.proactive,
+}));
 vi.mock('../wake/identity', () => ({
   createWakeIdentityLoader: () => async () => ({
     agentName: 'Arvin Agent',
@@ -141,6 +145,7 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     mocks.defer.mockResolvedValue(true);
     mocks.submit.mockResolvedValue('hold');
     mocks.classify.mockResolvedValue({ addressedToBot: 0.02, kind: 'chitchat', reason: 'x' });
+    mocks.proactive.mockResolvedValue({ helpful: 0.1, reason: 'p=0.10' });
   });
 
   const enforcing = { enabled: true, mode: 'enforce' };
@@ -159,6 +164,42 @@ describe('BotMessageRouter: a message that only names the bot', () => {
       ['wake', 'named-in-text', 'named'],
     ]);
     expect(mocks.classify).not.toHaveBeenCalled();
+  });
+
+  it('steps in to help its owner when they raise something it can act on, without its name', async () => {
+    mocks.proactive.mockResolvedValue({ helpful: 0.9, reason: 'p=0.90' });
+    await boot({ ...enforcing, proactive: { mode: 'enforce' } });
+
+    await catchAll()(
+      thread(),
+      message({ text: '这个 UI 一眼看上去还是太 vibe 了，得想想怎么refine' }),
+    );
+    await flush();
+
+    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+      proactive: true,
+      wakeKind: 'followup',
+    });
+    expect(decisions().map((d) => [d.outcome, d.finalReason, d.toTag])).toEqual([
+      ['wake', 'proactive-help', 'proactive'],
+    ]);
+  });
+
+  it('stays out of the same remark from someone else, without asking the model', async () => {
+    await boot({ ...enforcing, proactive: { mode: 'enforce' } });
+
+    await catchAll()(
+      thread(),
+      message({
+        author: { isBot: false, userId: 'bob-id', userName: 'bob' },
+        text: '这个 UI 一眼看上去还是太 vibe 了，得想想怎么refine',
+      }),
+    );
+    await flush();
+
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mocks.proactive).not.toHaveBeenCalled();
   });
 
   describe('with the scheduler enforcing', () => {

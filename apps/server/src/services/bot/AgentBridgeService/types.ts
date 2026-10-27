@@ -29,6 +29,11 @@ export interface BridgeHandlerOpts {
   client?: PlatformClient;
   displayToolCalls?: boolean;
   /**
+   * The bot woke on its own to offer its owner help nobody asked for (a `followup` wake); the
+   * agent is told why. See `formatBotPlatformContext`.
+   */
+  proactive?: boolean;
+  /**
    * Status-reaction verbosity (see `BotReactionMode`). Defaults to
    * `DEFAULT_BOT_REACTION_MODE` for callers that predate the setting.
    */

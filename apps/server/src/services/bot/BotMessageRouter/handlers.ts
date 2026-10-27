@@ -29,7 +29,7 @@ import {
   type UserAllowlist,
 } from '../platforms';
 import { renderThrownAgentError } from '../renderThrownError';
-import { createWakeClassify } from '../wake/classify';
+import { createWakeClassify, createWakeProactiveJudge } from '../wake/classify';
 import { createWakeIdentityLoader } from '../wake/identity';
 import { resolveWakeScheduler } from '../wake/scheduler';
 import type { WakeMessageLike } from '../wake/signal';
@@ -238,6 +238,12 @@ export function registerHandlers(
     botNames: client.getBotNames && (async () => (await client.getBotNames!()) ?? []),
     identity: createWakeIdentityLoader({ agentId, db: serverDB, userId }),
     operatorUserId,
+    proactiveJudge: createWakeProactiveJudge({
+      agentId,
+      db: serverDB,
+      userId,
+      workspaceId: workspaceId ?? undefined,
+    }),
     platform,
     settings: info.settings,
     userId,
@@ -741,6 +747,7 @@ export function registerHandlers(
         charLimit,
         client,
         displayToolCalls,
+        proactive: wakeReason === 'proactive-help',
         reactionMode,
         replyLocale,
         wakeKind,

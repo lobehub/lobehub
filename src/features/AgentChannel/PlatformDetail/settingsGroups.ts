@@ -73,7 +73,8 @@ export interface WakeSection {
  * - channels: where it may join a conversation nobody addressed to it
  * - pace: how soon and how often it speaks up on its own
  * - judgement: how it decides a message is for it. The prompt comes first: it is the part people
- *   write; the score threshold is the dial behind it.
+ *   write; the score threshold is the dial behind it. Offering help unasked follows: the same kind
+ *   of judgement, about the owner's own remarks.
  */
 const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   ['keywords', ['watchKeywords']],
@@ -89,7 +90,15 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
       'botWakeCooldownSeconds',
     ],
   ],
-  ['judgement', ['botWakeCustomInstructions', 'botWakeClassifierThreshold']],
+  [
+    'judgement',
+    [
+      'botWakeCustomInstructions',
+      'botWakeClassifierThreshold',
+      'botWakeProactiveEnabled',
+      'botWakeProactiveThreshold',
+    ],
+  ],
 ];
 
 /** The hidden master switch is not an option a person sets. */

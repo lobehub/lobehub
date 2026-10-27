@@ -185,6 +185,21 @@ describe('formatBotPlatformContext', () => {
     expect(result).not.toContain('empty_completion');
   });
 
+  it('tells an agent woken to offer help unasked why, so it only speaks with something concrete', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true };
+    const proactive = formatBotPlatformContext({ ...base, proactive: true, wakeKind: 'followup' });
+
+    expect(proactive).toContain('Why you were woken: your owner');
+    expect(proactive).toContain('stay silent');
+    expect(formatBotPlatformContext({ ...base, wakeKind: 'followup' })).not.toContain(
+      'Why you were woken',
+    );
+    // Proactive without a followup wake has nothing to qualify.
+    expect(formatBotPlatformContext({ ...base, proactive: true })).not.toContain(
+      '<optional_reply>',
+    );
+  });
+
   it('leaves the prompt untouched for a mention, or when the wake kind is unknown', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
 
