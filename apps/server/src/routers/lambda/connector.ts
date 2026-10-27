@@ -23,7 +23,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { getComposioClient } from '@/libs/composio';
-import { inferCrudType } from '@/libs/mcp/utils';
+import { getMCPConnectionErrorType, inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -840,6 +840,7 @@ export const connectorRouter = router({
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });
         }
+        if (err instanceof TRPCError && getMCPConnectionErrorType(err.cause)) throw err;
         throw new TRPCError({
           cause: err,
           code: 'INTERNAL_SERVER_ERROR',

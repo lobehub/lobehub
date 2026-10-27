@@ -1,7 +1,23 @@
 import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { describe, expect, it } from 'vitest';
 
-import { getMCPErrorLogMetadata } from './utils';
+import { createMCPError } from './types';
+import { getMCPConnectionErrorType, getMCPErrorLogMetadata } from './utils';
+
+describe('getMCPConnectionErrorType', () => {
+  it.each(['AUTHORIZATION_ERROR', 'INITIALIZATION_TIMEOUT', 'CONNECTION_FAILED'] as const)(
+    'classifies normalized %s',
+    (type) => {
+      expect(getMCPConnectionErrorType(createMCPError(type, 'MCP failed'))).toBe(type);
+    },
+  );
+  it.each([new Error('failure'), { data: { type: 'FORBIDDEN' } }, { code: 401 }, null])(
+    'does not classify unrelated errors',
+    (error) => {
+      expect(getMCPConnectionErrorType(error)).toBeUndefined();
+    },
+  );
+});
 
 describe('getMCPErrorLogMetadata', () => {
   it('keeps the HTTP status of an SDK v2 HTTP error, which is not in its code', () => {

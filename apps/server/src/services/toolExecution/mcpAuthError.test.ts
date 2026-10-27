@@ -1,14 +1,24 @@
 import { SdkErrorCode, SdkHttpError, UnauthorizedError } from '@modelcontextprotocol/client';
+import { TRPCError } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
+
+import { createMCPError } from '@/libs/mcp/types';
 
 import { isMcpAuthorizationError } from './mcpAuthError';
 
 describe('MCP authorization error brands', () => {
+  it('recognizes normalized authorization through a forbidden connector response', () => {
+    const cause = createMCPError('AUTHORIZATION_ERROR', 'Reconnect the MCP');
+    expect(isMcpAuthorizationError(new TRPCError({ code: 'FORBIDDEN', cause }))).toBe(true);
+    expect(isMcpAuthorizationError(new TRPCError({ code: 'UNAUTHORIZED' }))).toBe(false);
+    expect(isMcpAuthorizationError(new TRPCError({ code: 'FORBIDDEN' }))).toBe(false);
+  });
   it.each([
     new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'credentials rejected', {
       status: 401,
     }),
     new UnauthorizedError(),
+    new SdkHttpError(SdkErrorCode.ClientHttpForbidden, 'credentials rejected', { status: 403 }),
   ])('recognizes SDK authorization failures through causes: %s', (cause) => {
     expect(isMcpAuthorizationError(new Error('tool execution failed', { cause }))).toBe(true);
   });

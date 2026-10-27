@@ -1,6 +1,17 @@
-import { isRecord } from '@lobechat/utils/object';
+import { isRecord, toRecord } from '@lobechat/utils/object';
 
 import type { ToolCRUDType } from '@/database/schemas';
+
+/** The expected HTTP connection failures normalized by MCPClient.initialize. */
+export const getMCPConnectionErrorType = (error: unknown) => {
+  const type = toRecord(toRecord(error)?.data)?.type;
+  if (
+    type === 'AUTHORIZATION_ERROR' ||
+    type === 'INITIALIZATION_TIMEOUT' ||
+    type === 'CONNECTION_FAILED'
+  )
+    return type;
+};
 
 // Prefix-based matching (anchored at ^) handles camelCase names like getReactions, listPins.
 // \b word-boundary fails on camelCase because adjacent word-chars share no boundary.

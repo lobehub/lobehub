@@ -23,7 +23,11 @@ import {
   type StdioMCPParams,
 } from '@/libs/mcp';
 import { MCPClient } from '@/libs/mcp';
-import { getMCPErrorLogMetadata, getMCPLogOrigin } from '@/libs/mcp/utils';
+import {
+  getMCPConnectionErrorType,
+  getMCPErrorLogMetadata,
+  getMCPLogOrigin,
+} from '@/libs/mcp/utils';
 
 import { type ProcessContentBlocksFn } from './contentProcessor';
 import { contentBlocksToString } from './contentProcessor';
@@ -88,11 +92,12 @@ export class MCPService {
 
     const state = { ...result, content: newContent };
 
-    if (result.isError) {
-      return { content, state, success: true };
-    }
-
-    return { content, state, success: true };
+    return {
+      content,
+      ...(result.isError ? { error: { message: content, name: 'MCPToolError' } } : {}),
+      state,
+      success: result.isError !== true,
+    };
   }
 
   /**
@@ -306,9 +311,17 @@ export class MCPService {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (typeof error === 'object' && !!error && 'data' in error) {
+        const type = getMCPConnectionErrorType(error);
         throw new TRPCError({
           cause: error,
-          code: 'SERVICE_UNAVAILABLE',
+          code:
+            type === 'AUTHORIZATION_ERROR'
+              ? // These credentials belong to the upstream MCP, not the signed-in
+                // LobeHub user. A 401 here would trigger the client's global logout.
+                'FORBIDDEN'
+              : type === 'INITIALIZATION_TIMEOUT'
+                ? 'TIMEOUT'
+                : 'SERVICE_UNAVAILABLE',
           message: errorMessage,
         });
       }

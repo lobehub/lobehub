@@ -35,6 +35,7 @@ const makeClientInstance = (label: string) => ({
     isError: false,
   })),
   disconnect: vi.fn().mockResolvedValue(undefined),
+  getProtocolEra: vi.fn().mockReturnValue('legacy'),
   initialize: vi.fn().mockResolvedValue(undefined),
   listManifests: vi.fn().mockResolvedValue({ tools: [] }),
 });
@@ -150,6 +151,38 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
     expect(manifest.meta.description).toBe(`automatic MCP server has ${summary}`);
     expect(manifest.meta.description).not.toContain('undefined');
+  });
+
+  it('returns a failed tool result without replaying an MCP isError result', async () => {
+    const instance = makeClientInstance('failed');
+    instance.callTool.mockResolvedValue({
+      content: [{ type: 'text', text: 'Additional input is unsupported' }],
+      isError: true,
+    });
+    mcpClientMocks.mockReturnValue(instance);
+    await expect(
+      ctr.runHttpMcpTool({ name: 'modern', url: 'http://localhost/mcp' }, 'needs_input', {}),
+    ).resolves.toMatchObject({
+      error: { message: 'Additional input is unsupported' },
+      success: false,
+      state: { isError: true },
+    });
+    expect(instance.callTool).toHaveBeenCalledOnce();
+  });
+
+  it('does not reconnect or replay a modern HTTP tool on 404', async () => {
+    const instance = makeClientInstance('modern');
+    instance.getProtocolEra.mockReturnValue('modern');
+    const error = new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Endpoint not found', {
+      status: 404,
+    });
+    instance.callTool.mockRejectedValue(error);
+    mcpClientMocks.mockReturnValue(instance);
+    await expect(
+      ctr.runHttpMcpTool({ name: 'modern', url: 'http://localhost/mcp' }, 'write', {}),
+    ).rejects.toBe(error);
+    expect(mcpClientMocks).toHaveBeenCalledTimes(1);
+    expect(instance.callTool).toHaveBeenCalledOnce();
   });
 
   it('reuses one stdio session across consecutive tool calls (state survives)', async () => {

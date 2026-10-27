@@ -5,6 +5,7 @@ import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMCPError } from '@/libs/mcp/types';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
@@ -903,6 +904,49 @@ describe('ToolExecutionService', () => {
       expect(result.content).toContain('reconnect');
       expect(result.content).not.toContain("agent's creator");
       expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('keeps reconnect guidance when normalized upstream auth is returned as 403', async () => {
+      const result = await run(
+        {},
+        new TRPCError({
+          code: 'FORBIDDEN',
+          cause: createMCPError('AUTHORIZATION_ERROR', 'MCP authorization failed'),
+        }),
+      );
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("reconnect 'xmind-mcp'");
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('preserves a failed MCP result for the card and the parent reply', async () => {
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: vi.fn() } as any,
+        mcpService: {
+          callTool: vi.fn().mockResolvedValue({
+            content: 'Additional input is unsupported',
+            state: {
+              isError: true,
+              content: [{ type: 'text', text: 'Additional input is unsupported' }],
+            },
+            success: false,
+          }),
+        } as any,
+      });
+      const result = await service.executeTool(mcpPayload, {
+        toolManifestMap: {
+          'xmind-mcp': {
+            mcpParams: { name: 'xmind-mcp', type: 'http', url: 'https://example.com/mcp' },
+          },
+        },
+        userId: 'creator-1',
+      } as any);
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Additional input is unsupported');
+      expect(result.error).toMatchObject({
+        code: 'MCP_TOOL_ERROR',
+        message: 'Additional input is unsupported',
+      });
     });
 
     it('keeps other MCP failures as raw replannable errors', async () => {

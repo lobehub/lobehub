@@ -10,6 +10,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as McpModule from '@/libs/mcp';
 import { MCPClient, type MCPClientParams } from '@/libs/mcp';
 
 import { MCPService } from './index';
@@ -204,6 +205,23 @@ describe('MCPService log redaction', () => {
     expectLogsToBeRedacted(logOutput);
     expect(logOutput).toContain('https://mcp.example.com');
     expect(logOutput).toContain("name: 'Error'");
+  });
+
+  it.each([
+    ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
+    ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
+    ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
+  ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
+    // The module is auto-mocked in this suite; retain the actual error contract.
+    const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+    vi.mocked(MCPClient.prototype.initialize).mockRejectedValueOnce(
+      actual.createMCPError(type, 'MCP connection needs attention'),
+    );
+    await expect(new MCPService().listRawTools(sensitiveHttpParams)).rejects.toMatchObject({
+      code,
+      message: 'MCP connection needs attention',
+    });
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
   });
 
   it('redacts stdio environment variables from rejected server operations', async () => {
@@ -461,8 +479,9 @@ describe('MCPService', () => {
         argsStr: '{}',
       });
 
+      expect(result.error?.message).toBe('Error occurred');
       expect(result.content).toBe('Error occurred');
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.state).toEqual(errorResult);
     });
 

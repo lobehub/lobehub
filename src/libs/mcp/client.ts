@@ -1,11 +1,14 @@
 import { spawn } from 'node:child_process';
 
+import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
+  InsufficientScopeError,
   SdkError,
   SdkErrorCode,
   SdkHttpError,
   StreamableHTTPClientTransport,
+  UnauthorizedError,
 } from '@modelcontextprotocol/client';
 import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
@@ -169,7 +172,16 @@ export class MCPClient {
 
   constructor(params: MCPClientParams) {
     this.params = params;
-    this.mcp = new Client({ name: 'lobehub-mcp-client', version: '1.0.0' });
+    this.mcp = new Client(
+      { name: 'lobehub-mcp-client', version: '1.0.0' },
+      {
+        // Stdio stays legacy: auto would spawn a sibling probe process and can
+        // wait the entire probe timeout on servers that ignore unknown requests.
+        versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
+        // No elicitation/sampling/roots handlers are registered by this host.
+        inputRequired: { autoFulfill: false },
+      },
+    );
 
     switch (params.type) {
       case 'http': {
@@ -254,8 +266,28 @@ export class MCPClient {
       console.error('MCP connection failed:', getMCPErrorLogMetadata(e));
 
       if (this.params.type === 'http') {
-        if (SdkHttpError.isInstance(e) && e.status === 401)
-          throw createMCPError('AUTHORIZATION_ERROR', e.message);
+        if (
+          (SdkHttpError.isInstance(e) && (e.status === 401 || e.status === 403)) ||
+          UnauthorizedError.isInstance(e) ||
+          InsufficientScopeError.isInstance(e)
+        )
+          throw createMCPError(
+            'AUTHORIZATION_ERROR',
+            'MCP server authorization failed. Reconnect this MCP in your connector settings and try again.',
+            { originalError: e.message },
+          );
+
+        if (SdkError.isInstance(e) && e.code === SdkErrorCode.RequestTimeout)
+          throw createMCPError(
+            'INITIALIZATION_TIMEOUT',
+            'MCP server version negotiation timed out. Check the server connection and try again.',
+          );
+
+        if (SdkError.isInstance(e) && e.code === SdkErrorCode.EraNegotiationFailed)
+          throw createMCPError(
+            'CONNECTION_FAILED',
+            `Could not negotiate the MCP server protocol: ${e.message}`,
+          );
 
         throw e;
       }
@@ -314,6 +346,10 @@ export class MCPClient {
     log('MCP connection disconnected.');
   }
 
+  getProtocolEra() {
+    return this.mcp.getProtocolEra();
+  }
+
   /**
    * Detect the StreamableHTTP "session expired" error.
    *
@@ -322,10 +358,11 @@ export class MCPClient {
    * example-server message is also recognized. Callers (e.g. MCPService) surface this as a dedicated
    * `NoValidSessionId` error and retry with a freshly-initialized session.
    */
-  private static isNoValidSessionError(e: unknown): boolean {
+  private isNoValidSessionError(e: unknown): boolean {
     return (
-      (SdkHttpError.isInstance(e) && e.status === 404) ||
-      (e instanceof Error && e.message.includes('No valid session ID provided'))
+      this.getProtocolEra() !== 'modern' &&
+      ((SdkHttpError.isInstance(e) && e.status === 404) ||
+        (e instanceof Error && e.message.includes('No valid session ID provided')))
     );
   }
 
@@ -338,7 +375,7 @@ export class MCPClient {
     } catch (e) {
       console.error('Failed to list MCP tools:', getMCPErrorLogMetadata(e));
 
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
@@ -355,7 +392,7 @@ export class MCPClient {
     } catch (e) {
       console.error('Failed to list MCP resources:', getMCPErrorLogMetadata(e));
 
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
@@ -372,7 +409,7 @@ export class MCPClient {
     } catch (e) {
       console.error('Failed to list MCP prompts:', getMCPErrorLogMetadata(e));
 
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
@@ -424,8 +461,23 @@ export class MCPClient {
     } catch (e) {
       // The server rejects the request before executing the tool, so retrying
       // with a fresh session is safe (no double side effects).
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
+      }
+      if (
+        SdkError.isInstance(e) &&
+        e.code === SdkErrorCode.UnsupportedResultType &&
+        toRecord(e.data)?.resultType === 'input_required'
+      ) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'This MCP tool requires user input that LobeHub does not support yet. Use a tool that does not require additional input.',
+            },
+          ],
+          isError: true,
+        };
       }
       throw e;
     }

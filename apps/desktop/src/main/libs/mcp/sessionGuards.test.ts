@@ -5,6 +5,15 @@ import { MCPClient } from './client';
 import { isDeadTransportError, isStaleSessionError } from './sessionGuards';
 
 describe('SDK session guards', () => {
+  it('does not replay a modern HTTP failure, even if it resembles a stale session', () => {
+    const error = new SdkHttpError(
+      SdkErrorCode.ClientHttpNotImplemented,
+      'No valid session ID provided',
+      { status: 404 },
+    );
+    expect(isStaleSessionError(error, 'modern')).toBe(false);
+    expect(isStaleSessionError(error, 'legacy')).toBe(true);
+  });
   it.each([SdkErrorCode.ConnectionClosed, SdkErrorCode.NotConnected])(
     'evicts SDK %s without authorizing a replay',
     (code) => {
