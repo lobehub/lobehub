@@ -40,8 +40,10 @@ import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useDefaultMemberAssignee } from '../shared/useDefaultMemberAssignee';
 import { useEscapeDiscardGuard } from '../shared/useEscapeDiscardGuard';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import { hasUnsavedTaskDraft } from './hasUnsavedTaskDraft';
@@ -99,7 +101,10 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(defaultPriority);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
-    const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+    // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
+    const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
+    const { defaultMemberAssignee } = useDefaultMemberAssignee();
+    const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
     // Where this task will run, if not simply wherever the assignee runs.
     // Undefined = inherit, and then nothing is sent, so an untouched modal
     // creates exactly the task it always did.
@@ -120,7 +125,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     // A private agent is the stronger constraint, so drop an incompatible member.
     useEffect(() => {
       if (isPrivateAgent) {
-        if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+        if (isOtherMemberAssignee) setMemberChoice(undefined);
         if (visibility === 'public') setVisibility('private');
         return;
       }
@@ -151,7 +156,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       );
     }, []);
     const handleMemberChange = useCallback((nextUserId: string | null) => {
-      setAssigneeUserId(nextUserId ?? undefined);
+      setMemberChoice(nextUserId);
     }, []);
 
     const handleInline = useCallback(() => {

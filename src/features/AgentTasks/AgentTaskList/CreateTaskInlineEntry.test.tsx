@@ -231,11 +231,12 @@ vi.mock('../features/AssigneeMemberSelector', () => ({
   }: {
     children: ReactNode;
     currentUserId?: string;
-    onChange?: (id: string) => void;
+    onChange?: (id: string | null) => void;
   }) => (
     <div data-current-user-id={currentUserId ?? ''} data-testid="member-selector">
       {children}
       <span data-testid="select-member" onClick={() => onChange?.('user-1')} />
+      <span data-testid="clear-member" onClick={() => onChange?.(null)} />
     </div>
   ),
 }));
@@ -389,6 +390,55 @@ describe('CreateTaskInlineEntry', () => {
       expect(createTaskMock).toHaveBeenCalledWith(
         expect.objectContaining({ assigneeAgentId: 'agent-1', assigneeUserId: 'user-1' }),
       ),
+    );
+  });
+
+  it('assigns a new workspace task to its creator by default', async () => {
+    workspaceMembersMock.members = [
+      { role: 'member', userId: 'user-1' },
+      { role: 'member', userId: 'self-user' },
+    ];
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    expect(screen.getByTestId('member-selector')).toHaveAttribute(
+      'data-current-user-id',
+      'self-user',
+    );
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeUserId: 'self-user' }),
+      ),
+    );
+  });
+
+  it('does not default to a creator whose role cannot be a task assignee', () => {
+    workspaceMembersMock.members = [{ role: 'viewer', userId: 'self-user' }];
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', '');
+  });
+
+  it('keeps an explicitly cleared member unassigned across a draft reload', async () => {
+    workspaceMembersMock.members = [{ role: 'member', userId: 'self-user' }];
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { unmount } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('clear-member'));
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft.assigneeUserId).toBeNull();
+    });
+
+    unmount();
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', ''),
     );
   });
 
