@@ -1,11 +1,14 @@
 import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
 import {
+  describeTaskModelChange,
   MISSING_TASK_NAME_ERROR,
   normalizeListTasksParams,
   normalizeListWorkspaceMembersParams,
   normalizeSetTaskVerifyParams,
   selectAssignableMembers,
   TaskIdentifier,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
 } from '@lobechat/builtin-tool-task';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
@@ -116,9 +119,11 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       requirement?: string | null;
       title?: string;
     };
+    model?: string;
     name: string;
     parentIdentifier?: string;
     priority?: number;
+    provider?: string;
     sortOrder?: number;
   };
 
@@ -136,6 +141,12 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     // `name` is required by the manifest but nothing enforced it: nameless
     // tasks listed as "(unnamed)" and the receipt printed `"null"`.
     if (!args.name?.trim()) return { content: MISSING_TASK_NAME_ERROR, success: false };
+    let modelConfig: ReturnType<typeof toCreateTaskModelConfig>;
+    try {
+      modelConfig = toCreateTaskModelConfig(args);
+    } catch (error) {
+      return { content: (error as Error).message, success: false };
+    }
     let parentLabel: string | undefined;
 
     // Pre-resolve parent identifier so we can surface a tool-friendly error
@@ -179,6 +190,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       task = await taskService().createTask({
         assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
         assigneeUserId: args.assigneeUserId,
+        config: modelConfig,
         context: origin ? { origin } : undefined,
         createdByAgentId: agentId,
         instruction: args.instruction,
@@ -353,9 +365,11 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       description?: string;
       identifier: string;
       instruction?: string;
+      model?: string | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
+      provider?: string | null;
       removeDependencies?: string[];
     }) => {
       const task = await taskModel().resolve(args.identifier);
@@ -416,10 +430,20 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         changes.push(`priority → ${priorityLabel(args.priority)}`);
       }
 
-      if (Object.keys(updateData).length > 0) {
+      // Deep-merged into `config` so checkpoint / review / execution keys survive.
+      const configPatch = toTaskModelConfigPatch(args);
+      if (configPatch) changes.push(describeTaskModelChange(configPatch));
+
+      if (Object.keys(updateData).length > 0 || configPatch) {
         // Attribution rides the caller's context, not this payload — see
         // `AuthContext.actingAgentId`.
-        ops.push(taskCaller().update({ id: task.id, ...updateData }));
+        ops.push(
+          taskCaller().update({
+            id: task.id,
+            ...updateData,
+            ...(configPatch && { configPatch }),
+          }),
+        );
       }
 
       const applyDeps = async (

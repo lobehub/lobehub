@@ -38,6 +38,11 @@ import { normalizeListTasksParams } from '../../listTasks';
 import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
 import { normalizeSetTaskVerifyParams } from '../../setTaskVerify';
+import {
+  describeTaskModelChange,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
+} from '../../taskModel';
 import { resolveTaskOpenTarget } from '../../taskRef';
 import type {
   AddTaskCommentParams,
@@ -202,10 +207,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
-      // Bind a goal entity to the created task (see TaskService.createTask).
+      model?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      provider?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -232,6 +238,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         assigneeUserId,
+        config: toCreateTaskModelConfig(params),
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
@@ -294,9 +301,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
+      model?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      provider?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -413,9 +422,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       description?: string;
       identifier: string;
       instruction?: string;
+      model?: string | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
+      provider?: string | null;
       removeDependencies?: string[];
     },
     ctx?: BuiltinToolContext,
@@ -494,6 +505,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
             source: 'external',
           }),
         );
+      }
+
+      // Merged into `config` so checkpoint / review / execution keys survive.
+      const modelPatch = toTaskModelConfigPatch(params);
+      if (modelPatch) {
+        ops.push(store.updateTaskModelConfig(identifier, modelPatch, { rethrow: true }));
+        changes.push(describeTaskModelChange(modelPatch));
       }
 
       const applyDependencies = async (refs: string[], remove: boolean) => {

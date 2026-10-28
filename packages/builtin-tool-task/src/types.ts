@@ -59,9 +59,13 @@ export interface CreateTaskParams {
   /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
   assigneeUserId?: string;
   instruction: string;
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
   sortOrder?: number;
 }
 
@@ -226,9 +230,13 @@ export interface EditTaskParams {
   description?: string;
   identifier: string;
   instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
   removeDependencies?: string[];
 }
 

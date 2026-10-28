@@ -30,6 +30,11 @@ export const TaskManifest: BuiltinToolManifest = {
               "Optional workspace member (user ID) to set as the task's human owner. Coexists with assigneeAgentId — the agent executes the task, the member owns the outcome. Resolve the ID with listWorkspaceMembers first; never guess it.",
             type: 'string',
           },
+          model: {
+            description:
+              'Optional model ID this task runs with (e.g. "deepseek-chat"), instead of the assignee agent\'s default. Only set it when the user asks for a specific model. Omit to pin the assignee agent\'s current model.',
+            type: 'string',
+          },
           name: {
             description: 'A short, descriptive name for the task.',
             type: 'string',
@@ -42,6 +47,11 @@ export const TaskManifest: BuiltinToolManifest = {
           priority: {
             description: 'Priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low. Default is 0.',
             type: 'number',
+          },
+          provider: {
+            description:
+              'Provider ID for `model` (e.g. "lobehub", "openai"). Pass it together with model when known; omit to let the server resolve it from the assignee agent.',
+            type: 'string',
           },
           sortOrder: {
             description:
@@ -82,6 +92,11 @@ export const TaskManifest: BuiltinToolManifest = {
                     "Optional workspace member (user ID) to set as the task's human owner (coexists with assigneeAgentId). Resolve the ID with listWorkspaceMembers first.",
                   type: 'string',
                 },
+                model: {
+                  description:
+                    'Optional model ID this task runs with (e.g. "deepseek-chat"), instead of the assignee agent\'s default. Only set it when the user asks for a specific model. Omit to pin the assignee agent\'s current model.',
+                  type: 'string',
+                },
                 name: {
                   description: 'A short, descriptive name for the task.',
                   type: 'string',
@@ -95,6 +110,11 @@ export const TaskManifest: BuiltinToolManifest = {
                   description:
                     'Priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low. Default is 0.',
                   type: 'number',
+                },
+                provider: {
+                  description:
+                    'Provider ID for `model` (e.g. "lobehub", "openai"). Pass it together with model when known; omit to let the server resolve it from the assignee agent.',
+                  type: 'string',
                 },
                 sortOrder: {
                   description:
@@ -247,7 +267,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority), assignee (agent or workspace member), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
+        "Edit a task's fields (name, description, instruction, priority, model/provider), assignee (agent or workspace member), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -281,6 +301,11 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Updated instruction for the task.',
             type: 'string',
           },
+          model: {
+            description:
+              "Model ID this task should run with from now on. Pass null to clear the override so the next run uses the assignee agent's model. Pass provider alongside when known; a model without provider has its provider resolved from the assignee agent.",
+            type: ['string', 'null'],
+          },
           name: {
             description: 'Updated name for the task.',
             type: 'string',
@@ -293,6 +318,11 @@ export const TaskManifest: BuiltinToolManifest = {
           priority: {
             description: 'Updated priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low.',
             type: 'number',
+          },
+          provider: {
+            description:
+              'Provider ID for the task model (e.g. "lobehub", "openai"). Pass null to clear it.',
+            type: ['string', 'null'],
           },
           removeDependencies: {
             description:

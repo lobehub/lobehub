@@ -20,6 +20,11 @@ import { confirm, outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
 import { registerGoalAccessCommands } from './access';
+import {
+  applyCreatedGoalTaskModel,
+  parseGoalModelConfig,
+  registerGoalAssignmentCommands,
+} from './assignment';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import {
   type GoalMetricState,
@@ -591,6 +596,8 @@ export function registerGoalCommand(program: Command) {
       '--task-agent <id>',
       "Dedicated executor for the goal's tasks (defaults to the goal agent)",
     )
+    .option('--task-model <model>', "Model the goal's tasks run on (needs --task-provider)")
+    .option('--task-provider <provider>', 'Provider of --task-model')
     .option('--project <id>', 'Project ID')
     .option(
       '--visibility <visibility>',
@@ -643,6 +650,10 @@ export function registerGoalCommand(program: Command) {
         ...((options.task as string[] | undefined) ?? []),
         ...(options.taskFile ? parseTaskFile(await readFile(options.taskFile, 'utf8')) : []),
       ];
+      const taskModel = parseGoalModelConfig(
+        { model: options.taskModel, provider: options.taskProvider },
+        { model: '--task-model', provider: '--task-provider' },
+      );
       const seedProblem = goalSeedDependencyProblem(seedTasks);
       if (seedProblem) throw new Error(`--task-file: ${seedProblem}`);
       const operationId = process.env.LOBEHUB_OPERATION_ID;
@@ -738,6 +749,7 @@ export function registerGoalCommand(program: Command) {
             agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
             createdByAgentId: process.env.LOBEHUB_AGENT_ID,
           });
+      await applyCreatedGoalTaskModel(client, result.data!.goal.id, taskModel);
       const undrawn = missingSeedDependencies(result.data!, seedTasks);
       if (undrawn.length)
         log.warn(
@@ -1172,6 +1184,7 @@ export function registerGoalCommand(program: Command) {
     );
 
   registerGoalAccessCommands(goal);
+  registerGoalAssignmentCommands(goal);
 
   goal
     .command('bind-topic <id>')
