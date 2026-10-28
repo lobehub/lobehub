@@ -1,5 +1,5 @@
-import type { ShareVisibility } from '@lobechat/types';
-import { index, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import type { FileShareConfig, ShareVisibility } from '@lobechat/types';
+import { index, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
@@ -30,6 +30,10 @@ export const fileShares = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     pageViewCount: integer('page_view_count').default(0).notNull(),
+
+    /** Owner-controlled share settings; see `FileShareConfig`. */
+    config: jsonb('config').$type<FileShareConfig>(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 
     visibility: text('visibility').$type<ShareVisibility>().default('private').notNull(),
 

@@ -2199,6 +2199,8 @@ table file_shares {
   user_id text [not null]
   workspace_id text
   page_view_count integer [not null, default: 0]
+  config jsonb
+  metadata jsonb
   visibility text [not null, default: 'private']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]

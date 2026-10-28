@@ -34,6 +34,7 @@ export * from './export';
 export * from './favorite';
 export * from './fetch';
 export * from './files';
+export * from './fileShare';
 export * from './followUpAction';
 export * from './ftsSearch';
 export * from './generation';
