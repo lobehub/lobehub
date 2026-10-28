@@ -116,8 +116,7 @@ export class MessageToolMutations extends MessageScope {
               : mergedMetadata;
           }
 
-          // Always true: the outer guard means `content` or `metadata` was assigned above.
-          /* v8 ignore else */
+          /* v8 ignore else -- unreachable: the outer guard means `content` or `metadata` was assigned above */
           if (Object.keys(messageUpdateData).length > 0) {
             const [updated] = await trx
               .update(messages)

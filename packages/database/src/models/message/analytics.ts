@@ -18,8 +18,7 @@ import type { MessageAnalyticsFilters, TopicMessageCountItem, TopicMessageStats 
  */
 const percentileCont = (sorted: number[], q: number): number => {
   const n = sorted.length;
-  // Unreachable: the only caller returns early when there are no counts.
-  /* v8 ignore next */
+  /* v8 ignore next -- unreachable: the only caller returns early when there are no counts */
   if (n === 0) return 0;
   if (n === 1) return sorted[0];
   const rank = q * (n - 1);
@@ -339,8 +338,7 @@ export class MessageAnalyticsQueries extends MessageScope {
 
     const dateCountMap = new Map<string, number>();
     for (const item of result) {
-      // `DATE(created_at)` is never null: `created_at` is NOT NULL.
-      /* v8 ignore else */
+      /* v8 ignore else -- unreachable: `DATE(created_at)` is never null: `created_at` is NOT NULL */
       if (item?.date) {
         const dateStr = dayjs(item.date as string).format('YYYY-MM-DD');
         dateCountMap.set(dateStr, item.count);
@@ -409,8 +407,7 @@ export class MessageAnalyticsQueries extends MessageScope {
     const dateTokenMap = new Map<string, number>();
     let maxTokens = 0;
     for (const item of result) {
-      // `DATE(created_at)` is never null: `created_at` is NOT NULL.
-      /* v8 ignore else */
+      /* v8 ignore else -- unreachable: `DATE(created_at)` is never null: `created_at` is NOT NULL */
       if (item?.date) {
         const dateStr = dayjs(item.date as string).format('YYYY-MM-DD');
         const tokens = item.tokens || 0;
