@@ -12,11 +12,9 @@ import type {
  * - `verifying`: the checks are being judged.
  * - `repairing`: the round did not pass and a repair round has to deliver again.
  * - `awaitingReview`: the round was delivered and waits for the person's review.
- * - `awaitingDecision`: the round ended without passing, but nothing moved the
- *   task on — only a person can decide what happens next.
  */
 export type TaskAcceptanceWaitPhase =
-  'awaitingDecision' | 'awaitingEvidence' | 'awaitingReview' | 'repairing' | 'verifying';
+  'awaitingEvidence' | 'awaitingReview' | 'repairing' | 'verifying';
 
 export interface TaskAcceptanceWait {
   acceptanceId: string | null;
@@ -53,12 +51,10 @@ const resolvePhase = (status: string | null): TaskAcceptanceWaitPhase | undefine
     case 'delivered': {
       return 'awaitingReview';
     }
-    case 'errored':
-    case 'failed': {
-      return 'awaitingDecision';
-    }
-    // `passed` drives the task to completion on its own; any other value is not
-    // a state we can explain, so claim nothing.
+    // A settled round moves the task on by itself: `passed` completes it, and
+    // `failed` / `errored` pause or complete it. A `running` task listing one
+    // as its newest round is starting its next run, so claim nothing; the same
+    // for any value we cannot explain.
     default: {
       return undefined;
     }
@@ -121,9 +117,15 @@ export const resolveTaskAcceptanceWait = (
   if (topics.some((topic) => topic.runningOperation)) return undefined;
 
   // The newest round decides: an older round that is still open was superseded
-  // by the run after it.
+  // by the run after it. A newer run that has not ended is starting (its marker
+  // is not written yet), so the task is executing, not waiting.
   const latestVerified = topics.findLast((topic) => topic.verify);
-  return latestVerified ? resolveRunAcceptanceWait(latestVerified) : undefined;
+  if (!latestVerified) return undefined;
+  const latest = topics.at(-1);
+  if (latest !== latestVerified && !TERMINAL_RUN_STATUSES.has(latest?.status ?? '')) {
+    return undefined;
+  }
+  return resolveRunAcceptanceWait(latestVerified);
 };
 
 const findSubtaskStatus = (

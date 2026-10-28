@@ -80,8 +80,6 @@ describe('resolveRunAcceptanceWait', () => {
     ['verifying', 'verifying'],
     ['repairing', 'repairing'],
     ['delivered', 'awaitingReview'],
-    ['failed', 'awaitingDecision'],
-    ['errored', 'awaitingDecision'],
   ] as const)('maps a %s round of an ended run to %s', (status, phase) => {
     expect(
       resolveRunAcceptanceWait({
@@ -93,11 +91,19 @@ describe('resolveRunAcceptanceWait', () => {
     ).toBe(phase);
   });
 
-  it('does not report a passed round as waiting', () => {
-    expect(
-      resolveRunAcceptanceWait({ id: 'tpc', runningOperation: null, verify: verify('passed') }),
-    ).toBeUndefined();
-  });
+  it.each(['passed', 'failed', 'errored'])(
+    'does not report a settled %s round as waiting',
+    (status) => {
+      expect(
+        resolveRunAcceptanceWait({
+          id: 'tpc',
+          runningOperation: null,
+          status: 'completed',
+          verify: verify(status),
+        }),
+      ).toBeUndefined();
+    },
+  );
 });
 
 describe('acceptance wait evidence and scope', () => {
@@ -198,5 +204,35 @@ describe('resolveRunAcceptanceWaitInTask', () => {
         childRun,
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('a rerun after a settled round', () => {
+  const failedRound = {
+    id: 'tpc-3',
+    runningOperation: null,
+    seq: 3,
+    status: 'completed',
+    verify: verify('failed', 1, 4),
+  };
+
+  it('reads a running task as executing while only the failed predecessor is listed', () => {
+    expect(resolveTaskAcceptanceWait('running', [failedRound])).toBeUndefined();
+  });
+
+  it('reads a running task as executing while its newer run is starting', () => {
+    const repairing = { ...failedRound, verify: verify('repairing', 2, 4) };
+    const starting = {
+      id: 'tpc-4',
+      runningOperation: null,
+      seq: 4,
+      status: 'running',
+      verify: null,
+    };
+
+    expect(resolveTaskAcceptanceWait('running', [repairing, starting])).toBeUndefined();
+    expect(
+      resolveTaskAcceptanceWait('running', [repairing, { ...starting, status: 'completed' }]),
+    ).toMatchObject({ phase: 'repairing', topicId: 'tpc-3' });
   });
 });
