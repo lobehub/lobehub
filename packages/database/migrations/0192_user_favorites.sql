@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS "user_favorites" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
 	"workspace_id" text,
 	"type" text NOT NULL,

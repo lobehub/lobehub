@@ -1,8 +1,7 @@
 import type { FavoriteType } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { index, integer, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -19,10 +18,8 @@ import { workspaces } from './workspace';
 export const userFavorites = pgTable(
   'user_favorites',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => idGenerator('userFavorites'))
-      .notNull(),
+    // Only ever sent back to the API, never shown or linked, so no id prefix.
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })

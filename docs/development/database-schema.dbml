@@ -2013,7 +2013,7 @@ table expertise_runs {
 }
 
 table user_favorites {
-  id text [pk, not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
   type text [not null]

@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "f3e03af0-70e5-4b83-8fc2-599d711697c8",
+  "id": "9aa70021-b222-4c91-9e85-e665a3b0762f",
   "policies": {},
   "prevId": "eba5e982-254a-4b19-a7f0-44c72dfab9dc",
   "roles": {},
@@ -17165,9 +17165,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
