@@ -1,3 +1,4 @@
+import { isTRPCClientError } from '@trpc/client';
 import pc from 'picocolors';
 
 import { log } from '../utils/logger';
@@ -48,8 +49,8 @@ export const resolveWorkspace = async (idOrSlug: string): Promise<WorkspaceRow> 
 /**
  * Turn an optional `--workspace <id|slug>` value into a workspace id. Leaves
  * `undefined` alone so the ambient scope (env, `workspace use`) still applies.
- * When the caller's credentials cannot list workspaces, the value is passed
- * through as an id (how `--workspace` behaved before slugs) with a warning.
+ * When the caller's credentials are refused `workspace.list`, the value is
+ * passed through as an id (how `--workspace` behaved before slugs) with a warning.
  */
 export const resolveWorkspaceRef = async (idOrSlug?: string): Promise<string | undefined> => {
   if (!idOrSlug) return undefined;
@@ -58,6 +59,11 @@ export const resolveWorkspaceRef = async (idOrSlug?: string): Promise<string | u
   try {
     workspaces = await listWorkspaces();
   } catch (error) {
+    // Only a scope refusal passes through. Any other failure (network, server)
+    // is not evidence the value is an id, and forwarding a slug would read the
+    // personal scope instead.
+    if (!isTRPCClientError(error) || error.data?.code !== 'FORBIDDEN') throw error;
+
     // Keep ids working for credentials scoped below `workspace:read`, but say
     // so: a slug sent as `X-Workspace-Id` is rejected or read the wrong scope.
     log.debug('workspace.list failed', error);

@@ -1,3 +1,4 @@
+import { TRPCClientError } from '@trpc/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../utils/logger';
@@ -8,6 +9,9 @@ const { mockList } = vi.hoisted(() => ({ mockList: vi.fn() }));
 vi.mock('./client', () => ({
   getTrpcClient: async () => ({ workspace: { list: { query: mockList } } }),
 }));
+
+const trpcError = (code: string) =>
+  new TRPCClientError(code, { result: { error: { data: { code } } } as never });
 
 const workspaces = [
   { id: 'ws_1', name: 'Acme', slug: 'acme' },
@@ -39,11 +43,20 @@ describe('workspaceRef', () => {
   });
 
   // Credentials that cannot list workspaces keep the pre-slug behavior.
-  it('passes the value through as an id when the lookup fails', async () => {
-    mockList.mockRejectedValue(new Error('FORBIDDEN'));
+  it('passes the value through as an id when the lookup is forbidden', async () => {
+    mockList.mockRejectedValue(trpcError('FORBIDDEN'));
 
     await expect(resolveWorkspaceRef('ws_x')).resolves.toBe('ws_x');
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('pass the workspace id'));
+  });
+
+  // A slug forwarded after a transient failure would read the personal scope.
+  it('fails when the lookup fails for any other reason', async () => {
+    mockList.mockRejectedValue(trpcError('INTERNAL_SERVER_ERROR'));
+    await expect(resolveWorkspaceRef('acme')).rejects.toThrow('INTERNAL_SERVER_ERROR');
+
+    mockList.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(resolveWorkspaceRef('acme')).rejects.toThrow('fetch failed');
   });
 
   it('exits when nothing matches', async () => {
