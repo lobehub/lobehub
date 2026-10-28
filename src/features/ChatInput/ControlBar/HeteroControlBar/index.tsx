@@ -316,7 +316,12 @@ const HeteroControlBar = memo(() => {
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {sdkRuntimeBadge}
-        <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+        {/* Devin's session mode is user-selectable in the model menu, so a
+            static "Full access" badge (and its "cannot switch modes" tooltip)
+            would misstate the resolved mode. */}
+        {heteroProvider?.type !== 'devin' && (
+          <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
+        )}
       </Flexbox>
     </Flexbox>
   );

@@ -304,6 +304,24 @@ describe('HeteroControlBar', () => {
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
   });
 
+  it('hides the full-access badge for Devin, whose session mode is selectable', () => {
+    effectiveAgencyConfig.current = {
+      boundDeviceId: 'personal-device',
+      executionTarget: 'local',
+      heterogeneousProvider: { command: 'devin', mode: 'plan', type: 'devin' },
+    };
+
+    render(<HeteroControlBar />);
+
+    expect(screen.queryByText('heteroAgent.fullAccess.label')).toBeNull();
+  });
+
+  it('keeps the full-access badge for providers without a mode selector', () => {
+    render(<HeteroControlBar />);
+
+    expect(screen.getByText('heteroAgent.fullAccess.label')).toBeTruthy();
+  });
+
   it('shows local Kimi Code quota for a local execution target', async () => {
     effectiveAgencyConfig.current = {
       boundDeviceId: 'personal-device',

@@ -82,7 +82,14 @@ export interface DevinAcpSessionOptions extends AcpAgentSessionOptions {
   askUserBridge?: AskUserBridge;
   initialModel?: string;
   onModel?: (model: string) => void;
-  /** Devin ACP permission mode, applied via `session/set_config_option`. */
+  /**
+   * Devin ACP session mode (`accept-edits` | `ask` | `plan` | `bypass`),
+   * applied via `session/set_config_option` after session setup. This is a
+   * different enum from the global `--permission-mode` flag
+   * (`normal|accept-edits|smart|dangerous|autonomous`): a flag hoisted out of
+   * `args` still reaches the CLI, but it is never read back as the session
+   * mode.
+   */
   permissionMode?: string;
   prompt: DevinAcpPromptBlock[];
 }
@@ -142,8 +149,11 @@ export class DevinAcpSession extends AcpAgentSession<
       processLabel: 'Devin ACP',
       transport: TRANSPORT,
     });
-    this.resolvedPermissionMode =
-      devinArgs[0] === '--permission-mode' ? devinArgs[1] : (options.permissionMode ?? undefined);
+    // Only the explicit session-mode option feeds `session/set_config_option`.
+    // A `--permission-mode` hoisted out of `args` is the CLI's global flag —
+    // its enum (normal|smart|dangerous|autonomous) is not a valid ACP `mode`
+    // value, so it must stay on argv and never be sent as `configId: 'mode'`.
+    this.resolvedPermissionMode = options.permissionMode ?? undefined;
   }
 
   get sessionId(): string | undefined {
