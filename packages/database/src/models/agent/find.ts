@@ -221,6 +221,7 @@ export const getAgentVisibilityMeta = async (
   return {
     slug: row.slug,
     userId: row.userId,
+    /* v8 ignore next -- unreachable: agents.visibility is NOT NULL (default 'public'), so the `?? 'public'` fallback never runs */
     visibility: (row.visibility as 'private' | 'public' | null) ?? 'public',
   };
 };
