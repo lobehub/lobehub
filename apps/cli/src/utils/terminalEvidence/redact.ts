@@ -135,18 +135,32 @@ export const createRedactor = (options: RedactorOptions = {}): Redactor => {
       replacement: '~',
     });
 
+  // A rule that masks one capture group needs that group's own position: the
+  // value can also occur earlier in the match (`password=pass` holds "pass" in
+  // its field name), so searching for its text would mask the wrong span and
+  // publish the secret. The `d` flag records where each group matched.
+  const compiled = rules.map((rule) => ({
+    ...rule,
+    pattern:
+      rule.group && !rule.pattern.hasIndices
+        ? new RegExp(rule.pattern.source, `${rule.pattern.flags}d`)
+        : rule.pattern,
+  }));
+
   return {
     find: (text) => {
       const matches: RedactionMatch[] = [];
-      for (const rule of rules) {
+      for (const rule of compiled) {
         rule.pattern.lastIndex = 0;
         for (const match of text.matchAll(rule.pattern)) {
           if (match[0].length === 0) continue;
-          const value = rule.group ? match[rule.group] : match[0];
-          if (!value) continue;
-          const start = match.index! + (rule.group ? match[0].indexOf(value) : 0);
+          const span = rule.group
+            ? match.indices?.[rule.group]
+            : [match.index!, match.index! + match[0].length];
+          if (!span || span[1] <= span[0]) continue;
+          const [start, end] = span;
           matches.push({
-            end: start + value.length,
+            end,
             replacement: rule.replacement,
             rule: rule.name,
             start,

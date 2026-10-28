@@ -154,6 +154,70 @@ describe('terminal evidence', () => {
       });
     });
 
+    it.skipIf(process.platform === 'win32')(
+      'stops everything a --shell command started when it times out',
+      async () => {
+        const out = path.join(dir, 'tree');
+        const started = Date.now();
+        // The shell's children hold the output pipes; killing only the shell
+        // used to leave them running, so capture waited for them to finish.
+        await run(
+          'evidence',
+          'capture',
+          '--shell',
+          '--timeout',
+          '1',
+          '--out',
+          out,
+          '--',
+          'sleep 30 & sleep 30; echo done',
+        );
+        expect(Date.now() - started).toBeLessThan(10_000);
+        expect((await record(out)).execution).toMatchObject({ outcome: 'timed_out' });
+      },
+      20_000,
+    );
+
+    it('keeps a multibyte character whole across the head/tail boundary', async () => {
+      const out = path.join(dir, 'utf8');
+      // 4 ASCII bytes then a 3-byte '€' straddle the middle of a 10-byte budget.
+      await run(
+        'evidence',
+        'capture',
+        '--max-bytes',
+        '10',
+        '--out',
+        out,
+        '--',
+        node,
+        '-e',
+        'process.stdout.write("abcd€")',
+      );
+      expect(await readFile(path.join(out, 'stdout.txt'), 'utf8')).toBe('abcd€');
+      expect((await record(out)).processing.truncation).toEqual([]);
+    });
+
+    it('cuts truncated output at character boundaries and counts the cut bytes', async () => {
+      const out = path.join(dir, 'utf8-truncated');
+      await run(
+        'evidence',
+        'capture',
+        '--max-bytes',
+        '10',
+        '--out',
+        out,
+        '--',
+        node,
+        '-e',
+        'process.stdout.write("€€€€€€€€")',
+      );
+      const stdout = await readFile(path.join(out, 'stdout.txt'), 'utf8');
+      expect(stdout).not.toContain('\uFFFD');
+      const [truncation] = (await record(out)).processing.truncation;
+      expect(truncation.droppedBytes + truncation.keptBytes).toBe(24);
+      expect(stdout).toContain(`${truncation.droppedBytes} bytes truncated`);
+    });
+
     it('records a command that never started', async () => {
       const out = path.join(dir, 'missing');
       await run('evidence', 'capture', '--out', out, '--', 'lh-no-such-command-xyz');
@@ -367,6 +431,25 @@ describe('terminal evidence', () => {
       await appendFile(path.join(out, 'stdout.txt'), 'all tests passed\n');
       await expect(publishTerminalBundle(async () => ({ id: 'x' }), out)).rejects.toThrow(
         /changed after the bundle was written/,
+      );
+    });
+
+    it('refuses a bundle whose transcript was edited after it was written', async () => {
+      const out = await captureBundle('edited-transcript');
+      await appendFile(path.join(out, 'transcript.txt'), 'all tests passed\n');
+      await expect(publishTerminalBundle(async () => ({ id: 'x' }), out)).rejects.toThrow(
+        /transcript\.txt does not match/,
+      );
+    });
+
+    it('refuses a bundle whose record was edited after it was written', async () => {
+      const out = await captureBundle('edited-record');
+      const terminal = await record(out);
+      terminal.execution.exitCode = 0;
+      terminal.execution.command = 'npm test';
+      await writeFile(path.join(out, 'terminal.json'), JSON.stringify(terminal));
+      await expect(publishTerminalBundle(async () => ({ id: 'x' }), out)).rejects.toThrow(
+        /transcript\.txt does not match/,
       );
     });
 
