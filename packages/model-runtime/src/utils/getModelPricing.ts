@@ -66,3 +66,16 @@ export async function getModelParameters(
   );
   return card && 'parameters' in card ? card.parameters : undefined;
 }
+
+/**
+ * Model type (`chat`, `decision`, …) of the model-bank card for `model`, resolved like
+ * {@link getModelPricing}. Undefined when model-bank does not list the model.
+ */
+export async function getModelType(
+  model: string,
+  provider?: string,
+  pricingContext?: ModelPricingContext,
+): Promise<LobeDefaultAiModelListItem['type'] | undefined> {
+  const card = await findModelCard(model, provider, pricingContext, (m) => !!m.type);
+  return card?.type;
+}

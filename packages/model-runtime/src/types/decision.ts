@@ -87,7 +87,10 @@ export interface DecisionScoreAnswer {
    * provider does not report a distribution; when present it always covers every level.
    */
   probabilities?: number[];
-  /** Probability-weighted mean of the zero-based level index; it may fall between levels. */
+  /**
+   * Probability-weighted mean of the zero-based level index; it may fall between levels.
+   * An emulated decision reports the single chosen level index instead.
+   */
   score: number;
   type: 'score';
 }
@@ -116,7 +119,17 @@ export interface DecisionResponse<Q extends DecisionQuestions = DecisionQuestion
   model: string;
   /** Upstream provider that served the request, when reported. */
   provider?: string;
-  /** Provider-reported token usage, with `cost` when the model has pricing. */
+  /**
+   * Set by `ModelRuntime.decide`: which path served the call, plus the evidence an emulated
+   * decision wrote per question name.
+   */
+  providerMetadata?: {
+    lobehub?: { decisionMode: 'emulated' | 'native'; evidence?: Record<string, string> };
+  };
+  /**
+   * Provider-reported token usage, with `cost` when the model has pricing. Summed across
+   * attempts when an emulated decision retried.
+   */
   usage?: ModelUsage;
 }
 

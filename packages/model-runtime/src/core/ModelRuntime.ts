@@ -39,8 +39,10 @@ import type {
   VideoPollingRoute,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import { getModelType } from '../utils/getModelPricing';
 import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
+import { emulateDecision } from './decision/emulate';
 
 const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
 
@@ -624,21 +626,42 @@ export class ModelRuntime {
     }
   }
 
+  /**
+   * Answer typed questions about one state. A model-bank `type: 'decision'` model on a provider
+   * with native `decide` answers natively; any other model is emulated through `generateObject`.
+   * `response.providerMetadata.lobehub.decisionMode` says which path served the call.
+   */
   async decide<Q extends DecisionQuestions>(
     payload: DecisionPayload<Q>,
     options?: DecisionOptions,
   ): Promise<DecisionResponse<Q>> {
+    const runtime = this._runtime;
+    const provider = getRuntimeProviderId(runtime);
+    // A failed model-bank lookup only loses the routing hint: treat the model as unlisted.
+    const isDecisionModel =
+      !!runtime.decide &&
+      (await getModelType(payload.model, provider, options?.pricingContext).catch(
+        () => undefined,
+      )) === 'decision';
+
     // Unlike the optional-chained passthroughs above, an unsupported provider must not
     // resolve to `undefined`: callers branch on the answers and would read it as a result.
     // Thrown before the hooks run, so there is nothing for `onDecideError` to release.
-    const decide = this._runtime.decide?.bind(this._runtime);
-    if (!decide) {
+    if (!isDecisionModel && !runtime.generateObject) {
       throw AgentRuntimeError.chat({
         error: new Error('Decision models are not supported by this provider'),
         errorType: AgentRuntimeErrorType.CapabilityNotSupported,
-        provider: getRuntimeProviderId(this._runtime),
+        provider,
       });
     }
+    const decide = (decideOptions?: DecisionOptions) =>
+      isDecisionModel
+        ? runtime.decide!(payload, decideOptions)
+        : emulateDecision(payload, decideOptions, {
+            generateObject: (objectPayload, objectOptions) =>
+              runtime.generateObject!(objectPayload, objectOptions),
+            provider,
+          });
 
     try {
       const hookOptions = this._hooks?.beforeDecide && !options ? {} : options;
@@ -647,21 +670,28 @@ export class ModelRuntime {
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
       let providerReportedCost: number | undefined;
-      const finalOptions = this._hooks?.onDecideFinal
-        ? {
-            ...hookOptions,
-            onProviderReportedCost: async (cost: number) => {
-              providerReportedCost = cost;
-              await hookOptions?.onProviderReportedCost?.(cost);
-            },
-            onUsage: async (reported: ModelUsage) => {
-              usage = reported;
-              await hookOptions?.onUsage?.(reported);
-            },
-          }
-        : hookOptions;
-
-      const response = await decide(payload, finalOptions);
+      const raw = await decide({
+        ...hookOptions,
+        onProviderReportedCost: async (cost: number) => {
+          providerReportedCost = cost;
+          await hookOptions?.onProviderReportedCost?.(cost);
+        },
+        onUsage: async (reported: ModelUsage) => {
+          usage = reported;
+          await hookOptions?.onUsage?.(reported);
+        },
+      });
+      const response = {
+        ...raw,
+        providerMetadata: {
+          ...raw.providerMetadata,
+          lobehub: {
+            ...raw.providerMetadata?.lobehub,
+            decisionMode: isDecisionModel ? 'native' : 'emulated',
+          },
+        },
+        ...((raw.usage ?? usage) && { usage: raw.usage ?? usage }),
+      } as DecisionResponse<Q>;
 
       if (this._hooks?.onDecideFinal) {
         try {
@@ -674,7 +704,7 @@ export class ModelRuntime {
         }
       }
 
-      return response as DecisionResponse<Q>;
+      return response;
     } catch (error) {
       if (this._hooks?.onDecideError) {
         await this._hooks.onDecideError(error as ChatCompletionErrorPayload, {

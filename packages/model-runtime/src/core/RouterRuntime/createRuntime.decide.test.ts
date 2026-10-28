@@ -3,7 +3,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DecisionBooleanAnswer, DecisionRefusalAnswer } from '../../types';
 import type { LobeRuntimeAI } from '../BaseAI';
+import { ModelRuntime } from '../ModelRuntime';
 import { createRouterRuntime } from './createRuntime';
+
+const getModelType = vi.hoisted(() => vi.fn());
+vi.mock('../../utils/getModelPricing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getModelType,
+}));
+
+vi.mock('../../providers/lobehub', () => ({
+  LobeHubAI: class LobeHubAI {},
+}));
 
 describe('createRouterRuntime decide', () => {
   afterEach(() => {
@@ -89,5 +100,58 @@ describe('createRouterRuntime decide', () => {
     await expect(
       new Runtime().decide({ model: 'typesafe/jev-1.13', questions: {}, state: 'x' }),
     ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.CapabilityNotSupported });
+  });
+
+  it('should emulate a chat model through the routed generateObject when wrapped in ModelRuntime', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    getModelType.mockResolvedValue('chat');
+    const mockDecide = vi.fn();
+    const mockGenerateObject = vi.fn().mockResolvedValue({
+      q0: { evidence: 'Wants money back.', refused: false, value: 0.9 },
+    });
+
+    class MockRuntime implements LobeRuntimeAI {
+      decide = mockDecide;
+      generateObject = mockGenerateObject;
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'lobehub',
+      routers: [
+        {
+          apiType: 'openai',
+          models: ['gpt-5-mini'],
+          options: { id: 'channel-1' },
+          runtime: MockRuntime as any,
+        },
+      ],
+    });
+
+    const runtime = new ModelRuntime(new Runtime({ userId: 'user-1' }));
+    const metadata: Record<string, unknown> = { trigger: RequestTrigger.Api };
+
+    const result = await runtime.decide(
+      {
+        model: 'gpt-5-mini',
+        questions: {
+          refund: {
+            criteria: { false: 'no', true: 'yes' },
+            instructions: 'Refund request?',
+            type: 'boolean',
+          },
+        },
+        state: 'Give me my money back',
+      },
+      { metadata },
+    );
+
+    expect(result.answers.refund).toEqual({ probability: 0.9, type: 'boolean' });
+    expect(result.providerMetadata?.lobehub?.decisionMode).toBe('emulated');
+    expect(mockDecide).not.toHaveBeenCalled();
+    expect(mockGenerateObject).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5-mini' }),
+      expect.objectContaining({ metadata }),
+    );
+    expect(metadata.routeAttempt).toEqual(expect.objectContaining({ success: true }));
   });
 });

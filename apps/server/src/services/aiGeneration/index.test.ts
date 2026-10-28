@@ -150,3 +150,44 @@ describe('AiGenerationService.generateObject with a device-only provider', () =>
     ).rejects.toMatchObject({ error: { reason: 'no_executor' } });
   });
 });
+
+describe('AiGenerationService.decide', () => {
+  const decide = vi.fn();
+  const initSpy = vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB');
+
+  beforeEach(() => {
+    decide.mockReset();
+    initSpy.mockReset();
+    initSpy.mockResolvedValue({ decide } as any);
+  });
+
+  it('resolves the provider runtime and forwards the payload, trigger, onUsage and signal', async () => {
+    const questions = {
+      meaningChanged: {
+        criteria: { false: 'Same meaning', true: 'Meaning changed' },
+        instructions: 'Did the meaning change?',
+        type: 'boolean' as const,
+      },
+    };
+    const response = {
+      answers: { meaningChanged: { probability: 0.1, type: 'boolean' } },
+      model: 'gpt-5-mini',
+    };
+    decide.mockResolvedValue(response);
+    const onUsage = vi.fn();
+    const signal = new AbortController().signal;
+
+    const ai = new AiGenerationService({} as any, 'user-1', 'ws-1');
+    const result = await ai.decide(
+      { model: 'gpt-5-mini', provider: 'openai', questions, state: 'note' },
+      { metadata: { trigger: RequestTrigger.Chat }, onUsage, signal },
+    );
+
+    expect(result).toBe(response);
+    expect(initSpy).toHaveBeenCalledWith({}, 'user-1', 'openai', 'ws-1');
+    expect(decide).toHaveBeenCalledWith(
+      { model: 'gpt-5-mini', questions, state: 'note' },
+      { metadata: { trigger: RequestTrigger.Chat }, onUsage, signal },
+    );
+  });
+});
