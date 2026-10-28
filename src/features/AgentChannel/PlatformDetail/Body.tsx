@@ -29,6 +29,7 @@ import type { SaveModuleId } from './saveModules';
 import { ApplicationIdField, SchemaField } from './SchemaField';
 import {
   getSchemaFields,
+  groupAccessFields,
   groupSettingsFields,
   groupWakeFields,
   WAKE_KEY_PREFIX,
@@ -376,7 +377,35 @@ const Body = memo<BodyProps>(
                   {t('channel.reply.instant')}
                 </Text>
               )}
-              {group.key === 'wake' ? (
+              {group.key === 'access' ? (
+                // Who the owner is, who may talk to the bot and who may use the owner's devices are
+                // three separate decisions, so each gets a block (and a Save) of its own.
+                groupAccessFields(group.fields).map((section) => (
+                  <Form.Group
+                    className={styles.moduleGroup}
+                    collapsible={false}
+                    extra={moduleExtra(`access-${section.key}`)}
+                    key={section.key}
+                    keyValue={`settings-access-${section.key}-${platformDef.id}`}
+                    title={t(`channel.access.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      section.key === 'identity'
+                        ? undefined
+                        : t(`channel.access.section.${section.key}Desc`)
+                    }
+                  >
+                    <AccessSection
+                      disabled={disabled}
+                      fields={section.fields}
+                      form={form}
+                      section={section.key}
+                      userIdExtras={renderExtras(section.fields.find((f) => f.key === 'userId'))}
+                      onValuesChange={onValuesChange}
+                    />
+                  </Form.Group>
+                ))
+              ) : group.key === 'wake' ? (
                 // Keywords, channels, pace and judgement each get a block of their own, so a long
                 // list of options reads as four decisions.
                 groupWakeFields(group.fields).map((section) => (
@@ -411,18 +440,7 @@ const Body = memo<BodyProps>(
                       : undefined
                   }
                 >
-                  {group.key === 'access' &&
-                  group.fields.some((f) => f.key === 'dmPolicy' || f.key === 'groupPolicy') ? (
-                    <AccessSection
-                      disabled={disabled}
-                      fields={group.fields}
-                      form={form}
-                      userIdExtras={renderExtras(group.fields.find((f) => f.key === 'userId'))}
-                      onValuesChange={onValuesChange}
-                    />
-                  ) : (
-                    renderSettingsFields(group.fields)
-                  )}
+                  {renderSettingsFields(group.fields)}
                   {group.key === 'advanced' && (
                     <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
                       <Button

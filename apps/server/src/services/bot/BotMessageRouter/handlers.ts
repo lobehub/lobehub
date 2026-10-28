@@ -31,6 +31,7 @@ import {
   resolveReplyStyle,
   type UserAllowlist,
 } from '../platforms';
+import { extractDeviceAllowlist } from '../platforms/deviceAccess';
 import { renderThrownAgentError } from '../renderThrownError';
 import { createWakeClassify } from '../wake/classify';
 import { createWakeDutyJudge } from '../wake/dutyJudge';
@@ -169,6 +170,8 @@ export function registerHandlers(
     typeof info.settings?.userId === 'string'
       ? (info.settings.userId as string).trim() || undefined
       : undefined;
+  /** Who besides the owner may use the owner's devices; read once per bot. */
+  const deviceAllowlist = extractDeviceAllowlist(info.settings);
   const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
 
   /**
@@ -541,6 +544,7 @@ export function registerHandlers(
         botContext: buildBotContext({
           applicationId,
           authorUserId: merged.author?.userId,
+          deviceAllowlist,
           operatorUserId,
           platform,
           platformThreadId: thread.id,
@@ -844,6 +848,7 @@ export function registerHandlers(
         botContext: buildBotContext({
           applicationId,
           authorUserId: merged.author?.userId,
+          deviceAllowlist,
           operatorUserId,
           platform,
           platformThreadId: thread.id,
@@ -892,6 +897,7 @@ export function registerHandlers(
   );
 
   registerCatchAllHandler(bot, {
+    deviceAllowlist,
     agentId,
     applicationId,
     botWakeEnabled: isBotWakeEnabled(parseBotWakeSettings(info.settings).config),

@@ -4,9 +4,37 @@ import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/b
 import { botWakeFields } from '@/server/services/bot/platforms/botWakeFields';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
-import { getSchemaFields, groupSettingsFields, groupWakeFields } from './settingsGroups';
+import {
+  getSchemaFields,
+  groupAccessFields,
+  groupSettingsFields,
+  groupWakeFields,
+} from './settingsGroups';
 
 const field = (key: string): FieldSchema => ({ key, label: key, type: 'string' });
+
+describe('groupAccessFields', () => {
+  it('splits access into owner identity, conversation and device blocks, in page order', () => {
+    const sections = groupAccessFields(
+      ['deviceAllowFrom', 'groupPolicy', 'userId', 'devicePolicy', 'dmPolicy', 'serverId'].map(
+        field,
+      ),
+    );
+
+    expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
+      ['identity', ['userId', 'serverId']],
+      ['conversation', ['dmPolicy', 'groupPolicy']],
+      ['device', ['devicePolicy', 'deviceAllowFrom']],
+    ]);
+  });
+
+  it('drops a block the platform has no fields for', () => {
+    expect(groupAccessFields(['userId', 'devicePolicy'].map(field)).map((s) => s.key)).toEqual([
+      'identity',
+      'device',
+    ]);
+  });
+});
 
 describe('groupSettingsFields', () => {
   it('sorts fields into connect, access, reply and advanced, ordered by how a person decides them', () => {

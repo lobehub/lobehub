@@ -17,6 +17,7 @@ import {
   replyPlacementField,
   watchKeywordsField,
 } from '../const';
+import { deviceAccessFields } from '../deviceAccess';
 import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import {
@@ -69,6 +70,7 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       makeUserIdField('discord'),
+      ...deviceAccessFields,
       makeServerIdField('discord'),
       {
         key: 'charLimit',

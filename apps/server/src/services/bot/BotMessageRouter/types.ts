@@ -134,6 +134,8 @@ export interface BotHandlerContext {
   client: PlatformClient;
   commands: BotCommand[];
   detectReplyLocale: (message: { author?: unknown }) => BotReplyLocale;
+  /** User IDs, besides the owner, trusted with the owner's devices. */
+  deviceAllowlist: string[];
   displayToolCalls: boolean;
   dmSettings: DmSettings;
   /** Last check before a follow-up wake (watch keyword) runs: enforced policies, then the scheduler. */

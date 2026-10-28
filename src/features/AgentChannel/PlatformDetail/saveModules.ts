@@ -2,7 +2,7 @@ import isEqual from 'fast-deep-equal';
 
 import type { ChannelTab, ChannelValues } from './channelTabs';
 import { pickKeys, replyDiffers } from './replySettings';
-import { groupWakeFields, type SettingsGroup } from './settingsGroups';
+import { groupAccessFields, groupWakeFields, type SettingsGroup } from './settingsGroups';
 
 /**
  * The page saves one block at a time. A block is a titled group of options with its own Save
@@ -12,7 +12,7 @@ import { groupWakeFields, type SettingsGroup } from './settingsGroups';
  * Replies are not a block: they take effect as soon as they change and save themselves.
  */
 export type SaveModuleId =
-  | 'access'
+  | `access-${'conversation' | 'device' | 'identity'}`
   | 'advanced'
   | 'connection'
   | 'credentials'
@@ -20,8 +20,9 @@ export type SaveModuleId =
 
 export interface SaveModule {
   /**
-   * Settings keys written with this block that no field of it shows (the hidden wake switch), so
-   * a bot saved before the wake options existed still gets it.
+   * Settings keys written with this block that no field of it shows: the hidden wake switch, so
+   * a bot saved before the wake options existed still gets it, and the owner's ID with the
+   * conversation block, which a pairing policy needs.
    */
   alsoWrites?: string[];
   id: SaveModuleId;
@@ -63,7 +64,18 @@ export const resolveSaveModules = (
         settings('connection', group.fields);
         break;
       }
-      case 'access':
+      case 'access': {
+        for (const section of groupAccessFields(group.fields)) {
+          // Approving strangers needs the approver: saving that choice saves the owner's ID too,
+          // or the server would refuse a pairing policy with no one to approve.
+          settings(
+            `access-${section.key}`,
+            section.fields,
+            section.key === 'conversation' ? ['userId'] : undefined,
+          );
+        }
+        break;
+      }
       case 'advanced': {
         settings(group.key, group.fields);
         break;
@@ -84,7 +96,8 @@ export const resolveSaveModules = (
 /** The tab a block sits on, to mark a tab that holds unsaved changes. */
 export const tabOfModule = (id: SaveModuleId): ChannelTab => {
   if (id === 'credentials' || id === 'connection') return 'connect';
-  if (id === 'access' || id === 'advanced') return id;
+  if (id.startsWith('access-')) return 'access';
+  if (id === 'advanced') return id;
 
   return 'wake';
 };

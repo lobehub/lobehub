@@ -639,7 +639,7 @@ const findFirstMatchingKeyword = (
  * never sees the names — those exist purely so the operator can recognise
  * each entry on the settings page.
  */
-function parseIdList(raw: unknown): string[] {
+export function parseIdList(raw: unknown): string[] {
   if (typeof raw === 'string') {
     return raw
       .split(/[\s,]+/)

@@ -28,6 +28,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     client,
     commands,
     detectReplyLocale,
+    deviceAllowlist,
     displayToolCalls,
     dmSettings,
     gateFollowup,
@@ -279,6 +280,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           botContext: buildBotContext({
             applicationId,
             authorUserId: merged.author?.userId,
+            deviceAllowlist,
             operatorUserId,
             platform,
             platformThreadId: thread.id,

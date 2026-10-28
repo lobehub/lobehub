@@ -32,20 +32,37 @@ export interface SettingsGroup {
   key: SettingsGroupKey;
 }
 
+export type AccessSectionKey = 'conversation' | 'device' | 'identity';
+
+export interface AccessSectionGroup {
+  fields: FieldSchema[];
+  key: AccessSectionKey;
+}
+
 /**
- * Who the bot talks to, in the order a person decides it: who you are and which
- * server is yours, then DMs
- * (and the list they lean on), then groups.
+ * The access tab's blocks, in page order, each answering one question:
+ *
+ * - identity: who the owner is (their own ID, and the server that is theirs)
+ * - conversation: who may talk to the bot, in DMs (and the list they lean on) and in groups
+ * - device: who, besides the owner, may use the owner's devices through the bot
  */
-const ACCESS_KEYS = [
-  'userId',
-  'serverId',
-  'dmPolicy',
-  'allowFrom',
-  'guestPolicy',
-  'groupPolicy',
-  'groupAllowFrom',
+const ACCESS_SECTION_KEYS: Array<[AccessSectionKey, string[]]> = [
+  ['identity', ['userId', 'serverId']],
+  ['conversation', ['dmPolicy', 'allowFrom', 'guestPolicy', 'groupPolicy', 'groupAllowFrom']],
+  ['device', ['devicePolicy', 'deviceAllowFrom']],
 ];
+
+const ACCESS_KEYS = ACCESS_SECTION_KEYS.flatMap(([, keys]) => keys);
+
+/** Split the access tab's fields into its blocks. Empty blocks are dropped. */
+export const groupAccessFields = (fields: FieldSchema[]): AccessSectionGroup[] => {
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+
+  return ACCESS_SECTION_KEYS.map(([key, keys]) => ({
+    fields: keys.map((k) => byKey.get(k)).filter((field): field is FieldSchema => !!field),
+    key,
+  })).filter((section) => section.fields.length > 0);
+};
 
 /** What a reply looks like in the chat. */
 export const REPLY_KEYS = ['replyPlacement', 'displayToolCalls', 'showUsageStats', 'reactionMode'];
