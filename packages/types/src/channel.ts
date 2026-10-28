@@ -76,6 +76,12 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * Directory as chosen, not yet confirmed by the device. Saving a member never waits for the
+   * device: the coordinator verifies it once the device is online and replaces it with
+   * `workingDirectory`. A member with only this field never starts work.
+   */
+  pendingWorkingDirectory?: string;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
 }
@@ -139,6 +145,7 @@ export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
   | 'directory_locked'
+  | 'directory_unavailable'
   | 'member_busy'
   | 'unavailable'
   | 'workspace_changed';

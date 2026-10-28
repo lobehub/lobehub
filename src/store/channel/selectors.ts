@@ -9,6 +9,7 @@ import type { ChannelState } from './store';
 const EXTERNAL_BLOCKS = new Set<ChannelJobBlockCode>([
   'device_approval_pending',
   'device_offline',
+  'directory_unavailable',
   'unavailable',
   'workspace_changed',
 ]);

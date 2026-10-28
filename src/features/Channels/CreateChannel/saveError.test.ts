@@ -7,10 +7,6 @@ describe('channel member save feedback', () => {
     ['Choose an online device and working directory', 'environment.executionRequired'],
     ['Choose a working directory for this device', 'environment.directoryRequired'],
     ['Choose an accessible device shared with this workspace', 'environment.deviceUnavailable'],
-    [
-      'The device must be online and support directory verification',
-      'environment.directoryUnavailable',
-    ],
     ['Unsupported Channel runtime', 'environment.unsupportedRuntime'],
     ['Agent not found', 'environment.agentUnavailable'],
   ])('translates the actionable domain error %s', (message, key) => {

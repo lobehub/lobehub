@@ -60,7 +60,6 @@
   "environment.devicesLoading": "기기 상태 확인 중…",
   "environment.directoryLabel": "{{name}}의 작업 디렉토리",
   "environment.directoryRequired": "이 기기에서 작업 디렉토리를 선택하세요.",
-  "environment.directoryUnavailable": "디렉토리를 확인할 수 없습니다. 기기 연결을 확인하고 디렉토리를 다시 선택하세요.",
   "environment.editNamed": "{{name}}이(가) 실행되는 위치 변경",
   "environment.executionRequired": "모든 코딩 에이전트에 대해 온라인 기기와 작업 디렉토리를 선택하세요.",
   "environment.permissionRequired": "이 멤버를 저장할 권한이 없습니다. 채널 및 에이전트 접근을 확인하세요.",

@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Проверка на състоянието на устройството…",
   "environment.directoryLabel": "Работна директория за {{name}}",
   "environment.directoryRequired": "Изберете работна директория на това устройство.",
-  "environment.directoryUnavailable": "Не може да се провери директорията. Проверете връзката на устройството и изберете директорията отново.",
   "environment.editNamed": "Променете къде работи {{name}}",
   "environment.executionRequired": "Изберете онлайн устройство и работна директория за всеки кодиращ агент.",
   "environment.permissionRequired": "Нямате разрешение да запазите тези членове. Проверете достъпа до канала и агента.",

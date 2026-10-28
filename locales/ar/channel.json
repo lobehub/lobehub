@@ -60,7 +60,6 @@
   "environment.devicesLoading": "جارٍ التحقق من حالة الجهاز…",
   "environment.directoryLabel": "دليل العمل لـ {{name}}",
   "environment.directoryRequired": "اختر دليل عمل على هذا الجهاز.",
-  "environment.directoryUnavailable": "تعذر التحقق من الدليل. تحقق من اتصال الجهاز واختر الدليل مرة أخرى.",
   "environment.editNamed": "تغيير مكان تشغيل {{name}}",
   "environment.executionRequired": "اختر جهازًا متصلًا ودليل عمل لكل وكيل برمجي.",
   "environment.permissionRequired": "ليس لديك إذن لحفظ هؤلاء الأعضاء. تحقق من الوصول إلى القناة والوكيل.",

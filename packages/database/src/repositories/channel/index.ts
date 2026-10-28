@@ -146,8 +146,14 @@ export class ChannelRepository {
       async (tx) => {
         const member = await requireAgentMember(tx, channelId, memberId);
         // The device owner is routing data, not something the editor chooses.
-        const { deviceId, workingDirectory } = memberEnvironment(member.config);
-        return { agentId: member.agentId, deviceId, workingDirectory };
+        const { deviceId, pendingWorkingDirectory, workingDirectory } = memberEnvironment(
+          member.config,
+        );
+        return {
+          agentId: member.agentId,
+          deviceId,
+          workingDirectory: workingDirectory ?? pendingWorkingDirectory,
+        };
       },
       { minRole: 'admin' },
     );

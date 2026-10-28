@@ -60,7 +60,6 @@
   "environment.devicesLoading": "正在檢查裝置狀態…",
   "environment.directoryLabel": "{{name}} 的工作目錄",
   "environment.directoryRequired": "在此裝置上選擇一個工作目錄。",
-  "environment.directoryUnavailable": "無法驗證目錄。檢查裝置連接並重新選擇目錄。",
   "environment.editNamed": "更改 {{name}} 的運行位置",
   "environment.executionRequired": "為每個程式碼代理選擇一個在線裝置和工作目錄。",
   "environment.permissionRequired": "您無權保存這些成員。檢查頻道和代理的訪問權限。",

@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Vérification du statut des appareils…",
   "environment.directoryLabel": "Répertoire de travail pour {{name}}",
   "environment.directoryRequired": "Choisissez un répertoire de travail sur cet appareil.",
-  "environment.directoryUnavailable": "Impossible de vérifier le répertoire. Vérifiez la connexion de l'appareil et choisissez à nouveau le répertoire.",
   "environment.editNamed": "Modifier où {{name}} s'exécute",
   "environment.executionRequired": "Choisissez un appareil en ligne et un répertoire de travail pour chaque Agent de codage.",
   "environment.permissionRequired": "Vous n'avez pas la permission de sauvegarder ces membres. Vérifiez l'accès au canal et à l'Agent.",
