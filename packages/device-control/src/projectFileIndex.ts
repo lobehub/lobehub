@@ -22,7 +22,9 @@ const PROJECT_FILE_GLOB_LIMIT = 5000;
 const PROJECT_FILE_SEARCH_DEFAULT_LIMIT = 100;
 const PROJECT_DIRECTORY_LIST_LIMIT = 1000;
 
-const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
+type ProjectPathApi = Pick<typeof path, 'basename' | 'dirname' | 'relative' | 'resolve' | 'sep'>;
+
+const toPosixRelativePath = (filePath: string, sep = path.sep) => filePath.split(sep).join('/');
 
 /** Parent of a posix index path (`a/b/c.ts` → `a/b/`), or null at the root. */
 const getParentRelativePath = (relativePath: string): string | null => {
@@ -38,29 +40,49 @@ const createProjectFileEntry = (
   isDirectory: boolean,
   gitIgnored?: boolean,
   collapsed?: boolean,
+  pathApi: ProjectPathApi = path,
 ): ProjectFileIndexEntry => {
-  const relativePath = toPosixRelativePath(path.relative(root, absolutePath));
+  const relativePath = toPosixRelativePath(pathApi.relative(root, absolutePath), pathApi.sep);
   return {
     ...(collapsed ? { collapsed: true } : {}),
     ...(gitIgnored ? { gitIgnored: true } : {}),
     isDirectory,
-    name: path.basename(absolutePath),
+    name: pathApi.basename(absolutePath),
     path: absolutePath,
     relativePath: isDirectory ? `${relativePath}/` : relativePath,
   };
 };
 
-const collectProjectDirectories = (files: string[], root: string): ProjectFileIndexEntry[] => {
+/**
+ * Parent directories of indexed files, not including `root`.
+ *
+ * `pathApi` is injectable so Linux CI can exercise `path.win32`: Git for
+ * Windows reports `--show-toplevel` with forward slashes (`D:/repo`) while
+ * `path.resolve` uses backslashes. Both sides are normalized before the
+ * containment check; otherwise every nested parent is dropped and the Files
+ * tree flattens to the project root.
+ */
+export const collectProjectDirectories = (
+  files: string[],
+  root: string,
+  pathApi: ProjectPathApi = path,
+): ProjectFileIndexEntry[] => {
+  const normalizedRoot = pathApi.resolve(root);
+  const rootPrefix = `${normalizedRoot}${pathApi.sep}`;
   const directories = new Set<string>();
+
   for (const filePath of files) {
-    let current = path.dirname(filePath);
-    while (current && current !== root && current.startsWith(`${root}${path.sep}`)) {
+    let current = pathApi.resolve(pathApi.dirname(pathApi.resolve(filePath)));
+    while (current && current !== normalizedRoot && current.startsWith(rootPrefix)) {
       if (directories.has(current)) break;
       directories.add(current);
-      current = path.dirname(current);
+      current = pathApi.dirname(current);
     }
   }
-  return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
+
+  return [...directories].map((directory) =>
+    createProjectFileEntry(normalizedRoot, directory, true, undefined, undefined, pathApi),
+  );
 };
 
 /**
