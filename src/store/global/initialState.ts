@@ -224,6 +224,12 @@ export interface SystemStatus {
    * number of agents (defaultList) to display
    */
   agentPageSize?: number;
+  /**
+   * Sidebar groups folded in the task assignee picker, keyed by group id.
+   * Nested booleans so the lodash `merge` in `updateSystemStatus` replaces
+   * scalars instead of index-merging arrays.
+   */
+  assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -367,6 +373,11 @@ export interface SystemStatus {
    */
   projectTopicSubGroupModeByGroup?: Record<string, ProjectTopicSubGroupMode>;
   readNotificationSlugs?: string[];
+  /**
+   * Agents this device last picked as a task assignee, newest first, keyed by
+   * workspace id (`personal` outside a workspace). See `pushRecentAssignee`.
+   */
+  recentAssigneeAgentIds?: Record<string, string[]>;
   /**
    * number of recent items to display
    */

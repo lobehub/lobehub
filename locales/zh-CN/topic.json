@@ -293,6 +293,7 @@
   "sidebar.title": "话题",
   "taskManager.agent": "任务助手",
   "taskManager.agentSelector.privateGroup": "私人",
+  "taskManager.agentSelector.recentGroup": "最近指派",
   "taskManager.agentSelector.workspaceGroup": "工作区",
   "taskManager.welcome": "有什么任务问题想问我？",
   "temp": "临时",

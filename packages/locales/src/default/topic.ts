@@ -325,6 +325,7 @@ export default {
   'sidebar.title': 'Topics',
   'taskManager.agent': 'Task Agent',
   'taskManager.agentSelector.privateGroup': 'Private',
+  'taskManager.agentSelector.recentGroup': 'Recently assigned',
   'taskManager.agentSelector.workspaceGroup': 'Workspace',
   'taskManager.welcome': 'Ask me about your tasks',
   'temp': 'Temporary',
