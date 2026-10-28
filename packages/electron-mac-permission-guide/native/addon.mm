@@ -1,4 +1,6 @@
 #include <napi.h>
+#include <unistd.h>
+#include <xpc/xpc.h>
 
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
@@ -781,6 +783,107 @@ static const CGFloat kFlightStartScale = 0.3;
 
 @end
 
+// Screen Recording is the one privacy service a long-lived process cannot
+// cache: `CGPreflightScreenCaptureAccess` pins whatever it first returned for
+// the rest of the process lifetime, so an app that asked before the user
+// flipped the switch keeps reading "denied" and the only way out is a relaunch.
+// tccd keeps no such cache — it re-reads the decision on every query — so we
+// ask it directly, with the same request the private `TCCAccessPreflight`
+// sends, and read `result` out of the reply.
+static const int64_t kTccQueryTimeout = 1 * NSEC_PER_SEC;
+
+// Mirrors TCCAccessPreflight: 0 granted, 1 denied, 2 unknown.
+static int ReadScreenCaptureAuthorization() {
+  int authorization = 2;
+  xpc_connection_t connection = xpc_connection_create_mach_service(
+      "com.apple.tccd.system", dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+      XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+  if (!connection) return authorization;
+
+  dispatch_semaphore_t replied = dispatch_semaphore_create(0);
+  xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
+    (void)event;
+  });
+  xpc_connection_resume(connection);
+
+  xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
+  xpc_dictionary_set_string(request, "function", "TCCAccessRequest");
+  xpc_dictionary_set_string(request, "service", "kTCCServiceScreenCapture");
+  // A preflight only reads: it neither prompts nor writes to the TCC store.
+  xpc_dictionary_set_bool(request, "preflight", true);
+  xpc_dictionary_set_bool(request, "background_session", false);
+
+  __block int result = authorization;
+  xpc_connection_send_message_with_reply(
+      connection, request, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+      ^(xpc_object_t reply) {
+        if (xpc_get_type(reply) == XPC_TYPE_DICTIONARY &&
+            xpc_dictionary_get_uint64(reply, "auth_error_code") == 0 &&
+            xpc_dictionary_get_value(reply, "abort") == NULL) {
+          if (xpc_dictionary_get_bool(reply, "preflight_unknown")) {
+            result = 2;
+          } else if (xpc_dictionary_get_bool(reply, "restricted")) {
+            result = 1;
+          } else {
+            xpc_object_t granted = xpc_dictionary_get_value(reply, "result");
+            if (granted && xpc_get_type(granted) == XPC_TYPE_BOOL) {
+              result = xpc_bool_get_value(granted) ? 0 : 1;
+            }
+          }
+        }
+        dispatch_semaphore_signal(replied);
+      });
+
+  if (dispatch_semaphore_wait(replied, dispatch_time(DISPATCH_TIME_NOW, kTccQueryTimeout)) != 0) {
+    result = 2;
+  }
+  xpc_connection_cancel(connection);
+  return result;
+}
+
+// Another app's window title is only readable with Screen Recording, and unlike
+// the preflight, WindowServer answers from the current decision instead of a
+// per-process snapshot. A readable foreign title therefore proves the grant is
+// already live for this process and the capture pipeline has nothing to wait
+// for. On the Screen Recording pane this is always observable: System Settings
+// itself is the frontmost app while the guide is up.
+static BOOL ForeignWindowTitlesReadable() {
+  CFArrayRef list = CGWindowListCopyWindowInfo(
+      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+  if (!list) return NO;
+
+  pid_t self = getpid();
+  BOOL readable = NO;
+  for (NSDictionary *window in (__bridge NSArray *)list) {
+    if ([window[(id)kCGWindowOwnerPID] intValue] == self) continue;
+    id title = window[(id)kCGWindowName];
+    if ([title isKindOfClass:[NSString class]] && [title length] > 0) {
+      readable = YES;
+      break;
+    }
+  }
+  CFRelease(list);
+  return readable;
+}
+
+// `unknown` rather than an error: a missing or wedged tccd must not read as a
+// denial, or the caller would send the user to grant what they already granted.
+static Napi::Value ScreenCaptureStatus(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  switch (ReadScreenCaptureAuthorization()) {
+    case 0:
+      return Napi::String::New(env, "granted");
+    case 1:
+      return Napi::String::New(env, "denied");
+    default:
+      return Napi::String::New(env, "unknown");
+  }
+}
+
+static Napi::Value CanReadOtherAppWindowTitles(const Napi::CallbackInfo &info) {
+  return Napi::Boolean::New(info.Env(), ForeignWindowTitlesReadable());
+}
+
 static LobeGuideController *gController = nil;
 
 static Napi::Value Setup(const Napi::CallbackInfo &info) {
@@ -833,6 +936,9 @@ static Napi::Value ActivateSettings(const Napi::CallbackInfo &info) {
 
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("activateSettings", Napi::Function::New(env, ActivateSettings));
+  exports.Set("canReadOtherAppWindowTitles",
+              Napi::Function::New(env, CanReadOtherAppWindowTitles));
+  exports.Set("screenCaptureStatus", Napi::Function::New(env, ScreenCaptureStatus));
   exports.Set("setup", Napi::Function::New(env, Setup));
   exports.Set("show", Napi::Function::New(env, Show));
   exports.Set("hide", Napi::Function::New(env, Hide));

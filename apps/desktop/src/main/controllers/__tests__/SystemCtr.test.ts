@@ -1,10 +1,16 @@
 import type { ThemeMode } from '@lobechat/electron-client-ipc';
+import type * as GuideAddonModule from '@lobechat/electron-mac-permission-guide';
+import type { ScreenCaptureStatus } from '@lobechat/electron-mac-permission-guide';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 import type { IpcContext } from '@/utils/ipc';
 import { IpcHandler } from '@/utils/ipc/base';
-import { __resetMacPermissionsModuleCache, __setMacPermissionsModule } from '@/utils/permissions';
+import {
+  __resetMacPermissionsModuleCache,
+  __setGuideAddonModule,
+  __setMacPermissionsModule,
+} from '@/utils/permissions';
 
 import SystemController from '../SystemCtr';
 
@@ -135,6 +141,13 @@ const mockPermissionGuide = {
   open: vi.fn(async (_permission: string) => false),
 };
 
+// The live Screen Recording status comes from the native guide addon; `unknown`
+// is its report when tccd has no answer, which reads as `not-determined`.
+const guideAddonMock = {
+  canReadOtherAppWindowTitles: vi.fn(() => true),
+  screenCaptureStatus: vi.fn<() => ScreenCaptureStatus>(() => 'unknown'),
+};
+
 const mockApp = {
   appStoragePath: '/mock/storage',
   browserManager: mockBrowserManager,
@@ -157,8 +170,12 @@ describe('SystemController', () => {
     // Reset and inject mock permissions module for testing
     __resetMacPermissionsModuleCache();
     __setMacPermissionsModule(permissionsMock as any);
+    // Stub of the native guide addon: this suite only drives the two Screen
+    // Recording queries, not the guide surface the module also declares.
+    __setGuideAddonModule(guideAddonMock as unknown as typeof GuideAddonModule);
     fontListGetFonts2Mock.mockResolvedValue([]);
     mockPermissionGuide.open.mockResolvedValue(false);
+    guideAddonMock.screenCaptureStatus.mockReturnValue('unknown');
     controller = new SystemController(mockApp);
   });
 
@@ -395,18 +412,19 @@ describe('SystemController', () => {
   });
 
   describe('screen recording', () => {
-    it('should request screen capture access on macOS', async () => {
-      permissionsMock.getAuthStatus.mockReturnValue('not determined');
+    it('opens the Screen Recording pane without raising the system request alert', async () => {
+      guideAddonMock.screenCaptureStatus.mockReturnValue('denied');
 
       const result = await invokeIpc('system.requestScreenAccess');
 
-      expect(permissionsMock.getAuthStatus).toHaveBeenCalledWith('screen');
-      expect(permissionsMock.askForScreenCaptureAccess).toHaveBeenCalled();
-      expect(typeof result).toBe('boolean');
+      // The pane URL itself is asserted in the permissions util suite; what
+      // matters here is that the CGRequestScreenCaptureAccess alert is gone.
+      expect(permissionsMock.askForScreenCaptureAccess).not.toHaveBeenCalled();
+      expect(result).toBe(false);
     });
 
     it('should return true immediately if screen access is already granted', async () => {
-      permissionsMock.getAuthStatus.mockReturnValue('authorized');
+      guideAddonMock.screenCaptureStatus.mockReturnValue('granted');
 
       const result = await invokeIpc('system.requestScreenAccess');
 

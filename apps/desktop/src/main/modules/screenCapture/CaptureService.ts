@@ -1,4 +1,6 @@
 import type { CaptureRectParams } from '@lobechat/electron-client-ipc';
+import type { CaptureFailure } from '@lobechat/electron-mac-screen-capture';
+import * as screenCapture from '@lobechat/electron-mac-screen-capture';
 import { Monitor } from 'node-screenshots';
 
 import { createLogger } from '@/utils/logger';
@@ -16,34 +18,79 @@ interface DisplayBounds {
   y: number;
 }
 
+export interface CaptureResult {
+  png: Buffer | null;
+  /** Why there is no image; `null` on success. */
+  reason: CaptureFailure | null;
+}
+
+const failure = (reason: CaptureFailure): CaptureResult => ({ png: null, reason });
+const success = (png: Buffer): CaptureResult => ({ png, reason: null });
+
 /**
  * Capture a specific window by its native window id.
+ *
+ * ScreenCaptureKit serves every macOS that has `SCScreenshotManager` (14+): it
+ * is the API Apple points at now that `CGWindowListCreateImage` is obsoleted
+ * (macOS 15), it captures at native pixel resolution, and it re-reads the Screen
+ * Recording grant on every call instead of needing a fresh process. The
+ * node-screenshots implementation below stays for macOS 13 and older, where the
+ * deprecated API raises no alert yet.
+ *
+ * There is deliberately no fallback when ScreenCaptureKit fails: the legacy API
+ * answers an unauthorised capture with a blank image instead of an error, and a
+ * black screenshot reads as a successful one.
  */
-export async function captureWindow(windowId: number): Promise<Buffer | null> {
+export async function captureWindow(windowId: number): Promise<CaptureResult> {
+  if (screenCapture.isSupported()) {
+    return screenCapture.captureWindow(windowId);
+  }
+
+  return captureWindowLegacy(windowId);
+}
+
+/** node-screenshots fallback for macOS 13 and older. */
+async function captureWindowLegacy(windowId: number): Promise<CaptureResult> {
   try {
     const win = findWindowById(windowId);
     if (!win) {
       logger.warn(`Window ${windowId} not found`);
-      return null;
+      return failure('not-found');
     }
     const image = await win.captureImage();
-    const pngBuffer = Buffer.from(await image.toPng());
-    return pngBuffer;
+    return success(Buffer.from(await image.toPng()));
   } catch (error) {
     logger.error('Failed to capture window:', error);
-    return null;
+    return failure('failed');
   }
 }
 
 /**
  * Capture a rect region from the monitor that contains the rect.
  * `absoluteRect` is in absolute DIP coordinates.
+ *
+ * ScreenCaptureKit crops inside the capture itself and picks the display from
+ * that rect, so the monitor lookup and manual crop below only serve the macOS 13
+ * fallback.
  */
 export async function captureRect(
   absoluteRect: CaptureRectParams,
   scaleFactor: number,
   displayBounds?: DisplayBounds,
-): Promise<Buffer | null> {
+): Promise<CaptureResult> {
+  if (screenCapture.isSupported()) {
+    return screenCapture.captureRect(absoluteRect);
+  }
+
+  return captureRectLegacy(absoluteRect, scaleFactor, displayBounds);
+}
+
+/** node-screenshots fallback: capture the whole monitor, then crop in memory. */
+async function captureRectLegacy(
+  absoluteRect: CaptureRectParams,
+  scaleFactor: number,
+  displayBounds?: DisplayBounds,
+): Promise<CaptureResult> {
   try {
     const centerX = Math.round((absoluteRect.x + absoluteRect.width / 2) * scaleFactor);
     const centerY = Math.round((absoluteRect.y + absoluteRect.height / 2) * scaleFactor);
@@ -56,12 +103,12 @@ export async function captureRect(
 
     if (!monitor) {
       logger.warn(`No monitor found at point (${centerX}, ${centerY})`);
-      return null;
+      return failure('not-found');
     }
 
     const image = await captureMonitorImageWithRetry(monitor);
     if (!image) {
-      return null;
+      return failure('failed');
     }
 
     const physX = Math.round(absoluteRect.x * scaleFactor) - monitor.x();
@@ -76,15 +123,14 @@ export async function captureRect(
 
     if (cropW <= 0 || cropH <= 0) {
       logger.warn(`Crop rect out of monitor bounds: ${cropX},${cropY} ${cropW}x${cropH}`);
-      return null;
+      return failure('not-found');
     }
 
     const cropped = await image.crop(cropX, cropY, cropW, cropH);
-    const pngBuffer = Buffer.from(await cropped.toPng());
-    return pngBuffer;
+    return success(Buffer.from(await cropped.toPng()));
   } catch (error) {
     logger.error('Failed to capture rect:', error);
-    return null;
+    return failure('failed');
   }
 }
 

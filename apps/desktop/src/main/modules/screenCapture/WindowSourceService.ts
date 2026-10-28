@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 import type { ScreenCaptureWindowInfo } from '@lobechat/electron-client-ipc';
+import * as screenCapture from '@lobechat/electron-mac-screen-capture';
 import { app } from 'electron';
 import { Window } from 'node-screenshots';
 
@@ -28,14 +29,6 @@ interface DisplayBounds {
   width: number;
   x: number;
   y: number;
-}
-
-interface PreparedWindow {
-  appName: string;
-  bounds: DisplayBounds;
-  title: string;
-  windowId: number;
-  z: number;
 }
 
 interface WindowWithOptionalScaleFactor {
@@ -98,56 +91,67 @@ function normalizeWindowBounds(
   };
 }
 
-export async function enumerateWindows(
-  displayBounds: DisplayBounds,
+interface RawWindow {
+  appName: string;
+  bounds: DisplayBounds;
+  title: string;
+  windowId: number;
+  z: number;
+}
+
+/**
+ * Windows as ScreenCaptureKit reports them: frames in points, the same unit as
+ * Electron's display bounds, frontmost first. The list already excludes
+ * minimized and off-screen windows, so it needs neither the `get-windows`
+ * whitelist nor a minimized check.
+ */
+function collectScreenCaptureKitWindows(): RawWindow[] | null {
+  const content = screenCapture.screenShareableContent();
+  if (!content) return null;
+
+  return content.windows.map((window, index) => ({
+    appName: window.appName,
+    bounds: window.frame,
+    title: window.title,
+    // Frontmost first, so the z has to count down to keep the overlay's
+    // stacking order.
+    z: content.windows.length - index,
+    windowId: window.windowID,
+  }));
+}
+
+/** node-screenshots fallback: the collector behind macOS 13 and older. */
+function collectNodeScreenshotsWindows(
+  visiblePids: Set<number> | undefined,
   displayScaleFactor?: number,
-): Promise<ScreenCaptureWindowInfo[]> {
-  const selfName = app.getName();
-
-  let visiblePids: Set<number> | undefined;
-  try {
-    const visible = await openWindowsForCapture();
-    visiblePids = new Set(visible.map((w) => w.owner.processId));
-  } catch (error) {
-    logger.warn('get-windows unavailable, skipping whitelist filter:', error);
-  }
-
-  const preparedWindows = Window.all()
-    .map((win): PreparedWindow | null => {
-      if (visiblePids && !visiblePids.has(win.pid())) return null;
-
-      const appName = win.appName();
-      if (SYSTEM_APP_BLACKLIST.has(appName) || appName === selfName) return null;
-      if (win.isMinimized()) return null;
-
-      const width = win.width();
-      const height = win.height();
-      if (width < MIN_WIDTH || height < MIN_HEIGHT) return null;
-
-      const bounds = {
-        height,
-        width,
-        x: win.x(),
-        y: win.y(),
-      };
-      const normalizedBounds = normalizeWindowBounds(
-        bounds,
+): RawWindow[] {
+  return Window.all()
+    .filter((win) => !visiblePids || visiblePids.has(win.pid()))
+    .filter((win) => !win.isMinimized())
+    .map((win) => ({
+      appName: win.appName(),
+      bounds: normalizeWindowBounds(
+        { height: win.height(), width: win.width(), x: win.x(), y: win.y() },
         displayScaleFactor ?? (win as WindowWithOptionalScaleFactor).scaleFactor?.(),
-      );
-      if (!intersects(normalizedBounds, displayBounds)) return null;
+      ),
+      title: win.title(),
+      windowId: win.id(),
+      z: win.z(),
+    }));
+}
 
-      return {
-        appName,
-        bounds: normalizedBounds,
-        title: win.title(),
-        windowId: win.id(),
-        z: win.z(),
-      };
-    })
-    .filter((win): win is PreparedWindow => win !== null)
+function assembleWindows(
+  candidates: RawWindow[],
+  displayBounds: DisplayBounds,
+  selfName: string,
+): ScreenCaptureWindowInfo[] {
+  const preparedWindows = candidates
+    .filter((win) => !SYSTEM_APP_BLACKLIST.has(win.appName) && win.appName !== selfName)
+    .filter((win) => win.bounds.width >= MIN_WIDTH && win.bounds.height >= MIN_HEIGHT)
+    .filter((win) => intersects(win.bounds, displayBounds))
     .sort((left, right) => right.z - left.z);
 
-  const results = preparedWindows.map((win, index) => ({
+  return preparedWindows.map((win, index) => ({
     appName: win.appName,
     bounds: win.bounds,
     order: index,
@@ -160,11 +164,43 @@ export async function enumerateWindows(
     title: win.title,
     windowId: win.windowId,
   }));
+}
+
+export async function enumerateWindows(
+  displayBounds: DisplayBounds,
+  displayScaleFactor?: number,
+): Promise<ScreenCaptureWindowInfo[]> {
+  const selfName = app.getName();
+
+  if (screenCapture.isSupported()) {
+    const candidates = collectScreenCaptureKitWindows();
+    if (candidates) {
+      const results = assembleWindows(candidates, displayBounds, selfName);
+      logger.info(`Enumerated ${results.length} windows for display via ScreenCaptureKit`);
+      return results;
+    }
+    logger.warn('ScreenCaptureKit returned no shareable content, using node-screenshots');
+  }
+
+  let visiblePids: Set<number> | undefined;
+  try {
+    const visible = await openWindowsForCapture();
+    visiblePids = new Set(visible.map((w) => w.owner.processId));
+  } catch (error) {
+    logger.warn('get-windows unavailable, skipping whitelist filter:', error);
+  }
+
+  const results = assembleWindows(
+    collectNodeScreenshotsWindows(visiblePids, displayScaleFactor),
+    displayBounds,
+    selfName,
+  );
 
   logger.info(`Enumerated ${results.length} windows for display`);
   return results;
 }
 
+/** node-screenshots fallback lookup, used by the matching capture path. */
 export function findWindowById(windowId: number): Window | undefined {
   return Window.all().find((w) => w.id() === windowId);
 }

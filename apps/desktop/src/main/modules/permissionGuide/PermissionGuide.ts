@@ -11,6 +11,7 @@ import {
   getFullDiskAccessStatus,
   getInputMonitoringStatus,
   getScreenCaptureStatus,
+  isScreenCaptureUsable,
 } from '@/utils/permissions';
 import * as electronIs from '@/utils/platform';
 
@@ -35,9 +36,6 @@ const STATUS_READERS: Record<GuidedPermission, () => PermissionStatus> = {
   inputMonitoring: getInputMonitoringStatus,
   screen: getScreenCaptureStatus,
 };
-
-// Screen Recording only takes effect in a fresh process.
-const RELAUNCH_REQUIRED = new Set<GuidedPermission>(['screen']);
 
 const AWAITING_USER = new Set<GuidePhase>(['confirming', 'offPane', 'retry', 'waiting']);
 const ACCEPTS_DROP = new Set<GuidePhase>(['retry', 'waiting']);
@@ -67,7 +65,13 @@ export class PermissionGuide {
   // `false` means the guide can't run here and the caller keeps its old flow.
   async open(permission: GuidedPermission): Promise<boolean> {
     if (!electronIs.macOS()) return false;
-    if (this.isGranted(permission)) return true;
+
+    // Nothing left to do once the permission is on — except for a Screen
+    // Recording grant this process still cannot capture with, which is the one
+    // case the relaunch prompt exists for. Asking for the permission again is
+    // how that state reaches the user.
+    const granted = this.isGranted(permission);
+    if (granted && !this.needsRelaunch(permission)) return true;
 
     const addon = await this.loadAddon();
     const appPath = getAppBundlePath(electronApp.getPath('exe'));
@@ -76,16 +80,27 @@ export class PermissionGuide {
     this.close();
     this.active = {
       appPath,
-      granted: false,
+      granted,
       launchOrigin: this.resolveLaunchOrigin(),
       permission,
-      phase: 'waiting',
+      phase: granted ? 'relaunch' : 'waiting',
       promptVisible: false,
       titleSettled: false,
     };
     this.unsubscribe = addon.onGuideEvent((event) => this.handleEvent(event));
-    this.pollTimer = setInterval(() => this.poll(), POLL_INTERVAL_MS);
 
+    if (granted) {
+      // Nothing left to grant, so the panel only offers the relaunch — and the
+      // native panel is only on screen while System Settings is frontmost, so
+      // the pane still has to come up for the prompt to be visible at all.
+      this.notify(permission, 'granted');
+      await this.openSettings(permission);
+      this.render();
+      logger.info(`[PermissionGuide] ${permission} already granted, offering a relaunch`);
+      return true;
+    }
+
+    this.pollTimer = setInterval(() => this.poll(), POLL_INTERVAL_MS);
     this.notify(permission, 'active');
     await this.openSettings(permission);
     this.render();
@@ -133,6 +148,19 @@ export class PermissionGuide {
     return STATUS_READERS[permission]() === 'granted';
   }
 
+  /**
+   * Screen Recording is the one service whose grant the running process may
+   * still be unable to use: when the process asked for the screen before the
+   * switch was on, capture only starts working after a relaunch. Reading
+   * another app's window title is gated by the same permission but answered
+   * live, so a readable title proves the grant already took effect here and the
+   * user does not have to restart. On this pane System Settings is the
+   * frontmost app, so there is always a foreign titled window to read.
+   */
+  private needsRelaunch(permission: GuidedPermission) {
+    return permission === 'screen' && !isScreenCaptureUsable();
+  }
+
   private async openSettings(permission: GuidedPermission) {
     await shell.openExternal(getSettingsPaneUrl(permission));
     this.addon?.activateSettings();
@@ -172,7 +200,7 @@ export class PermissionGuide {
     this.notify(active.permission, 'granted');
     logger.info(`[PermissionGuide] ${active.permission} granted`);
 
-    if (RELAUNCH_REQUIRED.has(active.permission)) {
+    if (this.needsRelaunch(active.permission)) {
       this.setPhase('relaunch');
       return;
     }

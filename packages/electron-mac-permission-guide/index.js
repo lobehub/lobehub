@@ -55,4 +55,28 @@ const activateSettings = () => {
   if (binding) binding.activateSettings();
 };
 
-module.exports = { activateSettings, hideGuide, isSupported, onGuideEvent, showGuide };
+/**
+ * Screen Recording authorization as tccd reports it right now.
+ *
+ * Unlike `CGPreflightScreenCaptureAccess`, this is not cached for the process
+ * lifetime, so a permission the user grants while the app runs is visible on
+ * the very next call. Returns `null` when the native guide is unavailable.
+ */
+const screenCaptureStatus = () => (binding ? binding.screenCaptureStatus() : null);
+
+/**
+ * Whether this process can already read other apps' window titles, which
+ * Screen Recording gates. A `true` here means the grant is live in this
+ * process and capture needs no relaunch. Returns `null` when unavailable.
+ */
+const canReadOtherAppWindowTitles = () => (binding ? binding.canReadOtherAppWindowTitles() : null);
+
+module.exports = {
+  activateSettings,
+  canReadOtherAppWindowTitles,
+  hideGuide,
+  isSupported,
+  onGuideEvent,
+  screenCaptureStatus,
+  showGuide,
+};
