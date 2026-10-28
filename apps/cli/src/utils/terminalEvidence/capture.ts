@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import os from 'node:os';
 import { StringDecoder } from 'node:string_decoder';
 
@@ -112,13 +112,100 @@ class HeadTailBuffer {
     }
   }
 
-  text(): string {
-    const head = Buffer.concat(this.head).toString('utf8');
-    const tail = Buffer.concat(this.tail).toString('utf8');
-    if (this.dropped === 0) return head + tail;
-    return `${head}\n[… ${this.dropped} bytes truncated by the capturer …]\n${tail}`;
+  /**
+   * Decode once, at the end. Nothing dropped: head and tail are one contiguous
+   * stream, decoded together so a character split across their boundary stays
+   * whole. Something dropped: each side is cut back to a character boundary
+   * (the partial bytes count as dropped too) rather than decoded into U+FFFD.
+   */
+  read(): { dropped: number; kept: number; text: string } {
+    const head = Buffer.concat(this.head);
+    const tail = Buffer.concat(this.tail);
+    if (this.dropped === 0)
+      return { dropped: 0, kept: this.total, text: Buffer.concat([head, tail]).toString('utf8') };
+    const headEnd = completeUtf8Length(head);
+    const tailStart = utf8BoundaryOffset(tail);
+    const dropped = this.dropped + (head.length - headEnd) + tailStart;
+    return {
+      dropped,
+      kept: this.total - dropped,
+      text: `${head.subarray(0, headEnd).toString('utf8')}\n[… ${dropped} bytes truncated by the capturer …]\n${tail.subarray(tailStart).toString('utf8')}`,
+    };
   }
 }
+
+/** Bytes a UTF-8 sequence starting with this lead byte spans, or 0 for a continuation byte. */
+const utf8SequenceLength = (byte: number) =>
+  byte < 0x80 ? 1 : byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 0;
+
+/** Length of `buf` without a trailing character the cut left incomplete. */
+export const completeUtf8Length = (buf: Buffer): number => {
+  for (let i = buf.length - 1; i >= Math.max(0, buf.length - 4); i--) {
+    const length = utf8SequenceLength(buf[i]);
+    if (length === 0) continue;
+    return i + length <= buf.length ? buf.length : i;
+  }
+  return buf.length;
+};
+
+/** Leading continuation bytes left over from a character the cut began inside. */
+export const utf8BoundaryOffset = (buf: Buffer): number => {
+  let offset = 0;
+  while (offset < Math.min(3, buf.length) && utf8SequenceLength(buf[offset]) === 0) offset += 1;
+  return offset;
+};
+
+/** Every process below `root`, from one `ps` snapshot. Empty when it cannot be read. */
+const descendantPids = (root: number): number[] => {
+  let table: string;
+  try {
+    table = execFileSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8' });
+  } catch {
+    return [];
+  }
+  const children = new Map<number, number[]>();
+  for (const line of table.split('\n')) {
+    const [pid, ppid] = line.trim().split(/\s+/).map(Number);
+    if (!pid || ppid === undefined) continue;
+    children.set(ppid, [...(children.get(ppid) ?? []), pid]);
+  }
+  const found: number[] = [];
+  const queue = [root];
+  while (queue.length > 0) {
+    for (const child of children.get(queue.shift()!) ?? []) {
+      found.push(child);
+      queue.push(child);
+    }
+  }
+  return found;
+};
+
+/**
+ * Signal a command and everything it started. A `--shell` capture runs the
+ * command under a shell whose children hold the output pipes; signalling only
+ * the shell left them running, so a timeout did not bound the run. Descendants
+ * are remembered on the first signal: once their parent dies they are
+ * reparented, and the escalation must still reach them.
+ */
+const signalTree = (root: number | undefined, signal: NodeJS.Signals, known: Set<number>) => {
+  if (!root) return;
+  if (process.platform === 'win32') {
+    // taskkill /T walks the tree itself; there is no graceful signal to send.
+    spawn('taskkill', ['/pid', String(root), '/T', '/F'], { stdio: 'ignore' }).on(
+      'error',
+      () => {},
+    );
+    return;
+  }
+  for (const pid of descendantPids(root)) known.add(pid);
+  for (const pid of [root, ...known]) {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // Already gone.
+    }
+  }
+};
 
 /** Mark the run interrupted when this process is told to stop, and pass the stop on. */
 const onInterrupt = (handler: (signal: NodeJS.Signals) => void) => {
@@ -162,9 +249,10 @@ const capturePipe = (options: CaptureOptions): Promise<CaptureResult> =>
       if (options.echo) process.stderr.write(chunk);
     });
 
+    const tree = new Set<number>();
     const terminate = () => {
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS);
+      signalTree(child.pid, 'SIGTERM', tree);
+      killTimer = setTimeout(() => signalTree(child.pid, 'SIGKILL', tree), KILL_GRACE_MS);
       killTimer.unref();
     };
     const timer =
@@ -199,17 +287,15 @@ const capturePipe = (options: CaptureOptions): Promise<CaptureResult> =>
             : signalText
               ? 'signaled'
               : 'exited';
+      const out = stdout.read();
+      const err = stderr.read();
       const truncation: VerifyTerminalTruncation[] = [];
-      for (const [stream, buffer] of [
-        ['stdout', stdout],
-        ['stderr', stderr],
+      for (const [stream, read] of [
+        ['stdout', out],
+        ['stderr', err],
       ] as const)
-        if (buffer.dropped > 0)
-          truncation.push({
-            droppedBytes: buffer.dropped,
-            keptBytes: buffer.total - buffer.dropped,
-            stream,
-          });
+        if (read.dropped > 0)
+          truncation.push({ droppedBytes: read.dropped, keptBytes: read.kept, stream });
       resolve({
         cols: options.cols,
         error: spawnError ? (spawnError as Error).message : null,
@@ -220,8 +306,8 @@ const capturePipe = (options: CaptureOptions): Promise<CaptureResult> =>
         rows: options.rows,
         signal: signalText ?? (interrupted || null),
         startedAt,
-        stderr: stderr.text(),
-        stdout: stdout.text(),
+        stderr: err.text,
+        stdout: out.text,
         truncation,
       });
     });
@@ -339,9 +425,10 @@ const capturePty = async (options: CaptureOptions): Promise<CaptureResult> => {
     };
     if (process.stdout.isTTY) process.stdout.on('resize', onResize);
 
+    const tree = new Set<number>();
     const terminate = () => {
-      child.kill('SIGTERM');
-      killTimer = setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS);
+      signalTree(child.pid, 'SIGTERM', tree);
+      killTimer = setTimeout(() => signalTree(child.pid, 'SIGKILL', tree), KILL_GRACE_MS);
       killTimer.unref();
     };
     const timer =

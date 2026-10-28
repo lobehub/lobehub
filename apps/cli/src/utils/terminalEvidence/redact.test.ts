@@ -52,6 +52,17 @@ describe('createRedactor', () => {
     expect(redact(input).text).toBe(expected);
   });
 
+  it.each([
+    ['password=password', 'password=[REDACTED]'],
+    ['password=pass', 'password=[REDACTED]'],
+    ['token: token-token', 'token: [REDACTED]'],
+  ])(
+    'masks the captured value, not an earlier copy of it in the field name: %s',
+    (input, expected) => {
+      expect(redact(input).text).toBe(expected);
+    },
+  );
+
   it('does not treat a $VAR reference as a secret value', () => {
     expect(redact('echo "token=$MY_TOKEN"').text).toBe('echo "token=$MY_TOKEN"');
   });

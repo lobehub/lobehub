@@ -169,6 +169,7 @@ export const loadTerminalBundle = (target: string): LoadedBundle => {
   if (!parsed.ok) throw new Error(`${path.join(dir, TERMINAL_RECORD_FILE)}: ${parsed.error}`);
 
   const artifactFiles: LoadedBundle['artifactFiles'] = {};
+  const streams: TerminalBundleContent = {};
   for (const key of TERMINAL_ARTIFACT_KEYS) {
     const artifact = parsed.metadata.artifacts[key];
     if (!artifact) continue;
@@ -182,17 +183,20 @@ export const loadTerminalBundle = (target: string): LoadedBundle => {
         `${artifact.path} changed after the bundle was written (size or SHA-256 differs). Capture or import again instead of editing the bundle.`,
       );
     artifactFiles[key] = file;
+    streams[key] = data.toString('utf8');
   }
 
   const transcriptFile = path.join(dir, TERMINAL_TRANSCRIPT_FILE);
   if (!existsSync(transcriptFile)) throw new Error(`${transcriptFile} is missing`);
-  return {
-    artifactFiles,
-    dir,
-    metadata: parsed.metadata,
-    transcript: readFileSync(transcriptFile, 'utf8'),
-    transcriptFile,
-  };
+  // The transcript is the published payload, so it must say exactly what the
+  // verified streams and the record say: it was generated from them, and is
+  // regenerated here. A mismatch means either was edited after the write.
+  const transcript = readFileSync(transcriptFile, 'utf8');
+  if (transcript !== formatTerminalTranscript(parsed.metadata, streams))
+    throw new Error(
+      `${TERMINAL_TRANSCRIPT_FILE} does not match the bundle's record and output (it or ${TERMINAL_RECORD_FILE} changed after the bundle was written). Capture or import again instead of editing the bundle.`,
+    );
+  return { artifactFiles, dir, metadata: parsed.metadata, transcript, transcriptFile };
 };
 
 /** The evidence caption when the author gave none: the command itself. */
