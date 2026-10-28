@@ -150,7 +150,7 @@ describe('WorkModel coverage · document', () => {
     const otherDoc = await insertDocument();
     const [binding] = await serverDB
       .insert(agentDocuments)
-      .values({ agentId, documentId: doc.id, filename: 'bound.md', userId })
+      .values({ agentId, documentId: doc.id, userId })
       .returning();
 
     const bound = await model().registerDocument({
