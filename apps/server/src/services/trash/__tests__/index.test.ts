@@ -169,6 +169,16 @@ describe('TrashService', () => {
   });
 
   describe('agents', () => {
+    it('labels the entry with the agent name the sidebar shows, falling back to its title', async () => {
+      const nameOnly = await agentModel.create({ name: 'Alice' });
+      const named = await agentModel.create({ name: 'Bob', title: 'Health Assistant' });
+      const unnamed = await agentModel.create({ title: 'Bot' });
+
+      expect((await service.trashAgent(nameOnly.id))?.title).toBe('Alice');
+      expect((await service.trashAgent(named.id))?.title).toBe('Bob');
+      expect((await service.trashAgent(unnamed.id))?.title).toBe('Bot');
+    });
+
     it('cascades to topics (incl. legacy session-scoped ones), hides the session shell, and restores the whole unit', async () => {
       const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
       const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
