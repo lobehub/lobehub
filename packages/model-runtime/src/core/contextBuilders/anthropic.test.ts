@@ -1,8 +1,8 @@
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import type { OpenAI } from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types/chat';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   buildAnthropicBlock,

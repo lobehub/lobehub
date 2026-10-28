@@ -60,7 +60,9 @@ describe('GitHub repository loading', () => {
   });
 
   it('does not call a pending request empty', () => {
-    vi.spyOn(environmentService, 'listGithubRepositories').mockReturnValue(new Promise(() => {}));
+    vi.spyOn(environmentService, 'listGithubRepositories').mockReturnValue(
+      new Promise(() => {}),
+    );
     const { result } = setup();
     expect(result.current.state).toBe('loading');
   });

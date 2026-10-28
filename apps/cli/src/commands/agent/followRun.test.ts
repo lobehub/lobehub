@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  AgentGatewayUnavailableError,
-  AgentStreamHistoryError,
-} from '../../utils/agentStreamTransport';
+import { AgentGatewayUnavailableError, AgentStreamHistoryError } from '../../utils/agentStreamTransport';
 import { followAgentRun } from './followRun';
 
 const { getTrpcClient, historyQuery, streamAgentEvents } = vi.hoisted(() => {

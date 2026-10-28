@@ -83,7 +83,8 @@ export const mentionsOf = (entities: MemoryEntity[], activities: MemoryActivity[
   for (const entity of entities) {
     const found = new Map<string, Mention>();
     for (const n of entity.names)
-      if (!STOP_NAMES.has(key(n.name))) found.set(key(n.name), { fromText: false, label: n.name });
+      if (!STOP_NAMES.has(key(n.name)))
+        found.set(key(n.name), { fromText: false, label: n.name });
     found.set(key(entity.title), { fromText: false, label: entity.title });
     const text = textOf(entity);
     const lowerText = text.toLowerCase();

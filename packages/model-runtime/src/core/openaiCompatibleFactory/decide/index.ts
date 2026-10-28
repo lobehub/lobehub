@@ -1,5 +1,6 @@
 import type { ModelUsage } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
+import { isRecord } from '../../../utils/object';
 import createDebug from 'debug';
 import { DECISION_MODEL_SUFFIX } from 'model-bank';
 import type OpenAI from 'openai';
@@ -14,7 +15,6 @@ import { AgentRuntimeError } from '../../../utils/createError';
 import { getModelPricing } from '../../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../../utils/modelIdMapping';
-import { isRecord } from '../../../utils/object';
 import { withUsageCost } from '../../usageConverters/utils/withUsageCost';
 import { openaiDecisionAdapter } from './openai';
 import type { DecisionWireAdapter } from './shared';

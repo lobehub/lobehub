@@ -23,10 +23,7 @@ describe('useDraftStore', () => {
     setDraft('ctx-a', 'half-typed');
     setDraft('ctx-b', 'other page');
 
-    expect(useDraftStore.getState().drafts).toEqual({
-      'ctx-a': 'half-typed',
-      'ctx-b': 'other page',
-    });
+    expect(useDraftStore.getState().drafts).toEqual({ 'ctx-a': 'half-typed', 'ctx-b': 'other page' });
 
     setDraft('ctx-a');
     expect(useDraftStore.getState().drafts).toEqual({ 'ctx-b': 'other page' });

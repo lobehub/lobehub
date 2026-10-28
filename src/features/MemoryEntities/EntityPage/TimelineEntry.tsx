@@ -34,9 +34,7 @@ const TimelineEntry = memo<TimelineEntryProps>(({ activity, matched, upcoming })
   const format = useEntityFormat();
   const { t } = format;
   const status =
-    upcoming || activity.statusValue === 'completed'
-      ? undefined
-      : format.status(activity.statusValue);
+    upcoming || activity.statusValue === 'completed' ? undefined : format.status(activity.statusValue);
 
   return (
     <div {...stylex.props(styles.row)}>

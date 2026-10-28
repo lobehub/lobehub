@@ -63,7 +63,9 @@ describe('useSecretInputForm', () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useSecretInputForm({ fields, onSubmit }));
 
-    act(() => result.current.handleChange('OPENAI_API_KEY', '绑定到某个第三方服务去做 API 调用'));
+    act(() =>
+      result.current.handleChange('OPENAI_API_KEY', '绑定到某个第三方服务去做 API 调用'),
+    );
 
     // First Save is held: the sink never sees the values.
     await act(() => result.current.handleSubmit());
@@ -88,9 +90,7 @@ describe('useSecretInputForm', () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useSecretInputForm({ fields, onSubmit }));
 
-    act(() =>
-      result.current.handleChange('OPENAI_API_KEY', 'this sentence was pasted by accident'),
-    );
+    act(() => result.current.handleChange('OPENAI_API_KEY', 'this sentence was pasted by accident'));
 
     await act(() => result.current.handleSubmit());
     expect(onSubmit).not.toHaveBeenCalled();
@@ -154,9 +154,7 @@ describe('useSecretInputForm', () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() => useSecretInputForm({ fields, onSubmit }));
 
-    act(() =>
-      result.current.handleChange('OPENAI_API_KEY', 'sk-yCUC4oGrKNU1BG95jjE2d7ghMtQh6VAE1'),
-    );
+    act(() => result.current.handleChange('OPENAI_API_KEY', 'sk-yCUC4oGrKNU1BG95jjE2d7ghMtQh6VAE1'));
     await act(() => result.current.handleSubmit());
 
     expect(onSubmit).toHaveBeenCalledTimes(1);

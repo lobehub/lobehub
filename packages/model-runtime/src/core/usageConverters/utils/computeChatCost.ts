@@ -1,3 +1,4 @@
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
 import type {
@@ -9,7 +10,6 @@ import type {
   TieredPricingUnit,
 } from 'model-bank';
 
-import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
 import { DEFAULT_CACHE_TTL } from '../../anthropicCompatibleFactory/resolveCacheTTL';
 
 const log = debug('lobe-cost:computeChatPricing');

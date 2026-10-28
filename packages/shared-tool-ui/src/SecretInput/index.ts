@@ -1,6 +1,6 @@
 export {
-  isSecretSubmitDisabled,
   default as SecretInputView,
+  isSecretSubmitDisabled,
   type SecretInputViewProps,
 } from './SecretInputView';
 export type { SecretInputLabels } from './types';

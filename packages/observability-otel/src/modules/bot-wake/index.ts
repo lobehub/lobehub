@@ -37,10 +37,13 @@ export const botWakeFailureCounter = meter.createCounter('bot_wake_failures_tota
 });
 
 /** Time to record one decision, including shadow policies and the database writes. */
-export const botWakeRecordDurationHistogram = meter.createHistogram('bot_wake_record_duration_ms', {
-  description: 'Duration of recording one bot-wake decision.',
-  unit: 'ms',
-});
+export const botWakeRecordDurationHistogram = meter.createHistogram(
+  'bot_wake_record_duration_ms',
+  {
+    description: 'Duration of recording one bot-wake decision.',
+    unit: 'ms',
+  },
+);
 
 /**
  * Per-policy verdicts inside recorded decisions, shadow ones included — the series that shows a

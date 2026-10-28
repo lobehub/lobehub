@@ -123,7 +123,7 @@ export DATABASE_URL="postgresql://postgres:postgres@localhost:$DB_PORT/lh_accept
 `migrate` is what the run actually uses.
 
 Teardown reverses all of it — the worktree is throwaway, and on Linux the copy is
-a real \~6.8 GB, not a clonefile:
+a real ~6.8 GB, not a clonefile:
 
 ```bash
 "$WT/.agents/acceptance/scripts/init-dev-env.sh" clean   # stop only this run's server
@@ -153,16 +153,16 @@ in doubt.
 
 ## Troubleshooting
 
-| Issue                                                                       | Solution                                                                                                   |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `ECONNREFUSED`                                                              | Server not running — start it                                                                              |
-| `EADDRINUSE` on the port                                                    | Inspect the listener; stop it only if this run owns it. Never kill an unknown PID by port alone            |
-| Stale data / old behavior                                                   | Server needs a restart to pick up code changes                                                             |
-| Agent call runs inline                                                      | Set `AGENT_RUNTIME_MODE=queue`, make sure `REDIS_URL` is configured, then restart the server               |
-| Queue mode needs Redis                                                      | Run `init-dev-env.sh setup-db`, or provide `REDIS_URL=redis://...` for an existing Redis                   |
-| QStash workflow failures                                                    | Start `init-dev-env.sh qstash` and make sure dev server inherited the script's `QSTASH_*` env              |
+| Issue                     | Solution                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `ECONNREFUSED`            | Server not running — start it                                                                   |
+| `EADDRINUSE` on the port  | Inspect the listener; stop it only if this run owns it. Never kill an unknown PID by port alone |
+| Stale data / old behavior | Server needs a restart to pick up code changes                                                  |
+| Agent call runs inline    | Set `AGENT_RUNTIME_MODE=queue`, make sure `REDIS_URL` is configured, then restart the server    |
+| Queue mode needs Redis    | Run `init-dev-env.sh setup-db`, or provide `REDIS_URL=redis://...` for an existing Redis        |
+| QStash workflow failures  | Start `init-dev-env.sh qstash` and make sure dev server inherited the script's `QSTASH_*` env   |
 | Root `.env` present but dev fails (sign-in 500, schema behind the checkout) | Do not repair it in place — see [Root `.env` exists but does not boot](#root-env-exists-but-does-not-boot) |
-| `setup-auth.sh`: `root .env exists; do not seed`                            | Same: clean worktree without a root `.env`, then `init-dev-env.sh seed-user`                               |
+| `setup-auth.sh`: `root .env exists; do not seed` | Same: clean worktree without a root `.env`, then `init-dev-env.sh seed-user` |
 
 Marketplace/community endpoints are not part of the local agent-testing auth
 gate. Do not block local product-chain verification on marketplace API auth

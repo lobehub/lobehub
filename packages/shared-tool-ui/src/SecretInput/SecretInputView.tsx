@@ -99,8 +99,8 @@ const SecretInputView = memo<SecretInputViewProps>(
         <Button
           disabled={inert || !!blockedReason}
           loading={submitting}
-          size={'small'}
           onClick={() => void confirmProseSubmit()}
+          size={'small'}
         >
           {labels.confirmProse}
         </Button>

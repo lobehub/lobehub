@@ -1,7 +1,10 @@
 // Fixture: a store action annotates its result with the service's inferred return type.
 import { taskService } from '@/services/task';
 
-export const runTask = async (id: string, onError: (error: unknown) => void): Promise<boolean> => {
+export const runTask = async (
+  id: string,
+  onError: (error: unknown) => void,
+): Promise<boolean> => {
   // alint-expect
   let result: Awaited<ReturnType<typeof taskService.run>>;
   try {

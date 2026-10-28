@@ -26,7 +26,9 @@ describe('MessageContent editing lifecycle', () => {
   const setup = (printing: boolean) => {
     const store = createStore({
       context: { agentId: 'agent', topicId: 'topic', threadId: null },
-      messages: [{ id: 'm1', content: 'hello', role: 'user', createdAt: 0, updatedAt: 0 } as any],
+      messages: [
+        { id: 'm1', content: 'hello', role: 'user', createdAt: 0, updatedAt: 0 } as any,
+      ],
     });
     const toggleMessageEditing = vi.spyOn(store.getState(), 'toggleMessageEditing');
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -34,10 +36,7 @@ describe('MessageContent editing lifecycle', () => {
         {printing ? <PrintModeContext value>{children}</PrintModeContext> : children}
       </Provider>
     );
-    return {
-      ...render(<MessageContent editing id={'m1'} message={'hello'} />, { wrapper }),
-      toggleMessageEditing,
-    };
+    return { ...render(<MessageContent editing id={'m1'} message={'hello'} />, { wrapper }), toggleMessageEditing };
   };
 
   /** @example The screen row opens its editor and closes it on unmount. */

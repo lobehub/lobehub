@@ -4,8 +4,6 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import SecretInputView, { isSecretSubmitDisabled } from './SecretInputView';
-
 vi.mock('@lobehub/ui', () => ({
   Button: (props: any) => <button {...props} />,
   cssVar: { colorError: 'var(--error)', colorWarning: 'var(--warn)' },
@@ -15,6 +13,8 @@ vi.mock('@lobehub/ui', () => ({
   Text: (props: any) => <span {...props} />,
 }));
 vi.mock('lucide-react', () => ({ CircleAlert: (props: any) => <svg {...props} /> }));
+
+import SecretInputView, { isSecretSubmitDisabled } from './SecretInputView';
 
 const labels = {
   cancel: 'Skip',

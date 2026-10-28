@@ -515,11 +515,13 @@ describe('TreeActionImpl.revalidateLoaded — a delete only the server can enume
     const rootFolders = [serverRow('folder-a', true), serverRow('folder-b', true)];
     actions.forgetSnapshot();
 
-    mockGetKnowledgeItems.mockReset().mockImplementation(({ parentId }) => {
-      if (parentId === 'folder-b') return Promise.reject(new Error('network'));
-      if (parentId === null) return Promise.resolve({ items: rootFolders });
-      return Promise.resolve({ items: [] });
-    });
+    mockGetKnowledgeItems
+      .mockReset()
+      .mockImplementation(({ parentId }) => {
+        if (parentId === 'folder-b') return Promise.reject(new Error('network'));
+        if (parentId === null) return Promise.resolve({ items: rootFolders });
+        return Promise.resolve({ items: [] });
+      });
 
     await actions.revalidateLoaded('');
 

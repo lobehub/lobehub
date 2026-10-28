@@ -1,5 +1,5 @@
 // Fixture: ReturnType of local functions, timers, store APIs and hooks is not service inference.
-import type { useForm } from 'antd/es/form/Form';
+import { useForm } from 'antd/es/form/Form';
 import { createStore } from 'zustand/vanilla';
 
 import { documentService } from '@/services/document';

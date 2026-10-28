@@ -51,9 +51,10 @@ export const followAgentRun = async (
       // read after a token refresh still authenticate.
       readHistory: async (cursor, signal) => {
         try {
-          return await (
-            await getTrpcClient()
-          ).aiAgent.getOperationStreamHistory.query({ cursor, operationId }, { signal });
+          return await (await getTrpcClient()).aiAgent.getOperationStreamHistory.query(
+            { cursor, operationId },
+            { signal },
+          );
         } catch (error) {
           // Server predates the journal: no event stream can be produced, but the
           // run is still observable through status polling.

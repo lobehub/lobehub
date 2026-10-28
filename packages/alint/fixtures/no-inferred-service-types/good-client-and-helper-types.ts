@@ -1,7 +1,7 @@
 // Fixture: typing a client object or a pure service-module helper is not payload inference.
 import type { ProjectListResponse } from '@lobechat/types';
 
-import type { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import { transcriptBucketOf } from '@/services/message/replica';
 
 export type ScopedLambdaClient = ReturnType<typeof createWorkspaceLambdaClient>;
@@ -16,5 +16,6 @@ export const bucketFor = (topicId: string) => {
   return bucket;
 };
 
-export const listProjects = async (client: ScopedLambdaClient): Promise<ProjectListResponse> =>
-  client.project.list.query({ limit: 100, offset: 0 });
+export const listProjects = async (
+  client: ScopedLambdaClient,
+): Promise<ProjectListResponse> => client.project.list.query({ limit: 100, offset: 0 });

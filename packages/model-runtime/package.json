@@ -2,8 +2,6 @@
   "name": "@lobechat/model-runtime",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime",
-  "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
     "./errors": "./src/errors/index.ts",
@@ -61,5 +59,7 @@
   },
   "peerDependencies": {
     "zod": "^4.4.3"
-  }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime"
 }

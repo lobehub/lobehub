@@ -18,12 +18,9 @@ export const useSandboxDriveEntitlement = (enabled = true) => {
   // The replica entry the composer chip and the environments page read, so a
   // reload paints the storage page from the last answer and every surface
   // agrees on it.
-  const { error, isHydrated, isValidating, revalidate } = sandboxActions.useFetchEntitlement(
-    enabled,
-    {
-      revalidateOnFocus: false,
-    },
-  );
+  const { error, isHydrated, isValidating, revalidate } = sandboxActions.useFetchEntitlement(enabled, {
+    revalidateOnFocus: false,
+  });
   const data = useSandboxStore(sandboxSelectors.entitlement);
 
   return {

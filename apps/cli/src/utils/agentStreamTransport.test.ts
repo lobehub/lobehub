@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { streamAgentEvents } from './agentStream';
 import type { AgentHistoryPage } from './agentStreamTransport';
-import {
-  AgentGatewayUnavailableError,
-  AgentJournalUnsupportedError,
-  consumeAgentStream,
-} from './agentStreamTransport';
+import { AgentGatewayUnavailableError, AgentJournalUnsupportedError, consumeAgentStream } from './agentStreamTransport';
 
 let sockets: TestSocket[];
 class TestSocket {

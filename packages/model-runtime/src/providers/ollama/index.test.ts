@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { ModelProvider } from 'model-bank';
 import { Ollama } from 'ollama/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import * as debugStreamModule from '../../utils/debugStream';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { LobeOllamaAI, params } from './index';
 
 vi.mock('ollama/browser');

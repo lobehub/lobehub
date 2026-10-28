@@ -10,7 +10,7 @@ const styles = stylex.create({
   row: {
     alignItems: 'flex-start',
     backgroundColor: {
-      'default': 'transparent',
+      default: 'transparent',
       ':hover': cssVar.colorFillTertiary,
     },
     borderRadius: cssVar.borderRadius,
@@ -26,7 +26,7 @@ const styles = stylex.create({
   },
   active: {
     backgroundColor: {
-      'default': cssVar.colorFillSecondary,
+      default: cssVar.colorFillSecondary,
       ':hover': cssVar.colorFillSecondary,
     },
   },
@@ -74,21 +74,21 @@ interface ListItemProps {
 const ListItem = memo<ListItemProps>(({ active, entity, lastTouchedAt, muted, onSelect }) => {
   const format = useEntityFormat();
   return (
-    <button
-      aria-current={active ? 'page' : undefined}
-      type={'button'}
-      {...stylex.props(styles.row, active && styles.active, muted && styles.muted)}
-      onClick={() => onSelect(entity.id)}
-    >
-      <KindIcon kind={entity.kind} />
-      <span {...stylex.props(styles.body)}>
-        <span {...stylex.props(styles.titleLine)}>
-          <span {...stylex.props(styles.title)}>{format.title(entity)}</span>
-          <span {...stylex.props(styles.meta)}>{format.ago(lastTouchedAt)}</span>
-        </span>
-        <span {...stylex.props(styles.now)}>{entity.summary || entity.description}</span>
+  <button
+    aria-current={active ? 'page' : undefined}
+    type={'button'}
+    {...stylex.props(styles.row, active && styles.active, muted && styles.muted)}
+    onClick={() => onSelect(entity.id)}
+  >
+    <KindIcon kind={entity.kind} />
+    <span {...stylex.props(styles.body)}>
+      <span {...stylex.props(styles.titleLine)}>
+        <span {...stylex.props(styles.title)}>{format.title(entity)}</span>
+        <span {...stylex.props(styles.meta)}>{format.ago(lastTouchedAt)}</span>
       </span>
-    </button>
+      <span {...stylex.props(styles.now)}>{entity.summary || entity.description}</span>
+    </span>
+  </button>
   );
 });
 

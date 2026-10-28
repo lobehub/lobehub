@@ -67,8 +67,7 @@ describe('applyCanvasChanges', () => {
     });
 
     expect(result).toEqual({
-      error:
-        'edits[0] is missing "path": every edit must name the file it targets, e.g. "index.html".',
+      error: 'edits[0] is missing "path": every edit must name the file it targets, e.g. "index.html".',
       ok: false,
     });
   });
@@ -95,8 +94,7 @@ describe('applyCanvasChanges', () => {
 
   it('names the missing field when a write has no path', () => {
     expect(applyCanvasChanges(base, { writes: [{ content: 'body{}' } as any] })).toEqual({
-      error:
-        'writes[0] is missing "path": every write must name the file it targets, e.g. "index.html".',
+      error: 'writes[0] is missing "path": every write must name the file it targets, e.g. "index.html".',
       ok: false,
     });
   });
@@ -165,6 +163,8 @@ describe('collectCanvasFileRefs', () => {
   });
 
   it('skips a fileRef write without a path instead of crashing', () => {
-    expect(collectCanvasFileRefs({ writes: [{ fileRef: 'msg_abc.image_1' } as any] })).toEqual([]);
+    expect(
+      collectCanvasFileRefs({ writes: [{ fileRef: 'msg_abc.image_1' } as any] }),
+    ).toEqual([]);
   });
 });

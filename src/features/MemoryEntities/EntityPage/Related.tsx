@@ -21,7 +21,7 @@ const styles = stylex.create({
   item: {
     alignItems: 'center',
     backgroundColor: {
-      'default': 'transparent',
+      default: 'transparent',
       ':hover': cssVar.colorFillTertiary,
     },
     borderRadius: cssVar.borderRadius,
@@ -98,15 +98,7 @@ const Related = memo<RelatedProps>(({ entity }) => {
               const person = !!type && PERSON_TYPES.has(type.toLowerCase());
               return (
                 <span key={name} {...stylex.props(styles.chip, !person && styles.chipPlain)}>
-                  {person && (
-                    <Avatar
-                      avatar={undefined}
-                      name={name}
-                      shape={'circle'}
-                      size={20}
-                      title={name}
-                    />
-                  )}
+                  {person && <Avatar avatar={undefined} name={name} shape={'circle'} size={20} title={name} />}
                   {name}
                   {type && !person && <span {...stylex.props(styles.chipType)}>{type}</span>}
                 </span>
@@ -129,8 +121,7 @@ const Related = memo<RelatedProps>(({ entity }) => {
                 <span {...stylex.props(styles.text)}>
                   <span {...stylex.props(styles.name)}>{format.title(target)}</span>
                   <span {...stylex.props(styles.sub)}>
-                    {format.kind(target.kind)} ·{' '}
-                    {t('entity.related.shared', { names: format.names(names) })}
+                    {format.kind(target.kind)} · {t('entity.related.shared', { names: format.names(names) })}
                   </span>
                 </span>
               </button>

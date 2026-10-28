@@ -42,12 +42,14 @@ const readPath = (value: unknown): string | undefined => {
 };
 
 export const collectCanvasFileRefs = (changes: CanvasChangeSet): CanvasFileRefWrite[] =>
-  (changes.writes ?? []).filter(isCanvasFileRefWrite).flatMap((write) => {
-    // A fileRef write with no usable path is refused by applyCanvasChanges; skipping it here
-    // keeps this pre-resolution pass from crashing on the missing path first.
-    const path = readPath(write);
-    return path ? [{ fileRef: write.fileRef, path: normalizeCanvasPath(path) ?? path }] : [];
-  });
+  (changes.writes ?? [])
+    .filter(isCanvasFileRefWrite)
+    .flatMap((write) => {
+      // A fileRef write with no usable path is refused by applyCanvasChanges; skipping it here
+      // keeps this pre-resolution pass from crashing on the missing path first.
+      const path = readPath(write);
+      return path ? [{ fileRef: write.fileRef, path: normalizeCanvasPath(path) ?? path }] : [];
+    });
 
 const countOccurrences = (text: string, search: string) => {
   let count = 0;

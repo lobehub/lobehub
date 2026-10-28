@@ -37,10 +37,12 @@ interface MenuClickInfo {
  * rename field with it — before anything can be typed, which is why "Rename"
  * appeared to do nothing. Close the handler over the row and stop the event.
  */
-const stopRowClick = (run: () => void) => (info?: MenuClickInfo) => {
-  info?.domEvent?.stopPropagation();
-  run();
-};
+const stopRowClick =
+  (run: () => void) =>
+  (info?: MenuClickInfo) => {
+    info?.domEvent?.stopPropagation();
+    run();
+  };
 
 /**
  * Business builds inject their own transfer entries (Move to a library, …).

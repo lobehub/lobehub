@@ -63,7 +63,9 @@ const Timeline = memo<TimelineProps>(({ entries }) => {
         title={t('entity.timeline.past')}
       >
         {past.length === 0 ? (
-          <p {...stylex.props(styles.empty)}>{t('entity.timeline.empty')}</p>
+          <p {...stylex.props(styles.empty)}>
+            {t('entity.timeline.empty')}
+          </p>
         ) : (
           <div {...stylex.props(styles.list)}>
             {groupByMonth(shown, format.month).map((group) => (

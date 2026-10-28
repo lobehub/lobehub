@@ -17,11 +17,7 @@ const entity = (id: string, names: string[], title = id): MemoryEntity => ({
   updatedAt: '2026-10-01T00:00:00.000Z',
 });
 
-const activity = (
-  id: string,
-  names: string[],
-  when = '2026-10-02T00:00:00.000Z',
-): MemoryActivity => ({
+const activity = (id: string, names: string[], when = '2026-10-02T00:00:00.000Z'): MemoryActivity => ({
   id,
   names: names.map((name) => ({ name })),
   narrative: id,

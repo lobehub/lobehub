@@ -1,6 +1,5 @@
-import OpenAI from 'openai';
-
 import { isRecord } from '../../utils/object';
+import OpenAI from 'openai';
 
 /** Preserves flat JSON errors returned by OpenAI-compatible providers. */
 export class OpenAICompatibleClient extends OpenAI {

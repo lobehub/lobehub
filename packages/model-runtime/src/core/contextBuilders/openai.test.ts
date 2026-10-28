@@ -1,12 +1,12 @@
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { videoUrlToBase64 } from '../../utils/videoToBase64';
 import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage } from '../../types';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { clearReferenceImageCache } from '../../utils/referenceImageCache';
 import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
-import { videoUrlToBase64 } from '../../utils/videoToBase64';
 import {
   convertImageUrlToFile,
   convertMessageContent,

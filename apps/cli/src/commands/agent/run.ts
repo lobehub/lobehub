@@ -210,7 +210,8 @@ Exit codes:
           // for a human, as this flag's help text promises.
           const savedConfig = (
             (await client.user.getUserState.query().catch(() => undefined)) as
-              { settings?: { tool?: { humanIntervention?: UserInterventionConfig } } } | undefined
+              | { settings?: { tool?: { humanIntervention?: UserInterventionConfig } } }
+              | undefined
           )?.settings?.tool?.humanIntervention;
           // The Web tool-intervention selector treats a persisted 'headless' as
           // a backend-only value and shows 'auto-run' instead (settings

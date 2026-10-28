@@ -1,3 +1,5 @@
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { videoUrlToBase64 } from '../../utils/videoToBase64';
 import { Buffer } from 'buffer.js';
 import type OpenAI from 'openai';
 import { toFile } from 'openai';
@@ -9,12 +11,10 @@ import type {
   OpenAIChatMessage,
   UserMessageContentPart,
 } from '../../types';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
 import { fetchReferenceImageBytes } from '../../utils/referenceImageCache';
 import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
-import { videoUrlToBase64 } from '../../utils/videoToBase64';
 
 export type ExtendedChatCompletionContentPart = {
   type: 'video_url';

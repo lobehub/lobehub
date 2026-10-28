@@ -78,10 +78,7 @@ describe('SignalModel', () => {
     const stored = await model.record({ ...signalInput('addressed'), metadata });
     expect(stored?.metadata).toEqual(metadata);
     // A redelivery returns the first row; it does not overwrite what was recorded.
-    const again = await model.record({
-      ...signalInput('addressed'),
-      metadata: { entryPoint: 'x' },
-    });
+    const again = await model.record({ ...signalInput('addressed'), metadata: { entryPoint: 'x' } });
     expect(again?.metadata).toEqual(metadata);
   });
 

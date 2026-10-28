@@ -55,10 +55,7 @@ const KIND_BY_TYPE: Record<string, ContextKind> = {
 };
 
 export const kindOfType = (type?: string | null): ContextKind => {
-  const key = type
-    ?.trim()
-    .toLowerCase()
-    .replaceAll(/[\s-]+/g, '_');
+  const key = type?.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
   if (!key) return 'other';
   if (KIND_BY_TYPE[key]) return KIND_BY_TYPE[key];
   if (key.includes('project')) return 'project';

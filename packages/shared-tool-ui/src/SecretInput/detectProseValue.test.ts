@@ -4,9 +4,9 @@ import { detectProseValue } from './detectProseValue';
 
 describe('detectProseValue', () => {
   it('flags CJK text as prose', () => {
-    expect(detectProseValue('绑定到某个第三方服务（OpenAI / GitHub / 其他）去做 API 调用')).toBe(
-      true,
-    );
+    expect(
+      detectProseValue('绑定到某个第三方服务（OpenAI / GitHub / 其他）去做 API 调用'),
+    ).toBe(true);
     expect(detectProseValue('日語のキーです')).toBe(true);
     expect(detectProseValue('한국어 토큰 값')).toBe(true);
   });

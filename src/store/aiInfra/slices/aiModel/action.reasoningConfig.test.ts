@@ -649,15 +649,13 @@ describe('AiModelAction reasoning config', () => {
       });
 
       act(() => {
-        useStore
-          .getState()
-          .seedModelReasoningConfigs(
-            { 'anthropic/claude-sonnet-4-5': { reasoningEffort: 'low' } },
-            [
-              { id: 'gpt-5.2', providerId: 'openai' },
-              { id: 'claude-sonnet-4-5', providerId: 'anthropic' },
-            ] as any,
-          );
+        useStore.getState().seedModelReasoningConfigs(
+          { 'anthropic/claude-sonnet-4-5': { reasoningEffort: 'low' } },
+          [
+            { id: 'gpt-5.2', providerId: 'openai' },
+            { id: 'claude-sonnet-4-5', providerId: 'anthropic' },
+          ] as any,
+        );
       });
 
       const state = useStore.getState();

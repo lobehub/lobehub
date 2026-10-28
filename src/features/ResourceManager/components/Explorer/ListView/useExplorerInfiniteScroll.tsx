@@ -76,15 +76,7 @@ export const useExplorerInfiniteScroll = ({
     if (hasMore === false && dataLength > 0) return <div aria-hidden style={{ height: 96 }} />;
 
     return null;
-  }, [
-    columnWidths,
-    dataLength,
-    hasMore,
-    isLoadingMore,
-    loadMoreError,
-    retryLoadMore,
-    showUploader,
-  ]);
+  }, [columnWidths, dataLength, hasMore, isLoadingMore, loadMoreError, retryLoadMore, showUploader]);
 
   return {
     Footer,

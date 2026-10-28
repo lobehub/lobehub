@@ -1,11 +1,6 @@
 import type { AiModelReasoningConfig, AiProviderModelListItem } from 'model-bank';
 
-import {
-  arrayEntity,
-  defineReplica,
-  identityOnlyScope,
-  type ReplicaEntityAdapter,
-} from '@/libs/replica';
+import { arrayEntity, defineReplica, identityOnlyScope, type ReplicaEntityAdapter } from '@/libs/replica';
 
 import { modelReasoningConfigKey } from './initialState';
 

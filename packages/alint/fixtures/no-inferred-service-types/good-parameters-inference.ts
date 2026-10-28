@@ -1,7 +1,7 @@
 // Fixture: input-side inference, injected function types and re-imported aliases are out of scope.
-import type { messageService } from '@/services/message';
-import { taskService } from '@/services/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { messageService } from '@/services/message';
+import { taskService } from '@/services/task';
 
 type CreateTaskParams = Parameters<typeof taskService.create>[0];
 

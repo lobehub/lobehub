@@ -1,6 +1,6 @@
+import { imageUrlToBase64 } from './imageToBase64';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { imageUrlToBase64 } from './imageToBase64';
 import {
   clearReferenceImageCache,
   DownloadCache,
