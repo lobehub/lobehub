@@ -118,7 +118,7 @@ class MCPService {
             { signal },
           );
           observationFailures = 0;
-          if (outcome) return outcome as MCPToolCallResult;
+          if (outcome) return { ...outcome, contentFinalized: true } as MCPToolCallResult;
         } catch (error) {
           const status = toRecord(toRecord(error)?.data)?.httpStatus;
           if (

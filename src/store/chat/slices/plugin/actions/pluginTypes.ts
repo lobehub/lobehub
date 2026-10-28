@@ -402,13 +402,15 @@ export class PluginTypesActionImpl {
 
     // Archive oversized content (or truncate if archive context unavailable)
     const rawContent = data.content || (data.error as any)?.message || '';
-    const truncatedContent = await archiveToolResultViaServer({
-      agentId: message?.agentId,
-      content: rawContent,
-      identifier: payload.identifier,
-      toolCallId: payload.id,
-      topicId: message?.topicId,
-    });
+    const truncatedContent = data.contentFinalized
+      ? rawContent
+      : await archiveToolResultViaServer({
+          agentId: message?.agentId,
+          content: rawContent,
+          identifier: payload.identifier,
+          toolCallId: payload.id,
+          topicId: message?.topicId,
+        });
 
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;

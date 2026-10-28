@@ -1,6 +1,6 @@
 import { type AgentState, createAgentRuntimeExecutors } from '@lobechat/agent-runtime';
 import type { ToolsEngine } from '@lobechat/context-engine';
-import type { MessageMetadata } from '@lobechat/types';
+import type { LobeAgentConfig, MessageMetadata } from '@lobechat/types';
 
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { ChatStore } from '@/store/chat/store';
@@ -40,6 +40,8 @@ export const createClientRuntimeExecutors = (context: {
         resolveHost(instruction, state, runtimeContext),
         instruction,
         context.get,
+        (state.world?.agent as LobeAgentConfig | undefined)?.chatConfig?.toolResultMaxLength ??
+          context.agentConfig.chatConfig?.toolResultMaxLength,
       );
       return execute(prepared, state, runtimeContext);
     };

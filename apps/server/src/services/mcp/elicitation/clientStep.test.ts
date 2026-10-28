@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { MessageModel } from '@/database/models/message';
 import { agentOperations, agents, topics, users } from '@/database/schemas';
+import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
 import {
@@ -17,6 +18,7 @@ import {
 import { McpElicitationService } from './McpElicitationService';
 
 const probes = vi.hoisted(() => ({ execute: vi.fn(), manifest: vi.fn(), schedule: vi.fn() }));
+vi.mock('@/server/services/file/impls', () => ({ createFileServiceModule: () => ({}) }));
 vi.mock('@/server/services/queue', () => ({
   QueueService: class {
     getImpl() {
@@ -25,12 +27,17 @@ vi.mock('@/server/services/queue', () => ({
     scheduleMessage = probes.schedule;
   },
 }));
-vi.mock('./resume', () => ({ resolveMcpInvocationManifest: probes.manifest }));
+vi.mock('./resume', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveMcpInvocationManifest: probes.manifest,
+}));
 const db = await getTestDB();
 const userId = 'mcp-client-step-test';
 const messages = new MessageModel(db, userId);
 const service = new McpElicitationService(db, userId, undefined, undefined, {
   executeTool: probes.execute,
+  isOperationInterrupted: async () => false,
+  getToolResultPolicy: async () => ({ canReadArchive: true }),
   controlCompletedToolResult: async ({ result }) => ({ result, blocked: false, cancelled: false }),
   tryResumeParentFromAsyncTool: vi.fn(),
 });
@@ -455,3 +462,62 @@ describe('durable client MCP host without Agent Gateway', () => {
     expect(await other.invocations.clientSteps('client-topic')).toEqual([]);
   });
 });
+
+it.each([80000, 32])(
+  'finalizes a full durable HTTP result with configured window %s before its renderer can disappear',
+  async (limit) => {
+    const { operationId } = await registerClientMcpStep(service, {
+      assistantMessageId: 'client-assistant',
+      toolMessageIds: ['client-tool'],
+      owner: randomUUID(),
+      toolResultMaxLength: limit,
+    });
+    const full = 'first line\n' + 'long tool result\n'.repeat(3000) + 'tail:client-receipt';
+    probes.execute.mockImplementationOnce(async (_tool, context) => ({
+      content: context.skipResultTruncation ? full : full.slice(0, 25000),
+      success: true,
+      executionTime: 1,
+    }));
+    await executeClientMcpTool(service, {
+      ...tool,
+      operationId,
+      assistantMessageId: 'client-assistant',
+      toolMessageId: 'client-tool',
+      toolCallId: tool.id,
+    });
+    const row = await messages.findById('client-tool');
+    if (limit > full.length) expect(row?.content).toBe(full);
+    else {
+      expect(row?.content).toContain('Full content archived');
+      expect(row?.content).not.toContain('tail:client-receipt');
+      const path = row!.content.match(/Path: (.+)/)![1];
+      const persisted = await new AgentDocumentVfsService(db, userId).read(path, {
+        agentId: 'client-agent',
+        topicId: 'client-topic',
+      });
+      expect(persisted.content).toBe(full);
+    }
+    expect((await messages.findMessagePlugin('client-tool'))?.state?.mcpClientComplete).toBe(true);
+  },
+);
+
+it('loads the recorded client archive policy for a later continuation even without a live client agent state', async () => {
+  const { operationId } = await registerClientMcpStep(service, {
+    assistantMessageId: 'client-assistant',
+    toolMessageIds: ['client-tool'],
+    owner: randomUUID(),
+    toolResultMaxLength: 80000,
+  });
+  const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
+  // The renderer is gone and no live client AgentState remains.
+  const runtime = AgentRuntimeService.prototype.getMcpElicitationRuntime.call({
+    serverDB: db,
+    userId,
+    workspaceId: undefined,
+    coordinator: { loadAgentState: async () => null },
+  } as unknown as InstanceType<typeof AgentRuntimeService>);
+  await expect(runtime.getToolResultPolicy(operationId)).resolves.toEqual({
+    limit: 80000,
+    canReadArchive: true,
+  });
+}, 30000);

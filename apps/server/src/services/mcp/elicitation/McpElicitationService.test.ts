@@ -134,7 +134,7 @@ beforeEach(async () => {
   probes.queueImpl = undefined;
   probes.execute.mockResolvedValue({ content: 'remote receipt', success: true, executionTime: 1 });
   probes.schedule.mockResolvedValue('queued');
-  await db.delete(agentOperations).where(eq(agentOperations.id, identity.operationId));
+  await db.delete(agentOperations).where(inArray(agentOperations.userId, [owner, other]));
   await db.delete(users).where(inArray(users.id, [owner, other]));
   await db.insert(users).values([{ id: owner }, { id: other }]);
   await db.insert(userInstalledPlugins).values({
@@ -182,6 +182,7 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllEnvs());
 
 afterAll(async () => {
+  await db.delete(agentOperations).where(inArray(agentOperations.userId, [owner, other]));
   await db.delete(users).where(inArray(users.id, [owner, other]));
 });
 
@@ -957,4 +958,28 @@ it('archives the complete long continuation result with the original configured 
     topicId: 'mcp-topic',
   });
   expect(persisted.content).toBe(full);
+});
+
+it('retains a timed-out receipt and its recovery projection after parent dispatch fails, then recovers with a fresh service', async () => {
+  const { item, toolMessageId } = await open({ deadline: Date.now() - 10, legacy: false });
+  await db
+    .update(agentOperations)
+    .set({ status: 'waiting_for_async_tool' })
+    .where(eq(agentOperations.id, identity.operationId));
+  probes.resume.mockRejectedValueOnce(new Error('temporary parent Redis failure'));
+  await expect(expireMcpElicitation(service, item.id, testRuntime)).rejects.toThrow(
+    'Redis failure',
+  );
+  const receipt = (await messageModel.findById(toolMessageId))?.content;
+  expect(receipt).toContain('timed out');
+  const recoverable = await McpInvocationModel.recoveryQueries(db).interactions;
+  expect(recoverable.map((row) => row.itemId)).toContain(item.id);
+  const fresh = new McpElicitationService(db, owner);
+  await recoverPersistedMcpWork(db);
+  expect((await messageModel.findById(toolMessageId))?.content).toBe(receipt);
+  expect((await messageModel.findMessagePlugin(toolMessageId))?.state?.mcpElicitation).toBeNull();
+  expect((await messageModel.findMessagePlugin(toolMessageId))?.intervention?.status).toBe('none');
+  await expireMcpElicitation(fresh, item.id, testRuntime);
+  expect(probes.resume).toHaveBeenCalledTimes(2);
+  expect(probes.execute).not.toHaveBeenCalled();
 });

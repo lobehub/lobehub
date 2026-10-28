@@ -94,6 +94,8 @@ export interface ToolCallResult {
 
 export interface MCPToolCallResult {
   content: string;
+  /** Set by the LobeHub durable client transport after host-side archive finalization. */
+  contentFinalized?: boolean;
   error?: any;
   state: ToolCallResult;
   success: boolean;
