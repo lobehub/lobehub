@@ -6,6 +6,7 @@ import { appEnv } from '@/envs/app';
 import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import { toConversationLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
+  hasConversationLog,
   resolveChannelKeys,
   resolveConversationLogKeys,
   wakeStateKeys,
@@ -181,7 +182,7 @@ const rememberBotReply = async ({
   platformThreadId: string;
   spoken?: { id: string; text?: string };
 }) => {
-  if (platform !== 'discord' || platformThreadId.split(':')[1] === '@me') return;
+  if (!hasConversationLog(platform, platformThreadId)) return;
 
   try {
     const line = toConversationLine({

@@ -568,6 +568,28 @@ describe('bot-wake recorder: remembering what was said', () => {
     expect(state.logs.get('discord:g1:c1')?.[0].at).toBe(Date.UTC(2026, 0, 1));
   });
 
+  it('keeps a Feishu group message under the group, stamped with its send time', async () => {
+    const state = fakeState();
+    const sent = new Date(Date.UTC(2026, 0, 1));
+    await make(ENFORCE, state, { platform: 'feishu' }).remember(
+      observation({ threadId: 'feishu:group:oc_1' }, { id: 'om_1', metadata: { dateSent: sent } }),
+    );
+
+    expect(state.logs.get('feishu:group:oc_1')?.[0]).toMatchObject({
+      at: sent.getTime(),
+      id: 'om_1',
+    });
+  });
+
+  it('does not keep a Feishu direct message', async () => {
+    const state = fakeState();
+    await make(ENFORCE, state, { platform: 'feishu' }).remember(
+      observation({ threadId: 'feishu:p2p:oc_1' }),
+    );
+
+    expect(state.rememberMessages).not.toHaveBeenCalled();
+  });
+
   it('never throws when Redis is down', async () => {
     const state = fakeState();
     state.rememberMessages.mockRejectedValueOnce(new Error('redis down'));

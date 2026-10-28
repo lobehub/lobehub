@@ -489,6 +489,7 @@ export default {
   'channel.botWakeDenyChannelsEmpty': 'No channels blocked.',
   'channel.botWakeChannelIdLabel': 'Channel ID',
   'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
+  'channel.botWakeChannelIdPlaceholderLark': 'Group chat ID, e.g. oc_a0553eda9014c201e6969b478895c230',
   'channel.channelListLimit': 'Lists hold at most {{max}} entries — remove one first.',
   'channel.botWakePace': 'How often it joins',
   'channel.botWakePaceHint':
@@ -650,6 +651,9 @@ export default {
   'channel.tab.wake': 'Wake policy',
   'channel.wake.intro':
     'Lets the bot speak up when nobody @-mentioned it: when a message calls it by name, when someone follows up soon after it spoke, or when a watch keyword matches. It judges each message first, and may choose to stay silent.',
+  'channel.wake.feishuScope.title': 'Group messages need an extra permission',
+  'channel.wake.feishuScope.desc':
+    'To hear group messages that do not @-mention the bot, the app needs the im:message.group_msg scope. Add it under Permissions & Scopes in the developer console, then create and publish a new version. Apps made with one-click setup already have it.',
   'channel.wake.section.keywords': 'Keywords',
   'channel.wake.section.channels': 'Channels',
   'channel.wake.section.channelsDesc':

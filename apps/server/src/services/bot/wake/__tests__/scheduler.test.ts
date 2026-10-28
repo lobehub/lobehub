@@ -201,12 +201,31 @@ describe('wake scheduler wiring', () => {
         );
       });
 
+      it('is kept in the shared log of a Feishu group', async () => {
+        await recordWakeRunOutcome({
+          ...base,
+          platform: 'feishu',
+          platformThreadId: 'feishu:group:oc_1',
+          spoke: true,
+          spoken,
+        });
+
+        expect(mocks.botWake.rememberMessages).toHaveBeenCalledWith(
+          ['feishu:group:oc_1'],
+          [expect.objectContaining({ id: 'bot:op-1', isBot: true })],
+        );
+      });
+
       it.each([
         { name: 'the bot stayed silent', input: { spoke: false, spoken } },
         { name: 'there is no text to keep', input: { spoke: true, spoken: { id: 'op-1' } } },
         {
           name: 'it was a direct message',
           input: { platformThreadId: 'discord:@me:dm1', spoke: true, spoken },
+        },
+        {
+          name: 'it was a Feishu direct message',
+          input: { platform: 'feishu', platformThreadId: 'feishu:p2p:oc_1', spoke: true, spoken },
         },
         { name: 'the platform has no log yet', input: { platform: 'slack', spoke: true, spoken } },
       ])('is not kept when $name', async ({ input }) => {

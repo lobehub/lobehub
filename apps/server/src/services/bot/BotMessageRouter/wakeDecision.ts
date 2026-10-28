@@ -22,6 +22,7 @@ import {
   toConversationLine,
 } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
+  hasConversationLog,
   judgeExplicitMention,
   resolveChannelKeys,
   resolveConversationLogKey,
@@ -563,9 +564,9 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   const readState = async (signal: WakeSignal) =>
     toChannelState(await state.readChannel(wakeStateKeys(signal.channelKeys!)));
 
-  // Direct messages are private: only guild channels keep a shared log.
+  // Direct messages are private: only group conversations keep a shared log.
   const logKeyFor = (observation: BotWakeObservation): string | undefined =>
-    platform === 'discord' && observation.threadId.split(':')[1] !== '@me'
+    hasConversationLog(platform, observation.threadId)
       ? resolveConversationLogKey(platform, observation.threadId)
       : undefined;
 
@@ -971,8 +972,10 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         if (!enabled || !(await rolledOut())) return;
 
         const line = toConversationLine({
-          // A Discord id carries its send time, so two bots write the identical line.
-          at: discordMessageTime(message.id) ?? Date.now(),
+          // The send time comes from the message (a Discord id carries it), so two bots in one
+          // channel write the identical line.
+          at:
+            discordMessageTime(message.id) ?? message.metadata?.dateSent?.getTime() ?? Date.now(),
           authorId: message.author?.userId,
           authorName: message.author?.userName ?? message.author?.fullName,
           hasAttachments: (message.attachments?.length ?? 0) > 0,

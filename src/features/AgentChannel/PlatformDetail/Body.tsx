@@ -16,6 +16,7 @@ import {
   platformCredentialBodyMap,
   platformCredentialExtrasMap,
   platformSettingsFieldExtrasMap,
+  platformWakeNoticeMap,
 } from '../platform/registry';
 import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
@@ -123,6 +124,7 @@ const Body = memo<BodyProps>(
 
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
+    const WakeNotice = platformWakeNoticeMap[platformDef.id];
 
     // Fields behind a rollout flag stay hidden until the user's flag is on (and
     // while the flags have not loaded yet).
@@ -372,6 +374,7 @@ const Body = memo<BodyProps>(
                     {t('channel.wake.intro')}
                   </Text>
                 )}
+              {group.key === 'wake' && WakeNotice && <WakeNotice />}
               {group.key === 'reply' && hasConfig && (
                 <Text fontSize={12} type={'secondary'}>
                   {t('channel.reply.instant')}
