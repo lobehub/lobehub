@@ -23,7 +23,9 @@ describe('GenerationBatchService', () => {
 
     await generationBatchService.getGenerationBatches(topicId);
 
-    expect(lambdaClient.generationBatch.getGenerationBatches.query).toBeCalledWith({ topicId });
+    expect(lambdaClient.generationBatch.getGenerationBatches.query).toHaveBeenCalledWith({
+      topicId,
+    });
   });
 
   it('deleteGenerationBatch should call lambdaClient with correct params', async () => {
@@ -31,6 +33,8 @@ describe('GenerationBatchService', () => {
 
     await generationBatchService.deleteGenerationBatch(batchId);
 
-    expect(lambdaClient.generationBatch.deleteGenerationBatch.mutate).toBeCalledWith({ batchId });
+    expect(lambdaClient.generationBatch.deleteGenerationBatch.mutate).toHaveBeenCalledWith({
+      batchId,
+    });
   });
 });
