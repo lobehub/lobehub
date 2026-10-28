@@ -11,6 +11,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import type { TopicGroupMode } from '@/types/topic';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
@@ -21,6 +22,16 @@ import ByStatusMode from '../TopicListContent/ByStatusMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 import TopicListSkeleton from './TopicListSkeleton';
+
+// `byTime` is the fallback so the list keeps its default grouping even for a
+// mode value outside the map (e.g. stale persisted data).
+const TOPIC_GROUP_MODE_COMPONENTS: Partial<Record<TopicGroupMode, React.ComponentType>> = {
+  byAgent: ByAgentMode,
+  byDevice: ByDeviceMode,
+  byProject: ByProjectMode,
+  byStatus: ByStatusMode,
+  flat: FlatMode,
+};
 
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');
@@ -36,6 +47,8 @@ const TopicList = memo(() => {
   ]);
 
   const { topicGroupMode } = useAgentTopicGroupMode();
+
+  const TopicGroupModeView = TOPIC_GROUP_MODE_COMPONENTS[topicGroupMode] ?? ByTimeMode;
 
   useFetchChatTopics();
   useFetchActiveTopicDetail();
@@ -58,19 +71,7 @@ const TopicList = memo(() => {
           }}
         />
       )}
-      {topicGroupMode === 'flat' ? (
-        <FlatMode />
-      ) : topicGroupMode === 'byProject' ? (
-        <ByProjectMode />
-      ) : topicGroupMode === 'byStatus' ? (
-        <ByStatusMode />
-      ) : topicGroupMode === 'byAgent' ? (
-        <ByAgentMode />
-      ) : topicGroupMode === 'byDevice' ? (
-        <ByDeviceMode />
-      ) : (
-        <ByTimeMode />
-      )}
+      <TopicGroupModeView />
       <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
     </>
   );
