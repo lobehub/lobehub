@@ -1,7 +1,10 @@
 import type { IEditor } from '@lobehub/editor';
 import { useCallback, useRef, useState } from 'react';
 
-import { getAttachmentFileIdsFromEditor } from '@/features/EditorCanvas/editorAttachments';
+import {
+  getAttachmentFileIdsFromEditor,
+  getEditorAttachmentStateFromJson,
+} from '@/features/EditorCanvas/editorAttachments';
 import { useTaskStore } from '@/store/task';
 
 interface UseCommentSubmitOptions {
@@ -47,9 +50,12 @@ export const useCommentSubmit = ({
       // The tRPC error link already reports the failure; keep the text —
       // unless the user has started a new comment or moved to another task
       // while it was sending, which a restore would overwrite or misplace.
+      // Count still-uploading attachments too: they have no file id yet.
+      const attachments = getEditorAttachmentStateFromJson(editor?.getDocument?.('json'));
       const isEmpty =
         !String(editor?.getDocument?.('markdown') ?? '').trim() &&
-        getAttachmentFileIdsFromEditor(editor).length === 0;
+        !attachments.hasCompletedAttachments &&
+        !attachments.hasIncompleteAttachments;
       if (!isEmpty || taskIdRef.current !== taskId) return;
       if (json) editor?.setDocument?.('json', json);
       else editor?.setDocument?.('markdown', markdown);

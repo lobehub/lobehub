@@ -17,9 +17,11 @@ vi.mock('@/store/task', () => ({
 }));
 
 vi.mock('@/features/EditorCanvas/editorAttachments', () => ({
-  // Attachments live in the document, so a cleared editor has none.
-  getAttachmentFileIdsFromEditor: (editor: { getDocument: (format: string) => unknown }) =>
-    editor.getDocument('json') ? mocks.fileIds : [],
+  getAttachmentFileIdsFromEditor: () => mocks.fileIds,
+  getEditorAttachmentStateFromJson: (json: unknown) => ({
+    hasCompletedAttachments: false,
+    hasIncompleteAttachments: JSON.stringify(json ?? null).includes('"pending"'),
+  }),
 }));
 
 const JSON_DOC = { root: { type: 'root' } };
@@ -146,6 +148,28 @@ describe('useCommentSubmit', () => {
 
     expect(editor.setDocument).not.toHaveBeenCalled();
     expect(doc.markdown).toBe('next comment');
+  });
+
+  it('keeps a new draft whose attachment is still uploading', async () => {
+    const pending = deferred();
+    mocks.addComment.mockReturnValue(pending.promise);
+    const { doc, editor } = createEditor();
+    const { hook } = setup(editor);
+
+    let submit!: Promise<void>;
+    act(() => {
+      submit = hook.result.current.submit();
+    });
+    const uploading = { root: { children: [{ status: 'pending', type: 'file' }], type: 'root' } };
+    doc.json = uploading;
+
+    await act(async () => {
+      pending.reject(new Error('network'));
+      await submit;
+    });
+
+    expect(editor.setDocument).not.toHaveBeenCalled();
+    expect(doc.json).toBe(uploading);
   });
 
   it('does nothing without permission or content', async () => {
