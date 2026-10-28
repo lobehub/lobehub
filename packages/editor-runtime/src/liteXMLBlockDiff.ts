@@ -6,6 +6,8 @@ type Token =
   | { kind: 'text'; raw: string; verbatim: boolean };
 
 export interface LiteXMLBlock {
+  /** {@link LiteXMLBlock.xml} without the ids on its tags; ids in its text stay. */
+  bare: string;
   id?: string;
   tag: string;
   text: string;
@@ -90,10 +92,14 @@ const tokenize = (litexml: string): Token[] => {
 const isLayoutWhitespace = (token: Token) =>
   token.kind === 'text' && !token.verbatim && /^\s*$/.test(token.raw) && token.raw.includes('\n');
 
-const serialize = (tokens: Token[]) =>
+const ID_ATTRIBUTES = /\s+id="[^"]*"/g;
+
+const serialize = (tokens: Token[], { stripIds = false } = {}) =>
   tokens
     .filter((token) => !isLayoutWhitespace(token))
-    .map((token) => token.raw)
+    .map((token) =>
+      stripIds && token.kind !== 'text' ? token.raw.replaceAll(ID_ATTRIBUTES, '') : token.raw,
+    )
     .join('')
     .trim();
 
@@ -113,7 +119,7 @@ const toPayload = (tokens: Token[], { stripIds = false } = {}) =>
         const text = escapeText(token.raw);
         return /^\s+$/.test(token.raw) ? `<text>${text}</text>` : text;
       }
-      return stripIds ? token.raw.replaceAll(/\s+id="[^"]*"/g, '') : token.raw;
+      return stripIds ? token.raw.replaceAll(ID_ATTRIBUTES, '') : token.raw;
     })
     .join('')
     .trim();
@@ -176,6 +182,7 @@ const parseBlocks = (litexml: string): ParsedBlock[] | string => {
     if (stack.length === 0) {
       const head = current[0] as Extract<Token, { tag: string }>;
       blocks.push({
+        bare: serialize(current, { stripIds: true }),
         id: head.raw.match(ID_ATTRIBUTE)?.[1],
         tag: head.tag,
         text: blockText(current),
@@ -193,7 +200,7 @@ export const parseLiteXMLBlocks = (litexml: string): LiteXMLBlock[] | string => 
   const blocks = parseBlocks(litexml);
   return typeof blocks === 'string'
     ? blocks
-    : blocks.map(({ id, tag, text, xml }) => ({ id, tag, text, xml }));
+    : blocks.map(({ bare, id, tag, text, xml }) => ({ bare, id, tag, text, xml }));
 };
 
 const longestCommonSubsequence = (a: string[], b: string[]): Set<string> => {

@@ -52,6 +52,32 @@ describe('alignLiteXMLBlocks', () => {
     expect(diff.ok && diff.summary).toEqual({ inserted: 2, modified: 0, removed: 1 });
   });
 
+  it('sees a change to a literal id inside code', () => {
+    const code = page('<code id="c1" lang="html"><div id="old">Hello</div></code>');
+    const rewrite = page('<code id="z1" lang="html"><div id="new">Hello</div></code>');
+
+    const diff = diffLiteXMLBlocks(code, alignLiteXMLBlocks(code, rewrite)!);
+
+    expect(diff.ok && diff.summary).toEqual({ inserted: 0, modified: 1, removed: 0 });
+    expect(diff.ok && (diff.operations[0] as any).litexml).toContain('id="c1"');
+    expect(diff.ok && (diff.operations[0] as any).litexml).toContain('&lt;div id="new"&gt;Hello');
+  });
+
+  it('keeps literal ids inside code and span text', () => {
+    const code = page('<code id="c1" lang="html"><div>Hello</div></code>');
+    const rewrite = page(
+      '<code id="z1" lang="html"><div id="kept">Changed</div></code>',
+      '<p id="z2"><span id="z3">say id="x"</span></p>',
+    );
+
+    const aligned = alignLiteXMLBlocks(code, rewrite)!;
+
+    expect(aligned).toContain('<div id="kept">Changed</div>');
+    expect(aligned).toContain('say id="x"');
+    expect(aligned).not.toContain('z1');
+    expect(aligned).not.toContain('z3');
+  });
+
   it('rejects invalid LiteXML', () => {
     expect(alignLiteXMLBlocks(current, '<root><p>broken')).toBeUndefined();
   });

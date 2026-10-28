@@ -1,7 +1,5 @@
 import { parseLiteXMLBlocks } from './liteXMLBlockDiff';
 
-const stripIds = (xml: string) => xml.replaceAll(/\s+id="[^"]*"/g, '');
-
 const withId = (xml: string, id: string) => xml.replace(/^<([a-z][\w-]*)/i, `<$1 id="${id}"`);
 
 // Index pairs of equal items in a longest common subsequence, in order.
@@ -58,8 +56,8 @@ export const alignLiteXMLBlocks = (current: string, target: string): string | un
   if (typeof before === 'string' || typeof after === 'string') return;
 
   const pairs = commonPairs(
-    before.map((block) => stripIds(block.xml)),
-    after.map((block) => stripIds(block.xml)),
+    before.map((block) => block.bare),
+    after.map((block) => block.bare),
   );
 
   const aligned: string[] = [];
@@ -69,8 +67,9 @@ export const alignLiteXMLBlocks = (current: string, target: string): string | un
     const replaced = before.slice(i, keptBefore);
     after.slice(j, keptAfter).forEach((block, k) => {
       const previous = replaced[k];
-      const xml = stripIds(block.xml);
-      aligned.push(previous?.id && previous.tag === block.tag ? withId(xml, previous.id) : xml);
+      aligned.push(
+        previous?.id && previous.tag === block.tag ? withId(block.bare, previous.id) : block.bare,
+      );
     });
     if (keptBefore < before.length) aligned.push(before[keptBefore].xml);
     i = keptBefore + 1;
