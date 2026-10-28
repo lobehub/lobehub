@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "此代理已不可用。移除它並選擇其他代理。",
   "environment.checkingDevice": "正在檢查狀態",
   "environment.chooseDevice": "選擇裝置",
-  "environment.completeRequired": "完成高亮顯示的設置後才能繼續。",
   "environment.configurationFailed": "無法加載此代理的設置。請再試一次。",
   "environment.configurationLoading": "正在加載此代理的設置…",
   "environment.defaultsHint": "每個代理使用其自己的裝置和工作目錄。您可以稍後從成員列表中更改它們。",

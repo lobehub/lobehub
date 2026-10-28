@@ -25,6 +25,7 @@ interface SlotRowProps {
   state: RowState;
   /** The picker's accessible name; the row shows the same text as its label. */
   title: string;
+  width?: number;
 }
 
 /**
@@ -41,6 +42,7 @@ const SlotRow = ({
   onChange,
   state,
   title,
+  width = PICKER_WIDTH,
 }: SlotRowProps) => {
   const { t } = useTranslation('setting');
   const { groups, parseValue } = useModelOptions(modelKind);
@@ -84,7 +86,7 @@ const SlotRow = ({
       disabled={disabled}
       options={options}
       // borderless sits 1px further right than a filled trigger; keep the arrows in one line
-      style={{ flex: 'none', marginInlineEnd: 1, width: PICKER_WIDTH }}
+      style={{ flex: 'none', marginInlineEnd: 1, width }}
       value={value}
       variant={'borderless'}
       labelRender={() =>

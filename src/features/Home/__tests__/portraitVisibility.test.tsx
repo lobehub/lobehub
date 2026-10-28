@@ -1,11 +1,13 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import type { ComponentType, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 interface RenderHomeOptions {
   hiddenWidgets?: string[];
+  /** Module factory for the rail inbox. */
+  homeInbox?: () => { default: ComponentType<any> };
   isLogin?: boolean;
   portalViewType?: PortalViewType;
   promo?: ReactNode;
@@ -41,6 +43,7 @@ function translate() {
 
 const renderHome = async ({
   hiddenWidgets = [],
+  homeInbox = () => stub('home-inbox'),
   isLogin = true,
   portalViewType,
   promo,
@@ -60,7 +63,7 @@ const renderHome = async ({
   vi.doMock('@/business/client/features/useHomePromoLine', () => ({
     useHomePromoLine: vi.fn(() => promo),
   }));
-  vi.doMock('@/features/HomeInbox', () => stub('home-inbox'));
+  vi.doMock('@/features/HomeInbox', homeInbox);
   function selectFromChatStore(selector: (state: unknown) => unknown) {
     return selector({ portalViewType });
   }
@@ -208,6 +211,35 @@ describe('Home portrait visibility', () => {
     await renderHome({ portalViewType: PortalViewType.TaskDetail });
 
     expect(screen.queryByTestId('acceptance-portal-drawer')).not.toBeInTheDocument();
+  }, 20000);
+});
+
+describe('Home rail layout', () => {
+  it('paints the rail inbox in the first commit, without a suspended empty frame', async () => {
+    await renderHome();
+
+    expect(screen.getByTestId('home-rail')).toContainElement(screen.getByTestId('home-inbox'));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+  }, 20000);
+
+  it('hands the rail space to the main column only once the inbox reports it empty', async () => {
+    let reportEmpty: ((empty: boolean) => void) | undefined;
+    await renderHome({
+      homeInbox: () => ({
+        default: ({ onRailEmptyChange }: { onRailEmptyChange?: (empty: boolean) => void }) => {
+          reportEmpty = onRailEmptyChange;
+          return <div data-testid={'home-inbox'} />;
+        },
+      }),
+    });
+
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+
+    act(() => reportEmpty?.(true));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
+
+    act(() => reportEmpty?.(false));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
   }, 20000);
 });
 

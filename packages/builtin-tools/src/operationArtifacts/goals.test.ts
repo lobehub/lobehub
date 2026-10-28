@@ -1,7 +1,7 @@
 import type { AssistantContentBlock } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { deriveOperationGoals } from './deriveOperationGoals';
+import { deriveOperationGoals } from './goals';
 
 const block = (tools: AssistantContentBlock['tools']): AssistantContentBlock => ({
   content: '',

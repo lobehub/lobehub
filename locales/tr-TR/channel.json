@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "Bu Ajan artık kullanılamıyor. Kaldırın ve başka birini seçin.",
   "environment.checkingDevice": "Durum kontrol ediliyor",
   "environment.chooseDevice": "Bir cihaz seçin",
-  "environment.completeRequired": "Devam etmeden önce vurgulanan ayarları tamamlayın.",
   "environment.configurationFailed": "Bu Ajanın ayarları yüklenemedi. Tekrar deneyin.",
   "environment.configurationLoading": "Bu Ajanın ayarları yükleniyor…",
   "environment.defaultsHint": "Her Ajan kendi cihazını ve çalışma dizinini kullanır. Bunları daha sonra üye listesinden bu kanal için değiştirebilirsiniz.",

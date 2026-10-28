@@ -23,6 +23,7 @@ export interface ModelRef {
  * feature off. Other slots have no off switch at runtime and get no such option.
  */
 const ENABLED_FLAG_SLOTS = new Set<UserServiceModelConfigKey>([
+  'channelRouting',
   'followUpAction',
   'inputCompletion',
   'promptRewrite',

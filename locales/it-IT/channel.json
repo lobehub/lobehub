@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "Questo agente non è più disponibile. Rimuovilo e scegline un altro.",
   "environment.checkingDevice": "Verifica dello stato",
   "environment.chooseDevice": "Scegli un dispositivo",
-  "environment.completeRequired": "Completa le impostazioni evidenziate prima di continuare.",
   "environment.configurationFailed": "Impossibile caricare le impostazioni di questo agente. Riprova.",
   "environment.configurationLoading": "Caricamento delle impostazioni di questo agente…",
   "environment.defaultsHint": "Ogni agente utilizza il proprio dispositivo e directory di lavoro. Puoi cambiarli per questo canale in seguito dalla lista dei membri.",

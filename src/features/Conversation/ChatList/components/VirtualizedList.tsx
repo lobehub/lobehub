@@ -117,7 +117,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const { recordScroll } = useTopicScrollPersist({
       contextKey,
       containerRef,
-      dataSourceLength: dataSource.length,
+      dataSource,
       getScroller,
       headerOffset: LEADING_ROWS,
       initialPosition: isForward ? 'top' : initialScrollPosition,

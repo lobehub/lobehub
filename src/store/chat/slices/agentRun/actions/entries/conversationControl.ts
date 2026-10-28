@@ -30,7 +30,7 @@ import {
 import { shareChatService } from '@/services/shareChat';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
+import { topicSelectors } from '@/store/chat/selectors';
 import {
   type AgentRuntimeType,
   selectRuntimeType,
@@ -49,6 +49,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { type RunScope } from '../lifecycle/types';
+import { readClientRunMessages } from './ensureFullHistoryForClientRun';
 import { createInterventionProjection } from './interventionProjection';
 
 /**
@@ -917,7 +918,7 @@ export class ConversationControlActionImpl {
 
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     const currentRequestMetadata = this.#getRequestMetadataFromMessageChain(
       toolMessageId,
       currentMessages,
@@ -1325,7 +1326,7 @@ export class ConversationControlActionImpl {
     // the agent marketplace picker forks agents directly) — the LLM should see the
     // tool result, not a fake user turn.
     if (!shouldCreateUserMessage) {
-      const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+      const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
       const requestMetadata = this.#getRequestMetadataFromMessageChain(
         toolMessageId,
         currentMessages,
@@ -1407,11 +1408,10 @@ export class ConversationControlActionImpl {
     // optimisticCreateMessage above is another await round-trip after the earlier
     // guard, and executeClientAgent would otherwise start a fresh child run that
     // wasn't present when the cancellation propagated.
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message (not tool re-execution)
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
       parentMessageId: userMsg.id,
@@ -1609,11 +1609,10 @@ export class ConversationControlActionImpl {
     // optimisticCreateMessage above is another await round-trip after the guard
     // before it, and executeClientAgent would otherwise start a fresh child run
     // that wasn't present when the cancellation propagated.
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
       parentMessageId: userMsg.id,
@@ -2345,7 +2344,7 @@ export class ConversationControlActionImpl {
 
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId, currentMessages);
 
     // Create agent state and context to continue from rejected tool message

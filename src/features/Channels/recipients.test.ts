@@ -82,3 +82,27 @@ describe('composerRecipients', () => {
     ).toBe('noFollowers');
   });
 });
+
+describe('decision routing preview', () => {
+  const base = {
+    defaultRecipientIds: ['analyst', 'coder'],
+    decisionEnabled: true,
+    inThread: false,
+    members: [member('analyst'), member('coder')],
+    mentionIds: [],
+  };
+  it('does not promise every candidate will reply while routing is enabled', () => {
+    expect(composerRecipients(base)).toEqual({ agents: [], kind: 'automatic' });
+    expect(composerRecipients({ ...base, inThread: true })).toEqual({
+      agents: [],
+      kind: 'automatic',
+    });
+  });
+  it('keeps explicit mentions and the disabled fallback accurate', () => {
+    expect(composerRecipients({ ...base, mentionIds: ['coder'] })).toEqual({
+      agents: [member('coder')],
+      kind: 'named',
+    });
+    expect(composerRecipients({ ...base, decisionEnabled: false }).kind).toBe('all');
+  });
+});

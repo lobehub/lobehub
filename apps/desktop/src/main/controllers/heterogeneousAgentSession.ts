@@ -100,6 +100,8 @@ export interface AgentSession {
    * intentional, not agent failures.
    */
   cancelledByUs?: boolean;
+  /** CLI version spawn preflight detected; decides how Claude Code gets the `lh` guide. */
+  cliVersion?: string;
   codexAppServerFallback?: boolean;
   command: string;
   cursorAcpSession?: CursorAcpSession;

@@ -193,6 +193,18 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should keep topic previews off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(
+      false,
+    );
+
+    const config = { topic_preview: ['user-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableTopicPreview).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableTopicPreview).toBe(false);
+  });
+
   it('should gate the mobile gateway mux independently from the Web flag', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(

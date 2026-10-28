@@ -55,7 +55,7 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "openai",
   },
   "channelRouting": {
-    "enabled": false,
+    "enabled": true,
     "model": "jev-1.14.0",
     "provider": "typesafe",
   },

@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "Deze Agent is niet langer beschikbaar. Verwijder deze en kies een andere.",
   "environment.checkingDevice": "Status controleren",
   "environment.chooseDevice": "Kies een apparaat",
-  "environment.completeRequired": "Voltooi de gemarkeerde instellingen voordat je doorgaat.",
   "environment.configurationFailed": "Kon de instellingen van deze Agent niet laden. Probeer het opnieuw.",
   "environment.configurationLoading": "Instellingen van deze Agent laden…",
   "environment.defaultsHint": "Elke Agent gebruikt zijn eigen apparaat en werkmap. Je kunt deze later wijzigen voor dit kanaal vanuit de ledenlijst.",

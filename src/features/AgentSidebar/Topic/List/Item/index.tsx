@@ -50,6 +50,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
@@ -400,6 +401,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // `status` is the row's own copy: a project list keeps its topics outside
     // the chat store, so `isUnreadCompleted` never sees them there.
     const hasUnread = id && (isUnreadCompleted || status === 'unread' || isRunningTailUnread);
+    const hoverPrefetchHandlers = useTopicHoverPrefetch({
+      agentId: activeAgentId,
+      status,
+      topicId: id,
+    });
 
     useEffect(() => {
       if (!activeAgentId || !id || !isUnreadCompleted || hasLocalRunningRuntime) return;
@@ -658,7 +664,12 @@ const TopicItemRow = memo<TopicItemRowProps>(
     );
 
     return (
-      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
+      <Flexbox
+        data-testid="topic-item"
+        data-topic-id={id}
+        style={{ position: 'relative' }}
+        {...hoverPrefetchHandlers}
+      >
         {metaCard ? (
           <Popover
             arrow={false}

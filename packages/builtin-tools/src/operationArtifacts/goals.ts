@@ -1,6 +1,5 @@
 import { isGoalIdentifier } from '@lobechat/builtin-tool-goal';
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
 
 export interface OperationGoal {
   criteriaCount: number;
@@ -14,6 +13,15 @@ export interface OperationGoal {
    */
   source: 'command' | 'tool';
 }
+
+const safeParseJSON = (text?: string): unknown => {
+  if (typeof text !== 'string') return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;

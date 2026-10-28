@@ -53,6 +53,7 @@ export const resolveTab = (
       ? undefined
       : (pickMeaningful(live?.avatar) ?? pickMeaningful(tab.cached?.avatar));
   const avatarSeed = pickMeaningful(live?.avatarSeed) ?? pickMeaningful(tab.cached?.avatarSeed);
+  const avatarKind = live?.avatarKind ?? tab.cached?.avatarKind;
   const backgroundColor =
     pickMeaningful(live?.backgroundColor) ?? pickMeaningful(tab.cached?.backgroundColor);
 
@@ -60,6 +61,7 @@ export const resolveTab = (
     isActive,
     meta: {
       avatar,
+      avatarKind,
       avatarSeed,
       backgroundColor,
       icon: staticMeta.icon ?? FALLBACK_ICON,

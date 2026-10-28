@@ -70,11 +70,17 @@ export class ChannelService {
           'BAD_REQUEST',
           'Native Channel execution is not supported on Windows devices yet',
         );
-      if (!input.workingDirectory?.trim())
+      // An Agent without its own directory on this device runs in the device's home folder,
+      // the same fallback an ordinary conversation uses.
+      const workingDirectory =
+        input.workingDirectory?.trim() ||
+        (await deviceGateway.queryDeviceSystemInfo(this.userId, input.deviceId, this.workspaceId))
+          ?.homePath;
+      if (!workingDirectory)
         throw new ChannelError('BAD_REQUEST', 'Choose a working directory for this device');
       const path = await deviceGateway.statPath({
         deviceId: input.deviceId,
-        path: input.workingDirectory,
+        path: workingDirectory,
         userId: this.userId,
         workspaceId: this.workspaceId,
       });

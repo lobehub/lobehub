@@ -9,6 +9,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { electronStylish } from '@/styles/electron';
 
@@ -262,6 +263,8 @@ const TabItem = memo<TabItemProps>(
       <span className={styles.avatarWrapper}>
         {meta.avatarSeed ? (
           <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+        ) : meta.avatarKind === 'workspace' ? (
+          <WorkspaceAvatar avatar={meta.avatar} name={meta.title} size={16} />
         ) : meta.avatar ? (
           <Avatar
             emojiScaleWithBackground

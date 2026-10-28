@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "Cet Agent n'est plus disponible. Supprimez-le et choisissez-en un autre.",
   "environment.checkingDevice": "Vérification du statut",
   "environment.chooseDevice": "Choisir un appareil",
-  "environment.completeRequired": "Complétez les paramètres surlignés avant de continuer.",
   "environment.configurationFailed": "Impossible de charger les paramètres de cet Agent. Réessayez.",
   "environment.configurationLoading": "Chargement des paramètres de cet Agent…",
   "environment.defaultsHint": "Chaque Agent utilise son propre appareil et répertoire de travail. Vous pouvez les modifier pour ce canal plus tard depuis la liste des membres.",

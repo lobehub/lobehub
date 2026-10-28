@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "このエージェントは利用できなくなりました。削除して別のエージェントを選択してください。",
   "environment.checkingDevice": "ステータスを確認中",
   "environment.chooseDevice": "デバイスを選択",
-  "environment.completeRequired": "続行する前に、ハイライトされた設定を完了してください。",
   "environment.configurationFailed": "このエージェントの設定を読み込めませんでした。もう一度お試しください。",
   "environment.configurationLoading": "このエージェントの設定を読み込み中…",
   "environment.defaultsHint": "各エージェントは独自のデバイスと作業ディレクトリを使用します。後でメンバーリストからこれらを変更できます。",

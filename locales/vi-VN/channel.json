@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "Ajan này không còn khả dụng. Hãy xóa nó và chọn một Ajan khác.",
   "environment.checkingDevice": "Đang kiểm tra trạng thái",
   "environment.chooseDevice": "Chọn một thiết bị",
-  "environment.completeRequired": "Hoàn thành các cài đặt được đánh dấu trước khi tiếp tục.",
   "environment.configurationFailed": "Không thể tải cài đặt của Ajan này. Thử lại.",
   "environment.configurationLoading": "Đang tải cài đặt của Ajan này…",
   "environment.defaultsHint": "Mỗi Ajan sử dụng thiết bị và thư mục làm việc riêng. Bạn có thể thay đổi chúng cho kênh này sau từ danh sách thành viên.",

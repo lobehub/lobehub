@@ -6,8 +6,8 @@ import type { ReactNode } from 'react';
 
 import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
-import Avatar from '@/components/Avatar';
 import { ProductLogo } from '@/components/Branding';
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 
 /**
@@ -104,7 +104,6 @@ const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarP
   // scope to switch to, so the bar is the product, the collection, and you.
   const switchable = workspaces.length > 1;
   const scopeName = workspace?.name;
-  const scopeAvatar = workspace?.avatar || scopeName;
 
   return (
     <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
@@ -132,7 +131,7 @@ const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarP
       {scope ??
         (scopeName && (
           <Flexbox horizontal align={'center'} className={styles.scopePill} gap={6}>
-            <Avatar avatar={scopeAvatar} shape={'square'} size={20} />
+            <WorkspaceAvatar avatar={workspace?.avatar} name={scopeName} size={20} />
             <Text fontSize={13} weight={600}>
               {scopeName}
             </Text>

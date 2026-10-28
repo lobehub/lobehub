@@ -1,10 +1,12 @@
 import { type ChatTopic, type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
-import { readConversationMessageListPage } from '@/helpers/conversationMessageRead';
+import {
+  readConversationMessageListPage,
+  readEarlierConversationMessages,
+} from '@/helpers/conversationMessageRead';
 import { createReplicaSlice, readReplicaStoredKeys } from '@/libs/replica';
 import { lambdaClient } from '@/libs/trpc/client';
-import { messageService } from '@/services/message';
 import {
   getMessageListCacheIdentity,
   getMessageListWindowOlderCursor,
@@ -339,7 +341,7 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     context: ConversationMessageParams,
     cursor: NonNullable<ConversationMessagePage['nextCursor']>,
   ): Promise<ConversationMessageFetch> => {
-    const page = await messageService.getEarlierMessages(
+    const page = await readEarlierConversationMessages(
       {
         agentId: context.agentId,
         agentShareId: context.agentShareId,

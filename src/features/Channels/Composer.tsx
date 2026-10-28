@@ -75,6 +75,11 @@ export function Composer({
   const draft = useComposerDraft(editor, draftKey);
   const shouldSendOnEnter = useEnterToSend();
   const userId = useUserStore(userProfileSelectors.userId);
+  const decisionEnabled = useUserStore(
+    (s) =>
+      (s.settings.systemAgent?.channelRouting?.enabled ??
+        s.defaultSettings.systemAgent.channelRouting.enabled) !== false,
+  );
   const [content, setContent] = useState('');
   const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -158,6 +163,7 @@ export function Composer({
             <ComposerRecipients
               recipients={composerRecipients({
                 defaultRecipientIds,
+                decisionEnabled,
                 inThread,
                 members: members.map((member) => ({
                   actorType: member.actorType,

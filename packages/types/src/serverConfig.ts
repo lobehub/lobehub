@@ -65,6 +65,8 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /** Hover previews of a topic's final answer (`topic_preview`). */
+  enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;

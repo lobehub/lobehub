@@ -833,3 +833,34 @@ describe('GenerationBatchModel', () => {
     });
   });
 });
+
+describe('GenerationBatchModel guards', () => {
+  it('rejects a batch for a topic the caller cannot see', async () => {
+    await serverDB
+      .insert(generationTopics)
+      .values({ id: 'guard-foreign-topic', title: 'Not yours', userId: otherUserId });
+
+    await expect(
+      generationBatchModel.create({ ...testBatch, generationTopicId: 'guard-foreign-topic' }),
+    ).rejects.toThrow('Generation topic not found');
+
+    const rows = await serverDB
+      .select()
+      .from(generationBatches)
+      .where(eq(generationBatches.generationTopicId, 'guard-foreign-topic'));
+    expect(rows).toEqual([]);
+  });
+
+  it('collects only the urls an asset actually carries when deleting', async () => {
+    const batch = await generationBatchModel.create(testBatch);
+    await serverDB.insert(generations).values([
+      { asset: null, generationBatchId: batch.id, userId },
+      { asset: { coverUrl: 'cover-only.png', type: 'video' }, generationBatchId: batch.id, userId },
+    ]);
+
+    const result = await generationBatchModel.delete(batch.id);
+
+    expect(result?.deletedBatch.id).toBe(batch.id);
+    expect(result?.filesToDelete).toEqual(['cover-only.png']);
+  });
+});

@@ -1,5 +1,6 @@
 'use client';
 
+import { findLatestWorkRootOperationId } from '@lobechat/conversation-flow';
 import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
 import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -31,7 +32,6 @@ import {
   useConversationStore,
 } from '../../store';
 import type { SteerContinuation } from '../../store/slices/data/steerChains';
-import { getOperationFinalRootId } from '../../store/slices/data/workSummaries';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
@@ -64,21 +64,6 @@ const actionBarHolder = (
     style={{ height: '28px' }}
   />
 );
-
-const findLatestWorkRootOperationId = (
-  metadata?: { work?: { rootOperationId?: unknown } } | null,
-  children?: AssistantContentBlock[],
-  taskCompletions?: AssistantContentBlock[],
-) => {
-  const blocks = [...(children ?? []), ...(taskCompletions ?? [])];
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const rootOperationId = getOperationFinalRootId(blocks[index]?.metadata);
-    if (rootOperationId) return rootOperationId;
-  }
-
-  return getOperationFinalRootId(metadata);
-};
 
 interface GroupMessageProps {
   /** Later turns steered onto this one, rendered as one continuous chain. */

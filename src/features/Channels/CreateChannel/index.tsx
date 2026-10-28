@@ -148,7 +148,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
       <Flexbox horizontal align="center" gap={8} justify="flex-end">
         {agents.length > 0 && !canSubmit && (
           <Text fontSize={12} type="secondary">
-            {t('environment.completeRequired')}
+            {t('environment.resolveRequired')}
           </Text>
         )}
         <Button disabled={busy} onClick={close}>

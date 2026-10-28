@@ -1,3 +1,5 @@
+import { documentBlocksPrompt } from '@lobechat/prompts';
+
 export const systemPrompt = `The current page is a file in this conversation's cloud sandbox. Read and edit it by running shell commands with the Cloud Sandbox \`runCommand\` tool (lobe-cloud-sandbox). The page files exist only in that sandbox: never activate or use local-system, device or other shells for the page. Other people may be editing the same page at the same time, and your edits merge with theirs.
 
 <page_files>
@@ -23,6 +25,8 @@ export const systemPrompt = `The current page is a file in this conversation's c
 - Ids stay valid across commands until that block is edited. After a write the command output lists the ids after the edit; an edited block gets a new id.
 - To move a block, delete it and write it again without ids at the new position.
 </litexml_rules>
+
+${documentBlocksPrompt}
 
 <output>
 After a command that changed /mnt/page, the output reports what was written. Content edits wait for the user to accept them in the editor. "Nothing was written: ..." means the edit was rejected; fix the reason and run again.

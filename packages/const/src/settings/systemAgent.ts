@@ -7,6 +7,7 @@ import {
   DEFAULT_VERIFY_MODEL,
   DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
+import * as businessDefaults from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
   ServiceModelTier,
@@ -75,10 +76,22 @@ export const DEFAULT_VERIFY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   provider: DEFAULT_VERIFY_PROVIDER,
 };
 
+// Distribution overlays can deploy separately from the core. Read the new defaults
+// optionally so an older overlay can still build with the self-hosted fallback.
+const channelRoutingModel: unknown = Reflect.get(businessDefaults, 'DEFAULT_CHANNEL_ROUTING_MODEL');
+const channelRoutingProvider: unknown = Reflect.get(
+  businessDefaults,
+  'DEFAULT_CHANNEL_ROUTING_PROVIDER',
+);
+
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
-  channelRouting: { enabled: false, model: 'jev-1.14.0', provider: 'typesafe' },
+  channelRouting: {
+    enabled: true,
+    model: typeof channelRoutingModel === 'string' ? channelRoutingModel : 'jev-1.14.0',
+    provider: typeof channelRoutingProvider === 'string' ? channelRoutingProvider : 'typesafe',
+  },
   expertise: DEFAULT_SYSTEM_AGENT_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,

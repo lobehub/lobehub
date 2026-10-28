@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "این عامل دیگر در دسترس نیست. آن را حذف کرده و عامل دیگری انتخاب کنید.",
   "environment.checkingDevice": "در حال بررسی وضعیت",
   "environment.chooseDevice": "انتخاب دستگاه",
-  "environment.completeRequired": "تنظیمات برجسته‌شده را قبل از ادامه تکمیل کنید.",
   "environment.configurationFailed": "تنظیمات این عامل بارگذاری نشد. دوباره تلاش کنید.",
   "environment.configurationLoading": "در حال بارگذاری تنظیمات این عامل…",
   "environment.defaultsHint": "هر عامل از دستگاه و دایرکتوری کاری خود استفاده می‌کند. می‌توانید بعداً آن‌ها را از لیست اعضا برای این کانال تغییر دهید.",

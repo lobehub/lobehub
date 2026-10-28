@@ -1711,9 +1711,7 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           agentType: 'openclaw',
-          // Reuses the device's own session token as the run identity, not the
-          // dispatched operation jwt.
-          jwt: 'mock-access-token',
+          jwt: 'mock-jwt',
           operationId: 'op-xyz',
           prompt: 'hello',
           serverUrl: 'https://server.example.com',
@@ -1722,33 +1720,30 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
-    it('reuses the device access token as the run jwt instead of request.jwt', async () => {
-      const client = await connectAndOpen();
-      client.simulateAgentRunRequest('claude-code', 'op-auth', 'hi', 'dispatched-operation-jwt');
-      await vi.advanceTimersByTimeAsync(0);
+    describe.each(['pi', 'codex', 'claude-code', 'openclaw', 'hermes'])(
+      '%s run identity',
+      (agentType) => {
+        it.each(['same-account-login', 'another-account-login', null])(
+          'preserves the operation token with device login %s',
+          async (accessToken) => {
+            const client = await connectAndOpen();
+            const getAccessToken = vi.mocked(mockRemoteServerConfigCtr.getAccessToken);
+            getAccessToken.mockClear().mockResolvedValue(accessToken);
+            client.simulateAgentRunRequest(agentType, 'op-auth', 'hi', 'dispatched-operation-jwt');
+            await vi.advanceTimersByTimeAsync(0);
 
-      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-        expect.objectContaining({ jwt: 'mock-access-token' }),
-      );
-    });
-
-    it('falls back to request.jwt when the device has no access token', async () => {
-      const client = await connectAndOpen();
-      // Set after connect so the auto-connect getAccessToken call isn't the one
-      // that returns null — only the executeAgentRun lookup should see no token.
-      vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
-      client.simulateAgentRunRequest(
-        'claude-code',
-        'op-fallback',
-        'hi',
-        'dispatched-operation-jwt',
-      );
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-        expect.objectContaining({ jwt: 'dispatched-operation-jwt' }),
-      );
-    });
+            expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+              operationId: 'op-auth',
+              status: 'accepted',
+            });
+            expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+              expect.objectContaining({ jwt: 'dispatched-operation-jwt' }),
+            );
+            expect(getAccessToken).not.toHaveBeenCalled();
+          },
+        );
+      },
+    );
 
     it('sends rejected ack when remote server URL is not configured', async () => {
       const client = await connectAndOpen();

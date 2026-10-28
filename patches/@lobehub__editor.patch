@@ -1,27 +1,27 @@
 diff --git a/es/headless.js b/es/headless.js
-index db7dc2d..d1937e4 100644
+index 5b19e49..a630222 100644
 --- a/es/headless.js
 +++ b/es/headless.js
-@@ -8050,7 +8050,7 @@ var BlockImageNode = class BlockImageNode extends BaseImageNode {
+@@ -9982,7 +9982,7 @@ var BlockImageNode = class BlockImageNode extends BaseImageNode {
  	get height() {
  		return this.__height;
  	}
 -	constructor(opt) {
 +	constructor(opt = {}) {
- 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
- 		this.__loading = true;
- 		this.__status = "uploaded";
-@@ -8165,7 +8165,7 @@ var ImageNode = class ImageNode extends BaseImageNode {
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key, {
+ 			accent: opt.accent,
+ 			caption: opt.caption,
+@@ -10108,7 +10108,7 @@ var ImageNode = class ImageNode extends BaseImageNode {
  	static getType() {
  		return "image";
  	}
 -	constructor(opt) {
 +	constructor(opt = {}) {
- 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
- 		this.__loading = true;
- 		this.__status = "uploaded";
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key, {
+ 			accent: opt.accent,
+ 			caption: opt.caption,
 diff --git a/es/plugins/image/node/block-image-node.js b/es/plugins/image/node/block-image-node.js
-index ca20fb5..ffb4562 100644
+index 069aa5d..01adb0e 100644
 --- a/es/plugins/image/node/block-image-node.js
 +++ b/es/plugins/image/node/block-image-node.js
 @@ -35,7 +35,7 @@ var BlockImageNode = class BlockImageNode extends BaseImageNode {
@@ -30,11 +30,11 @@ index ca20fb5..ffb4562 100644
  	}
 -	constructor(opt) {
 +	constructor(opt = {}) {
- 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
- 		this.__loading = true;
- 		this.__status = "uploaded";
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key, {
+ 			accent: opt.accent,
+ 			caption: opt.caption,
 diff --git a/es/plugins/image/node/image-node.js b/es/plugins/image/node/image-node.js
-index b6bc3ed..d1d1703 100644
+index 5536a8c..dd1ec0b 100644
 --- a/es/plugins/image/node/image-node.js
 +++ b/es/plugins/image/node/image-node.js
 @@ -11,7 +11,7 @@ var ImageNode = class ImageNode extends BaseImageNode {
@@ -43,6 +43,6 @@ index b6bc3ed..d1d1703 100644
  	}
 -	constructor(opt) {
 +	constructor(opt = {}) {
- 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
- 		this.__loading = true;
- 		this.__status = "uploaded";
+ 		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key, {
+ 			accent: opt.accent,
+ 			caption: opt.caption,

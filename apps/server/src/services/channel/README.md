@@ -8,7 +8,7 @@ still bypass classification. Agent replies never trigger another classification.
 
 Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
-Then opt in through the existing service-model settings:
+Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
 ```json
 {
@@ -27,8 +27,8 @@ TYPESAFE_API_KEY="your-typesafe-api-key"
 # SYSTEM_AGENT="channelRouting=openrouter/typesafe/jev-1.13"
 ```
 
-An explicit model/provider selection opts in; `enabled: false` opts out even when the deployment
-sets a model. The default is disabled; `SYSTEM_AGENT=default=...` never fills this non-chat slot.
+The service-model switch controls routing; `enabled: false` opts out even when the deployment
+sets a model. The default is enabled; `SYSTEM_AGENT=default=...` never fills this non-chat slot.
 When disabled at send time, the existing all-candidate fallback remains. A message already waiting
 for model classification when routing is disabled becomes unassigned rather than broadcasting.
 An unmentioned Thread reply waits for its root's routing decision before choosing candidates;

@@ -1,7 +1,7 @@
 'use client';
 
 import { SERVICE_MODEL_TIER_SLOTS } from '@lobechat/const';
-import { Button, Flexbox, Icon, InputNumber, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Icon, InputNumber, Switch, TextArea } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -17,6 +17,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { usePermission } from '@/hooks/usePermission';
 import { useSaveState } from '@/hooks/useSaveState';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
   PERSONAL_SYSTEM_AGENT_KEYS,
@@ -48,10 +49,10 @@ const DEFAULT_AGENT_ROW = 'defaultAgent';
 
 const ADVANCED_ANCHOR = 'service-model-advanced';
 
-/** Onboarding and channel-routing slots are internal and not shown. */
+/** Onboarding slots are internal and not shown. */
 type DisplaySlot = Exclude<
   UserServiceModelConfigKey,
-  'channelRouting' | 'onboardingTaskRecommender' | 'onboardingUnderstanding'
+  'onboardingTaskRecommender' | 'onboardingUnderstanding'
 >;
 
 type RowKey = typeof DEFAULT_AGENT_ROW | DisplaySlot;
@@ -73,11 +74,12 @@ const TIERS: { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[] =
 const ASR_ROW = 'asr' satisfies RowKey;
 
 /** A settings card: one per tier, plus voice. */
-type Section = ServiceModelTier | 'voice';
+type Section = ServiceModelTier | 'channelRouting' | 'voice';
 
 const sectionOf = (row: RowKey | UserServiceModelConfigKey): Section => {
   if (row === DEFAULT_AGENT_ROW) return 'main';
   if (row === ASR_ROW) return 'voice';
+  if (row === 'channelRouting') return 'channelRouting';
   return tierOfSlot(row) ?? 'main';
 };
 
@@ -100,6 +102,7 @@ interface ServiceModelFormProps {
 
 const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) => {
   const { t } = useTranslation('setting');
+  const enableChannels = useServerConfigStore(serverConfigSelectors.enableChannels);
   const { allowed: canManage, reason } = usePermission('manage_settings');
   const [storedSystemAgent, storedDefaultAgent, defaults, defaultAgentDefaults] = useUserStore(
     (s) => [
@@ -451,6 +454,51 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
       title: t('serviceModel.voice.title'),
     },
   ];
+
+  if (enableChannels) {
+    const row = 'channelRouting';
+    const state = rowState(row);
+    const title = t('systemAgent.channelRouting.title');
+    groups.push({
+      children: (
+        <Form.Field label={t('serviceModel.tierPicker')}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={12}
+            justify={'flex-end'}
+            style={{ flex: 'none', width: PICKER_WIDTH }}
+          >
+            {state.kind !== 'off' && (
+              <SlotRow
+                canDisable={false}
+                disabled={!canManage || saveStatus === 'saving'}
+                followLabel={followLabelOf(row)}
+                followModel={followModelOf(row)}
+                modelKind={'decision'}
+                state={state}
+                title={title}
+                width={PICKER_WIDTH - 48}
+                onChange={(choice) => writeSlot(row, choice)}
+              />
+            )}
+            <Switch
+              aria-label={title}
+              checked={state.kind !== 'off'}
+              disabled={!canManage || saveStatus === 'saving'}
+              onChange={(enabled) => writeSlotField(row, { enabled })}
+            />
+          </Flexbox>
+        </Form.Field>
+      ),
+      collapsible: false,
+      desc: withReason(t('systemAgent.channelRouting.modelDesc')),
+      extra: saveHint(row),
+      title: (
+        <SettingsSearchAnchor id={'service-model-channelRouting'}>{title}</SettingsSearchAnchor>
+      ),
+    });
+  }
 
   return (
     <Form

@@ -45,6 +45,7 @@ const activeOperation = (overrides: Record<string, unknown> = {}) => ({
   model: 'model-a',
   provider: 'lobehub',
   status: 'running',
+  topicId: 'tpc_run',
   userId: 'user-1',
   workspaceId: null,
   ...overrides,
@@ -82,6 +83,7 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
       expect(principal).toEqual({
         agentType,
         operationId: 'op-1',
+        topicId: 'tpc_run',
         userId: 'user-1',
         workspaceId: undefined,
       });

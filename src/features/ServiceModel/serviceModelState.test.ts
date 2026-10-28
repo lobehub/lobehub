@@ -187,3 +187,35 @@ describe('canDisableSlot', () => {
     expect(canDisableSlot('topic')).toBe(false);
   });
 });
+
+describe('channel decision settings', () => {
+  it('defaults to an enabled decision model independent of chat tiers', () => {
+    const stored = applyTierChoice({}, 'flash', FLASH);
+    expect(resolveSlotState(stored, defaults, 'channelRouting')).toEqual({
+      kind: 'follow',
+      tier: undefined,
+      value: { model: defaults.channelRouting.model, provider: defaults.channelRouting.provider },
+    });
+    expect(canDisableSlot('channelRouting')).toBe(true);
+    expect(stored.channelRouting).toBeUndefined();
+  });
+
+  it('keeps the chosen model while disabled and restores it when enabled', () => {
+    const chosen = applySlotChoice({}, 'channelRouting', { kind: 'custom', value: OTHER });
+    const off = applySlotChoice(chosen, 'channelRouting', { kind: 'off' });
+    expect(off.channelRouting).toEqual({ ...OTHER, enabled: false });
+    expect(resolveSlotState(off, defaults, 'channelRouting').kind).toBe('off');
+    const on = { ...off, channelRouting: { ...off.channelRouting, enabled: true } };
+    expect(resolveSlotState(on, defaults, 'channelRouting')).toEqual({
+      kind: 'custom',
+      value: OTHER,
+    });
+  });
+
+  it('restores the recommended decision model without following a chat tier', () => {
+    const chosen = applySlotChoice({}, 'channelRouting', { kind: 'custom', value: OTHER });
+    const restored = restoreAllSlots(chosen, defaults, ['channelRouting']);
+    expect(restored.channelRouting).toEqual({ enabled: true });
+    expect(resolveSlotState(restored, defaults, 'channelRouting').kind).toBe('follow');
+  });
+});

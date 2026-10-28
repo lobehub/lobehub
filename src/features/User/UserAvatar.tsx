@@ -105,8 +105,8 @@ const UserAvatar = ({
       avatar={avatarValue}
       background={background}
       className={clickable ? styles.clickable : className}
-      // A workspace identity is not a person, so it keeps the gradient fallback.
-      fallbackVariant={nameOverride ? 'marble' : 'pixel'}
+      // A workspace identity is not a person, so it draws the workspace mark.
+      fallbackVariant={nameOverride ? 'bauhaus' : 'pixel'}
       name={name}
       ref={ref}
       shape={'square'}

@@ -98,6 +98,7 @@ import {
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
   normalizeImage,
+  prepareClaudeCodeLobeHubCli,
   readClaudeCodeSessionCost,
   readCodexSessionModel,
   resolveCliSpawnPlan,
@@ -1020,6 +1021,7 @@ export default class HeterogeneousAgentCtr {
       // spawn() can't (login-shell PATH, app-bundled Codex CLI, …).
       const useResolvedPath = Boolean(status?.path) && !command.includes(path.sep);
       session.resolvedCommandPath = useResolvedPath ? status!.path : undefined;
+      session.cliVersion = status?.version;
       // Carry the login-shell PATH the detector resolved through, so a
       // `#!/usr/bin/env node` shim spawned by absolute path still finds `node`.
       session.resolvedCommandSearchPath = useResolvedPath ? status!.resolvedPathEnv : undefined;
@@ -1507,27 +1509,22 @@ export default class HeterogeneousAgentCtr {
     return !session.resumeSessionId || session.transcriptRebuiltForResume === true;
   }
 
-  /**
-   * Build a Claude Code stream-json user message with text + base64 images.
-   * Semantic context is assembled by the shared prompt engine before the
-   * provider-specific serializer runs.
-   */
-  private async buildStreamJsonInput(
-    prompt: string,
-    imageList: HeterogeneousAgentImageAttachment[] = [],
-    systemContext?: string,
-    isNewSession?: boolean,
-  ): Promise<string> {
-    const promptInput = buildHeterogeneousPrompt({
-      imageList,
-      isNewSession,
-      prompt,
-      systemContext,
-    });
-    const plan = await buildAgentInput('claude-code', promptInput, {
+  /** The SDK's stream-json user message, and the arguments carrying the `lh` guide out of it. */
+  private async buildStreamJsonInput(params: SendPromptParams, session: AgentSession) {
+    const lobeHubCli = await prepareClaudeCodeLobeHubCli(
+      buildHeterogeneousPrompt({
+        imageList: params.imageList ?? [],
+        isNewSession: this.needsSessionIntroduction(session),
+        prompt: params.prompt,
+        systemContext: params.systemContext,
+      }),
+      session.args,
+      { resumed: Boolean(session.agentSessionId), version: session.cliVersion },
+    );
+    const plan = await buildAgentInput('claude-code', lobeHubCli.prompt, {
       cacheDir: this.fileCacheDir,
     });
-    return plan.stdin;
+    return { args: lobeHubCli.args, stdin: plan.stdin };
   }
 
   // ─── IPC methods ───
@@ -1796,6 +1793,7 @@ export default class HeterogeneousAgentCtr {
       });
       spawnPlan = await driver.buildSpawnPlan({
         args: session.args,
+        cliVersion: session.cliVersion,
         helpers: {
           buildAgentInput: async (agentType, input) => {
             try {
@@ -2051,21 +2049,16 @@ export default class HeterogeneousAgentCtr {
     const cwd = session.cwd || electronApp.getPath('desktop');
     const spawnEnv = this.buildSessionSpawnEnv(session);
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const stdinPayload = await this.buildStreamJsonInput(
-      params.prompt,
-      params.imageList ?? [],
-      params.systemContext,
-      this.needsSessionIntroduction(session),
-    );
+    const input = await this.buildStreamJsonInput(params, session);
     const traceSession = await this.createCliTraceSession({
       cliArgs: ['sdk-stream', ...session.args],
       cwd,
       imageList: params.imageList ?? [],
       session,
-      stdinPayload,
+      stdinPayload: input.stdin,
     });
 
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', stdinPayload);
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', input.stdin);
 
     if (session.cancelledByUs) {
       await this.completeCancelledSessionBeforeLaunch(session);
@@ -2076,7 +2069,7 @@ export default class HeterogeneousAgentCtr {
     // executable it launches) exists.
     const startedAt = new Date().toISOString();
     const sdkSession = new ClaudeAgentSdkSession({
-      args: session.args,
+      args: [...session.args, ...input.args],
       commandPath,
       configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
       cwd,
@@ -2112,7 +2105,7 @@ export default class HeterogeneousAgentCtr {
       operationId: params.operationId,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
-      stdinPayload,
+      stdinPayload: input.stdin,
       uploadImage: this.uploadResultImage,
     });
 

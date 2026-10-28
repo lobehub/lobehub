@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "هذا الوكيل لم يعد متاحًا. قم بإزالته واختر آخر.",
   "environment.checkingDevice": "جارٍ التحقق من الحالة",
   "environment.chooseDevice": "اختر جهازًا",
-  "environment.completeRequired": "أكمل الإعدادات المميزة قبل المتابعة.",
   "environment.configurationFailed": "تعذر تحميل إعدادات هذا الوكيل. حاول مرة أخرى.",
   "environment.configurationLoading": "جارٍ تحميل إعدادات هذا الوكيل…",
   "environment.defaultsHint": "يستخدم كل وكيل جهازه الخاص ودليل العمل الخاص به. يمكنك تغييرها لهذه القناة لاحقًا من قائمة الأعضاء.",

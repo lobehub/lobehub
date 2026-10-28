@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "이 에이전트는 더 이상 사용 가능하지 않습니다. 제거하고 다른 에이전트를 선택하세요.",
   "environment.checkingDevice": "상태 확인 중",
   "environment.chooseDevice": "기기 선택",
-  "environment.completeRequired": "계속하기 전에 강조 표시된 설정을 완료하세요.",
   "environment.configurationFailed": "이 에이전트의 설정을 로드할 수 없습니다. 다시 시도하세요.",
   "environment.configurationLoading": "이 에이전트의 설정을 로드 중…",
   "environment.defaultsHint": "각 에이전트는 자체 기기와 작업 디렉토리를 사용합니다. 나중에 멤버 목록에서 이를 변경할 수 있습니다.",

@@ -1,6 +1,5 @@
+import type { OperationGoal } from '@lobechat/builtin-tools/operationArtifacts';
 import type { GoalNodeStatus } from '@lobechat/types';
-
-import type { OperationGoal } from '@/features/Conversation/Messages/GoalTaskCard/deriveOperationGoals';
 
 export type GoalWorkflowRowState = 'done' | 'running' | 'waiting' | 'pending';
 

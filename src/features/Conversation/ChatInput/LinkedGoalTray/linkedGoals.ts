@@ -1,9 +1,8 @@
 import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { deriveOperationGoals } from '@lobechat/builtin-tools/operationArtifacts';
 import type { UIChatMessage } from '@lobechat/types';
 
 import type { GoalListItem } from '@/services/goal';
-
-import { deriveOperationGoals } from '../../Messages/GoalTaskCard/deriveOperationGoals';
 
 /** The tray is a pointer, not a list — past this the goal page's list is the right surface. */
 export const MAX_LINKED_GOALS = 3;

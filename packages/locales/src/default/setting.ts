@@ -1,4 +1,8 @@
 export default {
+  'systemAgent.channelRouting.title': 'Channel decision model',
+  'systemAgent.channelRouting.modelDesc':
+    'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',
+
   'chatPreference.assist.desc':
     'Personal preferences: they only apply to you, in your personal space and every workspace.',
   'chatPreference.assist.title': 'Chat Assist',

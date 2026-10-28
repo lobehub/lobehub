@@ -48,7 +48,6 @@
   "environment.agentUnavailable": "Этот агент больше недоступен. Удалите его и выберите другого.",
   "environment.checkingDevice": "Проверка статуса",
   "environment.chooseDevice": "Выберите устройство",
-  "environment.completeRequired": "Завершите выделенные настройки перед продолжением.",
   "environment.configurationFailed": "Не удалось загрузить настройки этого агента. Попробуйте еще раз.",
   "environment.configurationLoading": "Загрузка настроек этого агента…",
   "environment.defaultsHint": "Каждый агент использует свое устройство и рабочую директорию. Вы можете изменить их для этого канала позже из списка участников.",

@@ -7,7 +7,7 @@ import { appEnv } from '@/envs/app';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 
 /**
- * An explicit service-model selection enables routing; enabled:false always opts out.
+ * Routing is enabled by default; enabled:false always opts out.
  * SYSTEM_AGENT=default=... never assigns a chat model to this decision-only slot.
  * Credentials still resolve as the actual message sender in the Channel's workspace.
  */
@@ -17,7 +17,7 @@ export const resolveChannelRoutingConfig = async (db: LobeChatDatabase, userId: 
   const task: Partial<SystemAgentItem> | undefined = systemAgent?.channelRouting;
   const deployment = parseSystemAgent(appEnv.SYSTEM_AGENT).channelRouting;
   const defaults = DEFAULT_SYSTEM_AGENT_CONFIG.channelRouting;
-  const enabled = task?.enabled ?? Boolean(deployment || (task?.model && task.provider));
+  const enabled = task?.enabled ?? defaults.enabled;
   if (!enabled) return null;
   return {
     model: task?.model || deployment?.model || defaults.model,
