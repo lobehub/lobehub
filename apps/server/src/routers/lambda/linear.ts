@@ -22,7 +22,7 @@ import {
 } from '@/server/services/linear/client';
 import { listLinearProjects, listLinearTeams } from '@/server/services/linear/issues';
 import { LinearIssueSyncService } from '@/server/services/linear/issueSync';
-import { startLinearSyncJob } from '@/server/services/linear/startSyncJob';
+import { startLinearRuleSyncJob, startLinearSyncJob } from '@/server/services/linear/startSyncJob';
 import { toLinearSyncJobView } from '@/server/services/linear/syncJob';
 import { getLinearAccessToken, LinearReconnectRequiredError } from '@/server/services/linear/token';
 import { canWriteScmScope } from '@/server/services/scm/scope';
@@ -231,20 +231,19 @@ export const linearRouter = router({
       // Deleting the project deletes its rules; one the caller can no longer
       // see is not synced into.
       await requireProject(ctx, rule.projectId);
-      const running = await LinearSyncJobModel.findActiveForRule(
-        ctx.serverDB,
-        ctx.scope,
-        rule.projectId,
-        rule.id,
-      );
-      if (running && toLinearSyncJobView(running).status !== 'error') return { id: running.id };
       await callLinear(() => getLinearAccessToken(ctx.serverDB, rule.connectionId));
-      const id = await startJob(ctx, {
-        connectionId: rule.connectionId,
-        kind: 'rule',
-        projectId: rule.projectId,
-        ruleId: rule.id,
-      });
+      // Returns the run still going, if any; the check and insert are atomic.
+      const id = await startLinearRuleSyncJob(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.scope.workspaceId ?? undefined,
+        {
+          connectionId: rule.connectionId,
+          kind: 'rule',
+          projectId: rule.projectId,
+          ruleId: rule.id,
+        },
+      );
       return { id };
     }),
 });

@@ -59,6 +59,31 @@ export class LinearSyncJobModel {
     return (row as LinearSyncJobRow | undefined) ?? null;
   };
 
+  /**
+   * Record that a running job is still alive, so a long sync is not mistaken
+   * for one that was cut off. A job that already finished is left as is.
+   */
+  static touch = async (
+    db: LobeChatDatabase,
+    scope: LinearConnectionScope,
+    taskId: string,
+  ): Promise<void> => {
+    await db
+      .update(asyncTasks)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          eq(asyncTasks.type, AsyncTaskType.LinearIssueSync),
+          eq(asyncTasks.status, AsyncTaskStatus.Processing),
+          buildWorkspaceWhere(
+            { userId: scope.userId, workspaceId: scope.workspaceId ?? undefined },
+            asyncTasks,
+          ),
+        ),
+      );
+  };
+
   /** A run of this rule that has not finished yet, if any. */
   static findActiveForRule = async (
     db: LobeChatDatabase,

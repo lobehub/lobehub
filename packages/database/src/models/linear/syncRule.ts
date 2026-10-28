@@ -35,6 +35,23 @@ export class LinearSyncRuleModel {
     return row ?? null;
   };
 
+  /**
+   * Lock the rule row until the transaction ends, so concurrent starts of the
+   * same rule check for a running job one at a time. False when it is gone.
+   */
+  static lockInScope = async (
+    db: LobeChatDatabase,
+    id: string,
+    scope: LinearConnectionScope,
+  ): Promise<boolean> => {
+    const rows = await db
+      .select({ id: linearSyncRules.id })
+      .from(linearSyncRules)
+      .where(and(eq(linearSyncRules.id, id), scopeCondition(scope)))
+      .for('update');
+    return rows.length > 0;
+  };
+
   static create = async (
     db: LobeChatDatabase,
     values: NewLinearSyncRule,

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LinearConnectionModel } from '@/database/models/linear';
 import {
+  asyncTasks,
   linearConnections,
   linearSyncRules,
   projects,
@@ -253,6 +254,73 @@ describe('linearRouter', () => {
         teamName: 'Engineering',
       });
       expect(saved.lastRunAt).toBeInstanceOf(Date);
+    });
+
+    it('queues one run when the same rule is started twice at once', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        projectId,
+        stateTypes: ['unstarted'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+
+      const [first, second] = await Promise.all([
+        caller({ userId }).startRuleSync({ ruleId: rule.id }),
+        caller({ userId }).startRuleSync({ ruleId: rule.id }),
+      ]);
+
+      expect(second).toEqual(first);
+      expect(await caller({ userId }).listSyncJobs({ projectId })).toHaveLength(1);
+    });
+
+    it('keeps a long sync alive, so it is not shown as cut off', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        const connection = await connect({ userId });
+        mocks.getToken.mockResolvedValue('token');
+        mocks.runSync.mockResolvedValue({ ok: true });
+        let finish: ((result: typeof syncResult) => void) | undefined;
+        mocks.syncByFilter.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+        const rule = await caller({ userId }).createSyncRule({
+          connectionId: connection.id,
+          projectId,
+          stateTypes: ['unstarted'],
+          teamId: 'team-1',
+          teamName: 'Engineering',
+        });
+        const { id } = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+        const running = new LinearSyncJobService(serverDB, userId).run(id);
+        const settle = async (done: () => Promise<boolean> | boolean) => {
+          for (let i = 0; i < 200 && !(await done()); i++) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+        };
+        await settle(() => !!finish);
+
+        // The run has been busy past the stale window since it last wrote.
+        await serverDB
+          .update(asyncTasks)
+          .set({ updatedAt: new Date(Date.now() - 20 * 60 * 1000) })
+          .where(eq(asyncTasks.id, id));
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'timeout', id },
+        ]);
+
+        vi.advanceTimersByTime(60 * 1000);
+        const status = async () => (await caller({ userId }).listSyncJobs({ projectId }))[0];
+        await settle(async () => (await status()).status === 'processing');
+        expect(await status()).toMatchObject({ error: null, id, status: 'processing' });
+
+        finish!(syncResult);
+        await running;
+        expect(await status()).toMatchObject({ id, status: 'success' });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("hides another user's personal rules", async () => {

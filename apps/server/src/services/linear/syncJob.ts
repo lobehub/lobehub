@@ -24,6 +24,8 @@ const log = debug('lobe-server:linear:sync-job');
  * function); it is shown as failed so the user can start it again.
  */
 export const LINEAR_SYNC_STALE_MS = 15 * 60 * 1000;
+/** How often a running sync records that it is still alive; well inside the stale window. */
+export const LINEAR_SYNC_HEARTBEAT_MS = 60 * 1000;
 /**
  * A job the async router never picked up (the hand-off failed, or its token
  * expired on the way) is given up on much sooner than a running one.
@@ -85,6 +87,13 @@ export class LinearSyncJobService {
 
     const metadata = task.metadata;
     const startedAt = Date.now();
+    // A long sync keeps its lease, so it is not shown as cut off and the same
+    // rule cannot be started again while it still writes tasks.
+    const heartbeat = setInterval(() => {
+      LinearSyncJobModel.touch(this.db, this.scope, taskId).catch((error: unknown) =>
+        log('heartbeat %s failed: %O', taskId, error),
+      );
+    }, LINEAR_SYNC_HEARTBEAT_MS);
     try {
       const result = await this.execute(metadata);
       await this.asyncTaskModel.update(taskId, {
@@ -100,6 +109,8 @@ export class LinearSyncJobService {
         error: { code },
         status: AsyncTaskStatus.Error,
       });
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 
