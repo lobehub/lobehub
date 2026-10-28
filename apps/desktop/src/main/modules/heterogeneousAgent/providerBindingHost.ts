@@ -87,9 +87,32 @@ export interface HostedProviderBinding {
   env: Record<string, string>;
   model?: string;
   operationTokenEnvKey?: string;
+  ownsEnvKey?: (key: string) => boolean;
   profileDir: string;
   runDir: string;
 }
+
+/** Drop inherited variables a binding owns, so only its plan configures the CLI. */
+export const omitOwnedEnv = (
+  env: NodeJS.ProcessEnv,
+  binding: Pick<HostedProviderBinding, 'ownsEnvKey'> | undefined,
+): NodeJS.ProcessEnv => {
+  const ownsEnvKey = binding?.ownsEnvKey;
+  if (!ownsEnvKey) return env;
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !ownsEnvKey(key)));
+};
+
+/** CLIs that need the deployment's model card to describe a model they have no entry for. */
+const SERVER_DEFAULT_DESCRIBED_AGENT_TYPES = new Set([
+  'codex',
+  'copilot',
+  'droid',
+  'opencode',
+  'pi',
+]);
+
+export const needsServerDefaultModelDescriptor = (agentType: string): boolean =>
+  SERVER_DEFAULT_DESCRIBED_AGENT_TYPES.has(agentType);
 
 /** Keep native resume state only when it belongs to the same hosted binding. */
 export const resolveHostedBindingSession = (params: {
@@ -177,6 +200,7 @@ export const prepareHostedProviderBinding = async (params: {
       cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,
       operationTokenEnvKey: plan.operationTokenEnvKey,
+      ownsEnvKey: plan.ownsEnvKey,
       profileDir,
       runDir,
     };
@@ -242,6 +266,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
       cleanupSync: () => cleanupBindingRunSync(runDir, plan),
       env: plan.env,
       operationTokenEnvKey: plan.operationTokenEnvKey,
+      ownsEnvKey: plan.ownsEnvKey,
       profileDir,
       runDir,
     };

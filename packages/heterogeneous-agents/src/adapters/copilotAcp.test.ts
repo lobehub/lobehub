@@ -257,6 +257,26 @@ describe('CopilotAcpAdapter', () => {
     expect(ofType(events, 'error')).toEqual([]);
   });
 
+  it('drops the token-estimate notice Copilot streams for a model outside its catalog', () => {
+    const adapter = new CopilotAcpAdapter();
+    const chunk = (text: string) => ({
+      content: { text, type: 'text' },
+      sessionUpdate: 'agent_message_chunk',
+    });
+    // Streamed by copilot --acp 1.0.105 before the first request to a LobeHub server-default model.
+    const notice =
+      'Warning: No token count multiplier is known for Anthropic model "lobehub/claude-sonnet-4-6". ' +
+      'Token estimates will use the 1.0 fallback; configure a recognized canonical model ID to ' +
+      'enable model-specific token counting.';
+    const events = [
+      ...adapter.adapt(chunk(notice)),
+      ...adapter.adapt({ size: 128_000, sessionUpdate: 'usage_update', used: 10_875 }),
+      ...adapter.adapt(chunk('LOBEHUB_RELAY_OK')),
+    ];
+
+    expect(mainText(events)).toBe('LOBEHUB_RELAY_OK');
+  });
+
   it('emits nothing after the turn has ended', () => {
     const { adapter } = replay('acp-cancel-midstream');
 

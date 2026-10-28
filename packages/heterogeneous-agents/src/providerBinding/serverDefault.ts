@@ -22,6 +22,11 @@ export const SERVER_DEFAULT_HETEROGENEOUS_AGENT_CONFIG = {
     ingress: 'openai-responses',
     tokenHeader: 'bearer',
   },
+  // BYOK Anthropic type; LobeHub's OpenAI ingress serves Responses, not Copilot's Chat Completions.
+  'copilot': {
+    ingress: 'anthropic-messages',
+    tokenHeader: 'x-api-key',
+  },
   'grok-build': {
     ingress: 'openai-responses',
     tokenHeader: 'bearer',

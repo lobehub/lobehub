@@ -15,7 +15,7 @@ import HeterogeneousAgentCtr from '../HeterogeneousAgentImpl';
 
 const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
 
-const { copilot, mockGetAllWindows } = vi.hoisted(() => ({
+const { copilot, mockGetAllWindows, serverDefault } = vi.hoisted(() => ({
   copilot: {
     close: vi.fn(),
     construct: vi.fn(),
@@ -23,6 +23,19 @@ const { copilot, mockGetAllWindows } = vi.hoisted(() => ({
     run: vi.fn(),
   },
   mockGetAllWindows: vi.fn<() => any[]>(() => []),
+  serverDefault: {
+    begin: vi.fn(),
+    describe: vi.fn(),
+    endpoint: vi.fn(),
+    settle: vi.fn(),
+  },
+}));
+
+vi.mock('@/modules/heterogeneousAgent/providerBindingPort', () => ({
+  beginServerDefaultOperation: serverDefault.begin,
+  describeServerDefaultModel: serverDefault.describe,
+  getServerDefaultEndpoint: serverDefault.endpoint,
+  settleServerDefaultOperation: serverDefault.settle,
 }));
 
 vi.mock('electron', () => ({
@@ -120,6 +133,7 @@ describe('HeterogeneousAgentCtr GitHub Copilot ACP', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await rm(appStoragePath, { force: true, recursive: true });
   });
 
@@ -325,5 +339,61 @@ describe('HeterogeneousAgentCtr GitHub Copilot ACP', () => {
       ctr.sendPrompt({ operationId: 'op-copilot-unsafe', prompt: 'go', sessionId }),
     ).rejects.toThrow('GitHub Copilot ACP does not support CLI argument: --allow-all-tools');
     expect(copilot.construct).not.toHaveBeenCalled();
+  });
+
+  it('routes a server-default model to the LobeHub relay instead of GitHub', async () => {
+    // A user BYOK setup in the app's environment must not outrank the binding.
+    vi.stubEnv('COPILOT_PROVIDER_BEARER_TOKEN', 'user-byok-token');
+    vi.stubEnv('COPILOT_PROVIDER_WIRE_MODEL', 'gpt-5.4');
+    serverDefault.begin.mockResolvedValue({ token: 'operation-token' });
+    serverDefault.describe.mockResolvedValue({
+      abilities: { reasoning: true, vision: true },
+      maxOutput: 64_000,
+      model: 'claude-sonnet-4-6',
+      nativeResponses: false,
+    });
+    serverDefault.endpoint.mockResolvedValue('https://lobehub.test');
+    serverDefault.settle.mockResolvedValue({ success: true });
+    const ctr = createCtr();
+    const { sessionId } = await ctr.startSession({
+      agentType: 'copilot',
+      args: ['--model', 'gpt-5.4', '--add-dir', '/repo'],
+      command: 'copilot',
+      env: { COPILOT_PROVIDER_TYPE: 'openai' },
+      providerBinding: {
+        apiConfig: { model: 'claude-sonnet-4-6', source: 'server-default' },
+        kind: 'server-default',
+      },
+    });
+
+    await ctr.sendPrompt({
+      operationId: 'op-copilot-server',
+      prompt: 'go',
+      sessionId,
+      topicId: 'topic-1',
+    });
+
+    expect(serverDefault.describe).toHaveBeenCalledWith(expect.any(Object), {
+      agentType: 'copilot',
+      model: 'claude-sonnet-4-6',
+    });
+    const options = copilot.construct.mock.calls[0][0];
+    expect(options.args).toEqual(['--add-dir', '/repo']);
+    expect(options.initialModel).toBe('lobehub/claude-sonnet-4-6');
+    expect(options.env).toMatchObject({
+      COPILOT_MODEL: 'lobehub/claude-sonnet-4-6',
+      COPILOT_OFFLINE: 'true',
+      COPILOT_PROVIDER_API_KEY: 'operation-token',
+      COPILOT_PROVIDER_BASE_URL: 'https://lobehub.test/api/v1/anthropic',
+      COPILOT_PROVIDER_MAX_OUTPUT_TOKENS: '64000',
+      COPILOT_PROVIDER_TYPE: 'anthropic',
+    });
+    expect(options.env.COPILOT_PROVIDER_BEARER_TOKEN).toBeUndefined();
+    expect(options.env.COPILOT_PROVIDER_WIRE_MODEL).toBeUndefined();
+    expect(serverDefault.settle).toHaveBeenCalledWith(expect.any(Object), {
+      cancelled: false,
+      operationId: 'op-copilot-server',
+      result: 'done',
+    });
   });
 });

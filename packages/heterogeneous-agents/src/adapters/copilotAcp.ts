@@ -18,6 +18,12 @@ const META_KEY = 'github.com/copilot';
 const RETRY_NOTICE = /^Info: .+ Retrying\.\.\.$/;
 /** Copilot reports a provider failure as one `Error: …` message chunk, then ends the turn. */
 const ERROR_NOTICE_PREFIX = 'Error: ';
+/**
+ * BYOK notice Copilot streams as reply text on every turn whose model is not in
+ * its catalog, which includes every LobeHub server-default `lobehub/…` model.
+ */
+const TOKEN_ESTIMATE_NOTICE =
+  /^Warning: No token count multiplier is known for .+ model ".+"\. Token estimates will use the 1\.0 fallback;/;
 const CANCELLED_TOOL_RESULT = 'Cancelled before the tool finished.';
 /** Updates that interleave with a message without ending it. */
 const SIDE_CHANNEL_UPDATES = new Set([
@@ -176,6 +182,7 @@ export class CopilotAcpAdapter extends TraeAcpAdapter {
   private messageChunk(raw: TraeAcpPayload): HeterogeneousAgentEvent[] {
     const text = textOf(raw);
     if (!text) return [];
+    if (!this.messageOpen && TOKEN_ESTIMATE_NOTICE.test(text)) return [];
     if (RETRY_NOTICE.test(text)) {
       this.messageOpen = false;
       this.retryAttempt += 1;

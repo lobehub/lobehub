@@ -157,6 +157,8 @@ import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
   gcHostedProviderBindingProfiles,
+  needsServerDefaultModelDescriptor,
+  omitOwnedEnv,
   prepareHostedProviderBinding,
   prepareHostedServerDefaultBinding,
   resolveHostedBindingSession,
@@ -1100,7 +1102,7 @@ export default class HeterogeneousAgentCtr {
     // main-process undici dispatcher doesn't reach child processes — they need
     // env vars.
     const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
-    const inheritedEnv = buildInheritedSpawnEnv();
+    const inheritedEnv = omitOwnedEnv(buildInheritedSpawnEnv(), session.hostedProviderBinding);
     // When preflight resolved the CLI via the login-shell PATH, spawn with
     // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
@@ -1609,18 +1611,14 @@ export default class HeterogeneousAgentCtr {
     } else if (driver && params.providerBinding?.kind === 'server-default') {
       const model = params.providerBinding.apiConfig.model;
       // Model-card lookup is best-effort; operation begin validates the selection.
-      const modelDescriptor =
-        agentType === 'codex' ||
-        agentType === 'pi' ||
-        agentType === 'opencode' ||
-        agentType === 'droid'
-          ? await describeServerDefaultModel(this.remoteServerAuth, { agentType, model }).catch(
-              (error) => {
-                logger.warn('Server-default model description unavailable:', error);
-                return undefined;
-              },
-            )
-          : undefined;
+      const modelDescriptor = needsServerDefaultModelDescriptor(agentType)
+        ? await describeServerDefaultModel(this.remoteServerAuth, { agentType, model }).catch(
+            (error) => {
+              logger.warn('Server-default model description unavailable:', error);
+              return undefined;
+            },
+          )
+        : undefined;
       hostedProviderBinding = await prepareHostedServerDefaultBinding({
         agentType,
         appStoragePath: this.app.appStoragePath,
