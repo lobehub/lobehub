@@ -2012,6 +2012,27 @@ table expertise_runs {
   }
 }
 
+table user_favorites {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  type text [not null]
+  target_id text [not null]
+  path text [not null]
+  title text [not null]
+  icon text
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, type, target_id) [name: 'user_favorites_personal_target_unique', unique]
+    (user_id, workspace_id, type, target_id) [name: 'user_favorites_workspace_target_unique', unique]
+    workspace_id [name: 'user_favorites_workspace_id_idx']
+  }
+}
+
 table documents {
   id varchar(255) [pk, not null]
   title text

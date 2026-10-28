@@ -31,6 +31,7 @@ export * from './documentShare';
 export * from './environment';
 export * from './environmentInstance';
 export * from './expertise';
+export * from './favorite';
 export * from './file';
 export * from './ftsSearchSyncOutbox';
 export * from './generation';
