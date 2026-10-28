@@ -6,8 +6,6 @@ permissions:
 
 on:
   pull_request:
-    branches:
-      - canary
     paths:
       - apps/cli/**
       - apps/workbench/**
