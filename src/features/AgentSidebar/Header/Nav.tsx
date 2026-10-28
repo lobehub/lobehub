@@ -54,10 +54,14 @@ const Nav = memo(() => {
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
+  const { canEditResource } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
+  // Only a server-confirmed edit denial hides the entry. `canEditResource` stays
+  // permissive while workspace access is loading, so the entry no longer drops
+  // out each time an agent is opened; the profile page itself is still guarded by
+  // `ResourceConfigAccessGate`.
+  const hideProfile = !isAgentEditable || !canEditContent || !canEditResource;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
