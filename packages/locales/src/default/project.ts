@@ -42,7 +42,6 @@ export default {
   'topics.group.agent': 'By agent',
   'topics.all': 'All topics',
   'topics.executionContext': 'Work location',
-  'topics.conversationOnly': 'Conversation only, without a working directory',
   'topics.chooseTopic': 'Choose a topic in the sidebar, or create one to start working',
   'topics.notFound': 'This topic does not belong to this project, or you do not have access',
   'topics.viewProject': 'View project',

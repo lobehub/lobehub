@@ -306,7 +306,6 @@
   "topics.chooseLocation": "작업 디렉토리 선택",
   "topics.chooseTopic": "사이드바에서 주제를 선택하거나 새로 만들어 작업을 시작하세요.",
   "topics.complete": "완료로 표시",
-  "topics.conversationOnly": "작업 디렉토리 없이 대화만",
   "topics.executionContext": "작업 위치",
   "topics.gatewayUnavailable": "이 프로젝트 작업 위치를 사용하려면 에이전트 게이트웨이를 활성화하세요.",
   "topics.group.agent": "에이전트별",

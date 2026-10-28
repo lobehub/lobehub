@@ -32,7 +32,6 @@ import {
 } from '@/features/AgentSidebar/Topic/TopicListScope';
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useWorkspacePreferenceReady } from '@/hooks/useWorkspacePreferenceReady';
 import {
   useProjectDirectories,
@@ -41,10 +40,10 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
-import { openProjectTopicModal } from './StartDirectoryModal';
-import { canStageDraftOn, startProjectTopicDraft } from './startProjectTopicDraft';
+import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
+import { useStartProjectTopic } from './useStartProjectTopic';
 
 interface ProjectDirectoryTopicsProps {
   /** The main agent's display meta, for its group before the project has any topic. */
@@ -101,7 +100,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   // nothing else on a project route syncs that preference. Hold the list until
   // it is known so the unfiltered rows never paint.
   const isPreferenceLoading = !useWorkspacePreferenceReady();
-  const navigate = useWorkspaceAwareNavigate();
+  const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
   return (
     <AccordionItem value={itemKey}>
@@ -129,27 +128,14 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
             icon={PlusIcon}
             size="small"
             title={t('sidebar.newConversation')}
-            onClick={() => {
-              // Same habit as an agent's "+": a blank conversation on the first
-              // directory the coordinator can run in, switchable in the composer before the first
-              // send. The modal only remains for a project with none yet.
-              const directory = directories.find((d) => canStageDraftOn(d, fixedDeviceId));
-              if (directory) {
-                startProjectTopicDraft({
-                  agentId: coordinatorAgentId,
-                  directoryId: directory.id,
-                  navigate,
-                  projectId,
-                });
-                return;
-              }
-              openProjectTopicModal({
-                title: t('sidebar.newConversation'),
-                coordinatorAgentId,
-                directories,
-                projectId,
-              });
-            }}
+            onClick={() =>
+              // Same habit as an agent's "+": straight into the coordinator's
+              // conversation, on the first directory it can run in when there is one.
+              void startTopic({
+                agentId: coordinatorAgentId,
+                directoryId: directories.find((d) => canStageDraftOn(d, fixedDeviceId))?.id,
+              })
+            }
           />
         </Flexbox>
       </AccordionHeader>

@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Bir çalışma dizini seç",
   "topics.chooseTopic": "Kenardaki bir konuyu seçin veya çalışmaya başlamak için bir tane oluşturun",
   "topics.complete": "Tamamlandı olarak işaretle",
-  "topics.conversationOnly": "Sadece konuşma, çalışma dizini olmadan",
   "topics.executionContext": "Çalışma konumu",
   "topics.gatewayUnavailable": "Bu proje çalışma konumunu kullanmadan önce Ajan Geçidi'ni etkinleştirin.",
   "topics.group.agent": "Ajana göre",

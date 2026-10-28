@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Chọn một thư mục làm việc",
   "topics.chooseTopic": "Chọn một chủ đề trong thanh bên, hoặc tạo một chủ đề để bắt đầu làm việc",
   "topics.complete": "Đánh dấu hoàn thành",
-  "topics.conversationOnly": "Chỉ cuộc trò chuyện, không có thư mục làm việc",
   "topics.executionContext": "Vị trí làm việc",
   "topics.gatewayUnavailable": "Kích hoạt Agent Gateway trước khi sử dụng vị trí làm việc của dự án này.",
   "topics.group.agent": "Theo ajan",

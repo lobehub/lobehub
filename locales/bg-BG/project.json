@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Изберете работна директория",
   "topics.chooseTopic": "Изберете тема в страничната лента или създайте нова, за да започнете работа",
   "topics.complete": "Отбележи като завършено",
-  "topics.conversationOnly": "Само разговор, без работна директория",
   "topics.executionContext": "Местоположение на работа",
   "topics.gatewayUnavailable": "Активирайте Agent Gateway, преди да използвате това местоположение за работа по проекта.",
   "topics.group.agent": "По агент",

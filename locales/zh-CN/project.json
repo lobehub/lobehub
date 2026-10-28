@@ -306,7 +306,6 @@
   "topics.chooseLocation": "选择工作目录",
   "topics.chooseTopic": "从左侧选择话题，或新建话题开始工作",
   "topics.complete": "标记完成",
-  "topics.conversationOnly": "仅对话，不使用工作目录",
   "topics.executionContext": "工作位置",
   "topics.gatewayUnavailable": "此工作位置需要启用 Agent Gateway。请启用后重试。",
   "topics.group.agent": "按 Agent 分组",

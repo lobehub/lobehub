@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Escolher um diretório de trabalho",
   "topics.chooseTopic": "Escolha um tópico na barra lateral ou crie um para começar a trabalhar",
   "topics.complete": "Marcar como concluído",
-  "topics.conversationOnly": "Apenas conversa, sem um diretório de trabalho",
   "topics.executionContext": "Local de trabalho",
   "topics.gatewayUnavailable": "Habilite o Gateway do Agente antes de usar este local de trabalho do projeto.",
   "topics.group.agent": "Por agente",
