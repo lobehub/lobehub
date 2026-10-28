@@ -19,7 +19,7 @@ import {
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { MessageSquareDashed } from 'lucide-react';
+import { MessageSquareDashed, TargetIcon } from 'lucide-react';
 import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -48,7 +48,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
@@ -106,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
       }
     }
   `,
-  prIcon: css`
+  markerIcon: css`
     position: relative;
     display: inline-flex;
     flex: none;
@@ -211,6 +211,8 @@ RunningElapsedTime.displayName = 'RunningElapsedTime';
 
 interface TopicItemProps {
   fav?: boolean;
+  /** A goal was planned in this conversation — marks the row's identity slot. */
+  hasGoal?: boolean;
   id?: string;
   metadata?: ChatTopicMetadata;
   /**
@@ -255,6 +257,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     id,
     title,
     fav,
+    hasGoal,
     metadata,
     runStartedAt,
     status,
@@ -271,6 +274,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
+    const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
@@ -516,10 +520,26 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return null;
     })();
 
-    // Identity-flavored icons the row owns (bot platform, PR marker) — these
+    // Identity-flavored icons the row owns (goal, PR marker, bot platform) — these
     // keep the leading slot even in workspace mode, with the creator shrunk to
     // a corner badge.
     const identityIconNode = (() => {
+      // The conversation a goal was planned in says more about the row than
+      // the PR it produced, so it outranks the PR marker (which stays in the
+      // meta hover card).
+      if (hasGoal && goalsEnabled) {
+        return (
+          <Tooltip title={t('metaCard.goal')}>
+            <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
+              <Icon
+                icon={TargetIcon}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
+              />
+            </span>
+          </Tooltip>
+        );
+      }
       // GitHub PR state marker (open=green, merged=purple, closed=red),
       // like Codex. It is secondary metadata, so only an idle topic uses it
       // as the leading icon.
@@ -533,7 +553,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
           : t(prVisual.labelKey);
         return (
           <Tooltip title={tooltip}>
-            <span className={styles.prIcon}>
+            <span className={styles.markerIcon}>
               <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
               {showCiBadge && (
                 <span className={styles.ciBadge}>

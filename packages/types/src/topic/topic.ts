@@ -732,6 +732,12 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   favorite?: boolean;
   /** First user message (sliced server-side, used as preview fallback). */
   firstUserMessage?: string | null;
+  /**
+   * Whether a goal was planned in this conversation (`goals.subject_type =
+   * 'topic'`). Only the per-agent sidebar list and the project topic list
+   * select it; absent elsewhere.
+   */
+  hasGoal?: boolean;
   historySummary?: string;
   /** Total message count for the topic. */
   messageCount?: number | null;

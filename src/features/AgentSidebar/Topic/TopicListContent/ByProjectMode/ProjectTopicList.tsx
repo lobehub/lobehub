@@ -72,6 +72,7 @@ interface AgentPinnedRow {
 const renderTopic = (topic: ChatTopic, suppressAgentAvatar?: boolean) => (
   <TopicItem
     fav={topic.favorite}
+    hasGoal={topic.hasGoal}
     id={topic.id}
     key={topic.id}
     metadata={topic.metadata}

@@ -24,6 +24,7 @@ import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AgentModel } from './agent';
 import { EnvironmentModel } from './environment';
+import { topicHasGoal } from './topicGoal';
 
 export interface CreateProjectInput {
   avatar?: string;
@@ -1059,6 +1060,7 @@ export class ProjectModel {
         id: topics.id,
         createdAt: topics.createdAt,
         favorite: topics.favorite,
+        hasGoal: topicHasGoal(this.db, scope),
         metadata: topics.metadata,
         trigger: topics.trigger,
         userId: topics.userId,

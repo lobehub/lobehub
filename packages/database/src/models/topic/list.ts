@@ -25,6 +25,7 @@ import { agentOperations, agents, chatGroups, messages, topics } from '../../sch
 import { notChannelTopic } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
+import { topicHasGoal } from '../topicGoal';
 import type { TopicModelContext } from './context';
 import type { QueryTopicParams, TopicListItem } from './types';
 
@@ -312,6 +313,8 @@ export const query = async (
               completedAt: topics.completedAt,
               createdAt: topics.createdAt,
               favorite: topics.favorite,
+              // Marks the goal's planning conversation in the agent sidebar.
+              hasGoal: topicHasGoal(ctx.db, ctx),
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topicMetadataWithCreator(ctx.db, ctx.messageOwnership()),
