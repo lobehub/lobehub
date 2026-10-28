@@ -8,8 +8,8 @@ import { ChevronRight, Stamp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { resolveRunAcceptanceWait } from './taskAcceptanceWait';
 import { useOpenAcceptanceInPanel } from './useOpenAcceptanceInPanel';
+import { useRunAcceptanceWait } from './useTaskAcceptanceWait';
 
 // Same weight as the composer's OpStatusTray: one quiet status line, not a banner.
 const styles = stylex.create({
@@ -48,10 +48,8 @@ const TaskAcceptanceWaitNotice = memo<TaskAcceptanceWaitNoticeProps>(
     const openAcceptanceInPanel = useOpenAcceptanceInPanel();
 
     // Same rule as the run card's status icon, so the drawer and the card agree.
-    const wait =
-      activity?.status === 'running' && !runningOperation
-        ? resolveRunAcceptanceWait(activity)
-        : undefined;
+    const runWait = useRunAcceptanceWait(activity);
+    const wait = runningOperation ? undefined : runWait;
     if (!wait) return null;
 
     const { acceptanceId } = wait;

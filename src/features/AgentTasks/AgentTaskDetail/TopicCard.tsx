@@ -38,9 +38,9 @@ import RunReplyEditor from './RunReplyEditor';
 import RunVerifyDetail from './RunVerifyDetail';
 import RunVerifyTag from './RunVerifyTag';
 import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
-import { resolveRunAcceptanceWait } from './taskAcceptanceWait';
 import TopicStatusIcon from './TopicStatusIcon';
 import { resolveRunAgentId, useRunFollowUp } from './useRunFollowUp';
+import { useRunAcceptanceWait } from './useTaskAcceptanceWait';
 
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
@@ -95,6 +95,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
   const { allowed: canEditTask } = usePermission('create_content');
   const [commenting, setCommenting] = useState(false);
   const isRunning = activity.status === 'running';
+  const acceptanceWait = useRunAcceptanceWait(activity);
   // A run cannot be answered while it is still going: the follow-up is a turn
   // in the same conversation, so it would land mid-run.
   const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
@@ -299,13 +300,9 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
           )}
           <TopicStatusIcon
             size={16}
-            // A `running` row with no live operation is not executing: its agent
-            // stopped and the acceptance round bound to it has yet to settle.
-            status={
-              isRunning && resolveRunAcceptanceWait(activity)
-                ? 'awaiting_acceptance'
-                : activity.status
-            }
+            // The topic of a verify-bound run is `completed` while its task
+            // stays running until the acceptance round settles.
+            status={acceptanceWait ? 'awaiting_acceptance' : activity.status}
           />
           {activity.sourceTaskIdentifier && (
             <Tag

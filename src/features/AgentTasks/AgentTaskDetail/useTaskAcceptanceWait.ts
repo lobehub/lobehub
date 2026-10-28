@@ -1,9 +1,14 @@
+import type { TaskDetailActivity } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { resolveTaskAcceptanceWait, type TaskAcceptanceWait } from './taskAcceptanceWait';
+import {
+  resolveRunAcceptanceWaitInTask,
+  resolveTaskAcceptanceWait,
+  type TaskAcceptanceWait,
+} from './taskAcceptanceWait';
 
 /** The acceptance round the active `running` task waits on, if its agent has stopped. */
 export const useTaskAcceptanceWait = (): TaskAcceptanceWait | undefined => {
@@ -13,10 +18,31 @@ export const useTaskAcceptanceWait = (): TaskAcceptanceWait | undefined => {
   // topic list would not.
   const activities = useTaskStore((s) => taskDetailSelectors.activeTaskDetail(s)?.activities);
 
-  return useMemo(() => {
-    const topics = (activities ?? [])
-      .filter((activity) => activity.type === 'topic')
-      .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
-    return resolveTaskAcceptanceWait(status, topics, taskId);
-  }, [activities, status, taskId]);
+  return useMemo(
+    () =>
+      resolveTaskAcceptanceWait(
+        status,
+        (activities ?? []).filter((activity) => activity.type === 'topic'),
+        taskId,
+      ),
+    [activities, status, taskId],
+  );
+};
+
+/** The acceptance round one run holds its owning task in, if any. */
+export const useRunAcceptanceWait = (
+  run: Pick<TaskDetailActivity, 'id' | 'sourceTaskId'> | undefined,
+): TaskAcceptanceWait | undefined => {
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const detail = useTaskStore(taskDetailSelectors.activeTaskDetail);
+  const runId = run?.id;
+  const sourceTaskId = run?.sourceTaskId;
+
+  return useMemo(
+    () =>
+      runId
+        ? resolveRunAcceptanceWaitInTask(detail, taskId, { id: runId, sourceTaskId })
+        : undefined,
+    [detail, runId, sourceTaskId, taskId],
+  );
 };
