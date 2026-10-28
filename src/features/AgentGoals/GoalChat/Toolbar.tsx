@@ -65,6 +65,7 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) 
               fav={currentTopic.favorite}
               status={currentTopic.status}
               topicId={currentTopic.id}
+              topicLocked={topicLocked}
               topicTitle={currentTopic.title}
             />
           )}
