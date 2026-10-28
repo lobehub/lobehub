@@ -322,15 +322,30 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
       if (joined) payloads.push(joined);
       continue;
     }
-    const flag = words[index + 1];
-    if (!flag || !flag.startsWith('-') || flag.startsWith('--') || !flag.includes('c')) continue;
-    if (flag.endsWith('c')) {
-      // `-c`/`-ec`: the payload is the next word.
-      const payload = words[index + 2];
-      if (payload) payloads.push(payload);
-    } else if (flag.startsWith('-c')) {
-      // Glued form `-c<source>`.
-      payloads.push(flag.slice(2));
+    // Walk the interpreter's option words: `bash -e -c '<payload>'` puts the
+    // command payload after any number of preceding options (`bash [GNU long
+    // option] [option] ...`), so requiring `-c` right after the executable
+    // missed the payload and let the deletion run in the child shell.
+    let cursor = index + 1;
+    while (cursor < words.length) {
+      const option = words[cursor];
+      if (option === '--' || !option.startsWith('-')) break;
+      if (option.startsWith('--')) {
+        cursor++;
+        continue;
+      }
+      if (option.endsWith('c')) {
+        // `-c`/`-ec`: the payload is the next word.
+        const payload = words[cursor + 1];
+        if (payload) payloads.push(payload);
+        break;
+      }
+      if (option.startsWith('-c')) {
+        // Glued form `-c<source>`.
+        payloads.push(option.slice(2));
+        break;
+      }
+      cursor++;
     }
   }
   return payloads;
@@ -369,6 +384,17 @@ const hasAmbiguousRmShape = (
   if (
     interpreterPayloadWords(segment).some((payload) =>
       payloadIsDangerous(withoutLiteralMarkers(payload), depth, predicate),
+    )
+  ) {
+    return true;
+  }
+  // Executable substitutions in this segment run in the CALLING shell, before
+  // the command itself — including when that command is an interpreter whose
+  // payload was just analyzed: in `bash -c : "$(rm -rf ~)"` the substitution is
+  // an argument to bash and expands in the current shell, not inside the child.
+  if (
+    words.some((word) =>
+      substitutionPayloads(word).some((payload) => payloadIsDangerous(payload, depth, predicate)),
     )
   ) {
     return true;

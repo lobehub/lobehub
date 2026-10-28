@@ -1137,4 +1137,45 @@ describe('matchSemanticShellPredicate', () => {
       );
     });
   });
+
+  describe('twenty-first-round review: caller substitutions and interpreter options', () => {
+    // The substitution is an ARGUMENT to the interpreter, so the calling shell
+    // expands it before bash ever starts: `bash -c : "$(rm -rf ~)"`.
+    it.each([
+      ['rmRecursiveHomeTarget', 'bash -c : "$(rm -rf ~)"; echo ~'],
+      ['rmRecursiveRootTarget', 'bash -c : "$(rm -rf /)"; echo ~'],
+      ['rmRecursiveHomeTarget', "bash -c 'echo hi' \"$(rm -rf ~)\""],
+      ['rmRecursiveHomeTarget', 'eval : "$(rm -rf ~)"'],
+    ] as const)(
+      'inspects caller-level substitutions of an interpreter segment (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
+
+    it.each([
+      'bash -c : "$(date)"; echo done',
+      'bash -c : "$(ls ~)"; echo done',
+    ])('leaves a harmless caller-level substitution alone: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+    });
+
+    // `bash [option] ... -c command`: the payload is not necessarily the word
+    // right after the executable, so the option walk has to reach `-c`.
+    it.each([
+      ['rmRecursiveHomeTarget', "bash -e -c 'echo $(rm -rf ~)' rm; echo ~"],
+      ['rmRecursiveHomeTarget', "bash -x -e -c 'echo $(rm -rf ~)'"],
+      ['rmRecursiveHomeTarget', "bash --norc -c 'echo $(rm -rf ~)'"],
+      ['rmRecursiveRootTarget', "bash -e -c 'echo $(rm -rf /)' rm"],
+    ] as const)('finds the payload after preceding options (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each([
+      "bash -e -c 'echo hi'",
+      "bash --norc -c 'rm -rf /tmp/cache'",
+    ])('keeps a harmless payload behind options inert: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+    });
+  });
 });
