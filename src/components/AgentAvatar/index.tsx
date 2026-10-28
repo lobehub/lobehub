@@ -1,11 +1,11 @@
 'use client';
 
 import { AgentAvatar as GeneratedAgentAvatar, type AgentAvatarState } from '@lobehub/ui';
-import { memo, type MouseEventHandler } from 'react';
+import { memo, type MouseEventHandler, type Ref } from 'react';
 
 import Avatar, { type AvatarProps } from '@/components/Avatar';
 
-import { resolveAgentAvatar } from './resolve';
+import { pickDomProps, resolveAgentAvatar } from './resolve';
 
 export { isDefaultAgentAvatar } from './resolve';
 
@@ -39,6 +39,7 @@ const AgentAvatar = memo<AgentAvatarProps>(
     className,
     name,
     onClick,
+    ref,
     shape = 'square',
     size = 24,
     state,
@@ -48,17 +49,24 @@ const AgentAvatar = memo<AgentAvatarProps>(
   }) => {
     const resolved = resolveAgentAvatar({ agentId, avatar, name, title });
 
+    // Wrapped in a span so a trigger around the avatar (Popover, Tooltip) still
+    // gets its injected handlers and anchor ref, as it does on the Avatar branch.
     const generated = (
-      <GeneratedAgentAvatar
-        animated={animated}
+      <span
+        {...pickDomProps(rest)}
         className={className}
-        name={resolved.label}
-        seed={resolved.seed}
-        size={size}
-        state={state}
-        style={{ flex: 'none', ...style }}
-        onClick={onClick as unknown as MouseEventHandler<SVGSVGElement>}
-      />
+        ref={ref as Ref<HTMLSpanElement>}
+        style={{ display: 'inline-flex', flex: 'none', ...style }}
+        onClick={onClick as MouseEventHandler<HTMLSpanElement>}
+      >
+        <GeneratedAgentAvatar
+          animated={animated}
+          name={resolved.label}
+          seed={resolved.seed}
+          size={size}
+          state={state}
+        />
+      </span>
     );
 
     if (resolved.kind === 'generated') return generated;
@@ -72,6 +80,7 @@ const AgentAvatar = memo<AgentAvatarProps>(
         brokenFallback={generated}
         className={className}
         name={resolved.label}
+        ref={ref}
         shape={shape}
         size={size}
         style={style}

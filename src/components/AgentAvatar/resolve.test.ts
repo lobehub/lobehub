@@ -1,7 +1,7 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { isDefaultAgentAvatar, resolveAgentAvatar } from './resolve';
+import { isDefaultAgentAvatar, pickDomProps, resolveAgentAvatar } from './resolve';
 
 describe('isDefaultAgentAvatar', () => {
   it('treats empty values and the legacy default image as no avatar', () => {
@@ -43,5 +43,46 @@ describe('resolveAgentAvatar', () => {
       label: 'Bot',
       seed: 'agt_1',
     });
+  });
+});
+
+describe('pickDomProps', () => {
+  // A Popover/Tooltip trigger injects handlers into its child; the generated
+  // branch used to drop them, so hovering an author without an avatar never
+  // opened their profile popup.
+  it('keeps the handlers and attributes a trigger injects', () => {
+    const onMouseEnter = () => {};
+    const onFocus = () => {};
+
+    expect(
+      pickDomProps({
+        'aria-expanded': false,
+        'data-state': 'closed',
+        'id': 'trigger',
+        onFocus,
+        onMouseEnter,
+        'role': 'button',
+        'tabIndex': 0,
+      }),
+    ).toEqual({
+      'aria-expanded': false,
+      'data-state': 'closed',
+      'id': 'trigger',
+      onFocus,
+      onMouseEnter,
+      'role': 'button',
+      'tabIndex': 0,
+    });
+  });
+
+  it('drops avatar-only props that do not belong on a DOM element', () => {
+    expect(
+      pickDomProps({
+        animation: true,
+        emojiScaleWithBackground: true,
+        unoptimized: true,
+        variant: 'outlined',
+      }),
+    ).toEqual({});
   });
 });
