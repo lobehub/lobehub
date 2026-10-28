@@ -47,7 +47,3 @@ export const userMemoriesIdentities = pgTable(
     index('user_memories_identities_user_memory_id_index').on(table.userMemoryId),
   ],
 );
-
-export type UserMemoryIdentity = typeof userMemoriesIdentities.$inferSelect;
-export type UserMemoryIdentitiesWithoutVectors = Omit<UserMemoryIdentity, 'descriptionVector'>;
-export type NewUserMemoryIdentity = typeof userMemoriesIdentities.$inferInsert;

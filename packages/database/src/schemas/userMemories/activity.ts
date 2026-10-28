@@ -82,10 +82,3 @@ export const userMemoriesActivities = pgTable(
     index('user_memories_activities_status_index').on(table.status),
   ],
 );
-
-export type UserMemoryActivity = typeof userMemoriesActivities.$inferSelect;
-export type UserMemoryActivitiesWithoutVectors = Omit<
-  UserMemoryActivity,
-  'narrativeVector' | 'feedbackVector'
->;
-export type NewUserMemoryActivity = typeof userMemoriesActivities.$inferInsert;

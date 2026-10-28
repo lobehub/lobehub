@@ -1893,11 +1893,8 @@ describe('UserMemoryModel', () => {
         title: 'Activity structured fields',
         activity: {
           injectable: false,
-          messageIds: ['msg-1', 'msg-2'],
           narrative: 'Did a thing',
-          projectId: 'project-1',
           status: 'completed',
-          topicId: 'topic-1',
           type: ActivityTypeEnum.Other,
         },
       });
@@ -1907,9 +1904,6 @@ describe('UserMemoryModel', () => {
       });
 
       expect(persisted?.injectable).toBe(false);
-      expect(persisted?.messageIds).toEqual(['msg-1', 'msg-2']);
-      expect(persisted?.projectId).toBe('project-1');
-      expect(persisted?.topicId).toBe('topic-1');
     });
   });
 

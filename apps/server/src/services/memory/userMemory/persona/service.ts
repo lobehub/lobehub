@@ -1,7 +1,3 @@
-import {
-  type UserPersonaDocument,
-  type UserPersonaDocumentHistoriesItem,
-} from '@lobechat/database/schemas';
 import { userMemories } from '@lobechat/database/schemas';
 import { type UserPersonaExtractionResult } from '@lobechat/memory-user-memory';
 import {
@@ -9,7 +5,11 @@ import {
   RetrievalUserMemoryIdentitiesProvider,
   UserPersonaExtractor,
 } from '@lobechat/memory-user-memory';
-import type { UserServiceModelConfig } from '@lobechat/types';
+import type {
+  UserPersonaDocument,
+  UserPersonaDocumentHistory,
+  UserServiceModelConfig,
+} from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
@@ -47,7 +47,7 @@ interface UserPersonaAgentPayload {
 
 interface UserPersonaAgentResult {
   agentResult: UserPersonaExtractionResult;
-  diff?: UserPersonaDocumentHistoriesItem;
+  diff?: UserPersonaDocumentHistory;
   document: UserPersonaDocument;
 }
 
