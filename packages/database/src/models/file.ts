@@ -19,7 +19,6 @@ import {
   notExists,
   or,
   sql,
-  sum,
 } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
@@ -47,6 +46,7 @@ import {
   verifyEvidence,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { sumStoredFileSize } from '../utils/fileStorageUsage';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
 import {
   fileMatchesAccessScope,
@@ -364,16 +364,12 @@ export class FileModel {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
   };
 
+  /**
+   * Storage occupied by this owner's files. Rows sharing one stored object
+   * (see `sumStoredFileSize`) count once; usage is still counted per owner.
+   */
   countUsage = async (trx?: Transaction) => {
-    const db = trx ?? this.db;
-    const result = await db
-      .select({
-        totalSize: sum(files.size),
-      })
-      .from(files)
-      .where(this.ownership());
-
-    return parseInt(result[0].totalSize!) || 0;
+    return sumStoredFileSize(trx ?? this.db, this.ownership());
   };
 
   /**
@@ -383,15 +379,10 @@ export class FileModel {
    * reservation transaction to be counted inside it.
    */
   countAgentShareUsage = async (shareId: string, trx?: Transaction) => {
-    const db = trx ?? this.db;
-    const [row] = await db
-      .select({ totalSize: sum(files.size) })
-      .from(files)
-      .where(
-        and(this.ownership(), sql`${files.metadata} -> 'agentShare' ->> 'shareId' = ${shareId}`),
-      );
-
-    return Number(row?.totalSize ?? 0);
+    return sumStoredFileSize(
+      trx ?? this.db,
+      and(this.ownership(), sql`${files.metadata} -> 'agentShare' ->> 'shareId' = ${shareId}`),
+    );
   };
 
   deleteMany = async (

@@ -88,6 +88,33 @@ describe('KnowledgeBaseModel.countFileUsage', () => {
 
     await expect(model.countFileUsage(kbId)).resolves.toBe(50);
   });
+
+  it('counts files that share one stored object once', async () => {
+    const { id: kbId } = await model.create({ name: 'Copies' });
+    await seedFile('usage-original', 300);
+    await serverDB.insert(files).values({
+      fileHash: 'hash-usage-original',
+      fileType: 'application/pdf',
+      id: 'usage-copy',
+      name: 'usage-copy.pdf',
+      size: 300,
+      url: 'https://example.com/usage-original.pdf',
+      userId,
+    });
+    await serverDB.insert(files).values({
+      fileType: 'text/plain',
+      id: 'usage-no-hash',
+      name: 'usage-no-hash.txt',
+      size: 7,
+      url: 'https://example.com/usage-original.pdf',
+      userId,
+    });
+    await linkFile(kbId, 'usage-original');
+    await linkFile(kbId, 'usage-copy');
+    await linkFile(kbId, 'usage-no-hash');
+
+    await expect(model.countFileUsage(kbId)).resolves.toBe(307);
+  });
 });
 
 describe('KnowledgeBaseModel.hasForeignLinkedRows', () => {
