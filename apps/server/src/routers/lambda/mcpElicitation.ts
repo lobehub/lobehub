@@ -9,7 +9,10 @@ import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewar
 import { router } from '@/libs/trpc/lambda';
 import { aiAgentBaseProcedure } from '@/server/routers/lambda/aiAgent/procedures';
 import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
-import { scheduleMcpElicitationResume } from '@/server/services/mcp/elicitation/queue';
+import {
+  recoverMcpElicitationResume,
+  scheduleMcpElicitationResume,
+} from '@/server/services/mcp/elicitation/queue';
 import { redisService } from '@/server/services/redis';
 
 const procedure = aiAgentBaseProcedure.use(async ({ ctx, next }) =>
@@ -60,6 +63,7 @@ export const mcpElicitationRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
           operationId: input.identity.operationId,
+          assistantMessageId: input.identity.assistantMessageId,
           toolCallId: input.identity.toolCallId,
         },
         input.producerId,
@@ -89,13 +93,12 @@ export const mcpElicitationRouter = router({
         input.identity.assistantMessageId,
       );
       await redisService.agentToolResults.publishMcpResult(
-        input.identity.operationId,
+        { ...input.identity, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
         {
           ...input.result,
           toolCallId: input.identity.toolCallId,
           state: { ...input.result.state, mcpToolMessageId: toolMessageId },
         },
-        ctx.workspaceId ?? undefined,
       );
       return { success: true };
     }),
@@ -143,17 +146,8 @@ export const mcpElicitationRouter = router({
           )
             return undefined;
           // Recover an outbox whose submitting process died before enqueueing.
-          if (item.status === 'resolving' && !state.legacy) {
-            const resolution = batch.resolutions.find(
-              (entry) => entry.actorId === ctx.userId && entry.source === 'mcp',
-            );
-            if (resolution)
-              await scheduleMcpElicitationResume(
-                ctx.mcpElicitation,
-                item.id,
-                resolution.resolutionRequestId,
-              );
-          }
+          if (item.status === 'resolving' && !state.legacy)
+            await recoverMcpElicitationResume(ctx.mcpElicitation, item.id);
           return {
             apiName: plugin.apiName!,
             assistantMessageId: message.parentId!,

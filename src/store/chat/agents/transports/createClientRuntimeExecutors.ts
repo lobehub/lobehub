@@ -6,6 +6,7 @@ import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { ChatStore } from '@/store/chat/store';
 
 import { buildClientRuntimeHost } from './buildClientRuntimeHost';
+import { handoffClientMcpTools } from './handoffClientMcpTools';
 
 /** Resolve a fresh client host for each runtime step, then use the shared package registry. */
 export const createClientRuntimeExecutors = (context: {
@@ -15,8 +16,12 @@ export const createClientRuntimeExecutors = (context: {
   messageKey: string;
   operationId: string;
   toolsEngine?: ToolsEngine;
-}) =>
-  createAgentRuntimeExecutors((_instruction, state, runtimeContext) =>
+}) => {
+  const resolveHost = (
+    _instruction: Parameters<typeof handoffClientMcpTools>[1],
+    state: Parameters<typeof handoffClientMcpTools>[2],
+    runtimeContext?: Parameters<typeof buildClientRuntimeHost>[0]['runtimeContext'],
+  ) =>
     buildClientRuntimeHost({
       agentConfig: context.agentConfig,
       get: context.get,
@@ -26,5 +31,20 @@ export const createClientRuntimeExecutors = (context: {
       runtimeContext,
       stepIndex: state.stepCount,
       toolsEngine: context.toolsEngine,
-    }),
-  );
+    });
+  const executors = createAgentRuntimeExecutors(resolveHost);
+  for (const type of ['call_tool', 'call_tools_batch'] as const) {
+    const execute = executors[type]!;
+    executors[type] = async (instruction, state, runtimeContext) => {
+      const handoff = await handoffClientMcpTools(
+        resolveHost(instruction, state, runtimeContext),
+        instruction,
+        state,
+        context.get,
+        context.metadata,
+      );
+      return handoff ?? execute(instruction, state, runtimeContext);
+    };
+  }
+  return executors;
+};

@@ -1,3 +1,4 @@
+import { mcpInvocationKey } from '@lobechat/mcp-elicitation/transport';
 import { expect, it, vi } from 'vitest';
 
 import { McpInvocationRegistry } from './mcpInvocation';
@@ -35,4 +36,21 @@ it('never shares an invocation across operation or owner keys', async () => {
     ),
   );
   expect(execute).toHaveBeenCalledTimes(3);
+});
+
+it('executes two steps with the same provider id once each and rejoins only their own replays', async () => {
+  const registry = new McpInvocationRegistry(),
+    sideEffects: string[] = [];
+  const base = { userId: 'owner', operationId: 'op', toolCallId: 'call_1' };
+  const first = { ...base, assistantMessageId: 'one' },
+    second = { ...base, assistantMessageId: 'two' };
+  const invoke = (scope: typeof first) =>
+    registry.run(mcpInvocationKey(scope), 'args', Date.now() + 1000, async () => {
+      sideEffects.push(scope.assistantMessageId);
+      return scope.assistantMessageId;
+    });
+  expect(await Promise.all([invoke(first), invoke(second), invoke(first), invoke(second)])).toEqual(
+    ['one', 'two', 'one', 'two'],
+  );
+  expect(sideEffects).toEqual(['one', 'two']);
 });

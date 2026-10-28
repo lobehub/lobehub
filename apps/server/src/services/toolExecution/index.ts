@@ -431,17 +431,9 @@ export class ToolExecutionService {
     } catch (error) {
       if (error instanceof McpInputRequiredError && elicitationService && identity) {
         const entries = Object.entries(error.checkpoint.inputRequired.inputRequests ?? {});
-        const requests: Record<string, ElicitRequestParams> = entries.length
-          ? Object.fromEntries(
-              entries.map(([key, request]) => [key, request.params as ElicitRequestParams]),
-            )
-          : {
-              status: {
-                mode: 'form',
-                message: 'The MCP server is waiting. Continue the original operation?',
-                requestedSchema: { type: 'object', properties: {} },
-              },
-            };
+        const requests: Record<string, ElicitRequestParams> = Object.fromEntries(
+          entries.map(([key, request]) => [key, request.params as ElicitRequestParams]),
+        );
         const pending = await elicitationService.open(identity, {
           checkpoint: error.checkpoint,
           connectionBinding: mcpConnectionBinding(mcpParams),

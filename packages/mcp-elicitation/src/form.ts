@@ -84,8 +84,12 @@ export function getMcpFormDefaults(
   return Object.fromEntries(
     Object.entries(request.requestedSchema.properties).flatMap(([name, field]) =>
       field.default === undefined
-        ? field.type === 'boolean' && request.requestedSchema.required?.includes(name)
-          ? [[name, false]]
+        ? request.requestedSchema.required?.includes(name)
+          ? field.type === 'boolean'
+            ? [[name, false]]
+            : field.type === 'string' && !getMcpFormOptions(field)
+              ? [[name, '']]
+              : []
           : []
         : [[name, field.default]],
     ),

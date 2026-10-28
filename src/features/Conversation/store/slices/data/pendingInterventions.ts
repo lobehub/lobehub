@@ -197,3 +197,12 @@ const collectPendingTools = (
     }
   }
 };
+
+/** Merge projections by their durable message, never by a reusable provider call id. */
+export function mergePendingInterventions(
+  selected: PendingIntervention[],
+  mcp: PendingIntervention[],
+) {
+  const messages = new Set(mcp.map((item) => item.toolMessageId));
+  return [...selected.filter((item) => !messages.has(item.toolMessageId)), ...mcp];
+}

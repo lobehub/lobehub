@@ -7,7 +7,7 @@ output validation. Its protected non-complete-result hook retains the full
 only preserves the result type and method.
 
 - **2026-07-28 HTTP:** return the call stack to the host with opaque `requestState`
-  and keyed `inputRequests`. On user resolution, issue the original tools/call
+  and optional keyed `inputRequests` (a requestState-only wait stays pending and cancellable). On user resolution, issue the original tools/call
   parameters with a fresh transport request id, exact requestState and bare keyed
   inputResponses. A later round replaces the intervention batch. URL accept is
   consent, and the server determines whether the external operation has finished.
@@ -52,3 +52,15 @@ Protocol references:
 - <https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28>
 - <https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation>
 - <https://github.com/modelcontextprotocol/typescript-sdk/tree/main/examples/elicitation>
+
+Client-runtime MCP batches enter the existing persisted approval-continuation path
+before the first tools/call. The original assistant and tool rows remain their
+authority; the replacement operation records exact source rows before dispatch.
+This uses the configured Agent Gateway for delivery, including local Desktop IPC,
+and the same durable worker/outbox for subsequent HTTP rounds. Installed/custom
+HTTP and stdio plugins retain their server-owned connection settings on this path.
+
+Producer ownership, completion queues, first delivery, native invocation lookup and
+message anchors share one user/workspace/operation/assistant/provider-call tuple.
+Manual bearer/header credentials and stable OAuth client/issuer configuration are
+privately hashed; only configured OAuth refresh-token rotation is exempted.

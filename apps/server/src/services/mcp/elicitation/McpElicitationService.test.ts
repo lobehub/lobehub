@@ -8,9 +8,19 @@ import { MessageModel } from '@/database/models/message';
 import { agentOperations, agents, topics, userInstalledPlugins, users } from '@/database/schemas';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
+import {
+  allPendingToolsFulfilled,
+  type AsyncToolDeps,
+  resolveAsyncToolOnComplete,
+} from '../../agentRuntime/AgentRuntimeService/asyncTool';
+import { mcpConnectionBinding } from './binding';
 import { expireMcpElicitation } from './expire';
 import { McpElicitationService } from './McpElicitationService';
-import { executeMcpElicitationResume, scheduleMcpElicitationResume } from './queue';
+import {
+  executeMcpElicitationResume,
+  recoverMcpElicitationResume,
+  scheduleMcpElicitationResume,
+} from './queue';
 import { resumeMcpElicitation } from './resume';
 
 const probes = vi.hoisted(() => ({
@@ -297,11 +307,264 @@ describe('durable MCP elicitation', () => {
       scheduleMcpElicitationResume(service, item.id, resolutionRequestId),
     ).rejects.toThrow('queue offline');
     const restored = new McpElicitationService(db, owner);
-    await scheduleMcpElicitationResume(restored, item.id, resolutionRequestId);
+    await recoverMcpElicitationResume(restored, item.id);
     await executeMcpElicitationResume(restored, item.id, resolutionRequestId);
     expect(probes.execute.mock.calls[0][1].mcpContinuation.inputResponses.input.content.label).toBe(
       'retained',
     );
     expect(probes.execute).toHaveBeenCalledOnce();
   });
+});
+
+it('keeps two assistants in the same operation independent when the provider reuses its call id', async () => {
+  const secondIdentity = { ...identity, assistantMessageId: 'mcp-assistant-two' };
+  await messageModel.create(
+    {
+      agentId: 'mcp-agent',
+      topicId: 'mcp-topic',
+      role: 'assistant',
+      content: '',
+      metadata: { operationId: identity.operationId },
+      tools: [
+        {
+          id: identity.toolCallId,
+          apiName: 'form',
+          identifier: 'fixture',
+          arguments: '{}',
+          type: 'mcp',
+        },
+      ],
+    },
+    secondIdentity.assistantMessageId,
+  );
+  const checkpoint = {
+    inputRequired: {
+      resultType: 'input_required' as const,
+      inputRequests: { input: { method: 'elicitation/create' as const, params: request } },
+      requestState: 'opaque',
+    },
+    round: 1,
+  };
+  const first = await open({ legacy: false, checkpoint });
+  const second = await service.open(secondIdentity, {
+    legacy: false,
+    checkpoint,
+    deadline: Date.now() + 10000,
+    requests: { input: request },
+  });
+  expect(first.toolMessageId).not.toBe(second.toolMessageId);
+  probes.execute.mockImplementation(async (_tool, ctx) => ({
+    content: ctx.mcpContinuation.inputResponses.input.content.label,
+    success: true,
+    executionTime: 1,
+  }));
+  const work = [
+    [first, 'first-receipt'],
+    [second, 'second-receipt'],
+  ] as const;
+  for (const [pending, label] of work.toReversed()) {
+    const rid = randomUUID();
+    const responses = { input: { action: 'accept' as const, content: { label } } };
+    await service.claim(pending.item.id, rid, responses);
+    await executeMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id, rid);
+    await executeMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id, rid);
+    const deps = { serverDB: db, userId: owner, messageModel } as AsyncToolDeps;
+    const tool = {
+      id: identity.toolCallId,
+      type: 'mcp',
+      identifier: 'fixture',
+      apiName: 'form',
+      arguments: '{}',
+    } as const;
+    expect(
+      await allPendingToolsFulfilled(deps, [tool], undefined, {
+        messageIds: { [identity.toolCallId]: pending.toolMessageId },
+      }),
+    ).toBe(true);
+    expect(
+      await resolveAsyncToolOnComplete(deps, [tool], {
+        messageIds: { [identity.toolCallId]: pending.toolMessageId },
+      }),
+    ).toBe('resume');
+    if (pending === second) {
+      expect(
+        await allPendingToolsFulfilled(deps, [tool], undefined, {
+          messageIds: { [identity.toolCallId]: first.toolMessageId },
+        }),
+      ).toBe(false);
+    }
+    // A provider ID alone cannot identify an MCP invocation.
+    expect(await allPendingToolsFulfilled(deps, [tool])).toBe(false);
+  }
+  expect(probes.execute).toHaveBeenCalledTimes(2);
+  expect((await messageModel.findById(first.toolMessageId))?.content).toBe('first-receipt');
+  expect((await messageModel.findById(second.toolMessageId))?.content).toBe('second-receipt');
+  expect((await messageModel.findById(second.toolMessageId))?.parentId).toBe(
+    secondIdentity.assistantMessageId,
+  );
+});
+it.each(['bearer', 'header', 'oauth-config'])(
+  'refuses a changed %s credential before executing the saved answer',
+  async (kind) => {
+    const original = {
+      type: 'http' as const,
+      url: 'https://example.com/mcp',
+      ...(kind === 'header'
+        ? { headers: { Authorization: 'fixture-old' } }
+        : {
+            auth:
+              kind === 'bearer'
+                ? { type: 'bearer', token: 'fixture-old' }
+                : {
+                    type: 'oauth2',
+                    accessToken: 'old',
+                    refreshToken: 'r',
+                    clientId: 'client',
+                    serverMetadata: { issuer: 'https://issuer.example' },
+                  },
+          }),
+    };
+    const changed =
+      kind === 'header'
+        ? { ...original, headers: { Authorization: 'fixture-new' } }
+        : {
+            ...original,
+            auth: {
+              ...original.auth,
+              ...(kind === 'bearer' ? { token: 'fixture-new' } : { clientId: 'different-client' }),
+            },
+          };
+    await db
+      .update(userInstalledPlugins)
+      .set({ customParams: { mcp: changed } as any })
+      .where(eq(userInstalledPlugins.identifier, 'fixture'));
+    const checkpoint = {
+      inputRequired: {
+        resultType: 'input_required' as const,
+        inputRequests: { input: { method: 'elicitation/create' as const, params: request } },
+      },
+      round: 1,
+    };
+    const pending = await open({
+      legacy: false,
+      checkpoint,
+      connectionBinding: mcpConnectionBinding(original),
+    });
+    const rid = randomUUID();
+    await service.claim(pending.item.id, rid, {
+      input: { action: 'accept', content: { label: 'private' } },
+    });
+    await executeMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id, rid);
+    expect(probes.execute).not.toHaveBeenCalled();
+    expect((await messageModel.findById(pending.toolMessageId))?.content).toContain(
+      'connection changed',
+    );
+  },
+);
+it('persists and cancels a state-only wait without sending another tools/call', async () => {
+  const { MCP_CONTINUATION_CONTROL } = await import('@lobechat/mcp-elicitation/types');
+  const checkpoint = {
+    inputRequired: { resultType: 'input_required' as const, requestState: 'external-pending' },
+    round: 1,
+  };
+  const pending = await open({ legacy: false, checkpoint, requests: {} });
+  const rid = randomUUID();
+  await service.claim(pending.item.id, rid, { [MCP_CONTINUATION_CONTROL]: { action: 'cancel' } });
+  await executeMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id, rid);
+  expect(probes.execute).not.toHaveBeenCalled();
+  expect((await messageModel.findById(pending.toolMessageId))?.content).toContain('cancelled');
+  expect(probes.resume).toHaveBeenCalledOnce();
+});
+it.each(['before-enqueue', 'lost-ack'])(
+  'rebuilds the service after %s and executes real SDK tools/call only once',
+  async (fault) => {
+    const { startElicitationServers } =
+      await import('@/libs/mcp/__tests__/fixtures/elicitationServers');
+    const { MCPClient } = await import('@/libs/mcp/client');
+    const server = await startElicitationServers();
+    const connect = async () => {
+      const c = new MCPClient({ type: 'http', name: 'fixture', url: server.url + '/modern' });
+      await c.initialize();
+      return c;
+    };
+    const initial = await connect();
+    try {
+      const error = await initial.callTool('form', {}).catch((e) => e);
+      await db
+        .update(userInstalledPlugins)
+        .set({ customParams: { mcp: { type: 'http', url: server.url + '/modern' } } })
+        .where(eq(userInstalledPlugins.identifier, 'fixture'));
+      const pending = await open({
+        legacy: false,
+        checkpoint: error.checkpoint,
+        requests: { details: request },
+      });
+      const rid = randomUUID();
+      await service.claim(pending.item.id, rid, {
+        details: { action: 'accept', content: { label: 'retained' } },
+      });
+      let enqueued: any;
+      probes.schedule.mockImplementationOnce(async (job) => {
+        if (fault === 'lost-ack') enqueued = job;
+        throw new Error('lost schedule ACK');
+      });
+      await expect(scheduleMcpElicitationResume(service, pending.item.id, rid)).rejects.toThrow(
+        'ACK',
+      );
+      probes.execute.mockImplementation(async (_tool, ctx) => {
+        const client = await connect();
+        try {
+          const result = await client.callTool('form', {}, { continuation: ctx.mcpContinuation });
+          return { content: JSON.stringify(result.content), success: true, executionTime: 1 };
+        } finally {
+          await client.disconnect();
+        }
+      });
+      await recoverMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id);
+      const recovered = probes.schedule.mock.calls.at(-1)![0];
+      expect(recovered.deduplicationId).toBe('mcp-resume-' + rid);
+      if (enqueued) expect(enqueued.deduplicationId).toBe(recovered.deduplicationId);
+      for (let delivery = 0; delivery < 2; delivery++)
+        await executeMcpElicitationResume(
+          new McpElicitationService(db, owner),
+          pending.item.id,
+          rid,
+        );
+      expect(probes.execute).toHaveBeenCalledOnce();
+      const trace = await (await fetch(server.url + '/trace')).json();
+      expect(trace.requests.filter((r: any) => r.method === 'tools/call')).toHaveLength(2);
+      expect((await messageModel.findById(pending.toolMessageId))?.content).toContain(
+        'saved:retained',
+      );
+    } finally {
+      await initial.disconnect();
+      await server.close();
+    }
+  },
+);
+
+it('authorizes a client-to-durable approval continuation only for its server-persisted exact source message', async () => {
+  const source = await service.ensureToolMessage(identity);
+  const replacement = { ...identity, operationId: 'mcp-replacement', toolMessageId: source };
+  await db.insert(agentOperations).values({
+    id: replacement.operationId,
+    userId: owner,
+    agentId: 'mcp-agent',
+    topicId: 'mcp-topic',
+    status: 'running',
+  });
+  await expect(service.assertIdentity(replacement)).rejects.toThrow('conversation');
+  await service.operations.mergeMetadata(replacement.operationId, {
+    mcpInvocationSources: [
+      {
+        assistantMessageId: identity.assistantMessageId,
+        toolCallId: identity.toolCallId,
+        toolMessageId: source,
+      },
+    ],
+  });
+  expect(await service.ensureToolMessage(replacement)).toBe(source);
+  await expect(
+    service.ensureToolMessage({ ...replacement, toolMessageId: 'wrong-row' }),
+  ).rejects.toThrow('conversation');
 });

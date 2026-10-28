@@ -1,4 +1,5 @@
 export default {
+  'mcpElicitation.omit': 'Omit {{field}}',
   'mcpElicitation.next': 'Next request',
   'mcpElicitation.title': '{{server}} requests your input',
   'mcpElicitation.progress': 'Request {{current}} of {{total}}',

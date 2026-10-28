@@ -7,6 +7,8 @@ import type {
   McpElicitationHost,
 } from '@lobechat/mcp-elicitation';
 import { validateMcpElicitationResponse } from '@lobechat/mcp-elicitation/form';
+import { mcpInvocationKey } from '@lobechat/mcp-elicitation/transport';
+import { MCP_CONTINUATION_CONTROL } from '@lobechat/mcp-elicitation/types';
 import type { ChatToolPayload } from '@lobechat/types';
 import type {
   ElicitRequestParams,
@@ -65,13 +67,37 @@ export class McpElicitationService {
   async assertIdentity(identity: McpCallIdentity, allowEnded = false) {
     const operation = await this.operations.findById(identity.operationId);
     const assistant = await this.messages.findById(identity.assistantMessageId);
+    const sources = operation?.metadata?.mcpInvocationSources;
+    const approvedSource =
+      Array.isArray(sources) &&
+      sources.find(
+        (source) =>
+          source?.assistantMessageId === identity.assistantMessageId &&
+          source?.toolCallId === identity.toolCallId &&
+          (!identity.toolMessageId || source.toolMessageId === identity.toolMessageId),
+      );
+    const sourceRow = approvedSource
+      ? await this.messages.findById(approvedSource.toolMessageId)
+      : undefined;
+    const sourcePlugin = sourceRow
+      ? await this.messages.findMessagePlugin(sourceRow.id)
+      : undefined;
+    const approvedContinuation =
+      sourceRow?.role === 'tool' &&
+      sourceRow.userId === this.userId &&
+      sourcePlugin?.toolCallId === identity.toolCallId &&
+      sourcePlugin.identifier === identity.identifier &&
+      sourcePlugin.apiName === identity.apiName &&
+      sourceRow.parentId === identity.assistantMessageId &&
+      sourceRow.topicId === operation?.topicId &&
+      sourceRow.threadId === operation?.threadId;
     if (
       !operation ||
       operation.userId !== this.userId ||
       !assistant ||
       assistant.userId !== this.userId ||
       assistant.role !== 'assistant' ||
-      assistant.metadata?.operationId !== identity.operationId ||
+      (assistant.metadata?.operationId !== identity.operationId && !approvedContinuation) ||
       assistant.topicId !== operation.topicId ||
       assistant.threadId !== operation.threadId
     )
@@ -83,14 +109,19 @@ export class McpElicitationService {
       throw new Error('MCP tool call identity mismatch');
     if (!allowEnded && ['done', 'error', 'interrupted', 'abandoned'].includes(operation.status))
       throw new Error('MCP operation has ended');
-    return { operation, tool };
+    return {
+      operation,
+      tool,
+      approvedToolMessageId: approvedContinuation ? sourceRow.id : undefined,
+    };
   }
 
   async ensureToolMessage(identity: McpCallIdentity) {
-    const { operation, tool } = await this.assertIdentity(identity);
+    const { operation, tool, approvedToolMessageId } = await this.assertIdentity(identity);
     const id =
       identity.toolMessageId ??
-      `mcp_${hash(`${this.userId}:${this.workspaceId ?? ''}:${identity.operationId}:${identity.toolCallId}`).slice(0, 24)}`;
+      approvedToolMessageId ??
+      `mcp_${hash(mcpInvocationKey({ ...identity, userId: this.userId, workspaceId: this.workspaceId })).slice(0, 24)}`;
     const existing = await this.messages.findById(id);
     if (!existing) {
       await this.messages.create(
@@ -213,11 +244,15 @@ export class McpElicitationService {
   createLegacyHost(identity: McpCallIdentity, deadline: number): McpElicitationHost {
     return {
       request: async (request, { signal, checkpoint }) => {
+        const stateOnly =
+          checkpoint &&
+          !checkpoint.legacyUrl &&
+          !Object.keys(checkpoint.inputRequired.inputRequests ?? {}).length;
         const pending = await this.open(identity, {
           checkpoint,
           deadline,
           legacy: true,
-          requests: { input: request },
+          requests: stateOnly ? {} : { input: request },
         });
         try {
           while (!signal.aborted && Date.now() < deadline) {
@@ -239,7 +274,7 @@ export class McpElicitationService {
               await this.messages.updateMessagePlugin(pending.toolMessageId, {
                 intervention: { status: 'none' },
               });
-              return responses.input;
+              return responses[stateOnly ? MCP_CONTINUATION_CONTROL : 'input'];
             }
             const operation = await this.operations.findById(identity.operationId);
             if (
@@ -286,9 +321,19 @@ export class McpElicitationService {
     if (detail?.kind !== 'mcp_elicitation') throw new Error('Invalid MCP elicitation');
     const requests = JSON.parse(detail.requests) as Record<string, ElicitRequestParams>;
     if (
-      JSON.stringify(Object.keys(requests).sort()) !== JSON.stringify(Object.keys(responses).sort())
+      JSON.stringify(
+        Object.keys(requests).length ? Object.keys(requests).sort() : [MCP_CONTINUATION_CONTROL],
+      ) !== JSON.stringify(Object.keys(responses).sort())
     )
       throw new Error('MCP elicitation response identity mismatch');
+    if (!Object.keys(requests).length) {
+      const control = responses[MCP_CONTINUATION_CONTROL];
+      if (
+        !['accept', 'decline', 'cancel'].includes(control.action) ||
+        control.content !== undefined
+      )
+        throw new Error('Invalid MCP continuation control');
+    }
     for (const [key, request] of Object.entries(requests)) {
       const errors = validateMcpElicitationResponse(request, responses[key]);
       if (errors.length) throw new Error(errors.join('\n'));

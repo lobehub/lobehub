@@ -132,3 +132,25 @@ describe('URL elicitation trust boundary', () => {
     expect(() => validateMcpElicitationRequest({ mode: 'url', message: 'Setup', url })).toThrow();
   });
 });
+
+it('preserves required false/zero/empty defaults and optional absence as distinct values', () => {
+  const input = {
+    mode: 'form' as const,
+    message: 'Falsy values',
+    requestedSchema: {
+      type: 'object' as const,
+      required: ['flag', 'amount', 'text'],
+      properties: {
+        flag: { type: 'boolean' as const },
+        amount: { type: 'number' as const, default: 0 },
+        text: { type: 'string' as const, minLength: 0 },
+        optional: { type: 'string' as const },
+      },
+    },
+  };
+  const defaults = getMcpFormDefaults(input);
+  expect(defaults).toEqual({ flag: false, amount: 0, text: '' });
+  expect(validateMcpElicitationResponse(input, { action: 'accept', content: defaults })).toEqual(
+    [],
+  );
+});

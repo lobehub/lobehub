@@ -907,6 +907,7 @@
   "mcpElicitation.formPrivacy": "仅提供非敏感信息，请勿填写密码、API 密钥或其他秘密。",
   "mcpElicitation.invalidInput": "请检查填写的内容：{{detail}}",
   "mcpElicitation.next": "下一个请求",
+  "mcpElicitation.omit": "不提供{{field}}",
   "mcpElicitation.open": "打开外部页面",
   "mcpElicitation.openError": "未能打开外部页面，请重试。",
   "mcpElicitation.progress": "第 {{current}} / {{total}} 个请求",

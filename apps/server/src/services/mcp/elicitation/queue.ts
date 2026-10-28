@@ -58,3 +58,17 @@ export async function executeMcpElicitationResume(
     responses: JSON.parse(String(resolution.action.result.responses)),
   });
 }
+
+/** A subsequent read can recover a claim whose enqueue or enqueue ACK was lost. */
+export async function recoverMcpElicitationResume(service: McpElicitationService, itemId: string) {
+  const item = await service.get(itemId);
+  if (item.status !== 'resolving' || !item.toolMessageId) return;
+  const { pending } = await service.loadContinuation(item.toolMessageId);
+  if (pending.legacy || pending.batchId !== item.batchId) return;
+  const batch = await service.interventions.findBatch(item.operationId, item.batchId);
+  const resolution = batch.resolutions.find(
+    (entry) => entry.actorId === service.userId && entry.source === 'mcp',
+  );
+  if (resolution)
+    return scheduleMcpElicitationResume(service, itemId, resolution.resolutionRequestId);
+}

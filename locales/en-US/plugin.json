@@ -907,6 +907,7 @@
   "mcpElicitation.formPrivacy": "Only provide non-sensitive information. Do not enter passwords, API keys, or other secrets.",
   "mcpElicitation.invalidInput": "Check the requested values: {{detail}}",
   "mcpElicitation.next": "Next request",
+  "mcpElicitation.omit": "Omit {{field}}",
   "mcpElicitation.open": "Open external page",
   "mcpElicitation.openError": "The external page could not be opened. Try opening it again.",
   "mcpElicitation.progress": "Request {{current}} of {{total}}",

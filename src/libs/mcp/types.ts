@@ -120,6 +120,7 @@ export interface AuthConfig {
 
   // B. Authorization server metadata obtained through server discovery mechanism
   serverMetadata?: {
+    issuer?: string;
     authorization_endpoint?: string;
     registration_endpoint?: string;
     token_endpoint?: string;

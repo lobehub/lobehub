@@ -1,4 +1,8 @@
-import { mcpTransportCallId } from '@lobechat/mcp-elicitation/transport';
+import {
+  type McpInvocationIdentity,
+  mcpInvocationKey,
+  mcpTransportCallId,
+} from '@lobechat/mcp-elicitation/transport';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import type { ToolResultPayload } from '@/server/modules/AgentRuntime/ToolResultWaiter';
@@ -6,7 +10,7 @@ import type { ToolResultPayload } from '@/server/modules/AgentRuntime/ToolResult
 /** Owns the legacy runtime waiter's wire key, TTL and first-delivery policy. */
 export const agentToolResults = {
   async claimMcpProducer(
-    scope: { userId: string; workspaceId?: string; operationId: string; toolCallId: string },
+    scope: McpInvocationIdentity,
     producerId: string,
     fingerprint: string,
     deadline: number,
@@ -14,7 +18,7 @@ export const agentToolResults = {
     const redis = getAgentRuntimeRedisClient();
     if (!redis) throw new Error('Redis is unavailable for MCP invocation ownership');
     if (deadline <= Date.now()) return false;
-    const key = `mcp_producer:${JSON.stringify([scope.userId, scope.workspaceId, scope.operationId, scope.toolCallId])}`;
+    const key = `mcp_producer:${mcpInvocationKey(scope)}`;
     const value = JSON.stringify({ producerId, fingerprint });
     return (
       (await redis.eval(
@@ -26,9 +30,10 @@ export const agentToolResults = {
       )) === 1
     );
   },
-  async publishMcpResult(operationId: string, result: ToolResultPayload, workspaceId?: string) {
+  async publishMcpResult(scope: McpInvocationIdentity, result: ToolResultPayload) {
     const redis = getAgentRuntimeRedisClient();
     if (!redis) throw new Error('Redis is unavailable for MCP tool completion');
+    if (result.toolCallId !== scope.toolCallId) throw new Error('MCP result invocation mismatch');
     await redis.eval(
       `
       if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
@@ -38,8 +43,8 @@ export const agentToolResults = {
       return 1
     `,
       2,
-      `tool_result:mcp-delivered:${operationId}:${result.toolCallId}`,
-      `tool_result:${mcpTransportCallId(operationId, result.toolCallId, workspaceId)}`,
+      `tool_result:mcp-delivered:${mcpInvocationKey(scope)}`,
+      `tool_result:${mcpTransportCallId(scope)}`,
       JSON.stringify(result),
     );
   },

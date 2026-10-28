@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 
 import type { LobeToolManifest } from '@lobechat/context-engine';
-import { isPlainRecord } from '@lobechat/utils/object';
 import type { ElicitResult } from '@modelcontextprotocol/client';
 
 import { canonicalJson } from '@/database/models/agentIntervention/utils';
@@ -17,6 +16,7 @@ import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 import type { ToolExecutionResultResponse } from '@/server/services/toolExecution/types';
 
+import { buildPluginMcpParams } from '../pluginParams';
 import { mcpConnectionBinding } from './binding';
 import { McpElicitationService } from './McpElicitationService';
 
@@ -98,20 +98,9 @@ export async function resumeMcpElicitation(
           !plugin.manifest?.api.some((api) => api.name === identity.apiName)
         )
           throw new Error('MCP plugin is no longer installed or available');
-        const connection = plugin.customParams.mcp;
-        manifest = {
-          ...plugin.manifest,
-          mcpParams: {
-            ...connection,
-            name: identity.identifier,
-            ...(connection.type === 'http' && {
-              headers: {
-                ...connection.headers,
-                ...(isPlainRecord(plugin.settings) ? plugin.settings : {}),
-              },
-            }),
-          },
-        };
+        const mcpParams = buildPluginMcpParams(plugin);
+        if (!mcpParams) throw new Error('MCP plugin connection is unavailable');
+        manifest = { ...plugin.manifest, mcpParams };
       }
       if (
         pending.connectionBinding &&

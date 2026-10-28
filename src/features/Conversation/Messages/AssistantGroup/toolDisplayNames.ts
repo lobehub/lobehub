@@ -24,8 +24,10 @@ import {
   WORKFLOW_TRUNCATE_WORD_BOUNDARY_MIN_RATIO,
 } from './constants';
 import { extractToolKeyword } from './Tool/Inspector/extractToolKeyword';
+import { isPendingMcpToolResult } from './Tool/toolResultBody';
 
 export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): boolean => {
+  if (tools.some((tool) => isPendingMcpToolResult(tool.result))) return false;
   const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
   if (collapsible.length === 0) return false;
   return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
@@ -82,6 +84,7 @@ export const hasToolError = (tools: ChatToolPayloadWithResult[]): boolean => {
 export const getWorkflowCompletionStatus = (
   tools: ChatToolPayloadWithResult[],
 ): 'success' | 'partial' | 'error' => {
+  if (tools.some((tool) => isPendingMcpToolResult(tool.result))) return 'partial';
   const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
   if (collapsible.length === 0) return 'success';
 

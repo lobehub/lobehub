@@ -2,14 +2,27 @@ import { describe, expect, it } from 'vitest';
 
 import { mcpConnectionBinding } from './binding';
 
-describe('MCP continuation destination binding', () => {
-  it('ignores display names, omitted properties, key order and rotating OAuth tokens', () => {
+const oauth = {
+  type: 'oauth2',
+  clientId: 'fixture-client',
+  clientSecret: 'fixture-secret',
+  serverMetadata: {
+    issuer: 'https://issuer.example',
+    token_endpoint: 'https://issuer.example/token',
+  },
+  scope: 'read',
+  accessToken: 'first',
+  refreshToken: 'refresh-first',
+  tokenExpiresAt: 1,
+};
+describe('MCP private continuation binding', () => {
+  it('allows real OAuth token rotation while retaining its non-rotating configuration', () => {
     expect(
       mcpConnectionBinding({
         type: 'http',
         url: 'https://example.com/mcp',
         name: 'slug',
-        auth: { accessToken: 'old' },
+        auth: oauth,
       }),
     ).toBe(
       mcpConnectionBinding({
@@ -17,20 +30,56 @@ describe('MCP continuation destination binding', () => {
         url: 'https://example.com/mcp',
         type: 'http',
         headers: undefined,
-        auth: { accessToken: 'new' },
+        auth: {
+          ...oauth,
+          accessToken: 'rotated',
+          refreshToken: 'refresh-rotated',
+          tokenExpiresAt: 2,
+        },
       }),
     );
+    for (const patch of [
+      { type: 'bearer' },
+      { clientId: 'other' },
+      { clientSecret: 'other' },
+      { scope: 'write' },
+      { serverMetadata: { issuer: 'https://other.example' } },
+    ])
+      expect(mcpConnectionBinding({ auth: oauth })).not.toBe(
+        mcpConnectionBinding({ auth: { ...oauth, ...patch } }),
+      );
   });
-  it('rejects a different endpoint, command, environment or custom tenant header', () => {
-    const base = { type: 'http', url: 'https://example.com/mcp', headers: { tenant: 'alice' } };
-    expect(mcpConnectionBinding(base)).not.toBe(
-      mcpConnectionBinding({ ...base, url: 'https://other.example/mcp' }),
-    );
-    expect(mcpConnectionBinding(base)).not.toBe(
-      mcpConnectionBinding({ ...base, headers: { tenant: 'bob' } }),
-    );
-    expect(mcpConnectionBinding({ type: 'stdio', command: 'a', env: { USER: 'alice' } })).not.toBe(
-      mcpConnectionBinding({ type: 'stdio', command: 'a', env: { USER: 'bob' } }),
-    );
+  it('pins manual bearer, header credentials and OAuth tokens without a real refresh configuration', () => {
+    for (const auth of [
+      { type: 'bearer', token: 'manual-a' },
+      { type: 'oauth2', accessToken: 'manual-a' },
+      { type: 'oauth2', accessToken: 'manual-a', refreshToken: 'manual-refresh' },
+    ])
+      expect(mcpConnectionBinding({ auth })).not.toBe(
+        mcpConnectionBinding({ auth: { ...auth, token: 'manual-b', accessToken: 'manual-b' } }),
+      );
+    for (const name of ['Authorization', 'Proxy-Authorization', 'X-Api-Key']) {
+      expect(mcpConnectionBinding({ headers: { [name]: 'fixture-a' } })).not.toBe(
+        mcpConnectionBinding({ headers: { [name]: 'fixture-b' } }),
+      );
+      expect(mcpConnectionBinding({ headers: { [name]: 'fixture-a' } })).toBe(
+        mcpConnectionBinding({ headers: { [name.toLowerCase()]: 'fixture-a' } }),
+      );
+    }
+  });
+  it('pins endpoint, command, environment and custom tenant headers without exposing credentials', () => {
+    const base = {
+      type: 'http',
+      url: 'https://example.com/mcp',
+      headers: { tenant: 'alice', Authorization: 'fixture-private' },
+    };
+    for (const patch of [
+      { url: 'https://other.example/mcp' },
+      { headers: { tenant: 'bob' } },
+      { command: 'other' },
+      { env: { USER: 'bob' } },
+    ])
+      expect(mcpConnectionBinding(base)).not.toBe(mcpConnectionBinding({ ...base, ...patch }));
+    expect(mcpConnectionBinding(base)).toMatch(/^[a-f0-9]{64}$/);
   });
 });

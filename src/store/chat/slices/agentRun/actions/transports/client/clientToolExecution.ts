@@ -13,6 +13,8 @@ import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
@@ -248,7 +250,10 @@ export class ClientToolExecutionActionImpl {
       }
 
       // ─── MCP fallback — unified dispatch, mirrors invokeMCPTypePlugin shape ───
-      const invocation = mcpTransportContext(operationId, toolCallId);
+      const invocation = mcpTransportContext(operationId, toolCallId, {
+        assistantMessageId,
+        userId: userProfileSelectors.userId(useUserStore.getState()),
+      });
       const originalMcpCallId = invocation.toolCallId;
       const mcpResult = await this.#raceAgainstDeadline(
         () =>

@@ -200,7 +200,8 @@ export class ServerToolTransport implements ToolTransport {
           result: hookResult.result,
         };
       } else if (
-        chatToolPayload.executor === 'client' &&
+        (selectOperationToolSet(context.state).executorMap?.[chatToolPayload.identifier] ??
+          chatToolPayload.executor) === 'client' &&
         typeof streamManager.sendToolExecute === 'function'
       ) {
         log(`[${operationLogId}] Dispatching tool ${context.toolName} to client via Agent Gateway`);
@@ -221,6 +222,7 @@ export class ServerToolTransport implements ToolTransport {
           return this.abortedBeforeLaunch();
 
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
+          userId,
           agentId: context.state.origin?.agentId,
           assistantMessageId: context.parentMessageId,
           documentId: context.state.origin?.documentId,

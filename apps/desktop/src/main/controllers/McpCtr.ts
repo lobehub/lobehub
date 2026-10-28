@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
+import { mcpInvocationKey } from '@lobechat/mcp-elicitation/transport';
 import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   getMcpServerFingerprint,
@@ -962,7 +963,10 @@ export default class McpCtr extends ControllerModule {
     const serverUrl = await config.getRemoteServerUrl();
     if (!serverUrl) throw new Error('MCP invocation has no server');
     const owner = { userId, serverUrl };
-    const key = JSON.stringify([serverUrl, userId, elicitation.workspaceId, elicitation.identity]);
+    const key = JSON.stringify([
+      serverUrl,
+      mcpInvocationKey({ ...elicitation.identity, userId, workspaceId: elicitation.workspaceId }),
+    ]);
     const fingerprint = createHash('sha256')
       .update(
         JSON.stringify([serializeMcpClientParams(params), toolName, safeParseToRecord(rawArgs)]),

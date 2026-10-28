@@ -57,3 +57,6 @@ export class McpCallNotStartedError extends Error {
     this.name = 'McpCallNotStartedError';
   }
 }
+
+/** Private control response for requestState-only waits; never sent as MCP inputResponses. */
+export const MCP_CONTINUATION_CONTROL = '$continuation';

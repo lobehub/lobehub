@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 
 import {
   createMcpHandler,
+  type ElicitResult,
   inputRequired,
   McpServer,
   type ServerContext,
@@ -67,6 +68,62 @@ export async function startElicitationServers(port = 0) {
             },
           ],
         };
+      },
+    );
+    server.registerTool(
+      'edge_form',
+      { description: 'Legal false, zero, empty and optional values' },
+      async (ctx: ServerContext) => {
+        const answer = ctx.mcpReq.inputResponses?.answer as ElicitResult | undefined;
+        if (!answer)
+          return inputRequired({
+            requestState: 'edge-form',
+            inputRequests: {
+              answer: inputRequired.elicit({
+                mode: 'form',
+                message: 'Non-sensitive edge values',
+                requestedSchema: {
+                  type: 'object',
+                  required: ['flag', 'zero', 'text'],
+                  properties: {
+                    flag: { type: 'boolean' },
+                    zero: { type: 'number', default: 0 },
+                    text: { type: 'string', minLength: 0 },
+                    optional: { type: 'string' },
+                    defaulted: { type: 'string', default: 'seed' },
+                  },
+                },
+              }),
+            },
+          });
+        if (answer.action !== 'accept')
+          return { content: [{ type: 'text', text: 'edge_form:' + answer.action }] };
+        effects.push({ tool: 'edge_form', content: answer.content });
+        return { content: [{ type: 'text', text: 'edge_form:' + JSON.stringify(answer.content) }] };
+      },
+    );
+    server.registerTool(
+      'state_url',
+      { description: 'URL followed by a requestState-only external wait' },
+      async (ctx: ServerContext) => {
+        const state = ctx.mcpReq.requestState();
+        const answer = ctx.mcpReq.inputResponses?.answer as ElicitResult | undefined;
+        if (!state)
+          return inputRequired({
+            requestState: 'url-consent',
+            inputRequests: {
+              answer: inputRequired.elicitUrl({
+                message: 'Complete the external demo, then return.',
+                url: `${publicUrl}/external/state_url`,
+              }),
+            },
+          });
+        if (answer && answer.action !== 'accept')
+          return { content: [{ type: 'text', text: 'state_url:' + answer.action }] };
+        if (!completed.has('state_url'))
+          return { resultType: 'input_required' as const, requestState: 'external-pending' };
+        effects.push({ tool: 'state_url', content: {} });
+        return { content: [{ type: 'text', text: 'state_url:completed' }] };
       },
     );
     for (const tool of ['multi', 'url', 'legacy_url', 'failure', 'hang']) {
@@ -259,6 +316,22 @@ export async function startElicitationServers(port = 0) {
         response = new Response('fixture rejection', { status: Number(path.slice(1)) });
       } else if (path === '/timeout') {
         response = new Response(null, { status: 202 });
+      } else if (
+        path === '/modern' &&
+        entry.method === 'tools/call' &&
+        (entry.params as { name?: string }).name === 'state_url' &&
+        !!(entry.params as { requestState?: string }).requestState &&
+        !completed.has('state_url') &&
+        !Object.values(
+          (entry.params as { inputResponses?: Record<string, ElicitResult> }).inputResponses ?? {},
+        ).some((r) => r.action !== 'accept')
+      ) {
+        // Exercise the valid wire omission: SDK's classifier normalizes an absent map to {}.
+        response = Response.json({
+          jsonrpc: '2.0',
+          id: entry.requestId,
+          result: { resultType: 'input_required', requestState: 'external-pending' },
+        });
       } else if (path === '/legacy') {
         const existing = sessions.get(request.headers.get('mcp-session-id') ?? '');
         const session = existing ?? {

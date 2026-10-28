@@ -35,6 +35,7 @@ interface DispatchContext {
    */
   timeoutMs?: number;
   topicId?: string | null;
+  userId?: string;
   workspaceId?: string;
 }
 
@@ -76,10 +77,22 @@ export async function dispatchClientTool(
 ): Promise<ToolExecutionResultResponse> {
   const { operationId, streamManager } = ctx;
   const startedAt = Date.now();
-  const transportCallId =
-    ctx.mcpElicitation || chatToolPayload.type === 'mcp'
-      ? mcpTransportCallId(operationId, chatToolPayload.id, ctx.workspaceId)
-      : chatToolPayload.id;
+  const isMcp = ctx.mcpElicitation || chatToolPayload.type === 'mcp';
+  if (isMcp && (!ctx.userId || !ctx.assistantMessageId))
+    return buildErrorResult(
+      0,
+      'MCP invocation requires its user and assistant identity',
+      'invalid_identity',
+    );
+  const transportCallId = isMcp
+    ? mcpTransportCallId({
+        userId: ctx.userId!,
+        workspaceId: ctx.workspaceId,
+        operationId,
+        assistantMessageId: ctx.assistantMessageId!,
+        toolCallId: chatToolPayload.id,
+      })
+    : chatToolPayload.id;
 
   if (typeof streamManager.sendToolExecute !== 'function') {
     return buildErrorResult(

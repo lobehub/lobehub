@@ -40,6 +40,46 @@ describe('MCP elicitation against real SDK servers', () => {
     );
     expect(result.content).toEqual([{ type: 'text', text: 'saved:hello' }]);
   });
+  it('preserves a requestState-only URL wait and manually retries the exact original tool', async () => {
+    const client = await connect('/modern');
+    const initial = await client.callTool('state_url', {}).catch((e) => e);
+    const waiting = await client
+      .callTool(
+        'state_url',
+        {},
+        {
+          continuation: { ...initial.checkpoint, inputResponses: { answer: { action: 'accept' } } },
+        },
+      )
+      .catch((e) => e);
+    expect(waiting).toBeInstanceOf(McpInputRequiredError);
+    expect(Object.keys(waiting.checkpoint.inputRequired.inputRequests ?? {})).toHaveLength(0);
+    expect(waiting.checkpoint.inputRequired.requestState).toBe('external-pending');
+    const stillWaiting = await client
+      .callTool('state_url', {}, { continuation: { ...waiting.checkpoint, inputResponses: {} } })
+      .catch((e) => e);
+    expect(stillWaiting).toBeInstanceOf(McpInputRequiredError);
+    await fetch(servers.url + '/external/state_url?complete=success');
+    const result = await client.callTool(
+      'state_url',
+      {},
+      { continuation: { ...stillWaiting.checkpoint, inputResponses: {} } },
+    );
+    expect(result.content).toEqual([{ type: 'text', text: 'state_url:completed' }]);
+    const trace = await (await fetch(servers.url + '/trace')).json();
+    expect(trace.effects).toHaveLength(1);
+    const stateOnlyWire = trace.requests.find((r: any) => r.response?.includes('external-pending'));
+    expect(JSON.parse(stateOnlyWire.response).result).toEqual({
+      resultType: 'input_required',
+      requestState: 'external-pending',
+    });
+    expect(trace.requests.findLast((r: any) => r.method === 'tools/call').params).toMatchObject({
+      name: 'state_url',
+      arguments: {},
+      requestState: 'external-pending',
+      inputResponses: {},
+    });
+  });
   it.each(['accept', 'decline', 'cancel'] as const)(
     'legacy %s answers the waiting tool',
     async (action) => {

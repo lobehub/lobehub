@@ -4,6 +4,7 @@ import {
   getMcpFormOptions,
   validateMcpElicitationResponse,
 } from '@lobechat/mcp-elicitation/form';
+import { MCP_CONTINUATION_CONTROL } from '@lobechat/mcp-elicitation/types';
 import { Alert, Button, Flexbox, Input, InputNumber, Select, Switch, Text } from '@lobehub/ui';
 import type { ElicitRequestParams, ElicitResult } from '@modelcontextprotocol/client';
 import { useId, useState } from 'react';
@@ -22,6 +23,9 @@ import { useFetchMcpElicitations } from '../hooks/useFetchMcpElicitations';
 import { useConversationStore } from '../store';
 
 export function McpElicitationForm({ pending }: { pending: PendingMcpElicitation }) {
+  return <McpElicitationBatch key={pending.batchId} pending={pending} />;
+}
+function McpElicitationBatch({ pending }: { pending: PendingMcpElicitation }) {
   const { t } = useTranslation('plugin');
   const userId = useUserStore(userProfileSelectors.userId);
   const context = useConversationStore((s) => s.context);
@@ -37,7 +41,10 @@ export function McpElicitationForm({ pending }: { pending: PendingMcpElicitation
 
   const resolve = async (response?: ElicitResult) => {
     if (busy || pending.resolving || !canUseResource) return;
-    let collected = current && response ? { ...responses, [current[0]]: response } : responses;
+    let collected =
+      current && response
+        ? { ...responses, [current[0]]: response }
+        : { ...responses, [MCP_CONTINUATION_CONTROL]: response ?? { action: 'accept' as const } };
     if (response?.action === 'cancel')
       for (const [id] of requests)
         if (!Object.hasOwn(collected, id)) collected = { ...collected, [id]: { action: 'cancel' } };
@@ -93,12 +100,18 @@ export function McpElicitationForm({ pending }: { pending: PendingMcpElicitation
         <Flexbox gap={12}>
           <Text>{t('mcpElicitation.waiting')}</Text>
           <Button
-            disabled={busy || !canUseResource}
+            disabled={busy || pending.resolving || !canUseResource}
             loading={busy}
             type="primary"
             onClick={() => resolve()}
           >
             {t('mcpElicitation.retry')}
+          </Button>
+          <Button
+            disabled={busy || pending.resolving || !canUseResource}
+            onClick={() => resolve({ action: 'cancel' })}
+          >
+            {t('mcpElicitation.cancel')}
           </Button>
         </Flexbox>
       )}
@@ -170,14 +183,21 @@ function McpRequestForm({
           const fieldValue = Object.hasOwn(values, name) ? values[name] : undefined;
           const update = (value: string | number | boolean | string[] | null | undefined) =>
             setValues((previous) => {
-              if (value !== null && value !== undefined && value !== '')
-                return { ...previous, [name]: value };
+              if (value !== null && value !== undefined) return { ...previous, [name]: value };
               return Object.fromEntries(Object.entries(previous).filter(([key]) => key !== name));
             });
           const label = `${field.title ?? name}${request.requestedSchema.required?.includes(name) ? ' *' : ''}`;
           return (
             <Flexbox gap={6} key={name}>
-              <label htmlFor={`${fieldPrefixId}-${name}`}>{label}</label>
+              <Flexbox horizontal align="center" justify="space-between">
+                <label htmlFor={`${fieldPrefixId}-${name}`}>{label}</label>
+                {!request.requestedSchema.required?.includes(name) &&
+                  Object.hasOwn(values, name) && (
+                    <Button disabled={disabled} size="small" onClick={() => update(undefined)}>
+                      {t('mcpElicitation.omit', { field: field.title ?? name })}
+                    </Button>
+                  )}
+              </Flexbox>
               {field.description && <Text type="secondary">{field.description}</Text>}
               {options ? (
                 <Select

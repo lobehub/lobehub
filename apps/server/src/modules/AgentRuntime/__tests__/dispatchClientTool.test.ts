@@ -368,6 +368,8 @@ describe('dispatchClientTool', () => {
       ['op-alice', 'op-bob'].map((operationId) =>
         dispatchClientTool(makePayload({ type: 'mcp', id: 'reused' }), {
           operationId,
+          userId: 'user',
+          assistantMessageId: 'assistant',
           streamManager: makeStreamManager(sendToolExecute),
         }),
       ),
@@ -375,7 +377,14 @@ describe('dispatchClientTool', () => {
     const ids = sendToolExecute.mock.calls.map((call) => call[1].toolCallId);
     expect(new Set(ids).size).toBe(2);
     expect(ids).toEqual(
-      ['op-alice', 'op-bob'].map((operationId) => mcpTransportCallId(operationId, 'reused')),
+      ['op-alice', 'op-bob'].map((operationId) =>
+        mcpTransportCallId({
+          operationId,
+          toolCallId: 'reused',
+          userId: 'user',
+          assistantMessageId: 'assistant',
+        }),
+      ),
     );
     expect(results.map((result) => result.content)).toEqual(ids.map((id) => 'tool_result:' + id));
   });

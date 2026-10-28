@@ -2,7 +2,10 @@ import type { PendingMcpElicitation } from '@/services/mcpElicitation';
 
 import { dataSelectors, useConversationStore } from '../store';
 import type { PendingIntervention } from '../store/slices/data/pendingInterventions';
-import { isSamePendingInterventionList } from '../store/slices/data/pendingInterventions';
+import {
+  isSamePendingInterventionList,
+  mergePendingInterventions,
+} from '../store/slices/data/pendingInterventions';
 import { useUnexpiredInterventions } from './useDeadlineClock';
 import { useFetchMcpElicitations } from './useFetchMcpElicitations';
 
@@ -37,9 +40,5 @@ export const usePendingInterventions = () => {
       toolCallId: item.toolCallId,
       toolMessageId: item.toolMessageId,
     })) ?? [];
-  const mcpCalls = new Set(mcp.map((item) => item.toolCallId));
-  return useUnexpiredInterventions([
-    ...selected.filter((item) => !mcpCalls.has(item.toolCallId)),
-    ...mcp,
-  ]);
+  return useUnexpiredInterventions(mergePendingInterventions(selected, mcp));
 };
