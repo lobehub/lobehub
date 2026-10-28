@@ -37,9 +37,9 @@ matching, say what you checked and ask. Do not report "not found" after looking 
 
 \`-w\` only changes which workspace these \`lh workspace\` subcommands read. It does not
 change the scope of other modules.
-A workspace slug works wherever a workspace id is taken (\`-w\`, \`--workspace\`, the \`view\`
-argument), so there is no need to look up the id first. \`lh connect --workspace\` is the
-exception and takes an id.
+A workspace slug works in place of an id for \`-w\`, \`--workspace\` and the \`view\` argument,
+so there is no need to look up the id first. Resolving a slug needs \`workspace:read\`; a
+credential without it (such as a workspace-bound API key) must pass the workspace id.
 
 ## Scope rules for agent runs
 
