@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { encodeMobileSelection, parseMobileSelection } from './mobileSelection';
+import { encodeMobileSelection, isStackedLayout, parseMobileSelection } from './mobileSelection';
 
 describe('mobile skill selection param', () => {
   it('round-trips a selection, including identifiers that contain a colon', () => {
@@ -14,5 +14,13 @@ describe('mobile skill selection param', () => {
     expect(parseMobileSelection('builtin')).toBeUndefined();
     expect(parseMobileSelection('unknown:web-search')).toBeUndefined();
     expect(parseMobileSelection('builtin:')).toBeUndefined();
+  });
+});
+
+describe('isStackedLayout', () => {
+  it('opens connectors as list → detail on desktop too, keeping the skill split', () => {
+    expect(isStackedLayout(false, 'connector')).toBe(true);
+    expect(isStackedLayout(false, 'skill')).toBe(false);
+    expect(isStackedLayout(true, 'skill')).toBe(true);
   });
 });

@@ -1677,6 +1677,8 @@ When I am ___, I need ___
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
   'skillView.connectors': 'Connectors',
+  'skillView.connectorsDesc':
+    'Connect the apps and tools your agents can use. Open one to see its account and tools.',
   'skillView.skills': 'Skills',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',

@@ -1718,6 +1718,7 @@
   "skillStore.wantMore.feedback.title": "[技能申请] 请用一句话概括您需要的技能",
   "skillStore.wantMore.reachedEnd": "已经到底了，未找到所需技能？",
   "skillView.connectors": "连接器",
+  "skillView.connectorsDesc": "连接助理可以调用的应用和工具。点开一项，查看授权账号和工具清单。",
   "skillView.skills": "技能",
   "startConversation": "开始对话",
   "storage.actions.copyAgentGroups.button": "复制到…",
