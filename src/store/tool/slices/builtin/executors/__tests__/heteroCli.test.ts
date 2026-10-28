@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   claudeCodeExecutor,
   codexExecutor,
+  copilotExecutor,
   devinExecutor,
   droidExecutor,
   grokBuildExecutor,
@@ -40,6 +41,7 @@ describe('heteroCli executors', () => {
   it('registers the CLI adapter identifiers and exposes no invokable APIs', () => {
     expect(claudeCodeExecutor.identifier).toBe('claude-code');
     expect(codexExecutor.identifier).toBe('codex');
+    expect(copilotExecutor.identifier).toBe('copilot');
     expect(droidExecutor.identifier).toBe('droid');
     expect(devinExecutor.identifier).toBe('devin');
     expect(grokBuildExecutor.identifier).toBe('grok-build');
@@ -54,6 +56,18 @@ describe('heteroCli executors', () => {
     expect(grokBuildExecutor.hasApi('execute')).toBe(false);
     expect(grokBuildExecutor.getApiNames()).toEqual([]);
     expect(droidExecutor.getApiNames()).toEqual([]);
+    expect(copilotExecutor.getApiNames()).toEqual([]);
+  });
+
+  it('keeps the Copilot hook inert, since its tool names are model-written titles', async () => {
+    await copilotExecutor.onAfterCall!(
+      call({
+        apiName: 'Run requested shell command',
+        identifier: 'copilot',
+        params: { command: 'git worktree add /wt' },
+      }),
+    );
+    expect(detectMocks.recordGitCommandEffects).not.toHaveBeenCalled();
   });
 
   it('records the worktree for a successful shell call, keyed by the run topic', async () => {

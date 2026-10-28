@@ -128,6 +128,7 @@ export interface HeterogeneousAgentRuntimeStatus {
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'
+    | 'copilot-acp'
     | 'cursor-acp'
     | 'droid-acp'
     | 'dsh-jsonrpc'

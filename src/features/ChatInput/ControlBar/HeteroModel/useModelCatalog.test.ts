@@ -286,6 +286,7 @@ describe('useModelCatalog', () => {
   it.each([
     'codebuddy',
     'codex',
+    'copilot',
     'cursor',
     'droid',
     'grok-build',

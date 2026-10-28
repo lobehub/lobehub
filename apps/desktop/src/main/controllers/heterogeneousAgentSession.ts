@@ -5,6 +5,7 @@ import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   ClaudeAgentSdkSession,
   CodexThreadSession,
+  CopilotAcpSession,
   CursorAcpSession,
   DevinAcpSession,
   DroidAcpSession,
@@ -106,13 +107,13 @@ export interface AgentSession {
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
-  devinAcpSession?: DevinAcpSession;
-  droidAcpSession?: DroidAcpSession;
   dshSession?: DshAcpSessionHandle;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
   model?: string;
+  /** Active Copilot / Devin / Droid ACP run; cleared when the run settles. */
+  modelAcpSession?: CopilotAcpSession | DevinAcpSession | DroidAcpSession;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;

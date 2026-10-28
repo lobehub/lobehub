@@ -49,6 +49,7 @@ describe('resolveVerifyModelConfig', () => {
     for (const provider of heterogeneousProviders) {
       expect(isHeterogeneousVerifyProvider(provider)).toBe(true);
     }
+    expect(isHeterogeneousVerifyProvider('copilot')).toBe(true);
     expect(isHeterogeneousVerifyProvider('openai')).toBe(false);
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });

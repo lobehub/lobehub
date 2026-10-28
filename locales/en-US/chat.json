@@ -292,7 +292,7 @@
   "connectAgent.providerDesc.trae": "TRAE Enterprise coding agent CLI",
   "copilotInstallGuide.actions.openDocs": "Open Install Guide",
   "copilotInstallGuide.actions.openSystemTools": "Open System Tools",
-  "copilotInstallGuide.afterInstall": "After installing, run `copilot login` to sign in, then retry your message or click Re-detect in System Tools.",
+  "copilotInstallGuide.afterInstall": "After installing, run `copilot` and enter `/login` (or run `copilot login`) to sign in with GitHub, then retry your message or click Re-detect in System Tools.",
   "copilotInstallGuide.desc": "GitHub Copilot needs the Copilot CLI to run locally. Install it and make sure the `copilot` command is available in your PATH.",
   "copilotInstallGuide.installWithBrew": "Install script (macOS / Linux)",
   "copilotInstallGuide.installWithNpm": "npm (macOS / Linux / Windows)",

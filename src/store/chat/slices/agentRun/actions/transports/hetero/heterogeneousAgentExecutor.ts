@@ -377,6 +377,8 @@ const subscribeBroadcasts = (
   };
 };
 
+/** ACP runtimes that switch to the selected model after the handshake, not via a CLI flag. */
+const ACP_MODEL_ADAPTERS = new Set(['copilot', 'deepseek-harness', 'devin', 'droid', 'trae']);
 const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 const HETERO_TERMINAL_EVENT_GRACE_TIMEOUT_MS = 3_000;
 
@@ -2010,10 +2012,7 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'devin' ||
-          adapterType === 'droid' ||
-          adapterType === 'trae' ||
-          adapterType === 'deepseek-harness') &&
+        ACP_MODEL_ADAPTERS.has(adapterType) &&
         !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION

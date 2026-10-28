@@ -34,8 +34,8 @@ const log = debug('lobe-server:ai-agent-service');
  * exit. Local CLI and remote platform agents bypass the server-side LLM
  * pipeline — after topic + message creation we hand off to the device gateway
  * (desktop) or cloud sandbox, which will push events back via `heteroIngest` /
- * `heteroFinish` (amp / claude-code / codebuddy / codex / cursor / droid /
- * grok-build / kimi-code / opencode / pi / qoder / trae) or
+ * `heteroFinish` (amp / claude-code / codebuddy / codex / copilot / cursor / devin /
+ * droid / grok-build / kimi-code / opencode / pi / qoder / trae) or
  * `agentNotify.notify` (openclaw / hermes).
  *
  * Always returns a terminal {@link ExecAgentResult} — the caller's `execAgent`

@@ -61,12 +61,10 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('hermes')).toBe(false);
   });
 
-  it('keeps local-only CLIs on local or connected devices', () => {
-    expect(isHeterogeneousSandboxExecutionAvailable('droid')).toBe(false);
-    expect(isHeterogeneousSandboxExecutionAvailable('devin')).toBe(false);
-    expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
-    expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
-  });
+  it.each(['copilot', 'devin', 'droid', 'qoder', 'trae'])(
+    'keeps the local-only %s CLI on local or connected devices',
+    (type) => expect(isHeterogeneousSandboxExecutionAvailable(type)).toBe(false),
+  );
 
   it('keeps Cursor on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('cursor')).toBe(false);

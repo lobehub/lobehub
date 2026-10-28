@@ -9,8 +9,8 @@ import {
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
- * (`amp` / `claude-code` / `codebuddy` / `codex` / `cursor` / `droid` / `grok-build` /
- * `kimi-code` / `opencode` / `pi` / `qoder` / `trae` — set by the adapters in
+ * (`amp` / `claude-code` / `codebuddy` / `codex` / `copilot` / `cursor` / `droid` /
+ * `grok-build` / `kimi-code` / `opencode` / `pi` / `qoder` / `trae` — set by the adapters in
  * `packages/heterogeneous-agents/src/adapters/*`). These agents run their OWN
  * tools, so this executor is NEVER invoked: `apiEnum` is empty → `hasApi()` is
  * always false → the client-tool dispatch (`hasExecutor`) never routes to
@@ -106,6 +106,9 @@ export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set([
 });
 export const codeBuddyExecutor = new HeteroCliExecutor('codebuddy', new Set(['Bash']));
 export const codexExecutor = new HeteroCliExecutor('codex', new Set(['command_execution']));
+// Copilot names each ACP tool call by its model-written title (e.g. the shell
+// command's description), so no api name reliably marks a shell call.
+export const copilotExecutor = new HeteroCliExecutor('copilot', new Set());
 export const cursorExecutor = new HeteroCliExecutor('cursor', new Set(['shellToolCall']));
 // Droid's ACP shell tool name is not a documented protocol guarantee. Keep this
 // hook inert rather than guessing and recording unrelated tool calls.

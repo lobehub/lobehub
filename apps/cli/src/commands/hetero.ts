@@ -244,13 +244,16 @@ interface ExecOptions {
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
 
+/** ACP agents that switch models after the handshake instead of through a CLI flag. */
+const ACP_INITIAL_MODEL_TYPES = new Set(['copilot', 'devin', 'droid', 'trae']);
+
 const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
   const selectorArgs =
     options.type === 'amp'
       ? [...(options.mode ? ['--mode', options.mode] : [])]
-      : options.type === 'droid' || options.type === 'trae'
+      : options.type === 'copilot' || options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [
@@ -762,21 +765,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (
     serverIngest &&
     (agentType === 'claude-code' ||
+      agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||
       agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor' || agentType === 'droid') {
+    if (agentType !== 'claude-code' && agentType !== 'qoder') {
+      // Native ACP requests; Copilot and Cursor cards reuse the Claude Code renderer.
       askBridge = new AskUserBridge(operationId, {
-        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
+        identifier: agentType === 'copilot' || agentType === 'cursor' ? 'claude-code' : agentType,
         provider: agentType,
-      });
-    } else if (agentType === 'devin') {
-      askBridge = new AskUserBridge(operationId, {
-        identifier: 'devin',
-        provider: 'devin',
       });
     } else {
       askServer = new LobeBuiltinMcpServer();
@@ -1269,10 +1269,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // server agents. Ask Claude Code for content-block deltas so the current conversation
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
-    initialModel:
-      options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
-        ? options.model
-        : undefined,
+    initialModel: ACP_INITIAL_MODEL_TYPES.has(options.type) ? options.model : undefined,
     // Keep Claude Code's stdin open while it can still use input: closing it
     // early makes print mode kill background tasks after 10 minutes.
     liveInput: options.type === 'claude-code',

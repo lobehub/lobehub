@@ -88,6 +88,20 @@ export const codexBinary: BinarySpec = {
   priority: 2,
 };
 
+/**
+ * GitHub Copilot CLI
+ * @see https://docs.github.com/copilot/concepts/agents/about-copilot-cli
+ *
+ * The shared resolver requires GitHub's version banner and `--acp` support, so
+ * AWS's unrelated `copilot` CLI is not mistaken for it.
+ */
+export const copilotBinary: BinarySpec = {
+  description: 'GitHub Copilot - GitHub agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('copilot', 'copilot'),
+  name: 'copilot',
+  priority: 3,
+};
+
 /** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
 export const cursorBinary: BinarySpec = {
   description: 'Cursor - Cursor agentic coding CLI',
@@ -221,6 +235,7 @@ export const heterogeneousCliAgentBinaries = {
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
+  'copilot': copilotBinary,
   'cursor': cursorBinary,
   'droid': droidBinary,
   'devin': devinBinary,

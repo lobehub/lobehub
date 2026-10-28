@@ -292,7 +292,7 @@
   "connectAgent.providerDesc.trae": "TRAE 企业版编码助理 CLI",
   "copilotInstallGuide.actions.openDocs": "打开安装指南",
   "copilotInstallGuide.actions.openSystemTools": "打开系统工具",
-  "copilotInstallGuide.afterInstall": "安装完成后，请运行 `copilot login` 登录，然后重试消息或在系统工具中点击重新检测。",
+  "copilotInstallGuide.afterInstall": "安装完成后，运行 `copilot` 并输入 `/login`（或直接运行 `copilot login`）登录 GitHub，然后重试消息或在系统工具中点击重新检测。",
   "copilotInstallGuide.desc": "GitHub Copilot 需要在本机运行 Copilot CLI。请完成安装，并确认 PATH 中可以使用 `copilot` 命令。",
   "copilotInstallGuide.installWithBrew": "安装脚本（macOS / Linux）",
   "copilotInstallGuide.installWithNpm": "npm 安装（macOS / Linux / Windows）",
