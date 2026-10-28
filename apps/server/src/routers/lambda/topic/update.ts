@@ -129,8 +129,10 @@ export const updateRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const rows = await ctx.topicModel.findOwnersByIds(input.topicIds);
+      // Admins may re-home teammates' topics (e.g. consolidating a team's
+      // topics under one agent); everything else stays creator/owner-only.
       for (const userId of new Set(rows.map((row) => row.userId))) {
-        assertWorkspaceRowManageable(ctx, userId, 'topic');
+        assertWorkspaceRowManageable(ctx, userId, 'topic', { allowAdmin: true });
       }
       // Moving needs `use` on both the source conversations and the target agent.
       await assertCanUseTopicTargets(guardCtx(ctx), input.topicIds);
@@ -153,7 +155,8 @@ export const updateRouter = router({
         );
         const goalHandoff = new GoalTopicHandoffService(tx, ctx.userId, workspaceId);
         const goals = await goalHandoff.lockFollowing(input.topicIds, input.targetAgentId);
-        for (const goal of goals) assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        for (const goal of goals)
+          assertWorkspaceRowManageable(ctx, goal.userId, 'goal', { allowAdmin: true });
         return { movedGoalIds: await goalHandoff.handOver(goals, input.targetAgentId) };
       });
     }),
