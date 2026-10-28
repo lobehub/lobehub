@@ -1,6 +1,6 @@
 import { IYjsService, ReactYjsPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as Y from 'yjs';
