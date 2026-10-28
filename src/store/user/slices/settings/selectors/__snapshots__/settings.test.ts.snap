@@ -129,6 +129,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.6-luna",
     "provider": "openai",
   },
+  "verify": {
+    "model": "glm-5.3-flash",
+    "provider": "zhipu",
+  },
 }
 `;
 

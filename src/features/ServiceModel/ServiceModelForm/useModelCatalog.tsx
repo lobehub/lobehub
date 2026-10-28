@@ -7,7 +7,8 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type ModelRef } from '../serviceModelState';
 import ModelLabel from './ModelLabel';
 
-export type ModelKind = 'asr' | 'chat' | 'embedding';
+/** `vision` is the chat models that can read images. */
+export type ModelKind = 'asr' | 'chat' | 'embedding' | 'vision';
 
 // lobe-design-ignore DETAIL-NO-EMPTY: with no enabled model the picker still offers its follow item, so the list is never empty
 export const toOptionValue = ({ model, provider }: ModelRef) => `${provider}/${model}`;
@@ -27,7 +28,16 @@ export const useModelOptions = (kind: ModelKind) => {
   );
 
   const groups = useMemo<SelectOptions>(() => {
-    const withModels = providers.filter((provider) => provider.children.length > 0);
+    const withModels = providers
+      .map((provider) =>
+        kind === 'vision'
+          ? {
+              ...provider,
+              children: provider.children.filter((model) => model.abilities?.vision),
+            }
+          : provider,
+      )
+      .filter((provider) => provider.children.length > 0);
 
     return withModels.map((provider) => ({
       // With one provider the group is just 「指定模型」; otherwise the provider
@@ -39,7 +49,7 @@ export const useModelOptions = (kind: ModelKind) => {
         value: toOptionValue({ model: model.id, provider: provider.id }),
       })),
     }));
-  }, [providers, t]);
+  }, [kind, providers, t]);
 
   /** Option value → model ref; the model id may itself contain slashes. */
   const parseValue = useCallback((value: string): ModelRef => {

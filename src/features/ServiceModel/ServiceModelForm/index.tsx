@@ -58,7 +58,7 @@ type RowKey = typeof DEFAULT_AGENT_ROW | DisplaySlot;
 // lobe-design-ignore DETAIL-NO-EMPTY: the groups and rows are a fixed list; a group left empty (personal rows hidden in a workspace) is filtered out
 /** 「高级」 is grouped by what the task is for, not by the model it follows. */
 const GROUPS: { key: string; rows: RowKey[] }[] = [
-  { key: 'agent', rows: [DEFAULT_AGENT_ROW, 'agentMeta', 'expertise', 'goal'] },
+  { key: 'agent', rows: [DEFAULT_AGENT_ROW, 'agentMeta', 'expertise', 'goal', 'verify'] },
   { key: 'topic', rows: ['topic', 'thread', 'generationTopic', 'topicAutoSummary'] },
   { key: 'content', rows: ['translation', 'historyCompress', 'promptRewrite'] },
   {
@@ -81,8 +81,14 @@ const MEMORY_CONTEXT_LIMIT_SLOTS = new Set<RowKey>([
   'userMemoryPersonaWriter',
 ]);
 
-const modelKindOf = (row: RowKey): ModelKind =>
-  row === 'userMemoryEmbedding' ? 'embedding' : row === 'asr' ? 'asr' : 'chat';
+const MODEL_KIND_OF_ROW: Partial<Record<RowKey, ModelKind>> = {
+  asr: 'asr',
+  userMemoryEmbedding: 'embedding',
+  // The verifier reads screenshot evidence; a text-only model cannot judge it.
+  verify: 'vision',
+};
+
+const modelKindOf = (row: RowKey): ModelKind => MODEL_KIND_OF_ROW[row] ?? 'chat';
 
 const PERSONAL_SLOTS = new Set<UserServiceModelConfigKey>(PERSONAL_SYSTEM_AGENT_KEYS);
 const NO_SLOTS = new Set<UserServiceModelConfigKey>();

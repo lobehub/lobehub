@@ -1897,6 +1897,8 @@
   "systemAgent.userMemoryPersonaWriter.label": "Model",
   "systemAgent.userMemoryPersonaWriter.modelDesc": "Model used to write persona-oriented memory summaries.",
   "systemAgent.userMemoryPersonaWriter.title": "Memory Persona Writer",
+  "systemAgent.verify.modelDesc": "Model the built-in verifier uses to check task results against their acceptance criteria. It reads screenshot evidence, so only vision models are listed. A task with its own verifier agent uses that agent instead.",
+  "systemAgent.verify.title": "Task Acceptance",
   "tab.about": "About",
   "tab.addAgentSkill": "Add Agent Skill",
   "tab.addCustomMcp": "Add Custom MCP Skill",

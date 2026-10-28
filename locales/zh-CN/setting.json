@@ -1897,6 +1897,8 @@
   "systemAgent.userMemoryPersonaWriter.label": "模型",
   "systemAgent.userMemoryPersonaWriter.modelDesc": "用于生成面向画像的记忆摘要。",
   "systemAgent.userMemoryPersonaWriter.title": "记忆画像写入",
+  "systemAgent.verify.modelDesc": "内置验收助手用来对照验收标准检查任务结果的模型。验收需要读取截图证据，因此只列出支持视觉的模型。任务指定了自己的验收助手时，改用该助手。",
+  "systemAgent.verify.title": "任务验收",
   "tab.about": "关于",
   "tab.addAgentSkill": "添加 Agent 技能",
   "tab.addCustomMcp": "添加自定义 MCP 技能",

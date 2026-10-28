@@ -1812,6 +1812,9 @@ When I am ___, I need ___
   'systemAgent.goal.modelDesc':
     'Model used to turn a persistent goal into its standing acceptance criteria.',
   'systemAgent.goal.title': 'Goal Creation',
+  'systemAgent.verify.modelDesc':
+    'Model the built-in verifier uses to check task results against their acceptance criteria. It reads screenshot evidence, so only vision models are listed. A task with its own verifier agent uses that agent instead.',
+  'systemAgent.verify.title': 'Task Acceptance',
   'systemAgent.customPrompt.addPrompt': 'Add Custom Prompt',
   'systemAgent.customPrompt.desc':
     'Once filled out, the system agent will use the custom prompt when generating content',

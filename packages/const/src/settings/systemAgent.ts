@@ -4,6 +4,8 @@ import {
   DEFAULT_EMBEDDING_PROVIDER,
   DEFAULT_MINI_PROVIDER,
   DEFAULT_PROVIDER,
+  DEFAULT_VERIFY_MODEL,
+  DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
@@ -65,6 +67,14 @@ export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = 
   provider: DEFAULT_EMBEDDING_PROVIDER,
 };
 
+// Verification is the quality gate and reads screenshot evidence, so it stays on
+// one vision-capable model instead of following a tier. Deployments can repoint
+// it with `SYSTEM_AGENT=verify=<provider>/<model>`.
+export const DEFAULT_VERIFY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  model: DEFAULT_VERIFY_MODEL,
+  provider: DEFAULT_VERIFY_PROVIDER,
+};
+
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
@@ -85,6 +95,7 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topicAutoSummary: DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM,
   translation: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  verify: DEFAULT_VERIFY_SYSTEM_AGENT_ITEM,
 };
 
 /**
@@ -92,7 +103,7 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
  * above is its tier's default, so a slot that follows an unset tier runs the
  * same system-recommended model the tier shows. The first slot of a tier
  * stands for the tier's own recommendation. Slots left out (`asr`,
- * `channelRouting`, onboarding) keep their own system default and ignore tier changes.
+ * `channelRouting`, onboarding, `verify`) keep their own system default and ignore tier changes.
  */
 export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModelConfigKey[]> = {
   embedding: ['userMemoryEmbedding'],
