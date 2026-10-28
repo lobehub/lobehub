@@ -60,6 +60,7 @@ import { sendMessengerPush } from '@/server/services/messenger/push';
 import type { ServerRuntimeRegistration } from '../types';
 import type { MessageRouteParams } from './MessageDispatcherService';
 import { MessageDispatcherService } from './MessageDispatcherService';
+import { createMessageImageStore } from './storeMessageImages';
 
 /**
  * Shape returned by `listMessengers` / `getMessengerDetail` to the tool runtime.
@@ -906,7 +907,16 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
     };
 
-    return new MessageExecutionRuntime({ botProvider, service });
+    return new MessageExecutionRuntime({
+      botProvider,
+      resolveImages: createMessageImageStore({
+        agentId: context.agentId,
+        serverDB,
+        userId,
+        workspaceId: context.workspaceId,
+      }),
+      service,
+    });
   },
   identifier: MessageToolIdentifier,
 };

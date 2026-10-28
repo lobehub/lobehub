@@ -42,6 +42,7 @@ import type {
   ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
+  MessageItem,
   MessengerInfo,
   MessengerLinkInfo,
   MessengerPlatformInfo,
@@ -82,6 +83,12 @@ import type {
   UpdateBotParams,
   UpdateBotState,
 } from '../types';
+import type { MessageImageResolver } from './messageImages';
+import {
+  collectImageCandidates,
+  describeAttachedImages,
+  formatMessageLines,
+} from './messageImages';
 
 // Re-export all param/state types so adapters can import from executionRuntime entry
 export type {
@@ -167,6 +174,11 @@ export type {
   UpdateBotState,
 } from '../types';
 export type { MessageItem } from '../types';
+export type {
+  MessageImageCandidate,
+  MessageImageResolver,
+  MessageToolImage,
+} from './messageImages';
 
 /**
  * Service interface for message operations.
@@ -253,6 +265,11 @@ export interface BotProviderQuery {
 
 export interface MessageExecutionRuntimeOptions {
   botProvider?: BotProviderQuery;
+  /**
+   * Stores image attachments of read / searched messages so they can ride on the tool result
+   * (`state.images`) for vision models. Absent = images are named in the text only.
+   */
+  resolveImages?: MessageImageResolver;
   service: MessageRuntimeService;
 }
 
@@ -343,11 +360,28 @@ const describeDiscordPagination = (
 
 export class MessageExecutionRuntime {
   private botProvider?: BotProviderQuery;
+  private resolveImages?: MessageImageResolver;
   private service: MessageRuntimeService;
 
   constructor(options: MessageExecutionRuntimeOptions) {
     this.service = options.service;
     this.botProvider = options.botProvider;
+    this.resolveImages = options.resolveImages;
+  }
+
+  /**
+   * The newest image attachments of a message page, stored for the model. Never throws: a
+   * failed store leaves the images named in the text, and the read still succeeds.
+   */
+  private async attachImages(messages: MessageItem[] | undefined) {
+    const { candidates, total } = collectImageCandidates(messages);
+    if (candidates.length === 0 || !this.resolveImages) return { images: [], total };
+
+    try {
+      return { images: await this.resolveImages(candidates), total };
+    } catch {
+      return { images: [], total };
+    }
   }
 
   // ==================== Core Message Operations ====================
@@ -390,12 +424,8 @@ export class MessageExecutionRuntime {
     try {
       const result = await this.service.readMessages(params);
       const count = result.messages?.length ?? 0;
-      const formatted = result.messages
-        ?.map(
-          (m) =>
-            `[${m.timestamp}] [messageId: ${JSON.stringify(m.id)}] ${m.author.name}: ${m.content}`,
-        )
-        .join('\n');
+      const { images, total } = await this.attachImages(result.messages);
+      const formatted = formatMessageLines(result.messages, images);
 
       const paginationHint =
         params.platform === 'discord'
@@ -405,8 +435,8 @@ export class MessageExecutionRuntime {
             : '';
 
       return {
-        content: `Fetched ${count} messages from ${params.platform}:${params.channelId}${params.platform === 'discord' ? paginationHint : ''}\n\n${formatted ?? '(no messages)'}${params.platform === 'discord' ? '' : paginationHint}`,
-        state: result,
+        content: `Fetched ${count} messages from ${params.platform}:${params.channelId}${params.platform === 'discord' ? paginationHint : ''}\n\n${formatted ?? '(no messages)'}${params.platform === 'discord' ? '' : paginationHint}${describeAttachedImages(images, total)}`,
+        state: images.length > 0 ? { ...result, images } : result,
         success: true,
       };
     } catch (e) {
@@ -493,16 +523,12 @@ export class MessageExecutionRuntime {
     try {
       const result = await this.service.searchMessages(params);
       const count = result.totalFound ?? result.messages?.length ?? 0;
-      const formatted = result.messages
-        ?.map(
-          (m) =>
-            `[${m.timestamp}] [messageId: ${JSON.stringify(m.id)}] ${m.author.name}: ${m.content}`,
-        )
-        .join('\n');
+      const { images, total } = await this.attachImages(result.messages);
+      const formatted = formatMessageLines(result.messages, images);
 
       return {
-        content: `Found ${count} messages matching "${params.query}" in ${params.platform}:${params.channelId}\n\n${formatted ?? '(no results)'}`,
-        state: result,
+        content: `Found ${count} messages matching "${params.query}" in ${params.platform}:${params.channelId}\n\n${formatted ?? '(no results)'}${describeAttachedImages(images, total)}`,
+        state: images.length > 0 ? { ...result, images } : result,
         success: true,
       };
     } catch (e) {

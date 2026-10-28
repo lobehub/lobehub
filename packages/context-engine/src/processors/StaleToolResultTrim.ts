@@ -108,6 +108,7 @@ export interface StaleToolResultTrimConfig {
 const LOCAL_SYSTEM = 'lobe-local-system';
 const BROWSER = 'lobe-browser';
 const WEB_BROWSING = 'lobe-web-browsing';
+const MESSAGE = 'lobe-message';
 
 export interface CacheEconomics {
   /** Cached-read price relative to the plain input price. */
@@ -160,6 +161,7 @@ const READ_APIS = new Set(['readFile']);
 const WRITE_APIS = new Set(['writeFile', 'editFile']);
 const COMMAND_APIS = new Set(['runCommand', 'getCommandOutput']);
 const CRAWL_APIS = new Set(['search', 'crawlSinglePage', 'crawlMultiPages']);
+const MESSAGE_READ_APIS = new Set(['readMessages', 'searchMessages']);
 
 interface PluginInfo {
   apiName?: string;
@@ -561,6 +563,17 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       return {
         content: `${content.slice(0, this.config.crawlKeepChars)}\n[... trimmed ${content.length - this.config.crawlKeepChars} chars of stale web-browsing result. Search or crawl again if you need the full content.]`,
         rule: 'staleCrawlResult',
+      };
+    }
+
+    if (identifier === MESSAGE && MESSAGE_READ_APIS.has(apiName)) {
+      // Chat images read from the channel cost vision tokens on every later turn. The text
+      // (who said what) stays; the images are dropped once the result leaves the recent window.
+      const images = (message.pluginState as { images?: unknown[] } | undefined)?.images;
+      if (!images?.length) return undefined;
+      return {
+        content: `${content}\n[${images.length} image(s) from this ${apiName} result are no longer attached. Call ${apiName} again if you need to see them.]`,
+        rule: 'staleMessageImages',
       };
     }
 

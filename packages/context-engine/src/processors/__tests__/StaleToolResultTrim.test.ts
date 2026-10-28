@@ -108,6 +108,43 @@ describe('StaleToolResultTrimProcessor', () => {
     expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
   });
 
+  it('drops chat images from an old readMessages result but keeps its text', async () => {
+    const text =
+      'Fetched 3 messages\n[...] none01161: [image #1 attached to this result: image.png]';
+    const messages = [
+      toolMessage('lobe-message', 'readMessages', text, {
+        pluginState: {
+          images: [{ mediaType: 'image/png', url: 'https://app/f/file_1' }],
+          messages: [],
+        },
+      }),
+      toolMessage('lobe-message', 'readMessages', 'no images here'),
+      ...recencyPadding(3),
+    ];
+
+    const result = await createProcessor().process(createContext(messages));
+
+    expect(result.messages[0].content).toBe(
+      `${text}\n[1 image(s) from this readMessages result are no longer attached. Call readMessages again if you need to see them.]`,
+    );
+    expect((result.messages[0] as any).pluginState.images).toBeUndefined();
+    expect((result.messages[0] as any).pluginState.messages).toEqual([]);
+    expect(result.messages[1].content).toBe('no images here');
+    expect(result.metadata.staleToolResultTrim?.byRule).toEqual({ staleMessageImages: 1 });
+  });
+
+  it('keeps chat images inside the recency window', async () => {
+    const messages = [
+      toolMessage('lobe-message', 'readMessages', 'recent read', {
+        pluginState: { images: [{ mediaType: 'image/png', url: 'https://app/f/file_1' }] },
+      }),
+    ];
+
+    const result = await createProcessor().process(createContext(messages));
+
+    expect((result.messages[0] as any).pluginState.images).toHaveLength(1);
+  });
+
   it('trims stale browser snapshots outside the recency window', async () => {
     const messages = [
       toolMessage('lobe-browser', 'snapshot', '- button "写作" [ref=e1]\n'.repeat(100)),
