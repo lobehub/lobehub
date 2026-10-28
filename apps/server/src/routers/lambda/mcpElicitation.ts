@@ -1,7 +1,9 @@
 import type { McpElicitationCheckpoint } from '@lobechat/mcp-elicitation';
 import { parseMcpElicitationRequest } from '@lobechat/mcp-elicitation';
+import type { PendingMcpElicitation } from '@lobechat/types';
 import type { ElicitRequestParams } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -104,13 +106,14 @@ export const mcpElicitationRouter = router({
     }),
   pending: procedure
     .input(z.object({ topicId: z.string(), threadId: z.string().nullable().optional() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input, ctx }): Promise<PendingMcpElicitation[]> => {
       const plugins = await ctx.mcpElicitation.messages.listMessagePluginsByTopic(input.topicId);
       const pending = plugins.filter(
         (plugin) => plugin.state?.mcpElicitation && plugin.intervention?.status === 'pending',
       );
-      const items = await Promise.all(
-        pending.map(async (plugin) => {
+      const items = await pMap(
+        pending,
+        async (plugin) => {
           const state = plugin.state!.mcpElicitation as {
             batchId: string;
             deadline: number;
@@ -162,7 +165,8 @@ export const mcpElicitationRouter = router({
             toolCallId: plugin.toolCallId!,
             toolMessageId: plugin.id,
           };
-        }),
+        },
+        { concurrency: 5 },
       );
       return items.filter((item) => item !== undefined);
     }),

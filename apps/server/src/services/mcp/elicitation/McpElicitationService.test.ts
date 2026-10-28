@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { eq, inArray } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
 import { agentOperations, agents, topics, userInstalledPlugins, users } from '@/database/schemas';
@@ -13,6 +13,7 @@ import {
   type AsyncToolDeps,
   resolveAsyncToolOnComplete,
 } from '../../agentRuntime/AgentRuntimeService/asyncTool';
+import { LocalQueueServiceImpl } from '../../queue/impls/local';
 import { mcpConnectionBinding } from './binding';
 import { expireMcpElicitation } from './expire';
 import { McpElicitationService } from './McpElicitationService';
@@ -26,8 +27,9 @@ import { resumeMcpElicitation } from './resume';
 const probes = vi.hoisted(() => ({
   execute: vi.fn(),
   schedule: vi.fn(),
-  control: vi.fn(async ({ result }) => ({ result, blocked: false })),
+  control: vi.fn(async ({ result }) => ({ result, blocked: false, cancelled: false })),
   resume: vi.fn(),
+  queueImpl: undefined as unknown,
 }));
 vi.mock('@/server/services/toolExecution', () => ({
   ToolExecutionService: class {
@@ -45,7 +47,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
 vi.mock('@/server/services/queue', () => ({
   QueueService: class {
     getImpl() {
-      return {};
+      return probes.queueImpl ?? {};
     }
     scheduleMessage = probes.schedule;
   },
@@ -81,7 +83,9 @@ const open = (overrides: Partial<Parameters<typeof service.open>[1]> = {}) =>
   });
 
 beforeEach(async () => {
+  vi.stubEnv('KEY_VAULTS_SECRET', 'fixture-private-binding-key');
   vi.clearAllMocks();
+  probes.queueImpl = undefined;
   probes.execute.mockResolvedValue({ content: 'remote receipt', success: true, executionTime: 1 });
   probes.schedule.mockResolvedValue('queued');
   await db.delete(agentOperations).where(eq(agentOperations.id, identity.operationId));
@@ -128,6 +132,8 @@ beforeEach(async () => {
     identity.assistantMessageId,
   );
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 afterAll(async () => {
   await db.delete(users).where(inArray(users.id, [owner, other]));
@@ -261,16 +267,56 @@ describe('durable MCP elicitation', () => {
   });
   it('expires a parked tool with an error receipt and resumes its parent without executing MCP', async () => {
     const { item, toolMessageId } = await open({ deadline: Date.now() - 10, legacy: false });
-    await expireMcpElicitation(service, item.id);
+    await expireMcpElicitation(service, item.id, {
+      controlCompletedToolResult: probes.control,
+      tryResumeParentFromAsyncTool: probes.resume,
+    });
     expect((await messageModel.findById(toolMessageId))?.content).toContain('timed out');
     expect(probes.execute).not.toHaveBeenCalled();
     expect(probes.resume).toHaveBeenCalledOnce();
-    await expireMcpElicitation(service, item.id);
+    await expireMcpElicitation(service, item.id, {
+      controlCompletedToolResult: probes.control,
+      tryResumeParentFromAsyncTool: probes.resume,
+    });
     expect(probes.resume).toHaveBeenCalledOnce();
   });
   it('clears an orphaned form when expiry scheduling fails', async () => {
     probes.schedule.mockRejectedValueOnce(new Error('queue unavailable'));
     await expect(open({ legacy: false })).rejects.toThrow('queue unavailable');
+    const [plugin] = await messageModel.listMessagePluginsByTopic('mcp-topic');
+    expect(plugin.state?.mcpElicitation).toBeNull();
+    expect(plugin.intervention?.status).toBe('none');
+  });
+  it('runs local expiry with the injected runtime and finishes the persisted tool once', async () => {
+    const impl = new LocalQueueServiceImpl();
+    probes.queueImpl = impl;
+    probes.schedule.mockImplementationOnce((message) =>
+      impl.scheduleMessage({ ...message, delay: 1 }),
+    );
+    const local = new McpElicitationService(db, owner, undefined, (store, itemId) =>
+      expireMcpElicitation(store, itemId, {
+        controlCompletedToolResult: probes.control,
+        tryResumeParentFromAsyncTool: probes.resume,
+      }),
+    );
+    const { toolMessageId } = await local.open(identity, {
+      deadline: Date.now() - 10,
+      legacy: false,
+      requests: { input: request },
+    });
+    await vi.waitFor(async () => {
+      expect((await messageModel.findById(toolMessageId))?.content).toContain('timed out');
+      expect(probes.resume).toHaveBeenCalledOnce();
+    });
+    expect(probes.control).toHaveBeenCalledOnce();
+    expect(probes.resume).toHaveBeenCalledOnce();
+    expect(probes.execute).not.toHaveBeenCalled();
+  });
+  it('fails closed rather than leaving a pending local expiry without an executor', async () => {
+    probes.queueImpl = new LocalQueueServiceImpl();
+    await expect(open({ legacy: false })).rejects.toThrow(
+      'Local MCP expiry execution is not configured',
+    );
     const [plugin] = await messageModel.listMessagePluginsByTopic('mcp-topic');
     expect(plugin.state?.mcpElicitation).toBeNull();
     expect(plugin.intervention?.status).toBe('none');

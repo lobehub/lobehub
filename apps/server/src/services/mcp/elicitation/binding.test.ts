@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpConnectionBinding } from './binding';
+
+beforeEach(() => vi.stubEnv('KEY_VAULTS_SECRET', 'fixture-private-binding-key'));
+afterEach(() => vi.unstubAllEnvs());
 
 const oauth = {
   type: 'oauth2',
@@ -16,6 +19,14 @@ const oauth = {
   tokenExpiresAt: 1,
 };
 describe('MCP private continuation binding', () => {
+  it('keys the private fingerprint with the server secret and fails closed without it', () => {
+    const params = { auth: { type: 'bearer', token: 'fixture-low-entropy' } };
+    const first = mcpConnectionBinding(params);
+    vi.stubEnv('KEY_VAULTS_SECRET', 'different-server-key');
+    expect(mcpConnectionBinding(params)).not.toBe(first);
+    vi.stubEnv('KEY_VAULTS_SECRET', undefined);
+    expect(() => mcpConnectionBinding(params)).toThrow('required for MCP connection binding');
+  });
   it('allows real OAuth token rotation while retaining its non-rotating configuration', () => {
     expect(
       mcpConnectionBinding({
@@ -81,5 +92,12 @@ describe('MCP private continuation binding', () => {
     ])
       expect(mcpConnectionBinding(base)).not.toBe(mcpConnectionBinding({ ...base, ...patch }));
     expect(mcpConnectionBinding(base)).toMatch(/^[a-f0-9]{64}$/);
+  });
+  it('retains every credential when header names differ only in case', () => {
+    expect(
+      mcpConnectionBinding({ headers: { Authorization: 'first', authorization: 'last' } }),
+    ).not.toBe(
+      mcpConnectionBinding({ headers: { Authorization: 'changed', authorization: 'last' } }),
+    );
   });
 });

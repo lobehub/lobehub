@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { expireMcpElicitation } from '@/server/services/mcp/elicitation/expire';
 import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
 
@@ -20,6 +21,7 @@ export async function mcpElicitationExpire(c: Context) {
   await expireMcpElicitation(
     new McpElicitationService(db, input.payload.userId, input.payload.workspaceId),
     input.payload.itemId,
+    new AgentRuntimeService(db, input.payload.userId, { workspaceId: input.payload.workspaceId }),
   );
   return c.json({ success: true });
 }

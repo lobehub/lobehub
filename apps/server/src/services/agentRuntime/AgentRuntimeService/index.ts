@@ -9,6 +9,7 @@ import { appEnv } from '@/envs/app';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
+import { expireMcpElicitation } from '@/server/services/mcp/elicitation/expire';
 import { MessageService } from '@/server/services/message';
 import { QueueService } from '@/server/services/queue';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -209,6 +210,7 @@ export class AgentRuntimeService {
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,
       mcpService,
+      onMcpElicitationExpired: (service, itemId) => expireMcpElicitation(service, itemId, this),
     });
 
     // Setup local execution callback for LocalQueueServiceImpl

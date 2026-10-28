@@ -31,6 +31,7 @@ import { type MCPService } from '../mcp';
 import { mcpConnectionBinding } from '../mcp/elicitation/binding';
 import {
   type McpCallIdentity,
+  type McpElicitationExpiry,
   McpElicitationService,
 } from '../mcp/elicitation/McpElicitationService';
 import { type BuiltinToolsExecutor } from './builtin';
@@ -49,6 +50,7 @@ const log = debug('lobe-server:tool-execution-service');
 interface ToolExecutionServiceDeps {
   builtinToolsExecutor: BuiltinToolsExecutor;
   mcpService: MCPService;
+  onMcpElicitationExpired?: McpElicitationExpiry;
 }
 
 /**
@@ -154,10 +156,16 @@ const toModelContent = (result: any): string => {
 export class ToolExecutionService {
   private builtinToolsExecutor: BuiltinToolsExecutor;
   private mcpService: MCPService;
+  private onMcpElicitationExpired?: McpElicitationExpiry;
 
-  constructor({ mcpService, builtinToolsExecutor }: ToolExecutionServiceDeps) {
+  constructor({
+    mcpService,
+    builtinToolsExecutor,
+    onMcpElicitationExpired,
+  }: ToolExecutionServiceDeps) {
     this.builtinToolsExecutor = builtinToolsExecutor;
     this.mcpService = mcpService;
+    this.onMcpElicitationExpired = onMcpElicitationExpired;
   }
 
   async executeTool(
@@ -329,7 +337,12 @@ export class ToolExecutionService {
 
     const elicitationService =
       context.serverDB && context.userId && context.operationId && context.assistantMessageId
-        ? new McpElicitationService(context.serverDB, context.userId, context.workspaceId)
+        ? new McpElicitationService(
+            context.serverDB,
+            context.userId,
+            context.workspaceId,
+            this.onMcpElicitationExpired,
+          )
         : undefined;
     const identity: McpCallIdentity | undefined = elicitationService
       ? {

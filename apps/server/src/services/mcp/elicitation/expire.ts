@@ -1,9 +1,13 @@
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import type { McpElicitationService } from './McpElicitationService';
 
 /** Durable deadline callback. Old rounds cannot expire a newer request on the same tool. */
-export async function expireMcpElicitation(service: McpElicitationService, itemId: string) {
+export async function expireMcpElicitation(
+  service: McpElicitationService,
+  itemId: string,
+  runtime: Pick<AgentRuntimeService, 'controlCompletedToolResult' | 'tryResumeParentFromAsyncTool'>,
+) {
   const item = await service.get(itemId);
   if (
     !item.toolMessageId ||
@@ -25,9 +29,6 @@ export async function expireMcpElicitation(service: McpElicitationService, itemI
   const { identity, pending } = await service.loadContinuation(item.toolMessageId);
   if (pending.batchId !== item.batchId) return;
   await service.interventions.markBatchTerminal(item.operationId, item.batchId, 'timed_out');
-  const runtime = new AgentRuntimeService(service.db, service.userId, {
-    workspaceId: service.workspaceId,
-  });
   const controlled = await runtime.controlCompletedToolResult({
     operationId: item.operationId,
     toolMessageId: item.toolMessageId,

@@ -18,6 +18,7 @@ import type { ToolExecutionResultResponse } from '@/server/services/toolExecutio
 
 import { buildPluginMcpParams } from '../pluginParams';
 import { mcpConnectionBinding } from './binding';
+import { expireMcpElicitation } from './expire';
 import { McpElicitationService } from './McpElicitationService';
 
 /** First-winner outbox + fenced execution; a lost response never replays a mutating tools/call. */
@@ -29,6 +30,9 @@ export async function resumeMcpElicitation(
     responses: Record<string, ElicitResult>;
   },
 ) {
+  const runtime = new AgentRuntimeService(service.db, service.userId, {
+    workspaceId: service.workspaceId,
+  });
   const { item, prior } = await service.claim(
     params.itemId,
     params.resolutionRequestId,
@@ -120,6 +124,8 @@ export async function resumeMcpElicitation(
       const executor = new ToolExecutionService({
         builtinToolsExecutor: new BuiltinToolsExecutor(service.db, service.userId),
         mcpService,
+        onMcpElicitationExpired: (pendingService, itemId) =>
+          expireMcpElicitation(pendingService, itemId, runtime),
       });
       result = await executor.executeTool(
         { ...tool, type: 'mcp' },
@@ -159,9 +165,6 @@ export async function resumeMcpElicitation(
       throw new Error('MCP continuation execution claim was lost');
   }
   if (!result.deferred) {
-    const runtime = new AgentRuntimeService(service.db, service.userId, {
-      workspaceId: service.workspaceId,
-    });
     const controlled = await runtime.controlCompletedToolResult({
       operationId: identity.operationId,
       toolMessageId: item.toolMessageId,

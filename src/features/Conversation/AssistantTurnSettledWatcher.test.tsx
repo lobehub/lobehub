@@ -43,6 +43,10 @@ vi.mock('@/store/chat', () => ({
   },
 }));
 
+vi.mock('./hooks/useFetchMcpElicitations', () => ({
+  useFetchMcpElicitations: () => ({ data: [] }),
+}));
+
 interface SeedOp {
   cancelReason?: string;
   endTime?: number;

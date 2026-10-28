@@ -178,12 +178,10 @@ export const callConnectorToolById = async (
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
   const elicitation = params.elicitation;
+  const deadline = elicitation && Math.min(elicitation.deadline, Date.now() + 120_000);
   const host =
     elicitation && ctx.mcpElicitationService
-      ? ctx.mcpElicitationService.createLegacyHost(
-          elicitation.identity,
-          Math.min(elicitation.deadline, Date.now() + 120_000),
-        )
+      ? ctx.mcpElicitationService.createLegacyHost(elicitation.identity, deadline!)
       : undefined;
   if (elicitation && ctx.mcpElicitationService) {
     if (
@@ -197,6 +195,7 @@ export const callConnectorToolById = async (
     elicitation: {
       host,
       interactive: !!host,
+      timeoutMs: host && deadline ? Math.max(1, deadline - Date.now()) : undefined,
       scope: ctx.mcpElicitationService
         ? JSON.stringify([ctx.mcpElicitationService.userId, ctx.mcpElicitationService.workspaceId])
         : undefined,

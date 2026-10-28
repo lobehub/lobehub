@@ -1,9 +1,10 @@
+import type { PendingMcpElicitation } from '@lobechat/types';
 import type { ElicitResult } from '@modelcontextprotocol/client';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
 class McpElicitationService {
-  pending = (topicId: string, threadId?: string | null) =>
+  pending = (topicId: string, threadId?: string | null): Promise<PendingMcpElicitation[]> =>
     lambdaClient.mcpElicitation.pending.query({ topicId, threadId });
   resolve = (
     itemId: string,
@@ -13,4 +14,4 @@ class McpElicitationService {
 }
 
 export const mcpElicitationService = new McpElicitationService();
-export type PendingMcpElicitation = Awaited<ReturnType<McpElicitationService['pending']>>[number];
+export type { PendingMcpElicitation } from '@lobechat/types';

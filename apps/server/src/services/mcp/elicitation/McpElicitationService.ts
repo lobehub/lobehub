@@ -46,6 +46,12 @@ export interface StoredMcpElicitation {
   requests: Record<string, ElicitRequestParams>;
 }
 
+/** The runtime owns execution; the interaction store never imports the runtime. */
+export type McpElicitationExpiry = (
+  service: McpElicitationService,
+  itemId: string,
+) => Promise<void>;
+
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
 /** Uses the same sealed intervention batches and private resolution outbox as ask-user. */
@@ -58,6 +64,7 @@ export class McpElicitationService {
     readonly db: LobeChatDatabase,
     readonly userId: string,
     readonly workspaceId?: string,
+    private readonly onExpire?: McpElicitationExpiry,
   ) {
     this.interventions = new AgentInterventionModel(db, userId, workspaceId);
     this.messages = new MessageModel(db, userId, workspaceId);
@@ -214,11 +221,13 @@ export class McpElicitationService {
       try {
         const queue = new QueueService();
         const impl = queue.getImpl();
-        if (impl instanceof LocalQueueServiceImpl)
+        if (impl instanceof LocalQueueServiceImpl) {
+          const onExpire = this.onExpire;
+          if (!onExpire) throw new Error('Local MCP expiry execution is not configured');
           impl.setExecutionCallback(async () => {
-            const { expireMcpElicitation } = await import('./expire');
-            await expireMcpElicitation(this, item.id);
+            await onExpire(this, item.id);
           });
+        }
         const base =
           process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
         await queue.scheduleMessage({
