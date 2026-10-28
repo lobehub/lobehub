@@ -1401,7 +1401,7 @@ export default {
   'settingImage.defaultCount.desc':
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
-  'settingImage.defaultCount.title': 'Generation',
+  'settingImage.defaultCount.title': 'Image Generation',
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
@@ -1542,6 +1542,7 @@ export default {
     'Models LobeHub uses for background tasks. They follow the system recommendation by default and upgrade automatically when new models arrive.',
   'serviceModel.off': 'Off',
   'serviceModel.systemRecommended': 'System recommended',
+  'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
   'serviceModel.tier.embedding.desc': 'Memory retrieval',
   'serviceModel.tier.embedding.title': 'Embedding Model',
@@ -1553,6 +1554,9 @@ export default {
   'serviceModel.tier.verify.desc':
     'Task and goal acceptance. It reads screenshot evidence, so only vision models are listed',
   'serviceModel.tier.verify.title': 'Acceptance Model',
+  'serviceModel.voice.desc':
+    'Turns voice messages into text for external agents that only accept text',
+  'serviceModel.voice.title': 'Voice',
   'serviceModel.topicAutoSummary.desc':
     'Summarizes topics created in the rolling 24-hour window after one hour without message activity.',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',

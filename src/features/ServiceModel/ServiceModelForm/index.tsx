@@ -6,7 +6,7 @@ import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 
@@ -36,6 +36,7 @@ import {
   restoreAllSlots,
   type SlotChoice,
   type StoredSystemAgent,
+  tierOfSlot,
 } from '../serviceModelState';
 import SlotRow, { type RowState } from './SlotRow';
 import { PICKER_WIDTH, styles } from './styles';
@@ -70,6 +71,15 @@ const TIERS: { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[] =
 
 /** Speech-to-text follows no tier; it is its own row after the tiers. */
 const ASR_ROW = 'asr' satisfies RowKey;
+
+/** A settings card: one per tier, plus voice. */
+type Section = ServiceModelTier | 'voice';
+
+const sectionOf = (row: RowKey | UserServiceModelConfigKey): Section => {
+  if (row === DEFAULT_AGENT_ROW) return 'main';
+  if (row === ASR_ROW) return 'voice';
+  return tierOfSlot(row) ?? 'main';
+};
 
 const MEMORY_CONTEXT_LIMIT_SLOTS = new Set<RowKey>([
   'memoryAnalysisAgentConfig',
@@ -113,6 +123,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     () => new Set(hash === `#${ADVANCED_ANCHOR}` ? TIERS.map(({ key }) => key) : []),
   );
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const [savingSection, setSavingSection] = useState<Section>();
   const form = useForm();
 
   if (!isUserStateInit) {
@@ -151,12 +162,17 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     return state.kind === 'custom' ? state : { kind: state.kind };
   };
 
-  const write = (columns: Parameters<typeof replaceServiceModelSettings>[0]) =>
-    save(() => replaceServiceModelSettings(columns));
+  /** Saves and remembers which card changed, so only that card shows the save hint. */
+  const write = (section: Section, columns: Parameters<typeof replaceServiceModelSettings>[0]) => {
+    setSavingSection(section);
+    return save(() => replaceServiceModelSettings(columns));
+  };
 
   const writeSlot = (row: RowKey, choice: SlotChoice) => {
     if (row !== DEFAULT_AGENT_ROW) {
-      write({ systemAgent: applySlotChoice(storedSystemAgent, row, choice, { skipSlots }) });
+      write(sectionOf(row), {
+        systemAgent: applySlotChoice(storedSystemAgent, row, choice, { skipSlots }),
+      });
       return;
     }
 
@@ -165,11 +181,11 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     delete config.model;
     delete config.provider;
     if (choice.kind === 'custom') Object.assign(config, choice.value);
-    write({ defaultAgent: { ...storedDefaultAgent, config } });
+    write('main', { defaultAgent: { ...storedDefaultAgent, config } });
   };
 
   const writeSlotField = (slot: UserServiceModelConfigKey, patch: Partial<SystemAgentItem>) =>
-    write({
+    write(sectionOf(slot), {
       systemAgent: {
         ...storedSystemAgent,
         [slot]: { ...(storedSystemAgent?.[slot] as Partial<SystemAgentItem>), ...patch },
@@ -177,7 +193,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     });
 
   /** 「全部恢复」 for one tier: its pinned tasks follow the tier again; disabled ones stay off. */
-  const restoreTier = (rows: RowKey[]) => {
+  const restoreTier = (section: ServiceModelTier, rows: RowKey[]) => {
     const slots = rows.filter((row): row is DisplaySlot => row !== DEFAULT_AGENT_ROW);
     const columns: Parameters<typeof replaceServiceModelSettings>[0] = {
       systemAgent: restoreAllSlots(storedSystemAgent, defaults, slots, { skipSlots }),
@@ -188,7 +204,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
       delete config.provider;
       columns.defaultAgent = { ...storedDefaultAgent, config };
     }
-    write(columns);
+    write(section, columns);
   };
 
   const followLabelOf = (row: RowKey) => {
@@ -273,7 +289,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
                 disabled={!canManage}
                 size={'small'}
                 type={'text'}
-                onClick={() => restoreTier(rows)}
+                onClick={() => restoreTier(key, rows)}
               >
                 {t('serviceModel.advanced.restoreAll')}
               </Button>
@@ -364,44 +380,53 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
   // One settings group per page. Each tier is a form row; its 「高级」 is a
   // lighter sub-section right under it — small type, compact 40px rows — so the
   // tasks read as details of the tier they follow.
-  const group: FormGroupItem = {
-    children: (
-      <>
-        {tiers.map(({ key, modelKind, rows }, index) => {
-          const title = t(`serviceModel.tier.${key}.title`);
-          return (
-            <Fragment key={key}>
-              <Form.Field
-                desc={t(`serviceModel.tier.${key}.desc`)}
-                divider={index > 0}
-                label={
-                  <SettingsSearchAnchor
-                    id={index === 0 ? 'service-model-assignments' : `service-model-${key}`}
-                  >
-                    {title}
-                  </SettingsSearchAnchor>
-                }
-              >
-                <TierRow
-                  disabled={!canManage}
-                  modelKind={modelKind}
-                  recommended={resolveFollowModel({}, defaults, SERVICE_MODEL_TIER_SLOTS[key][0])!}
-                  title={title}
-                  value={getTierItem(storedSystemAgent, key)}
-                  onChange={(value) =>
-                    write({
-                      systemAgent: applyTierChoice(storedSystemAgent, key, value, { skipSlots }),
-                    })
-                  }
-                />
-              </Form.Field>
-              {rows.length > 1 && renderAdvanced(key, modelKind, rows)}
-            </Fragment>
-          );
-        })}
+  const saveHint = (section: Section) =>
+    saveStatus === 'idle' || savingSection !== section ? undefined : (
+      <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+    );
+  const withReason = (desc: string) => (!canManage && reason ? `${desc} ${reason}` : desc);
 
+  // One settings group per model kind, like 生图 below: each tier is its own
+  // card with its picker on top and the tasks that follow it in a lighter
+  // 「高级」 under it. Voice follows no tier, so it is a card of its own.
+  const groups: FormGroupItem[] = [
+    ...tiers.map(({ key, modelKind, rows }, index): FormGroupItem => {
+      const title = t(`serviceModel.tier.${key}.title`);
+      return {
+        children: (
+          <>
+            <Form.Field label={t('serviceModel.tierPicker')}>
+              <TierRow
+                disabled={!canManage}
+                modelKind={modelKind}
+                recommended={resolveFollowModel({}, defaults, SERVICE_MODEL_TIER_SLOTS[key][0])!}
+                title={title}
+                value={getTierItem(storedSystemAgent, key)}
+                onChange={(value) =>
+                  write(key, {
+                    systemAgent: applyTierChoice(storedSystemAgent, key, value, { skipSlots }),
+                  })
+                }
+              />
+            </Form.Field>
+            {rows.length > 1 && renderAdvanced(key, modelKind, rows)}
+          </>
+        ),
+        collapsible: false,
+        desc: withReason(t(`serviceModel.tier.${key}.desc`)),
+        extra: saveHint(key),
+        title: (
+          <SettingsSearchAnchor
+            id={index === 0 ? 'service-model-assignments' : `service-model-${key}`}
+          >
+            {title}
+          </SettingsSearchAnchor>
+        ),
+      };
+    }),
+    {
+      children: (
         <Form.Field
-          divider
           label={
             <SettingsSearchAnchor id={`service-model-${ASR_ROW}`}>
               {t(`systemAgent.${ASR_ROW}.title`)}
@@ -419,22 +444,19 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
             onChange={(choice) => writeSlot(ASR_ROW, choice)}
           />
         </Form.Field>
-      </>
-    ),
-    collapsible: false,
-    desc: `${t('serviceModel.desc')}${!canManage && reason ? ` ${reason}` : ''}`,
-    extra:
-      saveStatus === 'idle' ? undefined : (
-        <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
       ),
-    title: t('serviceModel.title'),
-  };
+      collapsible: false,
+      desc: withReason(t('serviceModel.voice.desc')),
+      extra: saveHint('voice'),
+      title: t('serviceModel.voice.title'),
+    },
+  ];
 
   return (
     <Form
       collapsible={false}
       form={form}
-      items={[group]}
+      items={groups}
       itemsType={'group'}
       variant={'filled'}
       {...FORM_STYLE}
