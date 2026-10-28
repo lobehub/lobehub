@@ -256,10 +256,12 @@ export class TaskConfigSliceActionImpl {
     });
   };
 
-  // Safely merges model/provider into config via task.updateConfig without overwriting checkpoint/review
+  // Safely merges model/provider into config via task.updateConfig without overwriting checkpoint/review.
+  // `null` clears a key, so the next run snapshots the assignee agent's model again.
   updateTaskModelConfig = async (
     id: string,
-    modelConfig: { model?: string; provider?: string },
+    modelConfig: { model?: string | null; provider?: string | null },
+    options?: { rethrow?: boolean },
   ): Promise<void> => {
     // Serialized with every other `config` writer, and with no refetch: switching
     // the model while picking a run location is the same column, and a late
@@ -276,6 +278,8 @@ export class TaskConfigSliceActionImpl {
         if (!target) return;
         target.config = { ...target.config, ...modelConfig };
       },
+      // Agent tools must report a write that did not land instead of claiming it.
+      rethrow: options?.rethrow,
     });
   };
 

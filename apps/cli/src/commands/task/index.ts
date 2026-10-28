@@ -21,6 +21,7 @@ import { registerDepCommands } from './dep';
 import { registerDocCommands } from './doc';
 import { briefIcon, priorityLabel, statusBadge } from './helpers';
 import { registerLifecycleCommands } from './lifecycle';
+import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
 import { registerReviewCommands } from './review';
 import { registerTopicCommands } from './topic';
 import { resolveAppUrl, resolveAppUrlBuilder, taskPath } from './url';
@@ -296,6 +297,14 @@ export function registerTaskCommand(program: Command) {
       console.log(`${pc.dim('Instruction:')} ${t.instruction}`);
       if (t.description) console.log(`${pc.dim('Description:')} ${t.description}`);
       if (t.agentId) console.log(`${pc.dim('Agent:')} ${t.agentId}`);
+      if (t.agentId) {
+        // Comparing against the agent's current default tells an override apart
+        // from the snapshot every assigned task gets at creation.
+        const agentConfig = await client.agent.getAgentConfigById
+          .query({ agentId: t.agentId })
+          .catch(() => null);
+        console.log(`${pc.dim('Model:')} ${formatTaskModel(t.config, agentConfig)}`);
+      }
       if (t.userId) console.log(`${pc.dim('User:')} ${t.userId}`);
       if (t.parent) {
         console.log(`${pc.dim('Parent:')} ${t.parent.identifier} ${t.parent.name || ''}`);
@@ -542,15 +551,19 @@ export function registerTaskCommand(program: Command) {
     .option('--user <idOrEmail>', 'Assign to a workspace member (user id, email or username)')
     .option('--parent <id>', 'Parent task ID')
     .option('--priority <n>', 'Priority (0=none, 1=urgent, 2=high, 3=normal, 4=low)', '0')
+    .option('--model <model>', "Model to run with (default: the assignee agent's model)")
+    .option('--provider <provider>', 'Provider for --model (default: resolved from the agent)')
     .option('--json [fields]', 'Output JSON')
     .action(
       async (options: {
         agent?: string;
         instruction: string;
         json?: string | boolean;
+        model?: string;
         name?: string;
         parent?: string;
         priority?: string;
+        provider?: string;
         user?: string;
       }) => {
         const client = await getTrpcClient();
@@ -566,6 +579,8 @@ export function registerTaskCommand(program: Command) {
         if (assigneeUserId) input.assigneeUserId = assigneeUserId;
         if (options.parent) input.parentTaskId = options.parent;
         if (options.priority) input.priority = Number.parseInt(options.priority, 10);
+        const modelConfig = toCreateModelConfig(options);
+        if (modelConfig) input.config = modelConfig;
 
         const result = await client.task.create.mutate(input);
         const url = buildUrl(taskPath(result.data.identifier, result.data.name));
@@ -594,6 +609,8 @@ export function registerTaskCommand(program: Command) {
     .option('--heartbeat-interval <n>', 'Heartbeat interval in seconds')
     .option('--heartbeat-timeout <n>', 'Heartbeat timeout in seconds (0 to disable)')
     .option('--description <text>', 'Task description')
+    .option('--model <model>', 'Model to run with ("null" to follow the assignee agent again)')
+    .option('--provider <provider>', 'Provider for the model (default: resolved from the agent)')
     .option(
       '--status <status>',
       'Set status (backlog, running, paused, completed, failed, canceled)',
@@ -609,8 +626,10 @@ export function registerTaskCommand(program: Command) {
           heartbeatTimeout?: string;
           instruction?: string;
           json?: string | boolean;
+          model?: string;
           name?: string;
           priority?: string;
+          provider?: string;
           status?: string;
           user?: string;
         },
@@ -632,6 +651,9 @@ export function registerTaskCommand(program: Command) {
           const val = Number.parseInt(options.heartbeatTimeout, 10);
           input.heartbeatTimeout = val === 0 ? null : val;
         }
+        // Deep-merged into config, so checkpoint / review / execution keys survive.
+        const configPatch = toModelConfigPatch(options);
+        if (configPatch) input.configPatch = configPatch;
         const hasFieldEdits = Object.keys(input).length > 1;
 
         // Status-only edits use the lifecycle API. Combined edits go through

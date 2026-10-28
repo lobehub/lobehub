@@ -19,6 +19,11 @@ import { getTrpcClient } from '../../api/client';
 import { confirm, outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
+import {
+  applyCreatedGoalTaskModel,
+  parseGoalModelConfig,
+  registerGoalAssignmentCommands,
+} from './assignment';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import {
   type GoalMetricState,
@@ -587,6 +592,8 @@ export function registerGoalCommand(program: Command) {
       '--task-agent <id>',
       "Dedicated executor for the goal's tasks (defaults to the goal agent)",
     )
+    .option('--task-model <model>', "Model the goal's tasks run on (needs --task-provider)")
+    .option('--task-provider <provider>', 'Provider of --task-model')
     .option('--project <id>', 'Project ID')
     .option('--explore <instruction>', 'Explore alternatives using completed experiment results')
     .option('--max-experiments <n>', 'Maximum experiment nodes (requires --explore, default 10)')
@@ -632,6 +639,10 @@ export function registerGoalCommand(program: Command) {
         ...((options.task as string[] | undefined) ?? []),
         ...(options.taskFile ? parseTaskFile(await readFile(options.taskFile, 'utf8')) : []),
       ];
+      const taskModel = parseGoalModelConfig(
+        { model: options.taskModel, provider: options.taskProvider },
+        { model: '--task-model', provider: '--task-provider' },
+      );
       const seedProblem = goalSeedDependencyProblem(seedTasks);
       if (seedProblem) throw new Error(`--task-file: ${seedProblem}`);
       const operationId = process.env.LOBEHUB_OPERATION_ID;
@@ -726,6 +737,7 @@ export function registerGoalCommand(program: Command) {
             agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
             createdByAgentId: process.env.LOBEHUB_AGENT_ID,
           });
+      await applyCreatedGoalTaskModel(client, result.data!.goal.id, taskModel);
       const undrawn = missingSeedDependencies(result.data!, seedTasks);
       if (undrawn.length)
         log.warn(
@@ -1159,35 +1171,7 @@ export function registerGoalCommand(program: Command) {
       },
     );
 
-  goal
-    .command('set-agent <id> <agent>')
-    .description(
-      'Hand the goal to a different supervising agent (its unfinished tasks follow unless the goal has a task agent)',
-    )
-    .option('--goal-only', 'Only change the goal-level agent; leave existing tasks as assigned')
-    .action(async (id: string, agentId: string, options: { goalOnly?: boolean }) => {
-      const result = await (
-        await getTrpcClient()
-      ).goal.setAgent.mutate({ agentId, goalOnly: options.goalOnly, id });
-      log.info(result.message);
-    });
-
-  goal
-    .command('set-task-agent <id> <agent>')
-    .description(
-      'Route the goal\'s tasks to a dedicated executor; "none" hands them back to the goal agent',
-    )
-    .option('--goal-only', 'Only change future tasks; leave existing tasks as assigned')
-    .action(async (id: string, agent: string, options: { goalOnly?: boolean }) => {
-      const result = await (
-        await getTrpcClient()
-      ).goal.setTaskAgent.mutate({
-        agentId: agent === 'none' ? null : agent,
-        goalOnly: options.goalOnly,
-        id,
-      });
-      log.info(result.message);
-    });
+  registerGoalAssignmentCommands(goal);
 
   goal
     .command('bind-topic <id>')
