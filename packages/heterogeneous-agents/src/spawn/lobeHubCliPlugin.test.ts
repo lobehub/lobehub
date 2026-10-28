@@ -216,9 +216,29 @@ describe('LobeHub CLI plugin', () => {
     ['2.1.0', true],
     ['10.0.0', true],
     ['2.1.301 (Claude Code)', true],
+    ['Claude Code v2.0.20', true],
+    ['1.2 then 2.0.20', true],
+    ['0.2.0.20', false],
     ['2.0.19', false],
     ['1.9.99', false],
   ])('treats Claude Code %s as loading plugin skills: %s', (version, expected) => {
     expect(claudeCodeLoadsPluginSkills(version)).toBe(expected);
+  });
+
+  it.each([
+    ['major without separators', (digits: string) => digits, false],
+    ['missing patch', (digits: string) => `${digits}.0`, false],
+    ['long minor', (digits: string) => `2.${digits}`, false],
+    ['digits before a valid version', (digits: string) => `${digits}x 2.0.20`, true],
+  ] as const)('handles %s without excessive backtracking', (_name, banner, expected) => {
+    const version = banner('9'.repeat(100_000));
+    const start = performance.now();
+    const actual = claudeCodeLoadsPluginSkills(version);
+    const elapsed = performance.now() - start;
+
+    expect(actual).toBe(expected);
+    // A linear scan takes milliseconds; allow ample CI headroom, but not the
+    // seconds spent retrying a failing match at every digit in the old parser.
+    expect(elapsed).toBeLessThan(1000);
   });
 });

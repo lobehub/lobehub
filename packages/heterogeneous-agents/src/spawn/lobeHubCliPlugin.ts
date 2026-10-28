@@ -41,9 +41,11 @@ export const CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION = '2.0.20';
 /** `claude --disable-slash-commands` disables every skill, plugin ones included. */
 const CLAUDE_CODE_DISABLE_SKILLS_FLAG = '--disable-slash-commands';
 
+// Only start at the beginning of a digit run. Otherwise a malformed banner
+// retries the match at every digit, taking quadratic time on long numeric runs.
 const parseVersion = (version: string) =>
   version
-    .match(/(\d+)\.(\d+)\.(\d+)/)
+    .match(/(?<!\d)(\d+)\.(\d+)\.(\d+)/)
     ?.slice(1, 4)
     .map(Number);
 
