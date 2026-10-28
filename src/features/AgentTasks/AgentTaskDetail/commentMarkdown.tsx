@@ -3,8 +3,13 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import { MENTION_TAG } from '@/const/plugin';
 import { createRemarkSelfClosingTagPlugin } from '@/features/Conversation/Markdown/plugins/remarkPlugins/createRemarkSelfClosingTagPlugin';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+import { resolveCommentMentionName } from './commentMentionName';
 
 const styles = stylex.create({
   mention: {
@@ -24,12 +29,16 @@ interface CommentMentionProps {
  */
 const CommentMention = memo<CommentMentionProps>(({ node }) => {
   const { id, name } = node?.properties || {};
-  if (!name && !id) return null;
+  const memberProfiles = useWorkspaceMemberProfiles();
+  const currentUser = useUserStore(userProfileSelectors.userProfile);
+
+  const displayName = resolveCommentMentionName({ currentUser, id, memberProfiles, name });
+  if (!displayName) return null;
 
   const { className, style } = stylex.props(styles.mention);
   return (
     <span className={`editor_mention ${className ?? ''}`} style={style}>
-      @{name || id}
+      @{displayName}
     </span>
   );
 });
