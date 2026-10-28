@@ -152,10 +152,14 @@ const HeterogeneousChatInput = memo(() => {
   // state and the control that produced it read as one unit.
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
     () => [
-      { alwaysDisplay: true, children: <HeteroPlus />, key: 'heteroPlus' },
+      {
+        alwaysDisplay: true,
+        children: <HeteroPlus providerType={providerType} />,
+        key: 'heteroPlus',
+      },
       { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
     ],
-    [],
+    [providerType],
   );
 
   // The model selector rides in the send-area prefix rather than the

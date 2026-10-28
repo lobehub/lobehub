@@ -2895,6 +2895,7 @@
   "upload.preview.status.processing": "文件处理中…",
   "upload.preview.status.success": "上传完成",
   "upload.preview.status.uploading": "正在上传文件…",
+  "upload.validation.heteroImageNotSupported": "{{name}} 无法读取图片，{{file}} 未添加。请改用支持图片的 Agent。",
   "upload.validation.mediaNotSupported": "当前模型无法解析以下媒体文件，未添加：{{files}}。请切换到支持该媒体的模型，或改用其他文件类型。",
   "upload.validation.unsupportedFileType": "不支持的文件类型：{{files}}。支持的图片格式：JPG、PNG、GIF、WebP。支持的文档包括PDF、Word、Excel、PowerPoint、Markdown、文本、CSV、JSON和代码文件。",
   "upload.validation.videoSizeExceeded": "视频文件不能超过 {{maxSize}}。当前为 {{actualSize}}",

@@ -53,7 +53,12 @@ const styles = stylex.create({
  * nothing. The send button remains the single commit action, and the armed state
  * is shown next to it by `ScheduledSendChip`.
  */
-const HeteroPlus = memo(() => {
+interface HeteroPlusProps {
+  /** The agent's CLI adapter type — decides whether picked images are accepted. */
+  providerType?: string;
+}
+
+const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const [open, setOpen] = useState(false);
@@ -69,7 +74,7 @@ const HeteroPlus = memo(() => {
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const closeMenu = useCallback(() => setOpen(false), []);
-  const { beforeUpload, onFiles } = useHeteroUpload(closeMenu);
+  const { beforeUpload, onFiles } = useHeteroUpload(providerType, closeMenu);
 
   const armSchedule = useCallback(
     (hours: number) => {

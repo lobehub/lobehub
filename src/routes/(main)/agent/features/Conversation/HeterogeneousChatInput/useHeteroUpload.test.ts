@@ -38,7 +38,7 @@ describe('useHeteroUpload', () => {
 
   it('uploads picked files to the chat upload list for the hetero agent', async () => {
     const onPicked = vi.fn();
-    const { result } = renderHook(() => useHeteroUpload(onPicked));
+    const { result } = renderHook(() => useHeteroUpload('claude-code', onPicked));
     const files = [new File(['x'], 'shot.png', { type: 'image/png' })];
 
     await act(() => result.current.onFiles(files));
@@ -51,15 +51,28 @@ describe('useHeteroUpload', () => {
 
   it('skips the upload when every picked file became a local-path reference', async () => {
     mocks.routeLargeFiles.mockReturnValueOnce([]);
-    const { result } = renderHook(() => useHeteroUpload(vi.fn()));
+    const { result } = renderHook(() => useHeteroUpload('claude-code', vi.fn()));
 
     await act(() => result.current.onFiles([new File(['x'], 'big.csv', { type: 'text/csv' })]));
 
     expect(mocks.upload).not.toHaveBeenCalled();
   });
 
-  it('accepts images without a model-capability gate', () => {
-    const { result } = renderHook(() => useHeteroUpload(vi.fn()));
+  it('rejects images for a text-only adapter with a toast', () => {
+    const { result } = renderHook(() => useHeteroUpload('cursor', vi.fn()));
+
+    expect(result.current.beforeUpload(new File(['x'], 'a.png', { type: 'image/png' }))).toBe(
+      false,
+    );
+    expect(mocks.toastError).toHaveBeenCalled();
+    // Non-image files still go through as download links.
+    expect(result.current.beforeUpload(new File(['x'], 'a.txt', { type: 'text/plain' }))).toBe(
+      true,
+    );
+  });
+
+  it('accepts images for an adapter that reads them', () => {
+    const { result } = renderHook(() => useHeteroUpload('claude-code', vi.fn()));
 
     expect(result.current.beforeUpload(new File(['x'], 'a.png', { type: 'image/png' }))).toBe(true);
   });
@@ -70,7 +83,7 @@ describe('useHeteroUpload', () => {
       isValid: false,
       maxSize: '20 MB',
     });
-    const { result } = renderHook(() => useHeteroUpload(vi.fn()));
+    const { result } = renderHook(() => useHeteroUpload('claude-code', vi.fn()));
 
     expect(result.current.beforeUpload(new File(['x'], 'a.mp4', { type: 'video/mp4' }))).toBe(
       false,

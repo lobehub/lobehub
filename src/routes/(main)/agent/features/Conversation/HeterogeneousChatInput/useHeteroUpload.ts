@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  getHeterogeneousTypeLabel,
+  heteroAgentSupportsImageInput,
+} from '@lobechat/heterogeneous-agents';
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import { toast } from '@lobehub/ui';
 import { useCallback } from 'react';
@@ -15,10 +19,11 @@ import { useFileStore } from '@/store/file';
  *
  * Uploads land in the same chat upload list as the agent composer; the hetero
  * send path forwards images as content blocks and other files as download links
- * in the prompt, so every CLI gets them. There is no model-capability gate: the
- * CLI's model is not a LobeHub model, and every adapter accepts images.
+ * in the prompt. The gate is the adapter, not a LobeHub model: text-only CLIs
+ * (e.g. Cursor) fail the whole run on an image block, so images are refused at
+ * pick time for them.
  */
-export const useHeteroUpload = (onPicked: () => void) => {
+export const useHeteroUpload = (providerType: string | undefined, onPicked: () => void) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const editor = useChatInputStore((s) => s.editor);
@@ -28,6 +33,16 @@ export const useHeteroUpload = (onPicked: () => void) => {
 
   const beforeUpload = useCallback(
     (file: File) => {
+      if (file.type.startsWith('image') && !heteroAgentSupportsImageInput(providerType)) {
+        toast.error(
+          t('upload.validation.heteroImageNotSupported', {
+            file: file.name,
+            name: getHeterogeneousTypeLabel(providerType),
+          }),
+        );
+        return false;
+      }
+
       const validation = validateVideoFileSize(file);
       if (validation.isValid) return true;
 
@@ -39,7 +54,7 @@ export const useHeteroUpload = (onPicked: () => void) => {
       );
       return false;
     },
-    [t],
+    [providerType, t],
   );
 
   const onFiles = useCallback(

@@ -3319,6 +3319,8 @@ export default {
   'upload.preview.status.processing': 'Processing file...',
   'upload.preview.status.success': 'Upload complete',
   'upload.preview.status.uploading': 'Uploading file...',
+  'upload.validation.heteroImageNotSupported':
+    "{{name}} can't read images, so {{file}} was not added. Use an agent that supports images instead.",
   'upload.validation.mediaNotSupported':
     'The current model cannot read these media files, so they were not added: {{files}}. Switch to a model that supports them, or upload a different file type.',
   'upload.validation.unsupportedFileType':
