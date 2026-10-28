@@ -52,6 +52,9 @@ export const userFavorites = pgTable(
     uniqueIndex('user_favorites_workspace_target_unique')
       .on(t.userId, t.workspaceId, t.type, t.targetId)
       .where(sql`${t.workspaceId} IS NOT NULL`),
+    // Neither partial index serves a lookup by user alone, which the
+    // `ON DELETE CASCADE` from users needs.
+    index('user_favorites_user_id_idx').on(t.userId),
     index('user_favorites_workspace_id_idx').on(t.workspaceId),
   ],
 );

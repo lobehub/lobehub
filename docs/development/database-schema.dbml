@@ -2029,6 +2029,7 @@ table user_favorites {
   indexes {
     (user_id, type, target_id) [name: 'user_favorites_personal_target_unique', unique]
     (user_id, workspace_id, type, target_id) [name: 'user_favorites_workspace_target_unique', unique]
+    user_id [name: 'user_favorites_user_id_idx']
     workspace_id [name: 'user_favorites_workspace_id_idx']
   }
 }

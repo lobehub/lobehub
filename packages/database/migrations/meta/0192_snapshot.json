@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "3daf9f65-4f74-4d0c-911b-533a5a8b12b4",
+  "id": "f3e03af0-70e5-4b83-8fc2-599d711697c8",
   "policies": {},
   "prevId": "eba5e982-254a-4b19-a7f0-44c72dfab9dc",
   "roles": {},
@@ -17299,6 +17299,21 @@
           ],
           "isUnique": true,
           "where": "\"user_favorites\".\"workspace_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_favorites_user_id_idx": {
+          "name": "user_favorites_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
