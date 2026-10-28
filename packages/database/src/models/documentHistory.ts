@@ -105,6 +105,7 @@ export class DocumentHistoryModel {
           lt(documentHistories.savedAt, beforeSavedAt),
           and(eq(documentHistories.savedAt, beforeSavedAt), lt(documentHistories.id, beforeId)),
         );
+        /* v8 ignore next -- unreachable: or() over two defined conditions always returns SQL */
         if (cursorCondition) {
           conditions.push(cursorCondition);
         }

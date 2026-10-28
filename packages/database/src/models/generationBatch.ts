@@ -268,6 +268,7 @@ export class GenerationBatchModel {
 
     // 2. Collect asset file URLs that need to be deleted (video, cover, thumbnail)
     const filesToDelete: string[] = [];
+    /* v8 ignore next -- unreachable: a drizzle `with` many-relation always loads as an array */
     if (batchWithGenerations.generations) {
       for (const gen of batchWithGenerations.generations) {
         const asset = gen.asset as ImageGenerationAsset | VideoGenerationAsset | null;

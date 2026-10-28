@@ -284,6 +284,7 @@ export class EnvironmentModel {
       ...row,
       // The id is what says a creator was found; a deleted account leaves the
       // join empty and the row keeps its place in the listing with no creator.
+      /* v8 ignore next -- unreachable: environments.user_id is NOT NULL with an on-delete-restrict FK to users, so the left join always finds the creator */
       creator: creatorId
         ? {
             avatar: creatorAvatar,
