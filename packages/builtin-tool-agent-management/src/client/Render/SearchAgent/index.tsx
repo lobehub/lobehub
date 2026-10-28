@@ -3,9 +3,8 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from '@lobehub/ui';
+import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
+import { Avatar, createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +16,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 12px;
     border-radius: 6px;
     background: ${cssVar.colorFillQuaternary};
+  `,
+  agentRole: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
   `,
   agentTitle: css`
     font-size: 13px;
@@ -84,29 +87,43 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
 
     return (
       <div className={styles.container}>
-        {agents.map((agent: AgentSearchItem) => (
-          <Flexbox horizontal align={'center'} className={styles.agentItem} gap={12} key={agent.id}>
-            <Avatar
-              avatar={agent.avatar || DEFAULT_AVATAR}
-              background={agent.backgroundColor || theme.colorBgContainer}
-              shape={'square'}
-              size={32}
-              title={agent.title || undefined}
-            />
-            <Flexbox flex={1} gap={2}>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <span className={styles.agentTitle}>{agent.title || agent.id}</span>
-                {agent.heteroType && (
-                  <span className={styles.heteroBadge}>
-                    {HETEROGENEOUS_TYPE_LABELS[agent.heteroType] ?? agent.heteroType}
-                  </span>
+        {agents.map((agent: AgentSearchItem) => {
+          const displayName = agentDisplayName(agent, agent.id);
+          const role = agentSecondaryDisplayName(agent);
+
+          return (
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={styles.agentItem}
+              gap={12}
+              key={agent.id}
+            >
+              <Avatar
+                avatar={agent.avatar || DEFAULT_AVATAR}
+                background={agent.backgroundColor || theme.colorBgContainer}
+                shape={'square'}
+                size={32}
+                title={displayName}
+              />
+              <Flexbox flex={1} gap={2}>
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <span className={styles.agentTitle}>{displayName}</span>
+                  {role && <span className={styles.agentRole}>{role}</span>}
+                  {agent.heteroType && (
+                    <span className={styles.heteroBadge}>
+                      {HETEROGENEOUS_TYPE_LABELS[agent.heteroType] ?? agent.heteroType}
+                    </span>
+                  )}
+                  {agent.isMarket && <span className={styles.marketBadge}>Market</span>}
+                </Flexbox>
+                {agent.description && (
+                  <span className={styles.description}>{agent.description}</span>
                 )}
-                {agent.isMarket && <span className={styles.marketBadge}>Market</span>}
               </Flexbox>
-              {agent.description && <span className={styles.description}>{agent.description}</span>}
             </Flexbox>
-          </Flexbox>
-        ))}
+          );
+        })}
       </div>
     );
   },

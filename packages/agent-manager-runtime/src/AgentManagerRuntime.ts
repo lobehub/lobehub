@@ -25,7 +25,6 @@ import {
   type BuiltinToolResult,
   type DiscoverAssistantDetail,
   getPluginMode,
-  type HeterogeneousProviderConfig,
   parsePluginEntry,
   upsertPluginMode,
 } from '@lobechat/types';
@@ -453,24 +452,16 @@ export class AgentManagerRuntime {
         userTotal = total;
 
         agents.push(
-          ...userAgents.map(
-            (agent: {
-              avatar?: string | null;
-              backgroundColor?: string | null;
-              description?: string | null;
-              heteroType?: HeterogeneousProviderConfig['type'];
-              id: string;
-              title?: string | null;
-            }) => ({
-              avatar: agent.avatar ?? undefined,
-              backgroundColor: agent.backgroundColor ?? undefined,
-              description: agent.description ?? undefined,
-              heteroType: agent.heteroType,
-              id: agent.id,
-              isMarket: false,
-              title: agent.title ?? undefined,
-            }),
-          ),
+          ...userAgents.map((agent) => ({
+            avatar: agent.avatar ?? undefined,
+            backgroundColor: agent.backgroundColor ?? undefined,
+            description: agent.description ?? undefined,
+            heteroType: agent.heteroType,
+            id: agent.id,
+            isMarket: false,
+            name: agent.name ?? undefined,
+            title: agent.title ?? undefined,
+          })),
         );
       }
 

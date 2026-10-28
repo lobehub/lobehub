@@ -20,6 +20,22 @@ describe('searchAgentsResultsPrompt', () => {
     expect(content).not.toContain('<agentSearchResults');
   });
 
+  it('renders the agent name before its title, omitting it when blank', () => {
+    const content = searchAgentsResultsPrompt({
+      agents: [
+        { id: 'agt_named', name: 'Dario 任务队列版', title: '美国100刀' },
+        { id: 'agt_blank', name: '  ', title: 'Coder' },
+      ],
+      source: 'user',
+      userTotal: 2,
+    });
+
+    expect(content).toContain(
+      '<agent id="agt_named" name="Dario 任务队列版" title="美国100刀" origin="workspace" />',
+    );
+    expect(content).toContain('<agent id="agt_blank" title="Coder" origin="workspace" />');
+  });
+
   it('marks heterogeneous agents and appends a plain Note: guidance line', () => {
     const content = searchAgentsResultsPrompt({
       agents: [{ heteroType: 'claude-code', id: 'agt_cc', title: 'CC 2号机' }],
