@@ -2,7 +2,3 @@
 // only swaps in a fresh home tab, so each would read as a way out that does not exist.
 // The window-close shortcut keeps its own rules (see resolveCloseShortcut).
 export const isTabClosable = (totalCount: number): boolean => totalCount > 1;
-
-// Middle-click is the browser-native close gesture; any other button is not a close.
-export const shouldCloseOnAuxClick = (button: number, totalCount: number): boolean =>
-  button === 1 && isTabClosable(totalCount);

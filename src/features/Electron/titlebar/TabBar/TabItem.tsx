@@ -18,7 +18,7 @@ import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
 import { useStyles } from './styles';
-import { isTabClosable, shouldCloseOnAuxClick } from './tabClose';
+import { isTabClosable } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
@@ -212,9 +212,9 @@ const TabItem = memo<TabItemProps>(
       (e: React.MouseEvent) => {
         if (e.button !== 1) return;
         e.preventDefault();
-        if (shouldCloseOnAuxClick(e.button, totalCount)) onClose(id);
+        if (closable) onClose(id);
       },
-      [onClose, id, totalCount],
+      [closable, onClose, id],
     );
 
     const contextMenuItems = useCallback(

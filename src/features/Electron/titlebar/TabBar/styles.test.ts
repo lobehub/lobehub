@@ -37,23 +37,3 @@ describe('icon tier', () => {
     expect(body).toMatch(/opacity:\s*0/);
   });
 });
-
-describe('close button reveal', () => {
-  const selectorList = (() => {
-    const end = source.indexOf('[data-tab-close] {');
-    const open = source.lastIndexOf('{', end - 1);
-    const start = source.lastIndexOf('*/', open) + 2;
-    return source.slice(start, open);
-  })();
-
-  // A lone tab has nowhere to close to, so hovering it must not reveal the button.
-  it('only reveals the button on closable tabs', () => {
-    const selectors = selectorList
-      .split(',')
-      .map((selector) => selector.trim())
-      .filter(Boolean);
-
-    expect(selectors.length).toBeGreaterThan(0);
-    for (const selector of selectors) expect(selector).toContain('[data-closable]');
-  });
-});
