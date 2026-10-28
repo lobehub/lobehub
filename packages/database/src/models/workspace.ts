@@ -218,7 +218,9 @@ export class WorkspaceModel {
       .select({ count: count() })
       .from(workspaceMembers)
       .where(and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)));
+    /* v8 ignore start -- unreachable: an ungrouped count() always returns one row */
     return result[0]?.count ?? 0;
+    /* v8 ignore stop */
   };
 
   listUserWorkspaces = async () => {
@@ -237,7 +239,9 @@ export class WorkspaceModel {
 
     return results.map((ws) => ({
       ...ws,
+      /* v8 ignore start -- unreachable: each workspace was selected via a membership row */
       role: memberships.find((m) => m.workspaceId === ws.id)?.role ?? 'viewer',
+      /* v8 ignore stop */
     }));
   };
 
