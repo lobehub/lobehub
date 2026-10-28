@@ -11,6 +11,7 @@ packages:
   - '../../packages/electron-client-ipc'
   - '../../packages/electron-mac-notifications'
   - '../../packages/electron-mac-permission-guide'
+  - '../../packages/electron-mac-sidebar-glass'
   - '../../packages/napi-loader'
   - '../../packages/file-loaders'
   - '../../packages/html-artifact'
