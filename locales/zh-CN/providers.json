@@ -1,4 +1,5 @@
 {
+  "acedatacloud.description": "Ace Data Cloud 提供按用量计费的聊天模型 API 服务。",
   "ai21.description": "AI21 Labs 为企业构建基础模型和 AI 系统，加速生成式 AI 的落地应用。",
   "ai302.description": "302.AI 是一个按需付费的 AI 平台，提供丰富的 AI API 和在线 AI 应用目录。",
   "ai360.description": "360 AI 是来自 360 的模型与服务平台，提供如 360GPT2 Pro、360GPT Pro 和 360GPT Turbo 等自然语言处理模型，结合大参数规模与多模态能力，支持文本生成、语义理解、对话与代码处理，定价灵活，满足多样化需求。",
