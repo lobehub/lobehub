@@ -75,4 +75,53 @@ describe('LinearConnectionModel coverage', () => {
     const decrypted = await LinearConnectionModel.findDecryptedById(db, row.id);
     expect(decrypted).toMatchObject({ credentials: null, id: row.id });
   });
+
+  it('replaces the token and its expiry after a refresh', async () => {
+    const row = await LinearConnectionModel.upsert(
+      db,
+      { ...organization, credentials: { accessToken: 'old' }, userId },
+      gateKeeper,
+    );
+    const tokenExpiresAt = new Date('2026-06-01T00:00:00.000Z');
+
+    await LinearConnectionModel.updateCredentials(
+      db,
+      row.id,
+      { credentials: { accessToken: 'new' }, tokenExpiresAt },
+      gateKeeper,
+    );
+    expect(await LinearConnectionModel.findDecryptedById(db, row.id, gateKeeper)).toMatchObject({
+      credentials: { accessToken: 'new' },
+      tokenExpiresAt,
+    });
+
+    // Without an expiry the refreshed token never expires; no gate keeper stores plain JSON.
+    await LinearConnectionModel.updateCredentials(db, row.id, {
+      credentials: { accessToken: 'plain' },
+    });
+    expect(await LinearConnectionModel.findById(db, row.id)).toMatchObject({
+      credentials: '{"accessToken":"plain"}',
+      tokenExpiresAt: null,
+    });
+  });
+
+  it('keeps a revoked connection revoked when a refresh lands late', async () => {
+    const row = await LinearConnectionModel.upsert(
+      db,
+      { ...organization, credentials: { accessToken: 'a' }, userId },
+      gateKeeper,
+    );
+    await LinearConnectionModel.revoke(db, row.id);
+
+    await LinearConnectionModel.updateCredentials(
+      db,
+      row.id,
+      { credentials: { accessToken: 'late' } },
+      gateKeeper,
+    );
+
+    const decrypted = await LinearConnectionModel.findDecryptedById(db, row.id, gateKeeper);
+    expect(decrypted).toMatchObject({ credentials: null, id: row.id });
+    expect(decrypted?.revokedAt).toBeInstanceOf(Date);
+  });
 });
