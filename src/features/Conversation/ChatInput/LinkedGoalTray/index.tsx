@@ -155,8 +155,12 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
   const confirmed = useGoalStore(goalSelectors.topicGoalsConfirmed(topicId));
   const confirmState = linkedGoalConfirmState(confirmed, error);
   const retry = useCallback(() => void revalidate(), [revalidate]);
-  // Server-confirmed rows only: a goal still pending in a tool result may not exist yet.
-  useMarkSidebarTopicGoal(enabled ? topicId : undefined, confirmed && !!topicGoals?.length);
+  // Server-confirmed rows only, in both directions: a goal still pending in a
+  // tool result may not exist yet, and a cached empty list proves nothing.
+  useMarkSidebarTopicGoal(
+    enabled ? topicId : undefined,
+    confirmed ? !!topicGoals?.length : undefined,
+  );
 
   const goals = useMemo(
     () => selectLinkedGoals(topicGoals, displayMessages),

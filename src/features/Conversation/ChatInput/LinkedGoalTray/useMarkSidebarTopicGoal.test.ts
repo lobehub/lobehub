@@ -64,11 +64,25 @@ describe('useMarkSidebarTopicGoal', () => {
     expect(project.refresh).not.toHaveBeenCalled();
   });
 
-  it('does nothing until the conversation has a confirmed goal', () => {
-    chat.topic = { id: 'tpc', projectId: 'prj' };
-    project.rows = { prj: [{ hasGoal: false, id: 'tpc' }] };
+  it('clears the marker once the server confirms the last goal is gone', () => {
+    chat.topic = { hasGoal: true, id: 'tpc', projectId: 'prj' };
+    project.rows = { prj: [{ hasGoal: true, id: 'tpc' }] };
 
     renderHook(() => useMarkSidebarTopicGoal('tpc', false));
+
+    expect(chat.dispatch).toHaveBeenCalledWith({
+      id: 'tpc',
+      type: 'updateTopic',
+      value: { hasGoal: false },
+    });
+    expect(project.refresh).toHaveBeenCalledWith('prj');
+  });
+
+  it('leaves both lists alone until the server has confirmed the goals', () => {
+    chat.topic = { hasGoal: true, id: 'tpc', projectId: 'prj' };
+    project.rows = { prj: [{ hasGoal: false, id: 'tpc' }] };
+
+    renderHook(() => useMarkSidebarTopicGoal('tpc', undefined));
 
     expect(chat.dispatch).not.toHaveBeenCalled();
     expect(project.refresh).not.toHaveBeenCalled();
