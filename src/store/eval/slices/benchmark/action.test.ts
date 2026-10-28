@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The benchmark list and detail are `@lobechat/replica` resources. These tests
+ * The benchmark list and detail are `local-replica` resources. These tests
  * pin the fetch orchestration and the write paths (create / update / delete)
  * at the boundary: which service call each action makes and that the replica
  * network sync is revalidated instead of a hand-written SWR `mutate`.

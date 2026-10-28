@@ -1,7 +1,7 @@
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type { LobeDocument } from '@/types/document';
 
-import type { PageListValue } from '../../projection';
+import type { PageListValue, PageSectionListValue } from '../../projection';
 
 export interface PageListSliceState {
   /**
@@ -19,6 +19,14 @@ export interface PageListSliceState {
   pageListMap: Record<string, PageListValue>;
   /** Local-first bookkeeping for `pageListMap`. */
   pageListReplica: ReplicaState<PageListValue>;
+  /** Every page of a section, paged for the full-list panel (`pageSectionListMap[mine|shared]`). */
+  pageSectionListMap: Record<string, PageSectionListValue>;
+  /** Local-first bookkeeping for `pageSectionListMap`. */
+  pageSectionListReplica: ReplicaState<PageSectionListValue>;
+  /** The Docs sidebar's page sections (`pageSectionMap[mine|shared]`). */
+  pageSectionMap: Record<string, LobeDocument[]>;
+  /** Local-first bookkeeping for `pageSectionMap`. */
+  pageSectionReplica: ReplicaState<LobeDocument[]>;
 }
 
 export const initialPageListState: PageListSliceState = {
@@ -26,4 +34,8 @@ export const initialPageListState: PageListSliceState = {
   pageDetailReplica: createReplicaState(),
   pageListMap: {},
   pageListReplica: createReplicaState(),
+  pageSectionListMap: {},
+  pageSectionListReplica: createReplicaState(),
+  pageSectionMap: {},
+  pageSectionReplica: createReplicaState(),
 };

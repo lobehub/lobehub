@@ -74,9 +74,12 @@ describe('settings useCategory', () => {
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
     ]);
+    // Environments is there with no lab switch: a code environment is a
+    // definition, written down whether or not there is a drive to run it on.
     expect(generalGroup?.items.map((item) => item.key)).toEqual([
       SettingsTabs.Stats,
       SettingsTabs.Devices,
+      SettingsTabs.Environments,
     ]);
     expect(
       result.current.find((group) => group.key === SettingsGroupKey.Agent)?.items.map((i) => i.key),
@@ -125,6 +128,27 @@ describe('settings useCategory', () => {
     const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
     const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
     expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
+  });
+
+  // The drives are what a persistent sandbox run keeps files on, so the tab
+  // that sets them out follows the same lab switch as the composer's picker.
+  it('shows Storage beside Environments once persistent sandboxes are switched on', () => {
+    expect(getItemKeys()).not.toContain(SettingsTabs.Drive);
+
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        lab: { ...initialUserStoreState.preference.lab, enablePersistentSandbox: true },
+      },
+    });
+    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
+    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
+    expect(generalGroup?.items.map((item) => item.key)).toEqual([
+      SettingsTabs.Stats,
+      SettingsTabs.Devices,
+      SettingsTabs.Environments,
+      SettingsTabs.Drive,
+    ]);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

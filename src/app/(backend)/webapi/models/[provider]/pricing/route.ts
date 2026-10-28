@@ -73,11 +73,14 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
       res = await fetchWithAuth(false);
     }
 
+    // Error bodies are never read; release their connections now rather than at GC.
     if (!res.ok && usedAuth) {
+      await res.body?.cancel().catch(() => {});
       res = await fetchWithAuth(false);
     }
 
     if (!res.ok) {
+      await res.body?.cancel().catch(() => {});
       return createErrorResponse(ChatErrorType.BadGateway, {
         message: `Failed to fetch pricing from provider: ${res.statusText}`,
       });

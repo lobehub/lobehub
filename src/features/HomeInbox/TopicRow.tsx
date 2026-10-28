@@ -1,8 +1,9 @@
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -60,7 +61,8 @@ const TopicRow = memo<TopicRowProps>(({ action, topic, leading, trailing }) => {
     <Flexbox horizontal align={'center'} className={styles.row} gap={10} onClick={open}>
       {leading}
       {agent && (
-        <Avatar
+        <AgentAvatar
+          agentId={topic.agentId}
           avatar={agent.avatar}
           background={agent.backgroundColor}
           shape={'circle'}

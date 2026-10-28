@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 import { registerTopicExportCommand } from './topic/export';
 import { registerTopicViewCommand } from './topic/view';
 
@@ -41,7 +42,12 @@ export function registerTopicCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(items, fields);
+          outputJson(
+            withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+              resourcePath.topic({ ...item, agentId: item.agentId ?? options.agentId }),
+            ),
+            fields,
+          );
           return;
         }
 
@@ -79,7 +85,12 @@ export function registerTopicCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.topic({ ...item, agentId: item.agentId ?? options.agentId }),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -317,7 +328,12 @@ export function registerTopicCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.topic({ agentId: item.agent?.id, groupId: item.group?.id, id: item.id }),
+          ),
+          fields,
+        );
         return;
       }
 

@@ -103,6 +103,7 @@ const createTask = (assigneeAgentId?: string | null) =>
   ({
     assigneeAgentId,
     createdAt: new Date('2026-05-18T00:00:00.000Z'),
+    id: 'task_22',
     identifier: 'T-22',
     name: 'Hourly trend update',
     priority: 2,
@@ -217,12 +218,12 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByTestId('subtask-progress'));
 
-    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('T-22'));
+    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('task_22'));
   });
 
   it('revalidates subtask navigation when an earlier detail is cached', async () => {
     mocks.taskDetailMap = {
-      'T-22': { subtasks: [{ identifier: 'T-stale', status: 'completed' }] },
+      task_22: { subtasks: [{ identifier: 'T-stale', status: 'completed' }] },
     };
     mocks.fetchTaskDetail.mockResolvedValue({
       subtasks: [{ identifier: 'T-current', status: 'backlog' }],
@@ -239,6 +240,6 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByTestId('subtask-progress'));
 
-    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('T-22'));
+    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('task_22'));
   });
 });

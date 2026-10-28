@@ -138,6 +138,9 @@ export class UserMemoryActivityModel {
     const [rows, totalResult] = await Promise.all([
       this.db
         .select({
+          associatedLocations: userMemoriesActivities.associatedLocations,
+          associatedObjects: userMemoriesActivities.associatedObjects,
+          associatedSubjects: userMemoriesActivities.associatedSubjects,
           capturedAt: userMemoriesActivities.capturedAt,
           createdAt: userMemoriesActivities.createdAt,
           endsAt: userMemoriesActivities.endsAt,

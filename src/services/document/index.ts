@@ -165,10 +165,13 @@ export class DocumentService {
   }
 
   async queryDocuments(params?: {
+    creator?: 'others' | 'self';
     current?: number;
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: 'createdAt' | 'title' | 'updatedAt';
     sourceTypes?: string[];
+    standaloneOnly?: boolean;
   }): Promise<{ items: DocumentItem[]; total: number }> {
     return lambdaClient.document.queryDocuments.query(params);
   }

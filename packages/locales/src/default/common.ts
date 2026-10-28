@@ -173,7 +173,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Resources',
+  'cmdk.resource': 'Docs',
 
   'cmdk.search.agent': 'Agent',
 
@@ -427,6 +427,8 @@ export default {
   'navPanel.agent': 'Agents',
   'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
+  'navPanel.openMenu': 'Open menu',
+  'navPanel.shortcuts': 'Shortcuts',
   'navPanel.displayItems': 'Display Items',
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
@@ -482,7 +484,7 @@ export default {
   'visibilityConfirm.publish.itemReversible':
     'You can switch it back to private later from the same menu',
   'visibilityConfirm.publish.itemCapturedState':
-    'Members can run its copies and reach everything it has captured — files, CLI logins, your signed-in identity',
+    'Copies made before environments became one-time setups keep what they captured — files, CLI logins, your signed-in identity — and members can reach them',
   'visibilityConfirm.publish.itemLoaded':
     'After switching back, content others have already loaded can’t be pulled back',
   'retry': 'Retry',
@@ -605,7 +607,7 @@ export default {
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.pages': 'Pages',
-  'tab.resource': 'Resources',
+  'tab.resource': 'Docs',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',

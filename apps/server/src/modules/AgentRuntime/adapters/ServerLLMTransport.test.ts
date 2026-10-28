@@ -5,7 +5,11 @@ import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modul
 import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { initModelRuntimeFromDB, resolveServerModel } from '@/server/modules/ModelRuntime';
+import {
+  initModelRuntimeFromDB,
+  resolveProviderResponseApiMode,
+  resolveServerModel,
+} from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { ServerLLMTransport } from './ServerLLMTransport';
@@ -17,6 +21,7 @@ const findByIdAndProviderMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
+  resolveProviderResponseApiMode: vi.fn(async () => undefined),
   resolveServerModel: vi.fn(),
 }));
 
@@ -550,5 +555,105 @@ describe('ServerLLMTransport.createTrace · streaming mode', () => {
         attributes: expect.objectContaining({ 'gen_ai.request.stream': false }),
       }),
     );
+  });
+});
+
+describe('ServerLLMTransport · provider Responses API preference', () => {
+  // The browser applies `ai_providers.config.enableResponseApi` in
+  // `services/chat#getChatCompletion`. A gateway run makes the provider call on the
+  // server, which used to drop that field and always land on `/v1/chat/completions`.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createAttemptCtx = () =>
+    ({
+      operationId: 'op-1',
+      serverDB: {},
+      stepIndex: 0,
+      streamManager: {
+        publishStreamChunk: vi.fn().mockResolvedValue('chunk-id'),
+        publishStreamEvent: vi.fn().mockResolvedValue('event-id'),
+      },
+      toolExecutionService: {},
+      userId: 'user-1',
+    }) as unknown as RuntimeExecutorContext;
+
+  const createAttemptInput = (): LLMAttemptInput =>
+    ({
+      assistantMessageId: 'msg-1',
+      attempt: 1,
+      context: {
+        messages: [{ content: 'Question', role: 'user' }],
+        modelParameters: {},
+        replayAssistantReasoning: false,
+        resolvedTools: {
+          enabledToolIds: [],
+          executorMap: {},
+          manifestMap: {},
+          promptManifestMap: {},
+          sourceMap: {},
+          tools: [],
+        },
+      } as unknown as LLMAttemptInput['context'],
+      events: [],
+      maxAttempts: 6,
+      model: 'gpt-4o',
+      provider: 'openai',
+      state: {},
+    }) as unknown as LLMAttemptInput;
+
+  it('forwards the switch onto the attempt payload', async () => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+    vi.mocked(resolveProviderResponseApiMode).mockResolvedValue('responses');
+
+    const transport = new ServerLLMTransport(createAttemptCtx());
+    await transport.runAttempt(createAttemptInput());
+
+    expect(resolveProviderResponseApiMode).toHaveBeenCalledWith({}, 'user-1', 'openai', undefined);
+    expect(chat.mock.calls[0][0].apiMode).toBe('responses');
+  });
+
+  it('keeps the model default when the provider has no explicit preference', async () => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+    vi.mocked(resolveProviderResponseApiMode).mockResolvedValue(undefined);
+
+    const transport = new ServerLLMTransport(createAttemptCtx());
+    await transport.runAttempt(createAttemptInput());
+
+    expect(chat.mock.calls[0][0]).not.toHaveProperty('apiMode');
+  });
+
+  it('resolves the preference once per provider across attempts', async () => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+    vi.mocked(resolveProviderResponseApiMode).mockResolvedValue('chatCompletion');
+
+    const transport = new ServerLLMTransport(createAttemptCtx());
+    await transport.runAttempt(createAttemptInput());
+    await transport.runAttempt(createAttemptInput());
+
+    expect(resolveProviderResponseApiMode).toHaveBeenCalledTimes(1);
+    expect(chat.mock.calls.map(([payload]) => payload.apiMode)).toEqual([
+      'chatCompletion',
+      'chatCompletion',
+    ]);
+  });
+
+  it('applies the same preference to compression streams', async () => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+    vi.mocked(resolveProviderResponseApiMode).mockResolvedValue('responses');
+
+    const ctx = { topicId: 'topic-1', userId: 'user-1' } as RuntimeExecutorContext;
+    await new ServerLLMTransport(ctx).stream({
+      messages: [],
+      model: 'gpt-4o',
+      provider: 'openai',
+    });
+
+    expect(chat.mock.calls[0][0].apiMode).toBe('responses');
   });
 });

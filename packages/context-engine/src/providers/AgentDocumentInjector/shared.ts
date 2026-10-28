@@ -3,8 +3,8 @@ import type { AgentDocumentPolicyLoad } from '@lobechat/types';
 import type {
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
-} from '../../../../database/src/models/agentDocuments/policy/loadPolicy';
-import { matchesLoadRules } from '../../../../database/src/models/agentDocuments/policy/loadPolicy';
+} from '../../policies/agentDocumentLoadPolicy';
+import { matchesLoadRules } from '../../policies/agentDocumentLoadPolicy';
 
 export type { AgentDocumentLoadRule, AgentDocumentLoadRules };
 export type { AgentDocumentPolicyLoad };

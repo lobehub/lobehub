@@ -89,7 +89,9 @@ export const listMemories = async <
       );
 
       const contextFilters: Array<SQL | undefined> = [
-        baseWhere.length ? and(...baseWhere) : undefined,
+        baseWhere.length
+          ? and(...baseWhere)
+          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
       ];
       const contextWhere = contextFilters.filter(Boolean) as SQL[];
 
@@ -100,7 +102,11 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesContexts, joinCondition)
-        .where(contextWhere.length ? and(...contextWhere) : undefined)
+        .where(
+          contextWhere.length
+            ? and(...contextWhere)
+            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
+        )
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);
@@ -122,7 +128,9 @@ export const listMemories = async <
       );
 
       const experienceFilters: Array<SQL | undefined> = [
-        baseWhere.length ? and(...baseWhere) : undefined,
+        baseWhere.length
+          ? and(...baseWhere)
+          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
       ];
       const experienceWhere = experienceFilters.filter(Boolean) as SQL[];
 
@@ -133,7 +141,11 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesExperiences, joinCondition)
-        .where(experienceWhere.length ? and(...experienceWhere) : undefined)
+        .where(
+          experienceWhere.length
+            ? and(...experienceWhere)
+            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
+        )
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);
@@ -155,7 +167,9 @@ export const listMemories = async <
       );
 
       const identityFilters: Array<SQL | undefined> = [
-        baseWhere.length ? and(...baseWhere) : undefined,
+        baseWhere.length
+          ? and(...baseWhere)
+          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
       ];
       const identityWhere = identityFilters.filter(Boolean) as SQL[];
 
@@ -166,7 +180,11 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesIdentities, joinCondition)
-        .where(identityWhere.length ? and(...identityWhere) : undefined)
+        .where(
+          identityWhere.length
+            ? and(...identityWhere)
+            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
+        )
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);
@@ -188,7 +206,9 @@ export const listMemories = async <
       );
 
       const preferenceFilters: Array<SQL | undefined> = [
-        baseWhere.length ? and(...baseWhere) : undefined,
+        baseWhere.length
+          ? and(...baseWhere)
+          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
       ];
       const preferenceWhere = preferenceFilters.filter(Boolean) as SQL[];
 
@@ -199,7 +219,11 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesPreferences, joinCondition)
-        .where(preferenceWhere.length ? and(...preferenceWhere) : undefined)
+        .where(
+          preferenceWhere.length
+            ? and(...preferenceWhere)
+            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
+        )
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);

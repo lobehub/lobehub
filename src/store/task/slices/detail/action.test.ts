@@ -4,11 +4,11 @@ import {
   toTaskExecutionConfigPatch,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
-import { renderHook } from '@testing-library/react';
+import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, createReplicaState } from '@/libs/replica';
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import { goalGraphResource } from '@/store/goal/projection';
@@ -35,6 +35,7 @@ vi.mock('@/services/task', () => ({
     addDependency: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
+    find: vi.fn(),
     getDetail: vi.fn(),
     pinDocument: vi.fn(),
     removeDependency: vi.fn(),
@@ -51,7 +52,7 @@ vi.mock('@/services/work', () => ({
 }));
 
 vi.mock('@/libs/swr', () => ({
-  mutate: vi.fn(),
+  mutate: vi.fn().mockResolvedValue(undefined),
   useClientDataSWR: vi.fn(),
 }));
 
@@ -60,8 +61,15 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
+afterEach(cleanup);
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(mutate).mockResolvedValue(undefined);
+  vi.spyOn(cacheScope, 'use').mockReturnValue(cacheScope.get());
+  vi.mocked(taskService.find).mockImplementation(
+    async (id) => ({ data: { id, identifier: id }, success: true }) as any,
+  );
   useTaskStore.setState({
     activeTaskId: undefined,
     activeTopicDrawerAgentId: undefined,
@@ -71,6 +79,10 @@ beforeEach(() => {
     isCreatingTask: false,
     isDeletingTask: false,
     taskDetailMap: {},
+    activeTaskRef: undefined,
+    taskRefIndex: Object.fromEntries(
+      ['T-1', 'T-2', 'T-3', 'T-4', 'T-5', 'T-parent', 'T-child', 'task_1'].map((id) => [id, id]),
+    ),
     taskDetailReplica: createReplicaState(),
     taskInstructionRevisionMap: {},
     taskSaveStatusMap: {},
@@ -91,7 +103,7 @@ describe('TaskDetailSliceAction', () => {
     it('polls while the task is in flight and stops once it settles', () => {
       vi.mocked(useClientDataSWR).mockReturnValue({ isValidating: false, mutate: vi.fn() } as any);
       useTaskStore.setState({
-        taskDetailMap: { 'T-1': { identifier: 'T-1', status: 'running' } as any },
+        taskDetailMap: { 'T-1': { id: 'T-1', identifier: 'T-1', status: 'running' } as any },
       });
 
       const { rerender } = renderHook(() => useTaskStore.getState().useFetchTaskDetail('T-1'));
@@ -99,7 +111,7 @@ describe('TaskDetailSliceAction', () => {
 
       vi.mocked(useClientDataSWR).mockClear();
       useTaskStore.setState({
-        taskDetailMap: { 'T-1': { identifier: 'T-1', status: 'completed' } as any },
+        taskDetailMap: { 'T-1': { id: 'T-1', identifier: 'T-1', status: 'completed' } as any },
       });
       rerender();
       expect(syncCall()?.[2]).toMatchObject({ refreshInterval: 0 });
@@ -109,8 +121,8 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(useClientDataSWR).mockReturnValue({ isValidating: false, mutate: vi.fn() } as any);
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', status: 'backlog' } as any,
-          'T-2': { identifier: 'T-2', status: 'backlog' } as any,
+          'T-1': { id: 'T-1', identifier: 'T-1', status: 'backlog' } as any,
+          'T-2': { id: 'T-2', identifier: 'T-2', status: 'backlog' } as any,
         },
       });
       renderHook(() => {
@@ -138,23 +150,28 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskDetailMap['T-2']).toBeDefined();
     });
 
-    it('stores a raw-id lookup under both the raw id and the identifier', async () => {
+    it('stores a lookup only under its canonical id and indexes aliases', async () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
-        data: { identifier: 'T-7', instruction: 'x' },
+        data: { id: 'T-7', identifier: 'T-7', instruction: 'x' },
       } as any);
 
-      await useTaskStore.getState().fetchTaskDetail('task_raw');
+      vi.mocked(taskService.find).mockResolvedValue({
+        data: { id: 'T-7', identifier: 'T-7' },
+        success: true,
+      } as any);
+      await useTaskStore.getState().fetchTaskDetail('old-7');
 
       const { taskDetailMap } = useTaskStore.getState();
-      expect(taskDetailMap.task_raw).toMatchObject({ identifier: 'T-7' });
-      expect(taskDetailMap['T-7']).toMatchObject({ identifier: 'T-7' });
+      expect(taskDetailMap['old-7']).toBeUndefined();
+      expect(useTaskStore.getState().taskRefIndex['old-7']).toBe('T-7');
+      expect(taskDetailMap['T-7']).toMatchObject({ id: 'T-7', identifier: 'T-7' });
     });
 
     it('restores the persisted row when a delete fails', async () => {
       const scope = `task-delete-${crypto.randomUUID()}:personal`;
       vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
       vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
-      const detail = { identifier: 'T-9', name: 'Keep me' } as any;
+      const detail = { id: 'T-9', identifier: 'T-9', name: 'Keep me' } as any;
       useTaskStore.getState().internal_dispatchTaskDetail({
         id: 'T-9',
         type: 'setTaskDetail',
@@ -184,7 +201,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.getState().internal_dispatchTaskDetail({
         id: 'T-3',
         type: 'setTaskDetail',
-        value: { identifier: 'T-3', name: 'Before' } as any,
+        value: { id: 'T-3', identifier: 'T-3', name: 'Before' } as any,
       });
       vi.mocked(taskService.update).mockResolvedValue({} as any);
 
@@ -205,7 +222,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.getState().internal_dispatchTaskDetail({
         id: 'T-1',
         type: 'setTaskDetail',
-        value: { identifier: 'T-1', name: 'Draft' } as any,
+        value: { id: 'T-1', identifier: 'T-1', name: 'Draft' } as any,
       });
 
       expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({ name: 'Draft' });
@@ -220,7 +237,7 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should not update if same id', () => {
-      useTaskStore.setState({ activeTaskId: 'T-1' });
+      useTaskStore.setState({ activeTaskId: 'T-1', activeTaskRef: 'T-1' });
       const spy = vi.fn();
       useTaskStore.subscribe(spy);
 
@@ -272,7 +289,7 @@ describe('TaskDetailSliceAction', () => {
   describe('createTask', () => {
     it('should call service and return identifier', async () => {
       vi.mocked(taskService.create).mockResolvedValue({
-        data: { identifier: 'T-1' },
+        data: { id: 'T-1', identifier: 'T-1' },
         message: 'ok',
         success: true,
       } as any);
@@ -292,7 +309,7 @@ describe('TaskDetailSliceAction', () => {
     it('should set isCreatingTask during creation', async () => {
       vi.mocked(taskService.create).mockImplementation(async () => {
         expect(useTaskStore.getState().isCreatingTask).toBe(true);
-        return { data: { identifier: 'T-1' }, success: true } as any;
+        return { data: { id: 'T-1', identifier: 'T-1' }, success: true } as any;
       });
 
       await useTaskStore.getState().createTask({ instruction: 'Test' });
@@ -321,7 +338,13 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { activities: [], identifier: 'T-1', instruction: 'x', status: 'backlog' },
+          'T-1': {
+            activities: [],
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'x',
+            status: 'backlog',
+          },
         },
       });
     };
@@ -389,7 +412,13 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Old', name: 'Old Name', status: 'backlog' },
+          'T-1': {
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'Old',
+            name: 'Old Name',
+            status: 'backlog',
+          },
         },
       });
 
@@ -413,6 +442,7 @@ describe('TaskDetailSliceAction', () => {
           'T-1': {
             activities: [],
             agentId: null,
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'x',
             status: 'backlog',
@@ -458,6 +488,7 @@ describe('TaskDetailSliceAction', () => {
               ),
               model: 'claude-code',
             },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'x',
             status: 'backlog',
@@ -495,6 +526,7 @@ describe('TaskDetailSliceAction', () => {
                 workingDirectory: '/srv/app',
               }),
             },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'x',
             status: 'backlog',
@@ -522,6 +554,7 @@ describe('TaskDetailSliceAction', () => {
                 applyTaskReposSelection(undefined, ['lobehub/lobehub']),
               ),
             },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'x',
             status: 'backlog',
@@ -541,7 +574,9 @@ describe('TaskDetailSliceAction', () => {
 
     it('revalidates goal graphs when the assignee changes, so a goal page shows the new executor', async () => {
       useTaskStore.setState({
-        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
       });
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
       const { mutate } = await import('@/libs/swr');
@@ -563,7 +598,9 @@ describe('TaskDetailSliceAction', () => {
 
     it('leaves goal graphs alone when the assignee does not change', async () => {
       useTaskStore.setState({
-        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
       });
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
       const { mutate } = await import('@/libs/swr');
@@ -583,6 +620,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Old instruction',
             status: 'backlog',
@@ -619,6 +657,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData,
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Old instruction',
             status: 'backlog',
@@ -636,6 +675,7 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: {
           editorData: { root: { children: [{ text: 'Old instruction' }] } },
+          id: 'T-1',
           identifier: 'T-1',
           instruction: 'Old instruction',
           status: 'backlog',
@@ -654,6 +694,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Old instruction',
             status: 'running',
@@ -663,6 +704,7 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: {
           editorData: null,
+          id: 'T-1',
           identifier: 'T-1',
           instruction: 'Tool instruction',
           status: 'running',
@@ -689,7 +731,7 @@ describe('TaskDetailSliceAction', () => {
       const { toast } = await import('@lobehub/ui');
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
@@ -714,6 +756,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData: { root: { children: [{ text: 'Persisted' }] } },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Persisted',
             status: 'backlog',
@@ -723,14 +766,15 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: {
           editorData: { root: { children: [{ text: 'Persisted' }] } },
+          id: 'T-1',
           identifier: 'T-1',
           instruction: 'Persisted',
           status: 'backlog',
         },
         success: true,
       } as any);
-      vi.mocked(mutate).mockImplementation(async () => {
-        await useTaskStore.getState().fetchTaskDetail('T-1');
+      vi.mocked(mutate).mockImplementation(async (key) => {
+        if (typeof key === 'function') await useTaskStore.getState().fetchTaskDetail('T-1');
       });
       vi.mocked(taskService.update).mockRejectedValueOnce(new Error('fail'));
 
@@ -764,7 +808,9 @@ describe('TaskDetailSliceAction', () => {
     it('lets the caller replace the failure toast Retry with its whole action', async () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
-        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
       });
       vi.mocked(taskService.update).mockRejectedValueOnce(new Error('fail'));
       const retry = vi.fn();
@@ -788,12 +834,15 @@ describe('TaskDetailSliceAction', () => {
         activeTaskId: 'T-sub',
         taskDetailMap: {
           'T-parent': {
+            id: 'T-parent',
             identifier: 'T-parent',
             instruction: 'Parent',
             status: 'backlog',
-            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+            subtasks: [
+              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
+            ],
           },
-          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+          'T-sub': { id: 'T-sub', identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
         },
       });
 
@@ -812,7 +861,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
@@ -830,12 +879,15 @@ describe('TaskDetailSliceAction', () => {
         activeTaskId: 'T-sub',
         taskDetailMap: {
           'T-parent': {
+            id: 'T-parent',
             identifier: 'T-parent',
             instruction: 'Parent',
             status: 'backlog',
-            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+            subtasks: [
+              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
+            ],
           },
-          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+          'T-sub': { id: 'T-sub', identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
         },
       });
 
@@ -868,10 +920,13 @@ describe('TaskDetailSliceAction', () => {
         activeTaskId: 'T-parent',
         taskDetailMap: {
           'T-parent': {
+            id: 'T-parent',
             identifier: 'T-parent',
             instruction: 'Parent',
             status: 'backlog',
-            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+            subtasks: [
+              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
+            ],
           },
         },
       });
@@ -893,8 +948,8 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'One', status: 'backlog' },
-          'T-2': { identifier: 'T-2', instruction: 'Two', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'One', status: 'backlog' },
+          'T-2': { id: 'T-2', identifier: 'T-2', instruction: 'Two', status: 'backlog' },
         },
       });
 
@@ -919,12 +974,12 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
       vi.mocked(taskService.delete).mockResolvedValue({
-        data: { identifier: 'T-1', name: 'Test Task' },
+        data: { id: 'T-1', identifier: 'T-1', name: 'Test Task' },
         success: true,
       } as any);
 
@@ -940,13 +995,13 @@ describe('TaskDetailSliceAction', () => {
     it('should set isDeletingTask during deletion', async () => {
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
       vi.mocked(taskService.delete).mockImplementation(async () => {
         expect(useTaskStore.getState().isDeletingTask).toBe(true);
-        return { data: { identifier: 'T-1' }, success: true } as any;
+        return { data: { id: 'T-1', identifier: 'T-1' }, success: true } as any;
       });
 
       await useTaskStore.getState().deleteTask('T-1');
@@ -957,12 +1012,12 @@ describe('TaskDetailSliceAction', () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
       vi.mocked(taskService.delete).mockResolvedValue({
-        data: { identifier: 'T-1' },
+        data: { id: 'T-1', identifier: 'T-1' },
         success: true,
       } as any);
       vi.mocked(workService.refreshAllConversations).mockRejectedValue(new Error('refresh failed'));
@@ -977,6 +1032,7 @@ describe('TaskDetailSliceAction', () => {
 
     it('should rollback optimistic delete and propagate error on failure', async () => {
       const snapshot = {
+        id: 'T-1',
         identifier: 'T-1',
         instruction: 'Test',
         name: 'Original',
@@ -1040,7 +1096,7 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
 
       // Detail page is open at parent identifier; doc is owned by a child DB id.
-      useTaskStore.setState({ activeTaskId: 'T-1' });
+      useTaskStore.setState({ activeTaskId: 'T-1', activeTaskRef: 'T-1' });
 
       await useTaskStore.getState().unpinDocument('task_child', 'doc_1');
 
@@ -1053,7 +1109,7 @@ describe('TaskDetailSliceAction', () => {
       const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
 
-      useTaskStore.setState({ activeTaskId: 'T-1' });
+      useTaskStore.setState({ activeTaskId: 'T-1', activeTaskRef: 'T-1' });
 
       await useTaskStore.getState().unpinDocument('T-1', 'doc_1');
 
@@ -1064,7 +1120,12 @@ describe('TaskDetailSliceAction', () => {
 
   describe('internal_dispatchTaskDetail', () => {
     it('should set task detail via reducer', () => {
-      const detail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;
+      const detail = {
+        id: 'T-1',
+        identifier: 'T-1',
+        instruction: 'Test',
+        status: 'backlog',
+      } as any;
 
       useTaskStore.getState().internal_dispatchTaskDetail({
         id: 'T-1',
@@ -1076,7 +1137,12 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should not update state if reducer returns same reference', () => {
-      const detail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;
+      const detail = {
+        id: 'T-1',
+        identifier: 'T-1',
+        instruction: 'Test',
+        status: 'backlog',
+      } as any;
       useTaskStore.setState({ taskDetailMap: { 'T-1': detail } });
 
       const spy = vi.fn();

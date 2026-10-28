@@ -30,7 +30,7 @@ export type ResourceListVisibilityFilter = 'private' | 'workspace';
 export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
 
 /**
- * The ResourceManager's two search surfaces as `@lobechat/replica` views.
+ * The ResourceManager's two search surfaces as `local-replica` views.
  *
  * Both were bare `useClientDataSWR` entries before: the rows only lived in the
  * SWR cache, so re-opening a search (or coming back to the surface) had to wait

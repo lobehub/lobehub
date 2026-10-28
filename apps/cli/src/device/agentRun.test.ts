@@ -16,8 +16,17 @@ const { saveTaskMock, getTaskMock, removeTaskMock } = vi.hoisted(() => ({
   removeTaskMock: vi.fn(),
   saveTaskMock: vi.fn(),
 }));
+const { identityMock, hasLoginMock } = vi.hoisted(() => ({
+  hasLoginMock: vi.fn(),
+  identityMock: vi.fn(),
+}));
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+// The device's own Claude Code login, read for account routing.
+vi.mock('@lobechat/heterogeneous-agents/quota-sampler', () => ({
+  hasClaudeCodeLogin: hasLoginMock,
+  readClaudeCodeIdentity: identityMock,
+}));
 vi.mock('../daemon/taskRegistry', () => ({
   getTask: getTaskMock,
   removeTask: removeTaskMock,
@@ -65,6 +74,7 @@ describe('spawnHeteroAgentRun', () => {
   afterEach(() => {
     spawnMock.mockReset();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it('does not hand the dispatched run an ancestor agent run identity or JWT file', () => {
@@ -362,6 +372,9 @@ describe('spawnHeteroAgentRun', () => {
   });
 
   it('removes the task registry entry on child exit when the PID still matches', async () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('process group exited'), { code: 'ESRCH' });
+    });
     const child = makeFakeChild();
     Object.defineProperty(child, 'pid', { value: 9988 });
     spawnMock.mockReturnValue(child);
@@ -382,6 +395,18 @@ describe('spawnHeteroAgentRun', () => {
     expect(removeTaskMock).toHaveBeenCalledWith('op-exit-cleanup');
   });
 
+  it('retains cancellation identity when descendants outlive the wrapper', async () => {
+    vi.spyOn(process, 'kill').mockReturnValue(true);
+    const child = Object.assign(makeFakeChild(), { pid: 9988 });
+    spawnMock.mockReturnValue(child);
+    getTaskMock.mockReturnValue({ pid: 9988 });
+    const ack = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-live-descendant' });
+    child.emit('spawn');
+    await ack;
+    child.emit('exit', 0, null);
+    expect(removeTaskMock).not.toHaveBeenCalled();
+  });
+
   it('does not remove the registry entry on exit when a newer PID replaced it', async () => {
     const child = makeFakeChild();
     Object.defineProperty(child, 'pid', { value: 7777 });
@@ -399,5 +424,45 @@ describe('spawnHeteroAgentRun', () => {
     child.emit('exit', 0, null);
 
     expect(removeTaskMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('spawnHeteroAgentRun Claude Code account routing', () => {
+  beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue(asDirectory);
+    identityMock.mockResolvedValue({ externalAccountId: 'acc-default' });
+    hasLoginMock.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    spawnMock.mockReset();
+  });
+
+  it('rejects a run pinned to an account this device is not signed in to', async () => {
+    const result = await spawnHeteroAgentRun({
+      ...baseParams,
+      claudeAccountRouting: {
+        candidates: [{ externalAccountId: 'acc-other', name: 'other@example.com' }],
+        mode: 'pinned',
+      },
+    });
+
+    expect(result.status).toBe('rejected');
+    expect(result.reason).toContain('other@example.com');
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('runs a run pinned to the account this device is signed in to', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const pending = spawnHeteroAgentRun({
+      ...baseParams,
+      claudeAccountRouting: { candidates: [{ externalAccountId: 'acc-default' }], mode: 'pinned' },
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled());
+    child.emit('spawn');
+
+    expect(await pending).toEqual({ status: 'accepted' });
   });
 });

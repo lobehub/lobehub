@@ -47,7 +47,7 @@ export class TaskCallbackMessageProcessor extends BaseProcessor {
       return [
         {
           ...message,
-          content: `<task_result task="${identifier}" status="${reason}">\n${content}\n</task_result>`,
+          content: `<task_result task="${identifier}"${callback?.taskId ? ` id="${callback.taskId}"` : ''} status="${reason}">\n${content}\n</task_result>`,
           role: 'user' as const,
         },
       ];

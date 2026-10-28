@@ -2,6 +2,7 @@ import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
 import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
   ClientLlmWaitItem,
+  ComposerUserMessage,
   ContextSelection,
   ExecAgentAppContext,
   ExecAgentClientIds,
@@ -148,7 +149,7 @@ export interface ExecAgentTaskParams {
    * live, to tell whether the client never saw it or its stop never landed.
    */
   clientOperations?: ClientOperationSnapshot[];
-  /** Content attached from the conversation, a page or code; persisted on the user message. */
+  /** @deprecated Mirror of `userMessage.metadata.contextSelections` for servers that predate it. */
   contextSelections?: ContextSelection[];
   deviceId?: string;
   existingMessageIds?: string[];
@@ -161,7 +162,7 @@ export interface ExecAgentTaskParams {
    * context so the supervisor run delegates to them instead of answering itself.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
-  /** Page-editor selections, mirrored from `contextSelections` for compatibility. */
+  /** @deprecated Mirror of `userMessage.metadata.pageSelections` for servers that predate it. */
   pageSelections?: PageSelection[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
@@ -192,6 +193,31 @@ export interface ExecAgentTaskParams {
    */
   trigger?: string;
   userInterventionConfig?: UserInterventionConfig;
+  /** The composer-authored part of the new user message; see `ExecAgentParams.userMessage`. */
+  userMessage?: ComposerUserMessage;
+}
+
+/**
+ * A composer send queued behind the running turn on the server: the
+ * fresh-send part of {@link ExecAgentTaskParams}.
+ */
+export type QueuedFollowUpRequest = Omit<
+  ExecAgentTaskParams,
+  | 'autoStart'
+  | 'clientIds'
+  | 'clientOperations'
+  | 'existingMessageIds'
+  | 'parentMessageId'
+  | 'replacesOperationId'
+  | 'resumeApproval'
+  | 'resumeApprovals'
+  | 'resumeToolResult'
+  | 'steer'
+>;
+
+export interface QueuedFollowUpSurface {
+  threadId?: string | null;
+  topicId: string;
 }
 
 /**
@@ -270,6 +296,7 @@ export interface UpdateClientTaskThreadStatusParams {
   error?: string;
   metadata?: {
     totalCost?: number;
+    totalLlmCalls?: number;
     totalMessages?: number;
     totalSteps?: number;
     totalTokens?: number;
@@ -312,6 +339,43 @@ class AiAgentService {
       },
       options,
     );
+  }
+
+  /**
+   * Queue a follow-up behind the surface's running turn on the server. It
+   * carries the same run declarations as {@link execAgentTask}, so the run can
+   * tell whether the follow-up can join it. `queued: false` means nothing was
+   * stored and this client must send it itself.
+   */
+  async appendQueuedFollowUp(params: {
+    /** Composer state to keep with it, so a reloaded page can show and resend it as typed. */
+    composer?: { editorData?: Record<string, any>; filesPreview?: Record<string, any>[] };
+    id: string;
+    request: QueuedFollowUpRequest;
+  }) {
+    const clientProtocol = canUseGatewayProtocolV2() ? CLIENT_PROTOCOL_VERSION : undefined;
+    const llmExecutor = buildLlmExecutorDeclaration();
+
+    return await lambdaClient.agentSteerQueue.append.mutate({
+      ...(params.composer && { composer: params.composer }),
+      id: params.id,
+      request: {
+        clientProtocol,
+        ...(llmExecutor && { llmExecutor }),
+        ...params.request,
+        streamFeatures: STREAM_FEATURES,
+      },
+    });
+  }
+
+  /** This user's follow-ups still waiting on the server, oldest first. */
+  async listQueuedFollowUps(surface: QueuedFollowUpSurface) {
+    return await lambdaClient.agentSteerQueue.list.query(surface);
+  }
+
+  /** `removed: false` means the follow-up already left the queue to be delivered. */
+  async removeQueuedFollowUp(params: QueuedFollowUpSurface & { id: string }) {
+    return await lambdaClient.agentSteerQueue.remove.mutate(params);
   }
 
   /**

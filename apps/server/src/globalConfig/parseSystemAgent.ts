@@ -10,7 +10,7 @@ const memoryServiceModelKeys = new Set([
   'userMemoryPersonaWriter',
 ]);
 // `default=` names a chat model; a speech-to-text slot must be set explicitly.
-const nonChatModelKeys = new Set(['asr']);
+const nonChatModelKeys = new Set(['asr', 'channelRouting']);
 const defaultModelAssignmentKeys = protectedKeys.filter(
   (key) => !memoryServiceModelKeys.has(key) && !nonChatModelKeys.has(key),
 );

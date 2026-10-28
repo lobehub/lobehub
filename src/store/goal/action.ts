@@ -28,6 +28,7 @@ import {
   type GoalListValue,
   goalMetricSeriesResource,
   homeGoalListResource,
+  topicGoalListResource,
 } from './projection';
 
 /**
@@ -152,13 +153,21 @@ const useGoalCoordinatorAdvancing = (goalId?: string | null): boolean =>
 /** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
 const TOPIC_GOAL_FETCH_LIMIT = 20;
 
-const topicGoalsRefreshInterval = (
-  result: { goals: { goal: { status: GoalStatus } }[] } | undefined,
-  generating?: boolean,
-) =>
-  generating || result?.goals.some(({ goal }) => goalStatusPolled(goal.status))
-    ? GOAL_GRAPH_POLL_INTERVAL
-    : 0;
+/**
+ * The composer tray and the working sidebar both read a topic's goals on
+ * mount; this window collapses them into one request. It stays under the poll
+ * interval because SWR's poll ticks dedupe too.
+ */
+const TOPIC_GOALS_DEDUPING_INTERVAL = 4000;
+
+const useTopicGoalsAdvancing = (topicId?: string | null): boolean =>
+  useGoalStore((state) =>
+    topicId
+      ? (state.topicGoalsByTopicId[topicId]?.goals.some(({ goal }) =>
+          goalStatusPolled(goal.status),
+        ) ?? false)
+      : false,
+  );
 
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
@@ -172,6 +181,7 @@ export class GoalActionImpl {
   readonly #goalMetricSeries;
   readonly #homeGoalList;
   readonly #set: Setter;
+  readonly #topicGoalList;
 
   constructor(set: Setter, get: () => GoalStore, _api?: unknown) {
     void _api;
@@ -205,9 +215,24 @@ export class GoalActionImpl {
       view: recordLens<GoalStore, GoalListValue>('homeGoalsByScope'),
     });
 
-    // One goal row is rendered by a scope's tabs and by the home rail; a change
-    // to it has to reach every list holding it, loaded or only persisted.
-    this.#goalListRows = linkReplicaEntity<GoalListItem>([this.#goalList, this.#homeGoalList]);
+    this.#topicGoalList = createReplicaSlice(topicGoalListResource, {
+      actionPrefix: 'topicGoalList',
+      entity: goalListEntity,
+      fetcher: (topicId) => goalService.list({ limit: TOPIC_GOAL_FETCH_LIMIT, topicId }),
+      get,
+      set,
+      stateKey: 'topicGoalsReplica',
+      view: recordLens<GoalStore, GoalListValue>('topicGoalsByTopicId'),
+    });
+
+    // One goal row is rendered by a scope's tabs, the home rail and the
+    // conversation that created it; a change to it has to reach every list
+    // holding it, loaded or only persisted.
+    this.#goalListRows = linkReplicaEntity<GoalListItem>([
+      this.#goalList,
+      this.#homeGoalList,
+      this.#topicGoalList,
+    ]);
 
     this.#goalGraph = createReplicaSlice(goalGraphResource, {
       actionPrefix: 'goalGraph',
@@ -452,16 +477,19 @@ export class GoalActionImpl {
    * while a `/goal` request is generating (`generating`, decided by the caller)
    * — that run is the one that creates the goal, so nothing on screen would
    * otherwise ask for it.
+   *
+   * Read the rows through `goalSelectors.topicGoals`; the persisted copy paints
+   * first, and `goalSelectors.topicGoalsConfirmed` says when its statuses are
+   * the server's current ones.
    */
-  useFetchTopicGoals = (topicId?: string | null, generating?: boolean) =>
-    useClientDataSWR(
-      topicId ? goalKeys.topicGoals(topicId) : null,
-      () => goalService.list({ limit: TOPIC_GOAL_FETCH_LIMIT, topicId: topicId! }),
-      {
-        refreshInterval: (result) => topicGoalsRefreshInterval(result, generating),
-        revalidateOnFocus: true,
-      },
-    );
+  useFetchTopicGoals = (topicId?: string | null, generating?: boolean) => {
+    const advancing = useTopicGoalsAdvancing(topicId);
+    return this.#topicGoalList.useSync(topicId || null, {
+      dedupingInterval: TOPIC_GOALS_DEDUPING_INTERVAL,
+      refreshInterval: generating || advancing ? GOAL_GRAPH_POLL_INTERVAL : 0,
+      revalidateOnFocus: true,
+    });
+  };
 
   /**
    * North-star data of the goal detail header, read through

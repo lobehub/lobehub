@@ -9,33 +9,51 @@ import { WorkspaceSidePanelProvider } from '@/features/RightPanel/WorkspaceSideP
 
 import GoalDetailPage from './GoalDetailPage';
 
-const mocks = vi.hoisted(() => ({ canEdit: true, hasSupervision: true, showPortal: false }));
+const mocks = vi.hoisted(() => ({
+  canEdit: true,
+  graphError: undefined as unknown,
+  hasSnapshot: true,
+  hasSupervision: true,
+  recovery: { pending: false } as { pending: boolean },
+  showPortal: false,
+}));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 vi.mock('@/store/goal', () => ({
   goalSelectors: {
-    goalGraph: () => () => ({
-      goal: {
-        agentId: 'agt_manager',
-        config: mocks.hasSupervision
-          ? { manager: true, managerState: { topicId: 'tpc_manager' } }
-          : {},
-        id: 'goal_1',
-        projectId: null,
-        requirement: 'Reach 1,100 followers',
-        status: 'review',
-        title: 'Ship it',
-      },
-      nodes: [],
-    }),
+    goalGraph: () => () =>
+      mocks.hasSnapshot
+        ? {
+            goal: {
+              agentId: 'agt_manager',
+              config: mocks.hasSupervision
+                ? { manager: true, managerState: { topicId: 'tpc_manager' } }
+                : {},
+              id: 'goal_1',
+              projectId: null,
+              requirement: 'Reach 1,100 followers',
+              status: 'review',
+              title: 'Ship it',
+            },
+            nodes: [],
+          }
+        : undefined,
   },
   useGoalStore: (selector: (s: any) => unknown) =>
     selector({
       pauseGoal: vi.fn(),
       resumeGoal: vi.fn(),
-      useFetchGoalGraph: () => ({ error: undefined, isLoading: false, mutate: vi.fn() }),
+      useFetchGoalGraph: () => ({ error: mocks.graphError, isLoading: false, mutate: vi.fn() }),
     }),
+}));
+
+vi.mock('@/features/Workspace/useLocateInOtherScope', () => ({
+  useOtherScopeRecovery: () => mocks.recovery,
+}));
+
+vi.mock('@/components/Skeleton/GoalDetail', () => ({
+  default: () => <div data-testid="goal-detail-skeleton" />,
 }));
 
 vi.mock('@/store/serverConfig', () => ({
@@ -182,7 +200,10 @@ vi.mock('./GoalSupervision', () => ({
 describe('GoalDetailPage', () => {
   beforeEach(() => {
     mocks.canEdit = true;
+    mocks.graphError = undefined;
+    mocks.hasSnapshot = true;
     mocks.hasSupervision = true;
+    mocks.recovery = { pending: false };
     mocks.showPortal = false;
   });
 
@@ -313,5 +334,17 @@ describe('GoalDetailPage', () => {
     render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
 
     expect(screen.getByTestId('goal-portal-content')).toBeInTheDocument();
+  });
+
+  // A 404 may only mean the goal lives in another of the user's spaces; while
+  // those are probed the page keeps its loading frame instead of going blank.
+  it('keeps the page skeleton while another space is being probed', () => {
+    mocks.hasSnapshot = false;
+    mocks.graphError = { data: { code: 'NOT_FOUND', httpStatus: 404 } };
+    mocks.recovery = { pending: true };
+
+    render(<GoalDetailPage goalId={'goal_1'} />);
+
+    expect(screen.getByTestId('goal-detail-skeleton')).toBeTruthy();
   });
 });

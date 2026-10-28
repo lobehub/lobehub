@@ -931,6 +931,11 @@ describe('lobehubSkillStore actions', () => {
       // Server should still be in state after error
       expect(result.current.lobehubSkillServers).toHaveLength(1);
       expect(result.current.lobehubSkillLoadingIds.has('linear')).toBe(false);
+      // The reason stays on the row, so the settings list can show it in place.
+      expect(result.current.lobehubSkillErrors.linear).toMatchObject({
+        action: 'remove',
+        message: 'Revoke failed',
+      });
     });
   });
 

@@ -58,7 +58,7 @@ export interface CreateTaskContentProps {
    * agent-scoped task list where every task belongs to that agent.
    */
   lockAssignee?: boolean;
-  onCreated?: (task: { agentId?: string; identifier: string; name?: string }) => void;
+  onCreated?: (task: { id: string; agentId?: string; identifier: string; name?: string }) => void;
   projectId?: string;
   /**
    * Creates a scheduled task: the form gains a schedule chip and the task is
@@ -196,6 +196,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         if (result) {
           close();
           onCreated?.({
+            id: result.id,
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
             name: result.name ?? undefined,
@@ -261,7 +262,6 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               fontWeight: 600,
               lineHeight: 1.4,
               minWidth: 0,
-              outline: 'none',
               padding: '4px 0',
             }}
             onChange={(e) => setTitle(e.target.value)}

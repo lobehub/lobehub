@@ -51,8 +51,8 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
-    "@auv-js/cli": "0.0.33",
-    "@auv-js/sdk": "0.0.33",
+    "@auv-js/cli": "0.0.38",
+    "@auv-js/sdk": "0.0.38",
     "@lobehub/fluent-emoji": "^5.0.0",
     "@lydell/node-pty": "1.2.0-beta.15",
     "electron-log": "^5.4.4",
@@ -86,7 +86,7 @@
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@lobehub/i18n-cli": "^1.27.0",
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/client": "~2.4.0",
     "@sentry/electron": "7.20.0",
     "@sentry/vite-plugin": "5.4.0",
     "@t3-oss/env-core": "^0.13.11",

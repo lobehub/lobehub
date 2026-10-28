@@ -110,6 +110,34 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
       );
     });
 
+    it('keeps a reconnect replay on each step row when hetero stream_start names it', async () => {
+      const store = createMockStore();
+      store.dbMessagesMap['main_agent-1_topic-1'] = [
+        { content: 'still waiting on CI', id: 'msg-step2', role: 'assistant' },
+        { content: 'final answer', id: 'msg-final', role: 'assistant' },
+      ];
+      // A reconnect anchors on `runningOperation.assistantMessageId` — the newest row.
+      const handler = createHandler(store, { assistantMessageId: 'msg-final' });
+
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' }, newStep: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'still waiting on CI' }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-final' }, newStep: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'final answer' }));
+      await flush();
+
+      const contentWrites = vi
+        .mocked(store.internal_dispatchMessage)
+        .mock.calls.map(([action]: any[]) => action)
+        .filter((action) => action.type === 'updateMessage' && 'content' in action.value)
+        .map((action) => [action.id, action.value.content]);
+      expect(contentWrites).toEqual([
+        ['msg-step2', 'still waiting on CI'],
+        ['msg-final', 'final answer'],
+      ]);
+      // Both rows are already loaded, so the replay needs no DB round trip.
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
     it('should reset accumulators on each stream_start', async () => {
       const store = createMockStore();
       const handler = createHandler(store);

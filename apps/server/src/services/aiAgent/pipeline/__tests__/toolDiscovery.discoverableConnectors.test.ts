@@ -60,11 +60,14 @@ const connectorTools = [
 ];
 
 interface RunOptions {
+  agentId?: string;
+  installed?: boolean;
   /** The agent's own `plugins` config — i.e. what the user pinned. */
   plugins?: string[];
   /** This turn's @-mention picks. */
   selectedToolIds?: string[];
   shareGate?: unknown;
+  sourceType?: 'custom' | 'marketplace';
 }
 
 const connectorModel = {
@@ -73,10 +76,16 @@ const connectorModel = {
 };
 
 const run = (options: RunOptions = {}) => {
-  connectorModel.resolveAll.mockReset().mockResolvedValue([customConnector]);
+  const connector = {
+    ...customConnector,
+    agentId: options.agentId ?? null,
+    sourceType: options.sourceType ?? 'custom',
+    status: 'connected',
+  };
+  connectorModel.resolveAll.mockReset().mockResolvedValue([connector]);
   connectorModel.resolveByIdentifiers
     .mockReset()
-    .mockImplementation(async (ids: string[]) => (ids.includes(YINGMI) ? [customConnector] : []));
+    .mockImplementation(async (ids: string[]) => (ids.includes(YINGMI) ? [connector] : []));
 
   return discoverTools(
     {
@@ -92,7 +101,9 @@ const run = (options: RunOptions = {}) => {
         getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
       }),
       messageModel: { update: vi.fn() },
-      pluginModel: { query: vi.fn().mockResolvedValue([]) },
+      pluginModel: {
+        query: vi.fn().mockResolvedValue(options.installed ? [{ identifier: YINGMI }] : []),
+      },
       userId: 'user-1',
     } as never,
     {
@@ -134,6 +145,80 @@ const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) 
   (result.tools ?? []).map((tool) => tool.function.name);
 
 describe('discoverTools — unpinned custom MCP connectors', () => {
+  it.each([
+    {},
+    { plugins: [YINGMI] },
+    { selectedToolIds: [YINGMI] },
+    {
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [{ identifier: YINGMI }] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    },
+  ])(
+    'rejects a canceled marketplace install even after its OAuth callback connects: %j',
+    async (options) => {
+      const result = await run({ ...options, sourceType: 'marketplace' });
+      expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+      expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+      const restored = result.toolsEngine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [YINGMI],
+      });
+      expect(restored.enabledToolIds).not.toContain(YINGMI);
+    },
+  );
+
+  it.each([
+    { label: 'auto', options: {} },
+    { label: 'pinned', options: { plugins: [YINGMI] } },
+    { label: 'mentioned', options: { selectedToolIds: [YINGMI] } },
+    {
+      label: 'share granted',
+      options: {
+        shareGate: {
+          agentId: 'agent-1',
+          shareConfig: { toolGrants: [{ identifier: YINGMI }] },
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      },
+    },
+  ])('preserves an independent agent copy after global uninstall: $label', async ({ options }) => {
+    const result = await run({
+      ...options,
+      agentId: 'agent-1',
+      sourceType: 'marketplace',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeDefined();
+    const activated = result.toolsEngine!.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'test-model',
+      provider: 'test-provider',
+      skipDefaultTools: true,
+      toolIds: [YINGMI],
+    });
+    expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
+  it('keeps a completed marketplace install discoverable and explicitly activatable', async () => {
+    const result = await run({ installed: true, sourceType: 'marketplace' });
+    expect(result.toolManifestMap[YINGMI]).toBeDefined();
+    const activated = result.toolsEngine!.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'test-model',
+      provider: 'test-provider',
+      skipDefaultTools: true,
+      toolIds: [YINGMI],
+    });
+    expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
   it('keeps an unmentioned, unpinned connector discoverable without enabling it', async () => {
     // The follow-up turn after an @-mention: no mention, nothing pinned. The
     // activator used to answer "Not found: yingmi" here.

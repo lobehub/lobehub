@@ -3,6 +3,7 @@ import { fal } from '@fal-ai/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types';
+import { clearFalInputSchemaCache } from './catalog';
 import { LobeFalAI, resolveFalImageSize } from './index';
 
 // Mock the fal client
@@ -28,11 +29,19 @@ let instance: LobeFalAI;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearFalInputSchemaCache();
+  // Endpoints outside the built-in cards look up their input schema; keep that lookup off
+  // fal's real catalog API, where rate limiting retries outlast the test timeout.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{}', { status: 500 })),
+  );
   instance = new LobeFalAI({ apiKey: 'test-api-key' });
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('LobeFalAI', () => {

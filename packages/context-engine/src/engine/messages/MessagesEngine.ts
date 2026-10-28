@@ -20,6 +20,7 @@ import {
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   StaleToolResultTrimProcessor,
+  SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
@@ -56,6 +57,7 @@ import {
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
   PlanInjector,
+  ProjectContextInjector,
   ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
   selectActivatedSkills,
@@ -450,6 +452,11 @@ export class MessagesEngine {
       new ContextSelectionsInjector({ enabled: true }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
+      // Project context (members, linked knowledge, open tasks) for a run inside a project
+      new ProjectContextInjector({
+        contextPrompt: initialContext?.projectContext?.contextPrompt,
+        enabled: !!initialContext?.projectContext?.contextPrompt,
+      }),
       // Task Manager page context (inject current tasks list/detail to last user message)
       new TaskManagerContextInjector({
         contextPrompt: initialContext?.taskManager?.contextPrompt,
@@ -495,6 +502,9 @@ export class MessagesEngine {
       // Flattens group/task messages, applies templates and variables
       // =============================================
 
+      // Background sub-agent results arrive as user messages from the
+      // sub-agent; mark them as its report before any user-text template
+      new SubAgentResultMessageProcessor(),
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
       // AgentCouncil message flatten

@@ -23,6 +23,8 @@ import { useTaskStore } from '@/store/task';
 import { isOptimisticActivityId } from '@/store/task/slices/detail/optimisticActivity';
 
 import { styles } from '../shared/style';
+import { commentMarkdownProps } from './commentMarkdown';
+import { resolveMarkdownSnapshotContent } from './commentRenderSource';
 
 // Keep saved comments visually consistent with the editor: render FileNodes
 // as the Linear-style card on its own row instead of the default inline pill.
@@ -61,6 +63,15 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
     }),
     [activity.content, activity.editorData],
   );
+  const snapshotMarkdown = useMemo(
+    () =>
+      resolveMarkdownSnapshotContent({
+        content: activity.content,
+        editorData: activity.editorData,
+      }),
+    [activity.content, activity.editorData],
+  );
+  const renderSnapshot = Boolean(activity.editorData) && snapshotMarkdown === undefined;
 
   useEffect(() => {
     if (activity.files && activity.files.length > 0) {
@@ -182,7 +193,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
           </Flexbox>
         </>
       )}
-      {!isEditing && Boolean(activity.editorData) && (
+      {!isEditing && renderSnapshot && (
         <LexicalRenderer
           className={mentionPlainClassName}
           overrides={rendererOverrides}
@@ -190,9 +201,9 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
           variant={'chat'}
         />
       )}
-      {!isEditing && !activity.editorData && (
-        <Markdown fontSize={14} variant={'chat'}>
-          {content}
+      {!isEditing && !renderSnapshot && (
+        <Markdown fontSize={14} variant={'chat'} {...commentMarkdownProps}>
+          {snapshotMarkdown ?? content}
         </Markdown>
       )}
 

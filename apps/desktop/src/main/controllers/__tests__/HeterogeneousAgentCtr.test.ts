@@ -1887,7 +1887,7 @@ describe('HeterogeneousAgentCtr', () => {
       }
     });
 
-    // LOBE-14393: without MCP_CONNECTION_NONBLOCKING the first turn misses claude.ai connectors.
+    // without MCP_CONNECTION_NONBLOCKING the first turn misses claude.ai connectors.
     it.each([
       ['codebuddy', 'codebuddy', 'CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS', '1'],
       ['claude-code', 'claude', 'MCP_CONNECTION_NONBLOCKING', 'false'],

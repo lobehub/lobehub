@@ -144,6 +144,7 @@ export class FtsSearchRepo {
     const trimmedQuery = query.trim();
     const limits = this.calculateLimits(limitPerType, type, agentId, contextType);
     const excludeKnowledgeBaseIds = options.excludeKnowledgeBaseIds ?? [];
+    const { timeRange } = options;
     const searches: Promise<FtsSearchBackendResponse>[] = [];
 
     if ((!type || type === 'agent') && limits.agent > 0) {
@@ -154,12 +155,19 @@ export class FtsSearchRepo {
     }
     if ((!type || type === 'topic') && limits.topic > 0) {
       searches.push(
-        this.execute(this.createRequest('topics', trimmedQuery, limits.topic, { agentId })),
+        this.execute(
+          this.createRequest('topics', trimmedQuery, limits.topic, { agentId, timeRange }),
+        ),
       );
     }
     if ((!type || type === 'message') && limits.message > 0) {
       searches.push(
-        this.execute(this.createRequest('messages', trimmedQuery, limits.message, { agentId })),
+        this.execute(
+          this.createRequest('messages', trimmedQuery, limits.message, {
+            agentId,
+            timeRange,
+          }),
+        ),
       );
     }
     if ((!type || type === 'file') && limits.file > 0) {
@@ -185,6 +193,7 @@ export class FtsSearchRepo {
           this.createRequest('documents', trimmedQuery, limits.page, {
             documentKind: 'page',
             excludeKnowledgeBaseIds,
+            timeRange,
           }),
         ),
       );

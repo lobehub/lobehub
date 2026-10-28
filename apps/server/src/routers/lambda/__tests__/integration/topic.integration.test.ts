@@ -284,6 +284,16 @@ describe('Topic Router Integration Tests', () => {
         })
         .returning();
 
+      // A native agent Session has a real relationship. An unlinked shell
+      // cannot serve as an Agent alias.
+      const { agentsToSessions } = await import('@/database/schemas');
+      const anotherAgentId = await createTestAgent(serverDB, userId);
+      await serverDB.insert(agentsToSessions).values({
+        agentId: anotherAgentId,
+        sessionId: anotherSession.id,
+        userId,
+      });
+
       const result = await caller.batchCreateTopics([
         { title: 'Topic with agentId', agentId: testAgentId },
         { title: 'Topic with sessionId', sessionId: anotherSession.id },

@@ -2,6 +2,7 @@ export * from './agent.service';
 export * from './agent-group.service';
 export * from './api-key.service';
 export * from './chat.service';
+export * from './chat-group.service';
 export * from './eval.service';
 export * from './file.service';
 export * from './mcp-server.service';

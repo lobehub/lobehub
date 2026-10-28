@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
-import Avatar from '@/components/Avatar';
+import UserAvatar from '@/components/UserAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { usePermission } from '@/hooks/usePermission';
@@ -245,8 +245,8 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
             title={member ? memberName(member) : unassignedLabel}
             icon={
               member ? (
-                <Avatar
-                  avatar={member.user?.avatar || undefined}
+                <UserAvatar
+                  avatar={member.user?.avatar}
                   name={memberName(member)}
                   shape={'circle'}
                   size={22}

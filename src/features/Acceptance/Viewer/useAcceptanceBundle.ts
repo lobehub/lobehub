@@ -52,7 +52,12 @@ export const useAcceptanceBundle = (
   // The poll follows the LIVE replica, not the static loader seed: a snapshot
   // cannot know whether the round is still moving.
   const status = replicaData?.acceptance.status;
-  const polling = poll && !!status && LIVE_ACCEPTANCE_STATUSES.has(status);
+  const repairState = replicaData?.repair?.state;
+  const polling =
+    poll &&
+    ((!!status && LIVE_ACCEPTANCE_STATUSES.has(status)) ||
+      repairState === 'starting' ||
+      repairState === 'running');
 
   const sync = useFetchAcceptanceBundle(acceptanceId, {
     refreshInterval: polling ? ACCEPTANCE_BUNDLE_POLL_INTERVAL : 0,

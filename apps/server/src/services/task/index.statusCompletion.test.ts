@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   areAllSubtasksCompleted: vi.fn(),
   cascadeOnCompletion: vi.fn(),
   findById: vi.fn(),
-  resolve: vi.fn(),
   shouldPauseAfterComplete: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -30,7 +29,6 @@ vi.mock('@/database/models/task', () => ({
     return {
       areAllSubtasksCompleted: mocks.areAllSubtasksCompleted,
       findById: mocks.findById,
-      resolve: mocks.resolve,
       shouldPauseAfterComplete: mocks.shouldPauseAfterComplete,
       updateStatus: mocks.updateStatus,
     };
@@ -55,7 +53,7 @@ const subtask = {
 describe('TaskService.updateStatus completion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.resolve.mockResolvedValue({ ...subtask, status: 'todo' });
+    mocks.findById.mockResolvedValueOnce({ ...subtask, status: 'todo' });
     mocks.updateStatus.mockImplementation(async (id: string, status: string) => ({
       ...subtask,
       id,
@@ -70,13 +68,13 @@ describe('TaskService.updateStatus completion', () => {
     mocks.areAllSubtasksCompleted.mockResolvedValue(true);
 
     const result = await new TaskService(db as any, 'user-1').updateStatus({
-      id: 'T-2',
+      id: 'task-2',
       status: 'completed',
     });
 
     expect(mocks.shouldPauseAfterComplete).toHaveBeenCalledWith(
       { id: 'task-1', identifier: 'T-1' },
-      'T-2',
+      expect.objectContaining({ id: 'task-2', identifier: 'T-2' }),
     );
     expect(mocks.updateStatus).toHaveBeenCalledWith('task-1', 'paused');
     expect(mocks.areAllSubtasksCompleted).toHaveBeenCalledWith('task-1');
@@ -95,7 +93,7 @@ describe('TaskService.updateStatus completion', () => {
     mocks.areAllSubtasksCompleted.mockResolvedValue(false);
 
     const result = await new TaskService(db as any, 'user-1').updateStatus({
-      id: 'T-2',
+      id: 'task-2',
       status: 'completed',
     });
 
@@ -109,10 +107,10 @@ describe('TaskService.updateStatus completion', () => {
     await expect(
       new TaskService(db as any, 'user-1').updateStatus({
         error: 'boom',
-        id: 'T-2',
+        id: 'task-2',
         status: 'completed',
       }),
     ).rejects.toThrow('Task error can only be provided when status is failed.');
-    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.findById).not.toHaveBeenCalled();
   });
 });

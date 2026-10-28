@@ -1,4 +1,4 @@
-import type { AgentSenderMetadata, ContextSelection, PageSelection } from '@lobechat/types';
+import type { AgentSenderMetadata, ComposerUserMessageMetadata } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
 import type { InternalExecAgentParams } from '../types';
@@ -7,9 +7,9 @@ export interface UserTurnMetadataInput {
   agentSender?: AgentSenderMetadata;
   appContext?: InternalExecAgentParams['appContext'];
   botSender?: InternalExecAgentParams['botSender'];
-  contextSelections?: ContextSelection[];
+  /** What the composer authored for this message (attached content, …). */
+  composerMetadata?: ComposerUserMessageMetadata;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
-  pageSelections?: PageSelection[];
   selectedSkillIds?: string[];
   steer?: boolean;
   trigger?: string;
@@ -24,13 +24,16 @@ export const buildUserTurnMetadata = ({
   agentSender,
   appContext,
   botSender,
-  contextSelections,
+  composerMetadata,
   externalOrigin,
-  pageSelections,
   selectedSkillIds,
   steer,
   trigger,
 }: UserTurnMetadataInput) => ({
+  // The composer's own part of the message, validated by
+  // `ComposerUserMessageMetadataSchema`. Spread first so every server-derived
+  // field below wins over anything a client sent.
+  ...composerMetadata,
   ...(trigger && Object.values(RequestTrigger).includes(trigger as RequestTrigger)
     ? { trigger: trigger as RequestTrigger }
     : undefined),
@@ -52,8 +55,4 @@ export const buildUserTurnMetadata = ({
   // Later turns read the selection back from history, so the skills stay
   // injected for the rest of the topic (see `collectSelectedSkillIds`).
   ...(selectedSkillIds?.length ? { selectedSkillIds: [...new Set(selectedSkillIds)] } : undefined),
-  // Content attached from the conversation, a page or code. The bubble renders
-  // it as a quote and the context engine injects it for this and later turns.
-  ...(contextSelections?.length ? { contextSelections } : undefined),
-  ...(pageSelections?.length ? { pageSelections } : undefined),
 });

@@ -6,6 +6,7 @@ import { verifyRouter } from '.';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  createManyEvidence: vi.fn(),
   findFileById: vi.fn(),
   findResultById: vi.fn(),
   findRunById: vi.fn(),
@@ -46,7 +47,7 @@ vi.mock('@/database/models/file', async (importOriginal) => {
 
 vi.mock('@/database/models/verifyEvidence', () => ({
   VerifyEvidenceModel: vi.fn(function () {
-    return { create: modelMocks.createEvidence };
+    return { create: modelMocks.createEvidence, createMany: modelMocks.createManyEvidence };
   }),
 }));
 
@@ -79,7 +80,7 @@ describe('verifyRouter evidence writes', () => {
       ).rejects.toThrow('Verification run not found');
 
       expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
-      expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+      expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
     });
 
     it('rejects an evidence item with both inline content and fileId', async () => {
@@ -95,7 +96,7 @@ describe('verifyRouter evidence writes', () => {
     it('lazily upserts the check result and attaches evidence in one call', async () => {
       modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
       modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1', verdict: 'passed' });
-      modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+      modelMocks.createManyEvidence.mockResolvedValueOnce([{ id: 'evidence-1' }]);
 
       const res = await createCaller().submitCheckEvidence({
         checkItemId: 'item-1',
@@ -107,13 +108,13 @@ describe('verifyRouter evidence writes', () => {
       expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
         expect.objectContaining({ checkItemId: 'item-1', verdict: 'passed', verifyRunId: 'run-1' }),
       );
-      expect(modelMocks.createEvidence).toHaveBeenCalledWith(
+      expect(modelMocks.createManyEvidence).toHaveBeenCalledWith([
         expect.objectContaining({
           checkResultId: 'result-1',
           fileId: 'files-1',
           type: 'screenshot',
         }),
-      );
+      ]);
       expect(res).toEqual({
         checkResult: { id: 'result-1', verdict: 'passed' },
         evidence: [{ id: 'evidence-1' }],
@@ -130,7 +131,7 @@ describe('verifyRouter evidence writes', () => {
         verifyRunId: 'run-1',
       });
 
-      expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+      expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
       expect(res.evidence).toEqual([]);
     });
 
@@ -214,7 +215,7 @@ describe('verifyRouter evidence writes', () => {
         id: 'result-2',
         verifyRunId: 'round-2',
       });
-      modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+      modelMocks.createManyEvidence.mockResolvedValueOnce([{ id: 'evidence-1' }]);
 
       await createCaller().submitCheckEvidence({
         checkItemId: 'item-1',
@@ -226,9 +227,9 @@ describe('verifyRouter evidence writes', () => {
       expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
         expect.objectContaining({ checkItemId: 'item-1', verifyRunId: 'round-2' }),
       );
-      expect(modelMocks.createEvidence).toHaveBeenCalledWith(
+      expect(modelMocks.createManyEvidence).toHaveBeenCalledWith([
         expect.objectContaining({ checkResultId: 'result-2', type: 'gif' }),
-      );
+      ]);
     });
 
     it('stores a GIF uploaded as video as a gif, not a video', async () => {
@@ -241,7 +242,7 @@ describe('verifyRouter evidence writes', () => {
         name: 'rename.gif',
       });
       modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
-      modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+      modelMocks.createManyEvidence.mockResolvedValueOnce([{ id: 'evidence-1' }]);
 
       await createCaller().submitCheckEvidence({
         checkItemId: 'item-1',
@@ -250,9 +251,9 @@ describe('verifyRouter evidence writes', () => {
       });
 
       expect(modelMocks.findFileById).toHaveBeenCalledWith('files-gif');
-      expect(modelMocks.createEvidence).toHaveBeenCalledWith(
+      expect(modelMocks.createManyEvidence).toHaveBeenCalledWith([
         expect.objectContaining({ fileId: 'files-gif', type: 'gif' }),
-      );
+      ]);
     });
 
     it('keeps the chapters a plan-round video is submitted with', async () => {
@@ -265,9 +266,10 @@ describe('verifyRouter evidence writes', () => {
       ];
       modelMocks.findRunByOperation.mockResolvedValueOnce({ id: 'run-1', plan: [] });
       modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
-      modelMocks.createEvidence
-        .mockResolvedValueOnce({ id: 'evidence-1' })
-        .mockResolvedValueOnce({ id: 'evidence-2' });
+      modelMocks.createManyEvidence.mockResolvedValueOnce([
+        { id: 'evidence-1' },
+        { id: 'evidence-2' },
+      ]);
 
       await createCaller().submitCheckEvidence({
         checkItemId: 'item-1',
@@ -278,7 +280,11 @@ describe('verifyRouter evidence writes', () => {
         operationId: 'op-1',
       });
 
-      expect(modelMocks.createEvidence.mock.calls.map(([row]) => row.metadata)).toEqual([
+      expect(
+        modelMocks.createManyEvidence.mock.calls[0][0].map(
+          (row: { metadata: unknown }) => row.metadata,
+        ),
+      ).toEqual([
         {
           chapters: [
             { kind: 'step', label: 'Reload with listDevices held', t: 1.2 },
@@ -307,8 +313,54 @@ describe('verifyRouter evidence writes', () => {
       );
 
       expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
-      expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+      expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
     });
+  });
+
+  it('rejects an invalid terminal record before storing a verdict or evidence', async () => {
+    modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1', plan: [] });
+
+    await expect(
+      createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [{ content: 'authored text', metadata: { terminal: {} }, type: 'terminal' }],
+        verdict: 'passed',
+        verifyRunId: 'run-1',
+      }),
+    ).rejects.toThrow('Invalid terminal evidence metadata');
+
+    expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
+  });
+
+  it('resolves a large submission with bounded concurrency and inserts it once', async () => {
+    modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1', plan: [] });
+    modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+    let inFlight = 0;
+    let peak = 0;
+    modelMocks.findFileById.mockImplementation(async (id: string) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { fileType: 'image/png', id, name: `${id}.png` };
+    });
+    const evidence = Array.from({ length: 12 }, (_, i) => ({
+      fileId: `files-${i}`,
+      type: 'screenshot' as const,
+    }));
+    modelMocks.createManyEvidence.mockResolvedValueOnce(evidence.map((_, i) => ({ id: `e-${i}` })));
+
+    await createCaller().submitCheckEvidence({
+      checkItemId: 'item-1',
+      evidence,
+      verifyRunId: 'run-1',
+    });
+
+    expect(modelMocks.findFileById).toHaveBeenCalledTimes(12);
+    expect(peak).toBeLessThanOrEqual(5);
+    expect(modelMocks.createManyEvidence).toHaveBeenCalledTimes(1);
+    expect(modelMocks.createManyEvidence.mock.calls[0][0]).toHaveLength(12);
   });
 
   describe('uploadEvidence', () => {
@@ -367,5 +419,87 @@ describe('verifyRouter evidence writes', () => {
         }),
       ).rejects.toThrow('Provide exactly one of `content` or `fileId`.');
     });
+  });
+
+  describe.each(['uploadEvidence', 'submitCheckEvidence'] as const)(
+    '%s inline evidence content limit',
+    (procedure) => {
+      const submit = (
+        content: string,
+        type: 'text' | 'markdown' | 'transcript' | 'dom_snapshot' | 'terminal' = 'text',
+      ) =>
+        procedure === 'uploadEvidence'
+          ? createCaller().uploadEvidence({ checkResultId: 'result-1', content, type })
+          : createCaller().submitCheckEvidence({
+              checkItemId: 'item-1',
+              evidence: [{ content, type }],
+              verdict: 'passed',
+              verifyRunId: 'run-1',
+            });
+
+      it.each([
+        { label: 'CLI threshold', content: 'x'.repeat(5000) },
+        { label: 'server boundary', content: 'x'.repeat(6000) },
+        { label: 'Chinese boundary', content: '中'.repeat(6000) },
+        { label: 'UTF-16 boundary', content: '😀'.repeat(3000) },
+      ])('preserves $label content without truncation', async ({ content }) => {
+        if (procedure === 'uploadEvidence') {
+          modelMocks.findResultById.mockResolvedValueOnce({ id: 'result-1' });
+          modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+        } else {
+          modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1', plan: [] });
+          modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1' });
+          modelMocks.createManyEvidence.mockResolvedValueOnce([{ id: 'evidence-1' }]);
+        }
+
+        await submit(content);
+
+        const row =
+          procedure === 'uploadEvidence'
+            ? modelMocks.createEvidence.mock.calls[0][0]
+            : modelMocks.createManyEvidence.mock.calls[0][0][0];
+        expect(row.content).toBe(content);
+      });
+
+      it.each(['text', 'markdown', 'transcript', 'dom_snapshot', 'terminal'] as const)(
+        'rejects oversized %s evidence before any lookup or write',
+        async (type) => {
+          await expect(submit('x'.repeat(6001), type)).rejects.toMatchObject({
+            code: 'BAD_REQUEST',
+            message: expect.stringContaining('6000'),
+          });
+          expect(modelMocks.findResultById).not.toHaveBeenCalled();
+          expect(modelMocks.findRunById).not.toHaveBeenCalled();
+          expect(modelMocks.findFileById).not.toHaveBeenCalled();
+          expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+          expect(modelMocks.createEvidence).not.toHaveBeenCalled();
+          expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
+        },
+      );
+
+      it('counts surrogate pairs consistently with the CLI', async () => {
+        await expect(submit('😀'.repeat(3001))).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringContaining('6000'),
+        });
+      });
+    },
+  );
+
+  it('rejects a batch containing oversized evidence before persisting any result', async () => {
+    await expect(
+      createCaller().submitCheckEvidence({
+        checkItemId: 'item-1',
+        evidence: [
+          { content: 'valid', type: 'text' },
+          { content: 'x'.repeat(6001), type: 'text' },
+        ],
+        verdict: 'passed',
+        verifyRunId: 'run-1',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('6000') });
+
+    expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+    expect(modelMocks.createManyEvidence).not.toHaveBeenCalled();
   });
 });

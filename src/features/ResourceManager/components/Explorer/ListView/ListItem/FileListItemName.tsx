@@ -3,6 +3,7 @@ import { FileText, FolderIcon, LockIcon } from 'lucide-react';
 
 import FileIcon from '@/components/FileIcon';
 
+import LibraryTags from '../../LibraryTags';
 import { styles } from './styles';
 import TruncatedFileName from './TruncatedFileName';
 
@@ -20,6 +21,8 @@ interface FileListItemNameProps {
    */
   isPrivate?: boolean;
   isRenaming: boolean;
+  /** Libraries the row is filed into, tagged after the name in the drive. */
+  knowledgeBaseIds?: string[];
   name: string;
   onRenameCancel: () => void;
   onRenameConfirm: () => void;
@@ -37,6 +40,7 @@ const FileListItemName = ({
   isPage,
   isPrivate,
   isRenaming,
+  knowledgeBaseIds,
   name,
   onRenameCancel,
   onRenameConfirm,
@@ -91,7 +95,10 @@ const FileListItemName = ({
         }}
       />
     ) : (
-      <TruncatedFileName className={styles.name} name={name || fallbackName} />
+      <>
+        <TruncatedFileName className={styles.name} name={name || fallbackName} />
+        <LibraryTags knowledgeBaseIds={knowledgeBaseIds} />
+      </>
     )}
   </Flexbox>
 );

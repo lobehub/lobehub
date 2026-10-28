@@ -161,3 +161,14 @@ export interface CliTraceSession {
   dir: string;
   writeQueue: Promise<void>;
 }
+
+/**
+ * The Claude profile a session's CLI reads its transcripts from: a profile the
+ * session env picked (agent env or account routing via `CLAUDE_CONFIG_DIR`),
+ * else a hosted provider binding's profile, else the default `~/.claude`
+ * (`undefined`). Resume recovery and replay must agree with the spawn on it.
+ */
+export const claudeProfileDirOf = (
+  session: Pick<AgentSession, 'env' | 'hostedProviderBinding'>,
+): string | undefined =>
+  session.env?.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir;

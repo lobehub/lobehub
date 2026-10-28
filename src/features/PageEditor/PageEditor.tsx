@@ -34,6 +34,7 @@ import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
+import TableOfContents, { TOC_RAIL_GUTTER } from './TableOfContents';
 import TitleSection from './TitleSection';
 import { usePageEditable } from './usePageEditable';
 
@@ -70,6 +71,11 @@ const shouldRestoreEditorScroll = ({
   !isUserInteractingWithEditor;
 
 const styles = StyleSheet.create({
+  artifactContent: {
+    minWidth: 0,
+    paddingBlock: 24,
+    paddingInline: 24,
+  },
   contentWrapper: {
     containerType: 'inline-size',
     display: 'flex',
@@ -97,8 +103,15 @@ const overrideStyles = createStaticStyles(({ css }) => ({
 
       position: relative;
       box-sizing: border-box;
-      width: 100cqi;
+
+      /* Tables bleed to the pane edge; stop short of the TOC rail when it is shown. */
+      width: calc(100cqi - var(--lobe-pageeditor-toc-gutter, 0px));
       margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
+
+      /* The TOC rail is hidden at this width (see TableOfContents). */
+      @media (width <= 1024px) {
+        width: 100cqi;
+      }
     }
 
     .lobe-editor-table-scroll-wrapper .editor_table {
@@ -166,9 +179,11 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const tableBleedInline = wideScreen
     ? `${TABLE_BASE_BLEED}px`
     : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;
+  const [tocVisible, setTocVisible] = useState(false);
   const editorContentStyle = {
     ...styles.editorContent,
     '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
+    '--lobe-pageeditor-toc-gutter': tocVisible ? `${TOC_RAIL_GUTTER}px` : '0px',
   } as CSSProperties;
   const resizeFrameRef = useRef<number | undefined>(undefined);
   const restoreScrollFrameRef = useRef<number | undefined>(undefined);
@@ -378,43 +393,57 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
         width={'100%'}
         onScroll={handleEditorScroll}
       >
-        <WideScreenContainer
-          wrapperStyle={{ cursor: editable && !isHtmlPage ? 'text' : 'default' }}
-          onChange={notifyEditorLayoutChange}
-          onClick={() => {
-            if (!editable || isHtmlPage) return;
-
-            editor?.focus();
-          }}
-        >
-          <Flexbox
-            className={overrideStyles.editorContent}
-            flex={1}
-            ref={editorContentRef}
-            style={editorContentStyle}
-            {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
-          >
-            <TitleSection />
-            <PageMetaBar />
-            {/* Surfaces local heartbeat health (unstable/lost) for the holder.
-                Suppressed when LockedAlert is showing — see LockStatusBanner. */}
-            <LockStatusBanner />
-            {/* Prominent in-body notice when another member holds the lock; the
-                compact status badge lives in the Header (EditingIndicator). */}
-            <LockedAlert />
-            {isHtmlPage ? (
-              <HtmlPageBody />
-            ) : (
-              <>
-                <EditorCanvas askCopilotTarget={askCopilotTarget} />
-                <BlockCommentMarker hostRef={editorContentRef} />
-              </>
-            )}
-            {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
-            <DocumentComments />
+        {isHtmlPage ? (
+          // An artifact is a finished, self-styled page: it gets the pane's full
+          // width instead of the reading column, and no editable title above it
+          // (the header carries the title; the HTML has its own heading).
+          <Flexbox flex={1} gap={24} ref={editorContentRef} style={styles.artifactContent}>
+            <HtmlPageBody />
+            <WideScreenContainer>
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </WideScreenContainer>
           </Flexbox>
-        </WideScreenContainer>
+        ) : (
+          <WideScreenContainer
+            wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
+            onChange={notifyEditorLayoutChange}
+            onClick={() => {
+              if (!editable) return;
+
+              editor?.focus();
+            }}
+          >
+            <Flexbox
+              className={overrideStyles.editorContent}
+              flex={1}
+              ref={editorContentRef}
+              style={editorContentStyle}
+              {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
+            >
+              <TitleSection />
+              <PageMetaBar />
+              {/* Surfaces local heartbeat health (unstable/lost) for the holder.
+                  Suppressed when LockedAlert is showing — see LockStatusBanner. */}
+              <LockStatusBanner />
+              {/* Prominent in-body notice when another member holds the lock; the
+                  compact status badge lives in the Header (EditingIndicator). */}
+              <LockedAlert />
+              <EditorCanvas askCopilotTarget={askCopilotTarget} />
+              <BlockCommentMarker hostRef={editorContentRef} />
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </Flexbox>
+          </WideScreenContainer>
+        )}
       </Flexbox>
+      {!isHtmlPage && (
+        <TableOfContents
+          contentRef={editorContentRef}
+          scrollRef={contentWrapperRef}
+          onVisibleChange={setTocVisible}
+        />
+      )}
       {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
     </Flexbox>
   );

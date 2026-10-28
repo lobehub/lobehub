@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 export function registerAgentGroupCommand(program: Command) {
@@ -21,7 +22,12 @@ export function registerAgentGroupCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(groups, fields);
+        outputJson(
+          withUrls(groups, await resolveUrlBuilder(client), (group: any) =>
+            resourcePath.group(group.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -51,7 +57,10 @@ export function registerAgentGroupCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(detail, fields);
+        outputJson(
+          withUrl(detail, await resolveUrlBuilder(client), resourcePath.group(id)),
+          fields,
+        );
         return;
       }
 

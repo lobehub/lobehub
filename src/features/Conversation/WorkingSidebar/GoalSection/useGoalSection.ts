@@ -40,11 +40,12 @@ export const useTopicOperationGoals = (): OperationGoal[] => {
     ),
   );
   const useFetchTopicGoals = useGoalStore((s) => s.useFetchTopicGoals);
-  const { data } = useFetchTopicGoals(context.topicId, goalRequestGenerating);
+  useFetchTopicGoals(context.topicId, goalRequestGenerating);
+  const topicGoals = useGoalStore(goalSelectors.topicGoals(context.topicId));
 
   return useMemo(
-    () => mergeTopicGoals(deriveOperationGoals(dbMessages ?? []), data?.goals),
-    [dbMessages, data],
+    () => mergeTopicGoals(deriveOperationGoals(dbMessages ?? []), topicGoals),
+    [dbMessages, topicGoals],
   );
 };
 

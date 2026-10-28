@@ -37,6 +37,22 @@ describe('scope.workspace', () => {
     expect(outcome.detail).toContain('Personal scope');
   });
 
+  it('reads LOBEHUB_WORKSPACE_ID=personal as personal scope, not a workspace id', async () => {
+    process.env.LOBEHUB_WORKSPACE_ID = 'personal';
+    state.stored = {
+      identity: 'user:me',
+      serverUrl: 'https://app.lobehub.com',
+      workspaceId: 'ws_saved',
+    };
+
+    const outcome = await runCheck(scopeChecks, 'scope.workspace');
+
+    expect(outcome.status).toBe('ok');
+    expect(outcome.detail).toBe(
+      'Personal scope: LOBEHUB_WORKSPACE_ID=personal overrides the saved scope ws_saved for this run.',
+    );
+  });
+
   it('redacts a basic-auth server URL before it reaches the report', async () => {
     // Found by sweeping every check's evidence for an injected credential.
     state.serverUrl = 'https://alice:s3cret@lobe.internal';

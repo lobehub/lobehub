@@ -1,6 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
-import { resolveLocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import type * as LobeChatConst from '@lobechat/const';
 import { FILE_PREVIEW_CHARS } from '@lobechat/prompts';
 import { type LobeChatPluginApi, type UIChatMessage } from '@lobechat/types';
@@ -1407,7 +1407,7 @@ describe('StreamingExecutor actions', () => {
       });
     });
 
-    it('should resolve desktop client tool manifests for the local execution environment', () => {
+    it('should attach the local system manifest for the local execution environment', () => {
       desktopFlag.value = true;
 
       const { result } = renderHook(() => useChatStore());
@@ -1420,13 +1420,11 @@ describe('StreamingExecutor actions', () => {
       } as UIChatMessage;
       const createToolsEngineSpy = vi
         .spyOn(toolEngineering, 'createAgentToolsEngine')
-        .mockImplementation((_workingModel, _pluginIds, manifestContext) => {
-          const localSystemManifest = resolveLocalSystemManifest(manifestContext ?? {});
-
+        .mockImplementation(() => {
           return {
             generateToolsDetailed: vi.fn().mockReturnValue({
-              enabledManifests: localSystemManifest ? [localSystemManifest] : [],
-              enabledToolIds: localSystemManifest ? [localSystemManifest.identifier] : [],
+              enabledManifests: [LocalSystemManifest],
+              enabledToolIds: [LocalSystemManifest.identifier],
               tools: [],
             }),
           } as any;

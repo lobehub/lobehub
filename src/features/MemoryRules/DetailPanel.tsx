@@ -696,6 +696,7 @@ interface DetailPanelProps extends Omit<RuleDocumentProps, 'rule' | 'code'> {
  */
 const DetailPanel = ({ code, onClose, rule, ...rest }: DetailPanelProps) => (
   <RightPanel
+    expandFollowsSelection
     defaultWidth={440}
     expand={Boolean(rule)}
     maxWidth={760}

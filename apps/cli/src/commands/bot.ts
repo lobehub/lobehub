@@ -279,20 +279,27 @@ function registerAllowlistCommand(bot: Command, opts: AllowlistGroupOptions) {
 // ── Watch keywords subcommand factory ──────────────────
 
 interface WatchKeywordEntry {
+  /** The keyword is one of the bot's names: saying it calls the bot. Kept only when true. */
+  asName?: boolean;
   instruction?: string;
   keyword: string;
 }
 
 /**
  * Normalise `settings.watchKeywords` into the canonical
- * `{keyword, instruction?}[]` shape. Mirrors `extractWatchKeywordEntries`
+ * `{keyword, instruction?, asName?}[]` shape. Mirrors `extractWatchKeywordEntries`
  * in `src/server/services/bot/platforms/const.ts` so the CLI accepts the
  * same legacy on-disk shapes (`string`, `string[]`, `{keyword, …}[]`)
  * the runtime is forgiving about — including the rare comma/whitespace
  * separated string from a hand-pasted upgrade.
  */
 function normalizeWatchKeywords(raw: unknown): WatchKeywordEntry[] {
-  const push = (out: Map<string, WatchKeywordEntry>, keyword: unknown, instruction?: unknown) => {
+  const push = (
+    out: Map<string, WatchKeywordEntry>,
+    keyword: unknown,
+    instruction?: unknown,
+    asName?: unknown,
+  ) => {
     if (typeof keyword !== 'string') return;
     const normalised = keyword.trim().toLowerCase();
     if (!normalised) return;
@@ -300,10 +307,15 @@ function normalizeWatchKeywords(raw: unknown): WatchKeywordEntry[] {
       typeof instruction === 'string' && instruction.trim() ? instruction.trim() : undefined;
     const existing = out.get(normalised);
     if (!existing) {
-      out.set(normalised, { instruction: trimmedInstruction, keyword: normalised });
+      out.set(normalised, {
+        instruction: trimmedInstruction,
+        keyword: normalised,
+        ...(asName === true && { asName: true }),
+      });
       return;
     }
     if (!existing.instruction && trimmedInstruction) existing.instruction = trimmedInstruction;
+    if (asName === true) existing.asName = true;
   };
   const collected = new Map<string, WatchKeywordEntry>();
   if (typeof raw === 'string') {
@@ -315,8 +327,8 @@ function normalizeWatchKeywords(raw: unknown): WatchKeywordEntry[] {
         continue;
       }
       if (entry && typeof entry === 'object' && 'keyword' in entry) {
-        const obj = entry as { instruction?: unknown; keyword?: unknown };
-        push(collected, obj.keyword, obj.instruction);
+        const obj = entry as { asName?: unknown; instruction?: unknown; keyword?: unknown };
+        push(collected, obj.keyword, obj.instruction, obj.asName);
       }
     }
   }
@@ -369,8 +381,12 @@ function registerWatchKeywordsCommand(bot: Command) {
       }
 
       printTable(
-        entries.map((e) => [e.keyword, e.instruction ?? pc.dim('-')]),
-        ['KEYWORD', 'INSTRUCTION'],
+        entries.map((e) => [
+          e.keyword,
+          e.asName ? 'yes' : pc.dim('-'),
+          e.instruction ?? pc.dim('-'),
+        ]),
+        ['KEYWORD', 'BOT NAME', 'INSTRUCTION'],
       );
     });
 
@@ -381,48 +397,69 @@ function registerWatchKeywordsCommand(bot: Command) {
       '--instruction <text>',
       'Prompt prepended to the user message when this keyword fires (omit for "just wake the bot")',
     )
-    .action(async (botId: string, keyword: string, options: { instruction?: string }) => {
-      const trimmedKeyword = keyword.trim().toLowerCase();
-      if (!trimmedKeyword) {
-        log.error('Keyword cannot be empty.');
-        process.exit(1);
-        return;
-      }
-
-      const trimmedInstruction = options.instruction?.trim();
-
-      const client = await getTrpcClient();
-      const b = await findBot(client, botId);
-      const entries = readEntries(b);
-
-      const existing = entries.find((e) => e.keyword === trimmedKeyword);
-      if (existing) {
-        // Upsert instruction on duplicate keyword — operators commonly
-        // re-run `add` to tweak the prompt without remembering to remove first.
-        if (trimmedInstruction && existing.instruction !== trimmedInstruction) {
-          existing.instruction = trimmedInstruction;
-          await client.agentBotProvider.update.mutate(buildPayload(b, entries) as any);
-          console.log(
-            `${pc.green('✓')} Updated instruction for ${pc.bold(trimmedKeyword)} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'})`,
-          );
+    .option(
+      '--as-name',
+      'Mark the keyword as one of the bot\'s names (an alias such as "canis"): saying it calls the bot',
+    )
+    .action(
+      async (
+        botId: string,
+        keyword: string,
+        options: { asName?: boolean; instruction?: string },
+      ) => {
+        const trimmedKeyword = keyword.trim().toLowerCase();
+        if (!trimmedKeyword) {
+          log.error('Keyword cannot be empty.');
+          process.exit(1);
           return;
         }
-        log.info(`${trimmedKeyword} is already on watchKeywords — nothing to do.`);
-        return;
-      }
 
-      const next = [
-        ...entries,
-        trimmedInstruction
-          ? { instruction: trimmedInstruction, keyword: trimmedKeyword }
-          : { keyword: trimmedKeyword },
-      ];
+        const trimmedInstruction = options.instruction?.trim();
 
-      await client.agentBotProvider.update.mutate(buildPayload(b, next) as any);
-      console.log(
-        `${pc.green('✓')} Added ${pc.bold(trimmedKeyword)}${trimmedInstruction ? ' (with instruction)' : ''} to watchKeywords (now ${next.length} entr${next.length === 1 ? 'y' : 'ies'})`,
-      );
-    });
+        const client = await getTrpcClient();
+        const b = await findBot(client, botId);
+        const entries = readEntries(b);
+
+        const existing = entries.find((e) => e.keyword === trimmedKeyword);
+        if (existing) {
+          // Upsert on duplicate keyword — operators commonly re-run `add` to tweak
+          // the prompt or mark a name without remembering to remove first. Leaving
+          // out `--as-name` never unmarks a name; remove and re-add for that.
+          const changes = [
+            trimmedInstruction && existing.instruction !== trimmedInstruction && 'instruction',
+            options.asName && !existing.asName && 'bot name',
+          ].filter(Boolean);
+          if (changes.length > 0) {
+            if (trimmedInstruction) existing.instruction = trimmedInstruction;
+            if (options.asName) existing.asName = true;
+            await client.agentBotProvider.update.mutate(buildPayload(b, entries) as any);
+            console.log(
+              `${pc.green('✓')} Updated ${changes.join(' and ')} for ${pc.bold(trimmedKeyword)} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'})`,
+            );
+            return;
+          }
+          log.info(`${trimmedKeyword} is already on watchKeywords — nothing to do.`);
+          return;
+        }
+
+        const next: WatchKeywordEntry[] = [
+          ...entries,
+          {
+            keyword: trimmedKeyword,
+            ...(trimmedInstruction && { instruction: trimmedInstruction }),
+            ...(options.asName && { asName: true }),
+          },
+        ];
+
+        await client.agentBotProvider.update.mutate(buildPayload(b, next) as any);
+        const notes = [options.asName && 'as a bot name', trimmedInstruction && 'with instruction']
+          .filter(Boolean)
+          .join(', ');
+        console.log(
+          `${pc.green('✓')} Added ${pc.bold(trimmedKeyword)}${notes ? ` (${notes})` : ''} to watchKeywords (now ${next.length} entr${next.length === 1 ? 'y' : 'ies'})`,
+        );
+      },
+    );
 
   group
     .command('remove <botId> <keyword>')

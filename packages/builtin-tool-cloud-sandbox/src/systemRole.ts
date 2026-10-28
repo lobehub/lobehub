@@ -244,7 +244,7 @@ When generating PDFs with Chinese text, you MUST:
  * `lh` invocation is refused so a visitor-controlled shell never receives the
  * creator's JWT. Without it the model only learns this when the command fails,
  * often after the visitor has already worked through earlier steps of a flow
- * that the agent prompt or a skill routed through `lh` (LOBE-14770).
+ * that the agent prompt or a skill routed through `lh`.
  */
 export const shareVisitorSystemPrompt = `<shared_conversation>
 This is a shared conversation: the user is a visitor of an agent that someone else published.

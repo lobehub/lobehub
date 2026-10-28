@@ -589,6 +589,36 @@ describe('AgentGroupRepository', () => {
       );
     });
 
+    it('should not leave a supervisor agent behind when a clientId retry fails', async () => {
+      await agentGroupRepo.createGroupWithSupervisor({ clientId: 'retry-1', title: 'First' });
+      const before = await serverDB.select().from(agents).where(eq(agents.userId, userId));
+
+      await expect(
+        agentGroupRepo.createGroupWithSupervisor({ clientId: 'retry-1', title: 'Retry' }),
+      ).rejects.toThrow();
+
+      const after = await serverDB.select().from(agents).where(eq(agents.userId, userId));
+      expect(after).toHaveLength(before.length);
+    });
+
+    it('should refuse member agents the caller cannot see', async () => {
+      await serverDB.insert(users).values({ id: 'foreign-owner' }).onConflictDoNothing();
+      await serverDB
+        .insert(agents)
+        .values({ id: 'foreign-agent', title: 'Foreign', userId: 'foreign-owner' });
+
+      await expect(
+        agentGroupRepo.createGroupWithSupervisor({ title: 'Leaky' }, ['foreign-agent']),
+      ).rejects.toThrow(GROUP_HAS_INACCESSIBLE_MEMBER);
+
+      expect(await serverDB.select().from(chatGroups).where(eq(chatGroups.title, 'Leaky'))).toEqual(
+        [],
+      );
+      expect(await serverDB.select().from(agents).where(eq(agents.userId, userId))).toEqual(
+        expect.not.arrayContaining([expect.objectContaining({ virtual: true })]),
+      );
+    });
+
     it('should create group with supervisor and member agents', async () => {
       // Create member agents first
       await serverDB.insert(agents).values([

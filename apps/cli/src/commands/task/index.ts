@@ -13,6 +13,7 @@ import {
   truncate,
 } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { registerArchiveCommands } from './archive';
 import { resolveAssigneeUserId } from './assignee';
 import { registerCheckpointCommands } from './checkpoint';
@@ -78,7 +79,10 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.list.query(input as any);
 
         if (options.json !== undefined) {
-          outputJson(result.data, options.json);
+          outputJson(
+            withUrls(result.data, await resolveUrlBuilder(client), resourcePath.task),
+            options.json,
+          );
           return;
         }
 
@@ -213,7 +217,10 @@ export function registerTaskCommand(program: Command) {
         const doc = await client.document.getDocumentDetail.query({ id });
 
         if (options.json !== undefined) {
-          outputJson(doc, options.json);
+          outputJson(
+            withUrl(doc, await resolveUrlBuilder(client), resourcePath.document(doc)),
+            options.json,
+          );
           return;
         }
 
@@ -239,7 +246,10 @@ export function registerTaskCommand(program: Command) {
         const items = Array.isArray(messages) ? messages : [];
 
         if (options.json !== undefined) {
-          outputJson(items, options.json);
+          outputJson(
+            withUrls(items, await resolveUrlBuilder(client), resourcePath.message),
+            options.json,
+          );
           return;
         }
 
@@ -278,6 +288,7 @@ export function registerTaskCommand(program: Command) {
 
       // ── Header ──
       console.log(`\n${pc.bold(t.identifier)} ${t.name || ''}`);
+      console.log(`ID: ${t.id}`);
       console.log(`${pc.dim('URL:')} ${url}`);
       console.log(
         `${pc.dim('Status:')} ${statusBadge(t.status)}  ${pc.dim('Priority:')} ${priorityLabel(t.priority)}`,
@@ -565,6 +576,7 @@ export function registerTaskCommand(program: Command) {
         }
 
         log.info(`Task created: ${pc.bold(result.data.identifier)} ${result.data.name || ''}`);
+        console.log(`ID: ${result.data.id}`);
         console.log(`${pc.bold('task')}: ${url}`);
       },
     );
@@ -633,7 +645,19 @@ export function registerTaskCommand(program: Command) {
           }
           if (!hasFieldEdits) {
             const result = await client.task.updateStatus.mutate({ id, status: options.status });
-            log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+            if (options.json !== undefined) {
+              outputJson(
+                withUrl(
+                  result.data,
+                  await resolveUrlBuilder(client),
+                  resourcePath.task(result.data),
+                ),
+                typeof options.json === 'string' ? options.json : undefined,
+              );
+            } else {
+              log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+              console.log(`ID: ${result.data.id}`);
+            }
             return;
           }
 
@@ -643,12 +667,16 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.update.mutate(input as any);
 
         if (options.json !== undefined) {
-          outputJson(result.data, typeof options.json === 'string' ? options.json : undefined);
+          outputJson(
+            withUrl(result.data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
+            typeof options.json === 'string' ? options.json : undefined,
+          );
           return;
         }
 
         const statusSuffix = options.status ? ` → ${options.status}` : '';
         log.info(`Task updated: ${pc.bold(result.data.identifier)}${statusSuffix}`);
+        console.log(`ID: ${result.data.id}`);
       },
     );
 
@@ -665,8 +693,8 @@ export function registerTaskCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
-      await client.task.delete.mutate({ id });
-      log.info(`Task ${pc.bold(id)} deleted.`);
+      const result = await client.task.delete.mutate({ id });
+      log.info(`Task ${pc.bold(result.data.identifier)} (id: ${result.data.id}) deleted.`);
     });
 
   // ── clear ──────────────────────────────────────────────
@@ -697,7 +725,10 @@ export function registerTaskCommand(program: Command) {
       const result = await client.task.getTaskTree.query({ id });
 
       if (options.json !== undefined) {
-        outputJson(result.data, options.json);
+        outputJson(
+          withUrls(result.data, await resolveUrlBuilder(client), resourcePath.task),
+          options.json,
+        );
         return;
       }
 

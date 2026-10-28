@@ -1,11 +1,16 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
 import {
   createQueueSendNowGate,
   getContextWindowMessages,
   getConversationChatInputUiState,
   getConversationSendButtonProps,
+  getQueuedHintKey,
+  putQueuedMessageInEditor,
+  sendQueuedMessageNow,
   toChatInputMessages,
   toDisplayableSendErrorMessage,
 } from './utils';
@@ -50,6 +55,35 @@ describe('createQueueSendNowGate', () => {
     await expect(first).resolves.toBe(true);
     await expect(gate.run(secondTask)).resolves.toBe(true);
     expect(secondTask).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getQueuedHintKey', () => {
+  it('promises the next step boundary for the built-in runtime', () => {
+    expect(getQueuedHintKey({ count: 1, waitsForRunEnd: false })).toBe('inputQueue.queuedHint');
+    expect(getQueuedHintKey({ count: 2, waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedMergeHint',
+    );
+  });
+
+  /**
+   * @example A follow-up is queued while a Claude Code run is still calling tools.
+   */
+  it('promises the end of the whole run for heterogeneous agents', () => {
+    // ROOT CAUSE:
+    //
+    // A Claude Code / Codex CLI turn cannot be handed back at a step boundary:
+    // the queue drains only once the CLI run ends. QueueTray still captioned
+    // the row "Sends when the current step finishes".
+    //
+    // Before: one caption for every runtime.
+    // After: heterogeneous agents say the follow-up waits for the current run.
+    expect(getQueuedHintKey({ count: 1, waitsForRunEnd: true })).toBe(
+      'inputQueue.queuedRunEndHint',
+    );
+    expect(getQueuedHintKey({ count: 3, waitsForRunEnd: true })).toBe(
+      'inputQueue.queuedRunEndMergeHint',
+    );
   });
 });
 
@@ -272,5 +306,144 @@ describe('toDisplayableSendErrorMessage', () => {
     expect(toDisplayableSendErrorMessage('  Network error  ')).toBe('Network error');
     expect(toDisplayableSendErrorMessage('   ')).toBeUndefined();
     expect(toDisplayableSendErrorMessage()).toBeUndefined();
+  });
+});
+
+describe('sendQueuedMessageNow', () => {
+  const context = { agentId: 'agt-1', topicId: 'tpc-1' };
+  const msg = {
+    content: 'now',
+    createdAt: 1,
+    id: 'q1',
+    interruptMode: 'soft' as const,
+    serverDelivery: 'server' as const,
+  };
+  const chatWith = (cancelled: boolean | Error) => {
+    const order: string[] = [];
+    const chat = {
+      cancelOperation: vi.fn(async () => {
+        order.push('cancel');
+        if (cancelled instanceof Error) throw cancelled;
+        return cancelled;
+      }),
+      restoreQueuedMessage: vi.fn(),
+      operations: {
+        'op-1': {
+          context,
+          id: 'op-1',
+          metadata: { startTime: 1 },
+          status: 'running',
+          type: 'execServerAgentRuntime',
+        },
+      },
+      operationsByContext: { [messageMapKey(context)]: ['op-1'] },
+      queuedMessages: {
+        [messageMapKey(context)]: [
+          { content: 'before', createdAt: 0, id: 'q0', interruptMode: 'soft' },
+          msg,
+          { content: 'after', createdAt: 2, id: 'q2', interruptMode: 'soft' },
+        ],
+      },
+      sendMessage: vi.fn(async () => {
+        order.push('send');
+      }),
+    } as any;
+    return { chat, order };
+  };
+
+  // ROOT CAUSE:
+  //
+  // Send now interrupted the run before withdrawing the item. When that run
+  // had already taken it from the server, the withdrawal then failed and no
+  // replacement send happened, leaving the follow-up unanswered.
+  //
+  // Before: cancel, then withdraw.
+  // After: withdraw first; an item already on its way stops nothing.
+  it('withdraws the item before interrupting the run, then sends it', async () => {
+    const { chat, order } = chatWith(true);
+    const withdraw = vi.fn(async () => {
+      order.push('withdraw');
+      return true;
+    });
+
+    await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      withdraw,
+    });
+
+    expect(order).toEqual(['withdraw', 'cancel', 'send']);
+    expect(chat.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'now', metadata: { steer: true } }),
+    );
+  });
+
+  it('stops nothing and sends nothing when the run already took it', async () => {
+    const { chat } = chatWith(true);
+
+    await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      withdraw: async () => false,
+    });
+
+    expect(chat.cancelOperation).not.toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unconfirmed', false],
+    ['failed', new Error('device unreachable')],
+  ])('puts the item back, held here, when the interrupt is %s', async (_label, cancelled) => {
+    const { chat } = chatWith(cancelled);
+
+    await expect(
+      sendQueuedMessageNow({
+        chat,
+        context,
+        contextKey: messageMapKey(context),
+        msg,
+        withdraw: async () => true,
+      }),
+    ).rejects.toThrow();
+
+    // Back at its own place (index 1), not at the tail, so the order holds.
+    expect(chat.restoreQueuedMessage).toHaveBeenCalledWith(
+      messageMapKey(context),
+      { ...msg, serverDelivery: undefined, serverUnconfirmed: undefined },
+      1,
+    );
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('putQueuedMessageInEditor', () => {
+  // ROOT CAUSE:
+  //
+  // Edit rebuilt the composer from the message text as markdown, dropping the
+  // selected skills, tools and @-mentions the send reads from the structured
+  // document — so an edited follow-up silently lost them.
+  //
+  // Before: always markdown.
+  // After: the structured document when there is one.
+  it('restores the structured document, so selections survive an edit', () => {
+    const editor = { setDocument: vi.fn() };
+    const editorData = { root: { type: 'root' } };
+
+    putQueuedMessageInEditor(editor, { content: 'text', editorData });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('json', editorData);
+  });
+
+  it('falls back to markdown for a message without one', () => {
+    const editor = { setDocument: vi.fn() };
+
+    putQueuedMessageInEditor(editor, { content: 'text' });
+
+    expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'text');
   });
 });

@@ -7,10 +7,13 @@ import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  getCompletedWithin,
   getVisibleTaskStatuses,
   groupTaskItems,
   HIDDEN_WHEN_COMPLETED_STATUSES,
+  isTaskHiddenByCompletedFilter,
   normalizeTaskListViewOptions,
+  toStoredTaskListViewOptions,
 } from './listViewOptions';
 
 const task = (id: string, overrides: Partial<TaskListItem> = {}): TaskListItem =>
@@ -238,9 +241,92 @@ describe('buildTaskRows', () => {
   });
 });
 
+describe('completedTasks', () => {
+  it('defaults to hiding completed and canceled tasks', () => {
+    expect(normalizeTaskListViewOptions().completedTasks).toBe('none');
+  });
+
+  it('migrates the persisted hideCompleted switch it replaces', () => {
+    expect(normalizeTaskListViewOptions({ hideCompleted: true }).completedTasks).toBe('none');
+    expect(normalizeTaskListViewOptions({ hideCompleted: false }).completedTasks).toBe('all');
+  });
+
+  it('prefers a stored completedTasks over a leftover hideCompleted', () => {
+    expect(
+      normalizeTaskListViewOptions({ completedTasks: 'week', hideCompleted: true }).completedTasks,
+    ).toBe('week');
+  });
+
+  it('falls back to the default for an unknown value', () => {
+    expect(normalizeTaskListViewOptions({ completedTasks: 'year' as never }).completedTasks).toBe(
+      'none',
+    );
+  });
+});
+
+describe('toStoredTaskListViewOptions', () => {
+  it('keeps the legacy hideCompleted in step for builds that only read it', () => {
+    const stored = (completedTasks: TaskListViewOptions['completedTasks']) =>
+      toStoredTaskListViewOptions({ ...DEFAULT_TASK_LIST_VIEW_OPTIONS, completedTasks });
+
+    expect(stored('none').hideCompleted).toBe(true);
+    expect(stored('all').hideCompleted).toBe(false);
+    expect(stored('week').hideCompleted).toBe(false);
+  });
+
+  it('round-trips through normalization to the same choice', () => {
+    const options = { ...DEFAULT_TASK_LIST_VIEW_OPTIONS, completedTasks: 'month' as const };
+    expect(normalizeTaskListViewOptions(toStoredTaskListViewOptions(options))).toEqual(options);
+  });
+});
+
+describe('isTaskHiddenByCompletedFilter', () => {
+  const now = new Date('2026-03-10T12:00:00Z').getTime();
+  const closedDaysAgo = (status: TaskListItem['status'], days: number, field = 'completedAt') =>
+    task(`${status}-${days}`, {
+      status,
+      updatedAt: new Date('2026-01-01'),
+      [field]: new Date(now - days * 24 * 60 * 60 * 1000),
+    } as Partial<TaskListItem>);
+
+  it('never hides an unfinished task, however old', () => {
+    const old = task('old', { status: 'backlog', updatedAt: new Date('2020-01-01') });
+    expect(isTaskHiddenByCompletedFilter(old, 'none', now)).toBe(false);
+    expect(isTaskHiddenByCompletedFilter(old, 'day', now)).toBe(false);
+  });
+
+  it('keeps completed tasks closed within the window and hides older ones', () => {
+    expect(isTaskHiddenByCompletedFilter(closedDaysAgo('completed', 3), 'week', now)).toBe(false);
+    expect(isTaskHiddenByCompletedFilter(closedDaysAgo('completed', 8), 'week', now)).toBe(true);
+    expect(isTaskHiddenByCompletedFilter(closedDaysAgo('completed', 2), 'day', now)).toBe(true);
+    expect(isTaskHiddenByCompletedFilter(closedDaysAgo('completed', 20), 'month', now)).toBe(false);
+  });
+
+  it('dates a canceled task without completedAt by updatedAt', () => {
+    const recent = closedDaysAgo('canceled', 1, 'updatedAt');
+    expect(isTaskHiddenByCompletedFilter(recent, 'week', now)).toBe(false);
+    const stale = closedDaysAgo('canceled', 10, 'updatedAt');
+    expect(isTaskHiddenByCompletedFilter(stale, 'week', now)).toBe(true);
+  });
+
+  it('shows every closed task for all and none of them for none', () => {
+    const ancient = closedDaysAgo('completed', 400);
+    expect(isTaskHiddenByCompletedFilter(ancient, 'all', now)).toBe(false);
+    expect(isTaskHiddenByCompletedFilter(closedDaysAgo('completed', 0), 'none', now)).toBe(true);
+  });
+});
+
+describe('getCompletedWithin', () => {
+  it('sends only a windowed choice to the server', () => {
+    expect(getCompletedWithin({ completedTasks: 'week' })).toBe('week');
+    expect(getCompletedWithin({ completedTasks: 'all' })).toBeUndefined();
+    expect(getCompletedWithin({ completedTasks: 'none' })).toBeUndefined();
+  });
+});
+
 describe('getVisibleTaskStatuses', () => {
-  it('translates hideCompleted into the server status filter, before pagination', () => {
-    const statuses = getVisibleTaskStatuses({ hideCompleted: true });
+  it('translates completedTasks none into the server status filter, before pagination', () => {
+    const statuses = getVisibleTaskStatuses({ completedTasks: 'none' });
     expect(statuses).toBeDefined();
     for (const hidden of HIDDEN_WHEN_COMPLETED_STATUSES) expect(statuses).not.toContain(hidden);
     expect(statuses).toContain('backlog');
@@ -248,6 +334,7 @@ describe('getVisibleTaskStatuses', () => {
   });
 
   it('applies no narrowing when completed tasks are shown', () => {
-    expect(getVisibleTaskStatuses({ hideCompleted: false })).toBeUndefined();
+    expect(getVisibleTaskStatuses({ completedTasks: 'all' })).toBeUndefined();
+    expect(getVisibleTaskStatuses({ completedTasks: 'week' })).toBeUndefined();
   });
 });

@@ -1,7 +1,8 @@
 diff --git a/es/headless.js b/es/headless.js
+index db7dc2d..d1937e4 100644
 --- a/es/headless.js
 +++ b/es/headless.js
-@@ -8124,7 +8124,7 @@
+@@ -8050,7 +8050,7 @@ var BlockImageNode = class BlockImageNode extends BaseImageNode {
  	get height() {
  		return this.__height;
  	}
@@ -10,7 +11,7 @@ diff --git a/es/headless.js b/es/headless.js
  		super(opt.src, opt.altText, opt.maxWidth, opt.width, opt.height, opt.key);
  		this.__loading = true;
  		this.__status = "uploaded";
-@@ -8240,7 +8240,7 @@
+@@ -8165,7 +8165,7 @@ var ImageNode = class ImageNode extends BaseImageNode {
  	static getType() {
  		return "image";
  	}
@@ -20,9 +21,10 @@ diff --git a/es/headless.js b/es/headless.js
  		this.__loading = true;
  		this.__status = "uploaded";
 diff --git a/es/plugins/image/node/block-image-node.js b/es/plugins/image/node/block-image-node.js
+index ca20fb5..ffb4562 100644
 --- a/es/plugins/image/node/block-image-node.js
 +++ b/es/plugins/image/node/block-image-node.js
-@@ -35,7 +35,7 @@
+@@ -35,7 +35,7 @@ var BlockImageNode = class BlockImageNode extends BaseImageNode {
  	get height() {
  		return this.__height;
  	}
@@ -32,9 +34,10 @@ diff --git a/es/plugins/image/node/block-image-node.js b/es/plugins/image/node/b
  		this.__loading = true;
  		this.__status = "uploaded";
 diff --git a/es/plugins/image/node/image-node.js b/es/plugins/image/node/image-node.js
+index b6bc3ed..d1d1703 100644
 --- a/es/plugins/image/node/image-node.js
 +++ b/es/plugins/image/node/image-node.js
-@@ -11,7 +11,7 @@
+@@ -11,7 +11,7 @@ var ImageNode = class ImageNode extends BaseImageNode {
  	static getType() {
  		return "image";
  	}

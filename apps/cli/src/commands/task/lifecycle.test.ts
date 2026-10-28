@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerLifecycleCommands } from './lifecycle';
 
-const { client, streamAgentEvents } = vi.hoisted(() => ({
+const { client, followAgentRun, pollAgentRunStatus } = vi.hoisted(() => ({
   client: {
     task: {
       addComment: { mutate: vi.fn() },
@@ -15,14 +15,16 @@ const { client, streamAgentEvents } = vi.hoisted(() => ({
     },
     topic: { getTopicDetail: { query: vi.fn() } },
   },
-  streamAgentEvents: vi.fn(),
+  followAgentRun: vi.fn(),
+  pollAgentRunStatus: vi.fn(),
 }));
 
 vi.mock('../../api/client', () => ({ getTrpcClient: vi.fn(async () => client) }));
-vi.mock('../../api/http', () => ({
-  getAuthInfo: vi.fn(async () => ({ headers: {}, serverUrl: 'https://example.com' })),
+vi.mock('../agent/followRun', () => ({ followAgentRun }));
+vi.mock('../agent/runStatus', () => ({
+  RUN_POLL_INTERVAL_MS: 10_000,
+  pollAgentRunStatus,
 }));
-vi.mock('../../utils/agentStream', () => ({ streamAgentEvents }));
 vi.mock('../../utils/logger', () => ({
   log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -160,7 +162,8 @@ describe('task lifecycle — following the agent stream', () => {
       throw new Error(`process.exit(${code})`);
     }) as any);
     for (const fn of Object.values(client.task)) Object.values(fn)[0].mockReset();
-    streamAgentEvents.mockReset();
+    followAgentRun.mockReset();
+    pollAgentRunStatus.mockReset();
     client.task.find.query.mockResolvedValue({
       data: { assigneeAgentId: 'agt_1', identifier: 'T-1', status: 'pending' },
     });
@@ -176,29 +179,36 @@ describe('task lifecycle — following the agent stream', () => {
 
   afterEach(() => {
     exitSpy.mockRestore();
+    process.exitCode = undefined;
   });
 
   it('task run --topics 2 stops with exit 1 when a run fails, without starting the next one', async () => {
-    streamAgentEvents.mockResolvedValue({ error: 'boom', kind: 'failed', status: 'error' });
+    followAgentRun.mockResolvedValue({
+      error: 'boom',
+      kind: 'failed',
+      status: 'error',
+    });
 
-    await expect(
-      createProgram().parseAsync(['node', 'test', 'task', 'run', 'T-1', '--topics', '2']),
-    ).rejects.toThrow('process.exit(1)');
+    await createProgram().parseAsync(['node', 'test', 'task', 'run', 'T-1', '--topics', '2']);
+    expect(process.exitCode).toBe(1);
 
     expect(client.task.run.mutate).toHaveBeenCalledTimes(1);
     expect(client.task.heartbeat.mutate).not.toHaveBeenCalled();
   });
 
   it('task start --follow exits 1 on a failed run', async () => {
-    streamAgentEvents.mockResolvedValue({ error: 'boom', kind: 'failed', status: 'error' });
+    followAgentRun.mockResolvedValue({
+      error: 'boom',
+      kind: 'failed',
+      status: 'error',
+    });
 
-    await expect(
-      createProgram().parseAsync(['node', 'test', 'task', 'start', 'T-1', '--follow']),
-    ).rejects.toThrow('process.exit(1)');
+    await createProgram().parseAsync(['node', 'test', 'task', 'start', 'T-1', '--follow']);
+    expect(process.exitCode).toBe(1);
   });
 
   it('a completed run sends the heartbeat and continues the sequence', async () => {
-    streamAgentEvents.mockResolvedValue({ kind: 'completed', status: 'done' });
+    followAgentRun.mockResolvedValue({ kind: 'completed', status: 'done' });
 
     await createProgram().parseAsync(['node', 'test', 'task', 'run', 'T-1', '--topics', '2']);
 
@@ -206,6 +216,40 @@ describe('task lifecycle — following the agent stream', () => {
     expect(client.task.heartbeat.mutate).toHaveBeenCalledTimes(2);
     expect(exitSpy).not.toHaveBeenCalled();
     // task streams opt out of the quiet-window probe: a long silent tool call is healthy
-    expect(streamAgentEvents.mock.calls[0][2]).not.toHaveProperty('onStall');
+    expect(followAgentRun.mock.calls[0][1]).not.toHaveProperty('onStall');
   });
+
+  it('falls back to status polling when the server has no agent event journal', async () => {
+    followAgentRun.mockRejectedValue(
+      Object.assign(new Error('This server has no agent event journal'), {
+        name: 'AgentJournalUnsupportedError',
+      }),
+    );
+    pollAgentRunStatus.mockResolvedValue({ kind: 'completed', status: 'done' });
+
+    await createProgram().parseAsync(['node', 'test', 'task', 'start', 'T-1', '--follow']);
+
+    expect(pollAgentRunStatus).toHaveBeenCalledWith(
+      client,
+      'op-1',
+      expect.objectContaining({ json: undefined }),
+    );
+    expect(client.task.heartbeat.mutate).toHaveBeenCalled();
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it.each([
+    ['waiting_for_human', 2],
+    ['interrupted', 1],
+    ['unknown', 3],
+  ] as const)(
+    'stops the topic sequence for %s without a completion heartbeat',
+    async (kind, code) => {
+      followAgentRun.mockResolvedValue({ kind });
+      await createProgram().parseAsync(['node', 'test', 'task', 'run', 'T-1', '--topics', '2']);
+      expect(process.exitCode).toBe(code);
+      expect(client.task.run.mutate).toHaveBeenCalledTimes(1);
+      expect(client.task.heartbeat.mutate).not.toHaveBeenCalled();
+    },
+  );
 });

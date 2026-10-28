@@ -33,6 +33,7 @@ export { OnboardingActionHintInjector } from './OnboardingActionHintInjector';
 export { OnboardingContextInjector } from './OnboardingContextInjector';
 export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInjector';
 export { PlanInjector } from './PlanInjector';
+export { ProjectContextInjector } from './ProjectContextInjector';
 export { ProjectInstructionsInjector } from './ProjectInstructionsInjector';
 export { RuntimeAdditionalContextProvider } from './RuntimeAdditionalContextProvider';
 export {
@@ -121,6 +122,7 @@ export type {
   OnboardingUserInfo,
 } from './OnboardingContextInjector';
 export type { Plan, PlanInjectorConfig } from './PlanInjector';
+export type { ProjectContextInjectorConfig } from './ProjectContextInjector';
 export type {
   ProjectInstructionFile,
   ProjectInstructionsInjectorConfig,

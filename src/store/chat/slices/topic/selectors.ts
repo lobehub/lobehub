@@ -4,7 +4,7 @@ import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 import type { AiModelReasoningConfig } from 'model-bank';
 
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS, TopicTrigger } from '@/const/topic';
 import {
   type ChatTopic,
   type ChatTopicSummary,
@@ -64,7 +64,8 @@ const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
   // the by-id detail cache so consumers keep real data (title, metadata, …).
   return s.activeTopicId ? s.topicDetailMap?.[s.activeTopicId] : undefined;
 };
-const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
+const searchTopics = (s: ChatStoreState): ChatTopic[] =>
+  s.searchTopics.filter((topic) => topic.trigger !== TopicTrigger.Channel);
 
 const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined =>
   currentTopicsWithoutSystemTriggers(s);
@@ -313,6 +314,7 @@ const sidebarActiveTopic = (
   includeCompleted: boolean,
 ): ChatTopic | undefined => {
   const topic = currentActiveTopic(s);
+  if (topic?.trigger === TopicTrigger.Channel) return undefined;
   return !includeCompleted && topic && topic.id === s.justArchivedTopicId ? undefined : topic;
 };
 
@@ -500,7 +502,7 @@ const agentTopicsViewData = (s: ChatStoreState): TopicData | undefined => {
 };
 
 const agentTopicsViewTopics = (s: ChatStoreState): ChatTopic[] =>
-  agentTopicsViewData(s)?.items ?? [];
+  agentTopicsViewData(s)?.items.filter((topic) => topic.trigger !== TopicTrigger.Channel) ?? [];
 
 const agentTopicsViewHasMore = (s: ChatStoreState): boolean =>
   agentTopicsViewData(s)?.hasMore ?? false;

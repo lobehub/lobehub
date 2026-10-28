@@ -25,6 +25,7 @@ import {
   ExecAgentsSchema,
   ExecGroupAgentSchema,
   ExecSubAgentTaskSchema,
+  foldLegacyUserMessageFields,
   ScheduleAgentRunSchema,
 } from './execSchemas';
 import { assertCanUseAgentRunConversation } from './guards';
@@ -271,7 +272,7 @@ export const execRouter = router({
           workspaceId: ctx.workspaceId,
         },
         {
-          ...input,
+          ...foldLegacyUserMessageFields(input),
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
         },
@@ -421,6 +422,9 @@ export const execRouter = router({
           selectedSkillIds: task.selectedSkillIds,
           slug,
           trigger: trigger ?? RequestTrigger.Chat,
+          // The user message's own content (rich text, attached content), with
+          // the deprecated top-level selections folded in like the single route.
+          userMessage: foldLegacyUserMessageFields(task).userMessage,
         });
 
         return {

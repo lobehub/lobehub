@@ -9,6 +9,7 @@ import { splitReferencedMessage } from '@/store/chat/utils/parseReferencedMessag
 import { type UIChatMessage } from '@/types/index';
 
 import { useStartTopicConversation } from '../../../hooks/useStartTopicConversation';
+import { hasRenderableEditorData } from '../editorData';
 import { useMarkdown } from '../useMarkdown';
 import AudioFileListViewer from './AudioFileListViewer';
 import FileListViewer from './FileListViewer';
@@ -34,8 +35,7 @@ const UserMessageContent = memo<UIChatMessage>(
       return { displayContent: body, reference };
     }, [content]);
 
-    const hasEditorData =
-      editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
+    const hasEditorData = hasRenderableEditorData(editorData);
 
     const textBody = hasEditorData ? (
       // Rich-text folder chips render headlessly, so they receive the

@@ -38,6 +38,7 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
     <ConversationProvider context={context}>
       <ChatList
         disableActionsBar
+        rememberReadingPosition
         headerSlot={headerSlot}
         initialScrollPosition={'top'}
         itemContent={itemContent}

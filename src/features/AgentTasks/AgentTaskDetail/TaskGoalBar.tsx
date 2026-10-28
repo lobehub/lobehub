@@ -7,8 +7,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { hasGoalPage } from './goalPageLink';
-
 /** "Part of goal" link back to the goal that drives this task, mirroring the parent-task bar. */
 const TaskGoalBar = memo(() => {
   const { t } = useTranslation('chat');
@@ -22,29 +20,19 @@ const TaskGoalBar = memo(() => {
       <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
         {t('taskDetail.partOfGoal')}
       </Text>
-      {!hasGoalPage() ? (
-        // The mobile router has no goal page, so name the goal without linking it.
-        <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
-          <Icon icon={TargetIcon} size={16} style={{ flex: 'none' }} />
-          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
-            {goal.title}
-          </Text>
-        </Flexbox>
-      ) : (
-        <Button
-          icon={<Icon icon={TargetIcon} size={16} />}
-          size={'small'}
-          style={{ maxWidth: '100%', minWidth: 0 }}
-          type={'text'}
-          // The agent-less route: the goal's supervising agent may be private to its
-          // creator or gated by Agent Lab, while the goal itself stays readable.
-          onClick={() => navigate(`/goal/${goal.id}`)}
-        >
-          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
-            {goal.title}
-          </Text>
-        </Button>
-      )}
+      <Button
+        icon={<Icon icon={TargetIcon} size={16} />}
+        size={'small'}
+        style={{ maxWidth: '100%', minWidth: 0 }}
+        type={'text'}
+        // The agent-less route: the goal's supervising agent may be private to its
+        // creator or gated by Agent Lab, while the goal itself stays readable.
+        onClick={() => navigate(`/goal/${goal.id}`)}
+      >
+        <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          {goal.title}
+        </Text>
+      </Button>
     </Flexbox>
   );
 });

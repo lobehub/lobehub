@@ -21,15 +21,20 @@ export interface HeterogeneousAgentAutoRetryState {
  * View-model for the rate-limit guide's "continue after reset" scheduling. When
  * present, the card can hand the continuation off to the backend instead of
  * requiring a manual retry. `isScheduled` toggles between the unscheduled entry
- * (schedule / retry-now) and the scheduled state (run-now / cancel).
+ * (schedule / retry-now) and the scheduled state (cancel).
  */
 export interface HeterogeneousAgentScheduleState {
   isScheduled: boolean;
   onCancel: () => void;
-  onRunNow: () => void;
   onSchedule: () => void;
   /** Epoch seconds when the rate-limit window resets (for the "~X h" copy). */
   resetsAt?: number;
+}
+
+export interface HeterogeneousAgentWorkingDirectoryResetState {
+  /** Folder name of the source repo the conversation goes back to. */
+  name?: string;
+  onReset: () => Promise<void>;
 }
 
 export interface HeterogeneousAgentStatusGuideProps {
@@ -37,11 +42,16 @@ export interface HeterogeneousAgentStatusGuideProps {
   autoRetry?: HeterogeneousAgentAutoRetryState;
   error?: HeterogeneousAgentSessionError | null;
   onDismiss?: () => void;
+  onHandoff?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
-  onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant?: HeterogeneousAgentStatusGuideVariant;
+  /**
+   * Present when the missing directory is a deleted worktree the conversation
+   * still records: drops it, falls back to the source repo and retries.
+   */
+  workingDirectoryReset?: HeterogeneousAgentWorkingDirectoryResetState;
 }
 
 export const SUPPORTED_HETEROGENEOUS_AGENT_TYPES = LOCAL_HETEROGENEOUS_AGENT_TYPES;
@@ -62,9 +72,10 @@ export interface HeterogeneousAgentGuideStateProps {
   config: HeterogeneousAgentGuideConfig;
   error?: HeterogeneousAgentSessionError | null;
   onDismiss?: () => void;
+  onHandoff?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
-  onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant: HeterogeneousAgentStatusGuideVariant;
+  workingDirectoryReset?: HeterogeneousAgentWorkingDirectoryResetState;
 }

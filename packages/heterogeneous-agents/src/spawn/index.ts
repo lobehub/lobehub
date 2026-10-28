@@ -180,6 +180,7 @@ export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,
   type EnsureResumeTranscriptResult,
+  findClaudeCodeTranscriptPath,
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
 export { getHeterogeneousAgentPresetEnv } from './presetEnv';

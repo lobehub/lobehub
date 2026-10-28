@@ -10,6 +10,8 @@ import {
   reactionModeField,
   watchKeywordsField,
 } from '../const';
+import { deviceAccessFields } from '../deviceAccess';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -47,6 +49,7 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       makeUserIdField('telegram'),
+      ...deviceAccessFields,
       {
         key: 'charLimit',
         default: 4000,
@@ -98,6 +101,7 @@ export const schema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
     ],
     type: 'object',
   },

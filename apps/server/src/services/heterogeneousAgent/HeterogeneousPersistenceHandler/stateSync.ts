@@ -58,15 +58,11 @@ export async function loadOrCreateState(
   allowMissingRunningOperation = false,
 ): Promise<OperationState> {
   let state = operationStates.get(operationId);
-  if (state) {
-    // Defensive: caller mismatch on topicId would corrupt persistence —
-    // assert and throw rather than silently writing to the wrong topic.
-    if (state.topicId !== topicId) {
-      throw new Error(
-        `Operation ${operationId} is already bound to topic ${state.topicId}, not ${topicId}`,
-      );
-    }
-    return state;
+  // A cached state must never be reused for another topic.
+  if (state && state.topicId !== topicId) {
+    throw new Error(
+      `Operation ${operationId} is already bound to topic ${state.topicId}, not ${topicId}`,
+    );
   }
 
   const topic = await deps.topicModel.findById(topicId);
@@ -106,6 +102,11 @@ export async function loadOrCreateState(
       );
     }
   }
+
+  // Cached accumulators do not grant write ownership. A steer can replace the
+  // topic's operation without advancing this producer's step index, so every
+  // batch must pass the same ownership/liveness check as a cold replica.
+  if (state) return state;
 
   // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
   // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
@@ -176,6 +177,7 @@ export async function loadOrCreateState(
     notifiedInterventionTransitions: new Set(),
     processedKeys: new Set(),
     publishedKeys: new Set(),
+    streamStartAssistantIds: new Map(),
     toolMsgIdByCallId: new Map(),
     threadId: running?.threadId ?? undefined,
     topicId,
@@ -398,21 +400,54 @@ export async function refreshMainStateFromDb(
   if (snapshot.model) state.main.turnModel = snapshot.model;
   if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
-  // Recover the chain spine from the DB. The next normal
-  // turn parents off the run's latest main-thread message that is neither a
-  // tool nor a TOOLLESS signal callback (a tools-bearing signal turn is
-  // main-chain — see `getLatestSpineMessageId`); reading it straight
-  // from the DB (independent of
-  // `currentAssistantId`, which can regress to the seed placeholder on a cold
-  // / non-sticky replica — see the multi-replica caveat on the class) keeps
-  // consecutive cold-replica steps chained linearly instead of forking onto a
-  // stale node. Signal turns still anchor off `lastToolMsgIdEver`, which is
-  // maintained in-memory across the run's tool batches.
+  // Recover only THIS operation's spine. A late write from the interrupted
+  // producer can be newer than the steered run's seed; using the topic-wide
+  // latest row would attach the new reply to the old branch. Reading stamped
+  // steps still recovers progress on cold replicas whose pointer is stale.
+  // Before the first stamped step, keep the run's seeded/current spine.
   const spineId = await deps.messageModel.getLatestSpineMessageId({
+    operationId: state.operationId,
     threadId: state.threadId ?? null,
     topicId: state.topicId,
   });
   if (spineId) state.main.lastSpineMessageId = spineId;
+}
+
+/** Spine assistants walked back from the tip; a run's tools sit a hop or two behind it. */
+const MAX_SIGNAL_ANCHOR_HOPS = 50;
+
+/**
+ * Recover `lastToolMsgIdEver` — the anchor a signal turn (a background task's
+ * wake-up) parents off — on a replica that never reduced this run's tool
+ * batches. Without it the signal turn falls back onto the toolless spine reply,
+ * and the read side, which only collects signal turns under tools, renders it
+ * as a separate top-level reply.
+ *
+ * Walks the spine from its tip back through main-thread assistants and takes
+ * the last tool of the first one that called any. Stopping at the first
+ * non-assistant (the run's user message) keeps a previous run's tools out.
+ */
+export async function recoverLastToolMessageFromDb(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  state: OperationState,
+): Promise<void> {
+  if (state.main.lastToolMsgIdEver) return;
+
+  const threadId = state.threadId ?? null;
+  let messageId: string | null | undefined = state.main.lastSpineMessageId;
+  for (let hop = 0; messageId && hop < MAX_SIGNAL_ANCHOR_HOPS; hop++) {
+    const message = await deps.messageModel.findById(messageId);
+    if (message?.role !== 'assistant' || (message.threadId ?? null) !== threadId) return;
+
+    const toolMessageId = ((message.tools ?? []) as ChatToolPayload[])
+      .map((tool) => tool.result_msg_id ?? state.toolMsgIdByCallId.get(tool.id))
+      .findLast(Boolean);
+    if (toolMessageId) {
+      state.main.lastToolMsgIdEver = toolMessageId;
+      return;
+    }
+    messageId = message.parentId;
+  }
 }
 
 /**

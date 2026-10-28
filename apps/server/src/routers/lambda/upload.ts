@@ -1,5 +1,6 @@
 import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import type { FileUploadItem } from '@lobechat/database/schemas';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -29,6 +30,31 @@ const uploadSizeSchema = z
   .min(0)
   .max(MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE)
   .optional();
+
+/**
+ * The content-addressed key the CLI derives for an upload:
+ * `files/<YYYY-MM-DD>/<sha256>[.<ext>]` (`uploadFileBuffer`).
+ */
+const CONTENT_ADDRESSED_PATHNAME = /^files\/\d{4}-\d{2}-\d{2}\/[\da-f]{64}(?:\.[\w-]{1,16})?$/;
+
+/**
+ * A run's operation token reaches this router only to upload acceptance
+ * evidence. It must sign a sized PUT through the reservation, which charges
+ * quota, bounds the length and refuses a key that already holds an object, and
+ * only under a content-addressed key, never a pathname of its choosing.
+ */
+const assertOperationTokenUpload = (
+  ctx: { heteroOperationScope?: string },
+  input: { pathname: string; size?: number },
+) => {
+  if (!ctx.heteroOperationScope) return;
+  if (input.size === undefined || !CONTENT_ADDRESSED_PATHNAME.test(input.pathname)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: "This run's token uploads only sized evidence under a content-addressed path",
+    });
+  }
+};
 
 const uploadProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -239,6 +265,7 @@ export const uploadRouter = router({
     .use(withScopedPermission('file:upload'))
     .input(z.object({ pathname: z.string().min(1), size: uploadSizeSchema }))
     .mutation(async ({ ctx, input }) => {
+      assertOperationTokenUpload(ctx, input);
       const s3 = new FileS3();
       if (input.size === undefined) return s3.createPreSignedUrl(input.pathname);
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -17,6 +18,19 @@ const getPluginNames = (platform: 'desktop' | 'web') =>
     .map((plugin) => plugin.name);
 
 describe('sharedRendererPlugins', () => {
+  it('compiles app StyleX without taking @lobehub/ui out of pre-bundling', () => {
+    const plugin = sharedRendererPlugins({ platform: 'web' })
+      .flat(Number.POSITIVE_INFINITY)
+      .find(
+        (item): item is { config?: unknown; name: string } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          (item as { name?: string }).name === '@stylexjs/unplugin',
+      );
+
+    expect(plugin?.config).toBeUndefined();
+  });
+
   it('keeps the icon barrel transform out of the Electron renderer', () => {
     expect(getPluginNames('desktop')).not.toContain('lobe-icon-named-export-proxy');
     expect(getPluginNames('web')).toContain('lobe-icon-named-export-proxy');
@@ -53,6 +67,10 @@ describe('lobe-dev-editor-provider', () => {
 describe('sharedOptimizeDeps', () => {
   it('pre-bundles the @lobehub/ui root entrypoint', () => {
     expect(sharedOptimizeDeps.include).toContain('@lobehub/ui');
+    expect(sharedOptimizeDeps.exclude).toEqual([
+      '@lobehub/ui/stylex/cssVar.stylex',
+      '@lobehub/ui/stylex/media.stylex',
+    ]);
   });
 });
 
@@ -404,5 +422,25 @@ describe('createSharedRolldownOutput', () => {
     const output = createSharedRolldownOutput({ splitInitial: false });
     expect(output.codeSplitting).not.toHaveProperty('includeDependenciesRecursively');
     expect((output.codeSplitting.groups as OutputGroup[]).some((g) => 'tags' in g)).toBe(false);
+  });
+
+  // Regression: base.css (which styles <body>) shared a chunk with modules the
+  // App's lazy chunks import, so loading Home restyled the App's body.
+  it('gives canvas runtime sources a chunk of their own, apart from modules the App shares', () => {
+    const entry = '/repo/packages/canvas-runtime/src/index.tsx';
+    const base = '/repo/packages/canvas-runtime/src/base.css';
+    const shared = '/repo/packages/canvas/src/index.ts';
+    const graph: Record<string, string[]> = { [base]: [], [entry]: [base, shared], [shared]: [] };
+    const ctx = { getModuleInfo: (id: string) => ({ importedIds: graph[id] }) };
+    const chunkOf = (id: string) =>
+      groups({ initialEntries: { runtime: entry } })
+        .filter((g) => (typeof g.test === 'function' ? g.test(id) : (g.test?.test(id) ?? true)))
+        .sort((a, b) => b.priority - a.priority)
+        .map((g) => (typeof g.name === 'function' ? g.name(id, ctx) : g.name))
+        .find(Boolean);
+
+    expect(chunkOf(base)).toBe('canvas-runtime-runtime');
+    expect(chunkOf(entry)).toBe('canvas-runtime-runtime');
+    expect(chunkOf(shared)).toBe('initial-runtime');
   });
 });

@@ -10,12 +10,8 @@ const { mockExecAgent, mockGetTrpcClient, mockGetUserState } = vi.hoisted(() => 
 }));
 
 vi.mock('../../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../../api/http', () => ({ getAgentStreamAuthInfo: vi.fn() }));
-vi.mock('../../utils/agentStream', () => ({
-  replayAgentEvents: vi.fn(),
-  streamAgentEvents: vi.fn(),
-  streamAgentEventsViaWebSocket: vi.fn(),
-}));
+vi.mock('../../utils/agentStream', () => ({ replayAgentEvents: vi.fn() }));
+vi.mock('./followRun', () => ({ followAgentRun: vi.fn() }));
 vi.mock('../../utils/device', () => ({ resolveLocalDeviceId: vi.fn() }));
 
 const runAgent = async (...args: string[]) => {
@@ -40,6 +36,29 @@ describe('lh agent run', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     mockExecAgent.mockReset();
+  });
+
+  it('declares the member-terminal stream feature so a group run keeps streaming', async () => {
+    const input = await runAgent('--agent-id', 'agt-1', '--prompt', 'Hello');
+
+    // Without it the server mirrors a member's terminal as `agent_runtime_end`,
+    // which the Gateway treats as this session's end and closes the socket.
+    expect(input.streamFeatures).toEqual(['member_runtime_end']);
+  });
+
+  it('retries without streamFeatures when an older server rejects the key', async () => {
+    mockExecAgent
+      .mockRejectedValueOnce(
+        Object.assign(new Error('unrecognized_keys: ["streamFeatures"]'), {
+          data: { code: 'BAD_REQUEST' },
+        }),
+      )
+      .mockResolvedValueOnce({ operationId: 'op-1', success: true, topicId: 'tpc-1' });
+
+    await runAgent('--agent-id', 'agt-1', '--prompt', 'Hello');
+
+    expect(mockExecAgent).toHaveBeenCalledTimes(2);
+    expect(mockExecAgent.mock.calls[1][0]).not.toHaveProperty('streamFeatures');
   });
 
   it('enables each --tool for the run, as an @-mention in chat does', async () => {

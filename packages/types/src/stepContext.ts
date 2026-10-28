@@ -233,6 +233,11 @@ export interface RuntimeInitialContext {
    */
   mentionedAgents?: RuntimeMentionedAgent[];
   /**
+   * Live project context (members, knowledge, open tasks) for a run inside a
+   * project, rebuilt each turn so renames and membership changes never go stale.
+   */
+  projectContext?: InitialProjectContext;
+  /**
    * Skills explicitly selected by the user for the current request
    * This is ephemeral runtime context and is not persisted to chat history
    */
@@ -248,6 +253,11 @@ export interface RuntimeInitialContext {
    * answer questions about the on-screen tasks without extra tool calls.
    */
   taskManager?: InitialTaskManagerContext;
+}
+
+export interface InitialProjectContext {
+  /** Prebuilt prompt describing the project the run belongs to. */
+  contextPrompt: string;
 }
 
 export interface InitialTaskManagerContext {

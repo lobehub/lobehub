@@ -23,10 +23,14 @@ export function registerCheckpointCommands(task: Command) {
         console.log(`  topic.after: ${c.topic.after ?? false}`);
       }
       if (c.tasks?.beforeIds?.length > 0) {
-        console.log(`  tasks.beforeIds: ${c.tasks.beforeIds.join(', ')}`);
+        console.log(
+          `  tasks.beforeIds: ${(c.beforeTasks?.map((task: { identifier: string }) => task.identifier) ?? c.tasks.beforeIds).join(', ')}`,
+        );
       }
       if (c.tasks?.afterIds?.length > 0) {
-        console.log(`  tasks.afterIds: ${c.tasks.afterIds.join(', ')}`);
+        console.log(
+          `  tasks.afterIds: ${(c.afterTasks?.map((task: { identifier: string }) => task.identifier) ?? c.tasks.afterIds).join(', ')}`,
+        );
       }
       if (
         !c.topic &&
@@ -75,6 +79,8 @@ export function registerCheckpointCommands(task: Command) {
         }
         if (options.before !== undefined) {
           checkpoint.tasks = { ...checkpoint.tasks };
+          // Explicit input is a new selection, rather than a config round trip.
+          delete checkpoint.tasks.beforeTasks;
           checkpoint.tasks.beforeIds = options.before
             .split(',')
             .map((s: string) => s.trim())
@@ -82,6 +88,7 @@ export function registerCheckpointCommands(task: Command) {
         }
         if (options.after !== undefined) {
           checkpoint.tasks = { ...checkpoint.tasks };
+          delete checkpoint.tasks.afterTasks;
           checkpoint.tasks.afterIds = options.after
             .split(',')
             .map((s: string) => s.trim())

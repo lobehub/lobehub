@@ -3,7 +3,6 @@ import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
 import {
-  Avatar,
   createStaticStyles,
   cssVar,
   cx,
@@ -18,6 +17,7 @@ import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
@@ -226,7 +226,8 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         title={topic.title}
         icon={
           agent ? (
-            <Avatar
+            <AgentAvatar
+              agentId={topic.agentId}
               avatar={agent.avatar}
               background={agent.backgroundColor}
               className={styles.topicAvatar}

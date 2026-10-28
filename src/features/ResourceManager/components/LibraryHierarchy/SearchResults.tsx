@@ -36,7 +36,7 @@ interface SearchResultsProps {
  * hit opens exactly like its tree counterpart (folder → navigate, page → page
  * editor, file → file editor) and keeps the same context menu.
  *
- * The rows are a `@lobechat/replica` entry owned by the ResourceManager store:
+ * The rows are a `local-replica` entry owned by the ResourceManager store:
  * the head page is persisted, so coming back to the same search paints it
  * before the request lands, and "load more" appends further pages through the
  * engine instead of re-fetching a widening window.

@@ -1,4 +1,5 @@
 import {
+  ComposerUserMessageSchema,
   ContextSelectionSchema,
   CreateThreadWithMessageSchema,
   initialTopicMetadataSchema,
@@ -182,6 +183,8 @@ export const ExecAgentFieldsSchema = z.object({
        * identity survives the gateway step_start snapshot / refetch.
        */
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+      /** Bind a NEW topic to this project (ignored with topicId; resolved from the topic). */
+      projectId: z.string().optional(),
       /** Bind a NEW topic to this project working directory (ignored with topicId). */
       projectWorkingDirectoryId: z.string().optional(),
       scope: z.string().nullish(),
@@ -204,12 +207,14 @@ export const ExecAgentFieldsSchema = z.object({
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds: z.array(z.string()).optional(),
   /**
-   * Content the user attached from the conversation, a page or code. The gateway
-   * path never calls `aiChat.sendMessageInServer`, so this is the only way the
-   * selections reach the user message the server persists and the run's context.
+   * The composer-authored part of the new user message (rich-text editorData,
+   * attached content). The gateway path never calls `aiChat.sendMessageInServer`,
+   * so this is how the row the server persists matches a client-runtime send.
    */
+  userMessage: ComposerUserMessageSchema.optional(),
+  /** @deprecated Sent by clients before `userMessage`; folded into `userMessage.metadata`. */
   contextSelections: z.array(ContextSelectionSchema).optional(),
-  /** Page-editor selections, mirrored from `contextSelections` for compatibility. */
+  /** @deprecated Sent by clients before `userMessage`; folded into `userMessage.metadata`. */
   pageSelections: z.array(PageSelectionSchema).optional(),
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId: z.string().optional(),
@@ -419,3 +424,32 @@ export const ExecSubAgentTaskSchema = z.object({
   /** The Topic ID */
   topicId: z.string(),
 });
+
+/**
+ * Fold the deprecated top-level selection fields into `userMessage.metadata`,
+ * so everything downstream reads one shape. `userMessage` wins when a client
+ * sends both. Applied wherever a request enters: `execAgent`, a queued
+ * follow-up's append, and every queued entry read back from Redis (an entry
+ * stored before this shape existed still carries the old fields).
+ */
+export const foldLegacyUserMessageFields = <
+  T extends Partial<Pick<ExecAgentInput, 'contextSelections' | 'pageSelections' | 'userMessage'>>,
+>({
+  contextSelections,
+  pageSelections,
+  ...input
+}: T): Omit<T, 'contextSelections' | 'pageSelections'> => {
+  if (!contextSelections?.length && !pageSelections?.length) return input;
+
+  return {
+    ...input,
+    userMessage: {
+      ...input.userMessage,
+      metadata: {
+        ...(contextSelections?.length ? { contextSelections } : undefined),
+        ...(pageSelections?.length ? { pageSelections } : undefined),
+        ...input.userMessage?.metadata,
+      },
+    },
+  };
+};

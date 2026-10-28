@@ -19,6 +19,12 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  agentQuotaSelectors,
+  getAgentQuotaStoreState,
+  useAgentQuotaStore,
+} from '@/store/agentQuota';
+
 const QUOTA_STALE_MS = 60_000;
 const QUOTA_RETRY_COOLDOWN_MS = 60_000;
 
@@ -162,6 +168,11 @@ export const createQuotaSourceKey = (...parts: QuotaSourcePart[]) =>
 
 export interface QuotaSnapshotBase {
   error: string | null;
+  /**
+   * The live sample failed (transport / IPC) instead of reporting a state: the
+   * panel treats it like an error and keeps the last good snapshot.
+   */
+  sampleFailed?: boolean;
   status: 'error' | 'ok' | 'unavailable';
   updatedAt: number;
 }
@@ -205,6 +216,12 @@ export interface FetchQuotaOptions<S = unknown> {
 
 interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   /**
+   * Keep `renderHeader` on screen when there are no windows to show (an
+   * unavailable / failed / empty sample), for headers that carry controls the
+   * user needs in exactly those states — e.g. adding or switching an account.
+   */
+  alwaysRenderHeader?: boolean;
+  /**
    * Revalidate on this cadence while the tab is visible, so the badge stays
    * near-live without user interaction. Upstream sampler caches must keep
    * their fresh window below this for each poll to observe new data.
@@ -240,6 +257,14 @@ interface LoadQuotaOptions {
   revalidate?: boolean;
 }
 
+interface PendingQuotaError<S> {
+  nextQuota: S;
+  options: LoadQuotaOptions;
+  requestContext?: string;
+  requestId: number;
+  requestSourceKey: string;
+}
+
 /**
  * Shared quota popover for local CLI agents: gauge trigger with the tightest
  * remaining percent in each compact group, plus per-window progress bars and
@@ -258,6 +283,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   hasExtraData,
   renderFooter,
   renderHeader,
+  alwaysRenderHeader,
   sourceKey = 'default',
   title,
   tooltip,
@@ -265,13 +291,27 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [quota, setQuota] = useState<S | null>(null);
+  // The last snapshot of this source lives in the agentQuota replica: a reload
+  // or a remount paints it (with its "updated N ago" line) before the sampler
+  // answers, and every applied sample is written back to it.
+  const useHydrateQuotaPanel = useAgentQuotaStore((s) => s.useHydrateQuotaPanel);
+  const { isHydrated } = useHydrateQuotaPanel(sourceKey);
+  const quota = (useAgentQuotaStore(agentQuotaSelectors.panel(sourceKey)) as S | undefined) ?? null;
   const [refreshError, setRefreshError] = useState<S | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const lastTransientErrorAtRef = useRef(0);
-  const quotaRef = useRef<S | null>(null);
   const requestIdRef = useRef(0);
   const sourceKeyRef = useRef(sourceKey);
+  const isHydratedRef = useRef(isHydrated);
+  /** An error sampled before the stored snapshot hydrated, applied once it has. */
+  const pendingErrorRef = useRef<PendingQuotaError<S> | null>(null);
+
+  /** What the panel of `key` shows now, read outside render. */
+  const readQuota = useCallback(
+    (key: string) =>
+      (agentQuotaSelectors.panel(key)(getAgentQuotaStoreState()) as S | undefined) ?? null,
+    [],
+  );
 
   const hasQuotaDataForSnapshot = useCallback(
     (snapshot: S | null) => {
@@ -282,10 +322,12 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     [getWindows, hasExtraData],
   );
 
-  const setQuotaSnapshot = useCallback((nextQuota: S) => {
-    quotaRef.current = nextQuota;
-    setQuota(nextQuota);
-  }, []);
+  const setQuotaSnapshot = useCallback(
+    (nextQuota: S, key: string = sourceKeyRef.current, context?: string) => {
+      getAgentQuotaStoreState().setQuotaPanel(key, nextQuota, context);
+    },
+    [],
+  );
 
   const applyQuota = useCallback(
     (nextQuota: S) => {
@@ -313,13 +355,29 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       options: LoadQuotaOptions = {},
       requestId = requestIdRef.current,
       requestSourceKey = sourceKeyRef.current,
+      requestContext?: string,
     ) => {
       if (!isCurrentRequest(requestId, requestSourceKey)) return;
 
-      if (nextQuota.status === 'error') {
+      if (nextQuota.status === 'error' || nextQuota.sampleFailed) {
         lastTransientErrorAtRef.current = Date.now();
 
-        if (hasQuotaDataForSnapshot(quotaRef.current)) {
+        // Writing the error before the stored snapshot hydrated would make the
+        // replica ignore that snapshot and drop its stored row: hold the error
+        // until hydration settles, then judge it against what was restored.
+        if (!isHydratedRef.current) {
+          pendingErrorRef.current = {
+            nextQuota,
+            options,
+            requestId,
+            requestContext,
+            requestSourceKey,
+          };
+          return;
+        }
+
+        // A failed refresh keeps the last good snapshot on screen (and in storage).
+        if (hasQuotaDataForSnapshot(readQuota(requestSourceKey))) {
           if (options.manual) setRefreshError(nextQuota);
           return;
         }
@@ -328,14 +386,17 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       }
 
       setRefreshError(null);
-      setQuotaSnapshot(nextQuota);
+      setQuotaSnapshot(nextQuota, requestSourceKey, requestContext);
     },
-    [hasQuotaDataForSnapshot, isCurrentRequest, setQuotaSnapshot],
+    [hasQuotaDataForSnapshot, isCurrentRequest, readQuota, setQuotaSnapshot],
   );
 
   const loadQuota = useCallback(
     async (options: LoadQuotaOptions = {}) => {
       const requestSourceKey = sourceKeyRef.current;
+      // A sample started under one identity (or before a user-data reset) must
+      // not land in another data context's replica.
+      const requestContext = getAgentQuotaStoreState().getQuotaContext();
       const requestId = requestIdRef.current + 1;
       requestIdRef.current = requestId;
 
@@ -350,13 +411,19 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
             // Progressive paint: show the fast (persisted) snapshot while the
             // live refresh continues; requestId still guards stale sources.
             if (!isCurrentRequest(requestId, requestSourceKey)) return;
-            setQuotaSnapshot(interimQuota);
+            setQuotaSnapshot(interimQuota, requestSourceKey, requestContext);
           },
         });
-        applyQuotaResult(nextQuota, options, requestId, requestSourceKey);
+        applyQuotaResult(nextQuota, options, requestId, requestSourceKey, requestContext);
       } catch (error) {
         console.error('Failed to fetch agent quota:', error);
-        applyQuotaResult(createErrorSnapshot(error), options, requestId, requestSourceKey);
+        applyQuotaResult(
+          createErrorSnapshot(error),
+          options,
+          requestId,
+          requestSourceKey,
+          requestContext,
+        );
       } finally {
         if (isCurrentRequest(requestId, requestSourceKey)) {
           setLoading(false);
@@ -368,15 +435,27 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
 
   useEffect(() => {
     sourceKeyRef.current = sourceKey;
-    quotaRef.current = null;
     lastTransientErrorAtRef.current = 0;
-    setQuota(null);
     setRefreshError(null);
   }, [sourceKey]);
 
   useEffect(() => {
     void loadQuota();
   }, [loadQuota, sourceKey]);
+
+  useEffect(() => {
+    isHydratedRef.current = isHydrated;
+    const pending = pendingErrorRef.current;
+    if (!isHydrated || !pending) return;
+    pendingErrorRef.current = null;
+    applyQuotaResult(
+      pending.nextQuota,
+      pending.options,
+      pending.requestId,
+      pending.requestSourceKey,
+      pending.requestContext,
+    );
+  }, [applyQuotaResult, isHydrated]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), QUOTA_STALE_MS);
@@ -601,13 +680,19 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           <Skeleton height={18} />
         </Flexbox>
       ) : quota?.status === 'unavailable' ? (
-        <div className={styles.emptyState}>
-          {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
-        </div>
+        <>
+          {alwaysRenderHeader && renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div className={styles.emptyState}>
+            {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
+          </div>
+        </>
       ) : quota?.status === 'error' && !hasQuotaData ? (
-        <div className={styles.error}>
-          {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
-        </div>
+        <>
+          {alwaysRenderHeader && renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div className={styles.error}>
+            {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
+          </div>
+        </>
       ) : hasQuotaData ? (
         <>
           {quota && renderHeader?.(quota, { applyQuota, formatDuration, now })}
@@ -625,7 +710,12 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           )}
         </>
       ) : (
-        <div className={styles.emptyState}>{t('heteroAgent.quota.noData')}</div>
+        <>
+          {alwaysRenderHeader &&
+            quota &&
+            renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div className={styles.emptyState}>{t('heteroAgent.quota.noData')}</div>
+        </>
       )}
     </Flexbox>
   );

@@ -330,7 +330,7 @@ export class BotMessageRouter {
         return dispatchTextCommand(text, commands) !== null;
       },
     );
-    registerHandlers(
+    const { deferMentionThread } = registerHandlers(
       chatBot,
       serverDB,
       client,
@@ -346,7 +346,7 @@ export class BotMessageRouter {
       () => getAgentRuntimeRedisClient(),
     );
     await chatBot.initialize();
-    client.applyChatPatches?.(chatBot);
+    client.applyChatPatches?.(chatBot, { deferMentionThread });
 
     // Register platform-specific bot commands (e.g., Telegram setMyCommands menu)
     if (client.registerBotCommands) {

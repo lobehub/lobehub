@@ -94,12 +94,21 @@ describe('buildGoalCardModel', () => {
     expect(model).toMatchObject({ findingCount: 1, taskDone: 1, taskTotal: 3, totalCost: 0.23 });
   });
 
-  it('marks a task whose run went silent as lost', () => {
+  it('marks a task whose run went silent as stalled', () => {
     const model = build({
       nodes: [node({ status: 'active', taskId: 'task-1', updatedAt: at(10) })],
     });
 
-    expect(model.steps[0].state).toBe('lost');
+    expect(model.steps[0].state).toBe('stalled');
+  });
+
+  it('marks a task held for a usage window as waiting for quota', () => {
+    const model = build({
+      nodes: [node({ id: 'n1', status: 'active', taskId: 'task-1', updatedAt: at(10) })],
+      quotaRetryAt: { n1: at(200) },
+    });
+
+    expect(model.steps[0].state).toBe('waitingQuota');
   });
 
   it('shows a task the goal ended under as stopped, not running', () => {

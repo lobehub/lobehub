@@ -249,7 +249,7 @@ export const resumeAbandonedTaskRecovery = async (
       ? 'Goal cost budget was exhausted after an operation was abandoned'
       : recovery.outcome === 'exhausted-rounds'
         ? 'Task attempt budget was exhausted after an operation was abandoned'
-        : 'Automatic recovery could not restart an abandoned operation';
+        : `Automatic recovery could not restart an abandoned operation${recovery.error ? `: ${recovery.error}` : ''}`;
   return ctx.gateOrTakeOver(graph, nodeId, task.id, reason, effects, {
     machine: recovery.outcome === 'spawn-failed',
   });

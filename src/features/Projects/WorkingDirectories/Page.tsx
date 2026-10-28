@@ -7,10 +7,14 @@ import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ProjectKnowledgeBaseSettings } from '../KnowledgeBases';
+import { ProjectMemberSettings } from '../Members';
+import { MembersSettings } from '../Review/MembersSettings';
+import { SitesSettings } from '../Review/SitesSettings';
+import { useCanManageProject } from '../useCanManageProject';
 import { AdvancedSettings } from './AdvancedSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { ProjectWorkingDirectories } from './index';
@@ -28,17 +32,32 @@ export function ProjectDirectoriesPage() {
   const navigate = useWorkspaceAwareNavigate();
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
   const { error, revalidate } = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
-  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const canManage = useCanManageProject();
   const detail = useCurrentProjectDetail(projectId);
+  const isMobile = useIsMobile();
   if (error && !detail) return <AsyncError error={error} variant="page" onRetry={revalidate} />;
   if (!detail) return <RouteLoading />;
 
-  const canManage = currentUserId === detail.project.userId;
   const sections: SectionItem[] = [
     {
       key: 'general',
       label: t('settings.general'),
       render: () => <GeneralSettings key={detail.project.id} project={detail.project} />,
+    },
+    {
+      key: 'members',
+      label: t('settings.members'),
+      render: () => (
+        <Flexbox gap={32}>
+          <ProjectMemberSettings detail={detail} />
+          <MembersSettings projectId={detail.project.id} />
+        </Flexbox>
+      ),
+    },
+    {
+      key: 'knowledge',
+      label: t('settings.knowledgeBases'),
+      render: () => <ProjectKnowledgeBaseSettings detail={detail} />,
     },
     {
       key: 'environments',
@@ -50,7 +69,12 @@ export function ProjectDirectoriesPage() {
       label: t('settings.workLocations'),
       render: () => <WorkingDirectorySettings projectId={detail.project.id} />,
     },
-    // Destructive settings are owner-only, so the tab is hidden for everyone else.
+    {
+      key: 'sites',
+      label: t('review.sites.title'),
+      render: () => <SitesSettings projectId={detail.project.id} />,
+    },
+    // Destructive settings need edit permission, so the tab is hidden from viewers.
     ...(canManage
       ? [
           {
@@ -64,7 +88,7 @@ export function ProjectDirectoriesPage() {
   const activeSection = sections.find((item) => item.key === section) ?? sections[0];
 
   return (
-    <Flexbox flex={1} padding={32} style={{ overflow: 'auto' }}>
+    <Flexbox flex={1} padding={isMobile ? 16 : 32} style={{ overflow: 'auto' }}>
       <Flexbox gap={28} style={{ width: '100%', maxWidth: 800, marginInline: 'auto' }}>
         <Text fontSize={24} weight={600}>
           {t('settings.title')}

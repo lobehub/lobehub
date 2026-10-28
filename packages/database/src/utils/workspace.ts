@@ -21,6 +21,8 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
   'agent_cron_jobs',
   'agent_skills',
   'agents',
+  'channel_threads',
+  'channels',
   'chat_groups',
   'dashboards',
   'documents',

@@ -5,12 +5,14 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import Avatar from '@/components/Avatar';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useAgentMeta } from '../../hooks';
+import { contextSelectors, useConversationStore } from '../../store';
 import ContentBlock from '../AssistantGroup/components/ContentBlock';
 import Group from '../AssistantGroup/components/Group';
 import UserMessageContent from '../User/components/MessageContent';
@@ -30,6 +32,7 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   const userAvatar = useUserAvatar();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const agentAvatar = useAgentMeta(message.agentId);
+  const contextAgentId = useConversationStore(contextSelectors.agentId);
   const { children, sender } = message;
   const view = resolveCompressedMessageView(message);
 
@@ -61,7 +64,13 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   if (view === 'assistant-content') {
     return (
       <Flexbox horizontal gap={8} paddingBlock={4}>
-        <Avatar {...agentAvatar} name={agentDisplayName(agentAvatar)} size={28} />
+        <AgentAvatar
+          agentId={message.agentId || contextAgentId}
+          avatar={agentAvatar.avatar}
+          background={agentAvatar.backgroundColor}
+          name={agentDisplayName(agentAvatar)}
+          size={28}
+        />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ContentBlock
             disableEditing
@@ -81,7 +90,13 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   if (view === 'assistant-turn-chain') {
     return (
       <Flexbox horizontal gap={8} paddingBlock={4}>
-        <Avatar {...agentAvatar} name={agentDisplayName(agentAvatar)} size={28} />
+        <AgentAvatar
+          agentId={message.agentId || contextAgentId}
+          avatar={agentAvatar.avatar}
+          background={agentAvatar.backgroundColor}
+          name={agentDisplayName(agentAvatar)}
+          size={28}
+        />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <Group
             disableEditing

@@ -9,6 +9,7 @@ Treat them as common knowledge — you never need to call any tool to discover t
 | Field | Value |
 |-------|-------|
 | Agent ID | \`{{agent_id}}\` |
+| Agent Name | {{agent_name}} |
 | Agent Title | {{agent_title}} |
 | Agent Description | {{agent_description}} |
 | Topic ID | \`{{topic_id}}\` |
@@ -53,8 +54,9 @@ run commands.
 | \`lh doc\` | Document management (create, parse, organize) | \`references/doc\` |
 | \`lh kb\` | Knowledge base management (create, upload, organize) | \`references/kb\` |
 | \`lh file\` | File management | \`references/file\` |
+| \`lh artifact\` | Publish local HTML or Canvas, with persistent bindings and retry recovery | \`references/artifact\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
-| \`lh search\` | Search local resources or the web | \`references/search\` |
+| \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |
 | \`lh project\` / \`lh task\` | Projects and agent tasks | \`references/project\` |
 | \`lh goal\` | Long-running goal graphs | \`references/goal\` |
@@ -69,7 +71,7 @@ run commands.
 | \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh migrate\` | Account, usage, settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
 
 Covered by their own skills, so activate the skill instead of reading a reference here:
-\`lh task\` inside a task run (\`task\` skill), \`lh artifact\` (\`artifacts\` skill) and
+\`lh task\` inside a task run (\`task\` skill) and
 \`lh acceptance\` (\`acceptance\` skill).
 
 # Workspace scope
@@ -107,7 +109,10 @@ lh kb list
 lh kb create-doc <kbId> -t "Meeting Notes" -c "..."
 
 # Search messages
-lh message search "deployment issue"
+lh message search "deployment issue" --since 7d
+
+# Recall everything about a topic from last week (messages, topics, goals, pages)
+lh recall "replica" --since 2026-10-12 --until 2026-10-18
 
 # Generate an image
 lh gen image "a sunset over mountains" -m dall-e-3

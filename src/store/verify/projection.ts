@@ -1,8 +1,7 @@
-import type { AcceptanceSubjectType } from '@lobechat/types';
+import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
 
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
-import { defineReplica } from '@/libs/replica';
+import { AppIndexedDBStorage, defineReplica } from '@/libs/replica';
 import type { AcceptanceBundle, AcceptanceBySubject, VerifyStateResponse } from '@/services/verify';
 
 /**
@@ -24,7 +23,7 @@ export const acceptanceBundleResource = defineReplica<string, AcceptanceBundle>(
 /** The subject (topic / task / document) an acceptance is attached to. */
 export interface AcceptanceBySubjectParams {
   subjectId: string;
-  subjectType: AcceptanceSubjectType;
+  subjectType: CreatableAcceptanceSubjectType;
 }
 
 /** One subject's entry key in `acceptanceBySubjectMap`. */
@@ -133,7 +132,7 @@ export const verifyRunResource = defineReplica<string, VerifyRunSnapshot>({
   key: (operationId) => operationId,
   name: VERIFY_RUN_NAME,
   persist: { maxEntries: 100 },
-  storage: new IndexedDBQueryProjectionStorage<VerifyRunSnapshot>({
+  storage: new AppIndexedDBStorage<VerifyRunSnapshot>({
     namespace: `replica:${VERIFY_RUN_NAME}:v${VERIFY_RUN_VERSION}`,
   }),
   version: VERIFY_RUN_VERSION,

@@ -4,7 +4,7 @@ import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { Block, ContextMenuTrigger, type DropdownItem, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, responsive, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Tag, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +13,8 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 // "In sidebar" overview: a collapsible card grid pinned above the main list
 // so the user can see at a glance which agents currently show in the sidebar
@@ -67,19 +67,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   grid: css`
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    /* Full-width page: as many 280px+ columns as fit, one column on narrow screens. */
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 12px;
 
     width: 100%;
     min-width: 0;
-
-    ${responsive.md} {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    ${responsive.sm} {
-      grid-template-columns: minmax(0, 1fr);
-    }
   `,
   header: css`
     cursor: pointer;
@@ -130,7 +124,7 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
       >
         <Block clickable className={styles.card} height={'100%'} variant={'outlined'}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <AgentAvatar item={item} size={24} />
+            <SidebarItemAvatar item={item} size={24} />
             <Text ellipsis style={{ minWidth: 0 }} weight={600}>
               {displayTitle}
             </Text>

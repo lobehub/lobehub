@@ -6,12 +6,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
+import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceLoadMeter';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useDeviceList } from '@/store/device';
 import { type ProjectDirectory } from '@/store/projectWorkingDirectory';
 
+import DeviceDetailPopover from './DeviceDetailPopover';
 import OptionRow from './OptionRow';
 import {
   listProjectDeviceTargets,
@@ -79,6 +81,7 @@ const ProjectDeviceSwitcher = ({
   const { canUseResource } = useChatInputResourceAccess();
   const directory = directories.find((d) => d.id === directoryId);
   const { data: devices } = useDeviceList();
+  const load = useDeviceLoad(devices?.find((d) => d.deviceId === directory?.deviceId));
   // The shared row, not the topic-pinned effective config: a fixed target is
   // the author's setting, and it is what the server checks the move against.
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
@@ -101,7 +104,7 @@ const ProjectDeviceSwitcher = ({
       <div className={styles.title}>{t('heteroAgent.executionTarget.title')}</div>
       {targets.map((target) => {
         const selectable = target.online && target.allowed;
-        return (
+        const row = (
           <OptionRow
             active={target.active}
             disabled={!selectable}
@@ -132,6 +135,15 @@ const ProjectDeviceSwitcher = ({
             onClick={() => (selectable ? handleSelect(target) : undefined)}
           />
         );
+        // Same hover details as the regular device picker: the label alone
+        // can't tell two machines' specs or last-seen time apart.
+        return target.device ? (
+          <DeviceDetailPopover device={target.device} key={target.directory.id}>
+            <div>{row}</div>
+          </DeviceDetailPopover>
+        ) : (
+          row
+        );
       })}
       <div className={styles.hint}>{t('heteroAgent.executionTarget.projectDevicesHint')}</div>
     </Flexbox>
@@ -145,9 +157,18 @@ const ProjectDeviceSwitcher = ({
           ? projectDirectoryDeviceName(directory, devices)
           : t('heteroAgent.executionTarget.unknownDevice')}
       </span>
+      {load && <DeviceLoadMeter load={load} />}
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
+
+  // The tooltip's body lays its children out in a row; stack the two lines.
+  const tooltip = directory ? (
+    <Flexbox gap={4}>
+      <span>{t('directories.boundTip', { ns: 'project', path: directory.path })}</span>
+      {load && <span>{load.summary}</span>}
+    </Flexbox>
+  ) : undefined;
 
   return (
     <Popover
@@ -158,15 +179,7 @@ const ProjectDeviceSwitcher = ({
       trigger="click"
       onOpenChange={setOpen}
     >
-      <div>
-        {open || !directory ? (
-          trigger
-        ) : (
-          <Tooltip title={t('directories.boundTip', { ns: 'project', path: directory.path })}>
-            {trigger}
-          </Tooltip>
-        )}
-      </div>
+      <div>{open || !tooltip ? trigger : <Tooltip title={tooltip}>{trigger}</Tooltip>}</div>
     </Popover>
   );
 };

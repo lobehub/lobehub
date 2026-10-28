@@ -130,6 +130,18 @@ export const goalMetricSeriesResource = defineReplica<string, MetricSeriesWithPo
 });
 
 /**
+ * Goals created from one conversation, keyed by topic id. Bounded: every topic
+ * the user ever opened would otherwise keep its own persisted row.
+ */
+export const topicGoalListResource = defineReplica<string, GoalListValue, GoalListResponse>({
+  key: (topicId) => topicId,
+  name: 'topicGoalList',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
  * Goals are addressed by `goal.id` across the goal store, and a list row
  * carries the row plus its graph roll-up. Deleting one drops the row and the
  * total it was counted in, in every list that holds it — loaded or only

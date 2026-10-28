@@ -1,20 +1,11 @@
-import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import {
-  Avatar,
-  Block,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Target } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { openGateReportModal } from '@/features/Acceptance/Viewer/Gate';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
@@ -91,7 +82,13 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
 
   const openTask = () => {
     if (!brief.taskId) return;
-    navigate(taskDetailPath(brief.taskId, brief.agentId ?? undefined, brief.taskName));
+    navigate(
+      taskDetailPath(
+        brief.taskIdentifier ?? brief.taskId,
+        brief.agentId ?? undefined,
+        brief.taskName,
+      ),
+    );
   };
 
   const content = (
@@ -138,8 +135,9 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
 
       <Flexbox horizontal align={'flex-start'} gap={10}>
         {agent && (
-          <Avatar
-            avatar={agent.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)}
+          <AgentAvatar
+            agentId={agent.id}
+            avatar={isInbox ? agent.avatar || DEFAULT_INBOX_AVATAR : agent.avatar}
             background={agent.backgroundColor || cssVar.colorBgContainer}
             shape={'circle'}
             size={28}
@@ -166,7 +164,10 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
           ) : (
             <BriefCardSummary summary={brief.summary} />
           )}
-          <BriefCardArtifacts artifacts={brief.artifacts} />
+          <BriefCardArtifacts
+            agentId={brief.agentId ?? brief.agent?.id}
+            artifacts={brief.artifacts}
+          />
         </Flexbox>
       </Flexbox>
 
@@ -191,6 +192,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         recommendedActionKey={goal?.recommendedAction}
         resolvedAction={brief.resolvedAction}
         taskId={brief.taskId}
+        taskIdentifier={brief.taskIdentifier}
         taskStatus={brief.taskStatus}
         topicId={brief.topicId}
         topicTitle={brief.taskName}

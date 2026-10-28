@@ -60,3 +60,23 @@ describe('TaskManifest identifier examples', () => {
     expect(text).toMatch(/\bT-1\b/);
   });
 });
+
+describe('stable task references', () => {
+  it('keeps parameter names and teaches stable ids at every ref input', () => {
+    for (const api of TaskManifest.api) {
+      const properties = (
+        api.parameters as { properties: Record<string, { description?: string }> }
+      ).properties;
+      for (const key of [
+        'identifier',
+        'parentIdentifier',
+        'identifiers',
+        'addDependencies',
+        'removeDependencies',
+      ]) {
+        const property = properties[key];
+        if (property) expect(property.description).toContain('prefer stable ids');
+      }
+    }
+  });
+});

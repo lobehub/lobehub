@@ -22,7 +22,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { OperationStatus } from '../../../operation/types';
-import { AI_RUNTIME_OPERATION_TYPES } from '../../../operation/types';
+import { AI_RUNTIME_OPERATION_TYPES, isClientHeldQueuedMessage } from '../../../operation/types';
 import { topicSelectors } from '../../../topic/selectors';
 import { scheduleQueuedFollowUp } from './queuedFollowUp';
 import type {
@@ -455,7 +455,8 @@ export const buildRunLifecycle = (
       if (
         disposition === 'success' &&
         adapter.runScope !== 'sub_agent' &&
-        (get().queuedMessages?.[contextKey]?.length ?? 0) > 0
+        // The server delivers the follow-ups it holds itself.
+        get().queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage)
       ) {
         completeSuccess();
         emitComplete(operationId, runtimeStatus);
@@ -484,7 +485,12 @@ export const buildRunLifecycle = (
           // must be moved to terminal here. The client is exempt: its cancel
           // path already set the op to `cancelled` out of band, and
           // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          if (adapter.runtimeType !== 'client') {
+            get().completeOperation(operationId);
+            // A stop from elsewhere settles as `completed`; nothing drains the
+            // queue now, so the input must not wait for that hand-off.
+            get().updateOperationMetadata(operationId, { endedWithoutCompletion: true });
+          }
           break;
         }
         // `undefined`: unrecognized terminal status — fall through untouched.

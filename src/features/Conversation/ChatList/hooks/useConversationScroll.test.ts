@@ -118,6 +118,7 @@ describe('useConversationScroll — pin behavior', () => {
    */
   type StoreFixture = {
     displayMessages: Array<{ id: string; role: 'user' | 'assistant' }>;
+    hasLaterMessages?: boolean;
     isAIGenerating: boolean;
     virtuaScrollMethods: {
       getItemOffset?: (i: number) => number;
@@ -146,6 +147,7 @@ describe('useConversationScroll — pin behavior', () => {
     vi.mocked(useConversationStore).mockImplementation((selector: any) => {
       const probe: any = {
         displayMessages: currentFixture.displayMessages,
+        hasLaterMessages: currentFixture.hasLaterMessages ?? false,
         operationState: { isAIGenerating: currentFixture.isAIGenerating },
         virtuaScrollMethods: currentFixture.virtuaScrollMethods,
       };
@@ -192,13 +194,16 @@ describe('useConversationScroll — pin behavior', () => {
     const rerender = (next: {
       contextKey?: string;
       dataSource: string[];
+      hasLaterMessages?: boolean;
       isSecondLastMessageFromUser: boolean;
     }) => {
+      const { hasLaterMessages, ...props } = next;
       currentFixture = {
         ...currentFixture,
         displayMessages: deriveDisplayMessages(next.isSecondLastMessageFromUser),
+        hasLaterMessages: hasLaterMessages ?? currentFixture.hasLaterMessages,
       };
-      hook.rerender({ contextKey: undefined, ...next });
+      hook.rerender({ contextKey: undefined, ...props });
     };
 
     return { ...hook, rerender };
@@ -248,6 +253,23 @@ describe('useConversationScroll — pin behavior', () => {
     // User message index 2 sits at virtua row 3 (header row 0 + messages).
     expect(scrollToIndex).toHaveBeenCalledTimes(1);
     expect(scrollToIndex).toHaveBeenCalledWith(3, { align: 'start', smooth: true });
+  });
+
+  it('does not scroll when a forward read appends its next page as a user+assistant pair', () => {
+    const { rerender } = renderScrollHook({
+      dataSource: [assistantId, 'prev'],
+      fixture: { hasLaterMessages: true },
+      isSecondLastMessageFromUser: false,
+    });
+
+    // The last page lands: later rounds are no longer unread after it.
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      hasLaterMessages: false,
+      isSecondLastMessageFromUser: true,
+    });
+
+    expect(scrollToIndex).not.toHaveBeenCalled();
   });
 
   it('does not scroll when only the assistant message is appended', () => {

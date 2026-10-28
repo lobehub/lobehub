@@ -20,6 +20,8 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
+import { CanvasManifest } from '@lobechat/builtin-tool-canvas';
+import { ChannelManifest } from '@lobechat/builtin-tool-channel';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
@@ -33,10 +35,7 @@ import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import {
-  LocalSystemManifest,
-  resolveLocalSystemManifest,
-} from '@lobechat/builtin-tool-local-system';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -78,6 +77,7 @@ export const defaultToolIds = [
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
   LobeAgentManifest.identifier,
+  CanvasManifest.identifier,
 ];
 
 /**
@@ -405,7 +405,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LocalSystemManifest.identifier,
     manifest: LocalSystemManifest,
-    resolveManifest: resolveLocalSystemManifest,
     type: 'builtin',
   },
   {
@@ -507,6 +506,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
+    hidden: true,
+    identifier: ChannelManifest.identifier,
+    manifest: ChannelManifest,
+    type: 'builtin',
+  },
+  {
     identifier: MessageManifest.identifier,
     manifest: MessageManifest,
     // Context-aware: drops APIs the current IM platform can't fulfil (e.g.
@@ -549,7 +555,9 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
+    // Hidden from the Tools popover (a goal starts from `/goal`), but
+    // discoverable so the activator can enable it when the user asks for a goal
+    // in plain words or wants a rejected goal proposal redone.
     hidden: true,
     identifier: GoalManifest.identifier,
     manifest: GoalManifest,
@@ -558,6 +566,11 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: CanvasManifest.identifier,
+    manifest: CanvasManifest,
     type: 'builtin',
   },
   {
