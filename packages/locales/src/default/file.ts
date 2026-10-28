@@ -2,6 +2,23 @@ export default {
   'addFolder': 'Create Folder',
   'addLibrary': 'Add',
   'addPage': 'Create Page',
+  'canvasStorage.delete.content':
+    'This deletes every version and file of “{{title}}” and frees {{size}}. This can’t be undone.',
+  'canvasStorage.delete.success': 'Canvas deleted. {{size}} freed.',
+  'canvasStorage.delete.title': 'Delete this canvas?',
+  'canvasStorage.desc':
+    'Images and files inside a canvas count toward file storage. They can only be deleted with the whole canvas.',
+  'canvasStorage.empty': 'Canvases aren’t using any storage.',
+  'canvasStorage.entry.desc_one':
+    '{{count}} canvas uses {{size}}. Its files aren’t listed in Drive.',
+  'canvasStorage.entry.desc_other':
+    '{{count}} canvases use {{size}}. Their files aren’t listed in Drive.',
+  'canvasStorage.entry.manage': 'Manage',
+  'canvasStorage.item.meta_one': '{{count}} file · Updated {{date}}',
+  'canvasStorage.item.meta_other': '{{count}} files · Updated {{date}}',
+  'canvasStorage.item.untitled': 'Canvas files without a work',
+  'canvasStorage.loadError': 'Couldn’t load canvas storage.',
+  'canvasStorage.title': 'Canvas storage',
   'detail.basic.createdAt': 'Creation Time',
   'detail.basic.filename': 'File Name',
   'detail.basic.size': 'File Size',

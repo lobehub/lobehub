@@ -1,5 +1,5 @@
 import { FileSource } from '@lobechat/types';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNotNull, max, sql, sum } from 'drizzle-orm';
 
 import { files } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -40,6 +40,28 @@ export class CanvasFileModel {
       .select({ canvasId: canvasIdField, fileHash: files.fileHash, id: files.id, url: files.url })
       .from(files)
       .where(and(this.ownership(), inArray(files.fileHash, hashes)));
+  };
+
+  /** Bytes and blob count each of the caller's canvases holds, largest first. */
+  summarizeByCanvas = async () => {
+    const rows = await this.db
+      .select({
+        canvasId: canvasIdField,
+        fileCount: count(),
+        totalSize: sum(files.size).mapWith(Number),
+        updatedAt: max(files.updatedAt),
+      })
+      .from(files)
+      .where(and(this.ownership(), isNotNull(canvasIdField)))
+      .groupBy(canvasIdField)
+      .orderBy(desc(sum(files.size)));
+
+    return rows.map((row) => ({
+      canvasId: row.canvasId!,
+      fileCount: row.fileCount,
+      totalSize: row.totalSize ?? 0,
+      updatedAt: row.updatedAt!,
+    }));
   };
 
   insertFiles = async (canvasId: string, blobs: CanvasBlobRecord[]) => {

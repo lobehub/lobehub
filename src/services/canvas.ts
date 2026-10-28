@@ -10,11 +10,16 @@ export type CanvasVersionSummary = Awaited<
 >[number];
 
 class CanvasService {
+  /** Delete a canvas with every version and file, freeing its storage. */
+  delete = (canvasId: string) => lambdaClient.canvas.delete.mutate({ canvasId });
+
   getProject = (canvasId: string, version: number) =>
     lambdaClient.canvas.getProject.query({ canvasId, version });
 
   getVersion = (canvasId: string, version?: number) =>
     lambdaClient.canvas.getVersion.query({ canvasId, version });
+
+  listStorage = () => lambdaClient.canvas.listStorage.query();
 
   listVersions = (canvasId: string) => lambdaClient.canvas.listVersions.query({ canvasId });
 
