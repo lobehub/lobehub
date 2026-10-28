@@ -868,6 +868,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 
+## Modelflare
+
+### `MODELFLARE_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the Modelflare service. Setting it enables the Modelflare provider for all users of the deployment.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `MODELFLARE_PROXY_URL`
+
+- Type: Optional
+- Description: The base URL of the Modelflare API. Point this at a mirror or backup endpoint; defaults to the official endpoint when unset.
+- Default: `https://modelflare.dev/v1`
+- Example: `https://your-modelflare-endpoint.com/v1`
+
+### `MODELFLARE_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the Modelflare model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+gpt-5.4,+deepseek-v4-flash=DeepSeek V4 Flash`
+
 ## Straico
 
 ### `STRAICO_API_KEY`
