@@ -13,6 +13,8 @@ interface UseFollowUpQueueParams {
   enabled: boolean;
   /** Whether the user has the composer open. */
   expanded: boolean;
+  /** Opens the composer without focusing it. */
+  reveal: () => void;
 }
 
 /**
@@ -24,11 +26,12 @@ interface UseFollowUpQueueParams {
  *
  * Returns:
  * - `hasQueuedMessages`: whether the queue tray has rows to show.
- * - `composerExpanded`: whether the composer must be open — it stays open while
- *   anything is queued, since Edit withdraws the message into its editor and a
- *   collapsed composer would lose the text.
+ * - `composerExpanded`: whether the composer must be open. A queued follow-up
+ *   opens it for good, not only while queued: Edit withdraws the last message
+ *   into the editor, which empties the queue, and a composer that collapsed then
+ *   would lose the text.
  */
-export const useFollowUpQueue = ({ editor, enabled, expanded }: UseFollowUpQueueParams) => {
+export const useFollowUpQueue = ({ editor, enabled, expanded, reveal }: UseFollowUpQueueParams) => {
   const context = useConversationStore((s) => s.context);
   const storeApi = useConversationStoreApi();
 
@@ -42,6 +45,10 @@ export const useFollowUpQueue = ({ editor, enabled, expanded }: UseFollowUpQueue
   useEffect(() => {
     if (editor) storeApi.setState({ editor });
   }, [editor, storeApi]);
+
+  useEffect(() => {
+    if (hasQueuedMessages) reveal();
+  }, [hasQueuedMessages, reveal]);
 
   return { composerExpanded: expanded || hasQueuedMessages, hasQueuedMessages };
 };

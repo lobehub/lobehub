@@ -43,7 +43,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
-    const { collapse, expand, expanded, handleEditorInit } = useComposerFocus({
+    const { collapse, expand, expanded, handleEditorInit, reveal } = useComposerFocus({
       defaultExpanded,
       editor,
       focusRequest,
@@ -59,6 +59,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
       editor,
       enabled: canUseResource,
       expanded,
+      reveal,
     });
 
     const canSubmit = hasContent || hasAttachments;
