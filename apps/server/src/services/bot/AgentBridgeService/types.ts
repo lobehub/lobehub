@@ -26,6 +26,11 @@ export interface ThreadState {
 export interface BridgeHandlerOpts {
   agentId: string;
   botContext?: ChatTopicBotContext;
+  /**
+   * The bot's settings. Local mode completes in-process, so it records the bot-wake outcome
+   * (follow-up window, silent-wake budget, stand-down) itself; queue mode reads them in the callback.
+   */
+  botSettings?: Record<string, unknown>;
   charLimit?: number;
   client?: PlatformClient;
   displayToolCalls?: boolean;

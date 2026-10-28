@@ -28,6 +28,7 @@ import {
   renderStopped,
   splitMessage,
 } from '../replyTemplate';
+import { recordWakeRunOutcome } from '../wake/scheduler';
 import type {
   BridgeExecutionDeps,
   BridgeExecutionResult,
@@ -52,6 +53,8 @@ export async function executeWithHooksLocalMode(
     botContext?: ChatTopicBotContext;
     botPlatformContext?: BotPlatformContext;
     botSender?: BotSenderMetadata;
+    /** The bot's settings, for the bot-wake bookkeeping done at completion. */
+    botSettings?: Record<string, unknown>;
     callbackUrl: string;
     charLimit?: number;
     channelContext?: DiscordChannelContext;
@@ -84,6 +87,7 @@ export async function executeWithHooksLocalMode(
     botContext,
     botPlatformContext,
     botSender,
+    botSettings,
     callbackUrl,
     charLimit,
     channelContext,
@@ -294,6 +298,32 @@ export async function executeWithHooksLocalMode(
                   hasAttachments: !!(event.attachments as unknown[] | undefined)?.length,
                   wakeKind,
                 });
+                // Bot-wake bookkeeping (follow-up window, silent-wake budget, stand-down), as the
+                // queue-mode callback does: best-effort and a no-op unless bot-wake is enabled.
+                if (botContext?.applicationId && botContext.platformThreadId) {
+                  try {
+                    await recordWakeRunOutcome({
+                      applicationId: botContext.applicationId,
+                      platform: botContext.platform,
+                      platformThreadId: botContext.platformThreadId,
+                      settings: botSettings,
+                      spoke: !noReply,
+                      // What was posted: without the stand-down marker, which is for the runtime.
+                      spoken: {
+                        id: event.operationId,
+                        text: extractStandDown(lastAssistantContent).content,
+                      },
+                      // A `STAND_DOWN` line after the reply, or `NO_REPLY:stand_down`.
+                      standDown:
+                        noReply?.reason === 'stand_down' ||
+                        extractStandDown(lastAssistantContent).standDown,
+                      wakeKind,
+                    });
+                  } catch (error) {
+                    log('executeWithCallback[local]: recordWakeRunOutcome failed: %O', error);
+                  }
+                }
+
                 if (noReply) {
                   log(
                     'onComplete: no_reply reason=%s operationId=%s',

@@ -127,6 +127,8 @@ export interface BotReplyVoice {
 export interface BotHandlerContext {
   agentId: string;
   applicationId: string;
+  /** The bot's settings, handed to the bridge for the bot-wake bookkeeping of local runs. */
+  botSettings?: Record<string, unknown>;
   /** The bot has the bot-wake scenario enabled: it listens to unaddressed channel chatter. */
   botWakeEnabled: boolean;
   bridge: AgentBridgeService;

@@ -22,6 +22,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
   const {
     agentId,
     applicationId,
+    botSettings,
     botWakeEnabled,
     bridge,
     canStandDown,
@@ -286,6 +287,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
             platform,
             platformThreadId: thread.id,
           }),
+          botSettings,
           charLimit,
           client,
           displayToolCalls,

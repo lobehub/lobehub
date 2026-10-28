@@ -55,6 +55,8 @@ export async function executeWithCallback(
   opts: {
     agentId: string;
     botContext?: ChatTopicBotContext;
+    /** The bot's settings; local mode records the bot-wake outcome with them. */
+    botSettings?: Record<string, unknown>;
     channelContext?: DiscordChannelContext;
     charLimit?: number;
     client?: PlatformClient;
@@ -387,6 +389,7 @@ export async function executeWithCallback(
     botContext,
     botPlatformContext,
     botSender,
+    botSettings: opts.botSettings,
     callbackUrl,
     charLimit,
     channelContext,
