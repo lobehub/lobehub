@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { ChatInputEditor } from '@/features/ChatInput';
+import { saveDraft } from '@/features/ChatInput/draftStorage';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { appendTaskAttachments } from '@/features/Home/InputArea/taskAttachments';
 import { taskNameFromMessage } from '@/features/Home/InputArea/taskName';
@@ -14,6 +15,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
@@ -42,43 +44,34 @@ const ensureAgentConfigLoaded = async (agentId: string) => {
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
 };
 
-/** How long a refused draft waits for the conversation's composer to mount. */
-const COMPOSER_MOUNT_TIMEOUT = 10_000;
-
-/**
- * Runs `apply` on the conversation's composer, waiting for it to mount when
- * the send fails before the page has rendered it.
- */
-const withConversationEditor = (apply: (editor: ChatInputEditor) => void) => {
-  const editor = useChatStore.getState().mainInputEditor;
-  if (editor) return apply(editor);
-
-  const timer = setTimeout(() => unsubscribe(), COMPOSER_MOUNT_TIMEOUT);
-  const unsubscribe = useChatStore.subscribe((state) => {
-    if (!state.mainInputEditor) return;
-    clearTimeout(timer);
-    unsubscribe();
-    apply(state.mainInputEditor);
-  });
-};
-
 /**
  * The composer that owns a send from the project home: the conversation page's,
  * which mounts only after the navigation. It is looked up when the send needs
- * it — to put a refused draft back — not when the send starts.
+ * it — to put a refused draft back — not when the send starts. Until it has
+ * mounted, the draft goes to the drafts that composer restores for this
+ * conversation: it settles its document after it first registers, which would
+ * wipe a draft written into the editor directly.
  */
-export const conversationComposer: ChatInputEditor = {
-  clearContent: () => withConversationEditor((editor) => editor.clearContent()),
-  focus: () => withConversationEditor((editor) => editor.focus()),
-  getJSONState: () => useChatStore.getState().mainInputEditor?.getJSONState(),
-  getMarkdownContent: () => useChatStore.getState().mainInputEditor?.getMarkdownContent() ?? '',
-  get instance() {
-    return useChatStore.getState().mainInputEditor?.instance as IEditor;
-  },
-  setDocument: (type, content, options) =>
-    withConversationEditor((editor) => editor.setDocument(type, content, options)),
-  setExpand: (expand) => withConversationEditor((editor) => editor.setExpand(expand)),
-  setJSONState: (content) => withConversationEditor((editor) => editor.setJSONState(content)),
+export const createConversationComposer = (draftKey: string): ChatInputEditor => {
+  const mounted = () => useChatStore.getState().mainInputEditor;
+
+  return {
+    clearContent: () => mounted()?.clearContent(),
+    focus: () => mounted()?.focus(),
+    getJSONState: () => mounted()?.getJSONState(),
+    getMarkdownContent: () => mounted()?.getMarkdownContent() ?? '',
+    get instance() {
+      return mounted()?.instance as IEditor;
+    },
+    // Only the plain-text fallback for a send without editor data comes here.
+    setDocument: (type, content, options) => mounted()?.setDocument(type, content, options),
+    setExpand: (expand) => mounted()?.setExpand(expand),
+    setJSONState: (content) => {
+      const editor = mounted();
+      if (editor) editor.setJSONState(content);
+      else saveDraft(draftKey, content);
+    },
+  };
 };
 
 export class AttachmentsNotReadyError extends Error {
@@ -146,6 +139,9 @@ export const useProjectComposer = (
       clearChatUploadFileList();
       navigate(getProjectTopicPath(project.slug ?? project.id, topic.id));
 
+      const conversationComposer = createConversationComposer(
+        messageMapKey({ agentId, topicId: topic.id }),
+      );
       let accepted = false;
       let restored = false;
       const restoreFiles = () => {

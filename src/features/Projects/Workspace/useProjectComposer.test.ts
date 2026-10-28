@@ -4,11 +4,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getDraft } from '@/features/ChatInput/draftStorage';
 import type { ProjectDetail } from '@/store/project';
 
 import {
   AttachmentsNotReadyError,
-  conversationComposer,
   toConversationTitle,
   useProjectComposer,
 } from './useProjectComposer';
@@ -21,7 +21,6 @@ const mocks = vi.hoisted(() => ({
   fileList: [] as unknown[],
   getAgentConfigById: vi.fn(),
   internal_dispatchAgentMap: vi.fn(),
-  chatListeners: new Set<(state: { mainInputEditor: unknown }) => void>(),
   mainInputEditor: null as unknown,
   navigate: vi.fn(),
   restoreChatUploadFileList: vi.fn(),
@@ -62,10 +61,6 @@ vi.mock('@/store/chat', () => {
   const state = () => ({ mainInputEditor: mocks.mainInputEditor, sendMessage: mocks.sendMessage });
   const useChatStore = Object.assign((selector: (s: unknown) => unknown) => selector(state()), {
     getState: state,
-    subscribe: (listener: (s: { mainInputEditor: unknown }) => void) => {
-      mocks.chatListeners.add(listener);
-      return () => mocks.chatListeners.delete(listener);
-    },
   });
   return { useChatStore };
 });
@@ -74,7 +69,6 @@ vi.mock('@/store/chat', () => {
 const mountConversationEditor = () => {
   const editor = { setDocument: vi.fn(), setJSONState: vi.fn() };
   mocks.mainInputEditor = editor;
-  for (const listener of mocks.chatListeners) listener({ mainInputEditor: editor });
   return editor;
 };
 
@@ -136,7 +130,7 @@ describe('useProjectComposer', () => {
     mocks.fileList = [];
     mocks.workspaceSlug = null;
     mocks.mainInputEditor = null;
-    mocks.chatListeners.clear();
+    localStorage.clear();
     // The conversation takes the message, then the run goes on in the background.
     mocks.sendMessage.mockImplementation(({ onMessageAccepted }) => {
       onMessageAccepted?.();
@@ -168,7 +162,7 @@ describe('useProjectComposer', () => {
       context: { agentId: 'coordinator', topicId: 'tpc_1' },
       editorData,
       files: [image],
-      inputEditor: conversationComposer,
+      inputEditor: expect.objectContaining({ setJSONState: expect.any(Function) }),
       message: 'Plan the next milestone\nwith details',
       onMessageAccepted: expect.any(Function),
       onPreflightFailure: expect.any(Function),
@@ -233,9 +227,10 @@ describe('useProjectComposer', () => {
    * @example Codex review: a preflight rejection was fire-and-forget while the
    * composer cleared itself and navigated, so the draft and attachments were lost.
    */
-  it('puts a draft the send refused back into the conversation composer once it mounts', async () => {
+  it('puts a draft the send refused back into the mounted conversation composer', async () => {
     mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
     mocks.fileList = [image];
+    const editor = mountConversationEditor();
     mocks.sendMessage.mockRejectedValue(new Error('device offline'));
     const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
 
@@ -243,11 +238,27 @@ describe('useProjectComposer', () => {
       await result.current.send(composer('Hello'));
     });
 
+    expect(editor.setJSONState).toHaveBeenCalledWith(editorData);
     expect(mocks.restoreChatUploadFileList).toHaveBeenCalledWith([image]);
     expect(mocks.toastError).toHaveBeenCalledWith('overview.messageNotSent');
+  });
 
-    const editor = mountConversationEditor();
-    expect(editor.setJSONState).toHaveBeenCalledWith(editorData);
+  /**
+   * @example Acceptance: a send refused before the conversation page had
+   * rendered its composer brought the attachment back but not the text — the
+   * composer settles its document after it registers and wiped what was
+   * written into it.
+   */
+  it('keeps a draft refused before the conversation composer mounts in that conversation', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    mocks.sendMessage.mockRejectedValue(new Error('device offline'));
+    const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
+
+    await act(async () => {
+      await result.current.send(composer('Hello'));
+    });
+
+    expect(getDraft('main_coordinator_tpc_1')).toEqual(editorData);
   });
 
   it('leaves the restore to the send when it recovered the draft itself', async () => {
