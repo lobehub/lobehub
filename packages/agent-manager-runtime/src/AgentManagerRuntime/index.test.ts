@@ -5,8 +5,8 @@ import { composioStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-import { AgentManagerRuntime } from '../AgentManagerRuntime';
 import type { IAgentService, IDiscoverService } from '../types';
+import { AgentManagerRuntime } from './index';
 
 /**
  * The `@/store/agent` mock below recreates a fresh object (with fresh

@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-import { AgentManagerRuntime } from '../AgentManagerRuntime';
 import type { IAgentService, IDiscoverService } from '../types';
+import { AgentManagerRuntime } from './index';
 
 /**
  * installPlugin branches: Composio, LobeHub Skill (both with OAuth windows),

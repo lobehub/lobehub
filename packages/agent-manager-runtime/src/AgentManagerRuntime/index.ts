@@ -46,7 +46,7 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { describeHeterogeneousAgent, renderHeteroRuntimeLines } from './heteroAgentDescriptor';
+import { describeHeterogeneousAgent, renderHeteroRuntimeLines } from '../heteroAgentDescriptor';
 import type {
   AgentManagerRuntimeServices,
   AgentSearchItem,
@@ -70,7 +70,7 @@ import type {
   UpdateAgentConfigState,
   UpdatePromptParams,
   UpdatePromptState,
-} from './types';
+} from '../types';
 
 /** Max results per searchAgents call (mirrored in the tool manifests: "max: 20") */
 const MAX_SEARCH_AGENT_LIMIT = 20;
