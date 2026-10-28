@@ -9,8 +9,9 @@ on:
     paths:
       - .github/workflows/preview-cli.yml
       - apps/cli/**
-      - apps/workbench/**
-      - packages/**
+  # Deliberately under-triggers: changes to bundled packages/* deps or the
+  # workbench report template do not auto-publish. Use workflow_dispatch on
+  # the branch when a preview of those is needed.
   workflow_dispatch: {}
 
 concurrency:
