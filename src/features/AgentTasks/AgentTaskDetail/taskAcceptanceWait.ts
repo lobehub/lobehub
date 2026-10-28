@@ -23,6 +23,13 @@ export interface TaskAcceptanceWait {
   total: number;
 }
 
+const TERMINAL_RUN_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
+
+type RunActivity = Pick<
+  TaskDetailActivity,
+  'id' | 'runningOperation' | 'sourceTaskId' | 'status' | 'verify'
+>;
+
 const resolvePhase = (status: string | null): TaskAcceptanceWaitPhase | undefined => {
   switch (status) {
     case null:
@@ -57,16 +64,20 @@ const resolvePhase = (status: string | null): TaskAcceptanceWaitPhase | undefine
  * The acceptance wait of one run whose agent has already stopped, if any.
  *
  * A run still holding a live operation is executing, whatever its round says.
+ * A missing operation marker alone is not proof the run stopped: it is written
+ * after the run starts. Phases past delivery only exist once the agent has
+ * delivered, but a round still awaiting evidence also needs the run itself to
+ * have reached a terminal status.
  */
-export const resolveRunAcceptanceWait = (
-  activity: Pick<TaskDetailActivity, 'id' | 'runningOperation' | 'verify'>,
-): TaskAcceptanceWait | undefined => {
+export const resolveRunAcceptanceWait = (activity: RunActivity): TaskAcceptanceWait | undefined => {
   if (activity.runningOperation) return undefined;
   const verify: TaskRunVerifySummary | null | undefined = activity.verify;
   if (!verify) return undefined;
 
   const phase = resolvePhase(verify.status);
   if (!phase) return undefined;
+  if (phase === 'awaitingEvidence' && !TERMINAL_RUN_STATUSES.has(activity.status ?? ''))
+    return undefined;
 
   return {
     acceptanceId: verify.acceptanceId,
@@ -86,12 +97,17 @@ export const resolveRunAcceptanceWait = (
  * "in progress" hides the one thing the user can act on. Returns the round the
  * task waits on, or `undefined` while any run is still executing (or the task
  * is not `running`), so an executing task never reads as waiting.
+ *
+ * A parent's detail also lists its descendants' runs (`sourceTaskId`); only
+ * the task's own runs decide.
  */
 export const resolveTaskAcceptanceWait = (
   status: string | undefined,
-  topics: Pick<TaskDetailActivity, 'id' | 'runningOperation' | 'verify'>[],
+  allTopics: RunActivity[],
+  taskId?: string | null,
 ): TaskAcceptanceWait | undefined => {
   if (status !== 'running') return undefined;
+  const topics = allTopics.filter((topic) => !topic.sourceTaskId || topic.sourceTaskId === taskId);
   if (topics.some((topic) => topic.runningOperation)) return undefined;
 
   // The newest round decides: an older round that is still open was superseded

@@ -78,16 +78,71 @@ describe('resolveRunAcceptanceWait', () => {
     ['delivered', 'awaitingReview'],
     ['failed', 'awaitingDecision'],
     ['errored', 'awaitingDecision'],
-  ] as const)('maps a %s round to %s', (status, phase) => {
+  ] as const)('maps a %s round of an ended run to %s', (status, phase) => {
     expect(
-      resolveRunAcceptanceWait({ id: 'tpc', runningOperation: null, verify: verify(status) })
-        ?.phase,
+      resolveRunAcceptanceWait({
+        id: 'tpc',
+        runningOperation: null,
+        status: 'completed',
+        verify: verify(status),
+      })?.phase,
     ).toBe(phase);
   });
 
   it('does not report a passed round as waiting', () => {
     expect(
       resolveRunAcceptanceWait({ id: 'tpc', runningOperation: null, verify: verify('passed') }),
+    ).toBeUndefined();
+  });
+});
+
+describe('acceptance wait evidence and scope', () => {
+  it('does not read a run that has not delivered yet as waiting before its marker is written', () => {
+    const starting = {
+      id: 'tpc-5',
+      runningOperation: null,
+      status: 'running',
+      verify: verify(null),
+    };
+
+    expect(resolveRunAcceptanceWait(starting)).toBeUndefined();
+    expect(resolveTaskAcceptanceWait('running', [starting])).toBeUndefined();
+  });
+
+  it('reads an undelivered round as waiting once its run has ended', () => {
+    const ended = {
+      id: 'tpc-5',
+      runningOperation: null,
+      status: 'completed',
+      verify: verify(null),
+    };
+
+    expect(resolveRunAcceptanceWait(ended)?.phase).toBe('awaitingEvidence');
+  });
+
+  it("ignores a descendant task's runs when resolving the parent", () => {
+    const own = { id: 'tpc-1', runningOperation: null, verify: verify('repairing', 2, 4) };
+    const childWaiting = {
+      id: 'tpc-c1',
+      runningOperation: null,
+      sourceTaskId: 'task-child',
+      verify: verify('delivered', 4, 4),
+    };
+    const childLive = {
+      id: 'tpc-c2',
+      runningOperation: liveOperation,
+      sourceTaskId: 'task-child',
+      verify: null,
+    };
+
+    expect(
+      resolveTaskAcceptanceWait('running', [own, childWaiting, childLive], 'task-parent'),
+    ).toMatchObject({
+      phase: 'repairing',
+      topicId: 'tpc-1',
+    });
+    expect(
+      resolveTaskAcceptanceWait('running', [{ ...own, verify: null }, childWaiting], 'task-parent'),
     ).toBeUndefined();
   });
 });
