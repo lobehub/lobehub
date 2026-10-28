@@ -539,6 +539,36 @@ describe('AcceptanceModel', () => {
         (await teammateModel.query({ scope: 'created' })).map((row) => row.subjectId).sort(),
       ).toEqual(['only-teammate', 'team']);
     });
+
+    it('keeps an only-me acceptance and its rounds within its creator ownership scope', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      const acceptance = await model.create({ subjectId: 'flip', subjectType: 'standalone' });
+      const runs = new VerifyRunModel(serverDB, userId, workspaceId);
+      const run = await runs.create({ goal: 'g' });
+      await runs.attachToAcceptance(run.id, acceptance.id);
+
+      await model.update(acceptance.id, { visibility: 'owner' });
+      await runs.setVisibilityByAcceptance(acceptance.id, 'owner');
+
+      // The creator still reads and writes it, and still sees its rounds.
+      expect((await model.findById(acceptance.id))?.visibility).toBe('owner');
+      expect((await runs.listByAcceptance(acceptance.id)).map((row) => row.id)).toEqual([run.id]);
+      await model.update(acceptance.id, { visibility: 'private' });
+      expect((await model.findById(acceptance.id))?.visibility).toBe('private');
+
+      // A teammate's ownership scope never reaches an owner row.
+      await model.update(acceptance.id, { visibility: 'owner' });
+      expect(
+        await new AcceptanceModel(serverDB, otherUserId, workspaceId).findById(acceptance.id),
+      ).toBeUndefined();
+    });
   });
 
   it('updateStatus stamps completedAt only on user-terminal statuses', async () => {
