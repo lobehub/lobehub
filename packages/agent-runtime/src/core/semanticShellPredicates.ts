@@ -208,13 +208,25 @@ const substitutionPayloads = (word: string): string[] => {
       // `$((…))` is arithmetic, not a command substitution.
       if (word[index + 2] === '(') continue;
       let depth = 0;
+      let body: string | undefined;
       for (let cursor = index + 1; cursor < word.length; cursor++) {
         if (word[cursor] === '(') depth++;
         else if (word[cursor] === ')' && --depth === 0) {
-          payloads.push(word.slice(index + 2, cursor));
+          body = word.slice(index + 2, cursor);
           index = cursor;
           break;
         }
+      }
+      // Quoting provenance is gone by now (the tokenizer strips quotes), so a
+      // parenthesis that was QUOTED arrives as a bare one and the depth counter
+      // either never closes (`echo $(printf "("; rm -rf ~)`) or closes on the
+      // wrong paren (`echo $(printf ")"; rm -rf ~)`). Re-analyze the whole
+      // remainder as a payload in both cases instead of trusting the split:
+      // the executed command is still in there, merely with a stray paren.
+      const tail = word.slice(index + 2).replace(/\)$/, '');
+      for (const candidate of [body, tail]) {
+        if (candidate && candidate.trim() && !payloads.includes(candidate))
+          payloads.push(candidate);
       }
       continue;
     }
@@ -252,7 +264,14 @@ const hasAmbiguousRmShape = (
 ): boolean => {
   // Confident rm resolution is handled by the precise predicates; here we
   // catch segments where the command slot is NOT a confidently-parsed rm.
-  if (segment.resolvedCommand === 'rm') return false;
+  // A resolved rm still needs its substitutions inspected: in
+  // `rm -f $(rm -rf ~)` the precise predicates see only the OUTER `-f`, while
+  // the substitution deletes the home directory before the outer rm runs.
+  if (segment.resolvedCommand === 'rm') {
+    return segment.words.some((word) =>
+      substitutionPayloads(word).some((payload) => payloadIsDangerous(payload, depth, predicate)),
+    );
+  }
   if (segment.resolvedCommand !== null && !AMBIGUOUS_COMMAND_HINTS.has(segment.resolvedCommand)) {
     // Resolved to an unrelated confident command (echo, ls, …) — a bare `rm`
     // word in this segment belongs to a quoted string or argument of THAT

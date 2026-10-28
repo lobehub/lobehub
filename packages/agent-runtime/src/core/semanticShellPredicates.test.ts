@@ -944,5 +944,39 @@ describe('matchSemanticShellPredicate', () => {
         true,
       );
     });
+
+    // A confident outer `rm` says nothing about its own substitutions: the
+    // substitution runs FIRST, and the outer flags are the only ones the
+    // precise resolvers see. `rm -f $(rm -rf ~)` therefore deletes home while
+    // the outer command carries no recursive flag at all.
+    it('inspects substitutions of a resolved rm command', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm -f $(rm -rf ~)')).toBe(true);
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm -f $(rm -rf ~); echo ~'),
+      ).toBe(true);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'rm -f $(rm -rf /)')).toBe(true);
+    });
+
+    // Quoting provenance is stripped before the predicate layer sees a word, so
+    // a QUOTED parenthesis arrives bare and the depth counter closes on the
+    // wrong one (or never closes). The remainder is still analyzed, so the
+    // executed delete cannot hide behind the unbalanced paren.
+    it.each([
+      'echo $(printf "("; rm -rf ~)',
+      'echo $(printf "("; rm -rf ~); echo ~',
+      'echo $(printf ")"; rm -rf ~)',
+      'echo $(printf ")"; rm -rf ~); echo ~',
+    ])('analyzes the substitution body when a quoted paren unbalances it: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it('leaves a resolved rm with a harmless substitution alone', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm -rf $(dirname /tmp/x)')).toBe(
+        false,
+      );
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'rm -rf $(pwd)/cache')).toBe(
+        false,
+      );
+    });
   });
 });
