@@ -32,6 +32,9 @@ export const installPlugin = async (
 ): Promise<BuiltinToolResult> => {
   const { identifier, source } = params;
 
+  // Each branch is `return await`ed: a bare `return` hands back the pending
+  // promise, so a store rejection would skip this catch and reach the caller
+  // as a thrown error instead of a failed install result.
   try {
     const toolState = getToolStoreState();
 
@@ -51,7 +54,7 @@ export const installPlugin = async (
         const composioServer = composioStoreSelectors
           .getServers(toolState)
           .find((s) => s.identifier === identifier);
-        return handleComposioInstall(
+        return await handleComposioInstall(
           agentService,
           agentId,
           identifier,
@@ -64,7 +67,7 @@ export const installPlugin = async (
         const lobehubSkillServer = lobehubSkillStoreSelectors
           .getServers(toolState)
           .find((s) => s.identifier === identifier);
-        return handleLobehubSkillInstall(
+        return await handleLobehubSkillInstall(
           agentService,
           agentId,
           identifier,
@@ -105,7 +108,7 @@ export const installPlugin = async (
     }
 
     // Source is 'market' - MCP marketplace plugin
-    return handleMarketPluginInstall(agentService, agentId, identifier);
+    return await handleMarketPluginInstall(agentService, agentId, identifier);
   } catch (error) {
     const err = error as Error;
     return handleErrorWithState(error, 'Failed to install plugin', {

@@ -302,6 +302,18 @@ describe('installPlugin · market', () => {
     });
   });
 
+  it('turns an async install failure into a failed result instead of rejecting', async () => {
+    mocks.toolState.installMCPPlugin.mockRejectedValue(new Error('network down'));
+
+    const result = await install('weather', 'market');
+
+    expect(result).toMatchObject({
+      content: 'Failed to install plugin: network down',
+      state: { error: 'network down', installed: false, pluginId: 'weather' },
+      success: false,
+    });
+  });
+
   it('turns a thrown error into a failed result that keeps the plugin state', async () => {
     mocks.resolveConnector.mockImplementation(() => {
       throw new Error('boom');
