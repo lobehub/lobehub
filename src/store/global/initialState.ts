@@ -635,7 +635,12 @@ export const INITIAL_STATUS = {
   showFilePanel: true,
   showHomePortrait: true,
   showHotkeyHelper: false,
-  showHomeRail: true,
+  /**
+   * One column by default: most people prefer the single-column Home. Only
+   * browsers without a stored preference get this, because `updateSystemStatus`
+   * persists the whole status, so earlier sessions already stored `true`.
+   */
+  showHomeRail: false,
   showImagePanel: true,
   showImageTopicPanel: true,
   showAgentBuilderPanel: false,

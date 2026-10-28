@@ -99,7 +99,7 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   toggleHomeRail = (newValue?: boolean): void => {
-    const currentValue = this.#get().status.showHomeRail ?? true;
+    const currentValue = this.#get().status.showHomeRail ?? false;
     const showHomeRail = typeof newValue === 'boolean' ? newValue : !currentValue;
 
     this.#get().updateSystemStatus({ showHomeRail }, n('toggleHomeRail', newValue));

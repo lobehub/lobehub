@@ -13,6 +13,7 @@ interface RenderHomeOptions {
   promo?: ReactNode;
   search?: string;
   showHomePortrait?: boolean;
+  showHomeRail?: boolean;
 }
 
 const stub = (testId: string) => ({ default: () => <div data-testid={testId} /> });
@@ -49,6 +50,7 @@ const renderHome = async ({
   promo,
   search = '',
   showHomePortrait,
+  showHomeRail,
 }: RenderHomeOptions = {}) => {
   vi.resetModules();
   window.history.replaceState(null, '', `/${search}`);
@@ -76,7 +78,9 @@ const renderHome = async ({
     },
   }));
   function selectFromGlobalStore(selector: (state: unknown) => unknown) {
-    return selector({ status: { hiddenHomeWidgets: hiddenWidgets, showHomePortrait } });
+    return selector({
+      status: { hiddenHomeWidgets: hiddenWidgets, showHomePortrait, showHomeRail },
+    });
   }
   vi.doMock('@/store/global', () => ({ useGlobalStore: selectFromGlobalStore }));
   function selectFromUserStore(selector: (state: unknown) => unknown) {
@@ -215,8 +219,15 @@ describe('Home portrait visibility', () => {
 });
 
 describe('Home rail layout', () => {
-  it('paints the rail inbox in the first commit, without a suspended empty frame', async () => {
+  it('opens in one column when the browser has no stored rail choice', async () => {
     await renderHome();
+
+    expect(screen.getByTestId('home-rail')).toHaveAttribute('data-collapsed', 'true');
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
+  }, 20000);
+
+  it('paints the rail inbox in the first commit, without a suspended empty frame', async () => {
+    await renderHome({ showHomeRail: true });
 
     expect(screen.getByTestId('home-rail')).toContainElement(screen.getByTestId('home-inbox'));
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
@@ -231,6 +242,7 @@ describe('Home rail layout', () => {
           return <div data-testid={'home-inbox'} />;
         },
       }),
+      showHomeRail: true,
     });
 
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');

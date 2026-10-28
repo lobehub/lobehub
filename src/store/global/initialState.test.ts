@@ -40,6 +40,16 @@ describe('createInitialSystemStatus', () => {
     expect(status.workingSidebarWidth).toBe(480);
   });
 
+  it('opens Home in one column for a browser without a stored rail choice', () => {
+    expect(createInitialSystemStatus().showHomeRail).toBe(false);
+  });
+
+  it('keeps the rail open for browsers that already stored it', () => {
+    seed({ showHomeRail: true });
+
+    expect(createInitialSystemStatus().showHomeRail).toBe(true);
+  });
+
   it('falls back to defaults when nothing is persisted', () => {
     const status = createInitialSystemStatus();
 
