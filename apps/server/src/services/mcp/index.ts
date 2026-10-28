@@ -159,7 +159,10 @@ export class MCPService {
             return undefined as T;
           }
           // Only retry for NoValidSessionId errors
-          if (!(error instanceof McpCallNotStartedError) && (error as Error).message !== 'NoValidSessionId') {
+          if (
+            !(error instanceof McpCallNotStartedError && error.retryable) &&
+            (error as Error).message !== 'NoValidSessionId'
+          ) {
             console.error('MCP operation failed:', {
               ...operationLog,
               error: getMCPErrorLogMetadata(error),
@@ -367,7 +370,7 @@ export class MCPService {
       }
     };
 
-    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, { mcpApps, scope: options.elicitation?.scope ?? 'tool' });
+    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, { mcpApps, scope: `${options.elicitation?.scope ?? 'tool'}:${options.elicitation?.host ? 'elicitation' : 'plain'}` });
   }
 
   // Private method to get or initialize a client based on parameters
@@ -397,7 +400,7 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, { mcpApps });
+      const client = new MCPClient(params, { mcpApps, elicitationEnabled: scope.endsWith(':elicitation') });
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);

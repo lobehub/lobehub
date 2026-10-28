@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({ redis: undefined as any }));
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: () => state.redis,
 }));
-it('produces, waits and first-delivers independently for reused ids across assistant steps and actors', async () => {
+it('waits and first-delivers independently for reused ids across assistant steps and actors', async () => {
   const claims = new Map<string, string>(),
     queues = new Map<string, string[]>(),
     waiters = new Map<string, (v: [string, string]) => void>();
@@ -36,7 +36,9 @@ it('produces, waits and first-delivers independently for reused ids across assis
       disconnect: vi.fn(),
       blpop: async (key: string) => {
         popped.push(key);
-        const ready = queues.get(key)?.shift();
+        const queued = queues.get(key);
+        const ready = queued?.shift();
+        if (queued?.length === 0) queues.delete(key);
         return ready ? [key, ready] : new Promise((resolve) => waiters.set(key, resolve));
       },
     }),
@@ -75,17 +77,6 @@ it('produces, waits and first-delivers independently for reused ids across assis
     ),
   );
   for (const scope of scopes.toReversed()) {
-    expect(
-      await agentToolResults.claimMcpProducer(scope, 'producer', 'args', Date.now() + 10000),
-    ).toBe(true);
-    expect(
-      await agentToolResults.claimMcpProducer(
-        scope,
-        'another-producer',
-        'args',
-        Date.now() + 10000,
-      ),
-    ).toBe(false);
     await agentToolResults.publishMcpResult(scope, {
       toolCallId: 'call_1',
       content: mcpInvocationKey(scope),

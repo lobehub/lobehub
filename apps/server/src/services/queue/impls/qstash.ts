@@ -17,7 +17,7 @@ const log = debug('lobe-server:service:queue:qstash');
 const toQStashDelaySeconds = (delayMs: number): number | undefined => {
   if (delayMs <= 0) return undefined;
 
-  return Math.max(1, Math.round(delayMs / 1000));
+  return Math.max(1, Math.ceil(delayMs / 1000));
 };
 
 /**

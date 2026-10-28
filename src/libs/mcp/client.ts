@@ -175,6 +175,7 @@ async function preCheckStdioCommand(params: {
 }
 
 export interface MCPClientOptions {
+  elicitationEnabled?: boolean;
   /**
    * Advertise MCP Apps (SEP-1865) during `initialize`, so servers expose their
    * interactive views. Off: the client announces itself as it did before MCP
@@ -200,7 +201,7 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
+  constructor(params: MCPClientParams, { mcpApps = false, elicitationEnabled = false }: MCPClientOptions = {}) {
     this.params = params;
     this.mcp = new McpProtocolClient(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
@@ -219,7 +220,7 @@ export class MCPClient {
       this.forgetToolListing(),
     );
 
-    this.elicitation = new McpElicitationClient(this.mcp);
+    this.elicitation = new McpElicitationClient(this.mcp, elicitationEnabled);
 
     switch (params.type) {
       case 'http': {
@@ -380,7 +381,7 @@ export class MCPClient {
   }
 
   async disconnect() {
-    await this.mcp.close();
+    await this.elicitation.closeWhenIdle();
     log('MCP connection disconnected.');
   }
 

@@ -1,26 +1,44 @@
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import type { McpElicitationService } from './McpElicitationService';
+import { recoverMcpElicitationResume } from './queue';
 
 /** Durable deadline callback. Old rounds cannot expire a newer request on the same tool. */
 export async function expireMcpElicitation(
   service: McpElicitationService,
   itemId: string,
   runtime: Pick<AgentRuntimeService, 'controlCompletedToolResult' | 'tryResumeParentFromAsyncTool'>,
+  options: { rearm?: boolean } = {},
 ) {
   const item = await service.get(itemId);
   if (
     !item.toolMessageId ||
-    item.deadline.getTime() > Date.now() ||
     !['timed_out', 'session_ended', 'pending', 'resolving'].includes(item.status)
   )
     return;
+  // The durable wakeup also drives saved-answer recovery, independently of any open page.
+  if (item.status === 'resolving') await recoverMcpElicitationResume(service, item.id);
+  if (item.deadline.getTime() > Date.now()) {
+    await service.scheduleExpiry(
+      item.id,
+      item.operationId,
+      Math.min(item.deadline.getTime(), Date.now() + 30_000),
+      0,
+      true,
+    );
+    return;
+  }
   const plugin = await service.messages.findMessagePlugin(item.toolMessageId);
   const stored = plugin?.state?.mcpElicitation as { batchId?: string } | undefined;
   if (!stored || stored.batchId !== item.batchId) return;
   const operation = await service.operations.findById(item.operationId);
   if (!operation || ['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)) {
-    await service.interventions.markBatchTerminal(item.operationId, item.batchId, 'session_ended');
+    const terminal = await service.interventions.markBatchTerminal(
+      item.operationId,
+      item.batchId,
+      'session_ended',
+    );
+    if (!terminal.some((row) => row.id === item.id && row.status === 'session_ended')) return;
     await service.messages.updateMessagePlugin(item.toolMessageId, {
       intervention: { batchId: item.batchId, operationId: item.operationId, status: 'none' },
     });
@@ -28,7 +46,27 @@ export async function expireMcpElicitation(
   }
   const { identity, pending } = await service.loadContinuation(item.toolMessageId);
   if (pending.batchId !== item.batchId) return;
-  await service.interventions.markBatchTerminal(item.operationId, item.batchId, 'timed_out');
+  const terminal = await service.interventions.markBatchTerminal(
+    item.operationId,
+    item.batchId,
+    'timed_out',
+  );
+  if (!terminal.some((row) => row.id === item.id && row.status === 'timed_out')) {
+    const execution = await service.invocations.execution(item.id);
+    if (
+      options.rearm !== false &&
+      (execution?.state === 'executing' || execution?.state === 'completed')
+    )
+      await service.scheduleExpiry(
+        item.id,
+        item.operationId,
+        Math.min(execution.leaseExpiresAt?.getTime() ?? Date.now() + 30_000, Date.now() + 30_000) +
+          500,
+        0,
+        true,
+      );
+    return;
+  }
   const controlled = await runtime.controlCompletedToolResult({
     operationId: item.operationId,
     toolMessageId: item.toolMessageId,
@@ -47,7 +85,7 @@ export async function expireMcpElicitation(
     content: controlled.result.content,
     onlyIfEmpty: true,
     pluginError: controlled.result.error ?? null,
-    pluginState: controlled.result.state,
+    pluginState: { ...controlled.result.state, mcpClientComplete: true },
   });
   await service.messages.updateMessagePlugin(item.toolMessageId, {
     intervention: { batchId: item.batchId, operationId: item.operationId, status: 'none' },

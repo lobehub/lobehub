@@ -386,6 +386,7 @@ export class MCPClient {
     params: MCPClientParams,
     {
       mcpApps = false,
+      elicitationEnabled = false,
     }: {
       /**
        * Announce MCP Apps (SEP-1865), so servers expose their interactive views.
@@ -393,6 +394,7 @@ export class MCPClient {
        * announcing client with app-specific results instead of its text fallback.
        */
       mcpApps?: boolean;
+      elicitationEnabled?: boolean;
     } = {},
   ) {
     this.mcp = new McpProtocolClient(
@@ -419,7 +421,9 @@ export class MCPClient {
       this.toolListingFailedAt = undefined;
     });
 
-    this.elicitation = new McpElicitationClient(this.mcp, true, () => this.disconnect());
+    this.elicitation = new McpElicitationClient(this.mcp, elicitationEnabled, () =>
+      this.disconnect(),
+    );
 
     switch (params.type) {
       case 'http': {

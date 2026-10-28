@@ -1,10 +1,23 @@
-import type { AgentRuntimeHost, AgentState } from '@lobechat/agent-runtime';
-import { describe, expect, it, vi } from 'vitest';
+import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatStore } from '@/store/chat/store';
 
-import { handoffClientMcpTools } from './handoffClientMcpTools';
+import { prepareClientMcpTools } from './handoffClientMcpTools';
 
+const api = vi.hoisted(() => ({ register: vi.fn(), lease: vi.fn(), cancel: vi.fn() }));
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => null,
+}));
+vi.mock('@/libs/trpc/client', () => ({
+  createWorkspaceLambdaClient: () => ({
+    mcpElicitation: {
+      registerClientStep: { mutate: api.register },
+      leaseClientStep: { mutate: api.lease },
+      cancelClientStep: { mutate: api.cancel },
+    },
+  }),
+}));
 const tool = {
   id: 'call_1',
   identifier: 'fixture',
@@ -12,102 +25,113 @@ const tool = {
   arguments: '{"zero":0}',
   type: 'mcp' as const,
 };
-function fixture(assistantMessageId = 'assistant-one') {
-  const rows: unknown[] = [];
-  const messages = {
-    findById: vi.fn().mockResolvedValue({ id: assistantMessageId, role: 'assistant' }),
-    createToolMessage: vi.fn(async (params) => {
-      rows.push(params);
-      return { id: `row-${assistantMessageId}-${rows.length}` };
-    }),
-    updateToolIntervention: vi.fn(),
-  };
+function fixture() {
+  const callbacks: (() => Promise<void>)[] = [];
+  const controller = new AbortController();
+  const create = vi.fn(async () => ({ id: `row-${create.mock.calls.length}` }));
   const host = {
-    operation: { operationId: 'client-only', agentId: 'agent', topicId: 'topic' },
-    transports: { messages },
+    operation: { operationId: 'local', agentId: 'agent', topicId: 'topic' },
+    transports: {
+      messages: {
+        findById: vi.fn().mockResolvedValue({ id: 'assistant', role: 'assistant' }),
+        createToolMessage: create,
+      },
+    },
   } as unknown as AgentRuntimeHost;
-  const executeGatewayAgent = vi.fn().mockResolvedValue({ success: true });
   const store = {
-    operations: { 'client-only': { context: { agentId: 'agent', topicId: 'topic' } } },
-    executeGatewayAgent,
+    operations: { local: { context: {}, abortController: controller } },
+    updateOperationMetadata: vi.fn(),
+    executeGatewayAgent: vi.fn(),
+    registerAfterCompletionCallback: vi.fn((_id, cb) => callbacks.push(cb)),
   } as unknown as ChatStore;
-  return { host, store, messages, executeGatewayAgent, rows };
+  api.lease.mockResolvedValue(undefined);
+  api.cancel.mockResolvedValue(true);
+  api.register.mockResolvedValue({ operationId: 'durable', deadline: Date.now() + 120_000 });
+  return { host, store, create, callbacks, controller };
 }
-describe('client MCP durable handoff', () => {
-  it('persists the exact client invocation then parks its loop while the existing approval continuation owns execution', async () => {
-    const { host, store, messages, executeGatewayAgent } = fixture();
-    const state = {
-      status: 'running',
-      pendingToolMessageIds: { call_1: 'earlier' },
-    } as unknown as AgentState;
-    const result = await handoffClientMcpTools(
-      host,
-      { type: 'call_tool', payload: { parentMessageId: 'assistant-one', toolCalling: tool } },
-      state,
-      () => store,
-    );
-    expect(messages.createToolMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        parentId: 'assistant-one',
-        tool_call_id: 'call_1',
-        plugin: tool,
-        pluginIntervention: { status: 'pending' },
-      }),
-    );
-    expect(executeGatewayAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        resumeApprovals: [
-          { decision: 'approved', parentMessageId: 'row-assistant-one-1', toolCallId: 'call_1' },
-        ],
-      }),
-    );
-    expect(result).toMatchObject({
-      events: [],
-      newState: { status: 'waiting_for_human', pendingToolMessageIds: undefined },
-    });
-    expect(state.status).toBe('running');
-  });
-  it('hands a mixed approved batch over once, retaining original ids and arguments', async () => {
-    const { host, store, messages, executeGatewayAgent } = fixture();
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.useRealTimers();
+});
+describe('client MCP persistence preserves execution mode', () => {
+  it('keeps mixed tools on the original client executors without requiring or consulting Gateway', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
     const builtin = { ...tool, id: 'call_2', type: 'builtin' as const };
-    await handoffClientMcpTools(
-      host,
+    const prepared = await prepareClientMcpTools(
+      f.host,
       {
         type: 'call_tools_batch',
-        payload: { parentMessageId: 'assistant-one', toolsCalling: [tool, builtin] },
-      },
-      {} as AgentState,
-      () => store,
-    );
-    expect(messages.createToolMessage).toHaveBeenCalledTimes(2);
-    expect(executeGatewayAgent).toHaveBeenCalledOnce();
-    expect(executeGatewayAgent.mock.calls[0][0].resumeApprovals.map((x) => x.toolCallId)).toEqual([
-      'call_1',
-      'call_2',
-    ]);
-  });
-  it('does not hand off ordinary client tools or report a failed start as a completed invocation', async () => {
-    const { host, store, executeGatewayAgent } = fixture();
-    expect(
-      await handoffClientMcpTools(
-        host,
-        {
-          type: 'call_tool',
-          payload: { parentMessageId: 'assistant-one', toolCalling: { ...tool, type: 'builtin' } },
+        payload: {
+          parentMessageId: 'assistant',
+          toolsCalling: [tool, builtin],
         },
-        {} as AgentState,
-        () => store,
-      ),
-    ).toBeUndefined();
-    expect(executeGatewayAgent).not.toHaveBeenCalled();
-    executeGatewayAgent.mockResolvedValue({ success: false, error: 'queue unavailable' });
+      },
+      () => f.store,
+    );
+    expect(f.create).toHaveBeenCalledTimes(2);
+    expect(f.create.mock.calls[0][0]).not.toHaveProperty('pluginIntervention');
+    expect(api.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assistantMessageId: 'assistant',
+        toolMessageIds: ['row-1', 'row-2'],
+      }),
+    );
+    expect(prepared).toMatchObject({
+      type: 'call_tools_batch',
+      payload: {
+        toolsCalling: [tool, builtin],
+        existingToolMessageIds: { call_1: 'row-1', call_2: 'row-2' },
+      },
+    });
+    expect(f.store.executeGatewayAgent).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(api.lease).toHaveBeenCalledOnce();
+    await f.callbacks[0]();
+    expect(api.lease).toHaveBeenLastCalledWith(expect.objectContaining({ finish: true }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(api.lease).toHaveBeenCalledTimes(2);
+  });
+  it('reuses approved tool messages, preserves original visible IDs and stops heartbeats on cancel', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const prepared = await prepareClientMcpTools(
+      f.host,
+      {
+        type: 'call_tool',
+        payload: {
+          parentMessageId: 'existing-tool',
+          skipCreateToolMessage: true,
+          toolCalling: tool,
+        },
+      },
+      () => f.store,
+    );
+    expect(f.create).not.toHaveBeenCalled();
+    expect(prepared).toMatchObject({
+      payload: { parentMessageId: 'existing-tool', toolCalling: tool, skipCreateToolMessage: true },
+    });
+    f.controller.abort();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(api.lease).not.toHaveBeenCalled();
+    expect(api.cancel).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'durable' }));
+  });
+  it('leaves non-MCP instructions unchanged and never executes after persistence fails', async () => {
+    const f = fixture();
+    const plain = {
+      type: 'call_tool' as const,
+      payload: { parentMessageId: 'assistant', toolCalling: { ...tool, type: 'builtin' as const } },
+    };
+    expect(await prepareClientMcpTools(f.host, plain, () => f.store)).toBe(plain);
+    expect(api.register).not.toHaveBeenCalled();
+    api.register.mockRejectedValueOnce(new Error('persistence unavailable'));
     await expect(
-      handoffClientMcpTools(
-        host,
-        { type: 'call_tool', payload: { parentMessageId: 'assistant-one', toolCalling: tool } },
-        {} as AgentState,
-        () => store,
+      prepareClientMcpTools(
+        f.host,
+        { ...plain, payload: { ...plain.payload, toolCalling: tool } },
+        () => f.store,
       ),
-    ).rejects.toThrow('queue unavailable');
+    ).rejects.toThrow('persistence unavailable');
+    expect(f.store.executeGatewayAgent).not.toHaveBeenCalled();
   });
 });

@@ -317,7 +317,7 @@ export class PluginTypesActionImpl {
   invokeMCPTypePlugin = async (
     id: string,
     payload: ChatToolPayload,
-  ): Promise<string | undefined> => {
+  ): Promise<MCPToolCallResult | undefined> => {
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract agentId/topicId
@@ -327,6 +327,11 @@ export class PluginTypesActionImpl {
     const operationId = this.#get().messageOperationMap[id];
     const operation = operationId ? this.#get().operations[operationId] : undefined;
     const abortController = operation?.abortController;
+    let root = operation;
+    while (root && !root.metadata.mcpClientStep && root.parentOperationId)
+      root = this.#get().operations[root.parentOperationId];
+    const clientStep = root?.metadata.mcpClientStep as
+      { operationId: string; deadline: number; workspaceId?: string } | undefined;
 
     log(
       '[invokeMCPTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
@@ -338,8 +343,9 @@ export class PluginTypesActionImpl {
 
     try {
       const result = await mcpService.invokeMcpToolCall(payload, {
+        clientRuntime: !!clientStep,
         // Resolve connectors as this agent's runs do: a linked one serves only its agent
-        agentId: message?.agentId ?? undefined,
+        agentId: message?.agentId ?? operation?.context?.agentId ?? undefined,
         elicitation:
           operationId && message?.parentId
             ? {
@@ -347,12 +353,14 @@ export class PluginTypesActionImpl {
                   apiName: payload.apiName,
                   assistantMessageId: message.parentId,
                   identifier: payload.identifier,
-                  operationId,
+                  operationId: clientStep?.operationId ?? operationId,
                   toolCallId: payload.id,
                   toolMessageId: id,
                 },
-                deadline: Date.now() + 60_000,
-                workspaceId: getActiveWorkspaceId() ?? undefined,
+                deadline: clientStep?.deadline ?? Date.now() + 60_000,
+                workspaceId: clientStep
+                  ? clientStep.workspaceId
+                  : (getActiveWorkspaceId() ?? undefined),
               }
             : undefined,
         signal: abortController?.signal,
@@ -408,7 +416,7 @@ export class PluginTypesActionImpl {
       context,
     );
 
-    return truncatedContent;
+    return { ...data, content: truncatedContent };
   };
 
   internal_invokeRemoteToolPlugin = async (

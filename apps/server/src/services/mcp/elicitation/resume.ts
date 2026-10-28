@@ -8,18 +8,22 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { ConnectorToolPermission } from '@/database/schemas';
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
-import { mcpService } from '@/server/services/mcp';
-import { ToolExecutionService } from '@/server/services/toolExecution';
-import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
+import type { ToolExecutionService } from '@/server/services/toolExecution';
 import type { ToolExecutionResultResponse } from '@/server/services/toolExecution/types';
 
 import { buildPluginMcpParams } from '../pluginParams';
 import { mcpConnectionBinding } from './binding';
-import { expireMcpElicitation } from './expire';
 import { McpElicitationService } from './McpElicitationService';
+
+export interface McpElicitationRuntime extends Pick<
+  AgentRuntimeService,
+  'controlCompletedToolResult' | 'tryResumeParentFromAsyncTool'
+> {
+  executeTool: ToolExecutionService['executeTool'];
+}
 
 /** First-winner outbox + fenced execution; a lost response never replays a mutating tools/call. */
 export async function resumeMcpElicitation(
@@ -29,10 +33,9 @@ export async function resumeMcpElicitation(
     resolutionRequestId: string;
     responses: Record<string, ElicitResult>;
   },
+  runtime = service.runtime,
 ) {
-  const runtime = new AgentRuntimeService(service.db, service.userId, {
-    workspaceId: service.workspaceId,
-  });
+  if (!runtime) throw new Error('MCP continuation runtime is unavailable');
   const { item, prior } = await service.claim(
     params.itemId,
     params.resolutionRequestId,
@@ -48,9 +51,12 @@ export async function resumeMcpElicitation(
   const inputHash = createHash('sha256')
     .update(canonicalJson({ itemId: item.id, responses: params.responses }))
     .digest('hex');
+  // Bound the wire budget to the lease ceiling, including a minute for durable result commit.
+  const executionStartedAt = Date.now();
+  const executionDeadline = Math.min(pending.deadline, executionStartedAt + 14 * 60_000);
   const claim = await service.interventions.claimCustomExecution({
     inputHash,
-    leaseDurationMs: 120_000,
+    leaseDurationMs: Math.max(1000, executionDeadline - executionStartedAt + 60_000),
     resolutionRequestId: params.resolutionRequestId,
   });
   if (claim.outcome === 'conflict') throw new Error('MCP continuation has already been claimed');
@@ -68,44 +74,12 @@ export async function resumeMcpElicitation(
         );
       const operation = await service.operations.findById(identity.operationId);
       if (!operation) throw new Error('MCP operation has ended');
-      const connectorModel = new ConnectorModel(service.db, service.userId, service.workspaceId);
-      const [connector] = await connectorModel.resolveByIdentifiers(
-        [identity.identifier],
+      const manifest = await resolveMcpInvocationManifest(
+        service,
+        identity.identifier,
+        identity.apiName,
         operation.agentId ?? undefined,
       );
-      let manifest: LobeToolManifest & { mcpParams: unknown };
-      if (connector) {
-        if (!connector.isEnabled) throw new Error('MCP connector is disabled');
-        const tools = await new ConnectorToolModel(
-          service.db,
-          service.userId,
-          service.workspaceId,
-        ).queryByConnector(connector.id);
-        const allowedTool = tools.find((entry) => entry.toolName === identity.apiName);
-        if (!allowedTool || allowedTool.permission === ConnectorToolPermission.disabled)
-          throw new Error('MCP tool is no longer available');
-        const fresh = await ensureFreshConnectorToken(connector, connectorModel);
-        manifest = {
-          identifier: identity.identifier,
-          api: [],
-          meta: {},
-          mcpParams: buildConnectorMcpParams(fresh),
-        };
-      } else {
-        const plugin = await new PluginModel(
-          service.db,
-          service.userId,
-          service.workspaceId,
-        ).findById(identity.identifier);
-        if (
-          !plugin?.customParams?.mcp ||
-          !plugin.manifest?.api.some((api) => api.name === identity.apiName)
-        )
-          throw new Error('MCP plugin is no longer installed or available');
-        const mcpParams = buildPluginMcpParams(plugin);
-        if (!mcpParams) throw new Error('MCP plugin connection is unavailable');
-        manifest = { ...plugin.manifest, mcpParams };
-      }
       if (
         pending.connectionBinding &&
         mcpConnectionBinding(manifest.mcpParams) !== pending.connectionBinding
@@ -121,18 +95,12 @@ export async function resumeMcpElicitation(
         Object.values(params.responses).some((response) => response.action !== 'accept')
       )
         throw new Error('The user cancelled the pending MCP operation.');
-      const executor = new ToolExecutionService({
-        builtinToolsExecutor: new BuiltinToolsExecutor(service.db, service.userId),
-        mcpService,
-        onMcpElicitationExpired: (pendingService, itemId) =>
-          expireMcpElicitation(pendingService, itemId, runtime),
-      });
-      result = await executor.executeTool(
+      result = await runtime.executeTool(
         { ...tool, type: 'mcp' },
         {
           agentId: operation.agentId ?? undefined,
           assistantMessageId: identity.assistantMessageId,
-          executionTimeoutMs: Math.max(1, pending.deadline - Date.now()),
+          executionTimeoutMs: Math.max(1, executionDeadline - Date.now()),
           mcpContinuation: McpElicitationService.continuation(pending, params.responses),
           operationId: identity.operationId,
           serverDB: service.db,
@@ -174,7 +142,7 @@ export async function resumeMcpElicitation(
       content: controlled.result.content,
       onlyIfEmpty: true,
       pluginError: controlled.result.error ?? null,
-      pluginState: { ...controlled.result.state, mcpElicitation: null },
+      pluginState: { ...controlled.result.state, mcpElicitation: null, mcpClientComplete: true },
       ...(controlled.blocked && { replacePluginState: true }),
     });
     await service.messages.updateMessagePlugin(item.toolMessageId, {
@@ -188,4 +156,44 @@ export async function resumeMcpElicitation(
   await service.interventions.markResolutionPublished(params.resolutionRequestId);
   await service.interventions.completeMcpResolution(params.resolutionRequestId);
   return { state: result.deferred ? ('pending' as const) : ('resolved' as const) };
+}
+
+/** Resolve current server-owned credentials and tool permissions for both runtime hosts. */
+export async function resolveMcpInvocationManifest(
+  service: McpElicitationService,
+  identifier: string,
+  apiName: string,
+  agentId?: string,
+) {
+  const connectorModel = new ConnectorModel(service.db, service.userId, service.workspaceId);
+  const [connector] = await connectorModel.resolveByIdentifiers([identifier], agentId ?? undefined);
+  let manifest: LobeToolManifest & { mcpParams: unknown };
+  if (connector) {
+    if (!connector.isEnabled) throw new Error('MCP connector is disabled');
+    const tools = await new ConnectorToolModel(
+      service.db,
+      service.userId,
+      service.workspaceId,
+    ).queryByConnector(connector.id);
+    const allowedTool = tools.find((entry) => entry.toolName === apiName);
+    if (!allowedTool || allowedTool.permission === ConnectorToolPermission.disabled)
+      throw new Error('MCP tool is no longer available');
+    const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+    manifest = {
+      identifier,
+      api: [],
+      meta: {},
+      mcpParams: buildConnectorMcpParams(fresh),
+    };
+  } else {
+    const plugin = await new PluginModel(service.db, service.userId, service.workspaceId).findById(
+      identifier,
+    );
+    if (!plugin?.customParams?.mcp || !plugin.manifest?.api.some((api) => api.name === apiName))
+      throw new Error('MCP plugin is no longer installed or available');
+    const mcpParams = buildPluginMcpParams(plugin);
+    if (!mcpParams) throw new Error('MCP plugin connection is unavailable');
+    manifest = { ...plugin.manifest, mcpParams };
+  }
+  return manifest;
 }

@@ -53,6 +53,10 @@ vi.mock('@lobechat/utils', () => ({
 vi.mock('@/libs/trpc/client', () => {
   const result = {
     lambdaClient: {
+      mcpElicitation: {
+        startClientTool: { mutate: vi.fn() },
+        clientToolOutcome: { query: vi.fn() },
+      },
       connector: {
         list: { query: vi.fn().mockResolvedValue([]) },
         listByAgent: { query: vi.fn().mockResolvedValue([]) },
@@ -178,6 +182,43 @@ describe('MCPService', () => {
             },
           ],
         });
+      });
+
+      it('keeps awaiting a persisted client invocation after an enqueue ACK is lost', async () => {
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.list.query).mockResolvedValueOnce([
+          {
+            id: 'http-id',
+            identifier: 'http-mcp',
+            isEnabled: true,
+            mcpConnectionType: 'http',
+            mcpServerUrl: 'https://example.com/mcp',
+          },
+        ] as any);
+        vi.mocked(lambdaClient.mcpElicitation.startClientTool.mutate).mockRejectedValueOnce(
+          new TypeError('fetch failed after enqueue'),
+        );
+        vi.mocked(lambdaClient.mcpElicitation.clientToolOutcome.query).mockResolvedValueOnce({
+          content: 'committed once',
+          success: true,
+          state: {},
+        });
+        const result = await mcpService.invokeMcpToolCall(payload, {
+          clientRuntime: true,
+          elicitation: {
+            identity: {
+              apiName: 'echo',
+              identifier: 'http-mcp',
+              operationId: 'op',
+              assistantMessageId: 'assistant',
+              toolCallId: 'call_1',
+              toolMessageId: 'tool',
+            },
+            deadline: Date.now() + 1000,
+          },
+        });
+        expect(result).toMatchObject({ content: 'committed once', success: true });
+        expect(lambdaClient.mcpElicitation.startClientTool.mutate).toHaveBeenCalledOnce();
       });
 
       it.each(['AUTHORIZATION_ERROR', 'INITIALIZATION_TIMEOUT', 'CONNECTION_FAILED'])(

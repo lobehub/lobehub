@@ -10,6 +10,8 @@ import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modu
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
 import { expireMcpElicitation } from '@/server/services/mcp/elicitation/expire';
+import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
+import type { McpElicitationRuntime } from '@/server/services/mcp/elicitation/resume';
 import { MessageService } from '@/server/services/message';
 import { QueueService } from '@/server/services/queue';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -210,7 +212,9 @@ export class AgentRuntimeService {
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,
       mcpService,
-      onMcpElicitationExpired: (service, itemId) => expireMcpElicitation(service, itemId, this),
+      onMcpElicitationExpired: (service, itemId) =>
+        expireMcpElicitation(service, itemId, this.getMcpElicitationRuntime()),
+      mcpRuntime: this.getMcpElicitationRuntime(),
     });
 
     // Setup local execution callback for LocalQueueServiceImpl
@@ -218,6 +222,31 @@ export class AgentRuntimeService {
   }
 
   // ==================== Operation Interruption ====================
+  getMcpElicitationRuntime(): McpElicitationRuntime {
+    return {
+      executeTool: (...args) => this.toolExecutionService.executeTool(...args),
+      controlCompletedToolResult: (...args) => this.controlCompletedToolResult(...args),
+      tryResumeParentFromAsyncTool: async (...args) => {
+        const operation = await new AgentOperationModel(
+          this.serverDB,
+          this.userId,
+          this.workspaceId,
+        ).findById(args[0].parentOperationId!);
+        if (operation?.metadata?.clientMcpStep) return false;
+        return this.tryResumeParentFromAsyncTool(...args);
+      },
+    };
+  }
+
+  createMcpElicitationService() {
+    return new McpElicitationService(
+      this.serverDB,
+      this.userId,
+      this.workspaceId,
+      (service, itemId) => expireMcpElicitation(service, itemId, this.getMcpElicitationRuntime()),
+      this.getMcpElicitationRuntime(),
+    );
+  }
 
   // ==================== Operation Management ====================
 

@@ -4,6 +4,7 @@ import type { ElicitResult } from '@modelcontextprotocol/client';
 import { lambdaClient } from '@/libs/trpc/client';
 
 class McpElicitationService {
+  recover = (itemId: string) => lambdaClient.mcpElicitation.recover.mutate({ itemId });
   pending = (topicId: string, threadId?: string | null): Promise<PendingMcpElicitation[]> =>
     lambdaClient.mcpElicitation.pending.query({ topicId, threadId });
   resolve = (

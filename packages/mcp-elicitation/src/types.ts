@@ -37,6 +37,8 @@ export class McpInputRequiredError extends Error {
 export interface McpElicitationCall {
   continuation?: McpElicitationContinuation;
   deadline: number;
+  /** Scoped callback ticket for a workspace device; never a general user credential. */
+  delegation?: string;
   identity: {
     apiName: string;
     assistantMessageId: string;
@@ -52,8 +54,11 @@ export interface McpElicitationCall {
 
 /** The previous session ended; this queued invocation never reached the wire. */
 export class McpCallNotStartedError extends Error {
-  constructor() {
-    super('MCP session ended before this tool call started');
+  constructor(
+    readonly retryable = true,
+    cause?: unknown,
+  ) {
+    super('MCP invocation ended before this tool call started', { cause });
     this.name = 'McpCallNotStartedError';
   }
 }

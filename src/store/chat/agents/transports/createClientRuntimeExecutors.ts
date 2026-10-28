@@ -1,4 +1,4 @@
-import { createAgentRuntimeExecutors } from '@lobechat/agent-runtime';
+import { type AgentState, createAgentRuntimeExecutors } from '@lobechat/agent-runtime';
 import type { ToolsEngine } from '@lobechat/context-engine';
 import type { MessageMetadata } from '@lobechat/types';
 
@@ -6,7 +6,7 @@ import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { ChatStore } from '@/store/chat/store';
 
 import { buildClientRuntimeHost } from './buildClientRuntimeHost';
-import { handoffClientMcpTools } from './handoffClientMcpTools';
+import { prepareClientMcpTools } from './handoffClientMcpTools';
 
 /** Resolve a fresh client host for each runtime step, then use the shared package registry. */
 export const createClientRuntimeExecutors = (context: {
@@ -18,8 +18,8 @@ export const createClientRuntimeExecutors = (context: {
   toolsEngine?: ToolsEngine;
 }) => {
   const resolveHost = (
-    _instruction: Parameters<typeof handoffClientMcpTools>[1],
-    state: Parameters<typeof handoffClientMcpTools>[2],
+    _instruction: Parameters<typeof prepareClientMcpTools>[1],
+    state: AgentState,
     runtimeContext?: Parameters<typeof buildClientRuntimeHost>[0]['runtimeContext'],
   ) =>
     buildClientRuntimeHost({
@@ -36,14 +36,12 @@ export const createClientRuntimeExecutors = (context: {
   for (const type of ['call_tool', 'call_tools_batch'] as const) {
     const execute = executors[type]!;
     executors[type] = async (instruction, state, runtimeContext) => {
-      const handoff = await handoffClientMcpTools(
+      const prepared = await prepareClientMcpTools(
         resolveHost(instruction, state, runtimeContext),
         instruction,
-        state,
         context.get,
-        context.metadata,
       );
-      return handoff ?? execute(instruction, state, runtimeContext);
+      return execute(prepared, state, runtimeContext);
     };
   }
   return executors;

@@ -91,11 +91,13 @@ export class McpElicitationClient {
   private activeHost?: McpElicitationHost;
   private activeSignal?: AbortSignal;
   private retired = false;
+  private activeCalls = 0;
+  private closePromise?: Promise<void>;
   private interactionTail: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly client: Client,
-    enabled = true,
+    private readonly enabled = false,
     private readonly retire?: () => Promise<void>,
   ) {
     if (!enabled) return;
@@ -123,6 +125,14 @@ export class McpElicitationClient {
         release();
       }
     });
+  }
+
+  /** Retiring a hosted call must not tear down other valid calls already on this session. */
+  async closeWhenIdle() {
+    this.retired = true;
+    if (this.activeCalls > 0) return;
+    this.closePromise ??= this.retire ? this.retire() : this.client.close();
+    await this.closePromise;
   }
 
   async callToolInteractively(
@@ -202,10 +212,26 @@ export class McpElicitationClient {
     host?: McpElicitationHost,
     continuation?: McpElicitationContinuation,
   ) {
+    if (host && !this.enabled)
+      throw new McpCallNotStartedError(
+        false,
+        new Error('This MCP connection has no elicitation host capability'),
+      );
+    const signal = host
+      ? AbortSignal.any([
+          ...(options.signal ? [options.signal] : []),
+          AbortSignal.timeout(options.timeout ?? 60_000),
+        ])
+      : options.signal;
+    options = { ...options, signal };
     const run = async () => {
+      if (signal?.aborted) throw new McpCallNotStartedError(false, signal.reason);
       if (this.retired) throw new McpCallNotStartedError();
-      this.activeHost = host;
-      this.activeSignal = options.signal;
+      this.activeCalls++;
+      if (host) {
+        this.activeHost = host;
+        this.activeSignal = signal;
+      }
       try {
         const callParams = {
           ...params,
@@ -261,30 +287,45 @@ export class McpElicitationClient {
         return result;
       } catch (error) {
         if (
+          host &&
           this.client.getProtocolEra() !== 'modern' &&
           (options.signal?.aborted ||
             (SdkError.isInstance(error) &&
               [SdkErrorCode.RequestTimeout, SdkErrorCode.ConnectionClosed].includes(error.code)))
         ) {
           this.retired = true;
-          await (this.retire ? this.retire() : this.client.close());
         }
         throw error;
       } finally {
-        this.activeHost = undefined;
-        this.activeSignal = undefined;
+        if (host && this.activeHost === host) {
+          this.activeHost = undefined;
+          this.activeSignal = undefined;
+        }
+        this.activeCalls--;
+        if (this.retired && this.activeCalls === 0) await this.closeWhenIdle();
       }
     };
-    if (this.client.getProtocolEra() === 'modern') return run();
+    if (!host || this.client.getProtocolEra() === 'modern') return run();
     const previous = this.tail;
     let release!: () => void;
-    this.tail = new Promise<void>((resolve) => {
+    const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    await previous;
+    this.tail = previous.then(() => gate);
+    let onAbort: (() => void) | undefined;
     try {
+      if (signal?.aborted) throw new McpCallNotStartedError(false, signal.reason);
+      await Promise.race([
+        previous,
+        new Promise<never>((_resolve, reject) => {
+          if (!signal) return;
+          onAbort = () => reject(new McpCallNotStartedError(false, signal.reason));
+          signal.addEventListener('abort', onAbort, { once: true });
+        }),
+      ]);
       return await run();
     } finally {
+      if (onAbort) signal?.removeEventListener('abort', onAbort);
       release();
     }
   }

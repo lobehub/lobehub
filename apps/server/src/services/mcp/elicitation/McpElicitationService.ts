@@ -20,12 +20,16 @@ import { isEqual } from 'es-toolkit';
 import { AgentInterventionModel } from '@/database/models/agentIntervention';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ConnectorModel } from '@/database/models/connector';
+import { McpInvocationModel } from '@/database/models/mcpInvocation';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
+
+import { postLocalMcpCallback } from './localCallback';
+import type { McpElicitationRuntime } from './resume';
 
 export interface McpCallIdentity {
   apiName: string;
@@ -56,6 +60,7 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 
 /** Uses the same sealed intervention batches and private resolution outbox as ask-user. */
 export class McpElicitationService {
+  readonly invocations: McpInvocationModel;
   readonly interventions: AgentInterventionModel;
   readonly messages: MessageModel;
   readonly operations: AgentOperationModel;
@@ -65,8 +70,10 @@ export class McpElicitationService {
     readonly userId: string,
     readonly workspaceId?: string,
     private readonly onExpire?: McpElicitationExpiry,
+    readonly runtime?: McpElicitationRuntime,
   ) {
     this.interventions = new AgentInterventionModel(db, userId, workspaceId);
+    this.invocations = new McpInvocationModel(db, userId, workspaceId);
     this.messages = new MessageModel(db, userId, workspaceId);
     this.operations = new AgentOperationModel(db, userId, workspaceId);
   }
@@ -217,27 +224,16 @@ export class McpElicitationService {
     await this.messages.updateMessagePlugin(toolMessageId, {
       intervention: { batchId, operationId: identity.operationId, status: 'pending' },
     });
-    if (!pending.legacy) {
+    {
       try {
-        const queue = new QueueService();
-        const impl = queue.getImpl();
-        if (impl instanceof LocalQueueServiceImpl) {
-          const onExpire = this.onExpire;
-          if (!onExpire) throw new Error('Local MCP expiry execution is not configured');
-          impl.setExecutionCallback(async () => {
-            await onExpire(this, item.id);
-          });
-        }
-        const base =
-          process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
-        await queue.scheduleMessage({
-          endpoint: `${base.replace(/\/$/, '')}/api/agent/mcp-elicitation-expire`,
-          operationId: identity.operationId,
-          stepIndex: pending.checkpoint?.round ?? 0,
-          delay: Math.max(1, pending.deadline - Date.now()),
-          deduplicationId: `mcp-expire-${item.id}`,
-          payload: { itemId: item.id, userId: this.userId, workspaceId: this.workspaceId },
-        });
+        await this.scheduleExpiry(
+          item.id,
+          identity.operationId,
+          pending.legacy
+            ? pending.deadline + 1_000
+            : Math.min(pending.deadline, Date.now() + 15_000),
+          pending.checkpoint?.round ?? 0,
+        );
       } catch (error) {
         await this.interventions.markBatchTerminal(identity.operationId, batchId, 'session_ended');
         await this.messages.updateMessagePlugin(toolMessageId, {
@@ -248,6 +244,40 @@ export class McpElicitationService {
       }
     }
     return { item, state, toolMessageId };
+  }
+
+  /** A wakeup must never be acknowledged without retaining the next not-before deadline. */
+  async scheduleExpiry(
+    itemId: string,
+    operationId: string,
+    deadline: number,
+    stepIndex = 0,
+    rearm = false,
+  ) {
+    const queue = new QueueService();
+    const impl = queue.getImpl();
+    const base = process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
+    if (impl instanceof LocalQueueServiceImpl) {
+      const onExpire = this.onExpire;
+      impl.setExecutionCallback(() =>
+        onExpire
+          ? onExpire(this, itemId)
+          : postLocalMcpCallback(`${base.replace(/\/$/, '')}/api/agent/mcp-elicitation-expire`, {
+              itemId,
+              userId: this.userId,
+              workspaceId: this.workspaceId,
+            }),
+      );
+    }
+    await queue.scheduleMessage({
+      endpoint: `${base.replace(/\/$/, '')}/api/agent/mcp-elicitation-expire`,
+      operationId,
+      stepIndex,
+      delay: Math.max(1, deadline - Date.now()),
+      // A redelivery before deadline must not dedupe against the task being acknowledged.
+      deduplicationId: `mcp-expire-${itemId}${rearm ? `-${randomUUID()}` : ''}`,
+      payload: { itemId, userId: this.userId, workspaceId: this.workspaceId },
+    });
   }
 
   createLegacyHost(identity: McpCallIdentity, deadline: number): McpElicitationHost {

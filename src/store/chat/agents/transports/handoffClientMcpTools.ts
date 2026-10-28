@@ -1,33 +1,25 @@
-import type {
-  AgentInstruction,
-  AgentRuntimeHost,
-  AgentState,
-  InstructionExecutionResult,
-} from '@lobechat/agent-runtime';
-import type { ChatToolPayload, MessageMetadata } from '@lobechat/types';
+import type { AgentInstruction, AgentRuntimeHost } from '@lobechat/agent-runtime';
+import type { ChatToolPayload } from '@lobechat/types';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import type { ChatStore } from '@/store/chat/store';
 
-/** Promote an approved client tool batch into the existing durable approval continuation.
- * The client has no durable operation. Persist its exact tool rows before the server claims
- * them; after that claim the server owns execution, elicitation and parent continuation.
- */
-export async function handoffClientMcpTools(
+/** Persist the original client batch before wire execution. Its agent loop stays on this host. */
+export async function prepareClientMcpTools(
   host: AgentRuntimeHost,
   instruction: AgentInstruction,
-  state: AgentState,
   get: () => ChatStore,
-  metadata?: Pick<MessageMetadata, 'trigger'>,
-): Promise<InstructionExecutionResult | undefined> {
-  if (instruction.type !== 'call_tool' && instruction.type !== 'call_tools_batch') return;
+): Promise<AgentInstruction> {
+  if (instruction.type !== 'call_tool' && instruction.type !== 'call_tools_batch')
+    return instruction;
   const tools: ChatToolPayload[] =
     instruction.type === 'call_tool'
       ? [instruction.payload.toolCalling]
       : instruction.payload.toolsCalling;
-  if (!tools.some((tool) => tool.type === 'mcp')) return;
+  if (!tools.some((tool) => tool.type === 'mcp')) return instruction;
   const operation = get().operations[host.operation.operationId];
-  const agentId = host.operation.agentId ?? operation?.context.agentId;
-  if (!operation || !agentId) throw new Error('Client MCP operation is unavailable');
+  if (!operation) throw new Error('Client MCP operation is unavailable');
   const parent = await host.transports.messages.findById(instruction.payload.parentMessageId);
   const assistantId = parent?.role === 'assistant' ? parent.id : parent?.parentId;
   if (!assistantId) throw new Error('Client MCP assistant identity is unavailable');
@@ -39,49 +31,64 @@ export async function handoffClientMcpTools(
           ? instruction.payload.parentMessageId
           : undefined
         : instruction.payload.existingToolMessageIds?.[tool.id];
-    if (existingId) {
-      await host.transports.messages.updateToolIntervention(existingId, { status: 'pending' });
-      ids[tool.id] = existingId;
-    } else {
-      ids[tool.id] = (
+    ids[tool.id] =
+      existingId ??
+      (
         await host.transports.messages.createToolMessage({
           agentId: host.operation.agentId,
           groupId: host.operation.groupId,
           content: '',
           parentId: assistantId,
           plugin: tool,
-          pluginIntervention: { status: 'pending' },
           role: 'tool',
           threadId: host.operation.threadId,
           tool_call_id: tool.id,
           topicId: host.operation.topicId,
         })
       ).id;
-    }
   }
-  const result = await get().executeGatewayAgent({
-    context: { ...operation.context, agentId },
-    message: '',
-    metadata,
-    parentMessageId: ids[tools[0].id],
-    parentOperationId: host.operation.operationId,
-    resumeApprovals: tools.map((tool) => ({
-      decision: 'approved',
-      parentMessageId: ids[tool.id],
-      toolCallId: tool.id,
-    })),
+  const owner = crypto.randomUUID();
+  const workspaceId = getActiveWorkspaceId() ?? undefined;
+  const lambdaClient = createWorkspaceLambdaClient(workspaceId ?? null);
+  const anchor = await lambdaClient.mcpElicitation.registerClientStep.mutate({
+    assistantMessageId: assistantId,
+    toolMessageIds: tools.map((tool) => ids[tool.id]),
+    owner,
   });
-  if (!result.success)
-    throw new Error(result.error || 'Could not persist the MCP tool continuation');
-  // The durable replacement owns subsequent LLM steps. Park the local loop exactly like
-  // existing client approval continuations; never feed a deferred object to the model.
-  return {
-    events: [],
-    newState: {
-      ...state,
-      status: 'waiting_for_human',
-      pendingToolsCalling: undefined,
-      pendingToolMessageIds: undefined,
-    },
+  get().updateOperationMetadata(host.operation.operationId, {
+    mcpClientStep: { ...anchor, owner, workspaceId, assistantMessageId: assistantId },
+  });
+  const heartbeat = setInterval(() => {
+    void lambdaClient.mcpElicitation.leaseClientStep
+      .mutate({ operationId: anchor.operationId, owner })
+      .catch(console.error);
+  }, 15_000);
+  const stop = () => clearInterval(heartbeat);
+  const abort = () => {
+    stop();
+    void lambdaClient.mcpElicitation.cancelClientStep
+      .mutate({ operationId: anchor.operationId, owner })
+      .catch(console.error);
   };
+  operation.abortController.signal.addEventListener('abort', abort, { once: true });
+  if (operation.abortController.signal.aborted) abort();
+  get().registerAfterCompletionCallback(host.operation.operationId, async () => {
+    stop();
+    operation.abortController.signal.removeEventListener('abort', abort);
+    await lambdaClient.mcpElicitation.leaseClientStep.mutate({
+      operationId: anchor.operationId,
+      owner,
+      finish: true,
+    });
+  });
+  if (instruction.type === 'call_tool')
+    return {
+      ...instruction,
+      payload: {
+        ...instruction.payload,
+        parentMessageId: ids[tools[0].id],
+        skipCreateToolMessage: true,
+      },
+    };
+  return { ...instruction, payload: { ...instruction.payload, existingToolMessageIds: ids } };
 }

@@ -31,7 +31,7 @@ it('does not hand a request to a host after the original invocation was aborted'
     },
   } as unknown as Client;
   await expect(
-    new McpElicitationClient(client).callToolInteractively(
+    new McpElicitationClient(client, true).callToolInteractively(
       { name: 'form' },
       { signal: abort.signal },
       host,
@@ -64,7 +64,7 @@ it('enforces the deadline even when a host does not observe cancellation', async
     },
   } as unknown as Client;
   await expect(
-    new McpElicitationClient(client).callToolInteractively(
+    new McpElicitationClient(client, true).callToolInteractively(
       { name: 'form' },
       { timeout: 20 },
       { request: async () => new Promise(() => {}) },
@@ -83,4 +83,15 @@ it('uses the modern URL wire schema without requiring a legacy elicitationId', a
   await expect(
     parseMcpElicitationRequest({ ...request, elicitationId: 'legacy-url' }, false),
   ).resolves.toMatchObject({ elicitationId: 'legacy-url' });
+});
+
+it('declares no elicitation capability on a connection without an installed host', () => {
+  const client = { registerCapabilities: vi.fn(), setRequestHandler: vi.fn() } as unknown as Client;
+  new McpElicitationClient(client);
+  expect(client.registerCapabilities).not.toHaveBeenCalled();
+  expect(client.setRequestHandler).not.toHaveBeenCalled();
+  new McpElicitationClient(client, true);
+  expect(client.registerCapabilities).toHaveBeenCalledExactlyOnceWith({
+    elicitation: { form: {}, url: {} },
+  });
 });

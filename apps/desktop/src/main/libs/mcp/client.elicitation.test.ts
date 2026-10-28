@@ -16,11 +16,14 @@ describe('native MCP elicitation protocol', () => {
     async (path) => {
       const servers = await startElicitationServers();
       try {
-        const client = new MCPClient({
-          type: 'http',
-          name: 'desktop-elicitation',
-          url: servers.url + path,
-        });
+        const client = new MCPClient(
+          {
+            type: 'http',
+            name: 'desktop-elicitation',
+            url: servers.url + path,
+          },
+          true,
+        );
         clients.push(client);
         await client.initialize();
         let prompts = 0;
@@ -48,19 +51,22 @@ describe('native MCP elicitation protocol', () => {
   it.each(['accept', 'decline', 'cancel'] as const)(
     'sends %s over a real legacy stdio child',
     async (action) => {
-      const client = new MCPClient({
-        type: 'stdio',
-        name: 'desktop-stdio',
-        command: process.execPath,
-        args: [
-          fileURLToPath(
-            new URL(
-              '../../../../../../src/libs/mcp/__tests__/fixtures/legacyElicitationStdio.mjs',
-              import.meta.url,
+      const client = new MCPClient(
+        {
+          type: 'stdio',
+          name: 'desktop-stdio',
+          command: process.execPath,
+          args: [
+            fileURLToPath(
+              new URL(
+                '../../../../../../src/libs/mcp/__tests__/fixtures/legacyElicitationStdio.mjs',
+                import.meta.url,
+              ),
             ),
-          ),
-        ],
-      });
+          ],
+        },
+        true,
+      );
       clients.push(client);
       await client.initialize();
       const result = await client.callTool(

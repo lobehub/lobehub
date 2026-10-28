@@ -5,7 +5,14 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
-import { agentOperations, agents, topics, userInstalledPlugins, users } from '@/database/schemas';
+import {
+  agentInterventions,
+  agentOperations,
+  agents,
+  topics,
+  userInstalledPlugins,
+  users,
+} from '@/database/schemas';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
 import {
@@ -18,11 +25,12 @@ import { mcpConnectionBinding } from './binding';
 import { expireMcpElicitation } from './expire';
 import { McpElicitationService } from './McpElicitationService';
 import {
-  executeMcpElicitationResume,
+  executeMcpElicitationResume as executeSavedMcpElicitationResume,
   recoverMcpElicitationResume,
   scheduleMcpElicitationResume,
 } from './queue';
-import { resumeMcpElicitation } from './resume';
+import { recoverPersistedMcpWork } from './recoveryWorker';
+import { resumeMcpElicitation as resumeSavedMcpElicitation } from './resume';
 
 const probes = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -30,6 +38,7 @@ const probes = vi.hoisted(() => ({
   control: vi.fn(async ({ result }) => ({ result, blocked: false, cancelled: false })),
   resume: vi.fn(),
   queueImpl: undefined as unknown,
+  localCallback: vi.fn(),
 }));
 vi.mock('@/server/services/toolExecution', () => ({
   ToolExecutionService: class {
@@ -37,8 +46,23 @@ vi.mock('@/server/services/toolExecution', () => ({
   },
 }));
 vi.mock('@/server/services/toolExecution/builtin', () => ({ BuiltinToolsExecutor: class {} }));
+vi.mock('./localCallback', () => ({ postLocalMcpCallback: probes.localCallback }));
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: class {
+    constructor(
+      private db: typeof db,
+      private userId: string,
+      private options: { workspaceId?: string },
+    ) {}
+    getMcpElicitationRuntime = () => testRuntime;
+    createMcpElicitationService = () =>
+      new McpElicitationService(
+        this.db,
+        this.userId,
+        this.options.workspaceId,
+        undefined,
+        testRuntime,
+      );
     controlCompletedToolResult = probes.control;
     tryResumeParentFromAsyncTool = probes.resume;
   },
@@ -52,6 +76,17 @@ vi.mock('@/server/services/queue', () => ({
     scheduleMessage = probes.schedule;
   },
 }));
+
+const testRuntime = {
+  executeTool: probes.execute,
+  controlCompletedToolResult: probes.control,
+  tryResumeParentFromAsyncTool: probes.resume,
+};
+const executeMcpElicitationResume = (
+  ...args: Parameters<typeof executeSavedMcpElicitationResume>
+) => executeSavedMcpElicitationResume(args[0], args[1], args[2], testRuntime);
+const resumeMcpElicitation = (...args: Parameters<typeof resumeSavedMcpElicitation>) =>
+  resumeSavedMcpElicitation(args[0], args[1], testRuntime);
 
 const db = await getTestDB();
 const owner = 'mcp-test-owner';
@@ -280,6 +315,103 @@ describe('durable MCP elicitation', () => {
     });
     expect(probes.resume).toHaveBeenCalledOnce();
   });
+  it('keeps a long-running continuation fenced beyond 120s and publishes its actual result', async () => {
+    const pending = await open({
+      legacy: false,
+      deadline: Date.now() + 800_000,
+      checkpoint: {
+        round: 1,
+        inputRequired: {
+          resultType: 'input_required',
+          requestState: { cursor: 'next' },
+          inputRequests: {
+            input: { method: 'elicitation/create', params: request },
+          },
+        },
+      },
+    });
+    const rid = randomUUID();
+    await service.claim(pending.item.id, rid, {
+      input: { action: 'accept', content: { label: 'long' } },
+    });
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    probes.execute.mockImplementationOnce(async () => {
+      entered();
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { content: 'actual remote mutation receipt', success: true, executionTime: 121_000 };
+    });
+    const first = executeMcpElicitationResume(service, pending.item.id, rid);
+    await started;
+    const now = Date.now();
+    const execution = await service.invocations.execution(pending.item.id);
+    expect(execution?.leaseExpiresAt?.getTime()).toBeGreaterThan(now + 800_000);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 121_000);
+    try {
+      await executeMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id, rid);
+      expect(probes.execute).toHaveBeenCalledOnce();
+      expect(probes.control).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+      release();
+    }
+    await first;
+    expect((await messageModel.findById(pending.toolMessageId))?.content).toBe(
+      'actual remote mutation receipt',
+    );
+    expect(probes.resume).toHaveBeenCalledOnce();
+  });
+
+  it('re-arms an expiry arriving 400ms before the deadline instead of acknowledging away the timeout', async () => {
+    const deadline = Date.now() + 10_400;
+    const { item, toolMessageId } = await open({ deadline, legacy: false });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline - 400);
+    try {
+      await expireMcpElicitation(service, item.id, {
+        controlCompletedToolResult: probes.control,
+        tryResumeParentFromAsyncTool: probes.resume,
+      });
+      expect(probes.schedule).toHaveBeenCalledTimes(2);
+      expect(probes.schedule.mock.calls[1][0].delay).toBeGreaterThanOrEqual(400);
+      expect(probes.schedule.mock.calls[1][0].deduplicationId).not.toBe(
+        probes.schedule.mock.calls[0][0].deduplicationId,
+      );
+      expect((await messageModel.findById(toolMessageId))?.content).toBe('');
+      expect(probes.resume).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('does not overwrite an executing resolution when its form deadline expires', async () => {
+    const { item, toolMessageId } = await open({ legacy: false });
+    const resolutionRequestId = randomUUID();
+    await service.claim(item.id, resolutionRequestId, {
+      input: { action: 'accept', content: { label: 'chosen' } },
+    });
+    const execution = await service.interventions.claimCustomExecution({
+      resolutionRequestId,
+      inputHash: 'a'.repeat(64),
+      leaseDurationMs: 120_000,
+    });
+    expect(execution.outcome).toBe('applied');
+    await db
+      .update(agentInterventions)
+      .set({ deadline: new Date(Date.now() - 10) })
+      .where(eq(agentInterventions.id, item.id));
+    await expireMcpElicitation(service, item.id, {
+      controlCompletedToolResult: probes.control,
+      tryResumeParentFromAsyncTool: probes.resume,
+    });
+    expect((await messageModel.findById(toolMessageId))?.content).toBe('');
+    expect(probes.control).not.toHaveBeenCalled();
+    expect(probes.resume).not.toHaveBeenCalled();
+    expect((await service.get(item.id)).status).toBe('resolving');
+  });
   it('clears an orphaned form when expiry scheduling fails', async () => {
     probes.schedule.mockRejectedValueOnce(new Error('queue unavailable'));
     await expect(open({ legacy: false })).rejects.toThrow('queue unavailable');
@@ -312,14 +444,45 @@ describe('durable MCP elicitation', () => {
     expect(probes.resume).toHaveBeenCalledOnce();
     expect(probes.execute).not.toHaveBeenCalled();
   });
-  it('fails closed rather than leaving a pending local expiry without an executor', async () => {
-    probes.queueImpl = new LocalQueueServiceImpl();
-    await expect(open({ legacy: false })).rejects.toThrow(
-      'Local MCP expiry execution is not configured',
+  it('keeps tools-only routes light and schedules a signed HTTP expiry callback in local mode', async () => {
+    const impl = new LocalQueueServiceImpl();
+    const callback = vi.spyOn(impl, 'setExecutionCallback');
+    probes.queueImpl = impl;
+    const pending = await open({ legacy: false });
+    await callback.mock.calls[0][0](identity.operationId, 0, undefined);
+    expect(probes.localCallback).toHaveBeenCalledWith(
+      expect.stringContaining('/mcp-elicitation-expire'),
+      expect.objectContaining({ itemId: pending.item.id, userId: owner }),
     );
-    const [plugin] = await messageModel.listMessagePluginsByTopic('mcp-topic');
-    expect(plugin.state?.mcpElicitation).toBeNull();
-    expect(plugin.intervention?.status).toBe('none');
+  });
+  it('recovers a persisted due timeout after rebuilding the local worker, without a frontend or original timer', async () => {
+    const pending = await open({ legacy: false });
+    await db
+      .update(agentInterventions)
+      .set({ deadline: new Date(Date.now() - 10) })
+      .where(eq(agentInterventions.id, pending.item.id));
+    await recoverPersistedMcpWork(db);
+    expect((await messageModel.findById(pending.toolMessageId))?.content).toContain('timed out');
+    expect(probes.resume).toHaveBeenCalledOnce();
+    expect(probes.execute).not.toHaveBeenCalled();
+  });
+  it('returns only a bounded public pending projection and never publishes recovery on repeated reads', async () => {
+    const pending = await open({ legacy: false });
+    await service.claim(pending.item.id, randomUUID(), {
+      input: { action: 'accept', content: { label: 'private-answer' } },
+    });
+    const before = probes.schedule.mock.calls.length;
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => service.invocations.listPending('mcp-topic')),
+    );
+    expect(probes.schedule).toHaveBeenCalledTimes(before);
+    expect(results[0]).toMatchObject([{ id: pending.item.id, resolving: true }]);
+    expect(JSON.stringify(results)).not.toMatch(
+      /private-answer|requestState|connectionBinding|arguments/,
+    );
+    expect(await new McpElicitationService(db, other).invocations.listPending('mcp-topic')).toEqual(
+      [],
+    );
   });
   it('rejects a different operation in the same user and conversation', async () => {
     const operationId = 'mcp-other-op';
@@ -335,7 +498,7 @@ describe('durable MCP elicitation', () => {
     ).rejects.toThrow('conversation');
     await db.delete(agentOperations).where(eq(agentOperations.id, operationId));
   });
-  it('retains the claimed answer when enqueue fails and recovers it on a subsequent read', async () => {
+  it('retains the claimed answer when enqueue fails and recovers it from a durable wakeup', async () => {
     const checkpoint = {
       inputRequired: {
         resultType: 'input_required' as const,
@@ -529,7 +692,7 @@ it.each(['before-enqueue', 'lost-ack'])(
     const { MCPClient } = await import('@/libs/mcp/client');
     const server = await startElicitationServers();
     const connect = async () => {
-      const c = new MCPClient({ type: 'http', name: 'fixture', url: server.url + '/modern' });
+      const c = new MCPClient({ type: 'http', name: 'fixture', url: server.url + '/modern' }, true);
       await c.initialize();
       return c;
     };
@@ -566,7 +729,19 @@ it.each(['before-enqueue', 'lost-ack'])(
           await client.disconnect();
         }
       });
-      await recoverMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id);
+      const publishedBeforeRecovery = probes.schedule.mock.calls.length;
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 15_001);
+      try {
+        await Promise.all(
+          Array.from({ length: 8 }, () =>
+            recoverMcpElicitationResume(new McpElicitationService(db, owner), pending.item.id),
+          ),
+        );
+      } finally {
+        clock.mockRestore();
+      }
+      expect(probes.schedule).toHaveBeenCalledTimes(publishedBeforeRecovery + 1);
       const recovered = probes.schedule.mock.calls.at(-1)![0];
       expect(recovered.deduplicationId).toBe('mcp-resume-' + rid);
       if (enqueued) expect(enqueued.deduplicationId).toBe(recovered.deduplicationId);

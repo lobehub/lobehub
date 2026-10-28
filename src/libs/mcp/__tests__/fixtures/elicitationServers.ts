@@ -32,6 +32,31 @@ export async function startElicitationServers(port = 0) {
       title: 'Negotiation fixture',
       version: 'v1.2.3',
     });
+    let parallelCount = 0;
+    let releaseParallel!: () => void;
+    const parallelGate = new Promise<void>((resolve) => {
+      releaseParallel = resolve;
+    });
+    server.registerTool(
+      'parallel',
+      { description: 'Two ordinary calls must enter the same session concurrently' },
+      async () => {
+        if (++parallelCount === 2) releaseParallel();
+        await parallelGate;
+        return { content: [{ type: 'text', text: 'parallel:complete' }] };
+      },
+    );
+    server.registerTool(
+      'slow_noop',
+      { description: 'An independent ordinary call remains valid after another call aborts' },
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        return { content: [{ type: 'text', text: 'slow_noop:complete' }] };
+      },
+    );
+    server.registerTool('noop', { description: 'Ordinary non-interactive call' }, async () => ({
+      content: [{ type: 'text', text: 'noop:complete' }],
+    }));
     server.registerTool(
       'form',
       { description: 'Elicit two rounds before a side effect' },

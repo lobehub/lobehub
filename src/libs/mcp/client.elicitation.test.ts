@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startElicitationServers } from './__tests__/fixtures/elicitationServers';
 import { MCPClient } from './client';
@@ -18,7 +18,10 @@ describe('MCP elicitation against real SDK servers', () => {
     await servers.close();
   });
   const connect = async (path: string) => {
-    const client = new MCPClient({ name: 'elicitation', type: 'http', url: servers.url + path });
+    const client = new MCPClient(
+      { name: 'elicitation', type: 'http', url: servers.url + path },
+      true,
+    );
     clients.push(client);
     await client.initialize();
     return client;
@@ -80,6 +83,50 @@ describe('MCP elicitation against real SDK servers', () => {
       inputResponses: {},
     });
   });
+  it('retires an aborted hosted legacy invocation only after another ordinary in-flight call finishes', async () => {
+    const client = await connect('/legacy');
+    const controller = new AbortController();
+    let entered!: () => void;
+    const active = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const hosted = client.callTool(
+      'form',
+      {},
+      {
+        timeoutMs: 4000,
+        signal: controller.signal,
+        host: {
+          request: async (_request, { signal }) => {
+            entered();
+            await new Promise<void>((resolve) =>
+              signal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+            return { action: 'cancel' };
+          },
+        },
+      },
+    );
+    const rejected = hosted.catch((error) => error);
+    await active;
+    const ordinary = client.callTool('slow_noop', {}, { timeoutMs: 1500 });
+    await vi.waitFor(() =>
+      expect(
+        servers.requests.some(
+          (request) =>
+            request.method === 'tools/call' &&
+            (request.params as { name?: string })?.name === 'slow_noop',
+        ),
+      ).toBe(true),
+    );
+    controller.abort();
+    expect(await rejected).toBeInstanceOf(Error);
+    expect((await ordinary).content).toEqual([{ type: 'text', text: 'slow_noop:complete' }]);
+    await expect(client.callTool('noop', {})).rejects.toMatchObject({
+      name: 'McpCallNotStartedError',
+    });
+  });
+
   it.each(['accept', 'decline', 'cancel'] as const)(
     'legacy %s answers the waiting tool',
     async (action) => {
@@ -116,6 +163,59 @@ describe('MCP elicitation against real SDK servers', () => {
       [{ type: 'text', text: 'saved:first' }],
       [{ type: 'text', text: 'saved:second' }],
     ]);
+  });
+  it('runs ordinary legacy calls concurrently on one real SDK session', async () => {
+    const client = await connect('/legacy');
+    const results = await Promise.all([
+      client.callTool('parallel', {}, { timeoutMs: 500 }),
+      client.callTool('parallel', {}, { timeoutMs: 500 }),
+    ]);
+    expect(
+      results.every(
+        (result) =>
+          result.content[0].type === 'text' && result.content[0].text === 'parallel:complete',
+      ),
+    ).toBe(true);
+  });
+  it('cancels an unsent interactive legacy call without closing the active caller connection', async () => {
+    const client = await connect('/legacy');
+    let release!: () => void;
+    const answer = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const firstHost = vi.fn(async () => {
+      await answer;
+      return { action: 'accept' as const, content: { label: 'first' } };
+    });
+    const first = client.callTool('form', {}, { host: { request: firstHost }, timeoutMs: 3000 });
+    await vi.waitFor(() => expect(firstHost).toHaveBeenCalledOnce());
+    const abort = new AbortController();
+    const secondHost = vi.fn();
+    const second = client
+      .callTool('form', {}, { host: { request: secondHost }, signal: abort.signal, timeoutMs: 500 })
+      .catch((error) => error);
+    abort.abort(new Error('cancel queued invocation'));
+    try {
+      const beforeRelease = await Promise.race([
+        second,
+        new Promise((resolve) => setTimeout(() => resolve('still queued'), 200)),
+      ]);
+      expect(beforeRelease).toMatchObject({ name: 'McpCallNotStartedError', retryable: false });
+      expect(await client.callTool('noop', {}, { timeoutMs: 500 })).toMatchObject({
+        content: [{ text: 'noop:complete' }],
+      });
+    } finally {
+      release();
+    }
+    expect(await first).toMatchObject({ content: [{ text: 'saved:first' }] });
+    expect(secondHost).not.toHaveBeenCalled();
+    const trace = await (await fetch(servers.url + '/trace')).json();
+    expect(
+      trace.requests.filter(
+        (row: { method: string; params: { name?: string } }) =>
+          row.method === 'tools/call' && row.params.name === 'form',
+      ),
+    ).toHaveLength(1);
   });
   it.each(['accept', 'decline', 'cancel'] as const)(
     'modern %s is returned to the original request',
@@ -289,16 +389,19 @@ describe('MCP elicitation against real SDK servers', () => {
   it.each(['accept', 'decline', 'cancel'] as const)(
     'legacy stdio %s round-trips real protocol requests',
     async (action) => {
-      const client = new MCPClient({
-        name: 'stdio',
-        type: 'stdio',
-        command: process.execPath,
-        args: [
-          fileURLToPath(
-            new URL('./__tests__/fixtures/legacyElicitationStdio.mjs', import.meta.url),
-          ),
-        ],
-      });
+      const client = new MCPClient(
+        {
+          name: 'stdio',
+          type: 'stdio',
+          command: process.execPath,
+          args: [
+            fileURLToPath(
+              new URL('./__tests__/fixtures/legacyElicitationStdio.mjs', import.meta.url),
+            ),
+          ],
+        },
+        true,
+      );
       clients.push(client);
       await client.initialize();
       let rounds = 0;
