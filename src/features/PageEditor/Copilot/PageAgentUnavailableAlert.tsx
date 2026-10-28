@@ -1,7 +1,7 @@
 'use client';
 
 import { SELF_HOSTING_DOCUMENTS } from '@lobechat/const';
-import { Alert, Button } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -56,21 +56,22 @@ const PageAgentUnavailableAlert = () => {
     );
 
   return (
-    <Alert
-      showIcon
-      action={action}
-      style={{ marginBlock: 8, marginInline: 12 }}
-      title={t(`pageEditor.agentUnavailable.${reason}`)}
-      type="info"
-      closable={{
-        onClose: () => {
-          const current = useGlobalStore.getState().status.dismissedBannerIds || [];
-          if (!current.includes(dismissId)) {
-            updateSystemStatus({ dismissedBannerIds: [...current, dismissId] });
-          }
-        },
-      }}
-    />
+    <Flexbox paddingBlock={8} paddingInline={16}>
+      <Alert
+        showIcon
+        action={action}
+        title={t(`pageEditor.agentUnavailable.${reason}`)}
+        type="info"
+        closable={{
+          onClose: () => {
+            const current = useGlobalStore.getState().status.dismissedBannerIds || [];
+            if (!current.includes(dismissId)) {
+              updateSystemStatus({ dismissedBannerIds: [...current, dismissId] });
+            }
+          },
+        }}
+      />
+    </Flexbox>
   );
 };
 
