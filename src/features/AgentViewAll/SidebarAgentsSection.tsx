@@ -13,6 +13,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { AGENT_GRID_MIN_COLUMN } from './AgentCard';
 import ItemActions from './ItemActions';
 import SidebarItemAvatar from './SidebarItemAvatar';
 
@@ -68,8 +69,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
     display: grid;
 
-    /* Full-width page: as many 280px+ columns as fit, one column on narrow screens. */
-    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+    /* Same column width as the badge wall below, so both grids line up. */
+    grid-template-columns: repeat(auto-fill, minmax(min(${AGENT_GRID_MIN_COLUMN}px, 100%), 1fr));
     gap: 12px;
 
     width: 100%;

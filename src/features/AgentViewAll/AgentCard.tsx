@@ -28,6 +28,7 @@ import SidebarItemAvatar from './SidebarItemAvatar';
 // the cover's bottom edge, without one the band is just top padding.
 const COVER_HEIGHT = 48;
 const AVATAR_SIZE = 56;
+export const AGENT_GRID_MIN_COLUMN = 260;
 
 export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -141,30 +142,17 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     overflow-wrap: anywhere;
   `,
-  // The grid reads its own column count from the content width (container
-  // query), not the viewport: four badges by default, folding to 3 / 2 / 1 as
-  // the page narrows.
-  gridContainer: css`
-    container-type: inline-size;
-    width: 100%;
-    min-width: 0;
-  `,
+  // Columns come from the content width: as many 260px+ badges as fit, so a
+  // ~1300px page shows four and an ultra-wide one six, instead of a fixed four
+  // stretching each badge. Shares the min width with SidebarAgentsSection so
+  // the two grids line up.
   grid: css`
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(${AGENT_GRID_MIN_COLUMN}px, 100%), 1fr));
     gap: 12px;
 
-    @container (width < 880px) {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    @container (width < 640px) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    @container (width < 400px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
+    width: 100%;
+    min-width: 0;
   `,
   /* Top-right "…" slot, a SIBLING of the card link (absolutely positioned
      over it) — nesting an interactive menu trigger inside the <a> would put
@@ -204,11 +192,9 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-/** Badge-wall grid wrapper; owns the container the column breakpoints read. */
+/** Badge-wall grid wrapper. */
 export const AgentCardGrid = memo<{ children: ReactNode }>(({ children }) => (
-  <div className={cardStyles.gridContainer}>
-    <div className={cardStyles.grid}>{children}</div>
-  </div>
+  <div className={cardStyles.grid}>{children}</div>
 ));
 
 AgentCardGrid.displayName = 'AgentCardGrid';
