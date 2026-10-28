@@ -1106,10 +1106,9 @@ export const executeHeterogeneousAgent = async (
         },
         { operationId },
       );
-      // Bridge resolved without the user — drop the hand state so the
-      // sidebar reflects that we're back to whatever the stream does
-      // next (`active`/`failed` lands shortly after via runtime_end).
-      writeTopicStatus('running');
+      // Bridge resolved without the user: drop the hand state, unless the run already
+      // ended — onComplete wrote its final status and a late `running` would strand it.
+      if (!completed) writeTopicStatus('running');
     } catch (err) {
       console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
     }

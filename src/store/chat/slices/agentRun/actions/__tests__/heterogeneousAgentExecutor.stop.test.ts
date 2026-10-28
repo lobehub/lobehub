@@ -1,8 +1,7 @@
 /**
- * A user stop must leave no tool card looking finished. Replays the Copilot
- * CLI 1.0.105 recording of a stop during an allowed `sleep 30`: Copilot never
- * sends a terminal update for that tool, and the adapter's synthesized
- * cancelled result arrives after the stop, when the executor drops events.
+ * Stopping a GitHub Copilot run must leave nothing looking unfinished: no tool
+ * card that reads as a success, no topic stuck on its running spinner. Replays
+ * Copilot CLI 1.0.105 recordings through the real adapter and executor.
  */
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -97,8 +96,64 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 10));
 };
 
-describe('heterogeneousAgentExecutor — tools left running by a user stop', () => {
+const createStore = (abortController = new AbortController()) =>
+  ({
+    activeTopicId: 'topic-1',
+    associateMessageWithOperation: vi.fn(),
+    completeOperation: vi.fn(),
+    dbMessagesMap: {},
+    drainQueuedMessages: vi.fn(() => []),
+    internal_dispatchMessage: vi.fn(),
+    internal_toggleToolCallingStreaming: vi.fn(),
+    markTopicUnread: vi.fn(),
+    messagesMap: {},
+    operations: {
+      'op-1': { abortController, context: params.context, metadata: { startTime: 0 } },
+    },
+    optimisticUpdateMessagePlugin: vi.fn(async () => undefined),
+    refreshMessages: vi.fn(async () => {}),
+    refreshThreads: vi.fn(async () => {}),
+    replaceMessages: vi.fn(),
+    startOperation: vi.fn(() => ({
+      abortController: new AbortController(),
+      operationId: 'sub-op-1',
+    })),
+    topicDataMap: {},
+    updateOperationMetadata: vi.fn(),
+    updateTopicMetadata: vi.fn(async () => undefined),
+    updateTopicStatus: vi.fn(),
+  }) as any;
+
+describe('heterogeneousAgentExecutor — stopping a Copilot run', () => {
   let listeners: Map<string, (...args: any[]) => void>;
+
+  /** Run the executor; `emit` feeds raw Copilot payloads through the real adapter. */
+  const start = async (store: any) => {
+    const adapter = createAdapter('copilot');
+    const forward = (event: Record<string, unknown>) =>
+      listeners.get('heteroAgentEvent')?.(null, {
+        event: { stepIndex: 0, timestamp: Date.now(), ...event, operationId: 'op-1' },
+        sessionId: 'ipc-sess-1',
+      });
+    const emit = (raw: Record<string, unknown>) => {
+      for (const event of adapter.adapt(raw)) forward(event as any);
+    };
+    const run = executeHeterogeneousAgent(() => store, params);
+    await flush();
+    emit({ sessionId: 'copilot-session-1', type: 'copilot_session' });
+    const finish = async () => {
+      listeners.get('heteroAgentSessionComplete')?.(null, { sessionId: 'ipc-sess-1' });
+      resolveSendPrompt();
+      await run.catch(() => {});
+      await flush();
+    };
+    return { emit, finish, forward };
+  };
+
+  const toolRowId = (toolCallId: string) =>
+    mockCreateMessage.mock.calls.find(
+      ([message]) => message.role === 'tool' && message.tool_call_id === toolCallId,
+    )?.[0].id;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -133,74 +188,80 @@ describe('heterogeneousAgentExecutor — tools left running by a user stop', () 
     delete (globalThis as any).window;
   });
 
-  it('marks the running tool aborted and leaves the finished one alone', async () => {
+  it('marks the tool a stop interrupted aborted and leaves the finished one alone', async () => {
     const abortController = new AbortController();
-    const store = {
-      associateMessageWithOperation: vi.fn(),
-      completeOperation: vi.fn(),
-      dbMessagesMap: {},
-      drainQueuedMessages: vi.fn(() => []),
-      internal_dispatchMessage: vi.fn(),
-      internal_toggleToolCallingStreaming: vi.fn(),
-      markTopicUnread: vi.fn(),
-      messagesMap: {},
-      operations: {
-        'op-1': {
-          abortController,
-          context: params.context,
-          metadata: { startTime: 0 },
-        },
-      },
-      optimisticUpdateMessagePlugin: vi.fn(async () => undefined),
-      refreshMessages: vi.fn(async () => {}),
-      refreshThreads: vi.fn(async () => {}),
-      replaceMessages: vi.fn(),
-      startOperation: vi.fn(() => ({
-        abortController: new AbortController(),
-        operationId: 'sub-op-1',
-      })),
-      topicDataMap: {},
-      updateOperationMetadata: vi.fn(),
-      updateTopicMetadata: vi.fn(async () => undefined),
-    } as any;
+    const store = createStore(abortController);
+    const { emit, finish } = await start(store);
 
-    const adapter = createAdapter('copilot');
-    const emit = (raw: Record<string, unknown>) => {
-      for (const event of adapter.adapt(raw)) {
-        listeners.get('heteroAgentEvent')?.(null, {
-          event: { ...event, operationId: 'op-1' },
-          sessionId: 'ipc-sess-1',
-        });
-      }
-    };
-
-    const run = executeHeterogeneousAgent(() => store, params);
-    await flush();
-
-    emit({ sessionId: 'copilot-session-1', type: 'copilot_session' });
     for (const update of [...finishedRead, ...recordedUpdates()]) emit(update);
     await flush();
 
     // The user stops while `sleep 30` runs; Copilot then ends the turn cancelled.
     abortController.abort();
     emit({ stopReason: 'cancelled', type: 'copilot_prompt_completed' });
-    listeners.get('heteroAgentSessionComplete')?.(null, { sessionId: 'ipc-sess-1' });
-    resolveSendPrompt();
-    await run.catch(() => {});
-    await flush();
+    await finish();
 
-    const toolRowId = (toolCallId: string) =>
-      mockCreateMessage.mock.calls.find(
-        ([message]) => message.role === 'tool' && message.tool_call_id === toolCallId,
-      )?.[0].id;
     const sleepRow = toolRowId('call_mock_7');
-    const readRow = toolRowId('call_read');
     expect(sleepRow).toBeDefined();
-    expect(readRow).toBeDefined();
-
+    expect(toolRowId('call_read')).toBeDefined();
     const abortedRows = store.optimisticUpdateMessagePlugin.mock.calls
       .filter(([, value]: any[]) => value?.intervention?.status === 'aborted')
       .map(([id]: any[]) => id);
     expect(abortedRows).toEqual([sleepRow]);
+  });
+
+  it('leaves the topic idle when a stop ends the session under an open permission card', async () => {
+    const store = createStore();
+    // The rejected-card write is still in flight when the run completes.
+    store.optimisticUpdateMessagePlugin.mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 50)),
+    );
+    const { emit, finish, forward } = await start(store);
+
+    const shell = 'call_shell';
+    const card = `copilot-permission-0-${shell}`;
+    emit({
+      kind: 'execute',
+      sessionUpdate: 'tool_call',
+      status: 'pending',
+      title: 'Run',
+      toolCallId: shell,
+    });
+    emit({
+      identifier: 'claude-code',
+      rawInput: { questions: [] },
+      sessionUpdate: 'tool_call',
+      title: 'askUserQuestion',
+      toolCallId: card,
+    });
+    forward({
+      data: { arguments: { questions: [] }, toolCallId: card },
+      type: 'agent_intervention_request',
+    });
+    await flush();
+
+    // Stopping the background process ends the session: the bridge settles the
+    // card as `session_ended`, Copilot denies the tool and ends the turn.
+    forward({
+      data: { cancelReason: 'session_ended', cancelled: true, toolCallId: card },
+      type: 'agent_intervention_response',
+    });
+    emit({
+      rawOutput: { cancelled: true },
+      sessionUpdate: 'tool_call_update',
+      status: 'completed',
+      toolCallId: card,
+    });
+    emit({
+      rawOutput: { message: 'Permission denied' },
+      sessionUpdate: 'tool_call_update',
+      status: 'failed',
+      toolCallId: shell,
+    });
+    emit({ stopReason: 'end_turn', type: 'copilot_prompt_completed' });
+    await finish();
+
+    const statuses = store.updateTopicStatus.mock.calls.map(([{ status }]: any[]) => status);
+    expect(statuses.at(-1)).toBe('active');
   });
 });
