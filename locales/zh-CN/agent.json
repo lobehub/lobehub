@@ -118,6 +118,7 @@
   "channel.botWakeScopeAllHint": "机器人能读到的任何频道或子区。",
   "channel.botWakeScopeBotThreads": "仅限它发过言的地方",
   "channel.botWakeScopeBotThreadsHint": "机器人在追问时间窗内发过言的频道或子区。Discord 会把一个频道和它的子区算作同一处。",
+  "channel.botWakeScopeBotThreadsHintLark": "机器人在追问时间窗内发过言的群聊。",
   "channel.botWakeScopeHint": "限定机器人可以主动参与的位置。",
   "channel.botWakeScopeNone": "不主动参与",
   "channel.botWakeScopeNoneHint": "机器人不会主动插话。",

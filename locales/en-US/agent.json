@@ -118,6 +118,7 @@
   "channel.botWakeScopeAllHint": "Any channel or thread the bot can read.",
   "channel.botWakeScopeBotThreads": "Only where it already spoke",
   "channel.botWakeScopeBotThreadsHint": "A channel or thread where the bot posted within the follow-up window. Discord counts a channel and its threads as one place.",
+  "channel.botWakeScopeBotThreadsHintLark": "A group chat where the bot posted within the follow-up window.",
   "channel.botWakeScopeHint": "Limits the places where the bot may join unprompted.",
   "channel.botWakeScopeNone": "Nowhere",
   "channel.botWakeScopeNoneHint": "The bot never joins unprompted.",

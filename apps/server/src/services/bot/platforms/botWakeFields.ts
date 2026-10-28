@@ -60,9 +60,12 @@ const channelList = (key: string, label: string, idPlaceholder: string): FieldSc
  */
 export const makeBotWakeFields = ({
   channelIdPlaceholder = 'channel.botWakeChannelIdPlaceholder',
+  scopeBotThreadsHint = 'channel.botWakeScopeBotThreadsHint',
 }: {
   /** How the platform's conversation ids look, shown in the channel lists. */
   channelIdPlaceholder?: string;
+  /** What "where it already spoke" covers on the platform. */
+  scopeBotThreadsHint?: string;
 } = {}): FieldSchema[] => [
   {
     key: KEY.enabled,
@@ -85,7 +88,7 @@ export const makeBotWakeFields = ({
     enum: ['all', 'bot-threads', 'none'],
     enumDescriptions: [
       'channel.botWakeScopeAllHint',
-      'channel.botWakeScopeBotThreadsHint',
+      scopeBotThreadsHint,
       'channel.botWakeScopeNoneHint',
     ],
     enumLabels: [
@@ -249,7 +252,8 @@ export const makeBotWakeFields = ({
 
 export const botWakeFields: FieldSchema[] = makeBotWakeFields();
 
-/** Feishu / Lark: the lists take group chat ids (`oc_…`). */
+/** Feishu / Lark: a conversation is a group chat, and the lists take its id (`oc_…`). */
 export const larkBotWakeFields: FieldSchema[] = makeBotWakeFields({
   channelIdPlaceholder: 'channel.botWakeChannelIdPlaceholderLark',
+  scopeBotThreadsHint: 'channel.botWakeScopeBotThreadsHintLark',
 });

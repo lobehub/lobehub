@@ -176,8 +176,12 @@ describe('bot-wake settings fields', () => {
     expect(allow.items?.properties?.[0].placeholder).toBe(
       'channel.botWakeChannelIdPlaceholderLark',
     );
-    expect(larkBotWakeFields.flatMap(referencedKeys).filter((key) => !(key in agentLocale))).toEqual(
-      [],
-    );
+    // Discord's "a channel and its threads count as one place" does not describe a Feishu group.
+    const scope = larkBotWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.scope)!;
+    expect(scope.enumDescriptions).toContain('channel.botWakeScopeBotThreadsHintLark');
+    expect(agentLocale['channel.botWakeScopeBotThreadsHintLark']).not.toMatch(/discord/i);
+    expect(
+      larkBotWakeFields.flatMap(referencedKeys).filter((key) => !(key in agentLocale)),
+    ).toEqual([]);
   });
 });

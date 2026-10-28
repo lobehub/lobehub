@@ -475,6 +475,8 @@ export default {
   'channel.botWakeScopeBotThreads': 'Only where it already spoke',
   'channel.botWakeScopeBotThreadsHint':
     'A channel or thread where the bot posted within the follow-up window. Discord counts a channel and its threads as one place.',
+  'channel.botWakeScopeBotThreadsHintLark':
+    'A group chat where the bot posted within the follow-up window.',
   'channel.botWakeScopeNone': 'Nowhere',
   'channel.botWakeScopeNoneHint': 'The bot never joins unprompted.',
   'channel.botWakeAllowChannels': 'Allowed channels',
