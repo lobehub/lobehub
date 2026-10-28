@@ -396,4 +396,58 @@ describe('HeterogeneousAgentCtr GitHub Copilot ACP', () => {
       result: 'done',
     });
   });
+
+  it('refuses a Copilot older than 1.0.56 for a LobeHub model instead of asking for a GitHub sign-in', async () => {
+    serverDefault.begin.mockResolvedValue({ token: 'operation-token' });
+    serverDefault.describe.mockResolvedValue({ model: 'claude-sonnet-4-6' });
+    serverDefault.endpoint.mockResolvedValue('https://lobehub.test');
+    serverDefault.settle.mockResolvedValue({ success: true });
+    const detect = vi.fn().mockResolvedValue({ available: true, version: '1.0.55' });
+    const ctr = new HeterogeneousAgentCtr({
+      appStoragePath,
+      binaryManager: { detect },
+      storeManager: { get: vi.fn() },
+    } as unknown as App);
+    const serverSession = await ctr.startSession({
+      agentType: 'copilot',
+      command: 'copilot',
+      providerBinding: {
+        apiConfig: { model: 'claude-sonnet-4-6', source: 'server-default' },
+        kind: 'server-default',
+      },
+    });
+
+    const message =
+      'GitHub Copilot CLI 1.0.56 or newer is required to use a LobeHub provider. Installed version: 1.0.55.';
+    await expect(
+      ctr.sendPrompt({
+        operationId: 'op-copilot-old',
+        prompt: 'go',
+        sessionId: serverSession.sessionId,
+        topicId: 'topic-1',
+      }),
+    ).rejects.toThrow(message);
+    expect(copilot.construct).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+      error: expect.objectContaining({ code: 'cli_version_unsupported', message }),
+      sessionId: serverSession.sessionId,
+    });
+    expect(serverDefault.settle).toHaveBeenCalledWith(expect.any(Object), {
+      cancelled: false,
+      operationId: 'op-copilot-old',
+      result: 'error',
+    });
+
+    // The subscription path keeps working on the same old CLI.
+    const subscriptionSession = await ctr.startSession({
+      agentType: 'copilot',
+      command: 'copilot',
+    });
+    await ctr.sendPrompt({
+      operationId: 'op-copilot-old-subscription',
+      prompt: 'go',
+      sessionId: subscriptionSession.sessionId,
+    });
+    expect(copilot.construct).toHaveBeenCalledTimes(1);
+  });
 });

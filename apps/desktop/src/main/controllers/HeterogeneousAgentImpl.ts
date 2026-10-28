@@ -250,6 +250,15 @@ const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
 ] as const;
 
 /** Directory under appStoragePath for caching downloaded files */
+// Oldest CLI that honors a LobeHub provider binding. GitHub Copilot ignores its
+// BYOK env in ACP sessions before 1.0.56 and asks for a GitHub sign-in instead.
+const PROVIDER_BINDING_MIN_CLI_VERSIONS: Partial<
+  Record<string, { name: string; version: string }>
+> = {
+  'copilot': { name: 'GitHub Copilot CLI', version: '1.0.56' },
+  'kimi-code': { name: 'Kimi Code', version: '0.6.0' },
+  'trae': { name: 'TRAE CLI', version: '0.201.2' },
+};
 const FILE_CACHE_DIR = HETERO_AGENT_FILES_DIR;
 const CLI_TRACE_DIR = '.heerogeneous-tracing';
 const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
@@ -1016,31 +1025,15 @@ export default class HeterogeneousAgentCtr {
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
-      if (
-        session.agentType === 'kimi-code' &&
-        session.hostedProviderBinding &&
-        status?.version &&
-        semver.lt(status.version, '0.6.0')
-      ) {
+      const minimum = session.hostedProviderBinding
+        ? PROVIDER_BINDING_MIN_CLI_VERSIONS[session.agentType]
+        : undefined;
+      if (minimum && status?.version && semver.lt(status.version, minimum.version)) {
         return {
           agentType: session.agentType,
           code: 'cli_version_unsupported',
           command,
-          message: `Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
-          workingDirectory,
-        };
-      }
-      if (
-        session.agentType === 'trae' &&
-        session.hostedProviderBinding &&
-        status?.version &&
-        semver.lt(status.version, '0.201.2')
-      ) {
-        return {
-          agentType: session.agentType,
-          code: 'cli_version_unsupported',
-          command,
-          message: `TRAE CLI 0.201.2 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
+          message: `${minimum.name} ${minimum.version} or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
           workingDirectory,
         };
       }
