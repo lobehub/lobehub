@@ -77,8 +77,10 @@ export function toAgentDocument(
   const policy = (settings.policy as AgentDocumentPolicy | null) ?? null;
   const policyLoadFormat =
     (settings.policyLoadFormat as DocumentLoadFormat | null) ??
+    /* v8 ignore start -- unreachable: agent_documents.policy_load_format is NOT NULL */
     policy?.context?.policyLoadFormat ??
     DocumentLoadFormat.RAW;
+  /* v8 ignore stop */
 
   return {
     accessPublic: settings.accessPublic,
@@ -104,6 +106,7 @@ export function toAgentDocument(
     policyLoadFormat,
     policyLoadPosition: settings.policyLoadPosition,
     policyLoadRule: settings.policyLoadRule,
+    /* v8 ignore next -- unreachable: documents.source is NOT NULL */
     source: doc.source ?? null,
     sourceType: doc.sourceType,
     templateId: settings.templateId ?? null,
