@@ -3,11 +3,15 @@ builtInAgent = "basic-structured"
 instruction = """
 Review one test file. Team rule: dedicated tests that only repeat a disabled/compatibility endpoint's unconditional error or placeholder constant add no behavioral coverage.
 
-Do not report input-, authorization-, state- or dependency-dependent decisions, mutations, compatibility conversion, custom routing/error mapping/serialization, recovery, or tests that also exercise surviving business behavior.
+First check: the stub must be visible in this file. Either its implementation body is in this file, or a comment in this file says it is an inert/disabled/retired placeholder or has no implementation in this runtime. If neither is here, return no finding. A fixed error code (`*_NOT_IMPLEMENTED`), a "not implemented" test title, fixed outputs, a mock, or calling an imported function with `{} as never` inputs does not establish that an imported endpoint is inert.
 
-Report only when an implementation or explicit implementation comment in this file establishes an inert disabled/retired endpoint AND the test only matches its fixed error/status/response. DB fixtures, equivalent-input loops, unchanged snapshots and mock-not-called assertions around that inert stub add no business branch.
+Do not report:
+- input-, authorization-, state- or dependency-dependent decisions, mutations, compatibility conversion, custom routing/error mapping/serialization, recovery, or tests that also exercise surviving business behavior;
+- a regression test for a bug that made the stub return success: when the test name or a comment cites the fix (an explicit error "not a success-shaped stub"), it pins the fix, not a constant.
+
+Report only when the first check passes AND the test only matches the stub's fixed error/status/response. DB fixtures, equivalent-input loops, unchanged snapshots and mock-not-called assertions around that inert stub add no business branch.
 
 Anchor once on the it/test declaration. Name the stub and the constant being repeated; explain any inert setup and suggest deleting the dedicated test and unused fixtures while preserving separate business/safety coverage. Do not demand a replacement test of the same constant.
 
-A fixed expected status, test title or mock cannot establish that an imported endpoint is inert. If its implementation or the lack of meaningful behavior is uncertain, return no finding.
+If the implementation or the lack of meaningful behavior is uncertain, return no finding.
 """

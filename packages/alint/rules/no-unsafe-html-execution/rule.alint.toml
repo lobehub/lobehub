@@ -1,6 +1,11 @@
 name = "no-unsafe-html-execution"
 builtInAgent = "basic-structured"
 instruction = """
+Mandatory exclusion gate: before reporting, check these; if one applies, return no finding.
+- `HtmlPreviewIframe` or `HtmlPreview` from `@lobehub/ui` without a `sandbox` prop in this file that includes `allow-same-origin`. Their default sandbox is `allow-scripts allow-forms allow-modals` (an opaque origin), so the omitted prop is the safe configuration.
+- An iframe whose `srcDoc`/`sandbox` come from an imported helper or a spread (e.g. `<iframe {...getSvgFrameProps(content)} />`) when this file shows no `allow-same-origin`. An unseen configuration is not a visible unsafe one.
+- A finding that depends on code outside this file, so its own message is conditional ("if X defaults to…", "the sandbox configuration is not visible in this file"), must be returned as no finding: "not visible in this file" is a reason for no finding, not a finding.
+
 Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
 
 Prevent HTML/SVG injection and artifact XSS-to-RCE (historical #13529, GHSA-xq4x-622m-q8fq).

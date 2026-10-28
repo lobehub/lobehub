@@ -1,10 +1,15 @@
 name = "no-untrusted-code-execution"
 builtInAgent = "basic-structured"
 instruction = """
+Mandatory scope gate: this rule covers only eval, Function/new Function, node:vm, and a non-shell interpreter's -e/-c/-p program (node, python, deno, …) invoked with an argv array (execFile/spawn/execa without a shell). Before reporting, check these; if one applies, return no finding.
+- A shell command string (child_process exec/execSync string, `sh`/`bash -c`, shell:true) belongs to the shell injection rule, including a program string that reaches an interpreter through that shell string (e.g. exec(`${pythonCommand} -c "import ${pkg}"`)). Report it there, not here.
+- A shell command string or script built for, or sent to, a remote sandbox `runCommand`/terminal is not host code execution; neither is an environment's user-authored setup/bootstrap command (`bootstrapCommand`, `setupCommand`, `postCreateCommand`).
+- A finding that depends on code outside this file, so its own message is conditional ("if a caller passes…", "not visible in this file"), must be returned as no finding.
+
 Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
 
 Prevent untrusted data becoming executable code in the application's privileged process.
-Report request, user, model-generated, downloaded, or stored user content passed to eval, Function/new Function, node:vm runInNewContext/runInThisContext/Script, or interpreter -e/-c execution (node/python etc.) on the host without a real isolation/authorization boundary. node:vm and an empty context object are not security sandboxes. Also report writing downloaded code and then executing/importing it when that chain is visible. Anchor at execution, not the download/write. For shell-string construction use the shell injection rule; this rule covers code interpreted as a program.
+Report request, user, model-generated, downloaded, or stored user content passed to eval, Function/new Function, node:vm runInNewContext/runInThisContext/Script, or an interpreter -e/-c program passed as an argv element (node/python etc.) on the host without a real isolation/authorization boundary. node:vm and an empty context object are not security sandboxes. Also report writing downloaded code and then executing/importing it when that chain is visible. Anchor at execution, not the download/write.
 Recommend data parsing for data, or an existing isolated sandbox/runtime with restricted capabilities and explicit execution policy for intentional code execution.
 Do not report fixed build-time code, a fixed expression containing no untrusted interpolation, JSON.parse, parsing/compiling without executing, verified signed application updates, or code delegated to a visibly isolated remote/container worker with an execution-policy boundary. A generic parameter named code with no indication of untrusted origin is not sufficient. An authorized terminal/REPL feature is not itself a bug; report a visible isolation/approval bypass, not its existence.
 """

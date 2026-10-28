@@ -11,10 +11,13 @@ Do not report:
 - forms, settings pages and modals whose purpose is editing, where fields are inputs from the start;
 - rich-text or code editors, chat inputs and search boxes;
 - inline cell editing in data tables and spreadsheets;
-- rename or create on nodes of any file / folder tree or explorer list (ResourceManager, FileTree, ExplorerTree, DocumentExplorerTree, LibraryHierarchy), from double-click or a context menu — the OS file-manager convention;
+- rename or create on nodes of any file / folder / page tree or explorer list (ResourceManager, FileTree, ExplorerTree, DocumentExplorerTree, LibraryHierarchy, the ResourceHome page tree; rows indented by a `depth` from a built tree), from double-click or a context menu — the OS file-manager convention. A flat list of topics, agents, projects or tasks is not a tree and stays in scope;
 - inline editing inside a component that is itself a modal (`*Modal`, rendered through `createModal`);
 - a persistent add-row that is always visible, and a title that is always an input (a page title editor);
-- a menu action that only sets state which opens a modal. Report only when you can see this file render the inline input in place of the text.
+- a menu action that only sets state which opens a modal;
+- a file that only renders a child component in place (`InlineField`, `RenameInput`, `*InlineCreate`) without an `Input` / `TextArea` of its own: the child is not this file rendering an input — the child's own file is where the finding belongs.
+
+Report only when you can see this file render the inline input in place of the text.
 
 If an exclusion applies, return no finding. If uncertain, use low confidence.
 """

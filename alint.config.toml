@@ -192,8 +192,9 @@ hetero = "./packages/heterogeneous-agents/alint/rules"
 "hetero/host-capability-placement" = "warn"
 
 # UI review rules: the product owner's recurring acceptance rejections,
-# distilled from 620 review comments over 30 days. Warn-only: they are taste
-# with a rationale, meant to be read in review, not to block a merge. The
+# distilled from 620 review comments over 30 days. They start as warnings to
+# be read in review; a rule becomes `error` only after its findings on real
+# PRs measured at zero false positives (button hierarchy, edit in modal). The
 # broad ones (chrome, color, copy, links) are too noisy per PR and live in
 # alint.audit.toml for periodic whole-repo audits instead.
 [[config.group]]
@@ -206,7 +207,7 @@ lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/ui-button-hierarchy" = "error"
 "lobehub/ui-view-switch-tabs" = "warn"
-"lobehub/ui-edit-in-modal" = "warn"
+"lobehub/ui-edit-in-modal" = "error"
 "lobehub/ui-lightweight-errors" = "warn"
 
 # Page width: only page bodies, where a missing width container is visible.
@@ -594,7 +595,7 @@ ignores = [ "packages/database/**", "packages/alint/fixtures/**" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/no-benchmark-in-tests" = "warn"
+"lobehub/no-benchmark-in-tests" = "error"
 
 [[config.group]]
 files = [ "packages/alint/fixtures/no-benchmark-in-tests/**" ]

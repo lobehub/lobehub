@@ -1,6 +1,8 @@
 name = "no-privileged-untrusted-electron"
 builtInAgent = "basic-structured"
 instruction = """
+Mandatory scope gate: this rule covers only window/view webPreferences, preload contextBridge APIs, and IPC handler sender policy. Do not report command execution in main-process helpers (child_process exec/execFile/spawn, running a manifest's check or install command, probing installed packages) — that is the shell injection and code execution rules, even when the input is remote metadata. A file with no BrowserWindow/BrowserView/WebContentsView preferences, contextBridge exposure or ipcMain handler has nothing for this rule: return no finding. A finding that depends on code outside this file ("if this helper is reachable from a remote frame…", "not visible in this file") must be returned as no finding.
+
 Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
 
 Prevent remote/user content obtaining Electron/Node capabilities (XSS-to-RCE boundary).

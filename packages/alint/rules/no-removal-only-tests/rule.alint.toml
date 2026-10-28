@@ -3,9 +3,17 @@ builtInAgent = "basic-structured"
 instruction = """
 Review one test file. Team rule: a dedicated test that only confirms deleted implementation is absent adds no behavioral coverage.
 
-Do not report tests of runtime data deletion, security/isolation policies, conditional registration, explicit ongoing architecture/deployment registration boundaries (even when only the unsupported side is asserted), custom validation or compatibility conversion, or surviving business behavior. Negative assertions alone are not evidence of deleted implementation.
+Check two preconditions for each it/test before anything else. If either fails, return no finding for it:
+1. Removal is stated. This file (a comment, the test name or its describe title) says a specific command, source/export, store member, route or UI registration existed and was deleted: "removed", "retired", "deleted", "is gone", "used to". Quote those words in your message. If there are none, return no finding. "not", "never", "no longer", "does not", "intentionally", "unsupported", "must not also", "keeps out of" are not evidence of removal; alone they describe an ongoing boundary.
+2. Every assertion is an absence. Every assertion in the block checks only that the removed artifact is absent, that the framework rejects it by default (commander `unknownCommand` and the like), or that a mock around it was not called. If dropping those absence assertions leaves one assertion that would fail on a regression of retained code (a return value, a resolved/rejected result, a no-throw contract, the arguments of a surviving call), return no finding, even when the title or a comment names the removed artifact.
 
-Report only when the file establishes removal of a specific command, source/export or UI registration AND the test merely checks its absence or the framework's default rejection of the missing registration. A mock-not-called assertion around that same missing command adds no behavior. Constant disabled endpoint stubs belong to no-constant-stub-tests.
+Do not report, even when both preconditions seem to hold:
+- the absence of something never removed: a lazy-chunk split, a single persistence owner, a deliberately unregistered handler, the narrowed capability surface of new code, an exclusion branch in new code;
+- an artifact missing in one variant but present in another (a platform filter, a deprecated alias, a capability or option flag, hidden from help or the man page), even when the supported side is asserted in a sibling test or not at all. Hiding a command is not removing it;
+- a tRPC caller rejecting with NOT_FOUND/FORBIDDEN: a procedure called by name with typed input on a router caller exists, and a refusal tied to the record's kind or the caller's role is an authorization policy, not a missing procedure;
+- a retained function fed data still stored in user records or settings (a removed toggle whose deprecated field is still persisted) and asserted to ignore it: that is compatibility handling;
+- tests of runtime data deletion, security/isolation policies, explicit ongoing architecture/deployment registration boundaries, or custom validation and compatibility conversion.
+Constant disabled endpoint stubs belong to no-constant-stub-tests.
 
 Anchor once on the it/test declaration. Name the removed artifact and the absence being repeated; suggest deleting that dedicated test and unused setup, preserving tests of retained behavior. Do not invent another test to confirm the deletion.
 

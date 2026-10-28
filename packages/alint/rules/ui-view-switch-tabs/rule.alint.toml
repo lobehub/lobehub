@@ -12,6 +12,8 @@ Anchor on the line of the `Segmented` / `Tabs` element. In the message, name the
 
 Do not report:
 - `Segmented` used as a filter, a sort order, a unit or a display mode of the same data (list / grid, day / week, all / mine);
+- a `Segmented` whose options are categories or types of one collection (All / Documents / Images; All / Task / Document) when its value already lives in the URL — `onChange` navigates to a path or search param per option, or the value is passed in from a URL-backed parent. That is a filter whose key is in the URL, which is what the rule asks for; a per-option route does not turn it into a view switch. Page-level `Tabs` whose key is only in this file's `useState` stay pattern 2, even when they split one collection (Workspace / Private pools on a settings page);
+- icon toggles (`ActionIcon active=`) or a `Segmented` that switch how one section of a side panel shows its data (summary / history of the same works in a `WorkingSidebar/*` section): a section inside the working sidebar or another side panel is not a routed view;
 - small in-card or in-popover switches, form controls, and tabs inside modals;
 - tabs whose key is already read from the URL or passed in by a parent (controlled `activeTab` / `onTabChange` props);
 - tabs in a component hosted by a modal (`*Modal` files, `createModal`, `open*Modal` helpers). If you cannot see that the component is a routed page or portal view, return no finding;

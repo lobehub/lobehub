@@ -8,7 +8,7 @@ Team rule, distilled from the product owner's review rejections ("按钮用 fill
 Report ONLY these three patterns. They can be decided from this file alone; anything else about button weight is taste and is not this rule's job.
 1. Two or more `type="primary"` buttons rendered in the same action group — one footer, one toolbar, one row of actions — including a `danger` primary next to another primary. Anchor on the second one. Suggest keeping the primary on the commit action and making the other `type="default"`.
 2. A `type="primary"` button rendered once per item of a list — inside a `.map()` over rows, results, cards or options — so the list shows a column of primaries. Suggest `type="default"` (or `fill`) for the per-row action.
-3. `size="small"` on the single call to action of an empty state or a centered failure / retry state. Suggest the default size ("默认用 small 不对吧，应该默认 default").
+3. `size="small"` on the single call to action of an empty state or a centered failure / retry state — an `Empty`, or a centered block that stacks an icon or message above the button as the surface's only way forward (a "regenerate" under an expired QR code). Suggest the default size ("默认用 small 不对吧，应该默认 default").
 Anchor on the line of the button's opening tag. In the message, name the action (from its label or handler) and which pattern it matches.
 
 Do not report:
@@ -18,7 +18,8 @@ Do not report:
 - `danger` buttons inside a destructive confirmation dialog;
 - buttons whose type or size is a prop passed in by the caller;
 - a primary inside an inline notice, banner or `Alert` action: when it is the notice's one way forward, primary is right;
-- small buttons anywhere other than pattern 3 (toolbars, table cells, list rows, tags, popovers, section-title `extra`s, graph node headers).
+- small buttons anywhere other than pattern 3 (toolbars, table cells, list rows, tags, popovers, section-title `extra`s, graph node headers);
+- a small Retry in the `trailing` / `extra` / `actions` slot of a row component (`OverviewRow`, `NavItem`, a list item), even when that row is the section's error state: a one-line error row with a trailing button is a row button, not pattern 3's failure state.
 
 If an exclusion applies, return no finding. If uncertain, use low confidence.
 """
