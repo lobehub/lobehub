@@ -67,6 +67,14 @@ export interface StaleToolResultTrimConfig {
    */
   enabled?: boolean;
   /**
+   * Chars an image attached to a tool result (`pluginState.images`) counts as in the size gate
+   * and the savings estimate. Images are billed per pixel, not per char, so without a weight a
+   * history of image reads never clears the gate and dropping them looks like no saving at all.
+   * Anthropic bills a ~1000×1000 image at ~1.3k tokens, about 5k chars.
+   * @default 5000
+   */
+  imageCharEquivalent?: number;
+  /**
    * Trailing message count that is never trimmed. The model is actively
    * working with the tail of the conversation; trimming there saves little and
    * risks evicting context it is about to use.
@@ -106,6 +114,9 @@ export interface StaleToolResultTrimConfig {
 }
 
 const LOCAL_SYSTEM = 'lobe-local-system';
+
+const imageCountOf = (message: Message) =>
+  (message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0;
 const BROWSER = 'lobe-browser';
 const WEB_BROWSING = 'lobe-web-browsing';
 const MESSAGE = 'lobe-message';
@@ -285,6 +296,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       crawlKeepChars: config.crawlKeepChars ?? 1000,
       economics,
       enabled: config.enabled ?? true,
+      imageCharEquivalent: config.imageCharEquivalent ?? 5000,
       keepRecentMessages: config.keepRecentMessages ?? 20,
       minTotalToolChars: config.minTotalToolChars ?? 100_000,
       pageTextKeepChars: config.pageTextKeepChars ?? 1000,
@@ -330,7 +342,9 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     let closedToolChars = 0;
     for (let i = 0; i < boundary; i++) {
       const m = messages[i];
-      if (m.role === 'tool' && typeof m.content === 'string') closedToolChars += m.content.length;
+      if (m.role !== 'tool') continue;
+      if (typeof m.content === 'string') closedToolChars += m.content.length;
+      closedToolChars += imageCountOf(m) * this.config.imageCharEquivalent;
     }
     if (closedToolChars < this.config.minTotalToolChars) {
       return this.markAsExecuted(context);
@@ -406,8 +420,14 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     // the candidates, and the priced payload are all frozen at the turn
     // boundary, so the decision cannot flip mid-operation and flip the
     // prefix with it.
+    // A trimmed result also loses its images (pass 3), which is most of the saving for an
+    // image read.
     const potentialSavedChars = candidates.reduce(
-      (s, c) => s + (messages[c.index].content as string).length - c.content.length,
+      (s, c) =>
+        s +
+        (messages[c.index].content as string).length -
+        c.content.length +
+        imageCountOf(messages[c.index]) * this.config.imageCharEquivalent,
       0,
     );
     const triggeredAt = toEpochMs(messages[lastUserIndex]?.createdAt);
@@ -430,6 +450,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       for (let i = 0; i < payloadEnd; i++) {
         const m = messages[i];
         if (typeof m.content === 'string') totalChars += m.content.length;
+        totalChars += imageCountOf(m) * this.config.imageCharEquivalent;
       }
       const gainEstimate =
         this.config.warmRemainingStepsEstimate * potentialSavedChars * this.config.cacheReadPrice;
@@ -471,7 +492,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       const candidate = candidateByIndex.get(index);
       if (!candidate) return message;
 
-      savedChars += (message.content as string).length - candidate.content.length;
+      savedChars +=
+        (message.content as string).length -
+        candidate.content.length +
+        imageCountOf(message) * this.config.imageCharEquivalent;
       byRule[candidate.rule] = (byRule[candidate.rule] ?? 0) + 1;
       // A trimmed image read must not keep its attachments: MessageContentProcessor
       // (later in the pipeline) would still turn pluginState.images into

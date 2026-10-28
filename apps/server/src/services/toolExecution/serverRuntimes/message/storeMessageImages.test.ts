@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMessageImageStore, MAX_MESSAGE_IMAGE_BYTES } from './storeMessageImages';
 
 const uploadFromBuffer = vi.hoisted(() => vi.fn());
+const fetchMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: fetchMock }));
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(function () {
@@ -32,15 +35,11 @@ const pngResponse = (bytes = 1000, contentType = 'image/png') =>
 const store = createMessageImageStore({ serverDB: {} as any, userId: 'user_1' });
 
 describe('createMessageImageStore', () => {
-  const fetchMock = vi.fn();
-
   beforeEach(() => {
-    vi.stubGlobal('fetch', fetchMock);
     uploadFromBuffer.mockResolvedValue({ fileId: 'file_1', key: 'k', url: 'https://app/f/file_1' });
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -61,7 +60,9 @@ describe('createMessageImageStore', () => {
     const [buffer, mediaType, pathname] = uploadFromBuffer.mock.calls[0];
     expect(buffer.length).toBe(1000);
     expect(mediaType).toBe('image/png');
-    expect(pathname).toMatch(/^files\/\d{4}-\d{2}-\d{2}\/im-1564834535558881420-image\.png$/);
+    expect(pathname).toMatch(
+      /^files\/\d{4}-\d{2}-\d{2}\/im-1564834535558881420-[\da-f]{12}-image\.png$/,
+    );
   });
 
   it('never fetches hosts off the allowlist', async () => {
@@ -100,5 +101,18 @@ describe('createMessageImageStore', () => {
     const images = await store([candidate({ name: 'a.png' }), candidate({ name: 'b.png' })]);
 
     expect(images.map((image) => image.name)).toEqual(['b.png']);
+  });
+
+  it('gives two attachments with the same file name different object keys', async () => {
+    fetchMock.mockImplementation(async () => pngResponse());
+
+    await store([
+      candidate({ url: 'https://cdn.discordapp.com/attachments/1/111/image.png' }),
+      candidate({ url: 'https://cdn.discordapp.com/attachments/1/222/image.png' }),
+    ]);
+
+    const keys = uploadFromBuffer.mock.calls.map((call) => call[2]);
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
   });
 });
