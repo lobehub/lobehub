@@ -86,6 +86,18 @@ describe('FileModel.countUsage', () => {
     expect(await fileModel.countUsage()).toBe(10 + 10 + 20 + 30 + 40 + 40);
   });
 
+  it('counts the largest size when rows of one object disagree', async () => {
+    await serverDB
+      .insert(files)
+      .values([
+        row({ fileHash: 'h1', size: 20, url: 'files/u/h1.png' }),
+        row({ fileHash: 'h1', size: 3000, url: 'files/u/h1.png' }),
+        row({ fileHash: 'h1', size: 500, url: 'files/u/h1.png' }),
+      ]);
+
+    expect(await fileModel.countUsage()).toBe(3000);
+  });
+
   it('scopes a workspace sum to that workspace', async () => {
     const [a, b] = await serverDB
       .insert(workspaces)

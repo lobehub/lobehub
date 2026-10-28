@@ -387,19 +387,23 @@ export class FileModel {
   ): Promise<number> => {
     const sharedObject = and(isNotNull(files.fileHash), notLike(files.url, 'internal://%'));
 
-    const objects = db
-      .selectDistinctOn([files.url, files.fileHash], { size: files.size })
-      .from(files)
-      .where(and(scope, sharedObject))
-      .as('objects');
-
-    const [rows] = await db
-      .select({ totalSize: sum(files.size) })
+    const unshared = db
+      .select({ size: sql<number>`${files.size}`.as('size') })
       .from(files)
       .where(and(scope, not(sharedObject!)));
-    const [deduped] = await db.select({ totalSize: sum(objects.size) }).from(objects);
+    // Rows of one object should agree on its size; if they do not, count the
+    // largest so a stale row can never lower usage.
+    const shared = db
+      .select({ size: sql<number>`max(${files.size})`.as('size') })
+      .from(files)
+      .where(and(scope, sharedObject))
+      .groupBy(files.url, files.fileHash);
+    // One statement, so both parts read the same snapshot of `files`.
+    const objects = unshared.unionAll(shared).as('objects');
 
-    return (Number(rows?.totalSize) || 0) + (Number(deduped?.totalSize) || 0);
+    const [result] = await db.select({ totalSize: sum(objects.size) }).from(objects);
+
+    return Number(result?.totalSize) || 0;
   };
 
   /**
