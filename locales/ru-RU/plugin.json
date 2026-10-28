@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "Всего параметров: {{count}}",
   "arguments.title": "Аргументы",
+  "builtins.builtin-goal.apiName.createGoal": "Начать цель",
   "builtins.claude-code.apiName.Agent": "Запустить субагента",
   "builtins.claude-code.apiName.Bash": "Выполнить команду",
   "builtins.claude-code.apiName.Edit": "Редактировать файл",
@@ -342,7 +343,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "Проверить прерванную задачу",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "Прочитать артефакт цели",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "Выбрать действие для восстановления",
-  "builtins.lobe-goal.apiName.createGoal": "Начать цель",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Массовое создание агентов",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Создать агента",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Создать группу",

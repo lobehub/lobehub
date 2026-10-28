@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "{{count}} Parameter insgesamt",
   "arguments.title": "Argumente",
+  "builtins.builtin-goal.apiName.createGoal": "Ziel starten",
   "builtins.claude-code.apiName.Agent": "Subagent ausführen",
   "builtins.claude-code.apiName.Bash": "Befehl ausführen",
   "builtins.claude-code.apiName.Edit": "Datei bearbeiten",
@@ -342,7 +343,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "Unterbrochene Aufgabe inspizieren",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "Zielartefakt lesen",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "Wiederherstellungsaktion wählen",
-  "builtins.lobe-goal.apiName.createGoal": "Ziel starten",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Agenten stapelweise erstellen",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Agent erstellen",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Gruppe erstellen",

@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "Toplam {{count}} parametre",
   "arguments.title": "Argümanlar",
+  "builtins.builtin-goal.apiName.createGoal": "Hedef başlat",
   "builtins.claude-code.apiName.Agent": "Alt ajan çalıştır",
   "builtins.claude-code.apiName.Bash": "Komut çalıştır",
   "builtins.claude-code.apiName.Edit": "Dosyayı düzenle",
@@ -342,7 +343,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "Kesintiye uğramış görevi incele",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "Hedef eserini oku",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "Kurtarma eylemini seç",
-  "builtins.lobe-goal.apiName.createGoal": "Hedef başlat",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Toplu ajan oluştur",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Ajan oluştur",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Grup oluştur",

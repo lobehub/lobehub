@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "總共有 {{count}} 個參數",
   "arguments.title": "參數清單",
+  "builtins.builtin-goal.apiName.createGoal": "開始目標",
   "builtins.claude-code.apiName.Agent": "執行子代理",
   "builtins.claude-code.apiName.Bash": "執行指令",
   "builtins.claude-code.apiName.Edit": "編輯檔案",
@@ -342,7 +343,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "檢查中斷的任務",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "閱讀目標工件",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "選擇恢復操作",
-  "builtins.lobe-goal.apiName.createGoal": "開始目標",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "批次建立代理",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "建立代理",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "建立群組",

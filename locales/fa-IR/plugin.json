@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "{{count}} پارامتر در مجموع",
   "arguments.title": "آرگومان‌ها",
+  "builtins.builtin-goal.apiName.createGoal": "شروع هدف",
   "builtins.claude-code.apiName.Agent": "اجرای زیرعامل",
   "builtins.claude-code.apiName.Bash": "اجرای فرمان",
   "builtins.claude-code.apiName.Edit": "ویرایش فایل",
@@ -342,7 +343,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "بررسی وظیفه متوقف‌شده",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "خواندن اثر هدف",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "انتخاب اقدام بازیابی",
-  "builtins.lobe-goal.apiName.createGoal": "شروع هدف",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "ایجاد گروهی عامل‌ها",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "ایجاد عامل",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "ایجاد گروه",

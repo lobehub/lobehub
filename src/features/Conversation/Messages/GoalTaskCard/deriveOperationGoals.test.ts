@@ -21,7 +21,7 @@ describe('deriveOperationGoals', () => {
             name: 'San Francisco night fog',
           }),
           id: 'call-1',
-          identifier: 'lobe-goal',
+          identifier: 'builtin-goal',
           result: {
             content: 'started',
             id: 'tool-1',

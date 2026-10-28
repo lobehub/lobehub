@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "{{count}} параметъра общо",
   "arguments.title": "Аргументи",
+  "builtins.builtin-goal.apiName.createGoal": "Започни цел",
   "builtins.claude-code.apiName.Agent": "Стартиране на подагент",
   "builtins.claude-code.apiName.Bash": "Изпълни команда",
   "builtins.claude-code.apiName.Edit": "Редактиране на файл",
@@ -342,7 +343,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "Преглед на прекъсната задача",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "Прочетете артефакт на целта",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "Изберете действие за възстановяване",
-  "builtins.lobe-goal.apiName.createGoal": "Започни цел",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "Създай агенти на групи",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "Създай агент",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "Създайте група",

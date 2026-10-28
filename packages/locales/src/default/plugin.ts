@@ -579,7 +579,7 @@ export default {
   'builtins.lobe-dashboard.title': 'Dashboards',
   'builtins.lobe-task.apiName.createTask': 'Create task',
   'builtins.lobe-task.apiName.createGoal': 'Start goal',
-  'builtins.lobe-goal.apiName.createGoal': 'Start goal',
+  'builtins.builtin-goal.apiName.createGoal': 'Start goal',
   'builtins.lobe-task.apiName.createTasks': 'Create tasks',
   'builtins.lobe-task.apiName.addTaskComment': 'Add comment',
   'builtins.lobe-task.apiName.deleteTask': 'Delete task',
