@@ -3,9 +3,10 @@ import { inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { topics, users } from '../../../schemas';
+import { agentOperations, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
+import { ABANDONED_OPERATION_TTL_MS } from '../../topic/runningOperation';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -13,6 +14,7 @@ const userId = 'topic-run-guards-user';
 const otherUserId = 'topic-run-guards-other';
 const topicId = 'topic-run-guards-topic';
 const otherTopicId = 'topic-run-guards-other-topic';
+const operationId = 'topic-run-guards-operation';
 
 const topicModel = new TopicModel(serverDB, userId);
 
@@ -31,6 +33,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // agent_operations.user_id has no FK, so the row would outlive its owner.
+  await serverDB.delete(agentOperations).where(inArray(agentOperations.id, [operationId]));
   // Topics cascade with their owner.
   await serverDB.delete(users).where(inArray(users.id, [userId, otherUserId]));
 });
@@ -176,6 +180,57 @@ describe('TopicModel running-operation guards', () => {
 
     expect(await topicModel.takeRunningOperation(otherTopicId, 'op-root')).toBeUndefined();
     expect((await readMetadata(otherTopicId))?.runningOperation).toEqual(runningOperation);
+  });
+});
+
+describe('TopicModel task-callback reservation past a dead run', () => {
+  const runningOperation = {
+    assistantMessageId: 'msg-dead',
+    operationId,
+    startedAt: new Date().toISOString(),
+  };
+  const longAgo = new Date(Date.now() - ABANDONED_OPERATION_TTL_MS - 60_000);
+
+  const expectReserved = async () => {
+    expect(await topicModel.tryReserveTaskCallback(topicId, 'callback-msg')).toBe(true);
+    expect((await readMetadata())?.taskCallbackReservation?.messageId).toBe('callback-msg');
+  };
+
+  it('reserves a topic whose marker points at a finished operation', async () => {
+    await serverDB.insert(topics).values({ id: topicId, metadata: { runningOperation }, userId });
+    await serverDB
+      .insert(agentOperations)
+      .values({ id: operationId, status: 'done', topicId, userId });
+
+    await expectReserved();
+  });
+
+  it('reserves a topic whose operation still claims running past the abandoned TTL', async () => {
+    await serverDB.insert(topics).values({ id: topicId, metadata: { runningOperation }, userId });
+    await serverDB
+      .insert(agentOperations)
+      .values({ createdAt: longAgo, id: operationId, status: 'running', topicId, userId });
+
+    await expectReserved();
+  });
+
+  it('reserves a topic whose row-less marker was stamped before the abandoned TTL', async () => {
+    await serverDB.insert(topics).values({
+      id: topicId,
+      metadata: { runningOperation: { ...runningOperation, startedAt: longAgo.toISOString() } },
+      userId,
+    });
+
+    await expectReserved();
+  });
+
+  it('reserves a topic whose row-less marker carries no start stamp', async () => {
+    const { startedAt: _startedAt, ...unstamped } = runningOperation;
+    await serverDB
+      .insert(topics)
+      .values({ id: topicId, metadata: { runningOperation: unstamped }, userId });
+
+    await expectReserved();
   });
 });
 
