@@ -59,19 +59,6 @@ const ftsSource = (candidateIds: string[]) => ({
   })),
 });
 
-/**
- * Returns successive values on each read, so a property can pass the caller's own
- * `=== undefined` / `=== null` checks and then hand a different value to the normalizer.
- */
-const shiftingProperty = <T extends object>(target: T, key: string, values: unknown[]): T => {
-  let reads = 0;
-  Object.defineProperty(target, key, {
-    enumerable: true,
-    get: () => values[Math.min(reads++, values.length - 1)],
-  });
-  return target;
-};
-
 describe('UserMemoryModel static parsers - fallbacks', () => {
   it('wraps a JSON scalar association extra and drops a missing one', () => {
     expect(
@@ -267,25 +254,23 @@ describe('UserMemoryModel identity entry normalization', () => {
     });
   });
 
-  it('addIdentityEntry() normalizes non-string values the caller checks let through', async () => {
-    const nullAtNormalize = await memoryModel.addIdentityEntry({
-      identity: shiftingProperty(
-        shiftingProperty({}, 'relationship', ['self', 'self', null]),
-        'type',
-        ['personal', 'personal', null],
-      ),
-    } as any);
-    const numberAtNormalize = await memoryModel.addIdentityEntry({
-      identity: shiftingProperty(
-        shiftingProperty({}, 'relationship', ['self', 'self', 7]),
-        'type',
-        ['personal', 'personal', 7],
-      ),
+  it('addIdentityEntry() / updateIdentityEntry() store null for non-string enum values', async () => {
+    // Tool payloads arrive as untyped JSON, so a number can reach the enum normalizers.
+    const { identityId } = await memoryModel.addIdentityEntry({
+      identity: { relationship: 7, type: 7 },
     } as any);
 
-    for (const { identityId } of [nullAtNormalize, numberAtNormalize]) {
-      expect(await readIdentity(identityId)).toMatchObject({ relationship: null, type: null });
-    }
+    expect(await readIdentity(identityId)).toMatchObject({ relationship: null, type: null });
+
+    const typed = await memoryModel.addIdentityEntry({
+      identity: { relationship: 'self', type: 'personal' },
+    } as any);
+    await memoryModel.updateIdentityEntry({
+      identity: { relationship: 7, type: 7 },
+      identityId: typed.identityId,
+    } as any);
+
+    expect(await readIdentity(typed.identityId)).toMatchObject({ relationship: null, type: null });
   });
 
   it('updateIdentityEntry() skips writes for empty base and identity payloads', async () => {
