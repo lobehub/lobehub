@@ -26,10 +26,16 @@ export const createPageSessions = (db: LobeChatDatabase, writer: PageWriter): Pa
   return {
     openSession: async (documentId, options) => {
       const row = await documents.getDocumentById(documentId);
-      if (row?.fileType === HTML_DOCUMENT_FILE_TYPE) throw new PageUnsupportedError();
-      return room && !(row && isSkillMarkdownDocument(row))
-        ? room.openSession(documentId)
-        : stored.openSession(documentId, options);
+      if (!row) throw new Error(`Page document not found: ${documentId}`);
+      if (row.fileType === HTML_DOCUMENT_FILE_TYPE) throw new PageUnsupportedError();
+      if (!room || isSkillMarkdownDocument(row)) return stored.openSession(documentId, options);
+
+      // The room reads and persists with the gateway token and the page owner's
+      // scope, so the writer's own permission is the only gate in front of it.
+      if ((await resolvePageAccess(db, writer.userId, documentId)) !== 'edit') {
+        throw new Error(`No permission to edit page: ${documentId}`);
+      }
+      return room.openSession(documentId);
     },
   };
 };
