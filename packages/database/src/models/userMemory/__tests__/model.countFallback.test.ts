@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { PGlite } from '@electric-sql/pglite';
 import { LayersEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { drizzle as proxyDrizzle } from 'drizzle-orm/pg-proxy';
@@ -15,21 +16,26 @@ import { UserMemoryModel } from '../model';
 const userId = 'memory-count-fallback-test-user';
 
 const serverDB: LobeChatDatabase = await getTestDB();
-const pool = (serverDB as unknown as { $client: Pool }).$client;
+const client = (serverDB as unknown as { $client: PGlite | Pool }).$client;
+
+/** Runs a statement on the real test client: PGlite (client-db suite) or node-postgres. */
+const runOnTestDB = async (text: string, values: unknown[], arrayMode: boolean) => {
+  if (client instanceof PGlite) {
+    return client.query(text, values, { rowMode: arrayMode ? 'array' : 'object' });
+  }
+
+  return client.query({ rowMode: arrayMode ? 'array' : undefined, text, values });
+};
 
 /**
- * Forwards every statement to the real test pool, but answers `SELECT COUNT(...)` with no rows,
+ * Forwards every statement to the real test database, but answers `SELECT COUNT(...)` with no rows,
  * so the `totalResult[0]?.count ?? 0` fallbacks see an aggregate that produced nothing.
  */
 const countlessDB = proxyDrizzle(
   async (text, params, method) => {
     if (/^select count\(/i.test(text.trim())) return { rows: [] };
 
-    const result = await pool.query({
-      rowMode: method === 'all' ? 'array' : undefined,
-      text,
-      values: params,
-    });
+    const result = await runOnTestDB(text, params, method === 'all');
 
     return { rows: result.rows };
   },
