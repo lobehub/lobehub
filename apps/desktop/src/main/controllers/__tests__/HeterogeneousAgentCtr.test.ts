@@ -549,7 +549,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
+vi.mock('@lobechat/heterogeneous-agents/rpc', async (importOriginal) => {
   class MockPiRpcSession {
     isReusable = true;
     constructor(private readonly options: any) {
@@ -568,10 +568,9 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
       piRpcSessionRebindMock(callbacks);
     }
 
-    async run() {
-      if (piRpcSessionRunMock.getMockImplementation()) {
-        return piRpcSessionRunMock(this.options);
-      }
+    async run(prompt: { text: string }) {
+      const result = piRpcSessionRunMock(this.options, prompt);
+      if (result) return result;
       const now = Date.now();
       this.options.onSessionId('pi_sess_1');
       await this.options.onEvents([
@@ -586,7 +585,7 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
     }
   }
 
-  return { PiRpcSession: MockPiRpcSession };
+  return { ...(await importOriginal<object>()), PiRpcSession: MockPiRpcSession };
 });
 
 const { consumeCodexRateLimitResetCreditMock, fetchCodexQuotaMock } = vi.hoisted(() => ({
@@ -4583,7 +4582,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       expect(piRpcSessionConstructMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          args: ['--provider', 'anthropic'],
+          args: ['--skill', expect.stringContaining('SKILL.md'), '--provider', 'anthropic'],
           commandPath: 'pi',
           operationId: 'op-pi',
           resumeSessionId: 'prev_sess',
@@ -4689,8 +4688,8 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
       await ctr.stopSession({ sessionId: first.sessionId });
 
-      // Turn 2: resumes with the native id captured on turn 1 → the pool
-      // returns the SAME PiRpcSession instead of constructing a new one.
+      expect(piRpcSessionRunMock.mock.calls[0][1]).toEqual({ text: 'first' });
+      // Resume must reuse the same process and keep the next user turn clean.
       const second = await ctr.startSession({
         agentType: 'pi',
         command: 'pi',
@@ -4701,6 +4700,7 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.stopSession({ sessionId: second.sessionId });
 
       expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(1);
+      expect(piRpcSessionRunMock.mock.calls[1][1]).toEqual({ text: 'second' });
       expect(piRpcSessionConstructMock.mock.calls[0][0].shellOperationId).toBe('op-1');
       expect(piRpcSessionRebindMock.mock.calls[0][0].shellOperationId).toBe('op-2');
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {

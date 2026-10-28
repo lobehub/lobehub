@@ -18,7 +18,7 @@ import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolv
 import {
   createPiRpcAgentHandle,
   type PiRpcStartupControl,
-  toPiRpcPrompt,
+  preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
@@ -91,11 +91,8 @@ const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
 /**
- * Runtime selection registry for `lh hetero exec` — the CLI counterpart of
- * the desktop controller's `runtimeDispatchers`. Long-lived bidirectional
- * runtimes (pi RPC) register a spawn factory here; every other agent uses the
- * generic one-shot `spawnAgent`. A future agent adopting an RPC mode only
- * adds one entry — no dispatch edit.
+ * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
+ * through to the generic one-shot `spawnAgent`.
  */
 const spawnRuntimeRegistry: Partial<
   Record<
@@ -111,7 +108,10 @@ const spawnRuntimeRegistry: Partial<
 > = {
   pi: async (spawnOpts, lifecycle) =>
     createPiRpcAgentHandle({
-      args: spawnOpts.extraArgs ?? [],
+      ...(await preparePiRpcInput(spawnOpts.prompt, {
+        args: spawnOpts.extraArgs ?? [],
+        lobeHubContext: !!spawnOpts.env?.LOBEHUB_TOPIC_ID,
+      })),
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       detached: spawnOpts.detached,
@@ -119,7 +119,6 @@ const spawnRuntimeRegistry: Partial<
       operationId: spawnOpts.operationId,
       onRawStdout: lifecycle?.onRawStdout,
       onStartupControl: lifecycle?.onStartupControl,
-      prompt: await toPiRpcPrompt(spawnOpts.prompt),
       resumeSessionId: spawnOpts.resumeSessionId,
       uploadImage: spawnOpts.uploadImage,
     }),

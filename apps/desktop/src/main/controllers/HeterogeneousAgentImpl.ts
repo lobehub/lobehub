@@ -59,9 +59,9 @@ import {
 } from '@lobechat/heterogeneous-agents/quota-sampler';
 import { isLoginShellTimeoutStatus } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import {
-  type PiRpcImage,
   PiRpcSession,
   type PiRpcSessionCallbacks,
+  preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentStreamEvent,
@@ -97,7 +97,6 @@ import {
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
-  normalizeImage,
   prepareClaudeCodeLobeHubCli,
   readClaudeCodeSessionCost,
   readCodexSessionModel,
@@ -2767,32 +2766,14 @@ export default class HeterogeneousAgentCtr {
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
-    const text: string[] = [];
-    const images: PiRpcImage[] = [];
-    for (const block of promptBlocks) {
-      if (block.type === 'text') {
-        if (block.text) text.push(block.text);
-        continue;
-      }
-      try {
-        const image = await normalizeImage(block.source, { cacheDir: this.fileCacheDir });
-        images.push({
-          data: image.buffer.toString('base64'),
-          mimeType: image.mediaType,
-          type: 'image',
-        });
-      } catch (error) {
-        // A broken attachment must not silently drop the image from the
-        // prompt — surface it like the Codex/Grok paths do.
-        throw new Error(
-          `Failed to attach image(s) to Pi RPC prompt: ${this.getErrorMessage(error) || 'Unknown error'}`,
-          { cause: error },
-        );
-      }
-    }
+    const input = await preparePiRpcInput(promptBlocks, {
+      args: session.args,
+      cacheDir: this.fileCacheDir,
+      lobeHubContext: true,
+    });
 
     const traceSession = await this.createCliTraceSession({
-      cliArgs: ['--mode', 'rpc', ...session.args],
+      cliArgs: ['--mode', 'rpc', ...input.args],
       cwd,
       imageList: params.imageList ?? [],
       session,
@@ -2824,7 +2805,7 @@ export default class HeterogeneousAgentCtr {
     const spawnFingerprint = [
       commandPath,
       cwd,
-      JSON.stringify(session.args ?? []),
+      JSON.stringify(input.args),
       JSON.stringify(
         Object.entries(spawnEnv)
           .filter(([key]) => key !== 'LOBEHUB_OPERATION_ID')
@@ -2836,7 +2817,7 @@ export default class HeterogeneousAgentCtr {
     const rpcSession =
       pooledSession ??
       new PiRpcSession({
-        args: session.args,
+        args: input.args,
         commandPath,
         cwd,
         env: spawnEnv,
@@ -2859,10 +2840,7 @@ export default class HeterogeneousAgentCtr {
     });
 
     try {
-      const { aborted } = await rpcSession.run({
-        text: text.join('\n\n'),
-        ...(images.length > 0 ? { images } : {}),
-      });
+      const { aborted } = await rpcSession.run(input.prompt);
       if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
       // Hand the process to the pool for the next turn (native id known now).
       // A fresh process without a native id cannot be keyed — recycle it.
