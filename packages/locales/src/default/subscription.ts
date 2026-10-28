@@ -517,7 +517,6 @@ export default {
   'plans.cloud.sync': 'Global cloud sync',
   'plans.cloud.title': 'Cloud Service',
   'plans.compare.agentMemory': 'Agent memory',
-  'plans.compare.applies': 'Applies',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
   'plans.compare.concurrentAgentRuns': 'Concurrent agent tasks',
@@ -565,6 +564,7 @@ export default {
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
   'plans.limits.rolling5hSpend': '5-hour usage limit',
+  'plans.limits.rolling5hSpend.multiple': '5-hour usage limit: {{multiple}}× that of {{plan}}',
   'plans.limits.rolling5hSpend.tooltip':
     'Usage within any 5 hours is capped too. The window starts with your first request and resets 5 hours later.',
   'plans.limits.rolling5hSpend.unavailable': 'No 5-hour limit',
@@ -578,6 +578,7 @@ export default {
   'plans.limits.ultraMonthlySpend.multiple': 'Ultra models: {{multiple}}× the usage of {{plan}}',
   'plans.limits.ultraMonthlySpend.tooltip':
     'Ultra models are the most capable and most expensive ones. They use your weekly credits and are also capped each month.',
+  'plans.limits.ultraMonthlySpend.unavailable': 'Ultra models',
   'plans.plan.max.desc': 'For power users running agents at scale',
   'plans.plan.plus.desc': 'For everyday AI use',
   'plans.plan.pro.desc': 'For professionals who rely on AI every day',
@@ -704,6 +705,9 @@ export default {
   'plansModal.modelAccess.desc':
     'This model is available on paid plans. Upgrade to use the full model lineup.',
   'plansModal.modelAccess.title': 'Unlock all models',
+  'plansModal.ultraModelAccess.desc':
+    'Ultra models are the most capable and most expensive ones, available on Pro and above. Upgrade to use them.',
+  'plansModal.ultraModelAccess.title': 'Ultra models need Pro or above',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
@@ -717,7 +721,7 @@ export default {
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets {{credit}} free credits per month, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
   'qa.list.limit.a':
-    '{{cloud}} offers {{plus}}, {{pro}} and {{max}}, each with a weekly usage allowance that resets 7 days after it starts ({{plus}} also has a 5-hour limit). When you reach a limit, you can wait for it to reset or upgrade your plan. Credit packs bought on the <fundsLink>"{{funds}}"</fundsLink> page keep you going once your plan limits run out. You can also set up a custom model API key to use API credits purchased from other sources.',
+    '{{cloud}} offers {{plus}}, {{pro}} and {{max}}. Each caps usage within 5 hours and within a week; each window resets 5 hours or 7 days after it starts. When you reach a limit, you can wait for it to reset or upgrade your plan. Credit packs bought on the <fundsLink>"{{funds}}"</fundsLink> page keep you going once your plan limits run out. You can also set up a custom model API key to use API credits purchased from other sources.',
   'qa.list.limit.q': 'What if I run out of credits?',
   'qa.list.highUsage.a':
     'Credit consumption depends heavily on conversation length. As a conversation grows, each new message sends the entire history as input tokens, which increases cost significantly. We recommend starting a new conversation when topics change. Also, if there is a long gap between messages, the prompt cache may expire, causing a spike in cost. Some models like the Gemini Pro series use tiered pricing — input beyond 200K tokens is charged at double the rate.',
