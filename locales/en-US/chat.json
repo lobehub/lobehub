@@ -1605,7 +1605,7 @@
   "input.costEstimate.tooltip": "Estimated from current context, tools, and model pricing. Actual cost may vary.",
   "input.disclaimer": "Agents can make mistakes. Use your judgment for critical info.",
   "input.errorMsg": "Send failed: {{errorMsg}}. Retry, or send again later.",
-  "input.heteroPlus.tooltip": "Formatting and scheduling",
+  "input.heteroPlus.tooltip": "Attachments, formatting and scheduling",
   "input.inputCompletionError.desc": "Input suggestions stopped after an error. Retry, or adjust the suggestion model in Settings.",
   "input.inputCompletionError.retry": "Retry",
   "input.inputCompletionError.settings": "Settings",

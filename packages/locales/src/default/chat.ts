@@ -973,7 +973,7 @@ export default {
     'The current model is no longer available. Choose another model to continue.',
   'input.viewOnlyAgent': 'You can only view this agent',
   'input.viewOnlyGroup': 'You can only view this group',
-  'input.heteroPlus.tooltip': 'Formatting and scheduling',
+  'input.heteroPlus.tooltip': 'Attachments, formatting and scheduling',
   'input.more': 'More',
   'input.notice.summary_one': '{{count}} input notice',
   'input.notice.summary_other': '{{count}} input notices',
