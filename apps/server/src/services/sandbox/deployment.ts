@@ -1,6 +1,9 @@
 import { sandboxEnv } from '@/envs/sandbox';
 
-import { getSandboxProviderKind } from './factory';
+import type { SandboxProviderKind } from './types';
+
+export const getSandboxProviderKind = (): SandboxProviderKind =>
+  sandboxEnv.SANDBOX_PROVIDER || 'market';
 
 export type SandboxDeployment = 'market' | 'onlyboxes' | 'unconfigured';
 
