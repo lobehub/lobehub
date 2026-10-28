@@ -186,3 +186,22 @@ export const isScopeTrusted = (): boolean => isIdentityResolved(getUserStoreStat
  * identity round-trip lands, even if the scope string itself did not change.
  */
 export const useIsScopeTrusted = (): boolean => useUserStore(isIdentityResolved);
+
+/**
+ * `isLogin` for first-paint layout. The cache gate paints from the last-known
+ * user's partition before the session round-trip lands, and `isSignedIn` is
+ * still unset then; gating layout on it alone draws the signed-out shape first
+ * and reflows once the session answers. Until identity resolves, trust the same
+ * persisted scope the cache already hydrated; afterwards, only the session.
+ */
+export const useIsSignedInOrRestoring = (): boolean => {
+  const isSignedIn = useUserStore(authSelectors.isLogin);
+  const identityResolved = useUserStore(isIdentityResolved);
+  // Read once on mount, like `useCacheScope`: it only matters before identity resolves.
+  const [persisted] = useState(readActiveScope);
+
+  if (isSignedIn) return true;
+  if (identityResolved) return false;
+
+  return !!persisted && !isAnonymousScope(persisted);
+};
