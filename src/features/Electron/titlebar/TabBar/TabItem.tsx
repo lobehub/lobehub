@@ -106,8 +106,10 @@ const TabItem = memo<TabItemProps>(
     // Which tiers actually show the button is settled in CSS so that it can fade rather
     // than unmount. Staying mounted below the compact tier would otherwise leave an
     // invisible button in the focus order, so those tiers are made inert rather than
-    // merely transparent.
-    const closeInert = tier !== 'full' && tier !== 'compact';
+    // merely transparent. A lone tab offers no close at all: closing it only swaps in a
+    // fresh home tab, so the button would read as a way out that does not exist.
+    const closable = totalCount > 1;
+    const closeInert = !closable || (tier !== 'full' && tier !== 'compact');
 
     const isDragging = !!drag;
 
@@ -280,6 +282,7 @@ const TabItem = memo<TabItemProps>(
     const face = (
       <m.div
         data-active={isActive ? 'true' : undefined}
+        data-closable={closable ? 'true' : undefined}
         data-tier={tier}
         role="button"
         tabIndex={0}
