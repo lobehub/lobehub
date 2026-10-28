@@ -384,6 +384,26 @@ const syncFindingComments = async (
 };
 
 /**
+ * The summary used to be an issue comment on the PR. The first run under the
+ * review shape retires it: the review replaces it, and leaving it behind would
+ * keep a fixed finding's table visible — and, on a clean run, be the only ALint
+ * message left on the PR.
+ */
+const retireLegacySummary = async (repo: string, pr: number) => {
+  const comments = await apiPages<{ body?: string | null; id: number }>(
+    `/repos/${repo}/issues/${pr}/comments`,
+  );
+  for (const comment of comments) {
+    if (!comment.body?.includes(REVIEW_MARKER)) continue;
+    try {
+      await api('DELETE', `/repos/${repo}/issues/comments/${comment.id}`);
+    } catch (error) {
+      console.warn(`alint: could not retire the old summary comment: ${String(error)}`);
+    }
+  }
+};
+
+/**
  * Keep one review on the PR current across pushes. A submitted review cannot be
  * deleted or replaced, only edited, so its summary body is rewritten in place.
  */
@@ -403,12 +423,16 @@ const publishReview = async (
   if (existing) {
     if (existing.body !== markdown)
       await api('PUT', `/repos/${repo}/pulls/${pr}/reviews/${existing.id}`, { body: markdown });
-  } else if (findings.length > 0) {
-    await api('POST', `/repos/${repo}/pulls/${pr}/reviews`, {
-      body: markdown,
-      commit_id: sha,
-      event: 'COMMENT',
-    });
+  } else {
+    // No review yet means this is the first run after the switch: drop the
+    // summary comment the previous shape left on the PR.
+    await retireLegacySummary(repo, pr);
+    if (findings.length > 0)
+      await api('POST', `/repos/${repo}/pulls/${pr}/reviews`, {
+        body: markdown,
+        commit_id: sha,
+        event: 'COMMENT',
+      });
   }
 
   await syncFindingComments(repo, pr, sha, findings);
