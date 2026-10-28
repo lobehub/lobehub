@@ -32,7 +32,11 @@ import {
   resolveDiscordMentions,
   sanitizeDiscordUserInput,
 } from './mentions';
-import { patchDiscordForwardedInteractions, patchDiscordMentionThreads } from './patch';
+import {
+  patchDiscordForwardedInteractions,
+  patchDiscordMentionThreads,
+  patchDiscordMessageEdits,
+} from './patch';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
@@ -231,6 +235,7 @@ class DiscordGatewayClient implements PlatformClient {
 
   applyChatPatches(chatBot: ChatBot<any>, options?: ChatPatchOptions): void {
     patchDiscordForwardedInteractions(chatBot);
+    patchDiscordMessageEdits(chatBot);
     if (options?.deferMentionThread) {
       patchDiscordMentionThreads(chatBot, options.deferMentionThread);
     }

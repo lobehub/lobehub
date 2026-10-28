@@ -59,6 +59,13 @@ const log = debug('lobe-server:bot:wake-decision');
 /** Revision of the bot-wake pipeline recorded on every decision. Bump when the judgement changes. */
 export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@2';
 
+/** What sets an edit's signal id apart from its first send's: `:edit:<edited at, ms>`. */
+const editSuffix = (message: WakeMessageLike) => {
+  const editedAt = message.metadata?.editedAt?.getTime();
+
+  return message.metadata?.edited ? `:edit:${editedAt ?? 0}` : '';
+};
+
 /** Policy id the router's own, pre-existing wake judgement is recorded under. */
 export const LEGACY_ROUTER_POLICY_ID = 'legacy-router';
 
@@ -154,6 +161,8 @@ export interface BotWakeObservation {
 /** The channel state the recorder reads and writes; Redis in production, a fake in tests. */
 export interface WakeStatePort {
   countClassifierCall: (applicationId: string, utcHour: string) => Promise<number | undefined>;
+  /** Remembers that the bot answered these messages, so an edit of one does not wake it again. */
+  markEditWakeEngaged?: (applicationId: string, messageIds: readonly string[]) => Promise<void>;
   readChannel: (keys: readonly string[]) => Promise<BotWakeChannelFields | undefined>;
   /** The wake `rememberInitiation` stored for a message; `undefined` when none or unreadable. */
   readInitiation?: (applicationId: string, messageId: string) => Promise<string | undefined>;
@@ -319,6 +328,11 @@ export interface BotWakeRecorder {
    * while the rollout or bot-wake is off.
    */
   remember: (observation: BotWakeObservation) => Promise<void>;
+  /**
+   * Remembers that the bot is answering these messages (platform ids), whatever the rollout: an
+   * edit that later @-mentions the bot on one of them must not wake it a second time. Never throws.
+   */
+  rememberEngaged: (messageIds: readonly string[]) => Promise<void>;
 }
 
 const asShadow = (policy: WakePolicy): WakePolicy => ({ ...policy, mode: 'shadow' });
@@ -737,7 +751,8 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       scopeKey,
       signal: {
         // Telegram-style message ids repeat across chats, so the key carries the whole address.
-        externalId: `${applicationId}:${observation.threadId}:${observation.message.id}`,
+        // An edit is judged again, so it gets its own row next to the one made when it was sent.
+        externalId: `${applicationId}:${observation.threadId}:${observation.message.id}${editSuffix(observation.message)}`,
         // Where the event was addressed and which handler saw it are not content: they stay on the
         // row after the retention sweep blanks the payload.
         metadata: {
@@ -748,6 +763,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
             platformThreadId: observation.threadId,
           },
           entryPoint: observation.entryPoint,
+          ...(observation.message.metadata?.edited && { trigger: 'edit' }),
         },
         payload: { text: text.slice(0, MAX_PAYLOAD_TEXT_LENGTH) },
         source: `bot:${platform}`,
@@ -935,6 +951,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       } catch (error) {
         botWakeFailureCounter.add(1, { stage: 'remember' });
         log('remember failed: entry=%s %O', observation.entryPoint, error);
+      }
+    },
+    rememberEngaged: async (messageIds) => {
+      try {
+        await state.markEditWakeEngaged?.(applicationId, messageIds);
+      } catch (error) {
+        log('rememberEngaged failed: %O', error);
       }
     },
     record: (observation) => {

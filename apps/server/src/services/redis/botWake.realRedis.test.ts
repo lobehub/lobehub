@@ -155,6 +155,21 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     expect(result).toBeUndefined();
   });
 
+  it('lets one edit wake the bot on a message that never engaged it, and only once', async () => {
+    expect(await domain.claimEditWake('app', 'fresh')).toBe(true);
+    // A second edit of the same message, or a redelivery, does not wake it again.
+    expect(await domain.claimEditWake('app', 'fresh')).toBe(false);
+    // Another bot in the channel may still be woken by its own @-mention.
+    expect(await domain.claimEditWake('other-app', 'fresh')).toBe(true);
+  });
+
+  it('keeps an edit from waking the bot on a message that already engaged it', async () => {
+    await domain.markEditWakeEngaged('app', ['answered', 'answered', 'merged']);
+
+    expect(await domain.claimEditWake('app', 'answered')).toBe(false);
+    expect(await domain.claimEditWake('app', 'merged')).toBe(false);
+  });
+
   describe('conversation log', () => {
     const line = (n: number, extra: Record<string, unknown> = {}) => ({
       at: n * 1_000,

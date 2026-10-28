@@ -24,6 +24,9 @@ const SCHEDULER_TTL_SECONDS = 24 * 60 * 60;
 const CLASSIFIER_CALLS_TTL_SECONDS = 2 * 60 * 60;
 // As long as a parked message can wait for its replay (`deferredMessages` TTL).
 const INITIATION_TTL_SECONDS = 30 * 60;
+// How long after it was sent an edit that newly @-mentions a bot may still wake it. The marker
+// that remembers the message already engaged the bot lives exactly as long.
+export const EDIT_WAKE_WINDOW_SECONDS = 30 * 60;
 // A channel's recent messages are context for the next judgement, not an archive: an idle channel
 // loses them after three days, and an active one never holds more than the newest 200.
 const CONVERSATION_LOG_TTL_SECONDS = 3 * 24 * 60 * 60;
@@ -232,6 +235,53 @@ export const botWake = {
       return (await redis.get(RedisKeys.botWake.initiation(applicationId, messageId))) ?? undefined;
     } catch (error) {
       log('readInitiation failed: %O', error);
+    }
+  },
+
+  /**
+   * Remembers that these messages engaged the bot (see `RedisKeys.botWake.editWake`), so a later
+   * edit of any of them does not wake it again. Never throws: a missed mark at worst lets an edit
+   * that adds an @-mention wake the bot a second time.
+   */
+  async markEditWakeEngaged(applicationId: string, messageIds: readonly string[]) {
+    if (messageIds.length === 0) return;
+
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const pipeline = redis.pipeline();
+      for (const messageId of new Set(messageIds)) {
+        pipeline.set(RedisKeys.botWake.editWake(applicationId, messageId), '1', {
+          ex: EDIT_WAKE_WINDOW_SECONDS,
+        });
+      }
+      await pipeline.exec();
+    } catch (error) {
+      log('markEditWakeEngaged failed: %O', error);
+    }
+  },
+
+  /**
+   * Claims the one wake an edit may start on a message: `true` only for the first caller, and only
+   * when the message has not engaged the bot before. `false` without Redis or on an error, so an
+   * edit that cannot be deduplicated never wakes the bot.
+   */
+  async claimEditWake(applicationId: string, messageId: string): Promise<boolean> {
+    try {
+      const redis = await getClient();
+      if (!redis) return false;
+
+      const claimed = await redis.set(RedisKeys.botWake.editWake(applicationId, messageId), '1', {
+        ex: EDIT_WAKE_WINDOW_SECONDS,
+        nx: true,
+      });
+
+      return claimed === 'OK';
+    } catch (error) {
+      log('claimEditWake failed: %O', error);
+
+      return false;
     }
   },
 

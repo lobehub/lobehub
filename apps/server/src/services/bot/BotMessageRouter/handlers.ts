@@ -1,4 +1,4 @@
-import type { Chat, MessageContext } from 'chat';
+import type { Chat, Message, MessageContext } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
@@ -10,7 +10,7 @@ import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWak
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
 import { isWholeGroupChatThreadId } from '../isWholeGroupChatThreadId';
-import { getSameSenderMessages } from '../mergeMessages';
+import { getOriginMessageId, getSameSenderMessages, getSourceMessages } from '../mergeMessages';
 import {
   type BotReplyLocale,
   type DmSettings,
@@ -301,6 +301,7 @@ export function registerHandlers(
       author: message.author,
       id: message.id,
       isMention: message.isMention,
+      metadata: message.metadata,
       raw: message.raw,
       text: message.text,
     },
@@ -406,6 +407,12 @@ export function registerHandlers(
       'wake',
       reason,
       threadSubscribed,
+    );
+    // An edit that later @-mentions the bot must not answer these messages a second time.
+    await wakeRecorder.rememberEngaged(
+      getSourceMessages(message as Message).flatMap((source) =>
+        source.id ? [getOriginMessageId(source)] : [],
+      ),
     );
     const opening = await replyOpening.open({
       conversation: () => wakeRecorder.conversation(observation),
