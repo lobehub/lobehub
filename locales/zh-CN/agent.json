@@ -538,7 +538,7 @@
   "channel.verificationTokenPlaceholder": "在此粘贴你的 Verification Token",
   "channel.wake.intro": "没人 @ 它时，机器人也能主动参与：消息里直接叫了它的名字、在它刚发言不久后有人接着说，或命中了监听关键词。它会先判断这条消息是不是在对它说，也可以选择不回复。",
   "channel.wake.feishuScope.title": "群消息需要额外权限",
-  "channel.wake.feishuScope.desc": "要收到群里没有 @ 机器人的消息，应用需开通「获取群组中所有消息」（im:message.group_msg）权限。在开发者后台「权限管理」中添加后，需创建版本并发布才会生效。通过一键创建的应用已自带该权限。",
+  "channel.wake.feishuScope.desc": "要收到群里没有 @ 机器人的消息，应用需开通「获取群组中所有消息」（im:message.group_msg）权限。群里还有其他机器人时，再开通「获取群组中用户和机器人发送的消息」（im:message.group_msg.include_bot:read），机器人判断要不要插话时才能看到它们说了什么。在开发者后台「权限管理」中添加后，需创建版本并发布才会生效。一键创建的应用已自带第一项权限。",
   "channel.wake.section.channels": "频道",
   "channel.wake.section.channelsDesc": "机器人可以在哪些频道里，主动参与没人叫它的对话。",
   "channel.wake.section.judgement": "职责边界",

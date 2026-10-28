@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 
 /**
  * Feishu / Lark push a group message the bot was not @-mentioned in only when the app holds
- * `im:message.group_msg`. Without it keywords and wake rules save fine but never fire, and
- * nothing on the page would say why, so the wake tab names the scope up front.
+ * `im:message.group_msg`, and another bot's message only with
+ * `im:message.group_msg.include_bot:read` on top. Without the first, keywords and wake rules save
+ * fine but never fire; without the second, the wake judgement never sees what other bots said.
+ * Nothing on the page would say why, so the wake tab names both scopes up front.
  */
 const FeishuWakeNotice = memo(() => {
   const { t } = useTranslation('agent');
