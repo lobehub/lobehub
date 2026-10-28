@@ -93,6 +93,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
+import { abortOpenToolMessages } from './abortOpenToolMessages';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
@@ -1030,6 +1031,8 @@ export const executeHeterogeneousAgent = async (
       pendingToolFlush.set(toolMsgId, toolUpdate);
     });
   };
+  const abortStoppedTools = () =>
+    abortOpenToolMessages(get, operationId, toolMsgIdByCallId.values(), terminalToolMessageIds);
   const claimToolStateSnapshot = (
     toolCallId: string,
     toolMsgId: string,
@@ -2090,8 +2093,7 @@ export const executeHeterogeneousAgent = async (
      * batch). Per-event branches still mirror the pre-Phase-0 inner loop.
      */
     const handleStreamEvent = (event: AgentStreamEvent) => {
-      // Once the user cancels, drop any trailing events the CLI emits before
-      // exit so they don't leak into DB writes.
+      // After a user cancel, drop trailing CLI events; abortStoppedTools settles open tools.
       if (isAborted()) return;
 
       // Record for debugging
@@ -2451,12 +2453,11 @@ export const executeHeterogeneousAgent = async (
             }
             pendingSubagentFlush.clear();
           }
+          if (isAborted()) await abortStoppedTools();
 
           if (!isErrorTerminal) {
-            // Topic status was already reset ahead of the queue (top of
-            // onComplete); forward the deferred terminal with the current
-            // frontend SoT so the handler can complete the operation without a
-            // DB refresh that may race write-behind batchMutate.
+            // Status was reset atop onComplete; forward the terminal with the current
+            // frontend SoT so completion needn't race write-behind batchMutate.
             attachTerminalFrontendSnapshot(terminalEvent);
             eventHandler(terminalEvent);
             if (!queueDrained) get().completeOperation(operationId);
@@ -2552,10 +2553,9 @@ export const executeHeterogeneousAgent = async (
           });
           await waitForPersistQueue(persistQueue, 'error');
 
-          // If the error came from a user-initiated cancel (SIGINT → non-zero
-          // exit), don't surface it as a runtime error toast — the operation is
-          // already marked cancelled and the partial content is persisted above.
+          // A user cancel (SIGINT → non-zero exit) is no runtime error: settle its tools only.
           if (isAborted()) {
+            await abortStoppedTools();
             writeTopicStatus('active');
             return;
           }
