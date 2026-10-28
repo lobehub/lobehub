@@ -191,6 +191,19 @@ describe('ConnectorDetail', () => {
     expect(screen.queryByText('connector.connected')).not.toBeInTheDocument();
   });
 
+  it('shows a disconnected connector as not connected even after an authorization error', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      isEnabled: false,
+      status: 'error',
+    };
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByText('connector.notConnected')).toBeInTheDocument();
+    expect(screen.queryByText('connector.authError')).not.toBeInTheDocument();
+  });
+
   it('shows an uninstalled built-in tool as uninstalled, matching the list', () => {
     mocks.toolState.connectors[0] = {
       id: 'connector-1',

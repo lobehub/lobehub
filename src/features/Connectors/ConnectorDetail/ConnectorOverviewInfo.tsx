@@ -85,12 +85,15 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
     ? isBuiltinInstalled
       ? { color: 'success' as const, label: t('connector.enabled') }
       : { label: t('tools.builtins.uninstalled', { ns: 'setting' }) }
-    : // Disconnect only clears `isEnabled`, leaving the stored status as connected.
-      connector.isEnabled && connector.status === ConnectorStatus.connected
-      ? { color: 'success' as const, label: t('connector.connected') }
-      : connector.status === ConnectorStatus.error
-        ? { color: 'error' as const, label: t('connector.authError') }
-        : { label: t('connector.notConnected') };
+    : // Disconnect only clears `isEnabled` and leaves the stored status (connected
+      // or error) behind, so a disabled connector reads not connected first.
+      !connector.isEnabled
+      ? { label: t('connector.notConnected') }
+      : connector.status === ConnectorStatus.connected
+        ? { color: 'success' as const, label: t('connector.connected') }
+        : connector.status === ConnectorStatus.error
+          ? { color: 'error' as const, label: t('connector.authError') }
+          : { label: t('connector.notConnected') };
 
   return (
     <div {...stylex.props(styles.list)}>
