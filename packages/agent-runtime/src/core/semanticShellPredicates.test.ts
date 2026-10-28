@@ -519,11 +519,9 @@ describe('matchSemanticShellPredicate', () => {
       'cat <<-EOF\nrm -rf /\nEOF',
       'cat 2<<EOF\nrm -rf /\nEOF',
       'cat <<EOF\nrm -rf /\nEOF\nls',
-      // Substitution as an ARGUMENT stays allowed — the confident command
-      // (echo) is unrelated to rm; execution-level risk belongs to the exec
-      // sandbox, not the blacklist.
-      'echo $(rm -rf /)',
-      'echo `rm -rf /`',
+      // Substitution bodies are no longer on this list: they execute before
+      // the outer command, so `echo $(rm -rf /)` is blocked as of the
+      // substitution-containment round (see below).
       // Routine substitutions with no recursive flag next to them.
       '$(date)',
       '$(git rev-parse HEAD)',
@@ -913,14 +911,32 @@ describe('matchSemanticShellPredicate', () => {
 
   describe('command substitution containment', () => {
     // Substitution bodies stay embedded inside words rather than splitting the
-    // outer command. The predicates above only fire on `rm` as the RESOLVED
-    // command of a segment, so `echo $(rm -rf /)` does not fire rmRecursiveRootTarget.
-    // This is deliberate: execution-level protections are the exec sandbox's
-    // job; the blacklist targets unambiguous direct invocations. What matters
-    // for regression safety is that read-only commands are never flagged.
-    it('does not flag substitution content as a direct rm invocation', () => {
-      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo $(rm -rf /)')).toBe(false);
-      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo `rm -rf /`')).toBe(false);
+    // outer command. They still RUN before the outer command, so a confident
+    // `echo` says nothing about them: `echo $(rm -rf ~)` deletes the home
+    // directory first. The predicates therefore analyze substitution payloads
+    // instead of trusting the outer command; literal words of that command stay
+    // ignored, so read-only commands with data arguments are never flagged.
+    it('flags a dangerous command wrapped in a substitution', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo $(rm -rf /)')).toBe(true);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo `rm -rf /`')).toBe(true);
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo $(rm -rf ${HOME})')).toBe(
+        true,
+      );
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo "at $(rm -rf /)"')).toBe(
+        true,
+      );
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo $(echo $(rm -rf /))')).toBe(
+        true,
+      );
+    });
+
+    it('leaves data-bearing and arithmetic substitutions alone', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo $(date)')).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo $((1 + 2))')).toBe(false);
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo $(rm -rf /tmp/build-cache)'),
+      ).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo "rm -rf /"')).toBe(false);
     });
 
     it('still catches the direct command sharing a line with a substitution', () => {

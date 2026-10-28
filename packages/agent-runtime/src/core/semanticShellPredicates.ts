@@ -194,6 +194,41 @@ const payloadIsDangerous = (
 };
 
 /**
+ * Command substitutions execute BEFORE the surrounding command, so a confident
+ * outer command says nothing about them: `echo $(rm -rf ~)` deletes the home
+ * directory and then echoes the empty result. The outer words themselves are
+ * still safe to ignore — a literal `rm -rf ~` inside a quoted argument is data,
+ * not a command — so only the bodies of `$( … )` and backtick substitutions are
+ * extracted here and re-analyzed as payloads.
+ */
+const substitutionPayloads = (word: string): string[] => {
+  const payloads: string[] = [];
+  for (let index = 0; index < word.length; index++) {
+    if (word[index] === '$' && word[index + 1] === '(') {
+      // `$((…))` is arithmetic, not a command substitution.
+      if (word[index + 2] === '(') continue;
+      let depth = 0;
+      for (let cursor = index + 1; cursor < word.length; cursor++) {
+        if (word[cursor] === '(') depth++;
+        else if (word[cursor] === ')' && --depth === 0) {
+          payloads.push(word.slice(index + 2, cursor));
+          index = cursor;
+          break;
+        }
+      }
+      continue;
+    }
+    if (word[index] === '`') {
+      const end = word.indexOf('`', index + 1);
+      if (end < 0) continue;
+      payloads.push(word.slice(index + 1, end));
+      index = end;
+    }
+  }
+  return payloads;
+};
+
+/**
  * Ambiguity fallback (defense in depth).
  *
  * Some wrapper shapes hide the real command from unwrapping: the dangerous
@@ -219,11 +254,14 @@ const hasAmbiguousRmShape = (
   // catch segments where the command slot is NOT a confidently-parsed rm.
   if (segment.resolvedCommand === 'rm') return false;
   if (segment.resolvedCommand !== null && !AMBIGUOUS_COMMAND_HINTS.has(segment.resolvedCommand)) {
-    // Resolved to an unrelated confident command (echo, ls, …) — the rm word
-    // (if any) belongs to a quoted string or argument of THAT command; the
-    // segment-level fallback would just re-create the original substring
-    // false-positive class. Only ambiguous command slots fall through.
-    return false;
+    // Resolved to an unrelated confident command (echo, ls, …) — a bare `rm`
+    // word in this segment belongs to a quoted string or argument of THAT
+    // command, and scanning words would re-create the original substring
+    // false-positive class. Command substitutions are the exception: their
+    // bodies run first, whatever the outer command is.
+    return segment.words.some((word) =>
+      substitutionPayloads(word).some((payload) => payloadIsDangerous(payload, depth, predicate)),
+    );
   }
   const words = segment.words;
   const rmIndex = words.findIndex((word) => word === 'rm' || /\/rm$/.test(word));
