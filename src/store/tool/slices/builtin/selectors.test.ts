@@ -75,6 +75,32 @@ describe('builtinToolSelectors', () => {
       const result = builtinToolSelectors.metaList(state);
       expect(result).toEqual([]);
     });
+
+    it('should fall back to hoisted identity when a builtin manifest has no meta', () => {
+      const state = {
+        ...initialState,
+        builtinSkills: [],
+        builtinTools: [
+          {
+            avatar: '🧩',
+            description: 'Runtime injected tool',
+            identifier: 'runtime-tool',
+            manifest: { api: [], identifier: 'runtime-tool', systemRole: '' },
+            title: 'Runtime Tool',
+            type: 'builtin',
+          },
+        ],
+        uninstalledBuiltinTools: [],
+      } as unknown as ToolStoreState;
+
+      const result = builtinToolSelectors.metaList(state);
+
+      expect(result[0].meta).toEqual({
+        avatar: '🧩',
+        description: 'Runtime injected tool',
+        title: 'Runtime Tool',
+      });
+    });
   });
 
   describe('metaListIncludingHidden', () => {
