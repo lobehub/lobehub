@@ -33,20 +33,26 @@ afterAll(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
 });
 
+const BUILDER_METHODS = [
+  'from',
+  'groupBy',
+  'innerJoin',
+  'leftJoin',
+  'limit',
+  'offset',
+  'onConflictDoNothing',
+  'onConflictDoUpdate',
+  'orderBy',
+  'returning',
+  'set',
+  'values',
+  'where',
+] as const;
+
 /** Chainable fake query builder: every builder method returns itself and awaiting it yields `rows`. */
 const chain = (rows: unknown[]) => {
-  const builder: any = new Proxy(
-    {},
-    {
-      get: (_target, prop) => {
-        if (prop === 'then') {
-          return (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-            Promise.resolve(rows).then(resolve, reject);
-        }
-        return () => builder;
-      },
-    },
-  );
+  const builder: any = Promise.resolve(rows);
+  for (const method of BUILDER_METHODS) builder[method] = () => builder;
 
   return builder;
 };
