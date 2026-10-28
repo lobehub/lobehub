@@ -31,5 +31,9 @@ export const useDefaultMemberAssignee = () => {
     [activeWorkspaceId, assignableMemberIds, selfUserId],
   );
 
-  return { assignableMemberIds, defaultMemberAssignee, isMembersLoading };
+  // Until a workspace's member directory first loads, the default is unknown:
+  // creating then would silently drop the creator's assignment.
+  const isDefaultMemberPending = Boolean(activeWorkspaceId) && isMembersLoading;
+
+  return { assignableMemberIds, defaultMemberAssignee, isDefaultMemberPending, isMembersLoading };
 };

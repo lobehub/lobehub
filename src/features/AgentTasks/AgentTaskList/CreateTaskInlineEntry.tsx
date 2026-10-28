@@ -104,7 +104,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const activeWorkspaceId = useActiveWorkspaceId();
-  const { assignableMemberIds, defaultMemberAssignee, isMembersLoading } =
+  const { assignableMemberIds, defaultMemberAssignee, isDefaultMemberPending, isMembersLoading } =
     useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
@@ -112,6 +112,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
   const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
   const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
+  const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
   // Where this task will run, if not simply wherever the assignee agent runs.
@@ -493,7 +494,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (!canCreateTask) return;
+    if (!canCreateTask || isMemberPending) return;
     const draft = readDraft();
     if (!draft) return;
 
@@ -521,7 +522,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [assigneeMeta?.title, canCreateTask, readDraft, submitDraft]);
+  }, [assigneeMeta?.title, canCreateTask, isMemberPending, readDraft, submitDraft]);
 
   /**
    * The escape hatch, one click away in the submit dropdown: create the task
@@ -530,11 +531,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * user who finds the reading slow or wrong is never stuck behind it.
    */
   const handleCreateDirectly = useCallback(async () => {
-    if (!canCreateTask) return;
+    if (!canCreateTask || isMemberPending) return;
     const draft = readDraft();
     if (!draft) return;
     await submitDraft(draft);
-  }, [canCreateTask, readDraft, submitDraft]);
+  }, [canCreateTask, isMemberPending, readDraft, submitDraft]);
 
   /**
    * The review editor is the source of truth for what gets created, not the
@@ -887,6 +888,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   !canCreateTask ||
                   isCreating ||
                   isAnalyzing ||
+                  isMemberPending ||
                   (!instruction.trim() && !hasAttachments)
                 }
                 onClick={handleSubmit}
@@ -921,6 +923,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                     !canCreateTask ||
                     isCreating ||
                     isAnalyzing ||
+                    isMemberPending ||
                     (!instruction.trim() && !hasAttachments)
                   }
                 />

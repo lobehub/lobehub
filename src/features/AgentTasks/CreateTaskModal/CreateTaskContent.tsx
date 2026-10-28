@@ -103,8 +103,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
-    const { defaultMemberAssignee } = useDefaultMemberAssignee();
+    const { defaultMemberAssignee, isDefaultMemberPending } = useDefaultMemberAssignee();
     const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
+    const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
     // Where this task will run, if not simply wherever the assignee runs.
     // Undefined = inherit, and then nothing is sent, so an untouched modal
     // creates exactly the task it always did.
@@ -175,7 +176,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     }, [editor]);
 
     const handleSubmit = useCallback(async () => {
-      if (!canCreateTask) return;
+      if (!canCreateTask || isMemberPending) return;
       const instruction = instructionRef.current.trim();
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
       if (!instruction && !title.trim() && !hasFiles) return;
@@ -223,6 +224,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       execution,
       createTask,
       editor,
+      isMemberPending,
       isScheduled,
       onCreated,
       priority,
@@ -489,7 +491,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           </Flexbox>
 
           <Button
-            disabled={!canCreateTask || isCreating}
+            disabled={!canCreateTask || isCreating || isMemberPending}
             loading={isCreating}
             shape={'round'}
             size={'small'}

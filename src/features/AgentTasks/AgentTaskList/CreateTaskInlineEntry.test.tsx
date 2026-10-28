@@ -414,6 +414,28 @@ describe('CreateTaskInlineEntry', () => {
     );
   });
 
+  it('holds creation until the member directory resolves the creator default', async () => {
+    workspaceMembersMock.isLoading = true;
+    workspaceMembersMock.members = [];
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(createTaskMock).not.toHaveBeenCalled();
+
+    workspaceMembersMock.isLoading = false;
+    workspaceMembersMock.members = [{ role: 'member', userId: 'self-user' }];
+    rerender(<CreateTaskInlineEntry placeholder="loaded" variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeUserId: 'self-user' }),
+      ),
+    );
+  });
+
   it('does not default to a creator whose role cannot be a task assignee', () => {
     workspaceMembersMock.members = [{ role: 'viewer', userId: 'self-user' }];
     render(<CreateTaskInlineEntry variant="hero" />);
