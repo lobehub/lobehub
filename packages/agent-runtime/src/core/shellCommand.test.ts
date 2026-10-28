@@ -175,6 +175,22 @@ describe('analyzeShellCommand', () => {
       expect(segments[0].hasFlag('r')).toBe(true);
     });
 
+    it('stops wrapper option parsing at the end-of-options marker', () => {
+      // `env -- rm -rf /tmp/cache ~`: `--` delimits the option list, so `rm`
+      // is the wrapped command. Treating `--` as a value-taking flag ate `rm`,
+      // read `/tmp/cache` as the value of `-rf`, and left `~` as a
+      // confidently unrelated executable while bash deleted the home dir.
+      const [seg] = analyzeShellCommand('env -- rm -rf /tmp/cache ~');
+      expect(seg.resolvedCommand).toBe('rm');
+      expect(seg.hasFlag('r')).toBe(true);
+      expect(seg.homeTargets).toContain('~');
+
+      // Same marker after sudo: `sudo -- rm -rf ~` deletes the home dir.
+      const [sudo] = analyzeShellCommand('sudo -- rm -rf ~');
+      expect(sudo.resolvedCommand).toBe('rm');
+      expect(sudo.homeTargets).toContain('~');
+    });
+
     it('unwraps env with variables set inline and command', () => {
       const segments = analyzeShellCommand('FOO=bar env rm file');
       // Leading assignments are skipped as part of lightweight word initializers
@@ -574,6 +590,18 @@ rm -rf ~`);
       // the real terminator line never match, so the `rm -rf ~` below the
       // heredoc was read as `cat` stdin data and escaped every predicate.
       const segs = analyzeShellCommand("cat <<$'EOF'\nx\nEOF\nrm -rf ~");
+      expect(segs[0].resolvedCommand).toBe('cat');
+      expect(segs[0].words[1]).toBe('x\n');
+      expect(segs[1].resolvedCommand).toBe('rm');
+      expect(segs[1].homeTargets).toContain('~');
+    });
+
+    it('applies locale-translation quote removal to a heredoc delimiter', () => {
+      // `<<$"EOF"` is locale-translation quoting: bash removes the `$` and
+      // treats the payload as a double-quoted word, so the delimiter is `EOF`.
+      // Keeping the `$` made the terminator `$EOF` never match, so the
+      // `rm -rf ~` below the heredoc was read as `cat` stdin data.
+      const segs = analyzeShellCommand('cat <<$"EOF"\nx\nEOF\nrm -rf ~');
       expect(segs[0].resolvedCommand).toBe('cat');
       expect(segs[0].words[1]).toBe('x\n');
       expect(segs[1].resolvedCommand).toBe('rm');

@@ -261,6 +261,16 @@ const splitIntoRawSegments = (command: string): string[] => {
         k++;
         continue;
       }
+      // Locale-translation quoting `$"…"` is a QUOTED word too: bash removes
+      // the `$`, translates the string, then treats it as double-quoted, so
+      // `<<$"EOF"` terminates at `EOF`. Keeping the `$` made the delimiter
+      // `$EOF`, the real terminator line never matched, and the `rm -rf ~` below
+      // the heredoc was read as `cat` stdin data.
+      if (ch === '$' && rest[k + 1] === '"') {
+        wordQuote = '"';
+        k += 2;
+        continue;
+      }
       // ANSI-C quoting `$'…'` is still a QUOTED word: bash decodes the
       // escapes and removes the `$` and quotes before the word becomes the
       // terminator, so `<<$'EOF'` terminates at `EOF`. Keeping the `$` made
@@ -1046,13 +1056,25 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
     // Skip wrapper-owned tokens: assignments after `env`, wrapper flags, and
     // the value word of any flag presumed to consume one (security-first
     // default, see WRAPPER_VALUE_FREE_FLAGS).
+    // `--` is the end-of-options marker, not a value-taking flag: for
+    // `env -- rm -rf /tmp/cache ~` GNU coreutils delimits the option list, so
+    // `rm` is the wrapped command. Treating `--` as consuming a value ate
+    // `rm`, then read `/tmp/cache` as the value of `-rf` and left `~` as a
+    // confidently unrelated executable — every predicate returned false while
+    // bash deleted the home directory.
+    let optionsEnded = false;
     while (index < words.length) {
       const token = words[index];
       if (ASSIGNMENT_PATTERN.test(token)) {
         index++;
         continue;
       }
-      if (isDashWord(token)) {
+      if (!optionsEnded && token === '--') {
+        optionsEnded = true;
+        index++;
+        continue;
+      }
+      if (!optionsEnded && isDashWord(token)) {
         // `--flag=value` / `-u=value` embed the value: consume nothing extra.
         if (token.includes('=')) {
           index++;
