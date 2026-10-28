@@ -166,6 +166,38 @@ describe('hetero exec ACP agents', () => {
     expect(bridgeOptions).toEqual([{ identifier: 'claude-code', provider: 'copilot' }]);
   });
 
+  it('turns an unclassified Copilot sign-in failure into the auth guide error', async () => {
+    // Copilot's ACP adapter reports `session/new` failures as a bare error; a
+    // device run that persisted it as-is showed the generic error card instead
+    // of the install/sign-in guide.
+    const detail =
+      'ACP request failed (session/new): 401 "checking third-party user token: unauthorized: Personal Access Token does not have \\"Copilot Requests\\" permission"';
+    const errorEvent = {
+      data: { agentType: 'copilot', error: detail, message: detail },
+      operationId: 'op-copilot-auth',
+      stepIndex: 0,
+      timestamp: 1,
+      type: 'error',
+    };
+    mockSpawnAgent.mockImplementation(async () => ({
+      ...(await createFakeHandle()),
+      events: (async function* () {
+        yield errorEvent;
+      })(),
+      exit: Promise.resolve({ code: 1, signal: null }),
+    }));
+
+    await runCmd(['--type', 'copilot', '--prompt', 'hi', ...serverIngestArgs('op-copilot-auth')]);
+
+    const guide = { agentType: 'copilot', code: 'auth_required', stderr: detail };
+    const ingested = mockHeteroIngestMutate.mock.calls.flatMap(([input]) => input.events);
+    expect(ingested.find((event) => event.type === 'error')?.data).toMatchObject(guide);
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).toMatchObject({
+      error: { body: guide, type: 'AgentRuntimeError' },
+      result: 'error',
+    });
+  });
+
   it.each([
     ['cursor', 'claude-code'],
     ['devin', 'devin'],

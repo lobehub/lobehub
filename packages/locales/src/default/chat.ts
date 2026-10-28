@@ -1243,6 +1243,8 @@ export default {
     'Claude Code rejected the cloud credential. Generate a new token with `claude setup-token`, update it in the agent profile, then retry your message.',
   'cliAuthGuide.desc':
     '{{name}} could not continue because its sign-in session expired or the credentials are invalid.',
+  'cliAuthGuide.deviceAfterLogin':
+    'Run it on the device that runs {{name}}, then retry your message.',
   'cliAuthGuide.errorDetails': 'Error details',
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',

@@ -65,6 +65,7 @@ export interface HeterogeneousAgentGuideConfig {
   signInCommand: string;
   title: string;
   translationPrefix: string;
+  type: SupportedHeterogeneousAgentType;
 }
 
 export interface HeterogeneousAgentGuideStateProps {

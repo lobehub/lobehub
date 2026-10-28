@@ -31,7 +31,6 @@ import {
   classifyHeteroProcessFailure,
   createCodexAgentHandle,
   createFileStoreImageUploader,
-  isHeteroStatusGuideErrorData,
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -41,6 +40,7 @@ import type { Command } from 'commander';
 import { getTrpcClient } from '../api/client';
 import { cliVersion } from '../pkg';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
+import { resolveTerminalErrorGuide } from '../utils/heteroTerminalError';
 import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
 import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
@@ -1142,11 +1142,13 @@ const exec = async (options: ExecOptions): Promise<void> => {
           sawTerminalError = true;
           const data = event.data as Record<string, unknown> | undefined;
           terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
-          // Keep the adapter's already-classified status-guide payload
-          // (overloaded / rate_limit carry `agentType` + `code`) so the finish
-          // leg doesn't flatten it back to a bare string — the process-failure
-          // classifier there only knows cli_not_found / auth_required.
-          terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
+          // Stream and finish must persist one status-guide payload, or the
+          // client falls back from the guide card to the generic alert.
+          terminalErrorData = resolveTerminalErrorGuide(data, {
+            agentType,
+            command: options.command,
+          });
+          if (terminalErrorData) event.data = terminalErrorData;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
         operationHeartbeat?.observe(event);

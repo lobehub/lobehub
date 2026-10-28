@@ -94,6 +94,7 @@ const createGuideConfig = () => {
       installCommands: descriptor.install.commands,
       signInCommand: descriptor.auth.signInCommand,
       title: descriptor.title,
+      type: descriptor.type,
       ...GUIDE_PRESENTATION_CONFIG[descriptor.type],
     };
   }

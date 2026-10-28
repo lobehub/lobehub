@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { Flexbox, Highlighter, Snippet, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import { resolveAuthGuideCopy } from '../authGuide';
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
@@ -15,6 +16,7 @@ const AuthRequiredState = ({
   const { t } = useTranslation('chat');
   const rawErrorDetails = error?.stderr || error?.message;
   const docsUrl = error?.docsUrl || config.docsUrl;
+  const copy = resolveAuthGuideCopy(config.type, isDesktop);
 
   return (
     <GuideShell
@@ -26,11 +28,7 @@ const AuthRequiredState = ({
           showDocs
           docsUrl={docsUrl}
           openDocsLabel={t('cliAuthGuide.actions.openDocs')}
-          openSystemToolsLabel={t(
-            isDesktop
-              ? 'cliAuthGuide.actions.openSystemTools'
-              : 'cliAuthGuide.actions.openCloudCredentials',
-          )}
+          openSystemToolsLabel={copy.systemToolsLabelKey && t(copy.systemToolsLabelKey)}
           onOpenSystemTools={onOpenSystemTools}
         />
       }
@@ -38,7 +36,7 @@ const AuthRequiredState = ({
         <Text type="secondary">{t('cliAuthGuide.desc', { name: config.title })}</Text>
       }
     >
-      {isDesktop && (
+      {copy.showSignInCommand && (
         <Flexbox gap={6}>
           <Text strong style={{ fontSize: 12 }}>
             {t('cliAuthGuide.runCommand')}
@@ -48,7 +46,7 @@ const AuthRequiredState = ({
       )}
 
       <Text style={{ fontSize: 12 }} type="secondary">
-        {t(isDesktop ? 'cliAuthGuide.afterLogin' : 'cliAuthGuide.cloudAfterUpdate')}
+        {t(copy.afterLoginKey, { name: config.title })}
       </Text>
 
       {rawErrorDetails && (
