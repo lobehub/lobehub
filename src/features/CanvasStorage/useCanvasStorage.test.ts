@@ -147,7 +147,7 @@ describe('useCleanOrphanCanvasFiles', () => {
     expect(canvas.delete.mock.calls).toEqual([['cvs_a'], ['cvs_b']]);
     expect(work.removeWork).not.toHaveBeenCalled();
     expect(mutate).toHaveBeenCalledWith(['canvas:storage']);
-    expect(ui.success).toHaveBeenCalledWith('canvasStorage.delete.success {"size":"2.0 KB"}');
+    expect(ui.success).toHaveBeenCalledWith('canvasStorage.orphan.success {"size":"2.0 KB"}');
   });
 
   it('refreshes what is left when a cleanup fails part way', async () => {

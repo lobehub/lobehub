@@ -126,7 +126,7 @@ export const useCleanOrphanCanvasFiles = () => {
           try {
             for (const orphan of orphans) await canvasService.delete(orphan.canvasId);
             await afterCanvasDelete([]);
-            toast.success(t('canvasStorage.delete.success', { size }));
+            toast.success(t('canvasStorage.orphan.success', { size }));
           } catch (error) {
             console.error('[useCleanOrphanCanvasFiles] failed to delete canvas files', error);
             await refreshCanvasStorage();

@@ -17,6 +17,7 @@ export default {
     'This deletes {{size}} of files left by canvases that no longer exist. This can’t be undone.',
   'canvasStorage.orphan.desc':
     '{{size}} of files left by deleted canvases still count toward storage',
+  'canvasStorage.orphan.success': 'Leftover files cleaned up. {{size}} freed.',
   'canvasStorage.orphan.title': 'Clean up leftover canvas files?',
   'canvasStorage.summary_one': 'Your {{count}} canvas uses {{size}} of file storage',
   'canvasStorage.summary_other': 'Your {{count}} canvases use {{size}} of file storage',

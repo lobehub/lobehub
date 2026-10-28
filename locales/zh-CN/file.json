@@ -13,6 +13,7 @@
   "canvasStorage.orphan.clean": "清理",
   "canvasStorage.orphan.confirm": "将删除已不存在的画布遗留的 {{size}} 文件。此操作无法撤销。",
   "canvasStorage.orphan.desc": "已删除画布遗留的 {{size}} 文件仍计入存储",
+  "canvasStorage.orphan.success": "遗留文件已清理，释放了 {{size}}",
   "canvasStorage.orphan.title": "清理遗留的画布文件？",
   "canvasStorage.summary_one": "你的 {{count}} 个画布占用 {{size}} 文件存储",
   "canvasStorage.summary_other": "你的 {{count}} 个画布占用 {{size}} 文件存储",

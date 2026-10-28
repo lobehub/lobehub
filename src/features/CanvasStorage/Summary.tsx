@@ -46,6 +46,7 @@ const CanvasStorageSummary = memo<CanvasStorageSummaryProps>(({ summary }) => {
       )}
       {summary.orphans.length > 0 && (
         <>
+          {summary.canvasCount > 0 && <span {...stylex.props(styles.text)}>·</span>}
           <span {...stylex.props(styles.text)}>
             {t('canvasStorage.orphan.desc', { size: formatSize(summary.orphanSize) })}
           </span>
