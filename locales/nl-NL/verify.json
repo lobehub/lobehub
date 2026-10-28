@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Onzeker",
   "acceptance.roundStatus.verifying": "Bezig met verificatie",
   "acceptance.share.copyFailed": "Kon de link niet kopiëren. Kopieer het vanuit de adresbalk.",
-  "acceptance.share.makePrivate": "Toegang beperken",
-  "acceptance.share.makePublic": "Toegang met de link toestaan",
   "acceptance.share.privateHint": "Alleen de maker en werkruimtemedewerkers kunnen deze acceptatie en zijn rondes lezen. Kopieën die al zijn gedownload, kunnen niet worden teruggeroepen.",
   "acceptance.share.publicHint": "Iedereen met de link kan deze acceptatie, al zijn rondes, bewijzen en opmerkingen lezen. Ingelogde bezoekers kunnen ook opmerkingen maken en annoteren. Controleer de inhoud voordat u deze openbaar maakt.",
   "acceptance.share.saved": "Deelrechten bijgewerkt",

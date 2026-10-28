@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Belirsiz",
   "acceptance.roundStatus.verifying": "Devam ediyor",
   "acceptance.share.copyFailed": "Bağlantı kopyalanamadı. Adres çubuğundan kopyalayın.",
-  "acceptance.share.makePrivate": "Erişimi kısıtla",
-  "acceptance.share.makePublic": "Bağlantı ile erişime izin ver",
   "acceptance.share.privateHint": "Yalnızca oluşturucu ve çalışma alanı üyeleri bu kabulü ve turlarını okuyabilir. Zaten indirilen kopyalar geri çağrılamaz.",
   "acceptance.share.publicHint": "Bağlantıya sahip olan herkes bu kabulü, tüm turlarını, kanıtları ve yorumları okuyabilir. Oturum açmış ziyaretçiler ayrıca yorum yapabilir ve not ekleyebilir. İçeriği herkese açık hale getirmeden önce gözden geçirin.",
   "acceptance.share.saved": "Paylaşım izinleri güncellendi",

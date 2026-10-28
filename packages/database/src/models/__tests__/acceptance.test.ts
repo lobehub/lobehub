@@ -467,6 +467,78 @@ describe('AcceptanceModel', () => {
         'by-me',
       ]);
     });
+
+    it('lists teammates private workspace acceptances under all, but keeps writes creator-only', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      // Workspace creation defaults to `private` — member-gated, not creator-only.
+      await new AcceptanceModel(serverDB, userId, workspaceId).create({
+        subjectId: 'by-me',
+        subjectType: 'standalone',
+      });
+      const teammates = await new AcceptanceModel(serverDB, otherUserId, workspaceId).create({
+        subjectId: 'by-teammate',
+        subjectType: 'standalone',
+      });
+      expect(teammates.visibility).toBe('private');
+
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      expect((await model.query({ scope: 'all' })).map((row) => row.subjectId).sort()).toEqual([
+        'by-me',
+        'by-teammate',
+      ]);
+      expect(
+        (await model.queryPage({ scope: 'all' })).items.map((row) => row.subjectId).sort(),
+      ).toEqual(['by-me', 'by-teammate']);
+      expect((await model.query({ scope: 'created' })).map((row) => row.subjectId)).toEqual([
+        'by-me',
+      ]);
+      // The personal scope never sees workspace rows.
+      expect(await new AcceptanceModel(serverDB, userId).query({ scope: 'all' })).toEqual([]);
+      // Widening the list leaves the model's write scope alone (members write via canManageAcceptance).
+      await model.updateStatus(teammates.id, 'accepted');
+      expect(
+        (await new AcceptanceModel(serverDB, otherUserId, workspaceId).findById(teammates.id))
+          ?.status,
+      ).toBe('pending');
+    });
+
+    it('keeps an only-me workspace acceptance out of teammates lists, participated included', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      const teammateModel = new AcceptanceModel(serverDB, otherUserId, workspaceId);
+      await teammateModel.create({ subjectId: 'team', subjectType: 'standalone' });
+      const hidden = await teammateModel.create({
+        subjectId: 'only-teammate',
+        subjectType: 'standalone',
+        visibility: 'owner',
+      });
+      await comment(hidden.id, userId);
+
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      expect((await model.query({ scope: 'all' })).map((row) => row.subjectId)).toEqual(['team']);
+      expect((await model.queryPage({ scope: 'all' })).items.map((row) => row.subjectId)).toEqual([
+        'team',
+      ]);
+      expect(await model.query({ scope: 'participated' })).toEqual([]);
+      // Its creator still sees it everywhere.
+      expect(
+        (await teammateModel.query({ scope: 'all' })).map((row) => row.subjectId).sort(),
+      ).toEqual(['only-teammate', 'team']);
+      expect(
+        (await teammateModel.query({ scope: 'created' })).map((row) => row.subjectId).sort(),
+      ).toEqual(['only-teammate', 'team']);
+    });
   });
 
   it('updateStatus stamps completedAt only on user-terminal statuses', async () => {

@@ -1,3 +1,4 @@
+import { isWorkspaceReadableVisibility } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 
@@ -32,7 +33,8 @@ export interface AcceptanceCommentAccess {
  *
  * Reading follows the bundle: the creator, anyone when the acceptance is
  * `public`, or a member of the acceptance's OWN workspace (not the caller's
- * active one).
+ * active one). An `owner` acceptance is the creator's alone: membership and
+ * project roles open nothing.
  *
  * Remarking is as wide as READING A PUBLIC LINK, minus anonymity — whoever was
  * handed the link can answer the evidence in front of them, and a shared
@@ -61,6 +63,8 @@ export async function resolveAcceptanceCommentAccess(
   if (acceptance.subjectType === 'site') return resolveSiteReviewAccess(db, userId, acceptance);
 
   const isOwner = Boolean(userId) && userId === acceptance.userId;
+  if (!isOwner && !isWorkspaceReadableVisibility(acceptance.visibility))
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
   const member =
     !isOwner && userId && acceptance.workspaceId
       ? await new WorkspaceMemberModel(db, userId).getMember(acceptance.workspaceId, userId)

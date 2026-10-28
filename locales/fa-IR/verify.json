@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "نامشخص",
   "acceptance.roundStatus.verifying": "در حال بررسی",
   "acceptance.share.copyFailed": "لینک را نمی‌توان کپی کرد. آن را از نوار آدرس کپی کنید.",
-  "acceptance.share.makePrivate": "محدود کردن دسترسی",
-  "acceptance.share.makePublic": "اجازه دسترسی با لینک",
   "acceptance.share.privateHint": "فقط سازنده و اعضای فضای کاری قادر به خواندن این تأییدیه و دورهای آن خواهند بود. نسخه‌های دانلود شده قبلی قابل بازخوانی نیستند.",
   "acceptance.share.publicHint": "هر کسی که لینک را داشته باشد می‌تواند این تأییدیه، تمام دورهای آن، شواهد و نظرات را بخواند. بازدیدکنندگان وارد شده نیز می‌توانند نظر دهند و حاشیه‌نویسی کنند. قبل از عمومی کردن محتوا، آن را بررسی کنید.",
   "acceptance.share.saved": "مجوزهای اشتراک‌گذاری به‌روزرسانی شد",

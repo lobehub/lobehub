@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Không chắc chắn",
   "acceptance.roundStatus.verifying": "Đang tiến hành",
   "acceptance.share.copyFailed": "Không thể sao chép liên kết. Hãy sao chép từ thanh địa chỉ.",
-  "acceptance.share.makePrivate": "Hạn chế quyền truy cập",
-  "acceptance.share.makePublic": "Cho phép truy cập bằng liên kết",
   "acceptance.share.privateHint": "Chỉ người tạo và các thành viên trong không gian làm việc mới có thể đọc được sự chấp nhận này và các vòng của nó. Các bản sao đã tải xuống không thể được thu hồi.",
   "acceptance.share.publicHint": "Bất kỳ ai có liên kết đều có thể đọc được sự chấp nhận này, tất cả các vòng, bằng chứng và nhận xét. Khách đã đăng nhập cũng có thể nhận xét và chú thích. Hãy xem xét nội dung trước khi công khai.",
   "acceptance.share.saved": "Quyền chia sẻ đã được cập nhật",

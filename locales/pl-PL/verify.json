@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Niepewne",
   "acceptance.roundStatus.verifying": "W trakcie",
   "acceptance.share.copyFailed": "Nie udało się skopiować linku. Skopiuj go z paska adresu.",
-  "acceptance.share.makePrivate": "Ogranicz dostęp",
-  "acceptance.share.makePublic": "Zezwól na dostęp za pomocą linku",
   "acceptance.share.privateHint": "Tylko twórca i członkowie przestrzeni roboczej będą mogli czytać tę akceptację i jej rundy. Kopii już pobranych nie można cofnąć.",
   "acceptance.share.publicHint": "Każdy z linkiem będzie mógł czytać tę akceptację, wszystkie jej rundy, dowody i komentarze. Zalogowani odwiedzający mogą również komentować i dodawać adnotacje. Przejrzyj treść przed jej upublicznieniem.",
   "acceptance.share.saved": "Uprawnienia do udostępniania zostały zaktualizowane",

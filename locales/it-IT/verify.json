@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Incerto",
   "acceptance.roundStatus.verifying": "In corso",
   "acceptance.share.copyFailed": "Impossibile copiare il link. Copialo dalla barra degli indirizzi.",
-  "acceptance.share.makePrivate": "Limita l'accesso",
-  "acceptance.share.makePublic": "Consenti l'accesso con il link",
   "acceptance.share.privateHint": "Solo il creatore e i membri del workspace potranno leggere questa accettazione e i suoi round. Le copie già scaricate non possono essere richiamate.",
   "acceptance.share.publicHint": "Chiunque abbia il link potrà leggere questa accettazione, tutti i suoi round, le prove e i commenti. I visitatori connessi possono anche commentare e annotare. Rivedi il contenuto prima di renderlo pubblico.",
   "acceptance.share.saved": "Permessi di condivisione aggiornati",

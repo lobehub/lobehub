@@ -6,7 +6,7 @@ import type {
   AcceptanceSubjectType,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, exists, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
 
 import { acceptanceComments } from '../schemas/acceptanceComment';
 import { goalNodes } from '../schemas/goalGraph';
@@ -88,6 +88,25 @@ export class AcceptanceModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
 
   /**
+   * What the list reads in the active scope. Wider than {@link ownership} in a
+   * workspace: a `private` workspace acceptance is member-gated, not
+   * creator-only — every member can open it (`resolveAcceptanceCommentAccess`),
+   * so the list must show it too. Only an `owner` row stays its creator's.
+   * Writes keep using `ownership`.
+   */
+  private listScope = (): SQL => {
+    const scope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    if (!this.workspaceId) return scope;
+    return and(scope, or(eq(acceptances.userId, this.userId), this.workspaceReadable()))!;
+  };
+
+  /** Rows a member of their workspace may read; mirrors `isWorkspaceReadableVisibility`. */
+  private workspaceReadable = (): SQL => ne(acceptances.visibility, 'owner');
+
+  /**
    * Acceptances the caller has spoken on — a remark or an approval, replies
    * included; a bare emoji reaction is not taking part. Rows the caller can no
    * longer read (made private, or they left its workspace) drop out: the link
@@ -112,17 +131,20 @@ export class AcceptanceModel {
       or(
         eq(acceptances.userId, this.userId),
         eq(acceptances.visibility, 'public'),
-        exists(
-          this.db
-            .select({ one: sql`1` })
-            .from(workspaceMembers)
-            .where(
-              and(
-                eq(workspaceMembers.workspaceId, acceptances.workspaceId),
-                eq(workspaceMembers.userId, this.userId),
-                isNull(workspaceMembers.deletedAt),
+        and(
+          this.workspaceReadable(),
+          exists(
+            this.db
+              .select({ one: sql`1` })
+              .from(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.workspaceId, acceptances.workspaceId),
+                  eq(workspaceMembers.userId, this.userId),
+                  isNull(workspaceMembers.deletedAt),
+                ),
               ),
-            ),
+          ),
         ),
       ),
     )!;
@@ -167,7 +189,7 @@ export class AcceptanceModel {
     const conditions: SQL[] = [];
     if (scope === 'participated') conditions.push(this.participation());
     else {
-      conditions.push(this.ownership());
+      conditions.push(this.listScope());
       if (scope === 'created') conditions.push(eq(acceptances.userId, this.userId));
     }
     if (projectId === null) conditions.push(isNull(acceptances.projectId));

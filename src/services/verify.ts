@@ -1,4 +1,5 @@
 import { DEFAULT_VERIFY_PLAN_PROVIDER } from '@lobechat/business-const';
+import type { AcceptanceVisibility } from '@lobechat/const/verify';
 import type {
   AcceptanceChecklistItem,
   AcceptanceCheckReviewAction,
@@ -187,7 +188,7 @@ export class VerifyService {
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
 
-  setAcceptanceVisibility = (id: string, visibility: 'private' | 'public') =>
+  setAcceptanceVisibility = (id: string, visibility: AcceptanceVisibility) =>
     lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
 
   /** The acceptance aggregate for a subject (topic/task/document), or null. */

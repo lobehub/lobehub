@@ -25,12 +25,16 @@ export default {
   'acceptance.comments.evidenceNumber': 'Evidence {{index}}',
   'acceptance.comments.evidenceModalTitle': 'Comment on evidence',
   'acceptance.share.title': 'Share',
-  'acceptance.share.makePublic': 'Allow access with the link',
-  'acceptance.share.makePrivate': 'Restrict access',
+  'acceptance.share.access.title': 'Who can see',
+  'acceptance.share.access.owner': 'Only me',
+  'acceptance.share.access.workspace': 'Workspace members',
+  'acceptance.share.access.public': 'Anyone with the link',
   'acceptance.share.publicHint':
     'Anyone with the link will be able to read this acceptance, all its rounds, evidence and comments. Signed-in visitors can also comment and annotate. Review the content before making it public.',
   'acceptance.share.privateHint':
     'Only the creator and workspace members will be able to read this acceptance and its rounds. Copies already downloaded cannot be recalled.',
+  'acceptance.share.ownerHint':
+    "Only you will be able to read this acceptance and its rounds. It leaves your teammates' lists, and links they hold stop opening.",
   'acceptance.share.saved': 'Sharing permissions updated',
   'acceptance.share.copyFailed': 'Could not copy the link. Copy it from the address bar.',
   'acceptance.video.annotateHint':

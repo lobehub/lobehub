@@ -41,10 +41,19 @@ vi.mock('./Header/AcceptanceStatusControl', () => ({ default: () => null }));
 vi.mock('./Header/AcceptanceTabs', () => ({ default: () => null }));
 vi.mock('./Review/AcceptanceDecision', () => ({ default: () => null }));
 
-const buildBundle = (overrides: { canReview: boolean; visibility: 'private' | 'public' }) => ({
-  acceptance: { id: 'acc-1', visibility: overrides.visibility },
+const buildBundle = (overrides: {
+  canReview: boolean;
+  isOwner?: boolean;
+  visibility: 'owner' | 'private' | 'public';
+  workspaceId?: string;
+}) => ({
+  acceptance: {
+    id: 'acc-1',
+    visibility: overrides.visibility,
+    workspaceId: overrides.workspaceId ?? null,
+  },
   canReview: overrides.canReview,
-  isOwner: overrides.canReview,
+  isOwner: overrides.isOwner ?? overrides.canReview,
   rounds: [],
   subject: { id: 'subject-1', type: 'task' },
 });
@@ -70,7 +79,7 @@ describe('AcceptanceOverview sharing', () => {
     const share = screen.getByRole('button', { name: /acceptance\.share\.title/ });
     fireEvent.click(share);
 
-    expect(await screen.findByText('acceptance.share.makePublic')).toBeTruthy();
+    expect(await screen.findByText('acceptance.share.access.public')).toBeTruthy();
     expect(screen.getByText('report.actions.copyLink')).toBeTruthy();
   });
 
@@ -88,13 +97,41 @@ describe('AcceptanceOverview sharing', () => {
     );
   });
 
-  it('offers to make a public acceptance private', async () => {
+  it('offers a personal acceptance only-me and link access', async () => {
     bundle.current = buildBundle({ canReview: true, visibility: 'public' });
     renderOverview();
 
     fireEvent.click(screen.getByRole('button', { name: /acceptance\.share\.title/ }));
 
-    expect(await screen.findByText('acceptance.share.makePrivate')).toBeTruthy();
+    expect(await screen.findByText('acceptance.share.access.owner')).toBeTruthy();
+    expect(screen.getByText('acceptance.share.access.public')).toBeTruthy();
+    expect(screen.queryByText('acceptance.share.access.workspace')).toBeNull();
+  });
+
+  it('lets the creator of a workspace acceptance keep it to themselves', async () => {
+    bundle.current = buildBundle({ canReview: true, visibility: 'private', workspaceId: 'ws-1' });
+    renderOverview();
+
+    fireEvent.click(screen.getByRole('button', { name: /acceptance\.share\.title/ }));
+
+    expect(await screen.findByText('acceptance.share.access.owner')).toBeTruthy();
+    expect(screen.getByText('acceptance.share.access.workspace')).toBeTruthy();
+    expect(screen.getByText('acceptance.share.access.public')).toBeTruthy();
+  });
+
+  it('does not let a teammate hide a workspace acceptance from the team', async () => {
+    bundle.current = buildBundle({
+      canReview: true,
+      isOwner: false,
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+    renderOverview();
+
+    fireEvent.click(screen.getByRole('button', { name: /acceptance\.share\.title/ }));
+
+    expect(await screen.findByText('acceptance.share.access.workspace')).toBeTruthy();
+    expect(screen.queryByText('acceptance.share.access.owner')).toBeNull();
   });
 
   it('shows no share control to a viewer who cannot manage the acceptance', () => {
