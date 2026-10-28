@@ -5,10 +5,14 @@ import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
-import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
-// Deep import, not the feature barrel: the inbox renderer loads lazily with
-// HomeInbox, and Home must not pull it into its own chunk for one provider.
+// Deep import, not the feature barrel: Home only needs the provider here.
 import { EntityLinkHostProvider } from '@/features/EntityLink/host';
+/**
+ * Static on purpose: HomeModeContent already imports the inbox statically, so a
+ * `lazy` wrapper saved no bytes and only suspended the rail for one frame on
+ * every refresh, painting it empty before the cards arrived (LOBE-15206).
+ */
+import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -63,9 +67,6 @@ const clearOnboardingHomeModeParam = () => {
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
-// The inbox renders markdown, briefs and an editor; keeping it lazy leaves the
-// greeting and the input box as the only static content of the home route.
-const HomeInbox = lazy(() => import('@/features/HomeInbox'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -362,8 +363,8 @@ const Home = memo(() => {
   /**
    * An enabled rail can settle with no cards; the main column then reclaims its
    * space without changing the preference. Only the loaded inbox may report it:
-   * judging by an empty DOM node also matched while the inbox chunk and its
-   * feeds were still loading, so every refresh painted one column first and
+   * judging by an empty DOM node also matched while the lazy inbox was
+   * suspended and while its feeds were still loading, so every refresh painted one column first and
    * slid back once the cards arrived (LOBE-15206).
    */
   const [railEmpty, setRailEmpty] = useState(false);
@@ -458,22 +459,11 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          {/* Hold the rail's place while the inbox loads, with the inbox's own
-              first-load skeleton, so the first frame is already two columns. */}
-          <Suspense
-            fallback={
-              <Flexbox data-testid={'home-rail-skeleton'} gap={12}>
-                <BriefCardSkeleton />
-                <BriefCardSkeleton />
-              </Flexbox>
-            }
-          >
-            {/* The inbox reads assistant replies, which carry internal entity
-                links; only the acceptance drawer can show a detail here. */}
-            <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
-              <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
-            </EntityLinkHostProvider>
-          </Suspense>
+          {/* The inbox reads assistant replies, which carry internal entity
+              links; only the acceptance drawer can show a detail here. */}
+          <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
+          </EntityLinkHostProvider>
         </aside>
       )}
 

@@ -6,8 +6,8 @@ import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 interface RenderHomeOptions {
   hiddenWidgets?: string[];
-  /** Module the lazy rail inbox resolves to; a pending promise keeps it loading. */
-  homeInbox?: () => Promise<{ default: ComponentType<any> }> | { default: ComponentType<any> };
+  /** Module factory for the rail inbox. */
+  homeInbox?: () => { default: ComponentType<any> };
   isLogin?: boolean;
   portalViewType?: PortalViewType;
   promo?: ReactNode;
@@ -215,10 +215,10 @@ describe('Home portrait visibility', () => {
 });
 
 describe('Home rail layout', () => {
-  it('holds the two-column layout with a skeleton while the rail inbox loads', async () => {
-    await renderHome({ homeInbox: () => new Promise(() => {}) });
+  it('paints the rail inbox in the first commit, without a suspended empty frame', async () => {
+    await renderHome();
 
-    expect(screen.getByTestId('home-rail-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('home-rail')).toContainElement(screen.getByTestId('home-inbox'));
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
   }, 20000);
 
@@ -233,7 +233,6 @@ describe('Home rail layout', () => {
       }),
     });
 
-    await screen.findByTestId('home-inbox');
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
 
     act(() => reportEmpty?.(true));
