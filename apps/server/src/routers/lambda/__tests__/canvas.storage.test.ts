@@ -11,6 +11,12 @@ import { canvasRouter } from '../canvas';
 
 const serverDB = await getTestDB();
 const objects = vi.hoisted(() => new Map<string, Uint8Array>());
+const unpublishCanvasSite = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/canvasPublish', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  unpublishCanvasSite,
+}));
 
 vi.mock('@/server/services/file', () => ({
   FileService: class {
@@ -49,6 +55,7 @@ const caller = (id = userId) => canvasRouter.createCaller({ serverDB, userId: id
 
 beforeEach(async () => {
   objects.clear();
+  unpublishCanvasSite.mockReset();
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: strangerId }]);
 });
@@ -130,5 +137,45 @@ describe('canvasRouter storage', () => {
     expect(await new FileModel(serverDB, userId).countUsage()).toBe(usage);
     expect(await model.findCanvas('cvs_storage')).not.toBeNull();
     expect([...objects.keys()].sort()).toEqual(keys);
+  });
+
+  it('takes a published canvas offline before deleting it', async () => {
+    const { model } = await createCanvas('cvs_storage', 'Climate Alarm');
+    await model.recordCanvasPublish('cvs_storage', {
+      deploymentId: 'dep_1',
+      publishedVersion: 2,
+      url: 'https://climate.lobehub.sites',
+    });
+
+    await caller().delete({ canvasId: 'cvs_storage' });
+
+    expect(unpublishCanvasSite).toHaveBeenCalledWith(
+      expect.objectContaining({ deploymentId: 'dep_1', userId }),
+    );
+    expect(await model.findCanvas('cvs_storage')).toBeNull();
+  });
+
+  it('keeps the canvas when its public site cannot be taken offline', async () => {
+    const { model } = await createCanvas('cvs_storage', 'Climate Alarm');
+    await model.recordCanvasPublish('cvs_storage', {
+      deploymentId: 'dep_1',
+      publishedVersion: 2,
+      url: 'https://climate.lobehub.sites',
+    });
+    const usage = await new FileModel(serverDB, userId).countUsage();
+    unpublishCanvasSite.mockRejectedValueOnce(new Error('market down'));
+
+    await expect(caller().delete({ canvasId: 'cvs_storage' })).rejects.toThrow('market down');
+
+    expect(await model.findCanvas('cvs_storage')).not.toBeNull();
+    expect(await new FileModel(serverDB, userId).countUsage()).toBe(usage);
+  });
+
+  it('does not touch publication for an unpublished canvas', async () => {
+    await createCanvas('cvs_storage', 'Climate Alarm');
+
+    await caller().delete({ canvasId: 'cvs_storage' });
+
+    expect(unpublishCanvasSite).not.toHaveBeenCalled();
   });
 });

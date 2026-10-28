@@ -3,7 +3,6 @@
 import { memo, useLayoutEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 
-import { CanvasStorageEntry } from '@/features/CanvasStorage';
 import ResourceManager from '@/features/ResourceManager';
 import { useInitFileCheck } from '@/features/ResourceManager/hooks/useInitFileCheck';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
@@ -63,15 +62,7 @@ const ResourceHomePage = memo(() => {
 
   if (view.kind === 'works') return <WorkGallery galleryKey={view.galleryKey} />;
 
-  if (view.kind !== 'drive') return <ResourceManager content={<HomeDashboard />} />;
-
-  // Canvas files fill the same storage quota without being listed as files, so
-  // the whole drive names them above its list.
-  return (
-    <ResourceManager
-      explorerHero={view.category === FilesTabs.All ? <CanvasStorageEntry /> : undefined}
-    />
-  );
+  return <ResourceManager content={view.kind === 'drive' ? undefined : <HomeDashboard />} />;
 });
 
 ResourceHomePage.displayName = 'ResourceHomePage';

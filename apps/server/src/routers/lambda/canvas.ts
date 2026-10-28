@@ -38,9 +38,11 @@ export const canvasRouter = router({
     .input(z.object({ canvasId: z.string().min(1).max(128) }))
     .mutation(({ ctx, input }) =>
       deleteCanvas(input.canvasId, {
+        db: ctx.serverDB,
         storage: createCanvasStorageService(ctx.serverDB, ctx.userId, ctx.workspaceId),
         userId: ctx.userId,
         workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -227,7 +229,7 @@ export const canvasRouter = router({
     }),
 
   // Canvas files count toward file storage but stay out of the resource library,
-  // so the Drive lists this usage per canvas instead.
+  // so the canvas Works list names this usage per canvas instead.
   listStorage: canvasProcedure.query(({ ctx }) =>
     new CanvasFileRepository(ctx.serverDB, ctx.userId, ctx.workspaceId).listStorage(),
   ),

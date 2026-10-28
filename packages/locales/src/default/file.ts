@@ -4,21 +4,22 @@ export default {
   'addPage': 'Create Page',
   'canvasStorage.delete.content':
     'This deletes every version and file of “{{title}}” and frees {{size}}. This can’t be undone.',
+  'canvasStorage.delete.contentNoSize':
+    'This deletes every version and file of “{{title}}”. This can’t be undone.',
+  'canvasStorage.delete.published': 'Its public link will stop working.',
   'canvasStorage.delete.success': 'Canvas deleted. {{size}} freed.',
+  'canvasStorage.delete.successNoSize': 'Canvas deleted',
   'canvasStorage.delete.title': 'Delete this canvas?',
-  'canvasStorage.desc':
-    'Images and files inside a canvas count toward file storage. They can only be deleted with the whole canvas.',
-  'canvasStorage.empty': 'Canvases aren’t using any storage.',
-  'canvasStorage.entry.desc_one':
-    '{{count}} canvas uses {{size}}. Its files aren’t listed in Drive.',
-  'canvasStorage.entry.desc_other':
-    '{{count}} canvases use {{size}}. Their files aren’t listed in Drive.',
-  'canvasStorage.entry.manage': 'Manage',
-  'canvasStorage.item.meta_one': '{{count}} file · Updated {{date}}',
-  'canvasStorage.item.meta_other': '{{count}} files · Updated {{date}}',
-  'canvasStorage.item.untitled': 'Canvas files without a work',
-  'canvasStorage.loadError': 'Couldn’t load canvas storage.',
-  'canvasStorage.title': 'Canvas storage',
+  'canvasStorage.menu.copyLink': 'Copy public link',
+  'canvasStorage.menu.delete': 'Delete canvas',
+  'canvasStorage.orphan.clean': 'Clean up',
+  'canvasStorage.orphan.confirm':
+    'This deletes {{size}} of files left by canvases that no longer exist. This can’t be undone.',
+  'canvasStorage.orphan.desc':
+    '{{size}} of files left by deleted canvases still count toward storage',
+  'canvasStorage.orphan.title': 'Clean up leftover canvas files?',
+  'canvasStorage.summary_one': 'Your {{count}} canvas uses {{size}} of file storage',
+  'canvasStorage.summary_other': 'Your {{count}} canvases use {{size}} of file storage',
   'detail.basic.createdAt': 'Creation Time',
   'detail.basic.filename': 'File Name',
   'detail.basic.size': 'File Size',
@@ -106,6 +107,7 @@ export default {
   'docs.shared.title': 'Shared docs',
   'docs.viewAllPages': 'View all',
   'docs.works.all': 'All',
+  'docs.works.canvas': 'Canvas',
   'docs.works.document': 'Documents',
   'docs.works.task': 'Tasks',
   'empty': 'No files or folders have been uploaded yet.',

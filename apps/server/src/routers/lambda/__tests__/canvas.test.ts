@@ -32,6 +32,7 @@ vi.mock('@/business/server/canvasPublish', () => ({
   getCanvasPublishRuntimeUrl: publishing.runtime,
   isCanvasPublishEnabled: () => publishing.enabled,
   publishCanvasSite: publishing.publish,
+  unpublishCanvasSite: vi.fn(),
 }));
 
 const committed = vi.hoisted(() => ({ calls: 0 }));

@@ -31,7 +31,8 @@ vi.mock('@/services/work', () => ({
 }));
 vi.mock('@/store/work', () => ({ workActions: { removeWork: work.removeWork } }));
 
-const { summarizeCanvasStorage, useDeleteCanvas } = await import('./useCanvasStorage');
+const { summarizeCanvasStorage, useCleanOrphanCanvasFiles, useDeleteCanvas } =
+  await import('./useCanvasStorage');
 
 const item = (overrides: Partial<CanvasStorageItem> = {}): CanvasStorageItem => ({
   canvasId: 'cvs_1',
@@ -43,24 +44,42 @@ const item = (overrides: Partial<CanvasStorageItem> = {}): CanvasStorageItem => 
   ...overrides,
 });
 
+const canvasOf = (overrides: Record<string, unknown> = {}) => ({
+  canvasId: 'cvs_1',
+  title: 'Climate Alarm',
+  totalSize: 17.4 * 1024 * 1024,
+  workId: 'work-1',
+  ...overrides,
+});
+
+const confirmLatest = () => act(() => ui.confirmModal.mock.calls.at(-1)![0].onOk());
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('summarizeCanvasStorage', () => {
-  it('totals the storage every canvas holds for the drive entry', () => {
-    expect(
-      summarizeCanvasStorage([
-        item({ totalSize: 300 }),
-        item({ canvasId: 'cvs_2', totalSize: 200 }),
-      ]),
-    ).toEqual({ count: 2, totalSize: 500 });
+  it('totals canvases by id and sets aside files whose Work is gone', () => {
+    const summary = summarizeCanvasStorage([
+      item({ totalSize: 300 }),
+      item({ canvasId: 'cvs_2', totalSize: 200, workId: 'work-2' }),
+      item({ canvasId: 'cvs_orphan', title: null, totalSize: 40, workId: null }),
+    ]);
+
+    expect(summary.canvasCount).toBe(2);
+    expect(summary.canvasSize).toBe(500);
+    expect(summary.byCanvas.get('cvs_2')?.totalSize).toBe(200);
+    expect(summary.orphans.map((orphan) => orphan.canvasId)).toEqual(['cvs_orphan']);
+    expect(summary.orphanSize).toBe(40);
   });
 
-  it('hides the entry while canvases hold no storage', () => {
-    expect(summarizeCanvasStorage(undefined)).toBeNull();
-    expect(summarizeCanvasStorage([])).toBeNull();
-    expect(summarizeCanvasStorage([item({ totalSize: 0 })])).toBeNull();
+  it('is empty before the usage loads', () => {
+    expect(summarizeCanvasStorage(undefined)).toMatchObject({
+      canvasCount: 0,
+      canvasSize: 0,
+      orphanSize: 0,
+      orphans: [],
+    });
   });
 });
 
@@ -69,9 +88,12 @@ describe('useDeleteCanvas', () => {
     canvas.delete.mockResolvedValue(undefined);
     const { result } = renderHook(() => useDeleteCanvas());
 
-    act(() => result.current(item()));
+    act(() => result.current(canvasOf()));
     expect(canvas.delete).not.toHaveBeenCalled();
-    await act(() => ui.confirmModal.mock.calls[0][0].onOk());
+    expect(ui.confirmModal.mock.calls[0][0].content).toBe(
+      'canvasStorage.delete.content {"size":"17.4 MB","title":"Climate Alarm"}',
+    );
+    await confirmLatest();
 
     expect(canvas.delete).toHaveBeenCalledWith('cvs_1');
     expect(work.removeWork).toHaveBeenCalledWith('work-1');
@@ -81,15 +103,18 @@ describe('useDeleteCanvas', () => {
     );
   });
 
-  it('frees files left without a Work by canvas id alone', async () => {
-    canvas.delete.mockResolvedValue(undefined);
+  it('warns that a published canvas goes offline, and confirms without a known size', () => {
     const { result } = renderHook(() => useDeleteCanvas());
 
-    act(() => result.current(item({ title: null, workId: null })));
-    await act(() => ui.confirmModal.mock.calls[0][0].onOk());
+    act(() =>
+      result.current(
+        canvasOf({ publishedUrl: 'https://climate.lobehub.sites', totalSize: undefined }),
+      ),
+    );
 
-    expect(canvas.delete).toHaveBeenCalledWith('cvs_1');
-    expect(work.removeWork).not.toHaveBeenCalled();
+    expect(ui.confirmModal.mock.calls[0][0].content).toBe(
+      'canvasStorage.delete.contentNoSize {"title":"Climate Alarm"} canvasStorage.delete.published',
+    );
   });
 
   it('keeps the canvas listed and reports a failed delete', async () => {
@@ -97,11 +122,48 @@ describe('useDeleteCanvas', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result } = renderHook(() => useDeleteCanvas());
 
-    act(() => result.current(item()));
-    await act(() => ui.confirmModal.mock.calls[0][0].onOk());
+    act(() => result.current(canvasOf()));
+    await confirmLatest();
 
     expect(work.removeWork).not.toHaveBeenCalled();
     expect(mutate).not.toHaveBeenCalled();
+    expect(ui.error).toHaveBeenCalledWith('operationFailed {"ns":"common"}');
+  });
+});
+
+describe('useCleanOrphanCanvasFiles', () => {
+  it('frees every leftover canvas by id after one confirmation', async () => {
+    canvas.delete.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useCleanOrphanCanvasFiles());
+
+    act(() =>
+      result.current([
+        item({ canvasId: 'cvs_a', totalSize: 1024, workId: null }),
+        item({ canvasId: 'cvs_b', totalSize: 1024, workId: null }),
+      ]),
+    );
+    await confirmLatest();
+
+    expect(canvas.delete.mock.calls).toEqual([['cvs_a'], ['cvs_b']]);
+    expect(work.removeWork).not.toHaveBeenCalled();
+    expect(mutate).toHaveBeenCalledWith(['canvas:storage']);
+    expect(ui.success).toHaveBeenCalledWith('canvasStorage.delete.success {"size":"2.0 KB"}');
+  });
+
+  it('refreshes what is left when a cleanup fails part way', async () => {
+    canvas.delete.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useCleanOrphanCanvasFiles());
+
+    act(() =>
+      result.current([
+        item({ canvasId: 'cvs_a', workId: null }),
+        item({ canvasId: 'cvs_b', workId: null }),
+      ]),
+    );
+    await confirmLatest();
+
+    expect(mutate).toHaveBeenCalledWith(['canvas:storage']);
     expect(ui.error).toHaveBeenCalledWith('operationFailed {"ns":"common"}');
   });
 });
