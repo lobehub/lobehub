@@ -1,5 +1,4 @@
 import type { ComfyUIKeyVault } from '@lobechat/types';
-import { createBasicAuthCredentials } from '@lobechat/utils';
 import debug from 'debug';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
@@ -8,6 +7,7 @@ import type {
   CreateImagePayload,
   CreateImageResponse,
 } from '../../types';
+import { createBasicAuthCredentials } from '../../utils/base64';
 import { parseComfyUIErrorMessage } from '../../utils/comfyuiErrorParser';
 import { AgentRuntimeError } from '../../utils/createError';
 

@@ -127,6 +127,7 @@ export const buildServerCallLlmContext = async ({
       agent: {
         chatConfig: agentConfig.chatConfig,
         description: agentConfig.description,
+        name: agentConfig.name,
         slug: agentConfig.slug,
         title: agentConfig.title,
       },

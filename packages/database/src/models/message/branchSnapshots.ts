@@ -69,6 +69,7 @@ export class MessageBranchSnapshots extends MessageScope {
     const branchIdsByParent = new Map<string, string[]>();
 
     for (const branch of branchRows) {
+      /* v8 ignore next -- unreachable: `inArray(messages.parentId, …)` already excludes NULL parents */
       if (!branch.parentId) continue;
       const branchIds = branchIdsByParent.get(branch.parentId) ?? [];
       branchIds.push(branch.id);

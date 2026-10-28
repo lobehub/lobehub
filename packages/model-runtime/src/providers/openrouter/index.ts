@@ -97,15 +97,18 @@ export const params = {
     },
   },
   constructorOptions: {
+    // App attribution for OpenRouter rankings: https://openrouter.ai/docs/app-attribution
+    // Categories accept at most 2 recognized values per request and cannot be removed once merged.
     defaultHeaders: {
       'HTTP-Referer': 'https://lobehub.com',
-      'X-Title': 'LobeHub',
+      'X-OpenRouter-Categories': 'personal-agent,general-chat',
+      'X-OpenRouter-Title': 'LobeHub',
     },
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
-  decide: { path: '/systemone' },
+  decide: { path: '/systemone', protocol: 'systemone' },
   models: async () => {
     // The default listing omits decision models; they are only returned when filtering by
     // their output modality, so fetch both lists.

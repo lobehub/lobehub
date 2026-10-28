@@ -153,6 +153,7 @@ export class VoiceMessageActionImpl {
         value: this.#createLocalMessage(transaction),
       },
       { conversationContext: transaction.context },
+      { creationOrigin: 'client' },
     );
   };
 

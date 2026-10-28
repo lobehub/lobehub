@@ -126,9 +126,26 @@ export const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  /**
+   * Hover-only controls fade in when they appear. They stay out of the layout
+   * (display: none, see rowHeader) until then — an invisible `opacity: 0` strip
+   * still kept its width and cut every title short for nothing.
+   */
   rowActions: css`
-    opacity: 0;
-    transition: opacity 0.2s;
+    @keyframes acceptance-row-reveal {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* The 24px icons sit inside the 22px title line, so revealing them
+       doesn't grow the row and nudge every row below it. */
+    height: 22px;
+    animation: acceptance-row-reveal 0.2s both;
   `,
   rowChevron: css`
     @media (width <= 767px) {
@@ -136,7 +153,7 @@ export const styles = createStaticStyles(({ css }) => ({
     }
   `,
   rowMeta: css`
-    transition: opacity 0.2s;
+    animation: acceptance-row-reveal 0.2s both;
 
     @media (width <= 767px) {
       grid-area: 1 / 3;
@@ -147,11 +164,6 @@ export const styles = createStaticStyles(({ css }) => ({
       &:empty {
         display: none;
       }
-    }
-
-    @media (hover: hover) and (pointer: fine) {
-      pointer-events: none;
-      opacity: 0;
     }
   `,
   rowTitle: css`
@@ -164,15 +176,18 @@ export const styles = createStaticStyles(({ css }) => ({
     padding-block: 12px;
     padding-inline: 16px;
 
-    &:hover,
-    &:focus-within {
-      .acceptance-row-actions {
-        opacity: 1;
+    /* At rest the row is all title. A pending accept/ignore keeps its spinner
+       on screen after the pointer leaves (data-busy). Touch screens have no
+       hover, so their meta stays put. */
+    &:not(:hover, :focus-within) {
+      .acceptance-row-actions:not([data-busy]) {
+        display: none;
       }
 
-      .acceptance-row-meta {
-        pointer-events: auto;
-        opacity: 1;
+      @media (hover: hover) and (pointer: fine) {
+        .acceptance-row-meta {
+          display: none;
+        }
       }
     }
 

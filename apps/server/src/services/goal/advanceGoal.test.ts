@@ -70,6 +70,44 @@ describe('advanceGoal', () => {
     expect(mocks.tick).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps filling free slots after a tick that started a run', async () => {
+    // A released wave of five started one Task per advance: dispatching reports
+    // `waiting_external`, which ended the advance with two slots still free.
+    const started = (taskId: string) => async (_goalId: string, options: any) => {
+      options?.onDecision?.({ effects: [{ targetId: taskId, type: 'started_run' }] });
+      return { goalId: 'goal-1', message: `Started task ${taskId}`, outcome: 'waiting_external' };
+    };
+    mocks.tick
+      .mockImplementationOnce(started('T-1'))
+      .mockImplementationOnce(started('T-2'))
+      .mockImplementationOnce(started('T-3'))
+      .mockImplementationOnce(async (_goalId: string, options: any) => {
+        options?.onDecision?.({ effects: [] });
+        return tickResult('waiting_external');
+      });
+
+    const { result, ticks } = await advance();
+
+    expect(ticks).toBe(4);
+    expect(mocks.tick).toHaveBeenCalledTimes(4);
+    // The cap-reached tick says nothing new; the caller learns what was started.
+    expect(result).toMatchObject({ message: 'Started task T-3', outcome: 'waiting_external' });
+  });
+
+  it('reports a person-facing stop over the runs it started', async () => {
+    mocks.tick
+      .mockImplementationOnce(async (_goalId: string, options: any) => {
+        options?.onDecision?.({ effects: [{ type: 'started_run' }] });
+        return tickResult('waiting_external');
+      })
+      .mockResolvedValueOnce(tickResult('waiting_human'));
+
+    const { result, ticks } = await advance();
+
+    expect(ticks).toBe(2);
+    expect(result.outcome).toBe('waiting_human');
+  });
+
   it.each(['achieved', 'failed', 'no_progress', 'waiting_human'] as const)(
     'stops on %s without another tick',
     async (outcome) => {
@@ -119,6 +157,20 @@ describe('advanceGoal trajectory recording', () => {
     outcome,
   });
 
+  /** Starts a run on the first tick, then finds no free slot, as a capped goal does. */
+  const startsOneRun = () => {
+    let started = false;
+    return async (_goalId: string, options: any) => {
+      if (started) {
+        options?.onDecision?.({ ...observation('waiting_external'), effects: [] });
+      } else {
+        started = true;
+        options?.onDecision?.(observation('waiting_external'));
+      }
+      return tickResult('waiting_external');
+    };
+  };
+
   /** Minimal store that only has to remember what was written. */
   const memoryStore = () => {
     const state: { partial?: any; saved?: any } = {};
@@ -154,10 +206,7 @@ describe('advanceGoal trajectory recording', () => {
     const { state, store } = memoryStore();
     mocks.createStore.mockReturnValue(store);
     mocks.status.mockResolvedValue('running');
-    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
-      options?.onDecision?.(observation('waiting_external'));
-      return tickResult('waiting_external');
-    });
+    mocks.tick.mockImplementation(startsOneRun());
 
     await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
 
@@ -175,10 +224,7 @@ describe('advanceGoal trajectory recording', () => {
     const { store } = memoryStore();
     mocks.createStore.mockReturnValue(store);
     mocks.status.mockResolvedValue('running');
-    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
-      options?.onDecision?.(observation('waiting_external'));
-      return tickResult('waiting_external');
-    });
+    mocks.tick.mockImplementation(startsOneRun());
 
     await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
 
@@ -193,10 +239,7 @@ describe('advanceGoal trajectory recording', () => {
     const { store } = memoryStore();
     mocks.createStore.mockReturnValue(store);
     mocks.status.mockResolvedValue('running');
-    mocks.tick.mockImplementation(async (_goalId: string, options: any) => {
-      options?.onDecision?.(observation('waiting_external'));
-      return tickResult('waiting_external');
-    });
+    mocks.tick.mockImplementation(startsOneRun());
 
     await advanceGoal({ goalId: 'goal-1', trigger: 'sweep', userId: 'user-1' });
 
@@ -206,7 +249,8 @@ describe('advanceGoal trajectory recording', () => {
         advancesTotal: 1,
         finalStatus: null,
         goalId: 'goal-1',
-        ticksTotal: 1,
+        // The dispatch, then the tick that finds no free slot left.
+        ticksTotal: 2,
         // The partial, because that is the object that exists while the goal
         // runs. Pointing at the finalized key here made `hasTrace` a lie and
         // had the server sign a URL that 404s until the goal was over.

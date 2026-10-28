@@ -1,8 +1,8 @@
-import { parseToolNameMaxLength } from '@lobechat/const/plugin';
 import { Md5 } from 'ts-md5';
 
 import type { ChatToolPayload, MessageToolCall } from '@/types/index';
 
+import { parseToolNameMaxLength } from '../../const/plugin';
 import type { LobeChatPluginApi, LobeToolManifest } from './types';
 
 // Tool naming constants

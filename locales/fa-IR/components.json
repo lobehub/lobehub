@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "این مدل از تشخیص ویدیو پشتیبانی می‌کند",
   "ModelSelect.featureTag.vision": "این مدل از تشخیص بصری پشتیبانی می‌کند.",
   "ModelSelect.removed": "مدل در فهرست نیست. در صورت عدم انتخاب، به‌طور خودکار حذف خواهد شد.",
+  "ModelSelect.routing": "مسیر یابی",
+  "ModelSelect.routingTooltip": "یک گروه مسیر یابی: چندین ارائه‌دهنده این مدل را ارائه می‌دهند و هر درخواست به هرکدام که پاسخ دهد ارسال می‌شود.",
   "ModelSelect.staleModel.current": "انتخاب فعلی",
   "ModelSelect.staleModel.notEnabled.action": "فعال کردن این مدل",
   "ModelSelect.staleModel.notEnabled.actionFailed": "فعال‌سازی مدل با شکست مواجه شد. لطفاً دوباره تلاش کنید.",

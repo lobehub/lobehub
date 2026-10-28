@@ -1,8 +1,14 @@
+import { isDesktop } from '@lobechat/const';
+import type { ClaudeCodeLocalAccount } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
+import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { electronKeys } from '@/libs/swr/keys';
 import { agentQuotaService } from '@/services/agentQuota';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 
@@ -302,6 +308,74 @@ export class ActionImpl {
   };
 
   /**
+   * Take an account in or out of the workspace's rotation. A disabled account
+   * stays listed (and keeps its history) but the load balancer skips it.
+   */
+  setQuotaAccountEnabled = async (accountId: string, enabled: boolean): Promise<void> => {
+    await this.#accounts.optimistic(
+      QUOTA_ACCOUNTS_KEY,
+      (accounts) =>
+        accounts.map((account) => (account.id === accountId ? { ...account, enabled } : account)),
+      () => agentQuotaService.updateAccount(accountId, { enabled }),
+    );
+    await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+  };
+
+  // ---- local Claude Code logins (desktop) ----
+
+  /**
+   * The Claude logins this desktop holds. Listing also samples each login's
+   * quota into the pool: the quota panel only samples the login it shows, Auto
+   * mode can only balance on readings that exist, and a login whose usage call
+   * fails (e.g. a blocked network) must still show up as an account.
+   */
+  useFetchClaudeLocalAccounts = (enabled = true): SWRResponse<ClaudeCodeLocalAccount[]> =>
+    useClientDataSWR(
+      enabled ? electronKeys.claudeCodeAccounts() : null,
+      () => this.#syncClaudeLocalAccounts(),
+      {
+        onSuccess: (claudeLocalAccounts: ClaudeCodeLocalAccount[]) =>
+          this.#set({ claudeLocalAccounts }, false, 'claudeLocalAccounts'),
+        revalidateOnFocus: false,
+      },
+    );
+
+  /**
+   * Sample every local login into the pool now, without a view mounted. The
+   * quota panel calls this on its refresh: in Auto mode runs may land on any
+   * local profile, and balancing reads these readings, so they must not go
+   * stale while the account manager is closed.
+   */
+  refreshClaudeLocalAccounts = async (): Promise<void> => {
+    const claudeLocalAccounts = await this.#syncClaudeLocalAccounts();
+    this.#set({ claudeLocalAccounts }, false, 'claudeLocalAccounts');
+  };
+
+  /**
+   * Sign an account in to this desktop through the browser (`claude auth
+   * login` in a profile of its own), then add it to the pool.
+   */
+  loginClaudeAccount = async (email?: string): Promise<ClaudeCodeLocalAccount> => {
+    this.#set({ claudeLoginPending: true }, false, 'claudeLoginPending');
+    try {
+      const account = await heterogeneousAgentService.loginClaudeCodeAccount(
+        email ? { email } : undefined,
+      );
+      await this.#ingestLocalLogin(account, true).catch(() => false);
+      await mutate(electronKeys.claudeCodeAccounts());
+      await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+      return account;
+    } finally {
+      this.#set({ claudeLoginPending: false }, false, 'claudeLoginPending');
+    }
+  };
+
+  /** Abort the browser sign-in in progress; `loginClaudeAccount` then rejects. */
+  cancelClaudeAccountLogin = async (): Promise<void> => {
+    await heterogeneousAgentService.cancelClaudeCodeAccountLogin();
+  };
+
+  /**
    * Drop every quota view and confirmation when the data context changes
    * (desktop `refreshUserData` / `disconnectRemoteServer`), even when the next
    * context derives the same scope string.
@@ -320,9 +394,54 @@ export class ActionImpl {
     // Live panel samples are not replica fetches, so `clear()` cannot retire them.
     this.#resetGeneration += 1;
     this.#set({ ...initialState }, false, 'resetAgentQuotaStore');
+    // Local logins outlive the data context, but their accounts must land in
+    // the new context's pool: list (and ingest) them again.
+    if (isDesktop) void mutate(electronKeys.claudeCodeAccounts()).catch(() => {});
   };
 
   // ---- internals ----
+
+  #syncClaudeLocalAccounts = async (): Promise<ClaudeCodeLocalAccount[]> => {
+    const accounts = await heterogeneousAgentService.listClaudeCodeAccounts();
+    const ingested = await Promise.all(
+      accounts.map((account) => this.#ingestLocalLogin(account).catch(() => false)),
+    );
+    if (ingested.some(Boolean)) await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+    return accounts;
+  };
+
+  /**
+   * Sample one local login and persist it. A login whose usage call fails still
+   * registers its account (no readings), so a fresh sign-in always shows up.
+   * Returns whether anything new reached the server.
+   */
+  #ingestLocalLogin = async (account: ClaudeCodeLocalAccount, force = false): Promise<boolean> => {
+    const live = await heterogeneousAgentService
+      .getClaudeCodeQuota({
+        ...(account.configDir && { env: { CLAUDE_CONFIG_DIR: account.configDir } }),
+        ...(force && { force: true }),
+      })
+      .catch(() => null);
+    const identity = live?.identity ?? account.identity;
+    const readings = live?.status === 'ok' ? (live.readings ?? []) : [];
+
+    const known = (await this.readQuotaAccounts().catch(() => [])).find(
+      (row) => row.externalAccountId === identity.externalAccountId,
+    );
+    if (known) {
+      if (readings.length === 0) return false;
+      // The main-process cache echoes a sample already persisted (same
+      // capturedAt); snapshots are append-only, so never ingest it twice.
+      const persisted = await this.readQuotaReadings(known.id).catch(() => []);
+      const newest = (rows: { capturedAt: number }[]) =>
+        rows.reduce((max, row) => Math.max(max, row.capturedAt), 0);
+      if (newest(readings) <= newest(persisted)) return false;
+    }
+
+    await agentQuotaService.ingestClaudeSnapshot({ identity, readings });
+    if (known) await this.readQuotaReadings(known.id, { fresh: true }).catch(() => []);
+    return true;
+  };
 
   /**
    * A sampler read (`readQuota*`) seeds the sync cache, but SWR still

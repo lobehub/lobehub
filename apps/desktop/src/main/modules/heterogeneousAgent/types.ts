@@ -27,6 +27,8 @@ export interface HeterogeneousAgentBuildPlanHelpers {
 
 export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
+  /** CLI version spawn preflight detected, when known. */
+  cliVersion?: string;
   helpers: HeterogeneousAgentBuildPlanHelpers;
   /**
    * Optional path to an MCP config JSON written by the controller (e.g. for

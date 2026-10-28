@@ -16,11 +16,11 @@ interface UseAgentIdentityFormOptions {
 const BUILTIN_SLUGS: ReadonlySet<string> = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 /**
- * Drives the three identity fields of the agent form.
+ * Drives the identity fields of the agent form.
  *
- * `name` and `title` ride the ordinary meta patch; `slug` has its own validated
+ * `name`, `title` and `description` ride the ordinary meta patch; `slug` has its own validated
  * endpoint (see `updateAgentSlug`). The slug is committed FIRST so a rejected
- * one can keep the form open with its reason — saving the other two first would
+ * one can keep the form open with its reason — saving the others first would
  * leave them persisted behind a form the user still has to fix.
  */
 export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormOptions) => {
@@ -34,6 +34,7 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
 
   const [name, setName] = useState(meta.name || '');
   const [title, setTitle] = useState(meta.title || '');
+  const [description, setDescription] = useState(meta.description || '');
   const [nextSlug, setNextSlug] = useState(slug || '');
   const [error, setError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
@@ -62,7 +63,11 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
         await refreshAgentConfig(agentId);
       }
 
-      await updateAgentMeta(agentId, { name: name.trim(), title: title.trim() });
+      await updateAgentMeta(agentId, {
+        description: description.trim(),
+        name: name.trim(),
+        title: title.trim(),
+      });
       onSaved();
     } catch {
       setError(t('settingAgent.identity.saveFailed'));
@@ -72,10 +77,12 @@ export const useAgentIdentityForm = ({ agentId, onSaved }: UseAgentIdentityFormO
   };
 
   return {
+    description,
     error,
     name,
     save,
     saving,
+    setDescription,
     setName,
     setSlug: (value: string) => {
       setNextSlug(value);

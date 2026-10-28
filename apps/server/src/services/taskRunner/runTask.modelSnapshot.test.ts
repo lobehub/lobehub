@@ -52,12 +52,14 @@ describe('TaskRunnerService.runTask model snapshot backfill', () => {
       totalTopics: 0,
     };
     taskModel = {
-      findById: vi.fn().mockResolvedValue({ ...task, status: 'running' }),
+      findById: vi
+        .fn()
+        .mockResolvedValueOnce({ ...task })
+        .mockResolvedValue({ ...task, status: 'running' }),
       getCheckpointConfig: vi.fn().mockReturnValue({}),
       getReviewConfig: vi.fn().mockReturnValue(undefined),
       incrementTopicCount: vi.fn(),
       lockForUpdate: vi.fn().mockResolvedValue(true),
-      resolve: vi.fn().mockResolvedValue({ ...task }),
       update: vi.fn(),
       updateCurrentTopic: vi.fn(),
       updateHeartbeat: vi.fn(),

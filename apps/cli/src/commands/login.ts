@@ -11,7 +11,7 @@ import { readCliApiKeyEnv } from '../constants/auth';
 import { CLI_PRODUCT_NAME } from '../constants/identity';
 import { OFFICIAL_SERVER_URL } from '../constants/urls';
 import { registerDevice, resolveDeviceIdentity } from '../device/register';
-import { loadSettings, normalizeUrl, saveSettings } from '../settings';
+import { loadSettings, normalizeUrl, saveSettings, settingsForLogin } from '../settings';
 import { log } from '../utils/logger';
 
 const CLIENT_ID = 'lobehub-cli';
@@ -70,22 +70,8 @@ export function registerLoginCommand(program: Command) {
         try {
           await getUserIdFromApiKey(apiKey, serverUrl);
 
-          const existingSettings = loadSettings();
-          const existingServerUrl = existingSettings?.serverUrl || OFFICIAL_SERVER_URL;
-          const shouldPreserveGateway = !!existingSettings && existingServerUrl === serverUrl;
-
-          saveSettings(
-            shouldPreserveGateway
-              ? {
-                  gatewayUrl: existingSettings.gatewayUrl,
-                  serverUrl,
-                }
-              : {
-                  // Gateway auth is tied to the login server's token issuer/JWKS.
-                  // When server changes, clear old gateway to avoid stale cross-environment config.
-                  serverUrl,
-                },
-          );
+          // Device gateway addresses stay bound to the server they were saved for.
+          saveSettings(settingsForLogin(loadSettings(), serverUrl));
           log.info('Login successful! Credentials saved.');
           return;
         } catch (error) {
@@ -203,22 +189,8 @@ export function registerLoginCommand(program: Command) {
               refreshToken: body.refresh_token,
             });
 
-            const existingSettings = loadSettings();
-            const existingServerUrl = existingSettings?.serverUrl || OFFICIAL_SERVER_URL;
-            const shouldPreserveGateway = !!existingSettings && existingServerUrl === serverUrl;
-
-            saveSettings(
-              shouldPreserveGateway
-                ? {
-                    gatewayUrl: existingSettings.gatewayUrl,
-                    serverUrl,
-                  }
-                : {
-                    // Gateway auth is tied to the login server's token issuer/JWKS.
-                    // When server changes, clear old gateway to avoid stale cross-environment config.
-                    serverUrl,
-                  },
-            );
+            // Device gateway addresses stay bound to the server they were saved for.
+            saveSettings(settingsForLogin(loadSettings(), serverUrl));
 
             // Register this device in the server registry right after auth, so
             // the device row exists without waiting for a later `lh connect`

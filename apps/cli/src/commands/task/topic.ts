@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrls } from '../resourceUrl';
 import { statusBadge } from './helpers';
 
 export function registerTopicCommands(task: Command) {
@@ -19,7 +20,10 @@ export function registerTopicCommands(task: Command) {
       const result = await client.task.getTopics.query({ id });
 
       if (options.json !== undefined) {
-        outputJson(result.data, options.json);
+        outputJson(
+          withUrls(result.data, await resolveUrlBuilder(client), resourcePath.topic),
+          options.json,
+        );
         return;
       }
 
@@ -67,7 +71,10 @@ export function registerTopicCommands(task: Command) {
       const items = Array.isArray(messages) ? messages : [];
 
       if (options.json !== undefined) {
-        outputJson(items, options.json);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), resourcePath.message),
+          options.json,
+        );
         return;
       }
 

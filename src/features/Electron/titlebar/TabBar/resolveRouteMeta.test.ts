@@ -77,6 +77,27 @@ describe('guardedMergeCache', () => {
     expect(merged).toEqual({ avatar: 'a.png', title: 'New' });
   });
 
+  it('caches the seed of a generated project avatar', () => {
+    const merged = guardedMergeCache({ title: 'Fix login · Alpha' }, { avatarSeed: 'Alpha' });
+    expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Fix login · Alpha' });
+  });
+
+  it('keeps the avatar kind so a cold tab still draws the workspace mark', () => {
+    const merged = guardedMergeCache(
+      { avatar: 'logo.png', title: 'Acme' },
+      { avatar: null, avatarKind: 'workspace', title: 'Acme' },
+    );
+    expect(merged).toEqual({ avatarKind: 'workspace', title: 'Acme' });
+  });
+
+  it('drops a cached avatar the entity has confirmed it no longer has', () => {
+    const merged = guardedMergeCache(
+      { avatar: 'logo.png', avatarSeed: 'Alpha', title: 'Alpha' },
+      { avatar: null, avatarSeed: 'Alpha' },
+    );
+    expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Alpha' });
+  });
+
   it('returns prev when next is undefined', () => {
     const prev = { title: 'Old' };
     expect(guardedMergeCache(prev, undefined)).toBe(prev);

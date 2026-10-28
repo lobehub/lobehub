@@ -1,4 +1,4 @@
-import { lobeHubCliGuide } from '@lobechat/heterogeneous-agents/protocol';
+import { lobeHubCliGuideBlock } from '@lobechat/heterogeneous-agents/protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnHeteroSandbox } from '../sandboxRunner';
@@ -135,10 +135,7 @@ describe('spawnHeteroSandbox', () => {
     });
 
     const payload = JSON.parse(decodeStdinPayload(mockCallTool.mock.calls[0][1].command));
-    expect(payload).toEqual([
-      { text: lobeHubCliGuide, type: 'text' },
-      { text: 'hi', type: 'text' },
-    ]);
+    expect(payload).toEqual([lobeHubCliGuideBlock, { text: 'hi', type: 'text' }]);
   });
 
   it('does not repeat the CLI introduction on a resumed session', async () => {

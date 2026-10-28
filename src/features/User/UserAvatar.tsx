@@ -1,10 +1,12 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Avatar, type AvatarProps } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { useMemo } from 'react';
 
+import BaseUserAvatar, {
+  type UserAvatarProps as BaseUserAvatarProps,
+} from '@/components/UserAvatar';
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { isDesktop } from '@/const/version';
 import { useElectronStore } from '@/store/electron';
@@ -44,7 +46,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export interface UserAvatarProps extends AvatarProps {
+export interface UserAvatarProps extends BaseUserAvatarProps {
   /**
    * Override the avatar URL/emoji — used when the component is acting as a
    * generic "active identity" avatar (e.g. showing the active team workspace
@@ -93,17 +95,19 @@ const UserAvatar = ({
   // mode (e.g. active team workspace). Stay inside that identity — don't fall
   // through to the signed-in user's avatar/name, or the icon and the label
   // will disagree. When `nameOverride` is absent, keep the original user flow.
-  const avatarValue = nameOverride
-    ? avatarOverride || nameOverride
-    : avatarOverride || userAvatarUrl || nickName || username;
+  const avatarValue = nameOverride ? avatarOverride : avatarOverride || userAvatarUrl;
+  const name = nameOverride || nickName || username;
   const altText = nameOverride || (isSignedIn ? nickName || username || 'User' : BRANDING_NAME);
 
   return (
-    <Avatar
+    <BaseUserAvatar
       alt={altText}
       avatar={avatarValue}
       background={background}
       className={clickable ? styles.clickable : className}
+      // A workspace identity is not a person, so it draws the workspace mark.
+      fallbackVariant={nameOverride ? 'bauhaus' : 'pixel'}
+      name={name}
       ref={ref}
       shape={'square'}
       size={size}

@@ -234,6 +234,7 @@ export class GenerationTopicModel {
     }
 
     // Add asset file URLs from all generations (video, cover, thumbnail)
+    /* v8 ignore next -- unreachable: a drizzle `with` many-relation always loads as an array */
     if (topicWithBatches.batches) {
       for (const batch of topicWithBatches.batches) {
         for (const gen of batch.generations) {

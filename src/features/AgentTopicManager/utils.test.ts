@@ -4,6 +4,7 @@ import {
   buildBotChannelOptions,
   getBotPlatformName,
   getProjectFilterLabel,
+  getProjectInfo,
   getProjectLabel,
   matchesBotChannel,
   matchesGroup,
@@ -23,6 +24,13 @@ const createTopic = (
 });
 
 describe('AgentTopicManager utils', () => {
+  it('keeps channel search results hidden after clearing the trigger filter', () => {
+    expect(matchesTrigger(createTopic({}, { trigger: 'channel' }), [])).toBe(false);
+    expect(matchesTrigger(createTopic({}, { trigger: 'channel' }), ['chat'])).toBe(false);
+    expect(matchesTrigger(createTopic({}, { trigger: 'task' }), [])).toBe(true);
+    expect(matchesTrigger(createTopic({}), [])).toBe(true);
+  });
+
   it('matches project filters by source path while displaying active worktree context', () => {
     const topic = createTopic({
       workingDirectory: '/repo-fix',
@@ -37,6 +45,7 @@ describe('AgentTopicManager utils', () => {
     expect(matchesGroup(topic, ['/repo-fix'])).toBe(false);
     expect(getProjectFilterLabel(topic)).toBe('repo');
     expect(getProjectLabel(topic)).toBe('repo/repo-fix · fix');
+    expect(getProjectInfo(topic)).toEqual({ branch: 'fix', path: 'repo/repo-fix' });
   });
 
   it('matches bot channel filters by metadata.bot.platform', () => {

@@ -17,6 +17,8 @@
   "desktop.showApp.title": "メインウィンドウの表示/非表示",
   "editMessage.desc": "Altキーを押しながらメッセージをダブルクリックして編集モードに入ります",
   "editMessage.title": "メッセージを編集",
+  "findInTopic.desc": "右パネルで現在のトピックのすべてのメッセージを検索",
+  "findInTopic.title": "トピック内検索",
   "navigateToChat.desc": "チャットタブに切り替えてLobe AIに入る",
   "navigateToChat.title": "デフォルトの会話に切り替え",
   "nextTab.desc": "デスクトップアプリでブラウザスタイルの次のタブに移動します。最後のタブに到達すると最初のタブに戻ります。",

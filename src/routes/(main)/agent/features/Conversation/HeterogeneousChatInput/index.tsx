@@ -33,7 +33,7 @@ import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 // Heterogeneous agents (e.g. Claude Code) bring their own toolchain and memory,
 // so most LobeHub-side pickers don't apply — no built-in left action fits, and
 // the bar is composed entirely from `extraActionItems`: a hetero-only `+` menu
-// (formatting toolbar + "Send later"), then the CLI model + thinking-effort
+// (uploads, formatting toolbar, "Send later"), then the CLI model + thinking-effort
 // selector. Both sit in the input's bottom-left corner, where the agent composer
 // puts its `+` and model picker, rather than off in the control-bar strip below.
 const leftActions: ActionKeys[] = [];
@@ -77,8 +77,8 @@ GuardBanner.displayName = 'GuardBanner';
  * HeterogeneousChatInput
  *
  * Simplified ChatInput for heterogeneous agents (Claude Code, etc.).
- * Keeps only: text input, typo toggle, send button, and a working-directory
- * picker — no model/tools/memory/KB/MCP/runtime-mode/upload.
+ * Keeps only: text input, attachments, typo toggle, send button, and a
+ * working-directory picker — no model/tools/memory/KB/MCP/runtime-mode.
  *
  * In cloud (web) mode, shows a configuration prompt and disables the input
  * until the user sets up their cloud credentials in agent profile.
@@ -152,10 +152,14 @@ const HeterogeneousChatInput = memo(() => {
   // state and the control that produced it read as one unit.
   const extraActionItems = useMemo<ChatInputActionsProps['items']>(
     () => [
-      { alwaysDisplay: true, children: <HeteroPlus />, key: 'heteroPlus' },
+      {
+        alwaysDisplay: true,
+        children: <HeteroPlus providerType={providerType} />,
+        key: 'heteroPlus',
+      },
       { alwaysDisplay: true, children: <ScheduledSendChip />, key: 'scheduledSendChip' },
     ],
-    [],
+    [providerType],
   );
 
   // The model selector rides in the send-area prefix rather than the

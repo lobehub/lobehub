@@ -13,10 +13,11 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
-import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
+import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { writeKeepingArchivedIdle } from './archiveGuard';
+import { armScheduleOnColumnWrite } from './armScheduleOnColumnWrite';
 import { armScheduleOnCreate } from './armScheduleOnCreate';
 import type { TaskServiceDeps } from './deps';
 import { TaskDetailService } from './detail';
@@ -27,7 +28,7 @@ import {
   type UpdateStatusCascadeResult,
   type UpdateStatusResult,
 } from './statusTransitions';
-import { interruptTaskOperation, resolveTaskOrThrow } from './utils';
+import { findTaskOrThrow, interruptTaskOperation } from './utils';
 
 export type { UpdateStatusCascadeResult, UpdateStatusResult } from './statusTransitions';
 
@@ -64,8 +65,9 @@ export interface CreateTaskInput {
 }
 
 export interface RunReadySubtasksResult {
-  failed: { error: string; identifier: string }[];
+  failed: { error: string; id?: string; identifier: string }[];
   kickedOff: string[];
+  kickedOffTasks?: { id: string; identifier: string }[];
   plan: SubtaskGraphPlan;
   skipped?: { reason: 'nothing-runnable' };
 }
@@ -109,8 +111,14 @@ export class TaskService {
    * `parentTaskId` if it's an identifier, and snapshots the assignee agent's
    * current model/provider into `task.config` so later changes to the agent's
    * default model don't silently affect this task.
+   *
+   * Inside a caller's transaction pass `maxRetries: 1`: an identifier clash
+   * aborts the transaction, so only the caller can retry it as a whole.
    */
-  async createTask(input: CreateTaskInput): Promise<TaskItem> {
+  async createTask(
+    input: CreateTaskInput,
+    options: { maxRetries?: number } = {},
+  ): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
 
     const taskInput = input;
@@ -120,7 +128,7 @@ export class TaskService {
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
-      const parent = await this.resolveOrThrow(createData.parentTaskId);
+      const parent = await this.findOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
       parentVisibility = parent.visibility;
       if (createData.projectId && createData.projectId !== parent.projectId) {
@@ -133,7 +141,7 @@ export class TaskService {
     }
 
     if (createData.projectId) {
-      const project = await this.projectModel.findManageableById(createData.projectId);
+      const project = await this.projectModel.findById(createData.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
 
@@ -191,10 +199,10 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    const task = await this.createTaskWithAssigneeLock({
-      ...createData,
-      ...armScheduleOnCreate(createData),
-    });
+    const task = await this.createTaskWithAssigneeLock(
+      { ...createData, ...armScheduleOnCreate(createData) },
+      options.maxRetries,
+    );
 
     return task;
   }
@@ -321,11 +329,8 @@ export class TaskService {
    * `keepOperationId` spares the caller's own run (an agent deleting the task
    * it is executing), which would otherwise interrupt itself mid-tool-call.
    */
-  async deleteTask(
-    idOrIdentifier: string,
-    options: { keepOperationId?: string } = {},
-  ): Promise<TaskItem> {
-    const task = await this.resolveOrThrow(idOrIdentifier);
+  async deleteTask(taskId: string, options: { keepOperationId?: string } = {}): Promise<TaskItem> {
+    const task = await this.findOrThrow(taskId);
 
     const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
 
@@ -427,7 +432,7 @@ export class TaskService {
     id: string;
     topicId?: string;
   }): Promise<ReviewResult> {
-    const task = await this.resolveOrThrow(input.id);
+    const task = await this.findOrThrow(input.id);
 
     const reviewConfig = this.taskModel.getReviewConfig(task);
     if (!reviewConfig?.enabled) {
@@ -500,23 +505,23 @@ export class TaskService {
   }
 
   /**
-   * Compute the subtask execution plan for `idOrIdentifier` without
+   * Compute the subtask execution plan for `taskId` without
    * actually kicking anything off.
    */
-  async previewSubtaskLayers(idOrIdentifier: string): Promise<SubtaskGraphPlan> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async previewSubtaskLayers(taskId: string): Promise<SubtaskGraphPlan> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
-    const { plan } = await graph.planForParent(parent.id);
-    return plan;
+    const { plan, descendants } = await graph.planForParent(parent.id);
+    return displaySubtaskPlan(plan, descendants);
   }
 
   /**
-   * Kick off the first runnable layer of subtasks under `idOrIdentifier`.
+   * Kick off the first runnable layer of subtasks under `taskId`.
    * Subsequent layers fire automatically through
    * `TaskRunnerService.cascadeOnCompletion` as each upstream finishes.
    */
-  async runReadySubtasks(idOrIdentifier: string): Promise<RunReadySubtasksResult> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async runReadySubtasks(taskId: string): Promise<RunReadySubtasksResult> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
     const { descendants, plan } = await graph.planForParent(parent.id);
 
@@ -524,26 +529,24 @@ export class TaskService {
       return {
         failed: [],
         kickedOff: [],
-        plan,
+        plan: displaySubtaskPlan(plan, descendants),
         skipped: { reason: 'nothing-runnable' as const },
       };
     }
 
     const firstLayer = plan.layers[0];
-    const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+    const byId = new Map(descendants.map((d) => [d.id, d]));
     const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
 
     const kickedOff: string[] = [];
-    const failed: { error: string; identifier: string }[] = [];
+    const failed: { error: string; id?: string; identifier: string }[] = [];
 
     const settled = await pMap(
       firstLayer,
-      async (identifier): Promise<PromiseSettledResult<string>> => {
+      async (id): Promise<PromiseSettledResult<string>> => {
         try {
-          const id = identifierToId.get(identifier);
-          if (!id) throw new Error(`Subtask ${identifier} not found`);
           await runner.runTask({ taskId: id });
-          return { status: 'fulfilled', value: identifier };
+          return { status: 'fulfilled', value: id };
         } catch (reason) {
           return { reason, status: 'rejected' };
         }
@@ -552,17 +555,27 @@ export class TaskService {
     );
 
     for (const [index, result] of settled.entries()) {
-      const identifier = firstLayer[index];
+      const id = firstLayer[index];
+      const identifier = byId.get(id)!.identifier;
       if (result.status === 'fulfilled') {
         kickedOff.push(identifier);
       } else {
         const message =
           result.reason instanceof Error ? result.reason.message : 'Failed to start task';
-        failed.push({ error: message, identifier });
+        failed.push({ error: message, id, identifier });
       }
     }
 
-    return { failed, kickedOff, plan };
+    return {
+      failed,
+      kickedOff,
+      kickedOffTasks: settled.flatMap((result, index) =>
+        result.status === 'fulfilled'
+          ? [{ id: firstLayer[index], identifier: byId.get(firstLayer[index])!.identifier }]
+          : [],
+      ),
+      plan: displaySubtaskPlan(plan, descendants),
+    };
   }
 
   private async assertAssigneeAgentBelongsToUser(assigneeAgentId?: string | null): Promise<void> {
@@ -643,10 +656,13 @@ export class TaskService {
 
   private async createTaskWithAssigneeLock(
     createData: CreateTaskInput & { config?: Record<string, unknown>; status?: TaskStatus },
+    insertRetries?: number,
   ): Promise<TaskItem> {
     if (!createData.assigneeUserId || !this.workspaceId) {
       await this.assertAssigneeUserAssignable(createData.assigneeUserId);
-      return this.taskModel.create(createData);
+      return insertRetries === undefined
+        ? this.taskModel.create(createData)
+        : this.taskModel.create(createData, { maxRetries: insertRetries });
     }
 
     // TaskModel's normal retry loop cannot continue after a unique violation
@@ -674,24 +690,53 @@ export class TaskService {
     options: Parameters<TaskModel['updateWithLog']>[3] = {},
   ): Promise<TaskItem | null> {
     return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
-      writeKeepingArchivedIdle(db, (tx) =>
-        new TaskModel(tx, this.userId, this.workspaceId).updateWithLog(
-          taskId,
-          data,
-          actor,
-          options,
-        ),
-      ),
+      writeKeepingArchivedIdle(db, async (tx) => {
+        const model = new TaskModel(tx, this.userId, this.workspaceId);
+        // A schedule write that carries schedule columns but no status must arm
+        // the run-count window in the SAME write that makes the schedule
+        // dispatchable (vent T-634). The stamp is decided against the row as it
+        // exists right before this update, read under the same row lock the
+        // write itself uses, so a concurrent dispatcher can never observe a
+        // "pattern set, window unstamped" row and replay a grace-window
+        // occurrence. A status transition stamps inside `updateStatus` instead,
+        // so the arming is skipped there to avoid double-stamping.
+        if (
+          !data.status &&
+          (data.automationMode !== undefined || data.schedulePattern !== undefined)
+        ) {
+          await model.lockForUpdate(taskId);
+          const current = await model.findById(taskId);
+          if (current) {
+            // `context` is a whole-column replace: when the caller ships their
+            // own pocket it is the base, otherwise the row as locked. The
+            // schedule columns must NOT use `??`: the tRPC and REST schemas
+            // use an explicit `null` to clear a field, and `??` would swap
+            // that clear for the locked row's old value — the probe would
+            // stamp a window for a row the write is about to disable, and a
+            // later re-enable would preserve that stale stamp and replay an
+            // occurrence from the disabled interval. Only `undefined` means
+            // "not part of this patch".
+            const arming = armScheduleOnColumnWrite({
+              automationMode:
+                data.automationMode !== undefined ? data.automationMode : current.automationMode,
+              context: data.context ?? current.context,
+              schedulePattern:
+                data.schedulePattern !== undefined ? data.schedulePattern : current.schedulePattern,
+              status: current.status,
+            });
+            if (arming.context) data.context = arming.context;
+          }
+        }
+        return model.updateWithLog(taskId, data, actor, options);
+      }),
     );
   }
 
-  private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
-    return resolveTaskOrThrow(this.deps, idOrIdentifier);
+  private async findOrThrow(taskId: string): Promise<TaskItem> {
+    return findTaskOrThrow(this.taskModel, taskId);
   }
 
-  async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(
-      taskIdOrIdentifier,
-    );
+  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
+    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(taskId);
   }
 }

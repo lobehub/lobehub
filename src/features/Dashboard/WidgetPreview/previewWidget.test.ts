@@ -4,12 +4,15 @@ import {
   canCreateDashboardFromPreview,
   canPreviewPublish,
   defaultDiffPair,
+  findExpectedRun,
   findSucceededPreviewRun,
   getPreviewPublishState,
   placeableDashboards,
   placementBoards,
   resolvePublishSchedule,
+  sampleOutputFor,
   toPreviewWidget,
+  toSampleWidget,
 } from './previewWidget';
 
 const widget = {
@@ -233,6 +236,44 @@ describe('findSucceededPreviewRun', () => {
   });
 });
 
+describe('findExpectedRun', () => {
+  const stat = { type: 'stat', value: 1 };
+  const table = { columns: [], rows: [], type: 'table' };
+
+  it("prefers the reviewed version's own latest usable run", () => {
+    const runs = [
+      { id: 'r3', output: null, status: 'failed', versionId: 'v2' },
+      { id: 'r2', output: stat, status: 'partial', versionId: 'v2' },
+      { id: 'r1', output: stat, status: 'succeeded', versionId: 'v1' },
+    ] as any[];
+    expect(findExpectedRun(runs, { id: 'v2', outputType: 'stat' })).toEqual({
+      run: runs[1],
+      sameVersion: true,
+    });
+  });
+
+  it('falls back to an earlier version with the same output type', () => {
+    const runs = [
+      { id: 'r3', output: null, status: 'failed', versionId: 'v3' },
+      { id: 'r2', output: table, status: 'succeeded', versionId: 'v2' },
+      { id: 'r1', output: stat, status: 'succeeded', versionId: 'v1' },
+    ] as any[];
+    expect(findExpectedRun(runs, { id: 'v3', outputType: 'stat' })).toEqual({
+      run: runs[2],
+      sameVersion: false,
+    });
+  });
+
+  it('predicts nothing without a usable run of the same shape', () => {
+    const runs = [
+      { id: 'r2', output: table, status: 'succeeded', versionId: 'v1' },
+      { id: 'r1', output: null, status: 'timeout', versionId: 'v2' },
+    ] as any[];
+    expect(findExpectedRun(runs, { id: 'v2', outputType: 'stat' })).toBeUndefined();
+    expect(findExpectedRun([], { id: 'v2', outputType: 'stat' })).toBeUndefined();
+  });
+});
+
 describe('defaultDiffPair', () => {
   const versions = [
     { id: 'v3', parentVersionId: 'v2', status: 'draft' as const },
@@ -248,5 +289,53 @@ describe('defaultDiffPair', () => {
     expect(defaultDiffPair(versions, 'v2')).toEqual({ baseId: 'v1', targetId: 'v2' });
     expect(defaultDiffPair(versions)).toEqual({ baseId: 'v2', targetId: 'v3' });
     expect(defaultDiffPair([])).toEqual({});
+  });
+});
+
+describe('sampleOutputFor', () => {
+  const labels = {
+    item: (index: number) => `Item ${index}`,
+    name: 'Name',
+    series: 'Sample',
+    value: 'Value',
+  };
+  const now = Date.parse('2026-10-25T08:00:00Z');
+
+  it('shapes the sample like the output type the version declares', () => {
+    expect(sampleOutputFor('stat', null, labels).type).toBe('stat');
+    const list = sampleOutputFor('list', null, labels);
+    expect(list).toMatchObject({
+      items: [{ title: 'Item 1' }, { title: 'Item 2' }, { title: 'Item 3' }],
+    });
+    const series = sampleOutputFor('series', null, labels, now);
+    expect(series.type === 'series' && series.series[0].points.at(-1)).toEqual({
+      t: '2026-10-25',
+      v: 19,
+    });
+  });
+
+  it("uses a table's chosen columns, numbering the last one", () => {
+    const table = sampleOutputFor('table', { columns: ['repo', 'stars'] }, labels);
+    expect(table).toMatchObject({
+      columns: [
+        { key: 'repo', title: 'repo', type: 'string' },
+        { key: 'stars', title: 'stars', type: 'number' },
+      ],
+      rows: [
+        { repo: 'Item 1', stars: 30 },
+        { repo: 'Item 2', stars: 20 },
+        { repo: 'Item 3', stars: 10 },
+      ],
+    });
+  });
+});
+
+describe('toSampleWidget', () => {
+  it('shows the sample without run times or a schedule', () => {
+    const sample = toSampleWidget(widget, { type: 'stat', value: 128 });
+    expect(sample.latestOutput).toEqual({ type: 'stat', value: 128 });
+    expect(sample.latestOutputAt).toBeNull();
+    expect(sample.lastRunAt).toBeNull();
+    expect(sample.schedulePattern).toBeNull();
   });
 });

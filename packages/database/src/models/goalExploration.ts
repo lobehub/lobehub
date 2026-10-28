@@ -210,6 +210,7 @@ export class GoalExplorationModel {
           scopeId: container,
           title: decision.title.trim() || target.title,
         });
+        /* v8 ignore next -- unreachable: this.lock() already holds the goal row FOR UPDATE in this transaction under the same ownership predicate createNode re-checks, so createNode never returns undefined */
         if (!node) throw new Error('Could not persist the revised protocol');
         await graphModel.createEdge(goalId, node.id, target.id, 'revises');
         const members = experimentScope(graph, container);
@@ -262,6 +263,7 @@ export class GoalExplorationModel {
         questionId,
         scopeId: experimentOwner(graph, questionId),
       });
+      /* v8 ignore next -- unreachable: this.lock() already holds the goal row FOR UPDATE in this transaction under the same ownership predicate createNode re-checks, so createNode never returns undefined */
       if (!experiment) throw new Error('Could not create experiment');
       const node = await graphModel.createNode(goalId, {
         scopeId: experiment.id,
@@ -269,6 +271,7 @@ export class GoalExplorationModel {
         title: decision.title,
         description: decision.instruction,
       });
+      /* v8 ignore next -- unreachable: this.lock() already holds the goal row FOR UPDATE in this transaction under the same ownership predicate createNode re-checks, so createNode never returns undefined */
       if (!node) throw new Error('Could not persist exploration node');
       await graphModel.createEdge(goalId, experiment.id, parent.id, 'derived_from');
       const parentMembers = experimentScope(graph, parent.id);

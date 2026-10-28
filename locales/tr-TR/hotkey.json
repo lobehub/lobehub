@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Ana Pencereyi Göster/Gizle",
   "editMessage.desc": "Alt tuşuna basılı tutup mesaja çift tıklayarak düzenleme moduna gir",
   "editMessage.title": "Mesajı Düzenle",
+  "findInTopic.desc": "Sağ paneldeki mevcut konunun her mesajını ara",
+  "findInTopic.title": "Konuda Bul",
   "navigateToChat.desc": "Sohbet sekmesine geç ve Lobe AI'ye gir",
   "navigateToChat.title": "Varsayılan Sohbete Geç",
   "nextTab.desc": "Masaüstü uygulamasında bir sonraki tarayıcı tarzı sekmeye geç; sonunda ilk sekmeye geri döner",

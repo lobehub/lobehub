@@ -10,6 +10,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import {
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
   lobeHubCliGuide,
+  lobeHubCliGuideBlock,
 } from '@lobechat/heterogeneous-agents/protocol';
 import type * as spawnModule from '@lobechat/heterogeneous-agents/spawn';
 import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
@@ -22,8 +23,8 @@ import type * as heteroCliProcessModule from '../../utils/heteroCliProcess';
 import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentImpl';
 
 /**
- * Every prompt that opens a fresh CLI session leads with the `lh` introduction;
- * a resumed one (`startSession({ resumeSessionId })`) does not.
+ * A fresh CLI session's serialized prompt leads with the `lh` introduction (Claude
+ * Code loads it as a skill instead); a resumed one (`startSession({ resumeSessionId })`) does not.
  */
 const cliGuideBlock = { text: lobeHubCliGuide, type: 'text' };
 
@@ -1511,6 +1512,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
+        binaryManager: { detect: async () => ({ available: true, version: '2.1.301' }) },
         storeManager: { get: vi.fn() },
       } as any);
       const { sessionId } = await ctr.startSession({
@@ -1541,24 +1543,22 @@ describe('HeterogeneousAgentCtr', () => {
       const line = writes[0].trimEnd();
       expect(line.endsWith('\n') || writes[0].endsWith('\n')).toBe(true);
       const msg = JSON.parse(line);
+      expect(cliArgs).toContain('--plugin-dir');
       expect(msg).toMatchObject({
-        message: {
-          content: [cliGuideBlock, { text: prompt, type: 'text' }],
-          role: 'user',
-        },
+        message: { content: [{ text: prompt, type: 'text' }], role: 'user' },
         type: 'user',
       });
     });
 
     it('re-introduces the CLI when this turn rebuilt a garbage-collected transcript', async () => {
-      // `--resume` keeps working because the transcript was rebuilt, so the
-      // session id survives — but the rebuild is made of persisted chat rows,
-      // which never carried the introduction the original session was given.
+      // `--resume` keeps working because the transcript was rebuilt, but it is
+      // made of persisted chat rows, which never carried the introduction. Skills
+      // are disabled here, so the guide cannot ride along as one.
       ensureResumeTranscriptMock.mockResolvedValueOnce({ path: '/tmp/t.jsonl', written: true });
 
       const { writes } = await runSendPrompt(
         'carry on',
-        { cwd: '/work/dir', resumeSessionId: 'sess-gc' },
+        { args: ['--disable-slash-commands'], cwd: '/work/dir', resumeSessionId: 'sess-gc' },
         [],
         { resumeReplayMessages: [{ content: 'earlier', role: 'user' }] } as any,
       );
@@ -1588,7 +1588,6 @@ describe('HeterogeneousAgentCtr', () => {
       const msg = JSON.parse(writes[0].trimEnd());
       expect(msg.message.content).toEqual([
         { text: 'selected code context', type: 'text' },
-        cliGuideBlock,
         { text: 'user task', type: 'text' },
       ]);
     });
@@ -1832,7 +1831,6 @@ describe('HeterogeneousAgentCtr', () => {
       // Anthropic rejects `{ text: '', type: 'text' }` with
       // "messages: text content blocks must be non-empty".
       expect(msg.message.content).toEqual([
-        cliGuideBlock,
         {
           source: { data: 'UE5HX1RFU1Q=', media_type: 'image/png', type: 'base64' },
           type: 'image',
@@ -5075,7 +5073,7 @@ describe('HeterogeneousAgentCtr', () => {
             { text: 'workspace rules\n\nprevious conversation', type: 'text' },
             // Native resume failed, so the retry opens a session that has never
             // seen the introduction the first turn delivered.
-            cliGuideBlock,
+            lobeHubCliGuideBlock,
             { text: 'inspect the repository', type: 'text' },
           ],
         }),

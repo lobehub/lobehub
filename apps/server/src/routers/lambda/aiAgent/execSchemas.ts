@@ -183,6 +183,8 @@ export const ExecAgentFieldsSchema = z.object({
        * identity survives the gateway step_start snapshot / refetch.
        */
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+      /** Bind a NEW topic to this project (ignored with topicId; resolved from the topic). */
+      projectId: z.string().optional(),
       /** Bind a NEW topic to this project working directory (ignored with topicId). */
       projectWorkingDirectoryId: z.string().optional(),
       scope: z.string().nullish(),

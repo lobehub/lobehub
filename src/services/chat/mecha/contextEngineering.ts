@@ -14,6 +14,7 @@ import { mentionsTopic } from '@lobechat/context-engine';
 import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from '@lobechat/mecha';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
+  agentIdentityLabel,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -161,7 +162,8 @@ export const contextEngineering = async ({
 
       for (const agent of groupDetail.agents) {
         const role = agent.isSupervisor ? 'supervisor' : 'participant';
-        const name = agent.title || 'Untitled Agent';
+        // "Nasa (Shadow Arvin)": the name people call it by, and its role.
+        const name = agentIdentityLabel(agent, 'Untitled Agent');
 
         agentMap[agent.id] = { name, role };
         members.push({ id: agent.id, name, role });
@@ -267,6 +269,7 @@ export const contextEngineering = async ({
         chatConfig: respondingChatConfig,
         description: agentMeta?.description,
         slug: agentItem?.slug,
+        name: agentMeta?.name,
         title: agentMeta?.title,
       },
       agentId,

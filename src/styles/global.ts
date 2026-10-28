@@ -1,6 +1,7 @@
 import type { LobeTheme } from '@lobehub/ui';
 import { CLASSNAMES, css } from '@lobehub/ui';
 
+import { CONVERSATION_PRINT_ROOT_CLASS } from '@/features/Conversation/ChatList/constants';
 import {
   MAC_PANEL_BG_VAR,
   MAC_WINDOW_FULLSCREEN_SELECTOR,
@@ -97,6 +98,34 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => c
     .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight])
   ) {
     opacity: 1;
+  }
+
+  /* Printing a conversation: keep only its transcript, no sidebars, headers,
+     composer or docks, and let the document grow past one viewport. */
+  @media screen {
+    .${CONVERSATION_PRINT_ROOT_CLASS} {
+      display: none;
+    }
+  }
+
+  @media print {
+    html:has(> body > .${CONVERSATION_PRINT_ROOT_CLASS}),
+    body:has(> .${CONVERSATION_PRINT_ROOT_CLASS}) {
+      overflow: visible;
+
+      height: auto;
+      min-height: 0;
+      max-height: none;
+
+      /* Paper is white. next-themes writes a dark color-scheme inline on html,
+         which paints the page canvas dark, and the dark theme paints body. */
+      color-scheme: light !important;
+      background: none !important;
+    }
+
+    body:has(> .${CONVERSATION_PRINT_ROOT_CLASS}) > :not(.${CONVERSATION_PRINT_ROOT_CLASS}) {
+      display: none !important;
+    }
   }
 `;
 

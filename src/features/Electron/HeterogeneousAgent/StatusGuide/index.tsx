@@ -20,9 +20,10 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
     onDismiss,
     onOpenSystemTools,
     onRetry,
-    onTransfer,
+    onHandoff,
     schedule,
     variant = 'inline',
+    workingDirectoryReset,
   }) => {
     const config = resolveHeterogeneousAgentGuideConfig({
       agentType,
@@ -35,9 +36,10 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
       onDismiss,
       onOpenSystemTools,
       onRetry,
-      onTransfer,
+      onHandoff,
       schedule,
       variant,
+      workingDirectoryReset,
     };
 
     switch (error?.code) {

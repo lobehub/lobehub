@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   type RecentTopic,
   type RecentTopicGroup,
@@ -5,23 +6,21 @@ import {
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
-import { and, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { MessageModel } from '@/database/models/message';
-import { chatGroups } from '@/database/schemas';
+import { agents, chatGroups } from '@/database/schemas';
 import { notTrashed } from '@/database/utils/softDelete';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
 import { TopicReferenceService } from '@/server/services/topicReference';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
-import {
-  batchResolveAgentIdFromSessions,
-  resolveAgentIdFromSession,
-  resolveContext,
-} from '../_helpers/resolveContext';
-import { topicProcedure, topicSearchProcedure } from './procedures';
+import { assertCanUseConversationTargets } from '../_helpers/conversationResourceGuard';
+import { batchResolveAgentIdFromSessions, resolveContext } from '../_helpers/resolveContext';
+import { guardCtx, topicProcedure, topicSearchProcedure } from './procedures';
+import { readTopicTranscript, topicTranscriptInput } from './transcript';
 
 export const queryRouter = router({
   getTopicDetail: topicProcedure
@@ -32,45 +31,13 @@ export const queryRouter = router({
       return topic;
     }),
   getTopicTranscript: topicProcedure
-    .input(
-      z.object({
-        includeMessages: z.boolean().default(true),
-        limit: z.number().int().min(1).max(500).default(50),
-        offset: z.number().int().min(0).default(0),
-        topicId: z.string(),
-      }),
-    )
-    .query(async ({ input, ctx }) => {
-      // `lh topic view` from a workspace run may be given one of the user's personal topic ids.
-      const topic = await new TopicReferenceService(
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      ).findTopic(input.topicId);
-
-      if (!topic) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: `Topic not found: ${input.topicId}`,
-        });
-      }
-
-      if (!input.includeMessages) {
-        return { items: [], topic, total: null };
-      }
-
-      const messageModel =
-        (topic.workspaceId ?? undefined) === (ctx.workspaceId ?? undefined)
-          ? ctx.messageModel
-          : new MessageModel(ctx.serverDB, ctx.userId, topic.workspaceId ?? undefined);
-      const transcript = await messageModel.queryTopicTranscript({
-        limit: input.limit,
-        offset: input.offset,
-        topicId: input.topicId,
-      });
-
-      return { ...transcript, topic };
-    }),
+    .input(topicTranscriptInput)
+    .query(async ({ input, ctx }) =>
+      readTopicTranscript(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        input,
+      ),
+    ),
   /**
    * @deprecated The `lobe-topic-reference` tool was removed; agents read topics with
    * `lh topic view`. Kept for released Desktop builds and cached web bundles whose
@@ -134,6 +101,8 @@ export const queryRouter = router({
         groupId: z.string().nullish(),
         includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
+        /** Only topics the caller created — the workspace "only mine" filter. */
+        onlyMine: z.boolean().optional(),
         pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullish(),
         /**
@@ -153,7 +122,7 @@ export const queryRouter = router({
     .query(async ({ input, ctx }) => {
       const {
         sessionId,
-        isInbox,
+        isInbox: _isInbox,
         groupId,
         excludeStatuses,
         excludeTriggers,
@@ -175,20 +144,36 @@ export const queryRouter = router({
         return { items: result.items, total: result.total };
       }
 
-      // If sessionId is provided but no agentId, need to reverse lookup agentId
-      let effectiveAgentId = rest.agentId;
-      if (!effectiveAgentId && sessionId) {
-        effectiveAgentId = await resolveAgentIdFromSession(
-          sessionId,
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId ?? undefined,
-        );
-      }
+      const resolvedContext = await resolveContext(
+        { agentId: rest.agentId ?? undefined, sessionId },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const effectiveAgentId = resolvedContext.agentId ?? undefined;
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolvedContext]);
+
+      // Inbox semantics come from the authorized canonical Agent, never an
+      // optional client flag (released native clients may omit or cache it).
+      const inboxAgent = effectiveAgentId
+        ? await ctx.serverDB.query.agents.findFirst({
+            columns: { id: true },
+            where: and(
+              eq(agents.id, effectiveAgentId),
+              eq(agents.slug, INBOX_SESSION_ID),
+              buildWorkspaceWhere(
+                { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+                agents,
+              ),
+            ),
+          })
+        : undefined;
+      const isInbox = !!inboxAgent;
 
       const result = await ctx.topicModel.query({
         ...rest,
         agentId: effectiveAgentId,
+        legacySessionId: resolvedContext.sessionId,
         excludeStatuses,
         excludeTriggers,
         includeTriggers,
@@ -384,6 +369,8 @@ export const queryRouter = router({
         agentId: z.string().optional(),
         groupId: z.string().nullish(),
         keywords: z.string(),
+        /** Only topics the caller created — the workspace "only mine" filter. */
+        onlyMine: z.boolean().optional(),
         sessionId: z.string().nullish(),
       }),
     )
@@ -395,16 +382,35 @@ export const queryRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      // Scope the search exactly like the topics list (`query`): by agentId
-      // directly (the new agent system stamps every topic with an agentId).
-      // Passing only the resolved sessionId used to miss every agentId-scoped
-      // topic — the cause of "no topics match" in the per-agent Topics search.
-      // `containerId` is only the fallback for legacy callers that pass no
-      // agentId/groupId.
-      return ctx.topicModel.queryByKeyword(input.keywords, {
-        agentId: input.agentId,
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+
+      const searchOptions = { onlyMine: input.onlyMine };
+      const scope = {
+        agentId: resolved.agentId ?? undefined,
         containerId: resolved.sessionId,
         groupId: input.groupId,
-      });
+      };
+      const byAgent = ctx.topicModel.queryByKeyword(input.keywords, scope, searchOptions);
+      if (!resolved.agentId || !resolved.sessionId || input.groupId) return byAgent;
+
+      // Legacy topics can still lack agentId before the existing on-read
+      // migration finishes. Search both scopes through the same search backend;
+      // only unassigned legacy rows may supplement the canonical Agent result.
+      const [current, legacy] = await Promise.all([
+        byAgent,
+        ctx.topicModel.queryByKeyword(
+          input.keywords,
+          { containerId: resolved.sessionId },
+          searchOptions,
+        ),
+      ]);
+      return [
+        ...new Map(
+          [...current, ...legacy.filter((topic) => !topic.agentId)].map((topic) => [
+            topic.id,
+            topic,
+          ]),
+        ).values(),
+      ];
     }),
 });

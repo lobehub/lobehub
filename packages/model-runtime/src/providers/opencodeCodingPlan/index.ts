@@ -1,4 +1,3 @@
-import { pickNonEmptyString } from '@lobechat/utils/object';
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
@@ -12,6 +11,7 @@ import type {
   GenerateObjectPayload,
 } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { pickNonEmptyString } from '../../utils/object';
 import {
   isKimiNativeThinkingModel,
   isKimiReasoningEffortModel,

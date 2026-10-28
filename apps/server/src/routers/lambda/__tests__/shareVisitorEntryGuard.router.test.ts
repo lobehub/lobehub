@@ -52,6 +52,7 @@ const mockMessageDeleteMessagesBySession = vi.fn();
 const mockMessageUpdateTTS = vi.fn();
 const mockMessageUpdateTranslate = vi.fn();
 vi.mock('@/database/models/message', () => ({
+  MESSAGE_KEYWORD_SEARCH_MAX_LIMIT: 100,
   MessageModel: vi.fn(function () {
     return {
       deleteMessagesBySession: mockMessageDeleteMessagesBySession,
@@ -116,10 +117,14 @@ vi.mock('@/server/services/file', () => ({
   }),
 }));
 
-// Topic creation canonicalizes agent/session through the DB; the guard under
+// Creation canonicalizes agent/session through the DB; the guard under
 // test runs after that step, so short-circuit it.
 vi.mock('../_helpers/resolveContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  resolveContext: vi.fn(async (input: { agentId?: string; topicId?: string }) => ({
+    ...input,
+    sessionId: 'session-1',
+  })),
   resolveContextWithAgentId: vi.fn(async (input: { agentId?: string }) => ({
     agentId: input.agentId,
     sessionId: 'session-1',

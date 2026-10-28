@@ -1,6 +1,7 @@
-import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
 import debug from 'debug';
 import type { FixedPricingUnit, LookupPricingUnit, Pricing } from 'model-bank';
+
+import { CREDITS_PER_DOLLAR } from '../../../const/currency';
 
 const log = debug('lobe-cost:computeImagePricing');
 

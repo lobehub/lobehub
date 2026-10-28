@@ -329,6 +329,7 @@ export class UserSkillModel {
     // One pass over the children, not one per bundle.
     const byBundle = new Map<string, (typeof children)[number][]>();
     for (const child of children) {
+      /* v8 ignore next -- unreachable: children are selected by inArray(documents.parentId, …), which never matches a NULL parentId */
       if (!child.parentId) continue;
       const list = byBundle.get(child.parentId) ?? [];
       list.push(child);

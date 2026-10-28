@@ -113,6 +113,51 @@ describe('MessageModel.queryTopicMessagesByCursor', () => {
     expect(page.hasMore).toBe(true);
   });
 
+  it('returns the newest round whole when it alone exceeds countBudget', async () => {
+    const topicId = 't-cursor-oversized-only';
+    const { ids } = await seedRounds(topicId, 1, 8);
+
+    const page = await messageModel.queryTopicMessagesByCursor({
+      topicId,
+      roundLimit: 1000,
+      countBudget: 3,
+    });
+
+    expect(page.messages.map((m) => m.id)).toEqual(ids);
+    expect(page.hasMore).toBe(false);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it('pages older history after an oversized newest round', async () => {
+    const topicId = 't-cursor-oversized-older';
+    await seedRounds(topicId, 2, 8);
+
+    const page = await messageModel.queryTopicMessagesByCursor({
+      topicId,
+      roundLimit: 1000,
+      countBudget: 3,
+    });
+
+    expect(page.messages).toHaveLength(9);
+    expect(page.messages[0].id).toBe(`${topicId}-u2`);
+    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).toEqual({ createdAt: expect.any(String), id: `${topicId}-u2` });
+  });
+
+  it('does not start a round at a steer user message', async () => {
+    const topicId = 't-cursor-steer';
+    await seedRounds(topicId, 2, 2);
+    await serverDB
+      .update(messages)
+      .set({ metadata: { steer: true }, role: 'user' })
+      .where(eq(messages.id, `${topicId}-a2-1`));
+
+    const page = await messageModel.queryTopicMessagesByCursor({ topicId, roundLimit: 1 });
+
+    expect(page.messages[0].id).toBe(`${topicId}-u2`);
+    expect(page.messages).toHaveLength(3);
+  });
+
   it('returns an empty page with no cursor for an empty topic', async () => {
     const topicId = 't-cursor-empty';
     await serverDB.insert(topics).values([{ id: topicId, userId }]);

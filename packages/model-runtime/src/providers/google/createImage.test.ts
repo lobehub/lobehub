@@ -1,10 +1,10 @@
 // @vitest-environment node
 import type { GoogleGenAI } from '@google/genai';
 import { MediaModality } from '@google/genai';
-import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import {
   createGoogleImage,
   GOOGLE_IMAGE_GENERATION_SYSTEM_PROMPT,

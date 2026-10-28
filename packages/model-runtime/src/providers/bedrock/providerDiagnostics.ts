@@ -1,11 +1,10 @@
-import { toRecord } from '@lobechat/utils/object';
-
 import {
   appendProviderResponseEvent,
   appendRawProviderEvent,
   recordProviderStringContent,
 } from '../../core/providerDiagnostics';
 import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
+import { toRecord } from '../../utils/object';
 
 export const recordBedrockResponseEvent = (
   diagnostics: ProviderResponseDiagnostics,

@@ -5,10 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 
-import { useToggleTerminalPanelHotkey } from './chatScope';
+import { useFindInTopicHotkey, useToggleTerminalPanelHotkey } from './chatScope';
 
 const mocks = vi.hoisted(() => ({
   hotkeyCallback: undefined as (() => void) | undefined,
+  openWorkingSidebar: vi.fn(),
   toggleTerminalPanel: vi.fn(),
   useHotkeyById: vi.fn(),
 }));
@@ -19,8 +20,16 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
 }));
 
 vi.mock('@/store/global', () => ({
-  useGlobalStore: (selector: (state: { toggleTerminalPanel: () => void }) => unknown) =>
-    selector({ toggleTerminalPanel: mocks.toggleTerminalPanel }),
+  useGlobalStore: (
+    selector: (state: {
+      openWorkingSidebar: (tab?: string) => void;
+      toggleTerminalPanel: () => void;
+    }) => unknown,
+  ) =>
+    selector({
+      openWorkingSidebar: mocks.openWorkingSidebar,
+      toggleTerminalPanel: mocks.toggleTerminalPanel,
+    }),
 }));
 
 vi.mock('./useHotkeyById', () => ({
@@ -76,5 +85,36 @@ describe('useToggleTerminalPanelHotkey', () => {
         enabled: false,
       },
     );
+  });
+});
+
+describe('useFindInTopicHotkey', () => {
+  beforeEach(() => {
+    mocks.hotkeyCallback = undefined;
+    mocks.openWorkingSidebar.mockReset();
+    mocks.useHotkeyById.mockReset();
+  });
+
+  it('opens the search tab of the working sidebar', () => {
+    renderHook(() => useFindInTopicHotkey(true));
+
+    act(() => {
+      mocks.hotkeyCallback?.();
+    });
+
+    expect(mocks.useHotkeyById).toHaveBeenCalledWith(HotkeyEnum.FindInTopic, expect.any(Function), {
+      enableOnContentEditable: true,
+      enabled: true,
+    });
+    expect(mocks.openWorkingSidebar).toHaveBeenCalledWith('search');
+  });
+
+  it('takes over Mod+F in the chat scope', () => {
+    expect(HOTKEYS_REGISTRATION).toContainEqual({
+      group: HotkeyGroupEnum.Conversation,
+      id: HotkeyEnum.FindInTopic,
+      keys: 'mod+f',
+      scopes: [HotkeyScopeEnum.Chat],
+    });
   });
 });

@@ -1,5 +1,6 @@
 import type { StepActivatedSkill, StepContextTodos, UIChatMessage } from '@lobechat/types';
-import { isNonEmptyString, isPlainRecord } from '@lobechat/utils/object';
+
+import { isNonEmptyString, isPlainRecord } from './object';
 
 /**
  * Wire-format tool identifiers that carry skill activations in their
@@ -173,9 +174,7 @@ export const normalizeTodosState = (
   if (!items || !items.every(isTodoItem)) return undefined;
 
   const updatedAt =
-    isPlainRecord(value) && isNonEmptyString(value.updatedAt)
-      ? value.updatedAt
-      : fallbackUpdatedAt;
+    isPlainRecord(value) && isNonEmptyString(value.updatedAt) ? value.updatedAt : fallbackUpdatedAt;
 
   return { items, updatedAt };
 };

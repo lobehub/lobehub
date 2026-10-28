@@ -216,6 +216,12 @@ export interface FetchQuotaOptions<S = unknown> {
 
 interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   /**
+   * Keep `renderHeader` on screen when there are no windows to show (an
+   * unavailable / failed / empty sample), for headers that carry controls the
+   * user needs in exactly those states — e.g. adding or switching an account.
+   */
+  alwaysRenderHeader?: boolean;
+  /**
    * Revalidate on this cadence while the tab is visible, so the badge stays
    * near-live without user interaction. Upstream sampler caches must keep
    * their fresh window below this for each poll to observe new data.
@@ -277,6 +283,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   hasExtraData,
   renderFooter,
   renderHeader,
+  alwaysRenderHeader,
   sourceKey = 'default',
   title,
   tooltip,
@@ -673,13 +680,19 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           <Skeleton height={18} />
         </Flexbox>
       ) : quota?.status === 'unavailable' ? (
-        <div className={styles.emptyState}>
-          {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
-        </div>
+        <>
+          {alwaysRenderHeader && renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div className={styles.emptyState}>
+            {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
+          </div>
+        </>
       ) : quota?.status === 'error' && !hasQuotaData ? (
-        <div className={styles.error}>
-          {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
-        </div>
+        <>
+          {alwaysRenderHeader && renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div className={styles.error}>
+            {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
+          </div>
+        </>
       ) : hasQuotaData ? (
         <>
           {quota && renderHeader?.(quota, { applyQuota, formatDuration, now })}
@@ -697,7 +710,12 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           )}
         </>
       ) : (
-        <div className={styles.emptyState}>{t('heteroAgent.quota.noData')}</div>
+        <>
+          {alwaysRenderHeader &&
+            quota &&
+            renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div className={styles.emptyState}>{t('heteroAgent.quota.noData')}</div>
+        </>
       )}
     </Flexbox>
   );

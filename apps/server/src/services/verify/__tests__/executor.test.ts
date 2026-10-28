@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { terminalRecord } from '@lobechat/utils/verify/terminalEvidence.fixture';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VerifyExecutorService } from '../executor';
@@ -519,5 +520,60 @@ describe('VerifyExecutorService', () => {
       image_url: { detail: 'high', url: 'https://files.example/image.png' },
       type: 'image_url',
     });
+  });
+
+  it('gates an execution requirement on provenance and points the repair at a real capture', async () => {
+    const plan = [
+      {
+        id: 'cli',
+        index: 0,
+        required: true,
+        title: 'CLI lists agents',
+        verifierConfig: { requiredEvidence: [{ provenance: 'execution', type: 'terminal' }] },
+        verifierType: 'llm',
+      },
+    ];
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan,
+      planConfirmedAt: new Date(),
+    });
+    // An authored example has the right medium but no execution behind it.
+    mocks.evidenceListByRun.mockResolvedValue([
+      {
+        checkItemId: 'cli',
+        content: '$ lh agent list',
+        metadata: {
+          terminal: terminalRecord({
+            capture: { ...terminalRecord().capture, mode: 'import' },
+            source: { kind: 'authored' },
+          }),
+        },
+        type: 'terminal',
+      },
+    ]);
+    mocks.resultListByRun.mockReset().mockResolvedValue([]);
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'done',
+      goal: 'ship',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'op-1',
+    });
+
+    expect(mocks.aiGenerateObject).not.toHaveBeenCalled();
+    expect(mocks.resultUpdateByCheckItem).toHaveBeenCalledWith(
+      'run-1',
+      'cli',
+      expect.objectContaining({
+        suggestion: expect.stringContaining(
+          'Run the command for real and publish it as terminal evidence (captured or imported, not authored).',
+        ),
+        toulmin: {
+          limitation: 'Required evidence not provided: terminal from a real command execution.',
+        },
+        verdict: 'uncertain',
+      }),
+    );
   });
 });

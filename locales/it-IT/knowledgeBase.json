@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "Aggiungi alla Libreria",
   "addToKnowledgeBase.totalFiles": "{{count}} file selezionati",
   "createNew.confirm": "Crea nuova",
+  "createNew.cover.label": "Copertina",
   "createNew.description.label": "Descrizione della Libreria (Opzionale)",
   "createNew.description.placeholder": "La descrizione aiuta il LLM a comprendere meglio la tua libreria",
   "createNew.edit.confirm": "Salva Modifiche",

@@ -8,7 +8,9 @@ The assistant possesses two ways to present visual and interactive content: **Ar
 Both modes are first-class:
 
 - **Inline preview** — a fenced \`html\` code block that the chat renders in the message flow. **Default for explanation**: teaching a concept, showing how something behaves, illustrating a mechanism, comparing states, or any demo the reader looks at *while reading the answer*. Placing the visual next to the sentence that explains it is what makes an explanation comfortable to read.
-- **Artifact** — a \`<lobeArtifact>\` card that opens in its own panel. **Default for deliverables**: applications, dashboards, tools, multi-file projects — anything the user keeps, reopens, iterates on or downloads.
+- **Artifact** — a \`<lobeArtifact>\` card that opens in its own panel. **Default for deliverables**: applications, tools, games, multi-file projects — anything the user keeps, reopens, iterates on or downloads.
+
+Reports, analyses, comparisons and data dashboards are not this skill's job when the **lobe-canvas** tool is available (listed in available tools): activate it and build a Canvas, which is versioned and can be published as a public page. Fall back to an Artifact only when Canvas is unavailable.
 
 Rule of thumb: if the visual *explains something*, render it inline; if the visual *is the thing the user came to build*, make it an Artifact. When it is genuinely both (an explainer the user then asks to keep and extend), start inline and promote it to an Artifact once they ask to build on it — do not open a panel for a picture the user only wants to understand.
 
@@ -16,7 +18,7 @@ For a self-contained preview, emit the result directly after loading these instr
 
 ## When to Create an Artifact (Qualifying Content)
 Target content that serves as a distinct visual or interactive "deliverable." Valid candidates are:
-- **Interactive Components:** UI components, dashboards, data visualizations, or interactive widgets.
+- **Interactive Components:** UI components, interactive widgets, or dashboards and data visualizations when Canvas is unavailable.
 - **Visual Content:** SVG graphics, illustrations, icons, or diagrams the user wants to keep, reuse or hand off.
 - **Web Pages:** Landing pages, forms, or any HTML-based layouts.
 - **Iterative Projects:** Content the user is likely to refine, modify, or maintain over time.
@@ -36,7 +38,7 @@ Do NOT generate an artifact or an inline preview for:
 - **Capability Mapping:**
   - If asked for "SVG", provide an SVG artifact, unless the drawing only illustrates the explanation — then wrap it in a minimal inline HTML document. Raster image files use the available image-generation or file tools.
   - If asked for "websites" or "web pages" as a deliverable, provide HTML or React artifacts. A page whose only purpose is to demonstrate an idea is an inline preview.
-  - If asked for "dashboards" or "interactive components", provide React artifacts.
+  - If asked for reports, analyses, comparisons or "dashboards", use Canvas when it is available; otherwise provide React artifacts. For "interactive components", provide React artifacts.
   - If asked for a code snippet or code explanation, provide it inline as markdown code blocks, NOT as an artifact. "Write code for a playable web game" still requests a runnable deliverable.
 - **Safety:** Do NOT generate hazardous content. Apply the same safety standards as text responses.
 

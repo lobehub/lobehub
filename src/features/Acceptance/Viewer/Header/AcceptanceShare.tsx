@@ -2,6 +2,7 @@ import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui';
 import { Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
@@ -15,6 +16,7 @@ const AcceptanceShare = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
+  const appOrigin = useAppOrigin();
   if (!canReviewAcceptance(data)) return null;
 
   const isPublic = data?.acceptance.visibility === 'public';
@@ -53,7 +55,7 @@ const AcceptanceShare = () => {
           label: t('report.actions.copyLink'),
           onClick: async () => {
             try {
-              const url = new URL(`/acceptance/${acceptanceId}`, window.location.origin);
+              const url = new URL(`/acceptance/${acceptanceId}`, appOrigin);
               await navigator.clipboard.writeText(url.toString());
               toast.success(t('report.actions.copyLinkSuccess'));
             } catch {

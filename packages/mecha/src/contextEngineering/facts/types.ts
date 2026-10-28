@@ -81,6 +81,8 @@ export interface ContextFactRequest {
   agent: {
     chatConfig?: LobeAgentChatConfig | null;
     description?: string | null;
+    /** Personal name the agent is addressed by; wins over `title` as its label. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
@@ -153,7 +155,10 @@ export interface ContextFactProviders {
   /** Recently used agents, most recent first. */
   listRecentAgents?: (
     limit: number,
-  ) => Promise<{ description?: string | null; id: string; title?: string | null }[] | undefined>;
+  ) => Promise<
+    | { description?: string | null; id: string; name?: string | null; title?: string | null }[]
+    | undefined
+  >;
   /** Files synced into the topic's sandbox upload dir. */
   listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
   /** Messages of a referenced topic, oldest first. */
@@ -163,13 +168,14 @@ export interface ContextFactProviders {
   /** Builtin tool identifiers the user uninstalled in the current scope. */
   listUninstalledBuiltinIds?: () => Promise<Iterable<string> | undefined>;
   /**
-   * Whether this run's cloud sandbox keeps its working directory, and which
-   * subdirectory it works in. Resolved by the host because it depends on a
+   * Whether this run's cloud sandbox keeps its working directory — a folder on
+   * the drive (`drive`) or an environment directory (`persistent`) — and
+   * which folder it works in. Resolved by the host because it depends on a
    * signed entitlement the browser cannot see; absent means the sandbox is
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+    { cwd?: string; mode: 'drive' | 'ephemeral' | 'persistent'; workingDir?: string } | undefined
   >;
 }
 

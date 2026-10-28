@@ -14,6 +14,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
@@ -32,6 +33,7 @@ export interface RecentDbItem {
   slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
+  taskIdentifier?: string | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
@@ -43,6 +45,7 @@ export interface RecentDbItem {
 // legacy `task_manager` trigger from the previous Task Manager panel.
 // System-trigger topics live in their own surfaces and would clutter Recent.
 const SYSTEM_TOPIC_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
   'cron',
   'eval',
   'task_manager',
@@ -74,6 +77,7 @@ const toPlainTextPreview = (markdown: string): string => {
   try {
     return removeMarkdown(markdown).trimEnd();
   } catch {
+    /* v8 ignore next -- unreachable: remove-markdown swallows its own errors unless `throwError` is set, and the preview query only yields non-empty strings */
     return markdown;
   }
 };
@@ -125,6 +129,7 @@ export class RecentModel {
           ? topics.description
           : sql<string | null>`NULL`.as('description'),
         id: topics.id,
+        taskIdentifier: sql<string | null>`NULL`.as('task_identifier'),
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
@@ -172,6 +177,7 @@ export class RecentModel {
       .select({
         description: sql<string | null>`NULL`.as('description'),
         id: documents.id,
+        taskIdentifier: sql<string | null>`NULL`.as('task_identifier'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
@@ -202,6 +208,7 @@ export class RecentModel {
       .select({
         description: sql<string | null>`NULL`.as('description'),
         id: tasks.id,
+        taskIdentifier: sql<string | null>`${tasks.identifier}`.as('task_identifier'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
@@ -247,13 +254,18 @@ export class RecentModel {
             ? `${preview.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
             : preview,
         metadata: row.metadata ?? undefined,
+        taskIdentifier: row.taskIdentifier,
         routeGroupId: row.routeGroupId,
         routeId: row.routeId,
         slugTitle: row.slugTitle,
         status: row.status,
         title: row.title,
         type: row.type,
-        updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
+        // Unreachable fallback: drizzle's timestamp column maps every driver value to a Date.
+        updatedAt:
+          row.updatedAt instanceof Date
+            ? row.updatedAt
+            : /* v8 ignore next -- unreachable: see note */ new Date(row.updatedAt as any),
         userId: row.userId,
       };
     });

@@ -1,12 +1,14 @@
-import { and, eq, inArray, or, type SQL } from 'drizzle-orm';
+import { INBOX_SESSION_ID } from '@lobechat/const';
+import { and, eq, exists, inArray, isNull, or, type SQL } from 'drizzle-orm';
 
-import { type TopicItem, topics } from '../../schemas';
+import { agents, type TopicItem, topics } from '../../schemas';
 import {
   isTrashed,
   restoreStamp,
   type SoftDeleteOptions,
   trashStamp,
 } from '../../utils/softDelete';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import type { TopicModelContext } from './context';
 
 /**
@@ -74,14 +76,41 @@ export const softDeleteByGroupId = async (
 export const softDeleteByAgentId = async (
   ctx: TopicModelContext,
   agentId: string,
-  options: SoftDeleteOptions,
+  options: SoftDeleteOptions & { legacySessionId?: string | null },
 ): Promise<TopicItem[]> => {
   return ctx.db
     .update(topics)
     .set(trashStamp(options.deletedAt))
     .where(
       and(
-        eq(topics.agentId, agentId),
+        or(
+          eq(topics.agentId, agentId),
+          options.legacySessionId
+            ? and(isNull(topics.agentId), eq(topics.sessionId, options.legacySessionId))
+            : undefined,
+          // Include unassigned Inbox history immediately; bulk deletion must
+          // not rely on a successful prior list-triggered migration.
+          and(
+            isNull(topics.agentId),
+            isNull(topics.sessionId),
+            isNull(topics.groupId),
+            exists(
+              ctx.db
+                .select({ id: agents.id })
+                .from(agents)
+                .where(
+                  and(
+                    eq(agents.id, agentId),
+                    eq(agents.slug, INBOX_SESSION_ID),
+                    buildWorkspaceWhere(
+                      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+                      agents,
+                    ),
+                  ),
+                ),
+            ),
+          ),
+        ),
         options.restrictToCreator ? ctx.mine() : ctx.ownership(),
         ctx.notShareVisitor(),
       ),

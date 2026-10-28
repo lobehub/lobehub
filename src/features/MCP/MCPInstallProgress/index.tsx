@@ -11,6 +11,7 @@ import { MCPInstallStep } from '@/types/plugins';
 import InstallError from './InstallError';
 import MCPConfigForm from './MCPConfigForm';
 import MCPDependenciesGuide from './MCPDependenciesGuide';
+import { MCPOAuthAuthorization } from './MCPOAuthAuthorization';
 
 const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
   const { t } = useTranslation('plugin');
@@ -24,10 +25,14 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
   const needsDependencies = installProgress?.step === MCPInstallStep.DEPENDENCIES_REQUIRED;
   const hasError = installProgress?.step === MCPInstallStep.ERROR;
   const errorInfo = installProgress?.errorInfo;
+  const needsAuthorization = installProgress?.step === MCPInstallStep.AUTHORIZATION_REQUIRED;
 
   return (
     <>
-      {installProgress && !hasError && !needsDependencies && (
+      {needsAuthorization && (
+        <MCPOAuthAuthorization error={errorInfo?.message} identifier={identifier} />
+      )}
+      {installProgress && !hasError && !needsDependencies && !needsAuthorization && (
         <m.div
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}

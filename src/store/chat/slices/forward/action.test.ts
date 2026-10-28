@@ -72,6 +72,8 @@ describe('ChatForwardAction', () => {
         topicId: 'source-topic',
       });
       expect(result.sourceSchedulePaused).toBe(!accepted);
+      // An accepted send persisted the target topic, so the failure must point at it.
+      expect(result.failed[0].topicId).toBe(accepted ? 'target-topic' : undefined);
     },
   );
 

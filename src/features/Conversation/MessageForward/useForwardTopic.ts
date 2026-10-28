@@ -5,13 +5,24 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
-import type { ForwardTarget } from '@/store/chat/slices/forward/action';
+import type { ForwardResult, ForwardTarget } from '@/store/chat/slices/forward/action';
 
 interface ForwardTopicSource {
   agentId: string;
   cancelSourceContinuation?: boolean;
   topicId: string;
 }
+
+const getHandoffFailureKey = (result: ForwardResult) => {
+  // No target confirmed and the source run is paused: inspect before re-arming.
+  if (result.sourceSchedulePaused) return 'messageForward.topic.handoff.sourceSchedulePaused';
+  // A target topic exists although its send failed; a retry would hand off twice.
+  if (result.failed.some((item) => item.topicId)) return 'messageForward.topic.handoff.unconfirmed';
+  // "Some Agents" only fits when at least one target took the handoff.
+  return result.succeeded.length > 0
+    ? 'messageForward.topic.handoff.partialFailed'
+    : 'messageForward.topic.handoff.failed';
+};
 
 export const useForwardTopic = ({
   agentId,
@@ -31,7 +42,11 @@ export const useForwardTopic = ({
       const primaryTarget = targets[0];
       void forwardTopic({
         cancelSourceContinuation,
-        header: t('messageForward.topic.header'),
+        header: t(
+          cancelSourceContinuation
+            ? 'messageForward.topic.handoff.header'
+            : 'messageForward.topic.header',
+        ),
         note,
         onTopicCreated: (target, createdTopicId) => {
           if (target.id !== primaryTarget.id) return;
@@ -48,17 +63,23 @@ export const useForwardTopic = ({
           if (result.succeeded.length > 0) {
             toast.success(
               targets.length === 1
-                ? t('messageForward.success', { title: primaryTarget.title || '' })
-                : t('messageForward.successMulti', { count: result.succeeded.length }),
+                ? t(
+                    cancelSourceContinuation
+                      ? 'messageForward.topic.handoff.success'
+                      : 'messageForward.success',
+                    { title: primaryTarget.title || '' },
+                  )
+                : t(
+                    cancelSourceContinuation
+                      ? 'messageForward.topic.handoff.successMulti'
+                      : 'messageForward.successMulti',
+                    { count: result.succeeded.length },
+                  ),
             );
           }
           if (result.failed.length > 0)
             toast.error(
-              t(
-                result.sourceSchedulePaused
-                  ? 'messageForward.topic.sourceSchedulePaused'
-                  : 'messageForward.failed',
-              ),
+              t(cancelSourceContinuation ? getHandoffFailureKey(result) : 'messageForward.failed'),
             );
         })
         .catch((error) => {
@@ -66,7 +87,7 @@ export const useForwardTopic = ({
           toast.error(
             t(
               cancelSourceContinuation
-                ? 'messageForward.topic.handoffFailed'
+                ? 'messageForward.topic.handoff.notStarted'
                 : 'messageForward.topic.loadFailed',
             ),
           );

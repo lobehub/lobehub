@@ -1,8 +1,8 @@
 // @vitest-environment node
-import * as imageToBase64Module from '@lobechat/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 import {

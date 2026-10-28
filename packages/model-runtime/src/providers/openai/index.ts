@@ -5,6 +5,7 @@ import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import { appendDecisionModels } from '../../utils/postProcessModelList';
 import {
   isGPTProResponsesModel,
   isOpenAIComputerUseModel,
@@ -76,6 +77,8 @@ export const params = {
     },
     supportsAudioInput: true,
   },
+  /** @see https://developers.openai.com/api/docs/guides/decisions */
+  decide: { path: '/decisions', protocol: 'openai' },
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENAI_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_OPENAI_RESPONSES === '1',
@@ -85,7 +88,9 @@ export const params = {
     const modelList: OpenAIModelCard[] = modelsPage.data;
 
     // Automatically detect model provider and select corresponding configuration
-    return processMultiProviderModelList(modelList, 'openai');
+    const models = await processMultiProviderModelList(modelList, 'openai');
+    // `decide` serves these through `/decisions`, so list their `:decision` cards too.
+    return appendDecisionModels(models);
   },
   provider: ModelProvider.OpenAI,
   responses: {

@@ -1,7 +1,12 @@
 import { Message } from 'chat';
 import { describe, expect, it } from 'vitest';
 
-import { buildReplayMessages, getSourceMessages, mergeBotMessages } from '../mergeMessages';
+import {
+  buildReplayMessages,
+  getOriginMessageId,
+  getSourceMessages,
+  mergeBotMessages,
+} from '../mergeMessages';
 
 const makeMessage = (id: string, text: string, raw: unknown, attachments: unknown[] = []) =>
   new Message({
@@ -46,6 +51,33 @@ describe('mergeBotMessages', () => {
 describe('buildReplayMessages', () => {
   it('returns an empty list for no entries', () => {
     expect(buildReplayMessages([])).toEqual([]);
+  });
+
+  it('reports the platform id behind a replay id', () => {
+    const original = makeMessage('10', 'hi', { item: 'text' });
+    const [replay] = buildReplayMessages([original.toJSON()]);
+
+    expect(replay.id).toMatch(/^10:replay:\d+:0$/);
+    expect(getOriginMessageId(replay)).toBe('10');
+    expect(getOriginMessageId(original)).toBe('10');
+  });
+
+  // A replay the scheduler parked again was stored under its replay id; replaying it once more
+  // stacked a second suffix, the origin id no longer matched the released batch, and the message
+  // was parked again on every run.
+  it('does not stack replay suffixes when a replay is parked and replayed again', () => {
+    const original = makeMessage('10', 'hi', { item: 'text' });
+    const [first] = buildReplayMessages([original.toJSON()]);
+    const [second] = buildReplayMessages([first.toJSON()]);
+
+    expect(second.id).toMatch(/^10:replay:\d+:0$/);
+    expect(getOriginMessageId(second)).toBe('10');
+  });
+
+  it('reports the platform id behind an id that already stacked replay suffixes', () => {
+    expect(getOriginMessageId({ id: '10:replay:1793094332657:0:replay:1793094692762:1' })).toBe(
+      '10',
+    );
   });
 
   it('keeps each original raw through the SDK JSON round-trip before merging', () => {

@@ -4,9 +4,10 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { resolveScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';

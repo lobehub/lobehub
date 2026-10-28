@@ -10,6 +10,7 @@ import {
   type MessageMetadata,
   type MessagePluginItem,
   type ModelRankItem,
+  type TopicMessageSearchMatch,
   type UIChatMessage,
   type UpdateMessageParams,
   type UpdateMessageRAGParams,
@@ -269,6 +270,13 @@ export class MessageService {
     });
 
     return { messages: data as unknown as UIChatMessage[] };
+  };
+
+  searchInTopic = async (params: {
+    keyword: string;
+    topicId: string;
+  }): Promise<TopicMessageSearchMatch[]> => {
+    return lambdaClient.message.searchInTopic.query(params);
   };
 
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {

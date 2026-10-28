@@ -1,8 +1,8 @@
-import { sanitizeToolCallArguments } from '@lobechat/utils';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { MessageToolCall, PipelineContext, ProcessorOptions } from '../types';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {

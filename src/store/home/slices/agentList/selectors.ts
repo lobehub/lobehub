@@ -96,6 +96,16 @@ const allAgents = (s: HomeStore): SidebarAgentItem[] => {
 };
 
 /**
+ * Agents every workspace member can see: the sidebar list without the
+ * current user's private bucket.
+ */
+const sharedAgents = (s: HomeStore): SidebarAgentItem[] => [
+  ...s.pinnedAgents,
+  ...s.agentGroups.flatMap((g) => g.items),
+  ...s.ungroupedAgents,
+];
+
+/**
  * Get agent by id
  */
 const getAgentById =
@@ -133,6 +143,7 @@ export const homeAgentListSelectors = {
   privateUngroupedAgents,
   privateUngroupedAgentsCount,
   privateUngroupedAgentsLimited,
+  sharedAgents,
   ungroupedAgents,
   ungroupedAgentsCount,
   ungroupedAgentsLimited,

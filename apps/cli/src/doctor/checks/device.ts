@@ -2,12 +2,12 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 
 import { CLI_PRIMARY_BIN } from '../../constants/identity';
 import { getRunningDaemonPid, readStatus, removePid, removeStatus } from '../../daemon/manager';
+import { describeDeviceGateway, describeDeviceGatewayFailure } from '../../device/gatewayEndpoint';
 import { readConnectServiceStatus } from '../../service/connect';
 import { resolveLocalDeviceId } from '../../utils/device';
-import { probeCredential, probeDevices } from '../probes';
+import { probeCredential, probeDeviceGateway, probeDevices } from '../probes';
 import { redactUrlCredentials, redactUrlsInMessage } from '../redact';
 import type { CheckOutcome, DoctorCheck } from '../types';
-import { resolveEndpoints } from './endpoints';
 
 /**
  * Is there a `lh connect` daemon on this machine, and is the state it left
@@ -38,7 +38,8 @@ const daemon: DoctorCheck = {
     const evidence = {
       connectionStatus: status?.connectionStatus,
       deviceId: status?.deviceId,
-      gatewayUrl: status?.gatewayUrl,
+      gatewaySource: status?.gatewaySource,
+      gatewayUrl: redactUrlCredentials(status?.gatewayUrl),
       pid,
       service,
     };
@@ -77,8 +78,11 @@ const daemon: DoctorCheck = {
         status: 'warn',
       };
 
+    const via = evidence.gatewayUrl
+      ? ` via ${evidence.gatewayUrl}${evidence.gatewaySource ? ` (${evidence.gatewaySource})` : ''}`
+      : '';
     return {
-      detail: `Daemon ${pid} connected as device ${status.deviceId ?? 'unknown'}.`,
+      detail: `Daemon ${pid} connected as device ${status.deviceId ?? 'unknown'}${via}.`,
       evidence,
       status: 'ok',
     };
@@ -97,8 +101,9 @@ function readServiceStatus(): unknown {
 
 /**
  * Can this machine authenticate to the device gateway at all — separating
- * "wrong URL", "rejected token" and "nothing answers", which all present as a
- * bare DEVICE_OFFLINE to whoever called the tool.
+ * "no address", "wrong URL", "rejected token" and "nothing answers", which all
+ * present as a bare DEVICE_OFFLINE to whoever called the tool. The address is
+ * resolved the way `lh connect` resolves it, against the credential's server.
  */
 const gatewayHandshake: DoctorCheck = {
   dependsOn: ['credentials.validity', 'endpoints.resolution'],
@@ -115,10 +120,23 @@ const gatewayHandshake: DoctorCheck = {
         status: 'fail',
       };
 
-    const { gatewayUrl } = resolveEndpoints();
+    const serverUrl = redactUrlCredentials(credential.serverUrl);
+    const gateway = await probeDeviceGateway(ctx, credential.serverUrl);
+    if (!gateway.ok) {
+      const { detail, fix } = describeDeviceGatewayFailure(gateway, credential.serverUrl);
+      return { detail, evidence: { reason: gateway.reason, serverUrl }, fix, status: 'fail' };
+    }
+
+    const { source, url: gatewayUrl } = gateway.endpoint;
     // The URL is used verbatim to connect and redacted everywhere it is shown.
     const shownUrl = redactUrlCredentials(gatewayUrl);
-    const evidence = { gatewayUrl: shownUrl, tokenType: credential.tokenType };
+    const shownGateway = describeDeviceGateway(gateway.endpoint);
+    const evidence = {
+      gatewaySource: source,
+      gatewayUrl: shownUrl,
+      serverUrl,
+      tokenType: credential.tokenType,
+    };
 
     const outcome = await new Promise<CheckOutcome>((resolve) => {
       const client = new GatewayClient({
@@ -162,13 +180,16 @@ const gatewayHandshake: DoctorCheck = {
         }),
       );
       client.on('connected', () =>
-        settle({ detail: `Authenticated to ${shownUrl}.`, evidence, status: 'ok' }),
+        settle({ detail: `Authenticated to ${shownGateway}.`, evidence, status: 'ok' }),
       );
       client.on('auth_failed', (reason: string) =>
         settle({
-          detail: `${shownUrl} rejected the credential: ${reason}.`,
+          detail: `${shownGateway} rejected the credential: ${reason}.`,
           evidence,
-          fix: 'The gateway and the server must trust the same issuer — check the gateway URL matches this server.',
+          fix:
+            source === 'server'
+              ? `The gateway ${serverUrl} advertises does not trust its tokens — the server's DEVICE_GATEWAY_PUBLIC_URL likely points at another deployment.`
+              : 'The gateway and the server must trust the same issuer — check the gateway URL matches this server.',
           status: 'fail',
         }),
       );

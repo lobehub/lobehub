@@ -185,6 +185,20 @@ describe('GatewayClient', () => {
       c.disconnect();
     });
 
+    it('should keep a public path prefix and ignore a trailing slash', () => {
+      const c = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://edge.example.com/device-gateway/',
+        token: 'tok',
+      });
+      c.connect();
+      const ws = new URL((c as any).ws.url);
+      expect(`${ws.protocol}//${ws.host}${ws.pathname}`).toBe(
+        'wss://edge.example.com/device-gateway/ws',
+      );
+      c.disconnect();
+    });
+
     it('should include user agent header when provided', () => {
       const c = new GatewayClient({
         autoReconnect: false,

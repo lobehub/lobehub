@@ -68,23 +68,49 @@ export function readCopyProfile(root) {
   const areas = [];
   let def = null;
   for (const p of parts) {
-    // 一个 profile 可以对应多条路由：`/settings, /resource → saas`
-    const m = p.match(/^(\S.*?)\s*(?:→|->|=>|:)\s*([a-z-]+)$/);
-    if (m) for (const path of m[1].split(/[,，\s]+/).filter(Boolean)) areas.push({ path, id: m[2] });
+    const m = p.match(/^(\S+)\s*(?:→|->|=>|:)\s*([a-z-]+)$/);
+    if (m) areas.push({ path: m[1], id: m[2] });
     else if (!def && /^[a-z-]+$/.test(p)) def = p;
   }
   return { default: def, areas };
 }
 
 // 选出这次要加载的 profile id 列表
-export function selectProfiles(metas, text, { profile, root } = {}) {
+// 路由分区匹配（5.5.0）：按路径段匹配，不按字符串前缀，所以带动态段的完整 URL 也能命中。
+//   `/api-keys`        → 任意位置连续出现该段序列：/api-keys、/acme/api-keys、/:wsSlug/api-keys/new 都命中；/api-keys-old 不命中
+//   `/*/api-keys`      → `*` 匹配恰好一段（含 :param / [param] 这类动态段）
+//   `/admin/**`        → `**` 匹配任意多段（含 0 段）
+//   `^/admin`          → 只从根开始匹配（真正的前缀）
+// 多条命中时取更具体的（字面段多者优先）。
+const segs = (p) => p.replace(/[?#].*$/, '').split('/').filter(Boolean).map((x) => x.toLowerCase());
+function matchAt(pat, url, i, j) {
+  if (i === pat.length) return true;
+  if (pat[i] === '**') { for (let k = j; k <= url.length; k++) if (matchAt(pat, url, i + 1, k)) return true; return false; }
+  if (j >= url.length) return false;
+  if (pat[i] === '*' || /^(?::\w+|\[[^\]]+\])$/.test(pat[i]) || pat[i] === url[j]) return matchAt(pat, url, i + 1, j + 1);
+  return false;
+}
+export function matchRoute(pattern, url) {
+  const anchored = pattern.startsWith('^');
+  const pat = segs(pattern.replace(/^\^/, '')), u = segs(url.replace(/^https?:\/\/[^/]+/i, ''));
+  if (!pat.length) return false;
+  for (let j = 0; j <= (anchored ? 0 : u.length - 1); j++) if (matchAt(pat, u, 0, j)) return true;
+  return false;
+}
+export const routesIn = (text) => [...text.matchAll(/(?:https?:\/\/[^\s/]+)?(?:\/[\w:.*\[\]@~-]+)+\/?/g)].map((m) => m[0]);
+export function matchArea(areas, routes) {
+  const score = (p) => segs(p.replace(/^\^/, '')).filter((x) => x !== '*' && x !== '**').length;
+  return areas.filter((a) => routes.some((r) => matchRoute(a.path, r))).sort((a, b) => score(b.path) - score(a.path))[0] ?? null;
+}
+
+export function selectProfiles(metas, text, { profile, root, page } = {}) {
   const profs = [...metas.values()].filter((m) => m?.tier === 'profile');
   const ids = new Set(profs.map((m) => m.profile));
   if (profile) return ids.has(profile) ? { selected: [profile], source: 'flag' } : { selected: [], source: 'flag', error: `未知 profile：${profile}（可用：${[...ids].join(', ')}）` };
   const hitIds = profs.filter((m) => (m.triggers ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean).some((t) => text.includes(t))).map((m) => m.profile);
   const proj = root ? readCopyProfile(root) : null;
   if (proj && (proj.default || proj.areas.length)) {
-    const area = proj.areas.find((a) => text.includes(a.path.toLowerCase()) && ids.has(a.id));
+    const area = matchArea(proj.areas.filter((a) => ids.has(a.id)), page ? [page] : routesIn(text));
     if (area) return { selected: [area.id], source: `product.md（${area.path}）` };
     const cands = [proj.default, ...proj.areas.map((a) => a.id)].filter((id) => id && ids.has(id));
     const byTrigger = cands.find((id) => hitIds.includes(id));
@@ -116,7 +142,7 @@ export function planRef(meta, text, chosen = []) {
 }
 
 // 给定指令（可选指定 stage），产出每个 stage 的加载清单
-export function resolveRefs(instruction, { stage, profile, root } = {}) {
+export function resolveRefs(instruction, { stage, profile, root, page } = {}) {
   const metas = allMeta();
   const r = route(instruction);
   const text = instruction.toLowerCase();
@@ -126,7 +152,7 @@ export function resolveRefs(instruction, { stage, profile, root } = {}) {
     ? [{ stage, file: PIPELINE.stages[stage]?.file, refs: PIPELINE.stages[stage]?.loads ?? [] }]
     : r.loads;
   if (stage && !PIPELINE.stages[stage]) return { instruction, scenario: r.scenario, granularity: r.granularity, stages: [], budget: ALWAYS_BUDGET, error: `未知 stage：${stage}` };
-  const copyProfile = selectProfiles(metas, text, { profile, root });
+  const copyProfile = selectProfiles(metas, text, { profile, root, page });
   const out = [];
   for (const st of plan) {
     if (!st.file) continue;
@@ -166,7 +192,9 @@ const HELP = `lobe-design refs — 渐进式披露解析器（零依赖）
   node scripts/refs.mjs "<指令>" --stage 50-visual  只看某个 stage
   node scripts/refs.mjs "<指令>" --json            JSON 输出
   node scripts/refs.mjs "<指令>" --profile admin   75-copy：指定文案 profile（consumer | saas | admin | devtool）
-  node scripts/refs.mjs "<指令>" --root <项目根>   75-copy：从 .agents/ux/product.md 的 copy-profile 选 profile（默认当前目录）
+  node scripts/refs.mjs "<指令>" --root <项目根>   75-copy：从 .agents/ux/product.md 的 copy-profile 选 profile
+  node scripts/refs.mjs "<指令>" --root <根> --page /acme/api-keys   指定当前页面路由（默认从指令里提取路径）
+    路由分区按路径段匹配：\`/api-keys\` 命中 /:wsSlug/api-keys；\`/*/api-keys\` 的 * 是一段；\`/admin/**\` 任意多段；\`^/admin\` 只从根匹配
   node scripts/refs.mjs --audit                    审计全部 reference 的 tier / always 预算
 
 tier
@@ -193,15 +221,15 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const json = args.includes('--json');
   const stage = args.includes('--stage') ? args[args.indexOf('--stage') + 1] : undefined;
   const profile = args.includes('--profile') ? args[args.indexOf('--profile') + 1] : undefined;
-  // 不带 --root 时默认当前目录，和 bootstrap / project-scan 一致：项目根下运行即可读到 .agents/ux/product.md
-  const root = args.includes('--root') ? args[args.indexOf('--root') + 1] : process.cwd();
-  const instruction = args.filter((a, i) => !a.startsWith('--') && !['--stage', '--profile', '--root'].includes(args[i - 1])).join(' ');
+  const root = args.includes('--root') ? args[args.indexOf('--root') + 1] : undefined;
+  const page = args.includes('--page') ? args[args.indexOf('--page') + 1] : undefined;
+  const instruction = args.filter((a, i) => !a.startsWith('--') && !['--stage', '--profile', '--root', '--page'].includes(args[i - 1])).join(' ');
   if (!instruction) { console.error(`用法错误：缺少指令。\n\n${HELP}`); process.exit(2); }
   if (stage && !PIPELINE.stages[stage]) {
     console.error(`用法错误：未知 stage：${stage}\n可用：${Object.keys(PIPELINE.stages).join(', ')}`);
     process.exit(2);
   }
-  const res = resolveRefs(instruction, { stage, profile, root });
+  const res = resolveRefs(instruction, { stage, profile, root, page });
   if (res.copyProfile?.error) { console.error(`用法错误：${res.copyProfile.error}`); process.exit(2); }
   if (json) console.log(JSON.stringify(res, null, 2));
   else console.log(format(res));

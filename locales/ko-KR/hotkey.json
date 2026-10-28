@@ -17,6 +17,8 @@
   "desktop.showApp.title": "메인 창 표시/숨기기",
   "editMessage.desc": "Alt 키를 누른 채 메시지를 더블 클릭하여 편집 모드로 진입",
   "editMessage.title": "메시지 편집",
+  "findInTopic.desc": "오른쪽 패널에서 현재 주제의 모든 메시지를 검색합니다",
+  "findInTopic.title": "주제에서 찾기",
   "navigateToChat.desc": "채팅 탭으로 전환하고 Lobe AI에 진입합니다",
   "navigateToChat.title": "기본 대화로 전환",
   "nextTab.desc": "데스크톱 앱에서 브라우저 스타일의 다음 탭으로 이동합니다. 끝에서 첫 번째 탭으로 돌아갑니다.",

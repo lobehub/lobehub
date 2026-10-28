@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Afficher/Masquer la fenêtre principale",
   "editMessage.desc": "Entrer en mode édition en maintenant Alt et en double-cliquant sur le message",
   "editMessage.title": "Modifier le message",
+  "findInTopic.desc": "Recherchez chaque message du sujet actuel dans le panneau de droite",
+  "findInTopic.title": "Rechercher dans le sujet",
   "navigateToChat.desc": "Passer à l'onglet Chat et entrer dans Lobe AI",
   "navigateToChat.title": "Passer au chat par défaut",
   "nextTab.desc": "Passer à l'onglet suivant de style navigateur dans l'application de bureau ; revient au premier onglet à la fin",

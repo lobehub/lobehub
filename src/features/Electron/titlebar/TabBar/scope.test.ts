@@ -15,7 +15,7 @@ describe('desktop tab scope', () => {
   // resolve as a phantom `workspace:<segment>` scope, so entering a project
   // page scope-swapped the tab and replayed stale tabs from that bucket.
   it('marks project, agents and goal routes as personal scope, not phantom workspaces', () => {
-    expect(resolveTabScope('/project/prj_1/conversation/tpc_1')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/project/prj_1/topic/tpc_1')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/project/prj_1/acceptance')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/projects')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/agents')).toEqual({ type: 'personal' });

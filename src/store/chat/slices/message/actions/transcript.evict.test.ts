@@ -8,6 +8,7 @@ import { messageListKey } from '@/services/message/cache';
 import { conversationMessagesKey, conversationMessagesResource } from '@/services/message/replica';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
+import { getMessageTranscript } from '@/store/chat/slices/message/transcript';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 
 import { resetTranscripts, rowsOf } from './testUtils';
@@ -76,6 +77,23 @@ describe('transcript eviction', () => {
     await waitFor(async () => expect(await storedRow(topicA)).toBeUndefined());
     expect(await storedRow(topicB)).toBeDefined();
     expect(rowsOf(topicB)).toBeDefined();
+  });
+
+  it('forgets unconfirmed client rows of an evicted conversation', async () => {
+    // A send that never reached the server, e.g. its create failed.
+    useChatStore
+      .getState()
+      .internal_dispatchMessage(
+        { id: 'tmp_unsent', type: 'createMessage', value: row('tmp_unsent') as any },
+        { conversationContext: topicA },
+        { creationOrigin: 'client' },
+      );
+    const transcript = getMessageTranscript(useChatStore.setState, useChatStore.getState);
+    expect(transcript.debugUnconfirmedClientIds()).toContain('tmp_unsent');
+
+    await act(() => evictMessageCache((ctx) => ctx.topicId === topicA.topicId));
+
+    expect(transcript.debugUnconfirmedClientIds()).not.toContain('tmp_unsent');
   });
 
   it('reaches rows only an earlier session persisted, so they never hydrate again', async () => {

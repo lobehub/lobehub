@@ -1,6 +1,7 @@
 import { mergeRouters } from '@/libs/trpc/lambda';
 
 import { createRouter } from './create';
+import { operationReadRouter } from './operationReads';
 import { queryRouter } from './queries';
 import { removeRouter } from './remove';
 import { shareRouter } from './share';
@@ -12,6 +13,7 @@ export const topicRouter = mergeRouters(
   createRouter,
   removeRouter,
   shareRouter,
+  operationReadRouter,
 );
 
 export type TopicRouter = typeof topicRouter;

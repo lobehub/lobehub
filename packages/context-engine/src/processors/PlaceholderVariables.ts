@@ -1,9 +1,9 @@
-import { PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const/plugin';
-import { truncateSurrogateSafe } from '@lobechat/utils';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
+import { PLUGIN_SCHEMA_SEPARATOR } from '../const/plugin';
 import type { PipelineContext, ProcessorOptions } from '../types';
+import { truncateSurrogateSafe } from '../utils/truncateSurrogateSafe';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {

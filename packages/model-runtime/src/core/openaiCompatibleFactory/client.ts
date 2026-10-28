@@ -1,5 +1,6 @@
-import { isRecord } from '@lobechat/utils';
 import OpenAI from 'openai';
+
+import { isRecord } from '../../utils/object';
 
 /** Preserves flat JSON errors returned by OpenAI-compatible providers. */
 export class OpenAICompatibleClient extends OpenAI {

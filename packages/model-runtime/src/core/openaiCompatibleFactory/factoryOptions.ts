@@ -23,7 +23,7 @@ import type {
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import type { AssertContextWithinWindowOptions } from '../../utils/resolveSafeMaxTokens';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
-import type { SystemOneDecideConfig } from './decide';
+import type { DecideConfig } from './decide';
 
 // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
 // passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
@@ -142,7 +142,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     chatCompletion: () => boolean;
     responses?: () => boolean;
   };
-  decide?: SystemOneDecideConfig;
+  decide?: DecideConfig;
   errorType?: {
     bizError: ILobeAgentRuntimeErrorType;
     invalidAPIKey: ILobeAgentRuntimeErrorType;

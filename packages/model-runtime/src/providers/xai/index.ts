@@ -1,9 +1,9 @@
-import { isRecord } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatCompletionTool, ChatResponseFormat, ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { isRecord } from '../../utils/object';
 import { createXAIImage } from './createImage';
 import { createXAIVideo } from './createVideo';
 

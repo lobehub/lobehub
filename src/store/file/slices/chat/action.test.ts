@@ -3,6 +3,7 @@ import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { UnreadableServerResponseError } from '@/libs/trpc/client/unreadableServerResponse';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
@@ -50,7 +51,10 @@ vi.mock('@/services/shareChat', () => ({
 }));
 
 vi.mock('i18next', () => ({
-  t: (key: string, options?: { reason?: string }) => {
+  t: (
+    key: string,
+    options?: { message?: string; reason?: string; requestId?: string; status?: number },
+  ) => {
     if (key === 'upload.permissionDenied') {
       return 'You do not have permission to upload files in this workspace.';
     }
@@ -58,6 +62,12 @@ vi.mock('i18next', () => ({
     if (key === 'upload.uploadFailed') return 'File upload failed.';
 
     if (key === 'upload.unknownError') return `Error reason: ${options?.reason}`;
+
+    if (key === 'upload.serviceUnavailable') return 'The upload service is unavailable.';
+
+    if (key === 'response.withRequestDetail') {
+      return `${options?.message} (HTTP ${options?.status} · Request ID: ${options?.requestId})`;
+    }
 
     return key;
   },
@@ -336,6 +346,36 @@ describe('useFileStore:chat', () => {
         agentId: AGENT_ID,
         error: 'You do not have permission to upload files in this workspace.',
         id: 'test.txt',
+        status: 'error',
+      }),
+    ]);
+  });
+
+  // Regression: a gateway HTML error page answered the upload API and the card
+  // showed `Error reason: Unexpected token '<', "<!doctype "... is not valid JSON`.
+  it('shows the upload-unavailable copy with the request id of an HTML error page', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['docx'], 'report.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    // tRPC wraps an error thrown by the link's fetch as the client error's cause.
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue(
+      new Error('wrapped', {
+        cause: new UnreadableServerResponseError({ requestId: 'a4f7-SJC', status: 502 }),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.uploadChatFiles([file], AGENT_ID);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([
+      expect.objectContaining({
+        error: 'The upload service is unavailable. (HTTP 502 · Request ID: a4f7-SJC)',
+        id: 'report.docx',
         status: 'error',
       }),
     ]);

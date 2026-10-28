@@ -69,6 +69,7 @@ const FloatingCommentAction = memo<{ onClick: () => void; title: string }>(({ on
   return (
     <div className={styles.rail}>
       <ActionIcon
+        aria-label={title}
         className={styles.button}
         icon={MessageSquarePlus}
         size={'small'}

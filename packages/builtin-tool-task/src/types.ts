@@ -78,6 +78,7 @@ export interface CreateTaskState {
   /** Lifecycle status the task was created in (usually `backlog`). */
   status?: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== createGoal ====================
@@ -124,6 +125,7 @@ export interface CreateTasksItemResult {
   identifier?: string;
   name: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface CreateTasksState {
@@ -178,6 +180,7 @@ export interface ViewTaskParams {
 export interface ViewTaskState {
   identifier?: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== task comments ====================
@@ -191,6 +194,7 @@ export interface AddTaskCommentState {
   commentId?: string;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface UpdateTaskCommentParams {
@@ -231,6 +235,7 @@ export interface EditTaskParams {
 export interface EditTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== runTask / runTasks ====================
@@ -247,6 +252,7 @@ export interface RunTaskState {
   identifier: string;
   operationId?: string;
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
@@ -259,7 +265,9 @@ export interface RunTasksItemResult {
   error?: string;
   identifier: string;
   operationId?: string;
+  refs?: string[];
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
@@ -289,6 +297,7 @@ export interface SetTaskScheduleState {
   automationMode?: TaskAutomationMode | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== setTaskVerify ====================
@@ -313,6 +322,7 @@ export interface SetTaskVerifyState {
   enabled?: boolean | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== updateTaskStatus ====================
@@ -324,8 +334,10 @@ export interface UpdateTaskStatusParams {
 }
 
 export interface UpdateTaskStatusState {
+  identifier?: string;
   status: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== deleteTask ====================
@@ -337,4 +349,5 @@ export interface DeleteTaskParams {
 export interface DeleteTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }

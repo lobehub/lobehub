@@ -1,7 +1,9 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import type { DeviceClient } from '@lobechat/types';
 import debug from 'debug';
 
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { FileService } from '@/server/services/file';
@@ -16,9 +18,11 @@ import { withoutDeviceReplay } from './withoutDeviceReplay';
  *
  * A cloud agent run can't touch a device's renderer directly, so each browser
  * api call is proxied back to the bound device through `deviceGateway`. The
- * device daemon forwards it to the desktop renderer, which runs the exact same
- * client `browserExecutor` (mount webview / snapshot / click / …) verified for
- * the local runtime — so there is one behavioral source of truth.
+ * desktop app forwards it to its renderer, which runs the exact same client
+ * `browserExecutor` (mount webview / snapshot / click / …) verified for the
+ * local runtime. A device with only `lh connect` runs it in a headless
+ * `agent-browser` instead, returning the same result shape — but only when it
+ * lists the tool in `supportedTools`.
  *
  * The browser session on the device is keyed by `topic:<topicId>`. The gateway
  * tool-call envelope only carries `apiName` + `arguments`, so the runtime rides
@@ -118,16 +122,40 @@ const buildCliOnlyDeviceBrowserResult = (
     : '';
   const message =
     `The active device (${deviceId}) is connected only through the \`lh connect\` CLI, ` +
-    `which has no built-in browser, so lobe-browser cannot run there. ` +
+    `which has no browser installed, so lobe-browser cannot run there. ` +
     publicPageHint +
-    `If a signed-in browser session is required, ask the user to open the LobeHub desktop app ` +
-    `on a machine and activate that device, then retry.`;
+    `To enable it, ask the user to install agent-browser on that machine ` +
+    `(\`npm i -g agent-browser && agent-browser install\`) and restart \`lh connect\`; ` +
+    `if a signed-in browser session is required, ask them to open the LobeHub desktop app ` +
+    `on a machine and activate that device instead, then retry.`;
   return {
     content: message,
     error: { code: BROWSER_DEVICE_UNSUPPORTED_ERROR_CODE, message },
     success: false,
   };
 };
+
+export const BROWSER_DEVICE_UNVERIFIED_ERROR_CODE = 'BROWSER_DEVICE_UNVERIFIED';
+
+/**
+ * The CLI did not answer the capability read (timeout, reconnect gap, gateway
+ * error). That says nothing about whether agent-browser is installed, so it
+ * must not be reported as missing — the next call reads again.
+ */
+const buildUnverifiedCliBrowserResult = (deviceId: string, reason: string) => {
+  const message =
+    `Could not confirm whether the \`lh connect\` CLI on the active device (${deviceId}) ` +
+    `can run lobe-browser: its capability check did not answer (${reason}). ` +
+    `Nothing was sent to the device. Retry shortly; if it keeps failing, ask the user to check ` +
+    `that \`lh connect\` is still running on that machine.`;
+  return {
+    content: message,
+    error: { code: BROWSER_DEVICE_UNVERIFIED_ERROR_CODE, message },
+    success: false,
+  };
+};
+
+type BrowserTarget = DeviceClient[] | 'unsupported' | { unverified: string };
 
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -164,24 +192,48 @@ export const browserRuntime: ServerRuntimeRegistration = {
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
 
-    // Only the desktop app hosts the browser panel. A device whose only live
-    // connection is `lh connect` answers every browser api with
-    // `Unknown tool API: <api>`, which tells the model nothing — check the
-    // client kind once per runtime and explain the dead end instead.
-    let clientKindPromise: Promise<string> | undefined;
-    const getClientKind = async () =>
-      (clientKindPromise ??= getDeviceWorkspaceId().then((workspaceId) =>
-        resolveDeviceClientKind(context.userId!, context.activeDeviceId!, workspaceId),
-      ));
+    // Which client runs the call, resolved once per runtime. The desktop app
+    // comes first: the user can watch its panel and it carries their sign-ins.
+    // A device with only `lh connect` runs it when that CLI found an
+    // agent-browser; otherwise the dead end is explained instead of dispatched.
+    let targetPromise: Promise<BrowserTarget> | undefined;
+    const resolveTarget = async (): Promise<BrowserTarget> => {
+      const workspaceId = await getDeviceWorkspaceId();
+      const clientKind = await resolveDeviceClientKind(
+        context.userId!,
+        context.activeDeviceId!,
+        workspaceId,
+      );
+      // `unknown` keeps the desktop dispatch this runtime always made.
+      if (clientKind !== 'cli-only') return ['desktop'];
+
+      const cli = await deviceGateway.readDeviceSystemInfo(
+        context.userId!,
+        context.activeDeviceId!,
+        workspaceId,
+        { clientKinds: ['cli'] },
+      );
+      if (!cli.ok) return { unverified: cli.reason };
+      if (cli.systemInfo.supportedTools?.includes(BrowserIdentifier)) return ['cli'];
+      log('cli-only device %s does not offer the browser tool', context.activeDeviceId);
+      return 'unsupported';
+    };
 
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of BrowserManifest.api) {
       proxy[api.name] = async (args: any) => {
-        if ((await getClientKind()) === 'cli-only') {
+        const target = await (targetPromise ??= resolveTarget());
+        if (target === 'unsupported') {
           return buildCliOnlyDeviceBrowserResult(context.activeDeviceId!, {
             webBrowsingAvailable: WebBrowsingManifest.identifier in (context.toolManifestMap ?? {}),
           });
+        }
+
+        if (!Array.isArray(target)) {
+          // Only a definite answer is kept for the rest of the run.
+          targetPromise = undefined;
+          return buildUnverifiedCliBrowserResult(context.activeDeviceId!, target.unverified);
         }
 
         // Carry the run identity so the device resolves the right browser
@@ -193,6 +245,7 @@ export const browserRuntime: ServerRuntimeRegistration = {
         const result = await executeAuthorizedDeviceToolCall(
           context.serverDB,
           {
+            clientKinds: target,
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
             userId: context.userId!,

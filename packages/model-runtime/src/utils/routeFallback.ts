@@ -1,8 +1,7 @@
-import { toRecord } from '@lobechat/utils';
-
 import { getErrorCodeSpec } from '../errors/specs';
 import { AgentRuntimeErrorType } from '../types/error';
 import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
+import { toRecord } from './object';
 
 const FALLBACK_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
 const FALLBACK_ERROR_CODES = new Set([

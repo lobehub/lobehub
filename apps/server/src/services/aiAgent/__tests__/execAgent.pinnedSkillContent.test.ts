@@ -387,11 +387,11 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
 
     await service.execAgent({ agentId: 'agent-1', prompt: '/goal ship it' } as any);
 
-    expect(operationSkillSetArg()?.enabledPluginIds).toContain('lobe-goal');
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('builtin-goal');
     expect(operationSkillSetArg()?.enabledPluginIds).not.toContain('lobe-task');
     expect(toolsEngineConfigArg()?.agentConfig).toEqual({
       chatConfig: { toolMode: 'custom' },
-      plugins: ['lobe-goal'],
+      plugins: ['builtin-goal'],
     });
   });
 
@@ -411,10 +411,10 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
       selectedToolIds: ['selected-tool'],
     } as any);
 
-    expect(operationSkillSetArg()?.enabledPluginIds).toEqual(['lobe-goal']);
+    expect(operationSkillSetArg()?.enabledPluginIds).toEqual(['builtin-goal']);
     expect(toolsEngineConfigArg()?.agentConfig).toEqual({
       chatConfig: { toolMode: 'custom' },
-      plugins: ['lobe-goal'],
+      plugins: ['builtin-goal'],
     });
   });
 

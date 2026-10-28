@@ -39,7 +39,13 @@ const PluginInstallConfirmModal = memo<PluginInstallConfirmModalProps>(
     const pluginSource = getPluginSource(installRequest);
 
     if (pluginSource === PluginSource.OFFICIAL)
-      return <OfficialPluginInstallModal installRequest={installRequest} onComplete={onComplete} />;
+      return (
+        <OfficialPluginInstallModal
+          installRequest={installRequest}
+          key={installRequest.pluginId}
+          onComplete={onComplete}
+        />
+      );
 
     return (
       <CustomPluginInstallModal

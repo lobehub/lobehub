@@ -1,4 +1,9 @@
-import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import {
+  TASK_COMPLETED_WINDOW_MS,
+  TASK_COMPLETED_WINDOWS,
+  TASK_STATUSES,
+  type TaskCompletedWindow,
+} from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 import { t } from 'i18next';
 
@@ -7,10 +12,21 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 export type TaskGroupBy = 'assignee' | 'automationMode' | 'member' | 'none' | 'priority' | 'status';
 export type TaskOrderBy = 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
 export type TaskOrderDirection = 'asc' | 'desc';
+/**
+ * Which completed and canceled tasks a list keeps: all of them, none, or only
+ * those closed within a look-back window.
+ */
+export type TaskCompletedFilter = 'all' | 'none' | TaskCompletedWindow;
+
+export const TASK_COMPLETED_FILTERS: readonly TaskCompletedFilter[] = [
+  'all',
+  ...TASK_COMPLETED_WINDOWS,
+  'none',
+];
 
 export interface TaskListViewOptions {
+  completedTasks: TaskCompletedFilter;
   groupBy: TaskGroupBy;
-  hideCompleted: boolean;
   /** Indent a shown sub-task under its parent instead of listing it as a peer. */
   nestedSubTasks: boolean;
   orderBy: TaskOrderBy;
@@ -29,19 +45,43 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
 ];
 
 /**
- * Server-side counterpart of `hideCompleted`: the statuses a paginated list
- * has to request so the cut happens before `limit` / `offset` instead of on
- * the fetched page (which could otherwise come back empty while older
- * unfinished tasks exist). `undefined` means no status narrowing.
+ * Server-side counterpart of `completedTasks: 'none'`: the statuses a
+ * paginated list has to request so the cut happens before `limit` / `offset`
+ * instead of on the fetched page (which could otherwise come back empty while
+ * older unfinished tasks exist). `undefined` means no status narrowing.
  */
 export const getVisibleTaskStatuses = (
-  options: Pick<TaskListViewOptions, 'hideCompleted'>,
+  options: Pick<TaskListViewOptions, 'completedTasks'>,
 ): TaskStatus[] | undefined =>
-  options.hideCompleted
+  options.completedTasks === 'none'
     ? TASK_STATUSES.filter((status) => !HIDDEN_COMPLETED_STATUS_SET.has(status))
     : undefined;
 
+/** Server-side counterpart of a windowed `completedTasks`, sent as `completedWithin`. */
+export const getCompletedWithin = (
+  options: Pick<TaskListViewOptions, 'completedTasks'>,
+): TaskCompletedWindow | undefined =>
+  options.completedTasks === 'all' || options.completedTasks === 'none'
+    ? undefined
+    : options.completedTasks;
+
 const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
+
+/**
+ * Client-side `completedTasks` cut for a list fetched in full. Mirrors the
+ * server's `closedAfter`: a closed task without `completedAt` (a canceled one)
+ * is dated by `updatedAt`.
+ */
+export const isTaskHiddenByCompletedFilter = (
+  task: Pick<TaskListItem, 'completedAt' | 'status' | 'updatedAt'>,
+  completedTasks: TaskCompletedFilter,
+  now = Date.now(),
+): boolean => {
+  if (completedTasks === 'all' || !HIDDEN_COMPLETED_STATUS_SET.has(task.status)) return false;
+  if (completedTasks === 'none') return true;
+  const closedAt = toTime(task.completedAt) || toTime(task.updatedAt);
+  return closedAt < now - TASK_COMPLETED_WINDOW_MS[completedTasks];
+};
 
 export interface TaskGroupMeta {
   assigneeId?: string;
@@ -55,8 +95,8 @@ export interface TaskGroupMeta {
 }
 
 export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
+  completedTasks: 'none',
   groupBy: 'status',
-  hideCompleted: true,
   // Nesting is the default *shape* for sub-tasks, but sub-tasks stay hidden
   // until asked for: a parent already carries its progress (`3/8`), so listing
   // its children as peers only pads the list with rows the parent stands for.
@@ -86,9 +126,37 @@ const TASK_ORDER_BY_SET = new Set<TaskOrderBy>([
   'updatedAt',
 ]);
 const TASK_ORDER_DIRECTION_SET = new Set<TaskOrderDirection>(['asc', 'desc']);
+const TASK_COMPLETED_FILTER_SET = new Set<TaskCompletedFilter>(TASK_COMPLETED_FILTERS);
+
+/** View options as persisted, possibly by a release that only had `hideCompleted`. */
+export type StoredTaskListViewOptions = Partial<TaskListViewOptions> & {
+  /** Replaced by `completedTasks`: `true` → 'none', `false` → 'all'. */
+  hideCompleted?: boolean;
+};
+
+const normalizeCompletedTasks = (next: StoredTaskListViewOptions): TaskCompletedFilter => {
+  if (TASK_COMPLETED_FILTER_SET.has(next.completedTasks as TaskCompletedFilter)) {
+    return next.completedTasks as TaskCompletedFilter;
+  }
+  if (typeof next.hideCompleted === 'boolean') return next.hideCompleted ? 'none' : 'all';
+  return DEFAULT_TASK_LIST_VIEW_OPTIONS.completedTasks;
+};
+
+/**
+ * The shape to persist. Keeps writing the legacy `hideCompleted` beside
+ * `completedTasks` so a build that predates the select (e.g. after a
+ * rollback) still follows the latest choice; a windowed choice reads as
+ * "shown" there, the closest it can express.
+ */
+export const toStoredTaskListViewOptions = <T extends Pick<TaskListViewOptions, 'completedTasks'>>(
+  options: T,
+): T & { hideCompleted: boolean } => ({
+  ...options,
+  hideCompleted: options.completedTasks === 'none',
+});
 
 export const normalizeTaskListViewOptions = (
-  value?: Partial<TaskListViewOptions> | null,
+  value?: StoredTaskListViewOptions | null,
 ): TaskListViewOptions => {
   const next = value ?? {};
   const groupBy = TASK_GROUP_BY_SET.has(next.groupBy as TaskGroupBy)
@@ -99,11 +167,8 @@ export const normalizeTaskListViewOptions = (
     : DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy;
 
   return {
+    completedTasks: normalizeCompletedTasks(next),
     groupBy,
-    hideCompleted:
-      typeof next.hideCompleted === 'boolean'
-        ? next.hideCompleted
-        : DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted,
     nestedSubTasks:
       typeof next.nestedSubTasks === 'boolean'
         ? next.nestedSubTasks

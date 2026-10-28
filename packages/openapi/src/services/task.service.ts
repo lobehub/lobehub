@@ -1,20 +1,53 @@
+import type { TaskTopicHandoff } from '@lobechat/types';
+
 import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { EditLockService } from '@/server/services/editLock';
 import { TaskService } from '@/server/services/task';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { resolveTaskPatchInvariants } from '@/server/services/task/patchValidation';
 import { assertResultingScheduleValid } from '@/server/services/task/scheduleValidation';
+import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
+import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
 import type {
   CreateTaskRequest,
+  RunTaskRequest,
   TaskListQuery,
+  TaskRunListQuery,
   UpdateTaskRequest,
   UpdateTaskStatusRequest,
 } from '../types/task.type';
+
+const DEFAULT_RUN_LIMIT = 20;
+
+type TaskRunRow = Awaited<ReturnType<TaskTopicModel['findWithHandoff']>>[number];
+
+// The brief-emission audit itself stays private; only its verdict leaves, as
+// `notable` — whether the lifecycle judged this run worth surfacing (always for
+// schedule ticks and errors, the LLM judge's call for heartbeat ticks).
+const toPublicRun = (row: TaskRunRow) => {
+  const handoff = (row.handoff ?? {}) as TaskTopicHandoff;
+  return {
+    agentId: row.agentId,
+    completedAt: row.completedAt,
+    content: handoff.content ?? null,
+    createdAt: row.createdAt,
+    keyFindings: handoff.keyFindings ?? [],
+    nextAction: handoff.nextAction ?? null,
+    notable: handoff.briefDecision ? handoff.briefDecision.emit : null,
+    seq: row.seq,
+    status: row.status,
+    summary: handoff.summary ?? null,
+    title: handoff.title ?? row.title ?? null,
+    topicId: row.topicId,
+    trigger: row.trigger,
+  };
+};
 
 /**
  * Tasks REST service.
@@ -27,11 +60,13 @@ import type {
 export class TaskRestService extends BaseService {
   private readonly taskModel: TaskModel;
   private readonly taskService: TaskService;
+  private readonly taskTopicModel: TaskTopicModel;
 
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId ?? '', workspaceId);
     this.taskService = new TaskService(db, userId ?? '', workspaceId);
+    this.taskTopicModel = new TaskTopicModel(db, userId ?? '', workspaceId);
   }
 
   async listTasks(query: TaskListQuery): ServiceResult<unknown> {
@@ -45,7 +80,9 @@ export class TaskRestService extends BaseService {
   }
 
   async getTask(id: string): ServiceResult<unknown> {
-    const detail = await this.taskService.getTaskDetail(id);
+    const detail = await this.taskService.getTaskDetail(
+      (await resolveTaskOrThrow(this.taskModel, id)).id,
+    );
     if (!detail) throw this.createNotFoundError('Task not found');
     return detail;
   }
@@ -56,7 +93,13 @@ export class TaskRestService extends BaseService {
     // create boundary, so a schedule the dispatcher cannot evaluate is refused
     // here instead of being stored and silently never firing.
     assertResultingScheduleValid(null, input);
-    const task = await this.taskService.createTask(input);
+    const task = await this.taskService.createTask({
+      ...input,
+      config: await normalizeTaskConfig(this.taskModel, input.config),
+      parentTaskId: input.parentTaskId
+        ? (await resolveTaskOrThrow(this.taskModel, input.parentTaskId)).id
+        : undefined,
+    });
     // Creating a task already assigned to another member notifies them, the way
     // the tRPC create boundary does; self-assignment is filtered inside the
     // helper, so this stays silent for the caller's own task.
@@ -79,8 +122,11 @@ export class TaskRestService extends BaseService {
         userId: this.userId,
         workspaceId: this.workspaceId,
       },
-      { data: input, id, parentTaskId: input.parentTaskId },
+      { data: { ...input }, id, parentTaskId: input.parentTaskId },
     );
+    if (data.config) {
+      data.config = await normalizeTaskConfig(this.taskModel, data.config, resolved.config);
+    }
 
     // The patch is a partial row update; the model owns which columns are
     // accepted and normalises the null-vs-undefined distinction itself.
@@ -104,9 +150,32 @@ export class TaskRestService extends BaseService {
     // A person (or their agent) made this change, so it belongs in the feed —
     // the service treats a missing actor as a system transition.
     return this.taskService.updateStatus(
-      { error: input.error, id, status: input.status },
+      {
+        error: input.error,
+        id: (await resolveTaskOrThrow(this.taskModel, id)).id,
+        status: input.status,
+      },
       { userId: this.userId },
     );
+  }
+
+  async runTask(id: string, input: RunTaskRequest): ServiceResult<unknown> {
+    const task = await this.taskModel.resolve(id);
+    if (!task) throw this.createNotFoundError('Task not found');
+    // Same runner as the in-app "Run now" (tRPC `task.run`), so the archived-task
+    // refusal, run bookkeeping and rollback on a failed start all apply here too.
+    const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
+    return runner.runTask({ extraPrompt: input.prompt, taskId: task.id });
+  }
+
+  async listRuns(id: string, query: TaskRunListQuery): ServiceResult<unknown> {
+    const task = await this.taskModel.resolve(id);
+    if (!task) throw this.createNotFoundError('Task not found');
+    const rows = await this.taskTopicModel.findWithHandoff(
+      task.id,
+      query.limit ?? DEFAULT_RUN_LIMIT,
+    );
+    return rows.map(toPublicRun);
   }
 
   async deleteTask(id: string): ServiceResult<unknown> {

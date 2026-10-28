@@ -1,13 +1,22 @@
+import { inspect } from 'node:util';
+
 import type * as LobeConst from '@lobechat/const';
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import {
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkError,
+  SdkErrorCode,
+} from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MCPClient } from '@/libs/mcp';
+import type * as McpModule from '@/libs/mcp';
+import { MCPClient, type MCPClientParams } from '@/libs/mcp';
 
 import { MCPService } from './index';
 
 const environment = vi.hoisted(() => ({ isDesktop: false }));
+const debugLog = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<typeof LobeConst>()),
@@ -16,8 +25,60 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 
+vi.mock('debug', () => ({ default: () => debugLog }));
+
 // Mock 依赖
 vi.mock('@/libs/mcp');
+
+const sensitiveHttpParams = {
+  auth: {
+    accessToken: 'oauth-access-token-secret',
+    clientSecret: 'oauth-client-secret',
+    refreshToken: 'oauth-refresh-token-secret',
+    token: 'bearer-token-secret',
+    type: 'oauth2' as const,
+  },
+  headers: {
+    'Authorization': 'Bearer authorization-header-secret',
+    'Cookie': 'session=cookie-header-secret',
+    'X-Api-Key': 'custom-header-secret',
+  },
+  metadata: {
+    nested: {
+      auth: { token: 'nested-auth-secret' },
+      env: { PRIVATE_KEY: 'nested-env-secret' },
+      headers: { Cookie: 'nested-cookie-secret' },
+    },
+  },
+  name: 'remote-connector',
+  type: 'http' as const,
+  url: 'https://url-user:url-password@mcp.example.com/path-token-secret?api_key=url-query-secret#fragment-secret',
+} as unknown as MCPClientParams;
+
+const sensitiveValues = [
+  'oauth-access-token-secret',
+  'oauth-client-secret',
+  'oauth-refresh-token-secret',
+  'bearer-token-secret',
+  'authorization-header-secret',
+  'cookie-header-secret',
+  'custom-header-secret',
+  'nested-auth-secret',
+  'nested-env-secret',
+  'nested-cookie-secret',
+  'url-user',
+  'url-password',
+  'path-token-secret',
+  'url-query-secret',
+  'fragment-secret',
+  'remote-generated-secret',
+];
+
+const expectLogsToBeRedacted = (logOutput: string) => {
+  for (const sensitiveValue of sensitiveValues) {
+    expect(logOutput).not.toContain(sensitiveValue);
+  }
+};
 
 describe('MCPService stdio authorization', () => {
   const stdioParams = {
@@ -41,6 +102,7 @@ describe('MCPService stdio authorization', () => {
 
   it('rejects connector tool sync on the web before initializing a stdio client', async () => {
     await expect(new MCPService().listRawTools(stdioParams)).rejects.toMatchObject({
+      cause: { data: { code: 'StdioDesktopOnly' } },
       code: 'BAD_REQUEST',
       message: 'Stdio MCP type is not supported in web environment.',
     });
@@ -77,6 +139,131 @@ describe('MCPService stdio authorization', () => {
   });
 });
 
+describe('MCPService log redaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    environment.isDesktop = false;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    {
+      invoke: (service: MCPService) => service.listTools(sensitiveHttpParams),
+      operationName: 'listing tools',
+    },
+    {
+      invoke: (service: MCPService) => service.listResources(sensitiveHttpParams),
+      operationName: 'listing resources',
+    },
+    {
+      invoke: (service: MCPService) => service.listPrompts(sensitiveHttpParams),
+      operationName: 'listing prompts',
+    },
+    {
+      invoke: (service: MCPService) =>
+        service.callTool({
+          argsStr: '{}',
+          clientParams: sensitiveHttpParams,
+          toolName: 'read_records',
+        }),
+      operationName: 'calling tool "read_records"',
+    },
+  ])('redacts credentials when $operationName fails', async ({ invoke, operationName }) => {
+    const service = new MCPService();
+    const failure = new Error('Connection failed with remote-generated-secret');
+    const mockClient = {
+      callTool: vi.fn().mockRejectedValue(failure),
+      listPrompts: vi.fn().mockRejectedValue(failure),
+      listResources: vi.fn().mockRejectedValue(failure),
+      listTools: vi.fn().mockRejectedValue(failure),
+    };
+    vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(invoke(service)).rejects.toThrow(TRPCError);
+
+    const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+    expectLogsToBeRedacted(logOutput);
+    expect(logOutput).toContain(operationName);
+    expect(logOutput).toContain('attempt');
+    expect(logOutput).toContain('https://mcp.example.com');
+    expect(logOutput).toContain("type: 'http'");
+  });
+
+  it('redacts credentials from client initialization failures', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(MCPClient.prototype.initialize).mockRejectedValueOnce(
+      new Error('Initialization failed with remote-generated-secret'),
+    );
+
+    await expect(new MCPService().listRawTools(sensitiveHttpParams)).rejects.toThrow(TRPCError);
+
+    const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+    expectLogsToBeRedacted(logOutput);
+    expect(logOutput).toContain('https://mcp.example.com');
+    expect(logOutput).toContain("name: 'Error'");
+  });
+
+  it.each([
+    ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
+    ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
+    ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
+  ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
+    // The module is auto-mocked in this suite; retain the actual error contract.
+    const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+    vi.mocked(MCPClient.prototype.initialize).mockRejectedValueOnce(
+      actual.createMCPError(type, 'MCP connection needs attention'),
+    );
+    await expect(new MCPService().listRawTools(sensitiveHttpParams)).rejects.toMatchObject({
+      code,
+      message: 'MCP connection needs attention',
+    });
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
+  });
+
+  it('redacts stdio environment variables from rejected server operations', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      new MCPService().listRawTools({
+        args: ['serve'],
+        command: 'local-mcp',
+        env: { PRIVATE_KEY: 'stdio-env-secret' },
+        name: 'local-connector',
+        type: 'stdio',
+      }),
+    ).rejects.toThrow(TRPCError);
+
+    const logOutput = inspect([debugLog.mock.calls, consoleError.mock.calls], { depth: null });
+    expect(logOutput).not.toContain('stdio-env-secret');
+    expect(logOutput).toContain("type: 'stdio'");
+  });
+
+  it('does not log tool argument or result values', async () => {
+    const service = new MCPService();
+    const mockClient = {
+      callTool: vi.fn().mockResolvedValue({
+        content: [{ text: 'tool-result-secret', type: 'text' }],
+      }),
+    };
+    vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
+
+    await service.callTool({
+      argsStr: JSON.stringify({ apiKey: 'tool-argument-secret' }),
+      clientParams: sensitiveHttpParams,
+      toolName: 'read_records',
+    });
+
+    const logOutput = inspect(debugLog.mock.calls, { depth: null });
+    expect(logOutput).not.toContain('tool-argument-secret');
+    expect(logOutput).not.toContain('tool-result-secret');
+    expectLogsToBeRedacted(logOutput);
+  });
+});
+
 describe('MCPService', () => {
   let mcpService: any;
   let mockClient: any;
@@ -92,6 +279,7 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      listManifests: vi.fn(),
       listPrompts: vi.fn(),
       listResources: vi.fn(),
       listTools: vi.fn(),
@@ -99,6 +287,43 @@ describe('MCPService', () => {
 
     // Mock getClient 方法返回 mock 客户端
     getClientSpy = vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
+  });
+
+  describe('manifest descriptions', () => {
+    it.each(['My server description'])(
+      'keeps stdio descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listManifests.mockResolvedValue({
+          prompts: undefined,
+          resources: undefined,
+          tools: [{ inputSchema: { type: 'object' }, name: 'hello' }],
+        });
+
+        const manifest = await mcpService.getStdioMcpServerManifest(
+          { command: 'test-command', name: 'tools-only' },
+          { description },
+        );
+
+        expect(manifest.api).toHaveLength(1);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
+
+    it.each(['My server description'])(
+      'keeps HTTP descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listTools.mockResolvedValue([]);
+
+        const manifest = await mcpService.getStreamableMcpServerManifest(
+          'empty-server',
+          'https://mcp.example.com',
+          { description },
+        );
+
+        expect(manifest.api).toEqual([]);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
   });
 
   describe('callTool', () => {
@@ -254,8 +479,9 @@ describe('MCPService', () => {
         argsStr: '{}',
       });
 
+      expect(result.error?.message).toBe('Error occurred');
       expect(result.content).toBe('Error occurred');
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.state).toEqual(errorResult);
     });
 
@@ -327,8 +553,8 @@ describe('MCPService', () => {
       expect(mockClient.callTool).toHaveBeenCalledTimes(4);
     });
 
-    it('should NOT retry tool-level McpError and return it as a failed tool result', async () => {
-      const mcpError = new McpError(ErrorCode.InvalidParams, 'tool blew up');
+    it('should NOT retry tool-level ProtocolError and return it as a failed tool result', async () => {
+      const mcpError = new ProtocolError(ProtocolErrorCode.InvalidParams, 'tool blew up');
       mockClient.callTool.mockRejectedValue(mcpError);
 
       const result = await mcpService.callTool({
@@ -340,9 +566,24 @@ describe('MCPService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe(mcpError);
       expect(result.state.isError).toBe(true);
-      // McpError is a tool result, not a session error → must not retry
+      // ProtocolError is a tool result, not a session error → must not retry
       expect(mockClient.callTool).toHaveBeenCalledTimes(1);
     });
+
+    it.each([SdkErrorCode.RequestTimeout, SdkErrorCode.ConnectionClosed])(
+      'returns SDK %s as a failed result without retry',
+      async (code) => {
+        const error = new SdkError(code, 'transport failed');
+        mockClient.callTool.mockRejectedValue(error);
+        const result = await mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'testTool',
+          argsStr: '{}',
+        });
+        expect(result).toMatchObject({ success: false, error, state: { isError: true } });
+        expect(mockClient.callTool).toHaveBeenCalledTimes(1);
+      },
+    );
 
     it('should bail immediately on client initialization failure without retrying', async () => {
       // getClient throws (e.g. bad URL/token, stdio spawn error) — not a stale session

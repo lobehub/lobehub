@@ -2,8 +2,9 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { resolveTaskOrThrow, resolveTasksOrThrow } from '@/server/services/task/utils';
 
-import { resolveOrThrow, taskProcedureWrite } from './procedures';
+import { taskProcedureWrite } from './procedures';
 
 export const relationsRouter = router({
   reorderSubtasks: taskProcedureWrite
@@ -17,32 +18,23 @@ export const relationsRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.id);
+        const task = await resolveTaskOrThrow(model, input.id);
         const subtasks = await model.findSubtasks(task.id);
 
-        // Build identifier → id map
-        const idMap = new Map<string, string>();
-        for (const s of subtasks) idMap.set(s.identifier, s.id);
-
-        // Validate all identifiers exist
-        const reorderItems: Array<{ id: string; sortOrder: number }> = [];
-        for (let i = 0; i < input.order.length; i++) {
-          const identifier = input.order[i].toUpperCase();
-          const taskId = idMap.get(identifier);
-          if (!taskId) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `Subtask not found: ${identifier}`,
-            });
-          }
-          reorderItems.push({ id: taskId, sortOrder: i });
+        const ordered = (await resolveTasksOrThrow(model, input.order, { duplicates: 'reject' }))
+          .tasks;
+        const directIds = new Set(subtasks.map((subtask) => subtask.id));
+        if (ordered.some((subtask) => !directIds.has(subtask.id))) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Task is not a direct subtask' });
         }
+        const reorderItems = ordered.map((subtask, sortOrder) => ({ id: subtask.id, sortOrder }));
 
         await model.reorder(reorderItems);
 
         return {
           data: reorderItems.map((item, i) => ({
-            identifier: input.order[i],
+            id: item.id,
+            identifier: ordered[i].identifier,
             sortOrder: item.sortOrder,
           })),
           message: 'Subtasks reordered',
@@ -69,8 +61,8 @@ export const relationsRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.taskId);
-        const dep = await resolveOrThrow(model, input.dependsOnId);
+        const task = await resolveTaskOrThrow(model, input.taskId);
+        const dep = await resolveTaskOrThrow(model, input.dependsOnId);
         await model.addDependency(task.id, dep.id, input.type);
         return { message: 'Dependency added', success: true };
       } catch (error) {
@@ -91,8 +83,8 @@ export const relationsRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.taskId);
-        const dep = await resolveOrThrow(model, input.dependsOnId);
+        const task = await resolveTaskOrThrow(model, input.taskId);
+        const dep = await resolveTaskOrThrow(model, input.dependsOnId);
         await model.removeDependency(task.id, dep.id);
         return { message: 'Dependency removed', success: true };
       } catch (error) {
@@ -116,7 +108,7 @@ export const relationsRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.taskId);
+        const task = await resolveTaskOrThrow(model, input.taskId);
         await model.pinDocument(task.id, input.documentId, input.pinnedBy);
         return { message: 'Document pinned', success: true };
       } catch (error) {
@@ -134,7 +126,7 @@ export const relationsRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.taskId);
+        const task = await resolveTaskOrThrow(model, input.taskId);
         await model.unpinDocument(task.id, input.documentId);
         return { message: 'Document unpinned', success: true };
       } catch (error) {

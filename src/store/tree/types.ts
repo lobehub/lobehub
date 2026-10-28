@@ -76,6 +76,8 @@ export interface TreeState extends TreeDataState {
   renameItem: (itemId: string, parentId: string, newName: string) => Promise<void>;
   reset: () => void;
   revalidate: (folderId: string) => Promise<void>;
+  /** Refetch every loaded folder — for a bulk mutation whose scope only the server knows. */
+  revalidateLoaded: (fallbackKey?: string) => Promise<void>;
   snapshotMap: Record<string, LibraryTreeSnapshot>;
   snapshotReplica: ReplicaState<LibraryTreeSnapshot>;
   toggle: (folderId: string) => void;

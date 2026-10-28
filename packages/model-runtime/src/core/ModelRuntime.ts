@@ -1,5 +1,4 @@
 import type { ModelPerformance, ModelUsage, TracePayload } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -39,6 +38,7 @@ import type {
   VideoPollingRoute,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import { createTimingHelpers, getDurationMs } from '../utils/timing';
 import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
 

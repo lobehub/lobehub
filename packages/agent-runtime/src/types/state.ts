@@ -13,6 +13,7 @@ import type {
   UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   AgentSignalOperationMarker,
   ChatToolPayload,
@@ -79,6 +80,8 @@ export interface AgentRunOrigin {
   // --- Conversation node ---
   /** Effective message owner for this run (the group member when applicable). */
   agentId?: string;
+  /** Assistant row the run streams into: its spinner anchor and error sink. */
+  assistantMessageId?: string;
   /** Set when this run continues a durable human-intervention claim. */
   continuation?: InterventionContinuation;
   // --- Trigger ---
@@ -92,6 +95,8 @@ export interface AgentRunOrigin {
   groupId?: string;
   // --- Run tree ---
   lineage?: AgentRunLineage;
+  /** Project the conversation (or the run's task) belongs to. */
+  projectId?: string;
   scope?: string;
   sessionId?: string;
   /** Run-scoped Agent Signal marker for background self-iteration / memory runs. */
@@ -417,6 +422,14 @@ export interface AgentState {
   lastModified: string;
 
   /**
+   * User-facing count of LLM calls made by this operation.
+   *
+   * Kept in sync with `usage.llm.apiCalls` at every step boundary. Unlike
+   * {@link stepCount}, tool-only runtime iterations do not increase it.
+   */
+  llmCalls?: number;
+
+  /**
    * Optional maximum number of steps allowed.
    * If set, execution will stop with error when exceeded.
    */
@@ -468,7 +481,6 @@ export interface AgentState {
       provider: string;
     };
   };
-
   /**
    * Credentials this run listed once when it was created. A step renders
    * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
@@ -479,13 +491,13 @@ export interface AgentState {
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
+
   // --- Origin ---
   /**
    * Where this run came from and where it sits in the run tree. Frozen when
    * the operation is created.
    */
   origin?: AgentRunOrigin;
-
   pendingApprovalBatch?: {
     assistantMessageId: string;
     id: string;
@@ -513,8 +525,8 @@ export interface AgentState {
    * Cleared once consumed.
    */
   pendingAssistantMessageId?: string;
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
@@ -534,8 +546,23 @@ export interface AgentState {
   // --- Principal ---
   /** Under whose authority the run acts and what it may do. Frozen at creation. */
   principal?: AgentRunPrincipal;
+  /**
+   * The turn's raw ask, kept ONLY while the run still owes its init.
+   *
+   * A run can be created before tool discovery and the context assembly have
+   * happened; the step-0 worker does them and clears this in the same write that
+   * saves what they produced. Its presence is therefore the signal:
+   * a state carrying a request has not been initialized yet.
+   *
+   * Everything else the init needs is already on the other slots (`world.agent`,
+   * `world.channel`, `principal.policy`, `host.hooks`, `modelRuntimeConfig` …) —
+   * this is the residue those slots have no claim on.
+   */
+  request?: AgentRunInitRequest;
+
   /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
+
   // --- State Machine ---
   status:
     | 'idle'
@@ -551,6 +578,11 @@ export interface AgentState {
   /**
    * Number of execution steps in this session.
    * Incremented on each runtime.step() call.
+   *
+   * This is the scheduling/idempotency counter (QStash `stepIndex`, stale
+   * delivery guards, resume). It intentionally keeps its original meaning so
+   * workers from the previous build can keep scheduling during a rolling
+   * deploy.
    */
   stepCount: number;
 

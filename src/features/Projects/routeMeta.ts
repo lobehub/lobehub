@@ -10,6 +10,11 @@ import { routeMeta } from '@/spa/router/routeMeta';
 const ProjectConversationDynamicMeta = lazy(
   () => import('@/features/RouteMeta/ProjectDynamicMeta'),
 );
+const ProjectSectionDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/ProjectDynamicMeta').then((module) => ({
+    default: module.ProjectSectionDynamicMeta,
+  })),
+);
 
 export const projectsRouteMeta = routeMeta({
   icon: FolderClosedIcon,
@@ -18,9 +23,17 @@ export const projectsRouteMeta = routeMeta({
 });
 
 export const projectDirectoriesRouteMeta = routeMeta({
+  DynamicMeta: ProjectSectionDynamicMeta,
   icon: FolderClosedIcon,
   Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'project:settings.title',
+});
+
+export const projectHomeRouteMeta = routeMeta({
+  DynamicMeta: ProjectSectionDynamicMeta,
+  icon: FolderClosedIcon,
+  Skeleton: createSurfaceSkeleton('detail'),
+  titleKey: 'project:sections.home',
 });
 
 export const projectConversationRouteMeta = routeMeta({
@@ -34,6 +47,7 @@ export const projectConversationRouteMeta = routeMeta({
 // reuse `acceptanceRouteMeta` — its DynamicMeta would pin the tab to the
 // generic fallback label.
 export const projectAcceptanceRouteMeta = routeMeta({
+  DynamicMeta: ProjectSectionDynamicMeta,
   icon: ClipboardCheckIcon,
   Skeleton: createSurfaceSkeleton('detail'),
   titleKey: 'project:sections.acceptance',

@@ -1,6 +1,8 @@
-import { Accordion, createStaticStyles, responsive } from '@lobehub/ui';
+import { Accordion, createStaticStyles, responsive, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
+
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
@@ -9,6 +11,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     ${responsive.sm} {
       border-radius: 0;
+      background: ${cssVar.colorFillQuaternary};
     }
 
     &:hover {
@@ -32,18 +35,24 @@ interface CollapseGroupProps {
 }
 
 const CollapseGroup = memo<CollapseGroupProps>(({ activeKey, items, onChange }) => {
+  const isMobile = useIsMobile();
+
   return (
     <Accordion
       classNames={{ header: styles.header }}
       indicatorPlacement={'end'}
-      styles={{ trigger: { paddingInline: '16px 10px' } }}
       value={activeKey}
       items={items.map((item) => ({
         action: item.extra,
+        alwaysShowAction: isMobile,
         children: item.children,
         key: item.key,
-        title: item.label,
+        title: <Text ellipsis>{item.label}</Text>,
       }))}
+      styles={{
+        header: isMobile ? { marginInline: 0 } : undefined,
+        trigger: { minHeight: isMobile ? 44 : undefined, paddingInline: '16px 10px' },
+      }}
       onValueChange={onChange}
     />
   );

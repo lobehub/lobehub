@@ -251,3 +251,46 @@ describe('SlackWebhookClient.extractFiles', () => {
     expect(downloadFileSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('Slack reply targets', () => {
+  const createClient = (connectionMode?: 'websocket') =>
+    new SlackClientFactory().createClient(
+      {
+        applicationId: 'A0AR7CK6PU4',
+        credentials: { appToken: 'xapp-test', botToken: 'xoxb-test', signingSecret: 'secret' },
+        platform: 'slack',
+        settings: connectionMode ? { connectionMode } : {},
+      },
+      { appUrl: 'https://example.com' },
+    );
+
+  it.each([['webhook'], ['websocket']] as const)(
+    'offers the channel or the thread under a top-level channel message (%s)',
+    async (mode) => {
+      const client = createClient(mode === 'websocket' ? mode : undefined);
+      const targets = client.getReplyTargets?.('slack:C1:111.222', { id: '111.222' });
+
+      expect(targets).toEqual({
+        channel: 'slack:C1',
+        namesThread: false,
+        openThread: expect.any(Function),
+      });
+      await expect(targets!.openThread('ignored')).resolves.toBe('slack:C1:111.222');
+    },
+  );
+
+  it('offers no choice inside a thread, in a DM, or without a thread timestamp', () => {
+    const client = createClient();
+
+    expect(client.getReplyTargets?.('slack:C1:111.222', { id: '333.444' })).toBeUndefined();
+    expect(client.getReplyTargets?.('slack:D1:111.222', { id: '111.222' })).toBeUndefined();
+    expect(client.getReplyTargets?.('slack:C1', { id: '111.222' })).toBeUndefined();
+  });
+
+  it('subscribes a thread but never the whole channel', () => {
+    const client = createClient();
+
+    expect(client.shouldSubscribe?.('slack:C1:111.222')).toBe(true);
+    expect(client.shouldSubscribe?.('slack:C1')).toBe(false);
+  });
+});

@@ -3,7 +3,7 @@ import { createElement, type PropsWithChildren } from 'react';
 import { SWRConfig } from 'swr';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { sandboxStorageService } from '@/services/sandboxStorage';
+import { environmentService } from '@/services/environment';
 
 import { useGithubRepositories } from './useGithubRepositories';
 
@@ -26,7 +26,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('GitHub repository loading', () => {
   it('reports a rejected request as an error and retries the real SWR fetcher', async () => {
     const fetcher = vi
-      .spyOn(sandboxStorageService, 'listGithubRepositories')
+      .spyOn(environmentService, 'listGithubRepositories')
       .mockRejectedValueOnce(new Error('HTTP 503'))
       .mockResolvedValue({ connected: true, repositories: [] });
     const { result } = setup();
@@ -41,7 +41,7 @@ describe('GitHub repository loading', () => {
   it('keeps previous repositories when retry fails and recovers without losing them', async () => {
     const repositories = [{ owner: 'qa', name: 'repo', defaultBranch: 'main', isPrivate: false }];
     const fetcher = vi
-      .spyOn(sandboxStorageService, 'listGithubRepositories')
+      .spyOn(environmentService, 'listGithubRepositories')
       .mockResolvedValueOnce({ connected: true, repositories })
       .mockRejectedValueOnce(new Error('HTTP 503'))
       .mockResolvedValue({ connected: true, repositories });
@@ -60,15 +60,13 @@ describe('GitHub repository loading', () => {
   });
 
   it('does not call a pending request empty', () => {
-    vi.spyOn(sandboxStorageService, 'listGithubRepositories').mockReturnValue(
-      new Promise(() => {}),
-    );
+    vi.spyOn(environmentService, 'listGithubRepositories').mockReturnValue(new Promise(() => {}));
     const { result } = setup();
     expect(result.current.state).toBe('loading');
   });
 
   it('keeps unavailable authorization distinct from a successful empty list', async () => {
-    vi.spyOn(sandboxStorageService, 'listGithubRepositories').mockResolvedValue({
+    vi.spyOn(environmentService, 'listGithubRepositories').mockResolvedValue({
       connected: false,
       repositories: [],
     });

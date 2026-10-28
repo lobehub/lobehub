@@ -468,6 +468,7 @@ export const useConversationScroll = ({
   virtuaRef,
 }: UseConversationScrollOptions): UseConversationScrollResult => {
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
+  const hasLaterMessages = useConversationStore(dataSelectors.hasLaterMessages);
   const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
   const getItemOffset = useConversationStore((s) => s.virtuaScrollMethods?.getItemOffset);
   const getItemSize = useConversationStore((s) => s.virtuaScrollMethods?.getItemSize);
@@ -483,7 +484,13 @@ export const useConversationScroll = ({
   // render rather than waiting for an unrelated dep to change.
   const [userMessageIndex, setUserMessageIndex] = useState<number | null>(null);
   const [assistantMessageIndex, setAssistantMessageIndex] = useState<number | null>(null);
+  const lastId = dataSource.at(-1);
   const prevLengthRef = useRef(dataSource.length);
+  const prevLastIdRef = useRef<string | undefined>(lastId);
+  // Whether later rounds were still unread as of the previous dataSource. A
+  // send can only append at the end of the conversation, so a pair appended
+  // while later rounds were unread is a forward read's next page.
+  const hadLaterMessagesRef = useRef(hasLaterMessages);
 
   const { registerSpacerNode, spacerLayoutVersion } = useSpacerLayoutSignal();
 
@@ -536,6 +543,8 @@ export const useConversationScroll = ({
     prevContextKeyRef.current = contextKey;
 
     prevLengthRef.current = dataSource.length;
+    prevLastIdRef.current = dataSource.at(-1);
+    hadLaterMessagesRef.current = hasLaterMessages;
     clearPin('context switch');
     setUserMessageIndex(null);
     setAssistantMessageIndex(null);
@@ -548,8 +557,20 @@ export const useConversationScroll = ({
   useEffect(() => {
     const newMessageCount = dataSource.length - prevLengthRef.current;
     prevLengthRef.current = dataSource.length;
+    // An older page that happens to be one round long also grows the list by
+    // two; only a pair placed after the previous last row is a send.
+    const appendedAtEnd = dataSource.at(-3) === prevLastIdRef.current;
+    prevLastIdRef.current = dataSource.at(-1);
+    const appendedLaterPage = hadLaterMessagesRef.current;
+    hadLaterMessagesRef.current = hasLaterMessages;
 
-    if (newMessageCount !== 2 || !isSecondLastMessageFromUser) return;
+    if (
+      newMessageCount !== 2 ||
+      !appendedAtEnd ||
+      !isSecondLastMessageFromUser ||
+      appendedLaterPage
+    )
+      return;
 
     const userMessage = displayMessages.at(-2);
     const assistantMessage = displayMessages.at(-1);
@@ -577,6 +598,7 @@ export const useConversationScroll = ({
     dataSource,
     displayMessages,
     getScrollOffset,
+    hasLaterMessages,
     isSecondLastMessageFromUser,
     mountedRef,
     pinRef,

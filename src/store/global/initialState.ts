@@ -45,9 +45,15 @@ export type WorkingSidebarTab =
   | 'overview'
   | 'params'
   | 'review'
+  | 'search'
   | 'skills'
   | 'web'
   | (string & {});
+
+export const CANVAS_TAB_PREFIX = 'canvas:';
+export const canvasTabKey = (canvasId: string) => `${CANVAS_TAB_PREFIX}${canvasId}`;
+export const canvasIdOfTab = (tab: string) =>
+  tab.startsWith(CANVAS_TAB_PREFIX) ? tab.slice(CANVAS_TAB_PREFIX.length) : undefined;
 
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
@@ -72,6 +78,8 @@ export enum SettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
+  /** The cloud sandbox's network drives — labelled “Storage”; `storage` is local data. */
+  Drive = 'drive',
   Environments = 'environments',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
@@ -155,6 +163,30 @@ export interface AgentDocumentSort {
   order: 'asc' | 'desc';
 }
 
+/** Which Docs sidebar page section a view setting belongs to. */
+export type DocsPageSectionKey = 'mine' | 'shared';
+
+/** How a Docs sidebar page section (My docs / Shared docs) lists its pages. */
+export interface DocsPageSectionView {
+  /** `byTime` buckets rows by the sorted date; `byType` puts artifacts apart from pages. */
+  groupBy: 'byTime' | 'byType' | 'none';
+  /** Rows the section loads and shows; the rest are one click away in the full list. */
+  pageSize: number;
+  sortBy: 'createdAt' | 'title' | 'updatedAt';
+  /** `artifact` keeps HTML pages only, `page` keeps rich-text pages only. */
+  type: 'all' | 'artifact' | 'page';
+}
+
+export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
+  groupBy: 'none',
+  pageSize: 20,
+  sortBy: 'updatedAt',
+  type: 'all',
+};
+
+/** How the sidebar project list is ordered; `manual` follows the shared drag order. */
+export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
+
 export interface SystemStatus {
   /**
    * Agent Builder panel width
@@ -215,6 +247,11 @@ export interface SystemStatus {
    */
   dismissedIslandItemKeys?: string[];
   /**
+   * List options of each Docs sidebar page section, kept apart so narrowing
+   * Shared docs never changes what My docs shows.
+   */
+  docsPageSectionViews?: Partial<Record<DocsPageSectionKey, Partial<DocsPageSectionView>>>;
+  /**
    * Per-agent expanded state of the agent sidebar's top-level sections
    * (Tasks / Topic), keyed by agentId. Lets each agent remember its own
    * collapse/expand state so switching agents doesn't share one accordion.
@@ -223,6 +260,11 @@ export interface SystemStatus {
    */
   expandAgentSidebarSectionsByAgent?: Record<string, Record<string, boolean>>;
   expandInputActionbar?: boolean;
+  /**
+   * Per-project expanded state of the project sidebar's sections (Channels / Topics), keyed by
+   * projectId. Nested booleans for the same `merge` reason as the agent sections above.
+   */
+  expandProjectSidebarSectionsByProject?: Record<string, Record<string, boolean>>;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
   fileManagerViewMode?: 'list' | 'masonry';
@@ -315,6 +357,11 @@ export interface SystemStatus {
    */
   privateAgentPageSize?: number;
   /**
+   * Order of the sidebar project list. Device-local view setting; the manual
+   * order itself is shared and lives on `projects.sort_order`.
+   */
+  projectListSortBy?: ProjectListSortBy;
+  /**
    * Per byProject group (keyed by the group id, e.g. `project-id:<id>`): how its
    * topics are sectioned. Absent means `none`.
    */
@@ -406,8 +453,15 @@ export interface SystemStatus {
    */
   taskListViewMode?: TaskViewMode;
   taskListViewOptions?: {
+    /**
+     * Left out of the defaults on purpose: status is deep-merged over the
+     * persisted value, so a default here would override the legacy
+     * `hideCompleted` it replaces before normalization could migrate it.
+     */
+    completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
     groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
-    hideCompleted: boolean;
+    /** @deprecated Replaced by `completedTasks`; read once to migrate. */
+    hideCompleted?: boolean;
     nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
@@ -537,7 +591,6 @@ export const INITIAL_STATUS = {
   recentPageSize: 5,
   taskListViewOptions: {
     groupBy: 'status',
-    hideCompleted: true,
     nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,

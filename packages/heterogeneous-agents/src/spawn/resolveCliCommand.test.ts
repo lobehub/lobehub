@@ -1269,15 +1269,15 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       expect(resolved.command).toBe('/Users/x/.local/bin/amp');
     });
 
-    it('resolves the default bare command to the validated absolute path', async () => {
+    it('resolves the default bare command to the validated absolute path and version', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');
 
       const { resolveHeteroSpawnCommand } = await importModule();
       const resolved = await resolveHeteroSpawnCommand('codex', undefined);
 
-      expect(resolved.command).toBe('/usr/local/bin/codex');
-      expect(resolved.pathEnv).toBeUndefined();
+      // The version decides how Claude Code is handed the `lh` guide.
+      expect(resolved).toEqual({ command: '/usr/local/bin/codex', version: '0.142.5' });
     });
 
     it('surfaces the login-shell PATH as pathEnv when resolution used it', async () => {

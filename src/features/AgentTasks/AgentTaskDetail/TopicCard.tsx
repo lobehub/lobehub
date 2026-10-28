@@ -25,8 +25,8 @@ import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
@@ -254,14 +254,21 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
   // An agent that simply never set an avatar is still an agent — it gets the
   // same default face it wears everywhere else, not a placeholder dot. The dot
   // stays for rows with no author at all.
-  const avatarNode =
-    activity.author?.avatar || isAgent ? (
-      <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
-    ) : (
-      <div className={styles.activityAvatar}>
-        <CircleDot size={12} />
-      </div>
-    );
+  const avatarNode = isAgent ? (
+    <AgentAvatar
+      agentId={activity.author?.id}
+      avatar={activity.author?.avatar}
+      name={activity.author?.name}
+      shape={'circle'}
+      size={24}
+    />
+  ) : activity.author?.avatar ? (
+    <Avatar avatar={activity.author.avatar} size={24} />
+  ) : (
+    <div className={styles.activityAvatar}>
+      <CircleDot size={12} />
+    </div>
+  );
 
   return (
     // The primary result is not one card among many — it is the agent reporting

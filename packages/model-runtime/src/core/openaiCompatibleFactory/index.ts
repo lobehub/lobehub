@@ -74,7 +74,7 @@ import {
 import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
-import { createSystemOneDecision } from './decide';
+import { createDecision } from './decide';
 import type {
   ChatCompletionCreateParamsWithPromptCacheKey,
   ConstructorOptions,
@@ -253,7 +253,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       if (decideConfig) {
         this.decide = (payload, decideOptions) =>
-          createSystemOneDecision(this.client, payload, decideOptions, {
+          createDecision(this.client, payload, decideOptions, {
             ...decideConfig,
             handleError: (error) => this.handleError(error),
             modelIdMappingOptions: this.modelIdMappingOptions,

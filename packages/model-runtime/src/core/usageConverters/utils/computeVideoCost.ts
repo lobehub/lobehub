@@ -1,4 +1,3 @@
-import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import debug from 'debug';
 import type {
   FixedPricingUnit,
@@ -9,6 +8,8 @@ import type {
   PricingUnitType,
   TieredPricingUnit,
 } from 'model-bank';
+
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
 
 const log = debug('lobe-cost:computeVideoCost');
 

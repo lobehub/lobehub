@@ -59,14 +59,22 @@ export const collectDiscordMentionNames = (message?: unknown): Map<string, strin
 };
 
 /**
- * Rewrite `<@id>` tokens to `@Display Name` so the model reads who was
- * addressed instead of an opaque snowflake. Unknown ids are left untouched
+ * Rewrite `<@id>` tokens to `@Display Name (<@id>)` so the model reads who was
+ * addressed instead of an opaque snowflake, while keeping the token it must
+ * write back to notify that person: a bare `@Name` in a reply is plain text on
+ * Discord and pings nobody. The bot's own mention (`selfId`) is named only —
+ * there is no reason for the bot to ping itself. Unknown ids are left untouched
  * rather than dropped — a raw id still tells the model *someone* was tagged.
  */
-export const resolveDiscordMentions = (text: string, names: Map<string, string>): string =>
+export const resolveDiscordMentions = (
+  text: string,
+  names: Map<string, string>,
+  selfId?: string,
+): string =>
   text.replaceAll(USER_MENTION_RE, (token, id: string) => {
     const name = names.get(id);
-    return name ? `@${name}` : token;
+    if (!name) return token;
+    return id === selfId ? `@${name}` : `@${name} (<@${id}>)`;
   });
 
 /**
@@ -85,7 +93,8 @@ export const stripLeadingBotMention = (text: string, applicationId: string): str
  * model sees the full message — not just the leading part, which it used to
  * misread as another bot trying to take over:
  * 1. strip the leading self-mention prefix;
- * 2. resolve every remaining user mention to `@name` via the message payload;
+ * 2. resolve every remaining user mention to `@name (<@id>)` via the message
+ *    payload (the bot's own to `@name`);
  * 3. drop self mentions that could not be named (Gateway path, no `mentions`)
  *    so the model never sees its own raw id.
  */
@@ -95,6 +104,10 @@ export const sanitizeDiscordUserInput = (
   message?: unknown,
 ): string => {
   const stripped = stripLeadingBotMention(text, applicationId);
-  const resolved = resolveDiscordMentions(stripped, collectDiscordMentionNames(message));
+  const resolved = resolveDiscordMentions(
+    stripped,
+    collectDiscordMentionNames(message),
+    applicationId,
+  );
   return resolved.replaceAll(new RegExp(`\\s*<@!?${applicationId}>`, 'g'), '').trim();
 };

@@ -1,5 +1,5 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
-import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
@@ -163,7 +163,11 @@ export const discoverTools = async (
       ? [GoalIdentifier]
       : [
           ...new Set([
-            ...getActivePluginIds(agentConfig?.plugins),
+            // An agent that pinned the goal tool before its rename still
+            // carries the legacy id; resolve it to the current one.
+            ...getActivePluginIds(agentConfig?.plugins).map((id) =>
+              isGoalIdentifier(id) ? GoalIdentifier : id,
+            ),
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
@@ -210,6 +214,7 @@ export const discoverTools = async (
         candidateIds: [...agentPlugins],
         exclusivePluginIds,
         isGoalTurn,
+        projectId: appContext?.projectId,
         requestedDeviceId,
         resolvedAgentId,
         shareGate,
@@ -319,10 +324,15 @@ export const discoverTools = async (
 
     await throwIfExecutionAborted('tool discovery');
 
-    // 5e. Create tools using Server AgentToolsEngine
+    // 5e. Create tools using Server AgentToolsEngine. Project knowledge counts:
+    // every agent in a project searches it, even with none of its own.
+    const projectScope = await toolReads.projectScope;
     hasEnabledKnowledgeBases =
-      agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
-      false;
+      projectScope.hasKnowledgeBases ||
+      (agentConfig.knowledgeBases?.some(
+        (kb: { enabled?: boolean | null }) => kb.enabled === true,
+      ) ??
+        false);
 
     hasAgentDocuments = await toolReads.agentDocuments;
     const hasOversizedFiles = await toolReads.oversizedFiles;
@@ -346,14 +356,17 @@ export const discoverTools = async (
       builtinModels.find((item) => item.id === model && item.providerId === provider)?.abilities ??
       builtinModels.find((item) => item.id === model)?.abilities;
     agentPlugins = [
-      ...agentPlugins,
-      ...(await resolveTurnScopedPluginIds({
-        attachedFileTypes: await toolReads.attachedFileTypes,
-        externalFileTypes: rawExternalFileTypes,
-        isBotConversation,
-        loadHistoryMessages,
-        modelMediaCapabilities,
-      })),
+      ...new Set([
+        ...agentPlugins,
+        ...(await resolveTurnScopedPluginIds({
+          attachedFileTypes: await toolReads.attachedFileTypes,
+          externalFileTypes: rawExternalFileTypes,
+          isBotConversation,
+          isProjectCoordinator: projectScope.isCoordinator,
+          loadHistoryMessages,
+          modelMediaCapabilities,
+        })),
+      ]),
     ];
     if (exclusivePluginIds) {
       agentPlugins = agentPlugins.filter((id) => exclusivePluginIds.includes(id));

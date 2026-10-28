@@ -1,13 +1,13 @@
 import type { ModelTokensUsage } from '@lobechat/types';
-import {
-  type AudioTokenEstimateSource,
-  estimateAudioInputTokens,
-  normalizeAudioTokensPerSecond,
-} from '@lobechat/utils/audio';
 import type { Pricing, PricingUnitName } from 'model-bank';
 import { estimateTokenCount } from 'tokenx';
 
 import type { ChatCompletionTool, OpenAIChatMessage } from '../../../types/chat';
+import {
+  type AudioTokenEstimateSource,
+  estimateAudioInputTokens,
+  normalizeAudioTokensPerSecond,
+} from '../../../utils/audio';
 import type { ComputeChatCostOptions, PricingComputationResult } from './computeChatCost';
 import { computeChatCost } from './computeChatCost';
 

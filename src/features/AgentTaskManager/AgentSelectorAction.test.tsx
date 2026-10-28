@@ -99,7 +99,7 @@ vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => mocks.fetchAgentList(),
 }));
 
-vi.mock('@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar', () => ({
+vi.mock('@/components/AgentAvatar', () => ({
   default: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} data-testid="avatar" />,
 }));
 

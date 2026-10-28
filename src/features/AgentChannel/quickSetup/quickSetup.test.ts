@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSetupGuide } from './guides';
+import { connectStepIndex, getInlineFieldKeys, getSetupGuide } from './guides';
 import {
   buildDiscordInviteUrl,
   buildSlackCreateAppUrl,
@@ -153,5 +153,39 @@ describe('getSetupGuide', () => {
 
   it('has no guide for platforms with their own flow', () => {
     expect(getSetupGuide('wechat', { appName: 'Moss' })).toBeUndefined();
+  });
+
+  it('asks for each credential in the step that produces it', () => {
+    const guide = getSetupGuide('discord', { appName: 'Moss' })!;
+    const fieldsOf = (key: string) => guide.steps.find((step) => step.key === key)?.fields;
+
+    expect(fieldsOf('credentials')).toEqual(['applicationId', 'publicKey']);
+    expect(fieldsOf('bot')).toEqual(['botToken']);
+  });
+
+  it('never asks for one credential in two steps', () => {
+    for (const platform of ['discord', 'slack', 'telegram', 'qq', 'line', 'feishu', 'lark']) {
+      const guide = getSetupGuide(platform, { appName: 'Moss' })!;
+      const keys = guide.steps.flatMap((step) => step.fields ?? []);
+
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+
+  it('lists the inline credentials per platform, and none for a platform without a guide', () => {
+    expect([...getInlineFieldKeys('telegram')]).toEqual(['botToken']);
+    expect(getInlineFieldKeys('wechat').size).toBe(0);
+  });
+
+  it('asks to save right after the last step with a credential, before what needs a running bot', () => {
+    const at = (platform: string) => {
+      const steps = getSetupGuide(platform, { appName: 'Moss' })!.steps;
+      return steps.map((step) => step.key).toSpliced(connectStepIndex(steps), 0, 'connect');
+    };
+
+    expect(at('discord')).toEqual(['create', 'credentials', 'bot', 'connect', 'invite']);
+    expect(at('telegram')).toEqual(['botfather', 'token', 'connect', 'privacy']);
+    expect(at('line')).toEqual(['account', 'messagingApi', 'credentials', 'connect', 'webhook']);
+    expect(connectStepIndex([{ key: 'only' }])).toBe(1);
   });
 });

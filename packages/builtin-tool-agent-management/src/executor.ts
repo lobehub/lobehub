@@ -111,6 +111,16 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
   ): Promise<BuiltinToolResult> => {
     const { agentId, instruction, skipCallSupervisor = false } = params;
 
+    // Background delivery wakes the caller through the server runtime, which
+    // this runtime does not have.
+    if (params.runInBackground) {
+      return {
+        content:
+          'Background agent calls (runInBackground) are not supported in this runtime. Call callAgent again without runInBackground to wait for the reply.',
+        success: false,
+      };
+    }
+
     // Execute as synchronous speak
     // Two modes: Group vs Agents
 

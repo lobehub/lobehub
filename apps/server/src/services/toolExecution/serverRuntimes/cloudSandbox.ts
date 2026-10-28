@@ -159,9 +159,16 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
     );
     const fileService = new FileService(context.serverDB, context.userId, workspaceId);
     const sandboxService = createSandboxService({
+      agentShareVisitor: context.agentShareVisitor
+        ? {
+            shareId: context.agentShareVisitor.shareId,
+            visitorUserId: context.agentShareVisitor.visitorUserId,
+          }
+        : undefined,
       fileService,
       marketService,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxSpecification: sandbox.specification,
       sandboxWorkingDir: sandbox.workingDir,

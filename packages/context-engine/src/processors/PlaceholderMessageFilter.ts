@@ -1,7 +1,7 @@
-import { LOADING_FLAT } from '@lobechat/const';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
+import { LOADING_FLAT } from '../const/message';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {

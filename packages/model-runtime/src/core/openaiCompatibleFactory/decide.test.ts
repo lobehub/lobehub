@@ -16,7 +16,7 @@ vi.mock('@lobechat/business-model-bank/model-config', async () => {
 
 const DecideRuntime = createOpenAICompatibleRuntime({
   baseURL: 'https://openrouter.ai/api/v1',
-  decide: { path: '/systemone' },
+  decide: { path: '/systemone', protocol: 'systemone' },
   provider: 'openrouter',
 });
 
