@@ -1243,6 +1243,8 @@ table channel_jobs {
     (channel_id, id) [name: 'channel_jobs_scope_unique', unique]
     (message_id, member_id, delivery_key) [name: 'channel_jobs_delivery_unique', unique]
     (channel_id, status) [name: 'channel_jobs_channel_status_idx']
+    (channel_id, requester_member_id) [name: 'channel_jobs_channel_requester_idx']
+    (channel_id, thread_id, created_at) [name: 'channel_jobs_channel_thread_created_at_idx']
     (member_id, requester_member_id, thread_id, claimed_at) [name: 'channel_jobs_continuation_idx']
     (topic_id, published_message_id) [name: 'channel_jobs_topic_idx']
     (member_id, status, created_at) [name: 'channel_jobs_member_queue_idx']
@@ -1275,6 +1277,7 @@ table channel_member_grants {
   indexes {
     member_id [name: 'channel_member_grants_member_unique', unique]
     (device_owner_id, status) [name: 'channel_member_grants_owner_status_idx']
+    (channel_id, requested_by_member_id) [name: 'channel_member_grants_channel_requester_idx']
     
     
   }
@@ -1344,6 +1347,8 @@ table channel_messages {
 
   indexes {
     (channel_id, id) [name: 'channel_messages_scope_unique', unique]
+    user_id [name: 'channel_messages_user_id_idx']
+    agent_id [name: 'channel_messages_agent_id_idx']
     (channel_id, sequence) [name: 'channel_messages_sequence_unique', unique]
     (channel_id, request_key) [name: 'channel_messages_request_key_unique', unique]
     (channel_id, thread_id, sequence) [name: 'channel_messages_thread_sequence_idx']
@@ -1370,6 +1375,7 @@ table channel_threads {
 
   indexes {
     (channel_id, id) [name: 'channel_threads_scope_unique', unique]
+    (channel_id, root_message_id) [name: 'channel_threads_root_message_idx']
     (channel_id, root_message_id) [name: 'channel_threads_root_unique', unique]
     
   }
