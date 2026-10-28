@@ -1023,5 +1023,33 @@ describe('matchSemanticShellPredicate', () => {
         false,
       );
     });
+
+    // Single quotes and a backslash suppress expansion: the text is printed, not
+    // executed. Quote stripping happens before the predicate layer, so the sigil
+    // keeps a marker and the scan must not treat the literal as a substitution.
+    it.each([
+      "echo '$(rm -rf ~)'",
+      "echo 'pre $(rm -rf ~) post'",
+      "echo '`rm -rf ~`'",
+      "echo '$(rm -rf ~)' | wc -c",
+    ])('keeps a literal, non-expanding sigil inert: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+    });
+
+    it('still flags the same text in double quotes, where it DOES expand', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo "$(rm -rf ~)"')).toBe(true);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo "at $(rm -rf /)"')).toBe(
+        true,
+      );
+    });
+
+    // A backslash suppresses the expansion, so the parity in the word decides:
+    // one literal backslash leaves a real substitution behind, and it runs.
+    it('does not mistake a substitution behind a literal backslash for escaped text', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo \\\\$(rm -rf ~)')).toBe(
+        true,
+      );
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo \\$(rm -rf ~)')).toBe(false);
+    });
   });
 });

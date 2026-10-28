@@ -36,6 +36,21 @@ const isEscapedAt = (text: string, index: number): boolean => {
 const EXECUTABLE_EXPANSION = /\$\(|`/;
 
 /**
+ * Marker for an expansion sigil that does NOT expand because single quotes (or
+ * a backslash) suppress it. `'$(rm -rf ~)'` is literal text: without the marker
+ * the quote-stripped word looks exactly like a real substitution and the
+ * predicates block a harmless command. A sentinel (not a backslash) keeps the
+ * escape parity of real words intact.
+ */
+export const LITERAL_EXPANSION_MARKER = '\u0001';
+
+const isLiteralExpansionAt = (text: string, index: number): boolean => {
+  const char = text[index];
+  if (char === '$') return text[index + 1] === '(';
+  return char === '`';
+};
+
+/**
  * Index of the `)` closing a process-substitution body that starts at `start`
  * (the character after the opening paren). Quotes hide parens, escapes skip
  * one character, and nested parens nest. `text.length` means unbalanced.
@@ -581,7 +596,12 @@ export const tokenizeWords = (raw: string): string[] => {
         i++;
         continue;
       }
-      word += char;
+      // Single quotes suppress expansion, so `'$(rm -rf ~)'` and
+      // `` '`rm -rf ~`' `` are literal TEXT. Quote markers are stripped below,
+      // which made the predicate layer read such an argument as a real
+      // substitution and block a harmless `echo`. Keep a backslash marker on
+      // the sigil so the executable-expansion scan can tell the two apart.
+      word += quote === "'" && isLiteralExpansionAt(raw, i) ? LITERAL_EXPANSION_MARKER + char : char;
       hasWord = true;
       i++;
       continue;
@@ -597,8 +617,11 @@ export const tokenizeWords = (raw: string): string[] => {
       }
       // POSIX unquoted backslash escape: the next character is LITERAL (`\/`
       // passes `/` as the target; `\rm` invokes rm). Consume the escape so the
-      // safe surface (argv) is what security matching sees.
-      word += escaped;
+      // safe surface (argv) is what security matching sees — except for an
+      // escaped expansion sigil, which never runs: keep its marker.
+      // An escaped expansion sigil is literal text too: mark it so the scan
+      // does not treat `\$(cmd)` as a running substitution.
+      word += isLiteralExpansionAt(raw, i + 1) ? LITERAL_EXPANSION_MARKER + escaped : escaped;
       hasWord = true;
       i += 2;
       continue;

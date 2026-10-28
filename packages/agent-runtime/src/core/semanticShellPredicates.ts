@@ -8,6 +8,7 @@ import {
   parameterExpansionOperand,
 } from './shellCommand';
 import { stripGroupingParens } from './shellQuoting';
+import { LITERAL_EXPANSION_MARKER } from './shellSegmenter';
 
 /**
  * Semantic shell predicates for security rules.
@@ -212,10 +213,20 @@ const payloadIsDangerous = (
  * not a command — so only the bodies of `$( … )` and backtick substitutions are
  * extracted here and re-analyzed as payloads.
  */
+/**
+ * Whether the sigil at `index` is marked as literal text (single quotes or a
+ * backslash suppressed its expansion). The segmenter writes the marker right
+ * before the sigil.
+ */
+const isLiteralExpansionAt = (text: string, index: number): boolean =>
+  index > 0 && text[index - 1] === LITERAL_EXPANSION_MARKER;
+
 const substitutionPayloads = (word: string): string[] => {
   const payloads: string[] = [];
   for (let index = 0; index < word.length; index++) {
     if (word[index] === '$' && word[index + 1] === '(') {
+      // A literal, non-expanding sigil — never a substitution.
+      if (isLiteralExpansionAt(word, index)) continue;
       // `$((…))` is arithmetic, not a command substitution.
       if (word[index + 2] === '(') continue;
       let depth = 0;
@@ -242,6 +253,8 @@ const substitutionPayloads = (word: string): string[] => {
       continue;
     }
     if (word[index] === '`') {
+      // Same provenance rule: `'\` … \`'` inside single quotes is literal text.
+      if (isLiteralExpansionAt(word, index)) continue;
       const end = word.indexOf('`', index + 1);
       if (end < 0) continue;
       payloads.push(word.slice(index + 1, end));
