@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS "goal_shares" (
 	"user_id" text NOT NULL,
 	"workspace_id" text,
 	"page_view_count" integer DEFAULT 0 NOT NULL,
+	"config" jsonb,
+	"metadata" jsonb,
 	"visibility" text DEFAULT 'private' NOT NULL,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
