@@ -265,11 +265,13 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       () =>
         query
           ? []
-          : pickRecentAssignees(recentIds, [
-              ...(inboxAgent ? [inboxAgent] : []),
-              ...scopes.flatMap((scope) => scope.sections.flatMap((section) => section.agents)),
-            ]),
-      [inboxAgent, query, recentIds, scopes],
+          : // A standalone inbox already has its own row above Recent; offering
+            // it here too would list it twice.
+            pickRecentAssignees(
+              recentIds,
+              scopes.flatMap((scope) => scope.sections.flatMap((section) => section.agents)),
+            ),
+      [query, recentIds, scopes],
     );
 
     const unassignedLabel = t('taskList.unassigned', { ns: 'chat' });

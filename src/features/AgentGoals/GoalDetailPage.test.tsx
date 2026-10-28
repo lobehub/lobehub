@@ -68,12 +68,15 @@ vi.mock('@/store/chat/selectors', () => ({
   chatPortalSelectors: { currentViewType: () => undefined, showPortal: () => mocks.showPortal },
 }));
 
-vi.mock('@/store/global', () => ({
-  useGlobalStore: Object.assign(
-    (selector: (s: any) => unknown) => selector({ toggleLeftPanel: vi.fn() }),
-    { getState: () => ({ toggleLeftPanel: vi.fn() }) },
-  ),
-}));
+vi.mock('@/store/global', () => {
+  // The assignee picker reads persisted UI status (folded groups, recents).
+  const state = { status: {}, toggleLeftPanel: vi.fn(), updateSystemStatus: vi.fn() };
+  return {
+    useGlobalStore: Object.assign((selector: (s: any) => unknown) => selector(state), {
+      getState: () => state,
+    }),
+  };
+});
 
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { showLeftPanel: () => false },
