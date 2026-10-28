@@ -917,7 +917,7 @@ export class FileModel {
 
       await trx
         .update(files)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: new Date() })
+        .set({ ...ownershipUpdate, ...visibilityUpdate, parentId: null, updatedAt: new Date() })
         .where(eq(files.id, fileId));
 
       // Knowledge base links are scoped per-user; keep them pointed at the new owner.
