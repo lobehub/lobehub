@@ -117,6 +117,20 @@ describe('useDeleteCanvas', () => {
     );
   });
 
+  it('deletes by canvas id alone and lets the caller refresh its own list', async () => {
+    canvas.delete.mockResolvedValue(undefined);
+    const onDeleted = vi.fn();
+    const { result } = renderHook(() => useDeleteCanvas({ onDeleted }));
+
+    act(() => result.current(canvasOf({ totalSize: undefined, workId: undefined })));
+    await confirmLatest();
+
+    expect(canvas.delete).toHaveBeenCalledWith('cvs_1');
+    expect(work.removeWork).not.toHaveBeenCalled();
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+    expect(ui.success).toHaveBeenCalledWith('canvasStorage.delete.successNoSize');
+  });
+
   it('keeps the canvas listed and reports a failed delete', async () => {
     canvas.delete.mockRejectedValue(new Error('boom'));
     vi.spyOn(console, 'error').mockImplementation(() => {});

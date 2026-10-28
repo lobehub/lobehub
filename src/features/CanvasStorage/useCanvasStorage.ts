@@ -54,7 +54,13 @@ export interface DeletableCanvas {
   title: string;
   /** Bytes freed, when known; the confirmation names it. */
   totalSize?: number;
-  workId: string;
+  /** The canvas Work, when the caller knows it, dropped from every Work list at once. */
+  workId?: string;
+}
+
+export interface UseDeleteCanvasOptions {
+  /** Runs after the canvas is deleted, for lists outside the Work and storage caches. */
+  onDeleted?: () => unknown;
 }
 
 const afterCanvasDelete = async (workIds: string[]) => {
@@ -69,7 +75,7 @@ const afterCanvasDelete = async (workIds: string[]) => {
  * storage it holds and take any public link offline. Canvas files are never
  * deleted one at a time: a canvas only renders with all of its files.
  */
-export const useDeleteCanvas = () => {
+export const useDeleteCanvas = ({ onDeleted }: UseDeleteCanvasOptions = {}) => {
   const { t } = useTranslation(['file', 'common']);
 
   return useCallback(
@@ -92,7 +98,8 @@ export const useDeleteCanvas = () => {
         onOk: async () => {
           try {
             await canvasService.delete(canvas.canvasId);
-            await afterCanvasDelete([canvas.workId]);
+            await afterCanvasDelete(canvas.workId ? [canvas.workId] : []);
+            await onDeleted?.();
             toast.success(
               size
                 ? t('canvasStorage.delete.success', { size })
@@ -106,7 +113,7 @@ export const useDeleteCanvas = () => {
         title: t('canvasStorage.delete.title'),
       });
     },
-    [t],
+    [onDeleted, t],
   );
 };
 
