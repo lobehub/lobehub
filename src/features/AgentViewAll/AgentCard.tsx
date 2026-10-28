@@ -66,14 +66,19 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
 
     height: ${COVER_HEIGHT}px;
 
-    background-color: color-mix(in srgb, var(--agent-cover) 72%, ${cssVar.colorBgContainer});
+    /* Neutral until an avatar image has been sampled. */
+    background-color: color-mix(
+      in srgb,
+      var(--agent-cover, ${cssVar.colorFill}) 72%,
+      ${cssVar.colorBgContainer}
+    );
     background-image: radial-gradient(
       color-mix(in srgb, ${cssVar.colorBgContainer} 30%, transparent) 1px,
       transparent 1.5px
     );
     background-size: 10px 10px;
 
-    /* A sampled image color replaces the seed color once it arrives. */
+    /* The sampled color fades in over the neutral band. */
     transition: background-color 0.3s;
   `,
   avatarRing: css`

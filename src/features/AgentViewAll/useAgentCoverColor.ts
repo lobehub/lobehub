@@ -3,23 +3,26 @@
 import type { SidebarAgentItem } from '@lobechat/types';
 import { useEffect, useState } from 'react';
 
-import { coverImageSrc, sampleImageColor, seedCoverColor } from './coverColor';
+import { coverImageSrc, sampledImageColor, sampleImageColor, seedCoverColor } from './coverColor';
 
 /**
  * Cover color of a badge-wall card, in order of preference: the avatar
  * background color the agent picked, the dominant color of its uploaded
  * avatar image, then the color of its generated character (from the id).
+ *
+ * Returns `undefined` while an image is still being sampled, so the card shows
+ * a neutral band rather than flashing an unrelated seed color first.
  */
-export const useAgentCoverColor = (item: SidebarAgentItem, picked?: string): string => {
+export const useAgentCoverColor = (item: SidebarAgentItem, picked?: string): string | undefined => {
   const src = picked ? undefined : coverImageSrc(item);
-  const [sampled, setSampled] = useState<{ color?: string; src: string }>();
+  const [, rerender] = useState(0);
 
   useEffect(() => {
-    if (!src) return;
+    if (!src || sampledImageColor(src)) return;
 
     let active = true;
-    sampleImageColor(src).then((color) => {
-      if (active) setSampled({ color, src });
+    sampleImageColor(src).then(() => {
+      if (active) rerender((count) => count + 1);
     });
 
     return () => {
@@ -27,7 +30,11 @@ export const useAgentCoverColor = (item: SidebarAgentItem, picked?: string): str
     };
   }, [src]);
 
-  const imageColor = src && sampled?.src === src ? sampled.color : undefined;
+  if (picked) return picked;
+  if (!src) return seedCoverColor(item);
 
-  return picked || imageColor || seedCoverColor(item);
+  const sampled = sampledImageColor(src);
+  if (!sampled) return undefined;
+
+  return sampled.color || seedCoverColor(item);
 };

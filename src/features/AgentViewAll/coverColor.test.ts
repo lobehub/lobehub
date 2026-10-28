@@ -27,6 +27,19 @@ describe('pickDominantColor', () => {
     );
   });
 
+  it('lets a small anti-aliased logo win over a mostly white image', () => {
+    // A blue mark split across two hue buckets, its edges blended toward white.
+    const color = pickDominantColor(
+      pixels(
+        [255, 255, 255, 255, 400],
+        [8, 102, 255, 255, 8],
+        [40, 70, 230, 255, 6],
+        [170, 200, 250, 255, 10],
+      ),
+    );
+    expect(color).toBe('rgb(31, 101, 248)');
+  });
+
   it('falls back to the neutral average for a grayscale image', () => {
     expect(pickDominantColor(pixels([200, 200, 200, 255, 4], [100, 100, 100, 255, 4]))).toBe(
       'rgb(150, 150, 150)',
