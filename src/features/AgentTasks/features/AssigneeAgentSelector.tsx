@@ -165,6 +165,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const [search, setSearch] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const listRef = useRef<HTMLDivElement>(null);
+    const keyboardMovedRef = useRef(false);
 
     const updateTask = useTaskStore((s) => s.updateTask);
     const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
@@ -411,9 +412,11 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
         if (flatOptions.length === 0) return;
         if (event.key === 'ArrowDown') {
           event.preventDefault();
+          keyboardMovedRef.current = true;
           setActiveIndex((index) => (index + 1) % flatOptions.length);
         } else if (event.key === 'ArrowUp') {
           event.preventDefault();
+          keyboardMovedRef.current = true;
           setActiveIndex((index) => (index - 1 + flatOptions.length) % flatOptions.length);
         } else if (event.key === 'Enter') {
           event.preventDefault();
@@ -424,7 +427,11 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       [activeIndex, flatOptions, handleSelect],
     );
 
+    // Follow the highlight only when the arrow keys moved it. Folding a group
+    // shifts every index after it, and scrolling then jumped the list away.
     useEffect(() => {
+      if (!keyboardMovedRef.current) return;
+      keyboardMovedRef.current = false;
       const active = listRef.current?.querySelector<HTMLElement>(
         `[data-assignee-index="${activeIndex}"]`,
       );
