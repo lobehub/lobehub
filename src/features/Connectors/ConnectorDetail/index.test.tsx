@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
     syncPluginTools: vi.fn(),
     syncing: false,
     uninstallBuiltinTool: vi.fn(),
+    uninstalledBuiltinTools: [] as string[],
     uninstallMCPPlugin: vi.fn(),
     updateToolPermission: vi.fn(),
   },
@@ -62,6 +63,13 @@ vi.mock('@/hooks/useResourceManageable', () => ({
 vi.mock('@/store/tool', () => ({
   useToolStore<T>(selector: (state: typeof mocks.toolState) => T): T {
     return selector(mocks.toolState);
+  },
+}));
+
+vi.mock('@/store/tool/selectors', () => ({
+  builtinToolSelectors: {
+    isBuiltinToolInstalled: (identifier: string) => (state: typeof mocks.toolState) =>
+      !state.uninstalledBuiltinTools.includes(identifier),
   },
 }));
 
@@ -104,6 +112,7 @@ describe('ConnectorDetail', () => {
       },
     ];
     mocks.toolState.syncing = false;
+    mocks.toolState.uninstalledBuiltinTools = [];
   });
 
   it('uses lifecycle actions instead of the generic marketplace uninstall action', () => {
@@ -180,5 +189,26 @@ describe('ConnectorDetail', () => {
 
     expect(screen.getByText('connector.notConnected')).toBeInTheDocument();
     expect(screen.queryByText('connector.connected')).not.toBeInTheDocument();
+  });
+
+  it('shows an uninstalled built-in tool as uninstalled, matching the list', () => {
+    mocks.toolState.connectors[0] = {
+      id: 'connector-1',
+      identifier: 'lobe-web-browsing',
+      name: 'Web Browsing',
+      sourceType: ConnectorSourceType.builtin,
+    };
+    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
+
+    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByText('tools.builtins.uninstalled')).toBeInTheDocument();
+    expect(screen.queryByText('connector.enabled')).not.toBeInTheDocument();
+
+    unmount();
+    mocks.toolState.uninstalledBuiltinTools = [];
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByText('connector.enabled')).toBeInTheDocument();
   });
 });

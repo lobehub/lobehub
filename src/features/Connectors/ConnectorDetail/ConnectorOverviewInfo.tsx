@@ -7,6 +7,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
+import { useToolStore } from '@/store/tool';
+import { builtinToolSelectors } from '@/store/tool/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 const styles = stylex.create({
@@ -74,8 +76,15 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
 
   const kind = getConnectorKind(connector);
   const isBuiltin = kind === 'builtin';
+  // Uninstalling a built-in only records it in a user preference; the connector
+  // row stays, so read the same installation state the list shows.
+  const isBuiltinInstalled = useToolStore(
+    builtinToolSelectors.isBuiltinToolInstalled(connector.identifier),
+  );
   const status = isBuiltin
-    ? { color: 'success' as const, label: t('connector.enabled') }
+    ? isBuiltinInstalled
+      ? { color: 'success' as const, label: t('connector.enabled') }
+      : { label: t('tools.builtins.uninstalled', { ns: 'setting' }) }
     : // Disconnect only clears `isEnabled`, leaving the stored status as connected.
       connector.isEnabled && connector.status === ConnectorStatus.connected
       ? { color: 'success' as const, label: t('connector.connected') }
