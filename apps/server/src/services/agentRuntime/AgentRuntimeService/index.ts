@@ -12,6 +12,7 @@ import { appEnv } from '@/envs/app';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
+import type { ClientMcpStep } from '@/server/services/mcp/elicitation/clientStep';
 import { expireMcpElicitation } from '@/server/services/mcp/elicitation/expire';
 import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
 import type { McpElicitationRuntime } from '@/server/services/mcp/elicitation/resume';
@@ -230,6 +231,13 @@ export class AgentRuntimeService {
       executeTool: (...args) => this.toolExecutionService.executeTool(...args),
       isOperationInterrupted: (id) => this.isOperationInterrupted(id),
       getToolResultPolicy: async (id) => {
+        const operation = await new AgentOperationModel(
+          this.serverDB,
+          this.userId,
+          this.workspaceId,
+        ).findById(id);
+        const clientStep = operation?.metadata?.clientMcpStep as ClientMcpStep | undefined;
+        if (clientStep?.resultPolicy) return clientStep.resultPolicy;
         const state = await this.coordinator.loadAgentState(id);
         return {
           limit: (state?.world?.agent as LobeAgentConfig | undefined)?.chatConfig

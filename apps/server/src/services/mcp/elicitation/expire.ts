@@ -93,13 +93,15 @@ export async function expireMcpElicitation(
     content: controlled.result.content,
     onlyIfEmpty: true,
     pluginError: controlled.result.error ?? null,
-    pluginState: { ...controlled.result.state, mcpClientComplete: true },
-  });
-  await service.messages.updateMessagePlugin(item.toolMessageId, {
-    intervention: { batchId: item.batchId, operationId: item.operationId, status: 'none' },
+    pluginState: { ...controlled.result.state, mcpElicitation: pending, mcpClientComplete: true },
   });
   await runtime.tryResumeParentFromAsyncTool(
     { parentOperationId: identity.operationId },
     { knownFulfilledMessageId: item.toolMessageId, scheduleVerifyOnHold: true },
   );
+  // The saved timeout must remain discoverable if parent dispatch/ACK fails.
+  await service.messages.updatePluginState(item.toolMessageId, { mcpElicitation: null });
+  await service.messages.updateMessagePlugin(item.toolMessageId, {
+    intervention: { batchId: item.batchId, operationId: item.operationId, status: 'none' },
+  });
 }

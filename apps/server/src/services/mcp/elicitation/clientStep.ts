@@ -8,6 +8,7 @@ import { getMcpToolTimeoutMs } from '@/libs/mcp/timeout';
 import { resolveToolTimeoutMs } from '@/server/modules/AgentRuntime/resolveToolTimeout';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import type { McpCallIdentity, McpElicitationService } from './McpElicitationService';
 import { resolveMcpInvocationManifest } from './resume';
@@ -18,6 +19,8 @@ export interface ClientMcpStep {
   deadlines?: Record<string, number>;
   leaseUntil: number;
   owner: string;
+  /** Client archive policy captured before dispatch, including for renderer-free continuations. */
+  resultPolicy?: { limit?: number; canReadArchive: boolean };
   toolMessageIds: string[];
 }
 
@@ -53,6 +56,7 @@ export async function registerClientMcpStep(
     toolMessageIds: string[];
     owner: string;
     localHostTimeoutMs?: number;
+    toolResultMaxLength?: number;
   },
 ) {
   const assistant = await service.messages.findById(input.assistantMessageId);
@@ -137,6 +141,7 @@ export async function registerClientMcpStep(
     deadlines,
     deadline: Math.max(...Object.values(deadlines)),
     leaseUntil: Date.now() + 45_000,
+    resultPolicy: { limit: input.toolResultMaxLength, canReadArchive: true },
   };
   await service.operations.recordStart({
     operationId,
@@ -222,6 +227,7 @@ export async function executeClientMcpTool(
     result = await service.runtime.executeTool(
       { ...tool, type: 'mcp' },
       {
+        skipResultTruncation: true,
         agentId: operation.agentId ?? undefined,
         assistantMessageId: identity.assistantMessageId,
         operationId: identity.operationId,
@@ -251,8 +257,21 @@ export async function executeClientMcpTool(
       toolMessageId,
       result,
     });
+    const archived = controlled.blocked
+      ? { content: controlled.result.content }
+      : await archiveToolResultIfNeeded({
+          ...(step.resultPolicy ?? { canReadArchive: true }),
+          content: controlled.result.content,
+          agentId: operation.agentId,
+          topicId: operation.topicId,
+          identifier: identity.identifier,
+          toolCallId: identity.toolCallId,
+          serverDB: service.db,
+          userId: service.userId,
+          workspaceId: service.workspaceId,
+        });
     await service.messages.updateToolMessage(toolMessageId, {
-      content: controlled.result.content,
+      content: archived.content,
       pluginError: controlled.result.error ?? null,
       pluginState: { ...controlled.result.state, mcpClientComplete: true },
       onlyIfEmpty: true,

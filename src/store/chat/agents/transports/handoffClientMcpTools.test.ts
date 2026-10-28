@@ -235,3 +235,18 @@ it('registers only native calls in a cloud/native/builtin batch and publishes ea
   });
   await f.callbacks[0]();
 });
+
+it('captures the configured client result window in the durable registration before wire execution', async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  await prepareClientMcpTools(
+    f.host,
+    { type: 'call_tool', payload: { parentMessageId: 'assistant', toolCalling: tool } },
+    () => f.store,
+    80000,
+  );
+  expect(api.register).toHaveBeenCalledWith(
+    expect.objectContaining({ toolResultMaxLength: 80000 }),
+  );
+  await f.callbacks[0]();
+});

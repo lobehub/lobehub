@@ -15,6 +15,7 @@ export async function prepareClientMcpTools(
   host: AgentRuntimeHost,
   instruction: AgentInstruction,
   get: () => ChatStore,
+  toolResultMaxLength?: number,
 ): Promise<AgentInstruction> {
   if (instruction.type !== 'call_tool' && instruction.type !== 'call_tools_batch')
     return instruction;
@@ -72,6 +73,7 @@ export async function prepareClientMcpTools(
     toolMessageIds: managedTools.map((tool) => ids[tool.id]),
     localHostTimeoutMs: isDesktop ? await ensureElectronIpc().mcp.getToolTimeoutMs() : undefined,
     owner,
+    toolResultMaxLength,
   });
   for (const tool of managedTools) {
     const id = ids[tool.id];
