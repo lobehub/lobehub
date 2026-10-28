@@ -26,7 +26,6 @@ export default {
   'agentViewAll.orderBy.author': 'Author',
   'agentViewAll.orderBy.title': 'Title',
   'agentViewAll.orderBy.updatedAt': 'Updated at',
-  'agentViewAll.pendant.core': 'Core',
   'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
   'agentViewAll.sidebarSection.collapse': 'Fold',

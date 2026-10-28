@@ -17,7 +17,7 @@ describe('resolveAgentBadge', () => {
     expect(resolveAgentBadge(agent())).toEqual({});
   });
 
-  it('adds a cover only when the agent picked an avatar background color', () => {
+  it('takes the cover from the avatar background color only when one was picked', () => {
     expect(resolveAgentBadge(agent({ backgroundColor: '#3b82f6' })).cover).toBe('#3b82f6');
     expect(resolveAgentBadge(agent({ backgroundColor: '  ' })).cover).toBeUndefined();
     expect(resolveAgentBadge(agent({ backgroundColor: null })).cover).toBeUndefined();
@@ -25,10 +25,10 @@ describe('resolveAgentBadge', () => {
     expect(resolveAgentBadge(agent({ backgroundColor: 'rgba(0, 0, 0, 0)' })).cover).toBeUndefined();
   });
 
-  it('marks builtin agents official before pinned ones core', () => {
+  it('marks only builtin agents with a chip', () => {
     expect(resolveAgentBadge(agent({ slug: 'inbox' })).bottom).toBe('official');
     expect(resolveAgentBadge(agent({ pinned: true, slug: 'inbox' })).bottom).toBe('official');
-    expect(resolveAgentBadge(agent({ pinned: true })).bottom).toBe('core');
+    expect(resolveAgentBadge(agent({ pinned: true })).bottom).toBeUndefined();
     expect(resolveAgentBadge(agent({ slug: 'my-custom-agent' })).bottom).toBeUndefined();
   });
 

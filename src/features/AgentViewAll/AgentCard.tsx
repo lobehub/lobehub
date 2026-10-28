@@ -1,9 +1,10 @@
 'use client';
 
-import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_USER_AVATAR_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import {
+  Avatar,
   Block,
   ContextMenuTrigger,
   createStaticStyles,
@@ -17,16 +18,17 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import AgentPendant from './AgentPendant';
+import type { AgentRowAuthor } from './AgentRow';
 import ItemActions from './ItemActions';
 import { resolveAgentBadge } from './resolveAgentBadge';
 import SidebarItemAvatar from './SidebarItemAvatar';
+import { useAgentCoverColor } from './useAgentCoverColor';
 
-// Badge-wall layout: avatar → name → role chip → two-line description,
-// centered. Every row has a fixed height, so plain and cover badges mixed in
-// one row keep the avatar, the name baseline and the description's first line
-// aligned. The avatar sits at the same y either way: with a cover it straddles
-// the cover's bottom edge, without one the band is just top padding.
-const COVER_HEIGHT = 48;
+// Badge-wall layout: cover → avatar → name → role chip → two-line description,
+// centered, with the owner in the bottom-left corner. Every row has a fixed
+// height, so the avatar, the name baseline and the description's first line
+// line up across a row. The avatar straddles the cover's bottom edge.
+const COVER_HEIGHT = 80;
 const AVATAR_SIZE = 56;
 export const AGENT_GRID_MIN_COLUMN = 260;
 
@@ -54,9 +56,9 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
       box-shadow: ${cssVar.boxShadowTertiary};
     }
   `,
-  // Identity texture, not artwork: a short straight-edged band tinted from the
-  // agent's avatar background, mixed toward the container color so it stays
-  // calm in both themes, with a faint dot grid on top.
+  // Identity texture, not artwork: a straight-edged band tinted from the
+  // agent's avatar (see useAgentCoverColor), mixed toward the container color
+  // so it stays calm in both themes, with a faint dot grid on top.
   cover: css`
     position: absolute;
     inset-block-start: 0;
@@ -70,6 +72,9 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
       transparent 1.5px
     );
     background-size: 10px 10px;
+
+    /* A sampled image color replaces the seed color once it arrives. */
+    transition: background-color 0.3s;
   `,
   avatarRing: css`
     position: relative;
@@ -142,6 +147,28 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     overflow-wrap: anywhere;
   `,
+  // Pinned to the bottom-left corner: auto top margin takes up whatever height
+  // the grid row adds, so the owner sits on the same line across a row.
+  owner: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    align-self: stretch;
+
+    min-width: 0;
+    margin-block-start: auto;
+    padding-block-start: 12px;
+
+    font-size: 12px;
+    line-height: 16px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  ownerName: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   // Columns come from the content width: as many 260px+ badges as fit, so a
   // ~1300px page shows four and an ultra-wide one six, instead of a fixed four
   // stretching each badge. Shares the min width with SidebarAgentsSection so
@@ -203,17 +230,20 @@ interface AgentCardProps {
   item: SidebarAgentItem;
   /** Toggle whether this item appears in the caller's sidebar. */
   onToggleSidebar?: (item: SidebarAgentItem) => void;
+  /** Who owns the agent; shown in the bottom-left corner when given. */
+  owner?: AgentRowAuthor | null;
   /** Whether the caller removed this item from their sidebar (default listed). */
   sidebarHidden?: boolean;
 }
 
-const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, sidebarHidden }) => {
+const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarHidden }) => {
   const { t } = useTranslation('common');
   const { description, id, type } = item;
   // Groups have no personal name, so this resolves to their title.
   const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
   const roleTag = agentSecondaryDisplayName(item);
   const badge = resolveAgentBadge(item);
+  const coverColor = useAgentCoverColor(item, badge.cover);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   // Right-click support — same bridge as AgentRow: the hook-bearing menu
@@ -237,12 +267,10 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, sidebarHidden }
           onPointerEnter={activateMenu}
         >
           <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
-            {badge.cover ? (
-              <div
-                className={cardStyles.cover}
-                style={{ '--agent-cover': badge.cover } as CSSProperties}
-              />
-            ) : null}
+            <div
+              className={cardStyles.cover}
+              style={{ '--agent-cover': coverColor } as CSSProperties}
+            />
             <AgentPendant bottom={badge.bottom} top={badge.top}>
               <span
                 className={cx(
@@ -265,6 +293,18 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, sidebarHidden }
               ) : null}
             </div>
             <div className={cardStyles.description}>{description}</div>
+            {owner?.name ? (
+              <div className={cardStyles.owner}>
+                <Avatar
+                  avatar={owner.avatar || DEFAULT_USER_AVATAR_URL}
+                  shape={'circle'}
+                  size={16}
+                />
+                <span className={cardStyles.ownerName} title={owner.name}>
+                  {owner.name}
+                </span>
+              </div>
+            ) : null}
           </Block>
         </WorkspaceLink>
         <span data-card-actions className={cardStyles.actions}>

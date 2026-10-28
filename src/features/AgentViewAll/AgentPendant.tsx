@@ -47,11 +47,8 @@ const styles = stylex.create({
     borderStartStartRadius: 9,
     insetBlockStart: -10,
   },
-  // White 10px text needs a dark enough plate: use the deeper warning shade
-  // and darken free-form label colors (gray / yellow presets) before use.
-  core: {
-    backgroundColor: cssVar.colorWarningActive,
-  },
+  // White 10px text needs a dark enough plate: darken free-form label colors
+  // (gray / yellow presets) before use.
   official: {
     backgroundColor: cssVar.colorPrimary,
   },
