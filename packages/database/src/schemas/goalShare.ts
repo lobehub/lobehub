@@ -16,7 +16,7 @@ export const goalShares = pgTable(
   'goal_shares',
   {
     id: text('id')
-      .$defaultFn(() => createNanoId(8)())
+      .$defaultFn(() => createNanoId(16)())
       .primaryKey(),
 
     goalId: text('goal_id')

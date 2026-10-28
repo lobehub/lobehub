@@ -43,7 +43,7 @@ describe('GoalShareModel', () => {
       const result = await shareModel.create(goalId);
 
       expect(result).toMatchObject({ goalId, userId, visibility: 'private' });
-      expect(result!.id).toHaveLength(8);
+      expect(result!.id).toHaveLength(16);
     });
 
     it('creates a link share', async () => {

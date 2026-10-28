@@ -16,7 +16,7 @@ export const fileShares = pgTable(
   'file_shares',
   {
     id: text('id')
-      .$defaultFn(() => createNanoId(8)())
+      .$defaultFn(() => createNanoId(16)())
       .primaryKey(),
 
     fileId: text('file_id')
