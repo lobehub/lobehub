@@ -129,7 +129,9 @@ export const useProjectConversation = () => {
     );
   else if (agent.error)
     fallback = <AsyncError error={agent.error} variant="page" onRetry={agent.mutate} />;
-  else if (topicsRequest.error)
+  // A guessed id may really be a slug, which fails the topic request; that
+  // failure is not the conversation's until the project resolves.
+  else if (topicsRequest.error && (projectConfirmed || detailSWR.error))
     fallback = (
       <AsyncError error={topicsRequest.error} variant="page" onRetry={topicsRequest.revalidate} />
     );

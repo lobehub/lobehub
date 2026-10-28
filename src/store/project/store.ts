@@ -338,8 +338,12 @@ export const projectByRefSelector =
     const detail = state.projectDetailMap[idOrSlug];
     if (detail) return detail.project;
 
-    return state.projectListMap[PROJECT_LIST_KEY]?.find(
-      (project) => project.id === idOrSlug || project.slug === idOrSlug,
+    // An exact id wins over a slug, as on the server (`findByReference`): one
+    // project's slug may equal another's id.
+    const list = state.projectListMap[PROJECT_LIST_KEY];
+    return (
+      list?.find((project) => project.id === idOrSlug) ??
+      list?.find((project) => project.slug === idOrSlug)
     );
   };
 

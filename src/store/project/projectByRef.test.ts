@@ -17,6 +17,16 @@ describe('projectByRefSelector', () => {
     expect(projectByRefSelector('alpha')(state())?.id).toBe('prj_a');
   });
 
+  it('matches an exact id before a slug, as the server does', () => {
+    const collision = {
+      ...initialProjectState,
+      // The first row's slug equals the second row's id.
+      projectListMap: { all: [row('prj_a', 'prj_b'), row('prj_b', 'beta')] },
+    };
+
+    expect(projectByRefSelector('prj_b')(collision)?.id).toBe('prj_b');
+  });
+
   it('prefers the loaded project page over the list row', () => {
     const detail = { project: row('prj_a', 'alpha', 'Fresh') } as ProjectDetail;
 

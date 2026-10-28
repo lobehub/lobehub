@@ -116,4 +116,23 @@ describe('useProjectConversation', () => {
     expect(screen.queryByText('topics.notFound')).toBeNull();
     expect(container.querySelector('[aria-busy]')).not.toBeNull();
   });
+
+  it('keeps waiting instead of failing when a guessed id turns out to be a slug', () => {
+    useProjectStore.setState({ projectListMap: {} } as any);
+    mocks.topics = [];
+    // `prj_launch` is a custom slug: the topic request by that "id" fails.
+    mocks.fetchTopics.mockReturnValue({
+      ...listRequest,
+      error: new Error('Project not found or access denied'),
+      hasData: false,
+    });
+
+    const { result } = renderHook(() => useProjectConversation(), {
+      wrapper: wrapper('/project/prj_launch/topic/tpc_1'),
+    });
+    const { container } = render(createElement(Fragment, null, result.current.fallback));
+
+    expect(screen.queryByText('Project not found or access denied')).toBeNull();
+    expect(container.querySelector('[aria-busy]')).not.toBeNull();
+  });
 });
