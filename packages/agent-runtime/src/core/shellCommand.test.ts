@@ -491,6 +491,39 @@ describe('analyzeShellCommand', () => {
       expect(seg.hasFlag('r')).toBe(true);
     });
 
+    it('xargs value-free and optional-argument shorts keep the wrapped command', () => {
+      // GNU xargs documents -t/--verbose, -p/--interactive, -x/--exit and
+      // -o/--open-tty as value-free. An unlisted `t` consumed `rm` as its
+      // option value, then `/tmp/cache` became the value of `-rf`, leaving `~`
+      // as a confidently unrelated executable while the delete still ran.
+      for (const command of [
+        'printf x | xargs -t rm -rf /tmp/cache ~',
+        'printf x | xargs -p rm -rf /tmp/cache ~',
+        'printf x | xargs -x rm -rf /tmp/cache ~',
+        'printf x | xargs -t0 rm -rf /tmp/cache ~',
+        'printf x | xargs --verbose rm -rf /tmp/cache ~',
+      ]) {
+        const wrapper = analyzeShellCommand(command).at(-1);
+        expect(wrapper?.resolvedCommand).toBe('rm');
+        expect(wrapper?.homeTargets).toContain('~');
+      }
+
+      // Deprecated OPTIONAL-argument shorts: getopt accepts their argument
+      // only when it is glued to the token, so the bare form (`-i` defaults to
+      // `{}`) and the attached form (`-i{}`) both end the option here and the
+      // next word is the wrapped command — neither may consume a value word.
+      for (const command of [
+        'printf x | xargs -i rm -rf /tmp/cache ~',
+        'printf x | xargs -i{} rm -rf /tmp/cache ~',
+        'printf x | xargs -l rm -rf /tmp/cache ~',
+        'printf x | xargs -l5 rm -rf /tmp/cache ~',
+      ]) {
+        const wrapper = analyzeShellCommand(command).at(-1);
+        expect(wrapper?.resolvedCommand).toBe('rm');
+        expect(wrapper?.homeTargets).toContain('~');
+      }
+    });
+
     it('shell negation `!` is skipped as syntax, not treated as a command', () => {
       expect(analyzeShellCommand('! rm -rf ~')[0].resolvedCommand).toBe('rm');
     });

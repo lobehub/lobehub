@@ -930,12 +930,19 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
   nohup: new Set(),
   // bash command builtin: -p default PATH, -v/-V describe.
   command: new Set(['p', 'v', 'V']),
-  // GNU xargs value-free flags: -0/--null NUL-separated input, -r/--no-run-if-empty,
-  // -a FILE (value!), -E EOF-str, -I replstr, -L lines, -n max-args, -P procs,
-  // -s size, -d delim — all value-taking besides -0/-r. Note the -0 form: an
-  // unwhitelisted `-0` would swallow the wrapped command (`xargs -0 rm -rf /
-  // harmless` resolved the harmless word as the command).
-  xargs: new Set(['0', 'r']),
+  // GNU xargs value-free flags: -0/--null NUL-separated input,
+  // -r/--no-run-if-empty, -t/--verbose, -p/--interactive, -x/--exit,
+  // -o/--open-tty, plus the deprecated OPTIONAL-argument forms -e/-i/-l
+  // (their argument is attachable only, see
+  // WRAPPER_OPTIONAL_ARG_SHORT_FLAGS below). Value-taking: -a FILE, -E
+  // EOF-str, -I replstr, -L lines, -n max-args, -P procs, -s size, -d delim.
+  // Note the -0 form: an unwhitelisted `-0` would swallow the wrapped command
+  // (`xargs -0 rm -rf / harmless` resolved the harmless word as the command),
+  // and `-t` failed the same way — `printf x | xargs -t rm -rf /tmp/cache ~`
+  // consumed `rm` as an option value and left `~` as a confidently unrelated
+  // executable, so every predicate returned false while bash deleted the home
+  // directory.
+  xargs: new Set(['0', 'r', 't', 'p', 'x', 'o', 'e', 'i', 'l']),
 };
 
 /**
@@ -955,6 +962,18 @@ const WRAPPER_VALUE_SHORT_FLAGS: Record<string, ReadonlySet<string>> = {
   stdbuf: new Set(['i', 'o', 'e']),
   ionice: new Set(['c', 'n', 'p']),
   flock: new Set(['w', 'E']),
+};
+
+/**
+ * Wrapper short flags whose argument is OPTIONAL (`xargs -i[R]`, `xargs
+ * -e[END]`, `xargs -l[MAX-LINES]`). getopt accepts an optional argument only
+ * when it is glued to the token, so the bare form is complete on its own and
+ * the next word is the wrapped command in BOTH shapes: neither `-i` nor
+ * `-i{}` may consume a value word. Reading them as value-taking ate the
+ * command (`xargs -i rm -rf ~` resolved `~` as the executable).
+ */
+const WRAPPER_OPTIONAL_ARG_SHORT_FLAGS: Record<string, ReadonlySet<string>> = {
+  xargs: new Set(['e', 'i', 'l']),
 };
 
 /**
@@ -1164,6 +1183,7 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
     const valueFreeFlags = WRAPPER_VALUE_FREE_FLAGS[base];
     const valueFreeLongFlags = WRAPPER_VALUE_FREE_LONG_FLAGS[base];
     const valueTakingShortFlags = WRAPPER_VALUE_SHORT_FLAGS[base];
+    const optionalArgShortFlags = WRAPPER_OPTIONAL_ARG_SHORT_FLAGS[base];
     const valueTakingLongFlags = WRAPPER_VALUE_LONG_FLAGS[base];
     index++;
     // Consume wrapper-owned positional values first (timeout DURATION, flock
@@ -1231,6 +1251,13 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
         }
         const flagBody = shortFlag[1];
         const flagHead = flagBody[0];
+        if (optionalArgShortFlags?.has(flagHead)) {
+          // `-i` / `-i{}` / `-eEND` / `-l5`: the argument is optional and, when
+          // present, glued to the token — so the option ends here and the next
+          // word is always the wrapped command.
+          index++;
+          continue;
+        }
         if (valueTakingShortFlags?.has(flagHead)) {
           // `-u` reads the next word; `-uFOO` / `-C/tmp` already carry it.
           index += flagBody.length === 1 ? 2 : 1;
