@@ -221,6 +221,7 @@ export const channelMemberGrants = pgTable(
   (t) => [
     uniqueIndex('channel_member_grants_member_unique').on(t.memberId),
     index('channel_member_grants_owner_status_idx').on(t.deviceOwnerId, t.status),
+    index('channel_member_grants_channel_requester_idx').on(t.channelId, t.requestedByMemberId),
     foreignKey({
       columns: [t.channelId, t.memberId],
       foreignColumns: [channelMembers.channelId, channelMembers.id],
@@ -280,6 +281,8 @@ export const channelThreads = pgTable(
   // Threads and messages reference each other; the annotation breaks the type cycle.
   (t): PgTableExtraConfigValue[] => [
     unique('channel_threads_scope_unique').on(t.channelId, t.id),
+    // Foreign-key checks must also find trashed Threads, which the live-root index excludes.
+    index('channel_threads_root_message_idx').on(t.channelId, t.rootMessageId),
     // One live Thread per root message; a trashed Thread keeps its row until restore or purge.
     uniqueIndex('channel_threads_root_unique')
       .on(t.channelId, t.rootMessageId)
@@ -332,6 +335,12 @@ export const channelMessages = pgTable(
   // Threads and messages reference each other; the annotation breaks the type cycle.
   (t): PgTableExtraConfigValue[] => [
     unique('channel_messages_scope_unique').on(t.channelId, t.id),
+    index('channel_messages_user_id_idx')
+      .on(t.userId)
+      .where(sql`${t.userId} IS NOT NULL`),
+    index('channel_messages_agent_id_idx')
+      .on(t.agentId)
+      .where(sql`${t.agentId} IS NOT NULL`),
     uniqueIndex('channel_messages_sequence_unique').on(t.channelId, t.sequence),
     uniqueIndex('channel_messages_request_key_unique').on(t.channelId, t.requestKey),
     index('channel_messages_thread_sequence_idx').on(t.channelId, t.threadId, t.sequence),
@@ -457,6 +466,8 @@ export const channelJobs = pgTable(
     unique('channel_jobs_scope_unique').on(t.channelId, t.id),
     uniqueIndex('channel_jobs_delivery_unique').on(t.messageId, t.memberId, t.deliveryKey),
     index('channel_jobs_channel_status_idx').on(t.channelId, t.status),
+    index('channel_jobs_channel_requester_idx').on(t.channelId, t.requesterMemberId),
+    index('channel_jobs_channel_thread_created_at_idx').on(t.channelId, t.threadId, t.createdAt),
     index('channel_jobs_continuation_idx').on(
       t.memberId,
       t.requesterMemberId,

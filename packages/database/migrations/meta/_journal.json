@@ -1344,6 +1344,13 @@
       "when": 1793116364829,
       "tag": "0191_linear_issue_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1793186472263,
+      "tag": "0192_channel_foreign_key_indexes",
+      "breakpoints": true
     }
   ],
   "version": "6"
