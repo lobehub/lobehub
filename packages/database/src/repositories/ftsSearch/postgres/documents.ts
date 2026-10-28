@@ -13,6 +13,7 @@ import type {
   FtsSearchTimeRange,
 } from '../types';
 import type { PostgresFtsSearchContext } from './context';
+import { createScoredScan } from './context';
 import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, truncate } from './results';
 import { timeRangeWhere } from './timeRange';
@@ -40,7 +41,12 @@ export async function searchFolders(
 ): Promise<FtsSearchBackendResponse<FtsSearchFolderResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(documents.id, FOLDER_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(
+    context,
+    documents,
+    FOLDER_FIELDS,
+    preparedQuery,
+  );
   const excludeKb = (column: SQLWrapper) =>
     excludeKbIds && excludeKbIds.length > 0
       ? or(isNull(column), notInArray(column, excludeKbIds))
@@ -60,13 +66,13 @@ export async function searchFolders(
       updatedAt: documents.updatedAt,
       workspaceId: documents.workspaceId,
     })
-    .from(documents)
+    .from(source)
     .where(
       and(
         context.scanScopeWhere(documents),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
         context.liftsExclusionFilter ? undefined : excludeKb(documents.knowledgeBaseId),
-        dialect.match(FOLDER_FIELDS, preparedQuery),
+        match,
       ),
     )
     .orderBy(sql`${score} DESC`)
@@ -122,7 +128,7 @@ export async function searchPages(
 ): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(documents.id, PAGE_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(context, documents, PAGE_FIELDS, preparedQuery);
   const excludeKb = (knowledgeBaseId: SQLWrapper, fileId: SQLWrapper) =>
     excludeKbIds && excludeKbIds.length > 0
       ? and(
@@ -155,7 +161,7 @@ export async function searchPages(
       updatedAt: documents.updatedAt,
       workspaceId: documents.workspaceId,
     })
-    .from(documents)
+    .from(source)
     .where(
       and(
         context.scanScopeWhere(documents),
@@ -164,7 +170,7 @@ export async function searchPages(
           ? undefined
           : excludeKb(documents.knowledgeBaseId, documents.fileId),
         timeRangeWhere(documents, timeRange),
-        dialect.match(PAGE_FIELDS, preparedQuery),
+        match,
       ),
     )
     .orderBy(sql`${score} DESC`)
@@ -225,8 +231,12 @@ export async function searchKnowledgeBaseDocuments(
 
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(documents.id, KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
-  const matchClause = dialect.match(KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(
+    context,
+    documents,
+    KNOWLEDGE_BASE_DOCUMENT_FIELDS,
+    preparedQuery,
+  );
   const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
   const userClause = buildWorkspaceWhere(context.scope, documents);
 
@@ -242,14 +252,14 @@ export async function searchKnowledgeBaseDocuments(
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
-    .from(documents)
+    .from(source)
     .where(
       and(
         userClause,
         folderClause,
         inArray(documents.knowledgeBaseId, knowledgeBaseIds),
         notAgentShareFileReference(db, documents.fileId),
-        matchClause,
+        match,
       ),
     )
     .orderBy(sql`${score} DESC`)
@@ -284,7 +294,7 @@ export async function searchKnowledgeBaseDocuments(
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
-    .from(documents)
+    .from(source)
     .innerJoin(
       knowledgeBaseFiles,
       and(
@@ -293,9 +303,7 @@ export async function searchKnowledgeBaseDocuments(
         inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
       ),
     )
-    .where(
-      and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
-    )
+    .where(and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), match))
     .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('file_backed_hits');

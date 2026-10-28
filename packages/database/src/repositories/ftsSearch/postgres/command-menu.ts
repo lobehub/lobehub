@@ -31,7 +31,7 @@ import type {
   FtsSearchTopicResult,
 } from '../types';
 import type { PostgresFtsSearchContext } from './context';
-import { AGENT_SCOPE_CANDIDATE_POOL } from './context';
+import { AGENT_SCOPE_CANDIDATE_POOL, createScoredScan } from './context';
 import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, buildSelectedResponse, mapScoresToRelevance, truncate } from './results';
 import { timeRangeWhere } from './timeRange';
@@ -79,7 +79,7 @@ export async function searchAgents(
 ): Promise<FtsSearchBackendResponse<FtsSearchAgentResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(agents.id, AGENT_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(context, agents, AGENT_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -96,8 +96,8 @@ export async function searchAgents(
       updatedAt: agents.updatedAt,
       workspaceId: agents.workspaceId,
     })
-    .from(agents)
-    .where(and(context.scanScopeWhere(agents), dialect.match(AGENT_FIELDS, preparedQuery)))
+    .from(source)
+    .where(and(context.scanScopeWhere(agents), match))
     .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('agent_hits');
@@ -153,7 +153,7 @@ export async function searchTopics(
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(topics.id, TOPIC_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(context, topics, TOPIC_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -169,7 +169,7 @@ export async function searchTopics(
       updatedAt: topics.updatedAt,
       workspaceId: topics.workspaceId,
     })
-    .from(topics)
+    .from(source)
     .where(
       and(
         context.scanScopeWhere(topics),
@@ -180,11 +180,11 @@ export async function searchTopics(
         notChannelTopic(),
         agentId && !context.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
         timeRangeWhere(topics, timeRange),
-        dialect.match(TOPIC_FIELDS, preparedQuery),
+        match,
       ),
     )
     // LIKE scores tie frequently; keep recent hits before the candidate cutoff.
-    // ParadeDB retains its score-only ordering to preserve the TopN scan.
+    // ParadeDB retains its existing score-only candidate ordering.
     .orderBy(
       sql`${score} DESC`,
       ...(dialect.isolatesScoredScan ? [] : [desc(topics.updatedAt), topics.id]),
@@ -273,7 +273,12 @@ export async function searchMessages(
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(messages.id, MESSAGE_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(
+    context,
+    messages,
+    MESSAGE_FIELDS,
+    preparedQuery,
+  );
 
   const hits = db
     .select({
@@ -290,7 +295,7 @@ export async function searchMessages(
       updatedAt: messages.updatedAt,
       workspaceId: messages.workspaceId,
     })
-    .from(messages)
+    .from(source)
     .where(
       and(
         context.scanScopeWhere(messages),
@@ -301,11 +306,11 @@ export async function searchMessages(
         notChannelTopicRef(messages.topicId),
         agentId && !context.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
         timeRangeWhere(messages, timeRange),
-        dialect.match(MESSAGE_FIELDS, preparedQuery),
+        match,
       ),
     )
     // Message recency follows creation time, even when older messages are edited.
-    // Preserve ParadeDB's score-only TopN scan.
+    // Preserve ParadeDB's score-only candidate ordering.
     .orderBy(
       sql`${score} DESC`,
       ...(dialect.isolatesScoredScan ? [] : [desc(messages.createdAt), messages.id]),
@@ -337,8 +342,8 @@ export async function searchMessages(
     })
     .from(hits)
     .leftJoin(agents, eq(hits.agentId, agents.id))
-    // Keep parent visibility outside the isolated BM25 scan so ParadeDB can
-    // still use TopN. A topic-less message is valid; a topic-backed message is
+    // Keep parent visibility at the hydration boundary. A topic-less message
+    // is valid; a topic-backed message is
     // visible only when its ownership-scoped parent remains live.
     .leftJoin(topics, and(eq(hits.topicId, topics.id), buildWorkspaceWhere(context.scope, topics)))
     .where(
@@ -388,7 +393,7 @@ export async function searchFiles(
 ): Promise<FtsSearchBackendResponse<FtsSearchFileResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(files.id, FILE_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(context, files, FILE_FIELDS, preparedQuery);
   // A file linked to any restricted KB is fully hidden. The subquery avoids
   // leaking it through a different joined membership row.
   const excludeKb = (fileId: SQLWrapper) =>
@@ -414,7 +419,7 @@ export async function searchFiles(
       url: files.url,
       workspaceId: files.workspaceId,
     })
-    .from(files)
+    .from(source)
     .where(
       and(
         context.scanScopeWhere(files),
@@ -422,7 +427,7 @@ export async function searchFiles(
         // Keep non-library files out of command-menu search.
         libraryVisibleFileSource(files.source),
         context.liftsExclusionFilter ? undefined : excludeKb(files.id),
-        dialect.match(FILE_FIELDS, preparedQuery),
+        match,
       ),
     )
     .orderBy(sql`${score} DESC`)
@@ -480,7 +485,12 @@ export async function searchChatGroups(
 ): Promise<FtsSearchBackendResponse<FtsSearchChatGroupResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(chatGroups.id, CHAT_GROUP_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(
+    context,
+    chatGroups,
+    CHAT_GROUP_FIELDS,
+    preparedQuery,
+  );
 
   const hits = db
     .select({
@@ -494,8 +504,8 @@ export async function searchChatGroups(
       updatedAt: chatGroups.updatedAt,
       workspaceId: chatGroups.workspaceId,
     })
-    .from(chatGroups)
-    .where(and(context.scanScopeWhere(chatGroups), dialect.match(CHAT_GROUP_FIELDS, preparedQuery)))
+    .from(source)
+    .where(and(context.scanScopeWhere(chatGroups), match))
     .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('chat_group_hits');
@@ -538,7 +548,12 @@ export async function searchKnowledgeBases(
 ): Promise<FtsSearchBackendResponse<FtsSearchKnowledgeBaseResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(knowledgeBases.id, KNOWLEDGE_BASE_FIELDS, preparedQuery);
+  const { source, score, match } = createScoredScan(
+    context,
+    knowledgeBases,
+    KNOWLEDGE_BASE_FIELDS,
+    preparedQuery,
+  );
   const excludeIdsWhere = (id: SQLWrapper) =>
     excludeIds && excludeIds.length > 0 ? notInArray(id, excludeIds) : undefined;
 
@@ -553,12 +568,12 @@ export async function searchKnowledgeBases(
       updatedAt: knowledgeBases.updatedAt,
       workspaceId: knowledgeBases.workspaceId,
     })
-    .from(knowledgeBases)
+    .from(source)
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
         context.liftsExclusionFilter ? undefined : excludeIdsWhere(knowledgeBases.id),
-        dialect.match(KNOWLEDGE_BASE_FIELDS, preparedQuery),
+        match,
       ),
     )
     .orderBy(sql`${score} DESC`)
@@ -579,8 +594,8 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
-        // ParadeDB keeps excluded knowledge bases out of the inner scored scan so
-        // TopN ranking remains intact; restricted rows only consume pool slots.
+        // Retain the existing exclusion boundary and candidate pool; restricted
+        // knowledge bases consume pool slots before hydration.
         context.liftsExclusionFilter ? excludeIdsWhere(hits.id) : undefined,
       ),
     )
