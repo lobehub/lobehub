@@ -156,6 +156,7 @@ export const countTasksBlockingAgentDemotion = async (
         or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
       ),
     );
+  /* v8 ignore next -- unreachable: an ungrouped count() always returns exactly one non-null row */
   return Number(row?.count ?? 0);
 };
 
