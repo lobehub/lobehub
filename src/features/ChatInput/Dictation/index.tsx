@@ -14,6 +14,7 @@ import { isOtherAudioInputModeActive } from './mutualExclusion';
 import { getDictationControlMode } from './presentation';
 import { useDictationControlFocus } from './useDictationControlFocus';
 import { useDictationPrefetch } from './useDictationPrefetch';
+import { useHoldToDictate } from './useHoldToDictate';
 import { useRealtimeDictation } from './useRealtimeDictation';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -157,6 +158,16 @@ const Dictation = memo(() => {
     setActiveAudioInputMode('dictation');
     void client.start();
   }, [client, generating, otherAudioModeActive, setActiveAudioInputMode]);
+
+  useHoldToDictate({
+    canStart: !generating && !otherAudioModeActive,
+    client,
+    editor,
+    enabled: enabled && !mobile,
+    prefetch,
+    start,
+    status,
+  });
 
   const dismiss = useCallback(() => {
     void client?.dispose();

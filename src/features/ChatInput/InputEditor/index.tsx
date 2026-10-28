@@ -48,6 +48,7 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
+import DictationHoldPlaceholder from './DictationHoldPlaceholder';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
@@ -569,13 +570,15 @@ const InputEditor = memo<{
         variant={'chat'}
         placeholder={
           ghostMarkdown === undefined ? (
-            (placeholder ?? (
-              <Placeholder
-                heterogeneousName={heterogeneousName}
-                showAgentAssignmentHint={showAgentAssignmentHint}
-                variant={placeholderVariant}
-              />
-            ))
+            <DictationHoldPlaceholder>
+              {placeholder ?? (
+                <Placeholder
+                  heterogeneousName={heterogeneousName}
+                  showAgentAssignmentHint={showAgentAssignmentHint}
+                  variant={placeholderVariant}
+                />
+              )}
+            </DictationHoldPlaceholder>
           ) : (
             <span className={ghostClassName}>{getHistoryPreviewText(ghostMarkdown)}</span>
           )

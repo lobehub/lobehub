@@ -109,6 +109,11 @@ export interface PublicState {
 
 export interface State extends PublicState {
   _savedEditorState?: Record<string, any>;
+  /**
+   * Hold-to-dictate on the input: `ready` while the gesture is usable,
+   * `holding` while the user keeps the pointer pressed.
+   */
+  dictationHold?: 'holding' | 'ready';
   editor?: IEditor;
   inputCompletionError?: InputCompletionError;
   inputCompletionErrorDismissed: boolean;
