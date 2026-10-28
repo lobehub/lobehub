@@ -68,12 +68,14 @@ export const buildTabContextMenuItems = ({
         }
       : null,
     { type: 'divider' },
-    {
-      disabled: !isTabClosable(totalCount),
-      key: 'closeCurrentTab',
-      label: t('tab.closeCurrentTab'),
-      onClick: () => onClose(id),
-    },
+    // Left out rather than disabled: a lone tab has no close at all (see tabClose).
+    isTabClosable(totalCount)
+      ? {
+          key: 'closeCurrentTab',
+          label: t('tab.closeCurrentTab'),
+          onClick: () => onClose(id),
+        }
+      : null,
     {
       disabled: closableOthers <= 0,
       key: 'closeOtherTabs',

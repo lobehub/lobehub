@@ -46,7 +46,9 @@ describe('close entries', () => {
   it('offers no close at all for a lone tab', () => {
     const items = build(0, 1);
 
-    expect(isDisabled(items, 'closeCurrentTab')).toBe(true);
+    expect(items.some((item) => !!item && 'key' in item && item.key === 'closeCurrentTab')).toBe(
+      false,
+    );
     expect(isDisabled(items, 'closeOtherTabs')).toBe(true);
     expect(isDisabled(items, 'closeLeftTabs')).toBe(true);
     expect(isDisabled(items, 'closeRightTabs')).toBe(true);
