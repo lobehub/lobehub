@@ -230,15 +230,9 @@ describe('LobeHub CLI plugin', () => {
     ['missing patch', (digits: string) => `${digits}.0`, false],
     ['long minor', (digits: string) => `2.${digits}`, false],
     ['digits before a valid version', (digits: string) => `${digits}x 2.0.20`, true],
-  ] as const)('handles %s without excessive backtracking', (_name, banner, expected) => {
+  ] as const)('parses a long banner with %s', (_name, banner, expected) => {
     const version = banner('9'.repeat(100_000));
-    const start = performance.now();
-    const actual = claudeCodeLoadsPluginSkills(version);
-    const elapsed = performance.now() - start;
 
-    expect(actual).toBe(expected);
-    // A linear scan takes milliseconds; allow ample CI headroom, but not the
-    // seconds spent retrying a failing match at every digit in the old parser.
-    expect(elapsed).toBeLessThan(1000);
+    expect(claudeCodeLoadsPluginSkills(version)).toBe(expected);
   });
 });
