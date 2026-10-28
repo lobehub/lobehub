@@ -637,6 +637,8 @@ export default {
   'channel.devicePolicy': 'Device Access',
   'channel.devicePolicyHint': 'Who may operate your devices through the bot.',
   'channel.deviceAllowFrom': 'Authorized People',
+  'channel.deviceAllowFromAdd': 'Add person',
+  'channel.deviceAllowFromEmpty': 'No one is authorized yet, so only you can use your devices.',
   'channel.deviceAllowFromHint':
     'Listed people can read and write files and run commands on your devices through the bot.',
   'channel.hero.title': '{{name}} bot',

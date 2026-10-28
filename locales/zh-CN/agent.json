@@ -177,6 +177,8 @@
   "channel.devWebhookProxyUrl": "HTTPS 隧道地址",
   "channel.devWebhookProxyUrlHint": "可选。用于将 webhook 请求转发到本地开发服务器的 HTTPS 隧道 URL。",
   "channel.deviceAllowFrom": "授权成员",
+  "channel.deviceAllowFromAdd": "添加成员",
+  "channel.deviceAllowFromEmpty": "尚未授权任何成员，目前仅你本人可以使用设备。",
   "channel.deviceAllowFromHint": "名单中的成员可以通过机器人在你的设备上读写文件、执行命令。",
   "channel.devicePolicy": "设备权限",
   "channel.devicePolicyHint": "谁可以通过机器人操作你的设备。",

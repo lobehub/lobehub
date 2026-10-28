@@ -145,6 +145,8 @@ describe('channel settings form: access tab', () => {
     );
 
     expect(screen.getByText(en['channel.access.device.list'])).toBeVisible();
+    // The list's add button derives its copy from the field label: a missing key shows raw.
+    expect(screen.getByRole('button', { name: 'Add person' })).toBeVisible();
     expect(screen.getByDisplayValue('friend-1')).toBeInTheDocument();
 
     const enabled = screen
