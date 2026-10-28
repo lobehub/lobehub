@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { createHash, randomUUID } from 'node:crypto';
 
+import { MCP_CONTINUATION_CONTROL } from '@lobechat/mcp-elicitation/types';
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +17,7 @@ import {
   userInstalledPlugins,
   users,
 } from '@/database/schemas';
+import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
 import {
@@ -37,12 +39,16 @@ import { resumeMcpElicitation as resumeSavedMcpElicitation } from './resume';
 
 const probes = vi.hoisted(() => ({
   execute: vi.fn(),
+  interrupted: vi.fn().mockResolvedValue(false),
+  policy: vi.fn().mockResolvedValue({ canReadArchive: false, limit: 25000 }),
   schedule: vi.fn(),
   control: vi.fn(async ({ result }) => ({ result, blocked: false, cancelled: false })),
   resume: vi.fn(),
   queueImpl: undefined as unknown,
   localCallback: vi.fn(),
 }));
+// Archives in this suite are database documents; no object-storage I/O is used.
+vi.mock('@/server/services/file/impls', () => ({ createFileServiceModule: () => ({}) }));
 vi.mock('@/server/services/toolExecution', () => ({
   ToolExecutionService: class {
     executeTool = probes.execute;
@@ -82,6 +88,8 @@ vi.mock('@/server/services/queue', () => ({
 
 const testRuntime = {
   executeTool: probes.execute,
+  isOperationInterrupted: probes.interrupted,
+  getToolResultPolicy: probes.policy,
   controlCompletedToolResult: probes.control,
   tryResumeParentFromAsyncTool: probes.resume,
 };
@@ -884,4 +892,69 @@ it('authorizes a client-to-durable approval continuation only for its server-per
   await expect(
     service.ensureToolMessage({ ...replacement, toolMessageId: 'wrong-row' }),
   ).rejects.toThrow('conversation');
+});
+
+it('settles a stopped queued continuation without sending tools/call', async () => {
+  const { item, toolMessageId } = await open({
+    legacy: false,
+    checkpoint: {
+      inputRequired: { resultType: 'input_required', requestState: 'saved' },
+      round: 1,
+    },
+    requests: {},
+  });
+  const rid = randomUUID();
+  await service.claim(item.id, rid, { [MCP_CONTINUATION_CONTROL]: { action: 'accept' } });
+  probes.interrupted.mockResolvedValueOnce(true);
+  await executeMcpElicitationResume(service, item.id, rid);
+  expect(probes.execute).not.toHaveBeenCalled();
+  expect((await messageModel.findById(toolMessageId))?.content).toContain('stopped');
+});
+it('redelivers a committed result after parent-resume failure without repeating the remote mutation', async () => {
+  const { item, toolMessageId } = await open({
+    legacy: false,
+    checkpoint: {
+      inputRequired: { resultType: 'input_required', requestState: 'saved' },
+      round: 1,
+    },
+    requests: {},
+  });
+  const rid = randomUUID();
+  await service.claim(item.id, rid, { [MCP_CONTINUATION_CONTROL]: { action: 'accept' } });
+  probes.resume.mockRejectedValueOnce(new Error('temporary parent queue failure'));
+  await expect(executeMcpElicitationResume(service, item.id, rid)).rejects.toThrow('parent queue');
+  await executeMcpElicitationResume(new McpElicitationService(db, owner), item.id, rid);
+  expect(probes.execute).toHaveBeenCalledOnce();
+  expect((await messageModel.findById(toolMessageId))?.content).toBe('remote receipt');
+  expect((await service.get(item.id)).status).toBe('resolved');
+});
+
+it('archives the complete long continuation result with the original configured window and a readable omitted tail', async () => {
+  const { item, toolMessageId } = await open({
+    legacy: false,
+    checkpoint: {
+      inputRequired: { resultType: 'input_required', requestState: 'saved' },
+      round: 1,
+    },
+    requests: {},
+  });
+  const rid = randomUUID();
+  await service.claim(item.id, rid, { [MCP_CONTINUATION_CONTROL]: { action: 'accept' } });
+  const full = 'first line\n' + 'long tool result\n'.repeat(3000) + 'tail:remote-receipt';
+  probes.execute.mockImplementationOnce(async (_tool, ctx) => ({
+    content: ctx.skipResultTruncation ? full : full.slice(0, 25000),
+    success: true,
+    executionTime: 1,
+  }));
+  probes.policy.mockResolvedValueOnce({ canReadArchive: true, limit: 32 });
+  await executeMcpElicitationResume(service, item.id, rid);
+  const row = await messageModel.findById(toolMessageId);
+  expect(row?.content).toContain('Full content archived');
+  expect(row?.content).not.toContain('tail:remote-receipt');
+  const path = row!.content.match(/Path: (.+)/)![1];
+  const persisted = await new AgentDocumentVfsService(db, owner).read(path, {
+    agentId: 'mcp-agent',
+    topicId: 'mcp-topic',
+  });
+  expect(persisted.content).toBe(full);
 });

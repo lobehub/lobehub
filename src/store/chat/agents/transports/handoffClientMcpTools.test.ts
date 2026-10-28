@@ -5,6 +5,22 @@ import type { ChatStore } from '@/store/chat/store';
 
 import { prepareClientMcpTools } from './handoffClientMcpTools';
 
+const plugins = vi.hoisted(() => ({ cloud: false }));
+vi.mock('@/store/tool/store', () => ({
+  getToolStoreState: () => ({
+    connectors: [],
+    installedPlugins: plugins.cloud
+      ? [{ identifier: 'fixture', customParams: { mcp: { type: 'cloud' } } }]
+      : [],
+  }),
+}));
+vi.mock('@/store/tool/selectors', () => ({
+  pluginSelectors: {
+    getInstalledPluginById: (id: string) => (s: { installedPlugins: { identifier: string }[] }) =>
+      s.installedPlugins.find((p) => p.identifier === id),
+    getCustomPluginById: () => () => undefined,
+  },
+}));
 const api = vi.hoisted(() => ({ register: vi.fn(), lease: vi.fn(), cancel: vi.fn() }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => null,
@@ -35,6 +51,7 @@ function fixture() {
       messages: {
         findById: vi.fn().mockResolvedValue({ id: 'assistant', role: 'assistant' }),
         createToolMessage: create,
+        updatePluginState: vi.fn(),
       },
     },
   } as unknown as AgentRuntimeHost;
@@ -53,6 +70,7 @@ function fixture() {
 }
 afterEach(() => {
   vi.clearAllMocks();
+  plugins.cloud = false;
   vi.useRealTimers();
 });
 describe('client MCP persistence preserves execution mode', () => {
@@ -166,4 +184,54 @@ describe('client MCP persistence preserves execution mode', () => {
     ).rejects.toThrow('persistence unavailable');
     expect(f.store.executeGatewayAgent).not.toHaveBeenCalled();
   });
+});
+
+it('leaves cloud-only and cloud plus builtin instructions on their existing executors before any durable registration', async () => {
+  plugins.cloud = true;
+  const f = fixture();
+  const instruction = {
+    type: 'call_tools_batch' as const,
+    payload: {
+      parentMessageId: 'assistant',
+      toolsCalling: [tool, { ...tool, id: 'builtin', type: 'builtin' as const }],
+    },
+  };
+  expect(await prepareClientMcpTools(f.host, instruction, () => f.store)).toBe(instruction);
+  expect(api.register).not.toHaveBeenCalled();
+  expect(f.create).not.toHaveBeenCalled();
+});
+
+it('registers only native calls in a cloud/native/builtin batch and publishes each actual discovery deadline', async () => {
+  vi.useFakeTimers();
+  plugins.cloud = true;
+  const f = fixture();
+  const native = { ...tool, id: 'native', identifier: 'local-fixture' };
+  const builtin = { ...tool, id: 'builtin', type: 'builtin' as const };
+  const deadline = Date.now() + 600000;
+  api.register.mockResolvedValueOnce({
+    operationId: 'durable',
+    deadline,
+    deadlines: { 'row-2': deadline },
+  });
+  const prepared = await prepareClientMcpTools(
+    f.host,
+    {
+      type: 'call_tools_batch',
+      payload: { parentMessageId: 'assistant', toolsCalling: [tool, native, builtin] },
+    },
+    () => f.store,
+  );
+  expect(api.register).toHaveBeenCalledWith(expect.objectContaining({ toolMessageIds: ['row-2'] }));
+  expect(f.store.operations.local.metadata.mcpClientSteps).toHaveProperty('row-2');
+  expect(f.store.operations.local.metadata.mcpClientSteps).not.toHaveProperty('row-1');
+  expect(f.host.transports.messages.updatePluginState).toHaveBeenCalledWith('row-2', {
+    mcpInvocationDeadline: deadline,
+  });
+  expect(prepared).toMatchObject({
+    payload: {
+      toolsCalling: [tool, native, builtin],
+      existingToolMessageIds: { call_1: 'row-1', native: 'row-2', builtin: 'row-3' },
+    },
+  });
+  await f.callbacks[0]();
 });

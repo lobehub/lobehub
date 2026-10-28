@@ -54,3 +54,18 @@ it('executes two steps with the same provider id once each and rejoins only thei
   );
   expect(sideEffects).toEqual(['one', 'two']);
 });
+
+it('keeps a long native invocation receipt beyond seven minutes without replaying its remote effect', async () => {
+  vi.useFakeTimers();
+  try {
+    const registry = new McpInvocationRegistry();
+    const execute = vi.fn().mockResolvedValue('original receipt');
+    const deadline = Date.now() + 600000;
+    await registry.run('long', 'args', deadline, execute);
+    await vi.advanceTimersByTimeAsync(420001);
+    await expect(registry.run('long', 'args', deadline, execute)).resolves.toBe('original receipt');
+    expect(execute).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});

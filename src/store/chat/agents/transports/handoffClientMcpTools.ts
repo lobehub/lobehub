@@ -6,6 +6,8 @@ import { toRecord } from '@lobechat/utils/object';
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import type { ChatStore } from '@/store/chat/store';
+import { pluginSelectors } from '@/store/tool/selectors';
+import { getToolStoreState } from '@/store/tool/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /** Persist the original client batch before wire execution. Its agent loop stays on this host. */
@@ -21,6 +23,18 @@ export async function prepareClientMcpTools(
       ? [instruction.payload.toolCalling]
       : instruction.payload.toolsCalling;
   if (!tools.some((tool) => tool.type === 'mcp')) return instruction;
+  const toolStore = getToolStoreState();
+  const managedTools = tools.filter((tool) => {
+    if (tool.type !== 'mcp') return false;
+    // Connector-first dispatch has priority over an installed plugin with the same identifier.
+    if (toolStore.connectors?.some((connector) => connector.identifier === tool.identifier))
+      return true;
+    const plugin =
+      pluginSelectors.getInstalledPluginById(tool.identifier)(toolStore) ??
+      pluginSelectors.getCustomPluginById(tool.identifier)(toolStore);
+    return plugin?.customParams?.mcp?.type !== 'cloud';
+  });
+  if (!managedTools.length) return instruction;
   const operation = get().operations[host.operation.operationId];
   if (!operation) throw new Error('Client MCP operation is unavailable');
   const parent = await host.transports.messages.findById(instruction.payload.parentMessageId);
@@ -55,10 +69,16 @@ export async function prepareClientMcpTools(
   const lambdaClient = createWorkspaceLambdaClient(workspaceId ?? null);
   const anchor = await lambdaClient.mcpElicitation.registerClientStep.mutate({
     assistantMessageId: assistantId,
-    toolMessageIds: tools.filter((tool) => tool.type === 'mcp').map((tool) => ids[tool.id]),
+    toolMessageIds: managedTools.map((tool) => ids[tool.id]),
     localHostTimeoutMs: isDesktop ? await ensureElectronIpc().mcp.getToolTimeoutMs() : undefined,
     owner,
   });
+  for (const tool of managedTools) {
+    const id = ids[tool.id];
+    await host.transports.messages.updatePluginState(id, {
+      mcpInvocationDeadline: anchor.deadlines?.[id] ?? anchor.deadline,
+    });
+  }
   const binding = { ...anchor, owner, workspaceId, assistantMessageId: assistantId };
   get().updateOperationMetadata(host.operation.operationId, {
     mcpClientStep: binding,
@@ -66,9 +86,7 @@ export async function prepareClientMcpTools(
     // Bind each row to its own anchor instead of using the last prepared subset.
     mcpClientSteps: {
       ...toRecord(get().operations[host.operation.operationId]?.metadata?.mcpClientSteps),
-      ...Object.fromEntries(
-        tools.filter((tool) => tool.type === 'mcp').map((tool) => [ids[tool.id], binding]),
-      ),
+      ...Object.fromEntries(managedTools.map((tool) => [ids[tool.id], binding])),
     },
   });
   const heartbeat = setInterval(() => {

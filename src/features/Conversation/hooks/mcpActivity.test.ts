@@ -44,3 +44,10 @@ describe('MCP activity polling boundary', () => {
     ).toBe(0);
   });
 });
+
+it('keeps discovery alive for a long native invocation until its actual persisted deadline', () => {
+  const native = { ...tool, pluginState: { mcpInvocationDeadline: now + 600_000 } };
+  expect(mcpActivityDeadline([native], now + 180_001)).toBe(now + 600_000);
+  expect(mcpActivityDeadline([native], now + 600_001)).toBe(0);
+  expect(mcpActivityDeadline([{ ...native, content: 'receipt' }], now)).toBe(0);
+});

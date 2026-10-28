@@ -44,7 +44,12 @@ export function mcpActivityDeadline(
     )
       continue;
     const pending = message.pluginState?.mcpElicitation as { deadline?: number } | undefined;
-    const until = pending?.deadline ?? new Date(message.createdAt).getTime() + 180_000;
+    const invocationDeadline = message.pluginState?.mcpInvocationDeadline;
+    const until =
+      pending?.deadline ??
+      (typeof invocationDeadline === 'number'
+        ? invocationDeadline
+        : new Date(message.createdAt).getTime() + 180_000);
     if (until > now) deadline = Math.max(deadline, until);
   }
   return deadline;

@@ -122,3 +122,20 @@ describe('current-round durable MCP recovery', () => {
     expect((await McpInvocationModel.recoveryWork(db)).interactions).toEqual([]);
   });
 });
+
+it('claims due and answered interactions parked on async tools, but never admits that operation to client-step recovery', async () => {
+  const a = await createAnchor();
+  const due = await createInteraction(a, { deadline: Date.now() - 1000 });
+  await db
+    .update(agentOperations)
+    .set({ status: 'waiting_for_async_tool' })
+    .where(eq(agentOperations.id, a.id));
+  const first = await McpInvocationModel.recoveryWork(db);
+  expect(first.interactions.map((row) => row.itemId)).toEqual([due.item.id]);
+  expect(first.clients).toEqual([]);
+  const answered = await createInteraction(a);
+  await claimInteraction(answered);
+  const second = await McpInvocationModel.recoveryWork(db);
+  expect(second.interactions.map((row) => row.itemId)).toEqual([answered.item.id]);
+  expect(second.clients).toEqual([]);
+});
