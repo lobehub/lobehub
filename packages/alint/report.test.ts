@@ -153,6 +153,29 @@ describe('toFindingComments', () => {
     ]);
   });
 
+  it('keys findings that share a line apart, so fixing one leaves no comment behind', () => {
+    const comments = toFindingComments(
+      toFindings(
+        {
+          diagnostics: [
+            diagnostic({ message: 'first rule' }),
+            diagnostic({ message: 'second rule', ruleId: 'lobehub/no-mode-flags' }),
+            diagnostic({ message: 'first rule, again' }),
+          ],
+        },
+        '/repo',
+      ),
+    );
+
+    expect(comments.map((comment) => comment.key)).toEqual([
+      `${file}:12:pmap-over-promise-all`,
+      `${file}:12:no-mode-flags`,
+      `${file}:12:pmap-over-promise-all#2`,
+    ]);
+    for (const comment of comments)
+      expect(comment.body.startsWith(findingMarker(comment.key))).toBe(true);
+  });
+
   it(`keeps the per-line comments up to ${5} findings and aggregates above`, () => {
     expect(commentsFor(1, 2, 3, 4, 5)).toHaveLength(AGGREGATE_THRESHOLD);
 

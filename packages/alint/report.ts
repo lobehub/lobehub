@@ -192,9 +192,9 @@ export interface FindingComment {
 
 const severityIcon = (finding: Finding) => (finding.severity === 'error' ? '❌' : '⚠️');
 
-const toFindingBody = (finding: Finding) =>
+const toFindingBody = (finding: Finding, key: string) =>
   [
-    findingMarker(`${finding.file}:${finding.line}`),
+    findingMarker(key),
     `**\`${finding.rule}\`** · ${finding.severity}`,
     '',
     oneLine(finding.message),
@@ -219,12 +219,31 @@ const toAggregatedBody = (file: string, findings: Finding[]) =>
  * runaway run bounded, not to hide lines that are cheap to annotate.
  */
 export const toFindingComments = (findings: Finding[]): FindingComment[] => {
+  const inline = findings.slice(0, INLINE_LIMIT);
   const groups = new Map<string, Finding[]>();
-  for (const finding of findings.slice(0, INLINE_LIMIT)) {
+  for (const finding of inline) {
     const group = groups.get(finding.file);
     if (group) group.push(finding);
     else groups.set(finding.file, [finding]);
   }
+  // Two rules can report the same line, so `file:line` is not always unique.
+  // Count the collisions once, up front: a key that shifts between runs would
+  // re-create a comment and leave the one for a fixed finding behind.
+  const perLine = new Map<string, number>();
+  for (const finding of inline) {
+    const line = `${finding.file}:${finding.line}`;
+    perLine.set(line, (perLine.get(line) ?? 0) + 1);
+  }
+  const keys = new Set<string>();
+  const keyFor = (finding: Finding) => {
+    const line = `${finding.file}:${finding.line}`;
+    const base = (perLine.get(line) ?? 0) > 1 ? `${line}:${finding.rule}` : line;
+    let key = base;
+    // The same rule can still report the same line twice; order the repeats.
+    for (let repeat = 2; keys.has(key); repeat += 1) key = `${base}#${repeat}`;
+    keys.add(key);
+    return key;
+  };
   const comments: FindingComment[] = [];
   for (const [file, group] of groups) {
     if (group.length > AGGREGATE_THRESHOLD) {
@@ -237,14 +256,16 @@ export const toFindingComments = (findings: Finding[]): FindingComment[] => {
       });
       continue;
     }
-    for (const finding of group)
+    for (const finding of group) {
+      const key = keyFor(finding);
       comments.push({
-        body: toFindingBody(finding),
-        key: `${file}:${finding.line}`,
+        body: toFindingBody(finding, key),
+        key,
         line: finding.line,
         path: file,
         side: 'RIGHT',
       });
+    }
   }
   return comments;
 };
@@ -273,6 +294,19 @@ const api = async (method: string, url: string, body?: unknown) => {
   return response.status === 204 ? undefined : response.json();
 };
 
+/** Every page of a list endpoint: a PR can carry more than one page of comments. */
+const apiPages = async <T>(url: string): Promise<T[]> => {
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const batch = (await api(
+      'GET',
+      `${url}${url.includes('?') ? '&' : '?'}per_page=100&page=${page}`,
+    )) as T[];
+    items.push(...batch);
+    if (batch.length < 100) return items;
+  }
+};
+
 const findPullRequest = async (repo: string, branch?: string) => {
   if (process.env.PR_NUMBER) return Number(process.env.PR_NUMBER);
   if (!branch) return undefined;
@@ -286,11 +320,11 @@ const findPullRequest = async (repo: string, branch?: string) => {
 
 /** The review comments this script wrote on an earlier run, keyed by marker. */
 const findFindingComments = async (repo: string, pr: number) => {
-  const comments = (await api('GET', `/repos/${repo}/pulls/${pr}/comments?per_page=100`)) as {
+  const comments = await apiPages<{
     body?: string | null;
     id: number;
     line?: number | null;
-  }[];
+  }>(`/repos/${repo}/pulls/${pr}/comments`);
   const byKey = new Map<string, { body?: string | null; id: number; line?: number | null }>();
   for (const comment of comments) {
     const key = markerKey(comment.body);
