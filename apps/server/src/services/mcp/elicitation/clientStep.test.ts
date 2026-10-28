@@ -2,13 +2,18 @@
 import { randomUUID } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
 import { agentOperations, agents, topics, users } from '@/database/schemas';
 
 import { getTestDB } from '../../../../../../packages/database/src/core/getTestDB';
-import { cancelClientMcpStep, executeClientMcpTool, registerClientMcpStep } from './clientStep';
+import {
+  cancelClientMcpStep,
+  executeClientMcpTool,
+  expireClientMcpStep,
+  registerClientMcpStep,
+} from './clientStep';
 import { McpElicitationService } from './McpElicitationService';
 
 const probes = vi.hoisted(() => ({ execute: vi.fn(), manifest: vi.fn(), schedule: vi.fn() }));
@@ -84,7 +89,186 @@ afterAll(async () => {
   await db.delete(agentOperations).where(eq(agentOperations.userId, userId));
   await db.delete(users).where(eq(users.id, userId));
 });
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 describe('durable client MCP host without Agent Gateway', () => {
+  it.each(['environment', 'manifest'] as const)(
+    'preserves a 300s %s execution budget',
+    async (source) => {
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now);
+      if (source === 'environment') vi.stubEnv('MCP_TOOL_TIMEOUT', '300000');
+      else
+        probes.manifest.mockResolvedValue({
+          identifier: 'fixture',
+          api: [{ name: 'form', defaultTimeoutMs: 300000 }],
+          mcpParams: { type: 'http', url: 'https://example.com' },
+        });
+      const { operationId, deadline } = await register();
+      expect(deadline).toBe(now + 300000);
+      await executeClientMcpTool(service, {
+        ...tool,
+        operationId,
+        assistantMessageId: 'client-assistant',
+        toolMessageId: 'client-tool',
+        toolCallId: tool.id,
+      });
+      expect(probes.execute.mock.calls[0][1].executionTimeoutMs).toBe(300000);
+    },
+  );
+  it('preserves the configured native stdio host default', async () => {
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    probes.manifest.mockResolvedValue({
+      identifier: 'fixture',
+      mcpParams: { type: 'stdio', command: 'fixture' },
+    });
+    const first = await registerClientMcpStep(service, {
+      assistantMessageId: 'client-assistant',
+      toolMessageIds: ['client-tool'],
+      owner: randomUUID(),
+      localHostTimeoutMs: 300000,
+    });
+    expect(first.deadline).toBe(now + 300000);
+    expect(first.deadlines).toEqual({ 'client-tool': now + 300000 });
+  });
+  it('keeps each MCP budget separate in a mixed-duration batch and ignores native hints for HTTP', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const long = { ...tool, id: 'long-call', arguments: JSON.stringify({ timeout: 300000 }) };
+    await messages.update('client-assistant', { tools: [tool, long] });
+    await messages.create(
+      {
+        role: 'tool',
+        content: '',
+        agentId: 'client-agent',
+        topicId: 'client-topic',
+        parentId: 'client-assistant',
+        plugin: long,
+        tool_call_id: long.id,
+      },
+      'long-mcp',
+    );
+    const anchor = await registerClientMcpStep(service, {
+      assistantMessageId: 'client-assistant',
+      toolMessageIds: ['client-tool', 'long-mcp'],
+      owner: randomUUID(),
+      localHostTimeoutMs: 900000,
+    });
+    expect(anchor.deadlines).toEqual({ 'client-tool': now + 60000, 'long-mcp': now + 300000 });
+    clock.mockReturnValue(now + 61000);
+    await executeClientMcpTool(service, {
+      ...tool,
+      operationId: anchor.operationId,
+      assistantMessageId: 'client-assistant',
+      toolMessageId: 'client-tool',
+      toolCallId: tool.id,
+    });
+    expect(probes.execute).not.toHaveBeenCalled();
+    expect((await messages.findMessagePlugin('client-tool'))?.error).toMatchObject({
+      code: 'MCP_CLIENT_TOOL_FAILED',
+    });
+    await executeClientMcpTool(service, {
+      ...long,
+      operationId: anchor.operationId,
+      assistantMessageId: 'client-assistant',
+      toolMessageId: 'long-mcp',
+      toolCallId: long.id,
+    });
+    expect(probes.execute).toHaveBeenCalledOnce();
+    expect(probes.execute.mock.calls[0][1].executionTimeoutMs).toBe(239000);
+  });
+  it('retains a wire execution lease after its renderer owner disconnects', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const { operationId } = await register();
+    await service.invocations.claimClientWire(operationId, 'client-tool', now + 240000);
+    clock.mockReturnValue(now + 181000);
+    await expireClientMcpStep(service, operationId);
+    expect((await messages.findById('client-tool'))?.content).toBe('');
+    clock.mockReturnValue(now + 241000);
+    await expireClientMcpStep(service, operationId);
+    expect((await messages.findMessagePlugin('client-tool'))?.error?.type).toBe(
+      'MCP_CLIENT_TOOL_TIMEOUT',
+    );
+  });
+  it.each(['expire', 'cancel'] as const)(
+    '%s owns only MCP rows, while cold parent still waits for a long builtin sibling',
+    async (action) => {
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+      const builtin = { ...tool, id: 'builtin-2', type: 'builtin' as const, identifier: 'other' };
+      await messages.update('client-assistant', { tools: [tool, builtin] });
+      await messages.create(
+        {
+          role: 'tool',
+          content: '',
+          agentId: 'client-agent',
+          topicId: 'client-topic',
+          parentId: 'client-assistant',
+          plugin: builtin,
+          tool_call_id: builtin.id,
+        },
+        'long-builtin',
+      );
+      const owner = randomUUID();
+      const { operationId } = await registerClientMcpStep(service, {
+        assistantMessageId: 'client-assistant',
+        toolMessageIds: ['client-tool', 'long-builtin'],
+        owner,
+      });
+      if (action === 'expire')
+        await messages.updateToolMessage('client-tool', { content: 'actual MCP result' });
+      clock.mockReturnValue(now + 181000);
+      if (action === 'expire') await expireClientMcpStep(service, operationId);
+      else await cancelClientMcpStep(service, operationId, owner);
+      expect((await messages.findById('long-builtin'))?.content).toBe('');
+      expect((await messages.findMessagePlugin('long-builtin'))?.error).toBeFalsy();
+      if (action === 'expire')
+        expect((await messages.findById('client-tool'))?.content).toBe('actual MCP result');
+      else
+        expect((await messages.findMessagePlugin('client-tool'))?.error?.type).toBe(
+          'MCP_CLIENT_TOOL_CANCELLED',
+        );
+      if (action === 'expire') {
+        expect(
+          await service.invocations.leaseClientStep(operationId, randomUUID()),
+        ).toBeUndefined();
+        await messages.updateToolMessage('long-builtin', { content: 'actual long builtin result' });
+        const claims = await Promise.all(
+          Array.from({ length: 4 }, () =>
+            service.invocations.leaseClientStep(operationId, randomUUID()),
+          ),
+        );
+        expect(claims.filter(Boolean)).toHaveLength(1);
+      }
+    },
+  );
+  it('does not publish unknown expiry over a live client heartbeat, but explicit stop still wins', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const owner = randomUUID();
+    const { operationId } = await register();
+    const op = (await service.operations.findById(operationId))!;
+    await db
+      .update(agentOperations)
+      .set({
+        metadata: {
+          ...op.metadata,
+          clientMcpStep: { ...op.metadata!.clientMcpStep, owner, leaseUntil: now + 240000 },
+        },
+      })
+      .where(eq(agentOperations.id, operationId));
+    clock.mockReturnValue(now + 181000);
+    await expireClientMcpStep(service, operationId);
+    expect((await messages.findById('client-tool'))?.content).toBe('');
+    await cancelClientMcpStep(service, operationId, owner);
+    expect((await messages.findMessagePlugin('client-tool'))?.error?.type).toBe(
+      'MCP_CLIENT_TOOL_CANCELLED',
+    );
+  });
   it('accepts an executable subset beside approval tools, but cold recovery waits for the entire original assistant batch', async () => {
     const builtin = { ...tool, id: 'approval_2', type: 'builtin' as const, identifier: 'other' };
     await messages.update('client-assistant', { tools: [tool, builtin] });

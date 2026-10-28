@@ -39,8 +39,10 @@ function fixture() {
     },
   } as unknown as AgentRuntimeHost;
   const store = {
-    operations: { local: { context: {}, abortController: controller } },
-    updateOperationMetadata: vi.fn(),
+    operations: { local: { context: {}, metadata: {}, abortController: controller } },
+    updateOperationMetadata: vi.fn((_id, patch) =>
+      Object.assign(store.operations.local.metadata, patch),
+    ),
     executeGatewayAgent: vi.fn(),
     registerAfterCompletionCallback: vi.fn((_id, cb) => callbacks.push(cb)),
   } as unknown as ChatStore;
@@ -74,7 +76,7 @@ describe('client MCP persistence preserves execution mode', () => {
     expect(api.register).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantMessageId: 'assistant',
-        toolMessageIds: ['row-1', 'row-2'],
+        toolMessageIds: ['row-1'],
       }),
     );
     expect(prepared).toMatchObject({
@@ -115,6 +117,36 @@ describe('client MCP persistence preserves execution mode', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(api.lease).not.toHaveBeenCalled();
     expect(api.cancel).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'durable' }));
+  });
+  it('keeps row bindings for concurrently prepared approval subsets', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const instruction = {
+      type: 'call_tool' as const,
+      payload: { parentMessageId: 'assistant', toolCalling: tool },
+    };
+    api.register.mockResolvedValueOnce({
+      operationId: 'first-anchor',
+      deadline: Date.now() + 300000,
+    });
+    await prepareClientMcpTools(f.host, instruction, () => f.store);
+    api.register.mockResolvedValueOnce({
+      operationId: 'second-anchor',
+      deadline: Date.now() + 60000,
+    });
+    await prepareClientMcpTools(
+      f.host,
+      {
+        ...instruction,
+        payload: { ...instruction.payload, toolCalling: { ...tool, id: 'approval-sibling' } },
+      },
+      () => f.store,
+    );
+    expect(f.store.operations.local.metadata.mcpClientSteps).toMatchObject({
+      'row-1': { operationId: 'first-anchor' },
+      'row-2': { operationId: 'second-anchor' },
+    });
+    await Promise.all(f.callbacks.map((callback) => callback()));
   });
   it('leaves non-MCP instructions unchanged and never executes after persistence fails', async () => {
     const f = fixture();

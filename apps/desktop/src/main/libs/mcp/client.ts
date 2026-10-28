@@ -897,20 +897,24 @@ export class MCPClient {
       host?: McpElicitationHost;
       continuation?: McpElicitationContinuation;
       signal?: AbortSignal;
+      timeoutMs?: number;
     } = {},
   ): Promise<ToolCallResult> {
     const invoke = options.host
       ? () =>
           this.elicitation.callToolInteractively(
             { arguments: args, name: toolName },
-            { timeout: getDesktopEnv().MCP_TOOL_TIMEOUT, signal: options.signal },
+            {
+              timeout: options.timeoutMs ?? getDesktopEnv().MCP_TOOL_TIMEOUT,
+              signal: options.signal,
+            },
             options.host!,
           )
       : () =>
           this.elicitation.callTool(
             { arguments: args, name: toolName },
             {
-              timeout: getDesktopEnv().MCP_TOOL_TIMEOUT,
+              timeout: options.timeoutMs ?? getDesktopEnv().MCP_TOOL_TIMEOUT,
               signal: options.signal,
             },
             options.host,

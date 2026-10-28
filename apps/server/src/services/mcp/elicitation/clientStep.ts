@@ -4,6 +4,8 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 
 import { appEnv } from '@/envs/app';
+import { getMcpToolTimeoutMs } from '@/libs/mcp/timeout';
+import { resolveToolTimeoutMs } from '@/server/modules/AgentRuntime/resolveToolTimeout';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 
@@ -13,6 +15,7 @@ import { resolveMcpInvocationManifest } from './resume';
 export interface ClientMcpStep {
   assistantMessageId: string;
   deadline: number;
+  deadlines?: Record<string, number>;
   leaseUntil: number;
   owner: string;
   toolMessageIds: string[];
@@ -27,6 +30,8 @@ export async function cancelClientMcpStep(
   const operation = await service.operations.findById(operationId);
   const step = operation?.metadata?.clientMcpStep as ClientMcpStep | undefined;
   for (const id of step?.toolMessageIds ?? []) {
+    // Older anchors included builtins. Ownership is rechecked before any terminal write.
+    if ((await service.messages.findMessagePlugin(id))?.type !== 'mcp') continue;
     const message =
       'The user cancelled this client tool call. A request already sent to the remote server may still have taken effect; it was not repeated.';
     await service.messages.updateToolMessage(id, {
@@ -47,6 +52,7 @@ export async function registerClientMcpStep(
     assistantMessageId: string;
     toolMessageIds: string[];
     owner: string;
+    localHostTimeoutMs?: number;
   },
 ) {
   const assistant = await service.messages.findById(input.assistantMessageId);
@@ -66,6 +72,8 @@ export async function registerClientMcpStep(
   )
     throw new Error('Client MCP batch does not match the original assistant');
   const sources = [];
+  const deadlines: Record<string, number> = {};
+  const now = Date.now();
   for (const id of input.toolMessageIds) {
     const row = await service.messages.findById(id);
     const plugin = await service.messages.findMessagePlugin(id);
@@ -83,8 +91,34 @@ export async function registerClientMcpStep(
       plugin.arguments !== tool.arguments
     )
       throw new Error('Client MCP tool identity mismatch');
+    if (tool.type !== 'mcp' || plugin.type !== 'mcp') continue;
+    const manifest = await resolveMcpInvocationManifest(
+      service,
+      tool.identifier,
+      tool.apiName,
+      assistant.agentId ?? undefined,
+    );
+    const args = toRecord(JSON.parse(tool.arguments || '{}')) ?? {};
+    const configured = manifest.api?.find((api) => api.name === tool.apiName)?.defaultTimeoutMs;
+    const explicitTimeout = [args.timeout, configured].some(
+      (value) => typeof value === 'number' && Number.isFinite(value) && value > 0,
+    );
+    const params = toRecord(manifest.mcpParams);
+    const nativeTimeout =
+      params?.type === 'stdio' &&
+      Number.isFinite(input.localHostTimeoutMs) &&
+      Number(input.localHostTimeoutMs) > 0
+        ? input.localHostTimeoutMs
+        : undefined;
+    deadlines[id] =
+      now +
+      (explicitTimeout
+        ? resolveToolTimeoutMs({ apiName: tool.apiName, args, manifest })
+        : (nativeTimeout ?? getMcpToolTimeoutMs()));
     sources.push({ assistantMessageId: assistant.id, toolCallId: tool.id, toolMessageId: id });
   }
+  if (!sources.length) throw new Error('Client MCP batch has no MCP calls');
+  const toolMessageIds = sources.map((source) => source.toolMessageId);
   const operationId = `mcp_client_${createHash('sha256')
     .update(
       JSON.stringify([
@@ -97,8 +131,11 @@ export async function registerClientMcpStep(
     .digest('hex')
     .slice(0, 32)}`;
   const step: ClientMcpStep = {
-    ...input,
-    deadline: Date.now() + 120_000,
+    assistantMessageId: input.assistantMessageId,
+    owner: input.owner,
+    toolMessageIds,
+    deadlines,
+    deadline: Math.max(...Object.values(deadlines)),
     leaseUntil: Date.now() + 45_000,
   };
   await service.operations.recordStart({
@@ -121,7 +158,14 @@ export async function registerClientMcpStep(
     throw new Error('This client step already has a live owner');
   await service.invocations.markClientWaiting(operationId);
   await scheduleClientMcpExpiry(service, operationId, Number(stored?.deadline ?? step.deadline));
-  return { operationId, deadline: Number(stored?.deadline ?? step.deadline) };
+  return {
+    operationId,
+    deadline: Number(stored?.deadline ?? step.deadline),
+    deadlines: (stored?.deadlines ??
+      Object.fromEntries(
+        toolMessageIds.map((id) => [id, Number(stored?.deadline ?? step.deadline)]),
+      )) as Record<string, number>,
+  };
 }
 
 export async function scheduleClientMcpTool(
@@ -152,13 +196,23 @@ export async function executeClientMcpTool(
 ) {
   const { operation, tool } = await service.assertIdentity(identity);
   const toolMessageId = await service.ensureToolMessage(identity);
-  // A duplicate delivery never re-enters tools/call, even after an execution lease expires.
-  if (!(await service.invocations.claimClientWire(identity.operationId, toolMessageId))) return;
-  if (!service.runtime) throw new Error('Client MCP tool host is unavailable');
   const step = operation.metadata?.clientMcpStep as ClientMcpStep;
+  if (!step.toolMessageIds.includes(toolMessageId) || tool.type !== 'mcp')
+    throw new Error('Not an owned MCP call');
+  const deadline = step.deadlines?.[toolMessageId] ?? step.deadline;
+  // A duplicate delivery never re-enters tools/call, even after an execution lease expires.
+  if (
+    !(await service.invocations.claimClientWire(
+      identity.operationId,
+      toolMessageId,
+      deadline + 60_000,
+    ))
+  )
+    return;
+  if (!service.runtime) throw new Error('Client MCP tool host is unavailable');
   let result;
   try {
-    if (step.deadline <= Date.now()) throw new Error('Client MCP tool expired before execution');
+    if (deadline <= Date.now()) throw new Error('Client MCP tool expired before execution');
     const manifest = await resolveMcpInvocationManifest(
       service,
       identity.identifier,
@@ -173,7 +227,7 @@ export async function executeClientMcpTool(
         operationId: identity.operationId,
         toolCallId: identity.toolCallId,
         toolMessageId,
-        executionTimeoutMs: Math.max(1, step.deadline - Date.now()),
+        executionTimeoutMs: Math.max(1, deadline - Date.now()),
         serverDB: service.db,
         userId: service.userId,
         workspaceId: service.workspaceId,
@@ -237,25 +291,49 @@ export async function expireClientMcpStep(service: McpElicitationService, operat
     !step
   )
     return;
-  if (step.deadline + 60_000 > Date.now()) {
-    try {
-      if (step.deadline > Date.now()) {
-        const queued = toRecord(operation.metadata?.mcpClientQueue) ?? {};
-        for (const entry of Object.values(queued)) {
-          const identity = toRecord(entry)?.identity as McpCallIdentity | undefined;
-          if (identity) await scheduleClientMcpTool(service, identity);
-        }
-      }
-    } finally {
-      await scheduleClientMcpExpiry(service, operationId, step.deadline);
-    }
-    return;
-  }
+  const now = Date.now();
+  let waiting = false;
+  const queued = toRecord(operation.metadata?.mcpClientQueue) ?? {};
+  const wire = toRecord(operation.metadata?.mcpClientWire) ?? {};
   for (const id of step.toolMessageIds) {
     const row = await service.messages.findById(id);
     const plugin = await service.messages.findMessagePlugin(id);
-    if (!row || row.content || row.error || plugin?.error || plugin?.state?.mcpClientComplete)
+    if (
+      plugin?.type !== 'mcp' ||
+      !row ||
+      row.content ||
+      row.error ||
+      plugin.error ||
+      plugin.state?.mcpClientComplete
+    )
       continue;
+    const deadline = step.deadlines?.[id] ?? step.deadline;
+    const execution = toRecord(wire[id]);
+    // A live renderer owns completion, and a live wire/continuation lease owns
+    // remote effects. Only explicit stop may retire their output early.
+    const intervention = toRecord(plugin.intervention);
+    const active =
+      typeof intervention?.batchId === 'string'
+        ? await service.invocations.executionForTool(id, intervention.batchId)
+        : undefined;
+    const protectedUntil = Math.max(
+      step.leaseUntil,
+      Number(execution?.leaseUntil ?? 0),
+      active?.leaseExpiresAt?.getTime() ?? 0,
+    );
+    if (deadline + 60_000 > now || protectedUntil > now) {
+      waiting = true;
+      if (deadline > now && !wire[id]) {
+        const identity = toRecord(queued[id])?.identity as McpCallIdentity | undefined;
+        if (identity) await scheduleClientMcpTool(service, identity);
+      }
+      continue;
+    }
+    // A continuation has its own fenced unknown-outcome recovery; do not race it.
+    if (active?.state === 'executing' || active?.state === 'completed') {
+      waiting = true;
+      continue;
+    }
     const message =
       'The client tool execution expired or disconnected. Its outcome is unknown; the tool was not repeated.';
     await service.messages.updateToolMessage(id, {
@@ -266,5 +344,6 @@ export async function expireClientMcpStep(service: McpElicitationService, operat
     });
     await service.messages.updateMessagePlugin(id, { intervention: { status: 'none' } });
   }
-  await service.operations.mergeMetadata(operationId, { mcpClientExpiryFinished: true });
+  if (waiting) await scheduleClientMcpExpiry(service, operationId, Math.max(step.deadline, now));
+  else await service.operations.mergeMetadata(operationId, { mcpClientExpiryFinished: true });
 }

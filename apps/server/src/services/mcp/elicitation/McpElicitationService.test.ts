@@ -1,11 +1,14 @@
 // @vitest-environment node
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { canonicalJson } from '@/database/models/agentIntervention/utils';
+import { McpInvocationModel } from '@/database/models/mcpInvocation';
 import { MessageModel } from '@/database/models/message';
 import {
+  agentInterventionResolutions,
   agentInterventions,
   agentOperations,
   agents,
@@ -411,6 +414,99 @@ describe('durable MCP elicitation', () => {
     expect(probes.control).not.toHaveBeenCalled();
     expect(probes.resume).not.toHaveBeenCalled();
     expect((await service.get(item.id)).status).toBe('resolving');
+  });
+  it('waits for a future dispatch fence after the execution lease expired, without one-second expiry spin', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      const checkpoint = {
+        inputRequired: { resultType: 'input_required' as const, requestState: 'private-state' },
+        round: 1,
+      };
+      const { item, toolMessageId } = await open({ legacy: false, checkpoint });
+      const resolutionRequestId = randomUUID();
+      await service.claim(item.id, resolutionRequestId, {
+        input: { action: 'accept', content: { label: 'chosen' } },
+      });
+      const inputHash = createHash('sha256')
+        .update(
+          canonicalJson({
+            itemId: item.id,
+            responses: { input: { action: 'accept', content: { label: 'chosen' } } },
+          }),
+        )
+        .digest('hex');
+      expect(
+        (
+          await service.interventions.claimCustomExecution({
+            resolutionRequestId,
+            inputHash,
+            leaseDurationMs: 1000,
+          })
+        ).outcome,
+      ).toBe('applied');
+      await db
+        .update(agentInterventionResolutions)
+        .set({ customExecutionLeaseExpiresAt: new Date(now - 1000) })
+        .where(eq(agentInterventionResolutions.resolutionRequestId, resolutionRequestId));
+      await db
+        .update(agentInterventions)
+        .set({ deadline: new Date(now - 10) })
+        .where(eq(agentInterventions.id, item.id));
+      clock.mockReturnValue(now + 61000);
+      const token = await service.invocations.claimDispatch(item.operationId, resolutionRequestId);
+      expect(token).toBeTruthy();
+      await service.invocations.acknowledgeDispatch(
+        item.operationId,
+        resolutionRequestId,
+        token!,
+        'delivered',
+      );
+      probes.schedule.mockClear();
+      for (let index = 0; index < 3; index++) {
+        await expireMcpElicitation(service, item.id, testRuntime);
+        const callback = probes.schedule.mock.calls.at(-1)?.[0];
+        expect(callback.delay).toBeGreaterThanOrEqual(15000);
+        clock.mockReturnValue(Date.now() + callback.delay);
+      }
+      expect(
+        probes.schedule.mock.calls.filter(([entry]) =>
+          entry.endpoint.endsWith('mcp-elicitation-resume'),
+        ),
+      ).toHaveLength(1);
+      expect((await messageModel.findById(toolMessageId))?.content).toBe('');
+      expect(probes.execute).not.toHaveBeenCalled();
+      await executeSavedMcpElicitationResume(service, item.id, resolutionRequestId, testRuntime);
+      expect((await messageModel.findById(toolMessageId))?.content).toContain('outcome is unknown');
+      expect(probes.execute).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('does not starve current work behind 32 obsolete intervention rounds', async () => {
+    const pending = await open({ legacy: false });
+    const [original] = await db
+      .select()
+      .from(agentInterventions)
+      .where(eq(agentInterventions.id, pending.item.id));
+    await db.insert(agentInterventions).values(
+      Array.from({ length: 32 }, (_, index) => ({
+        ...original,
+        id: randomUUID(),
+        batchId: randomUUID(),
+        activityKey: `obsolete-${index}`,
+        reviewTokenHash: createHash('sha256').update(`obsolete-${index}`).digest('hex'),
+        resolutionId: null,
+        deadline: new Date(Date.now() - 60000 - index * 1000),
+      })),
+    );
+    await db
+      .update(agentInterventions)
+      .set({ deadline: new Date(Date.now() - 1) })
+      .where(eq(agentInterventions.id, pending.item.id));
+    const work = await McpInvocationModel.recoveryWork(db);
+    expect(work.interactions.map((item) => item.itemId)).toContain(pending.item.id);
+    expect(work.interactions).toHaveLength(1);
   });
   it('clears an orphaned form when expiry scheduling fails', async () => {
     probes.schedule.mockRejectedValueOnce(new Error('queue unavailable'));

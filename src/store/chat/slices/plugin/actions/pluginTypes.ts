@@ -3,6 +3,7 @@ import {
   type RuntimeStepContext,
   type SubAgentCallbacks,
 } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -330,8 +331,15 @@ export class PluginTypesActionImpl {
     let root = operation;
     while (root && !root.metadata.mcpClientStep && root.parentOperationId)
       root = this.#get().operations[root.parentOperationId];
-    const clientStep = root?.metadata.mcpClientStep as
-      { operationId: string; deadline: number; workspaceId?: string } | undefined;
+    const stepBindings = toRecord(root?.metadata.mcpClientSteps);
+    const clientStep = (stepBindings?.[id] ?? root?.metadata.mcpClientStep) as
+      | {
+          operationId: string;
+          deadline: number;
+          deadlines?: Record<string, number>;
+          workspaceId?: string;
+        }
+      | undefined;
 
     log(
       '[invokeMCPTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
@@ -357,7 +365,8 @@ export class PluginTypesActionImpl {
                   toolCallId: payload.id,
                   toolMessageId: id,
                 },
-                deadline: clientStep?.deadline ?? Date.now() + 60_000,
+                deadline:
+                  clientStep?.deadlines?.[id] ?? clientStep?.deadline ?? Date.now() + 60_000,
                 workspaceId: clientStep
                   ? clientStep.workspaceId
                   : (getActiveWorkspaceId() ?? undefined),

@@ -60,8 +60,16 @@ export async function expireMcpElicitation(
       await service.scheduleExpiry(
         item.id,
         item.operationId,
-        Math.min(execution.leaseExpiresAt?.getTime() ?? Date.now() + 30_000, Date.now() + 30_000) +
-          500,
+        Math.max(
+          Date.now() + 15_000,
+          Math.min(
+            Math.max(
+              execution.leaseExpiresAt?.getTime() ?? 0,
+              Number(execution.dispatchUntil ?? 0),
+            ),
+            Date.now() + 30_000,
+          ),
+        ),
         0,
         true,
       );

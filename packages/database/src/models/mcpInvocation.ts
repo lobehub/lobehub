@@ -23,9 +23,9 @@ export class McpInvocationModel {
     readonly workspaceId?: string,
   ) {}
 
-  /** Bounded startup/worker recovery. Only due rows and dispatchable outbox entries are projected. */
-  static async recoveryWork(db: LobeChatDatabase, now = Date.now()) {
-    const interactions = await db
+  /** Queries remain inspectable with toSQL() for real PostgreSQL plan verification. */
+  static recoveryQueries(db: LobeChatDatabase, now = Date.now()) {
+    const interactions = db
       .select({
         itemId: agentInterventions.id,
         deadline: agentInterventions.deadline,
@@ -35,7 +35,12 @@ export class McpInvocationModel {
       })
       .from(agentInterventions)
       .innerJoin(messagePlugins, eq(messagePlugins.id, agentInterventions.toolMessageId))
+      .innerJoin(messages, eq(messages.id, agentInterventions.toolMessageId))
       .innerJoin(agentOperations, eq(agentOperations.id, agentInterventions.operationId))
+      .leftJoin(
+        agentInterventionResolutions,
+        eq(agentInterventionResolutions.id, agentInterventions.resolutionId),
+      )
       .where(
         and(
           eq(agentInterventions.source, 'mcp'),
@@ -46,13 +51,39 @@ export class McpInvocationModel {
             'session_ended',
           ]),
           notInArray(agentOperations.status, ['done', 'error', 'interrupted', 'abandoned']),
+          eq(agentOperations.userId, agentInterventions.userId),
+          eq(messages.userId, agentInterventions.userId),
+          eq(messagePlugins.userId, agentInterventions.userId),
+          sql`${agentOperations.workspaceId} IS NOT DISTINCT FROM ${agentInterventions.workspaceId}`,
+          sql`${messages.workspaceId} IS NOT DISTINCT FROM ${agentInterventions.workspaceId}`,
+          sql`${messagePlugins.workspaceId} IS NOT DISTINCT FROM ${agentInterventions.workspaceId}`,
           sql`${messagePlugins.intervention}->>'status' = 'pending'`,
-          sql`(${agentInterventions.deadline} <= ${new Date(now)} OR ${agentInterventions.status} = 'resolving')`,
+          sql`${messagePlugins.intervention}->>'batchId' = ${agentInterventions.batchId}`,
+          sql`${messagePlugins.intervention}->>'operationId' = ${agentInterventions.operationId}`,
+          sql`${messagePlugins.state} #>> '{mcpElicitation,batchId}' = ${agentInterventions.batchId}`,
+          sql`coalesce((${agentOperations.metadata}->'mcpRecoveryClaims'->>(${agentInterventions.id})::text)::bigint,0) <= ${now}`,
+          sql`((${agentInterventions.status} <> 'resolving' AND ${agentInterventions.deadline} <= ${new Date(now)}) OR (
+          ${agentInterventions.status} = 'resolving'
+          AND ${agentInterventionResolutions.source} = 'mcp'
+          AND ${agentInterventionResolutions.status} = 'resolving'
+          AND ${agentInterventionResolutions.userId} = ${agentInterventions.userId}
+          AND ${agentInterventionResolutions.workspaceId} IS NOT DISTINCT FROM ${agentInterventions.workspaceId}
+          AND ${agentInterventionResolutions.batchId} = ${agentInterventions.batchId}
+          AND ${agentInterventionResolutions.operationId} = ${agentInterventions.operationId}
+          AND coalesce(${messagePlugins.state} #>> '{mcpElicitation,legacy}', 'false') <> 'true'
+          AND (${agentInterventionResolutions.customExecutionState} IS DISTINCT FROM 'executing' OR ${agentInterventionResolutions.customExecutionLeaseExpiresAt} <= ${new Date(now)})
+          AND coalesce((${agentOperations.metadata}->'mcpResumeDispatch'->(${agentInterventionResolutions.resolutionRequestId})::text->>'leaseUntil')::bigint,0) <= ${now}
+        ))`,
         ),
       )
-      .orderBy(asc(agentInterventions.deadline))
+      // A failed/protected row gets a durable cooldown and moves behind untouched work.
+      .orderBy(
+        sql`coalesce((${agentOperations.metadata}->'mcpRecoveryClaims'->>(${agentInterventions.id})::text)::bigint,0)`,
+        asc(agentInterventions.deadline),
+        asc(agentInterventions.id),
+      )
       .limit(32);
-    const clients = await db
+    const clients = db
       .select({
         operationId: agentOperations.id,
         userId: agentOperations.userId,
@@ -61,19 +92,68 @@ export class McpInvocationModel {
       .from(agentOperations)
       .where(
         and(
+          // jsonb_ops GIN supports ?, unlike metadata->key IS NOT NULL. See EXPLAIN evidence.
+          sql`${agentOperations.metadata} ? 'clientMcpStep'`,
           inArray(agentOperations.status, ['running', 'waiting_for_client']),
-          sql`${agentOperations.metadata}->'clientMcpStep' IS NOT NULL`,
-          sql`coalesce(${agentOperations.metadata}->>'mcpClientExpiryFinished', 'false') <> 'true'`,
-          sql`(((${agentOperations.metadata} #>> '{clientMcpStep,deadline}')::bigint + 60000 <= ${now}) OR EXISTS (
-          SELECT 1 FROM jsonb_each(coalesce(${agentOperations.metadata}->'mcpClientQueue', '{}'::jsonb)) AS entry(key, value)
-          WHERE (entry.value->>'leaseUntil')::bigint <= ${now}
-          AND NOT (coalesce(${agentOperations.metadata}->'mcpClientWire', '{}'::jsonb) ? entry.key)
-        ))`,
+          sql`coalesce(${agentOperations.metadata}->>'mcpClientExpiryFinished','false') <> 'true'`,
+          sql`coalesce((${agentOperations.metadata}->>'mcpClientRecoveryUntil')::bigint,0) <= ${now}`,
+          sql`(((${agentOperations.metadata} #>> '{clientMcpStep,deadline}')::bigint + 60000 <= ${now}
+        AND coalesce((${agentOperations.metadata} #>> '{clientMcpStep,leaseUntil}')::bigint,0) <= ${now}) OR EXISTS (
+        SELECT 1 FROM jsonb_each(coalesce(${agentOperations.metadata}->'mcpClientQueue','{}'::jsonb)) AS entry(key,value)
+        WHERE (entry.value->>'leaseUntil')::bigint <= ${now}
+        AND NOT (coalesce(${agentOperations.metadata}->'mcpClientWire','{}'::jsonb) ? entry.key)
+      ))`,
         ),
       )
-      .orderBy(asc(agentOperations.createdAt))
+      .orderBy(
+        sql`coalesce((${agentOperations.metadata}->>'mcpClientRecoveryUntil')::bigint,0)`,
+        asc(agentOperations.createdAt),
+        asc(agentOperations.id),
+      )
       .limit(32);
     return { interactions, clients };
+  }
+
+  /** Bounded, fair, multi-worker claims. No response values or process-local cursors. */
+  static async recoveryWork(db: LobeChatDatabase, now = Date.now()) {
+    const queries = this.recoveryQueries(db, now);
+    const [interactions, clients] = await Promise.all([queries.interactions, queries.clients]);
+    const claimedInteractions: typeof interactions = [];
+    const claimedClients: typeof clients = [];
+    for (const [rows, client] of [
+      [interactions, false],
+      [clients, true],
+    ] as const) {
+      for (const row of rows) {
+        const claimed = await db.transaction(async (tx) => {
+          const [op] = await tx
+            .select({ metadata: agentOperations.metadata, status: agentOperations.status })
+            .from(agentOperations)
+            .where(eq(agentOperations.id, row.operationId))
+            .for('update');
+          if (!op || !['running', 'waiting_for_client'].includes(op.status)) return false;
+          const claims = toRecord(op.metadata?.mcpRecoveryClaims) ?? {};
+          const itemId = 'itemId' in row ? row.itemId : '';
+          if (Number(client ? op.metadata?.mcpClientRecoveryUntil : claims[itemId]) > now)
+            return false;
+          const patch = client
+            ? { mcpClientRecoveryUntil: now + 15000 }
+            : { mcpRecoveryClaims: { ...claims, [itemId]: now + 15000 } };
+          await tx
+            .update(agentOperations)
+            .set({
+              metadata: sql`coalesce(${agentOperations.metadata},'{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+            })
+            .where(eq(agentOperations.id, row.operationId));
+          return true;
+        });
+        if (claimed) {
+          if (client) claimedClients.push(row);
+          else if ('itemId' in row) claimedInteractions.push(row);
+        }
+      }
+    }
+    return { interactions: claimedInteractions, clients: claimedClients };
   }
 
   private ownership = () =>
@@ -231,7 +311,7 @@ export class McpInvocationModel {
           eq(agentOperations.userId, this.userId),
           eq(agentOperations.id, operationId),
           eq(agentOperations.status, 'running'),
-          sql`${agentOperations.metadata}->'clientMcpStep' IS NOT NULL`,
+          sql`${agentOperations.metadata} ? 'clientMcpStep'`,
         ),
       );
   }
@@ -351,11 +431,11 @@ export class McpInvocationModel {
     });
   }
 
-  async claimClientWire(operationId: string, toolMessageId: string) {
+  async claimClientWire(operationId: string, toolMessageId: string, leaseUntil?: number) {
     const [row] = await this.db
       .update(agentOperations)
       .set({
-        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || jsonb_build_object('mcpClientWire', coalesce(${agentOperations.metadata}->'mcpClientWire', '{}'::jsonb) || jsonb_build_object(${toolMessageId}::text, 'executing'))`,
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || jsonb_build_object('mcpClientWire', coalesce(${agentOperations.metadata}->'mcpClientWire', '{}'::jsonb) || jsonb_build_object(${toolMessageId}::text, ${JSON.stringify({ leaseUntil: leaseUntil ?? Date.now() + 60_000 })}::jsonb))`,
       })
       .where(
         and(
@@ -363,7 +443,7 @@ export class McpInvocationModel {
           eq(agentOperations.userId, this.userId),
           eq(agentOperations.id, operationId),
           inArray(agentOperations.status, ['running', 'waiting_for_client']),
-          sql`${agentOperations.metadata}->'clientMcpStep' IS NOT NULL`,
+          sql`${agentOperations.metadata} ? 'clientMcpStep'`,
           sql`NOT coalesce(${agentOperations.metadata}->'mcpClientWire', '{}'::jsonb) ? ${toolMessageId}`,
         ),
       )
@@ -391,7 +471,7 @@ export class McpInvocationModel {
           eq(agentOperations.topicId, topicId),
           sql`${agentOperations.threadId} IS NOT DISTINCT FROM ${threadId ?? null}`,
           inArray(agentOperations.status, ['running', 'waiting_for_client']),
-          sql`${agentOperations.metadata}->'clientMcpStep' IS NOT NULL`,
+          sql`${agentOperations.metadata} ? 'clientMcpStep'`,
         ),
       )
       .orderBy(asc(agentOperations.createdAt))
@@ -530,13 +610,33 @@ export class McpInvocationModel {
     });
   }
 
+  async executionForTool(toolMessageId: string, batchId: string) {
+    const [item] = await this.db
+      .select({ id: agentInterventions.id })
+      .from(agentInterventions)
+      .where(
+        and(
+          eq(agentInterventions.toolMessageId, toolMessageId),
+          eq(agentInterventions.batchId, batchId),
+          eq(agentInterventions.userId, this.userId),
+          sql`${agentInterventions.workspaceId} IS NOT DISTINCT FROM ${this.workspaceId ?? null}`,
+          eq(agentInterventions.status, 'resolving'),
+          eq(agentInterventions.source, 'mcp'),
+        ),
+      )
+      .limit(1);
+    return item ? this.execution(item.id) : undefined;
+  }
+
   async execution(itemId: string) {
     const [row] = await this.db
       .select({
         state: agentInterventionResolutions.customExecutionState,
         leaseExpiresAt: agentInterventionResolutions.customExecutionLeaseExpiresAt,
+        dispatchUntil: sql<number>`coalesce((${agentOperations.metadata}->'mcpResumeDispatch'->(${agentInterventionResolutions.resolutionRequestId})::text->>'leaseUntil')::bigint,0)`,
       })
       .from(agentInterventions)
+      .innerJoin(agentOperations, eq(agentOperations.id, agentInterventions.operationId))
       .innerJoin(
         agentInterventionResolutions,
         eq(agentInterventionResolutions.id, agentInterventions.resolutionId),

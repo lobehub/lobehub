@@ -1,9 +1,12 @@
 import type { AgentInstruction, AgentRuntimeHost } from '@lobechat/agent-runtime';
+import { isDesktop } from '@lobechat/const';
 import type { ChatToolPayload } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import type { ChatStore } from '@/store/chat/store';
+import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /** Persist the original client batch before wire execution. Its agent loop stays on this host. */
 export async function prepareClientMcpTools(
@@ -52,11 +55,21 @@ export async function prepareClientMcpTools(
   const lambdaClient = createWorkspaceLambdaClient(workspaceId ?? null);
   const anchor = await lambdaClient.mcpElicitation.registerClientStep.mutate({
     assistantMessageId: assistantId,
-    toolMessageIds: tools.map((tool) => ids[tool.id]),
+    toolMessageIds: tools.filter((tool) => tool.type === 'mcp').map((tool) => ids[tool.id]),
+    localHostTimeoutMs: isDesktop ? await ensureElectronIpc().mcp.getToolTimeoutMs() : undefined,
     owner,
   });
+  const binding = { ...anchor, owner, workspaceId, assistantMessageId: assistantId };
   get().updateOperationMetadata(host.operation.operationId, {
-    mcpClientStep: { ...anchor, owner, workspaceId, assistantMessageId: assistantId },
+    mcpClientStep: binding,
+    // Approval may prepare another subset while an earlier tool is still running.
+    // Bind each row to its own anchor instead of using the last prepared subset.
+    mcpClientSteps: {
+      ...toRecord(get().operations[host.operation.operationId]?.metadata?.mcpClientSteps),
+      ...Object.fromEntries(
+        tools.filter((tool) => tool.type === 'mcp').map((tool) => [ids[tool.id], binding]),
+      ),
+    },
   });
   const heartbeat = setInterval(() => {
     void lambdaClient.mcpElicitation.leaseClientStep

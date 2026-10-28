@@ -70,6 +70,7 @@ export const mcpElicitationRouter = router({
       z.object({
         assistantMessageId: z.string(),
         toolMessageIds: z.array(z.string()).min(1).max(64),
+        localHostTimeoutMs: z.number().finite().positive().optional(),
         owner: z.string().uuid(),
       }),
     )
