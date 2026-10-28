@@ -4,6 +4,7 @@ export { ClaudeCodeSdkAdapter } from './claudeCodeSdk';
 export { CodeBuddyAdapter } from './codeBuddy';
 export { CodexAdapter } from './codex';
 export { CodexAppServerAdapter } from './codexAppServer';
+export { CopilotAcpAdapter } from './copilotAcp';
 export { CursorAdapter } from './cursor';
 export { CursorAcpAdapter } from './cursorAcp';
 export { DevinAcpAdapter } from './devinAcp';

@@ -159,6 +159,38 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.github.com/copilot/concepts/agents/about-copilot-cli',
+      errorMessage:
+        'GitHub Copilot could not authenticate. Run `copilot login`, or set COPILOT_GITHUB_TOKEN to a token with the "Copilot Requests" permission, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'copilot requests',
+        'copilot login',
+      ],
+      signInCommand: 'copilot login',
+    },
+    defaultCommand: 'copilot',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'GithubCopilot',
+    install: {
+      commands: [
+        'npm install -g @github/copilot',
+        'curl -fsSL https://gh.io/copilot-install | bash',
+        'brew install copilot-cli',
+        'winget install GitHub.Copilot',
+      ],
+      docsUrl: 'https://docs.github.com/copilot/concepts/agents/about-copilot-cli',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCopilotAgent',
+    menuLabelKey: 'newCopilotAgent',
+    resume: { supported: true },
+    title: 'GitHub Copilot',
+    type: 'copilot',
+  },
+  {
+    auth: {
       docsUrl: 'https://cursor.com/docs/cli/installation',
       errorMessage: 'Cursor could not authenticate. Run `agent login`, then retry.',
       patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'authentication required', 'not logged in'],

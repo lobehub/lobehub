@@ -8,6 +8,7 @@ import { ClaudeCodeAdapter } from '../adapters/claudeCode';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import {
+  spawnCopilotAcpAgent,
   spawnCursorAcpAgent,
   spawnDevinAcpAgent,
   spawnDroidAcpAgent,
@@ -33,6 +34,11 @@ import { assertSpawnableWorkingDirectory } from './workingDirectory';
 export interface SpawnAgentOptions {
   /** Registered local heterogeneous-agent type key. */
   agentType: string;
+  /**
+   * (GitHub Copilot ACP only) Approve every tool request through the session's
+   * `allow_all` option instead of asking `askUserBridge`. For unattended runs.
+   */
+  allowAll?: boolean;
   /** Bridge for bidirectional question requests emitted by ACP agents. */
   askUserBridge?: AskUserBridge;
   /**
@@ -61,7 +67,10 @@ export interface SpawnAgentOptions {
    * connected client renders live token streaming.
    */
   includePartialMessages?: boolean;
-  /** Initial model selected through the agent protocol after session setup (Droid/TRAE ACP). */
+  /**
+   * Initial model selected through the agent protocol after session setup
+   * (Copilot/Droid/TRAE ACP).
+   */
   initialModel?: string;
   /**
    * Image normalization options (URL fetch + on-disk cache + path
@@ -453,8 +462,8 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: b
 
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
- * Factory Droid, Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
- * `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
+ * Factory Droid, GitHub Copilot, Kimi Code, OpenCode, Pi, Qoder, or TRAE) and
+ * yield its stream as unified `AgentStreamEvent`s. Used by `lh hetero exec` for both standalone
  * terminal runs and (later) sandbox-driven runs that ingest into the server.
  *
  * Stays minimal on purpose — no on-disk tracing, no proxy env composition,
@@ -483,6 +492,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   }
   if (options.agentType === 'droid') {
     return spawnDroidAcpAgent(options, command, cwd);
+  }
+  if (options.agentType === 'copilot') {
+    return spawnCopilotAcpAgent(options, command, cwd);
   }
 
   // A run answering a LobeHub conversation (`lh hetero exec --topic`) gets the

@@ -5,10 +5,11 @@ import {
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CopilotAcpAdapter,
   CursorAcpAdapter,
   CursorAdapter,
-  DroidAcpAdapter,
   DevinAcpAdapter,
+  DroidAcpAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -50,6 +51,10 @@ describe('registry', () => {
 
     it('creates a CursorAcpAdapter for the native ACP runtime', () => {
       expect(createAdapter('cursor-acp')).toBeInstanceOf(CursorAcpAdapter);
+    });
+
+    it('creates a CopilotAcpAdapter for "copilot"', () => {
+      expect(createAdapter('copilot')).toBeInstanceOf(CopilotAcpAdapter);
     });
 
     it('creates a DroidAcpAdapter for Droid and its ACP runtime alias', () => {

@@ -1,6 +1,7 @@
 export {
   listHeterogeneousAgentModels,
   parseCodeBuddyModelCatalog,
+  parseCopilotModelCatalog,
   parseCursorModelCatalog,
   parseGrokBuildModelCatalog,
   parseOpenCodeModelCatalog,

@@ -1,4 +1,5 @@
 import * as childProcess from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import type * as os from 'node:os';
 import path from 'node:path';
 
@@ -173,6 +174,67 @@ describe('heterogeneous agent model discovery', () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it('reads the Copilot model catalog from `copilot help config`', async () => {
+    const stdout = await readFile(
+      new URL('./__fixtures__/copilot-help-config-1.0.105.txt', import.meta.url),
+      'utf8',
+    );
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseCopilotModelCatalog } = await importModule();
+
+    const models = parseCopilotModelCatalog(stdout)!;
+    expect(models).toHaveLength(31);
+    expect(models.slice(0, 2)).toEqual([
+      { id: 'claude-sonnet-5.5', modelId: 'claude-sonnet-5.5', providerId: 'copilot' },
+      { id: 'claude-sonnet-5', modelId: 'claude-sonnet-5', providerId: 'copilot' },
+    ]);
+    // The list ends at the `model` setting; later settings' bullets are not models.
+    expect(models.at(-1)).toEqual({ id: 'kimi-k3', modelId: 'kimi-k3', providerId: 'copilot' });
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--add-dir', '/repo'],
+        command: '/custom/copilot',
+        cwd: '/repo',
+        env: { COPILOT_HOME: '/config' },
+        type: 'copilot',
+      }),
+    ).resolves.toMatchObject({ models, status: 'success' });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/copilot',
+      ['help', 'config'],
+      expect.objectContaining({ cwd: '/repo', env: { COPILOT_HOME: '/config' } }),
+      expect.any(Function),
+    );
+  });
+
+  it('falls back to the probe-observed Copilot models when the help lists none', async () => {
+    resolveExecFile('  `model`: AI model to use for Copilot CLI.\n\n  `logLevel`: log level');
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    const catalog = await listHeterogeneousAgentModels({
+      command: '/custom/copilot',
+      type: 'copilot',
+    });
+    expect(catalog.status).toBe('success');
+    expect(catalog.status === 'success' && catalog.models.map(({ id }) => id)).toEqual([
+      'gpt-6-luna',
+      'gpt-5.6-luna',
+      'claude-haiku-4.5',
+      'gpt-4.1',
+      'mai-code-1.1-flash',
+    ]);
+  });
+
+  it('reports a missing Copilot CLI instead of offering models', async () => {
+    rejectExecFile(Object.assign(new Error('spawn copilot ENOENT'), { code: 'ENOENT' }));
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/copilot', type: 'copilot' }),
+    ).resolves.toMatchObject({ error: { code: 'cli_not_found' }, status: 'error' });
   });
 
   it('fails discovery when CodeBuddy exits successfully without reporting a model catalog', async () => {
