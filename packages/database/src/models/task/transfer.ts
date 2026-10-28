@@ -160,11 +160,9 @@ export const copyToWorkspace = async (
       /* v8 ignore next -- unreachable: the queue only holds ids taken from the subtree */
       if (!original) continue;
 
-      const newParentId =
-        currentId === taskId
-          ? null
-          : /* v8 ignore next -- unreachable: BFS clones a parent before its children */
-            (idMap.get(original.parentTaskId!) ?? null);
+      /* v8 ignore start -- unreachable `?? null`: BFS clones a parent before its children, so idMap always holds it */
+      const newParentId = currentId === taskId ? null : (idMap.get(original.parentTaskId!) ?? null);
+      /* v8 ignore stop */
 
       const identifier = `${DEFAULT_TASK_IDENTIFIER_PREFIX}-${seq}`;
       const inserted = (await (trx as LobeChatDatabase)

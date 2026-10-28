@@ -337,7 +337,7 @@ export const groupList = async (
     groupQueries.map(async (group) => {
       const groupTasks =
         group.prefetchedTasks ??
-        /* v8 ignore start -- unreachable: every grouping branch above prefetches its tasks */
+        /* v8 ignore start -- unreachable: every grouping branch above prefetches its tasks. The stop marker sits after the return because V8 charges the continuation of this never-resumed `await` to the statement that follows it */
         (await ctx.db
           .select()
           .from(tasks)
@@ -345,7 +345,6 @@ export const groupList = async (
           .orderBy(desc(tasks.createdAt), desc(tasks.seq))
           .limit(group.limit)
           .offset(group.offset));
-      /* v8 ignore stop */
 
       return {
         ...(group.assigneeAgentId !== undefined ? { assigneeAgentId: group.assigneeAgentId } : {}),
@@ -358,6 +357,7 @@ export const groupList = async (
         tasks: groupTasks,
         total: group.total,
       };
+      /* v8 ignore stop */
     }),
   );
 

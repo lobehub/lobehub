@@ -219,6 +219,14 @@ describe('TaskModel dependency guards', () => {
     expect(await model.getDependencies(loose.id)).toEqual([]);
   });
 
+  it('unlocks nothing when the completed task has no dependents', async () => {
+    const model = new TaskModel(serverDB, userId);
+    const done = await model.create({ instruction: 'alone' });
+    await model.updateStatus(done.id, 'completed');
+
+    expect(await model.getUnlockedTasksForMany([done.id])).toEqual([]);
+  });
+
   it('unlocks nothing while every dependent is still blocked elsewhere', async () => {
     const model = new TaskModel(serverDB, userId);
     const done = await model.create({ instruction: 'done' });
