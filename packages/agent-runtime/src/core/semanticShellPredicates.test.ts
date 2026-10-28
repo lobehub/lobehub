@@ -1088,4 +1088,53 @@ describe('matchSemanticShellPredicate', () => {
       ).toBe(false);
     });
   });
+
+  describe('nineteenth-round review: eval argument joining and payloads beside a bare rm', () => {
+    // `help eval`: "Combine ARGs into a single string". Reparsing each argument
+    // on its own split the command from its target: `rm -rf` has no target and
+    // `~` has no executable, so both halves looked harmless while Bash ran
+    // `rm -rf <home>`.
+    it.each([
+      ['rmRecursiveHomeTarget', "eval 'rm -rf' ~"],
+      ['rmRecursiveHomeTarget', 'eval "rm -rf" ~'],
+      ['rmRecursiveRootTarget', "eval 'rm -rf' /"],
+      ['rmRecursiveRootTarget', 'eval rm -rf /'],
+      ['rmRecursiveHomeTarget', "eval 'rm' '-rf' ~"],
+    ] as const)('joins eval arguments before analyzing them (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each([
+      ['rmRecursiveHomeTarget', "eval 'echo' hi"],
+      ['rmRecursiveHomeTarget', "eval 'ls' -la"],
+      ['rmRecursiveHomeTarget', "eval 'rm -rf' /tmp/build-cache"],
+      ['rmRecursiveRootTarget', "eval 'rm -rf' /tmp/build-cache"],
+    ] as const)('keeps a joined eval payload data-only when it is harmless (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(false);
+    });
+
+    // A positional `rm` makes rmIndex non-negative, which used to skip the
+    // interpreter-payload branch: the outer `-c` carried no recursive flag, so
+    // the destructive child shell was never inspected.
+    it.each([
+      ['rmRecursiveHomeTarget', "bash -c 'echo $(rm -rf ~)' rm"],
+      ['rmRecursiveHomeTarget', "sh -c 'echo $(rm -rf ~)' rm"],
+      ['rmRecursiveRootTarget', "bash -c 'echo $(rm -rf /)' rm"],
+      ['rmRecursiveHomeTarget', "bash -ec 'echo $(rm -rf ~)' rm"],
+    ] as const)(
+      'inspects an interpreter payload even beside a bare rm (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
+
+    it('leaves a harmless interpreter payload beside a bare rm alone', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', "bash -c 'echo hi' rm")).toBe(
+        false,
+      );
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', "bash -c 'rm -rf /tmp/cache' rm")).toBe(
+        false,
+      );
+    });
+  });
 });

@@ -298,6 +298,44 @@ const substitutionPayloads = (word: string): string[] => {
  * flag + root/home target co-occur in one segment — a shape that essentially
  * only appears in real attack payloads or adversarial test strings.
  */
+/**
+ * Payload words the segment hands to a NEW shell level as source: the word
+ * after `-c` (`bash -c '<payload>'`, combined flags like `-ec '<payload>'`
+ * included) and, for `eval`, every following argument — Bash joins them with
+ * spaces before executing the result (`help eval`: "Combine ARGs into a single
+ * string").
+ *
+ * Both shapes must be analyzed whatever ELSE the segment contains:
+ *  - a positional `rm` in `bash -c 'echo $(rm -rf ~)' rm` used to divert the
+ *    fallback into its bare-rm branch and skip the payload inspection; and
+ *  - reparsing `eval 'rm -rf' ~` argument by argument split the command from
+ *    its target, so neither half looked dangerous on its own.
+ */
+const interpreterPayloadWords = (segment: ShellSegment): string[] => {
+  const words = segment.words;
+  const payloads: string[] = [];
+  for (let index = 0; index < words.length; index++) {
+    if (!isShellInterpreterWord(words[index])) continue;
+    if (words[index].replace(/^.*\//, '') === 'eval') {
+      // `eval` concatenates its arguments; `eval 'rm -rf' ~` runs `rm -rf ~`.
+      const joined = words.slice(index + 1).join(' ').trim();
+      if (joined) payloads.push(joined);
+      continue;
+    }
+    const flag = words[index + 1];
+    if (!flag || !flag.startsWith('-') || flag.startsWith('--') || !flag.includes('c')) continue;
+    if (flag.endsWith('c')) {
+      // `-c`/`-ec`: the payload is the next word.
+      const payload = words[index + 2];
+      if (payload) payloads.push(payload);
+    } else if (flag.startsWith('-c')) {
+      // Glued form `-c<source>`.
+      payloads.push(flag.slice(2));
+    }
+  }
+  return payloads;
+};
+
 const hasAmbiguousRmShape = (
   segment: ShellSegment,
   depth = 0,
@@ -324,6 +362,17 @@ const hasAmbiguousRmShape = (
     );
   }
   const words = segment.words;
+  // A shell interpreter runs its payload as fresh shell source, so the payload
+  // is analyzed regardless of any bare `rm` word sitting in this segment: in
+  // `bash -c 'echo $(rm -rf ~)' rm` the positional `rm` used to short-circuit
+  // this fallback before the payload was ever inspected.
+  if (
+    interpreterPayloadWords(segment).some((payload) =>
+      payloadIsDangerous(withoutLiteralMarkers(payload), depth, predicate),
+    )
+  ) {
+    return true;
+  }
   const rmIndex = words.findIndex((word) => word === 'rm' || /\/rm$/.test(word));
   if (rmIndex < 0) {
     // The executable is unknowable at parse time: command substitution
