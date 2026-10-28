@@ -37,7 +37,9 @@ vi.mock('@/store/task/slices/detail/reducer', () => ({
   findSubtaskParentId: vi.fn(() => undefined),
 }));
 
-vi.mock('@/services/task', () => ({ taskService: {} }));
+vi.mock('@/services/task', () => ({
+  taskService: { find: vi.fn(async () => ({ data: { id: 'task-1', identifier: 'T-1' } })) },
+}));
 
 // Keep the role gate deterministic: only 'viewer' is excluded here.
 vi.mock('@lobechat/const/rbac', () => ({
@@ -130,7 +132,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
 
       expect(result.success).toBe(true);
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeUserId: 'usr_2' },
         { source: 'external' },
       );
@@ -143,7 +145,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       } as any);
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeUserId: 'usr_2' },
         { actorAgentId: 'agt-self', source: 'external' },
       );
@@ -153,7 +155,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       await taskExecutor.editTask({ assigneeAgentId: 'agt-new', identifier: 'T-1' });
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeAgentId: 'agt-new' },
         { source: 'external' },
       );
@@ -167,7 +169,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       });
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeAgentId: 'agt-new', assigneeUserId: 'usr_2' },
         { source: 'external' },
       );
@@ -177,7 +179,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       const result = await taskExecutor.editTask({ assigneeUserId: null, identifier: 'T-1' });
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeUserId: null },
         { source: 'external' },
       );

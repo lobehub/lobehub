@@ -228,6 +228,10 @@ export interface AgentSearchItem {
    */
   isMarket?: boolean;
   /**
+   * User-facing display name; `title` is the agent's role
+   */
+  name?: string;
+  /**
    * Agent title
    */
   title?: string;

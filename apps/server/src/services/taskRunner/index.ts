@@ -109,7 +109,7 @@ export class TaskRunnerService {
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
     const {
       additionalPluginIds,
-      taskId: idOrIdentifier,
+      taskId,
       continueTopicId,
       deviceId,
       extraPrompt,
@@ -118,7 +118,7 @@ export class TaskRunnerService {
       trigger = 'manual',
     } = params;
 
-    const task = await this.taskModel.resolve(idOrIdentifier);
+    const task = await this.taskModel.findById(taskId);
     if (!task) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
     }
@@ -450,7 +450,7 @@ export class TaskRunnerService {
     } catch (error) {
       if (weSetRunning) {
         try {
-          const failedTask = await this.taskModel.resolve(idOrIdentifier);
+          const failedTask = await this.taskModel.findById(taskId);
           if (failedTask && failedTask.status === 'running') {
             const errorText = error instanceof Error ? error.message : 'Unknown error';
             // A failed kickoff must not kill an automation task's schedule: the
@@ -480,7 +480,7 @@ export class TaskRunnerService {
    * payload shape unchanged.
    */
   static cascadeEmpty(): CascadeResult {
-    return { failed: [], paused: [], started: [] };
+    return { failed: [], paused: [], started: [], pausedTasks: [], startedTasks: [] };
   }
 
   /**
@@ -509,7 +509,7 @@ export class TaskRunnerService {
     const unlocked = await this.taskModel.getUnlockedTasksForMany(completedTaskIds);
     if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
 
-    const result: CascadeResult = { failed: [], paused: [], started: [] };
+    const result: CascadeResult = TaskRunnerService.cascadeEmpty();
 
     for (const task of unlocked) {
       // An archived dependent stays idle; restoring it leaves it ready to run.
@@ -517,12 +517,14 @@ export class TaskRunnerService {
       if (await this.shouldHoldForCheckpoint(task)) {
         await this.taskModel.updateStatus(task.id, 'paused');
         result.paused.push(task.identifier);
+        result.pausedTasks!.push({ id: task.id, identifier: task.identifier });
         continue;
       }
 
       try {
         await this.runTask({ taskId: task.id });
         result.started.push(task.identifier);
+        result.startedTasks!.push({ id: task.id, identifier: task.identifier });
       } catch (error) {
         // Archived after discovery: the runner refused it, nothing failed.
         if (error instanceof TRPCError && error.code === 'PRECONDITION_FAILED') continue;
@@ -534,7 +536,7 @@ export class TaskRunnerService {
         } catch {
           /* ignore — surfaced via failed list */
         }
-        result.failed.push({ error: message, identifier: task.identifier });
+        result.failed.push({ error: message, id: task.id, identifier: task.identifier });
       }
     }
 
@@ -545,15 +547,17 @@ export class TaskRunnerService {
     if (!task.parentTaskId) return false;
     const parent = await this.taskModel.findById(task.parentTaskId);
     if (!parent) return false;
-    return this.taskModel.shouldPauseBeforeStart(parent, task.identifier);
+    return this.taskModel.shouldPauseBeforeStart(parent, task);
   }
 }
 
 export interface CascadeResult {
   /** Tasks where kickoff threw and were marked paused with an error. */
-  failed: { error: string; identifier: string }[];
+  failed: { error: string; id?: string; identifier: string }[];
   /** Tasks held back by a parent's `beforeIds` checkpoint. */
   paused: string[];
+  pausedTasks?: { id: string; identifier: string }[];
   /** Tasks that were successfully kicked off (topic created). */
   started: string[];
+  startedTasks?: { id: string; identifier: string }[];
 }

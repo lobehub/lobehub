@@ -17,7 +17,7 @@ import { channelActions } from '@/store/channel';
 import { TrashEmptyScopeChangedError } from './action';
 import type { TrashListData } from './initialState';
 import { initialState } from './initialState';
-import { trashListKey } from './projection';
+import { trashCountKey, trashListKey } from './projection';
 import { trashSelectors } from './selectors';
 import { useTrashStore } from './store';
 
@@ -83,7 +83,7 @@ const seed = (items: TrashItem[], filter: TrashViewFilter = {}) =>
 const ids = (filter: TrashViewFilter = {}) =>
   useTrashStore.getState().trashListMap[trashListKey(filter)]?.items.map((i) => i.id) ?? [];
 
-const syncKey = (name: string, key: string) => ['replica:sync', name, 2, 'u1:personal', key, {}];
+const syncKey = (name: string, key: string) => ['replica:sync', name, 3, 'u1:personal', key, {}];
 
 describe('TrashAction', () => {
   beforeEach(() => {
@@ -256,9 +256,9 @@ describe('TrashAction', () => {
       useTrashStore.setState({
         projectSelection: { projectId: 'proj_a', scope: 'u1:personal' },
         trashCountMap: {
-          'all': { topic: 9 },
-          'project:proj_a': { topic: 1 },
-          'project:proj_b': { topic: 4 },
+          [trashCountKey()]: { topic: 9 },
+          [trashCountKey(active)]: { topic: 1 },
+          [trashCountKey(other)]: { topic: 4 },
         },
         trashListMap: {
           [trashListKey(active)]: view([buildItem({ id: 'in_a' })]),
@@ -269,7 +269,7 @@ describe('TrashAction', () => {
 
       await useTrashStore.getState().purge(['in_a']);
       // Other views' counts are unknown now (not stale numbers); their rows stay.
-      expect(Object.keys(useTrashStore.getState().trashCountMap)).toEqual(['project:proj_a']);
+      expect(Object.keys(useTrashStore.getState().trashCountMap)).toEqual([trashCountKey(active)]);
       expect(ids(other)).toEqual(['in_b']);
 
       vi.mocked(trashService.emptyTrash).mockResolvedValue({
@@ -331,6 +331,21 @@ describe('TrashAction', () => {
       expect(list?.items.map((item) => item.id)).toEqual(['head']);
       expect(list?.currentPage).toBe(0);
       expect(list?.nextCursor).toBe('cursor-1');
+    });
+
+    it('keeps each side of a workspace bin in its own view and remembers the side', () => {
+      expect(trashListKey({ visibility: 'public' })).not.toBe(
+        trashListKey({ visibility: 'private' }),
+      );
+      expect(trashSelectors.activeVisibility(true)(useTrashStore.getState())).toBe('public');
+
+      useTrashStore.getState().setFilter({ visibility: 'private' }, 'u1:ws-1');
+      expect(trashSelectors.activeVisibility(true)(useTrashStore.getState())).toBe('private');
+
+      // A personal view has no side and leaves the workspace side as it was.
+      useTrashStore.getState().setFilter({}, 'u1:personal');
+      expect(trashSelectors.activeVisibility(false)(useTrashStore.getState())).toBeUndefined();
+      expect(trashSelectors.activeVisibility(true)(useTrashStore.getState())).toBe('private');
     });
 
     it('binds a project filter to the scope it was chosen in', () => {

@@ -5,6 +5,7 @@ import {
   BOT_WAKE_SETTING_KEYS,
   DEFAULT_WAKE_RULES,
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
+  MAX_DUTIES_LENGTH,
   MIN_COLLECT_SECONDS,
   MIN_COOLDOWN_SECONDS,
   parseBotWakeSettings,
@@ -51,8 +52,22 @@ describe('bot-wake settings fields', () => {
     expect(field.rows).toBeGreaterThanOrEqual(8);
     expect(field.maximum).toBe(MAX_CUSTOM_INSTRUCTIONS_LENGTH);
     expect(field.type).toBe('string');
-    // Only that one field is multi-line.
-    expect(botWakeFields.filter((f) => f.rows).map((f) => f.key)).toEqual([field.key]);
+    // Only the two prompts are multi-line: the duties and the instructions.
+    expect(botWakeFields.filter((f) => f.rows).map((f) => f.key)).toEqual([
+      BOT_WAKE_SETTING_KEYS.duties,
+      field.key,
+    ]);
+  });
+
+  it('give the duties a text area that is off while empty, with a dial from 0.8', () => {
+    const duties = botWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.duties)!;
+    const threshold = botWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.dutiesThreshold)!;
+
+    expect(duties).toMatchObject({ maximum: MAX_DUTIES_LENGTH, type: 'string' });
+    expect(duties.rows).toBeGreaterThanOrEqual(8);
+    // No default: an untouched form saves no duties, so the bot never steps in on its own.
+    expect(duties.default).toBeUndefined();
+    expect(threshold).toMatchObject({ default: 0.8, maximum: 1, minimum: 0, type: 'number' });
   });
 
   it('are shown by the Discord form', () => {

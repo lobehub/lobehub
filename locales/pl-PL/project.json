@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Wybierz katalog roboczy",
   "topics.chooseTopic": "Wybierz temat w pasku bocznym lub utwórz nowy, aby rozpocząć pracę",
   "topics.complete": "Oznacz jako ukończone",
-  "topics.conversationOnly": "Tylko rozmowa, bez katalogu roboczego",
   "topics.executionContext": "Miejsce pracy",
   "topics.gatewayUnavailable": "Włącz Agent Gateway przed użyciem tego miejsca pracy w projekcie.",
   "topics.group.agent": "Według agenta",

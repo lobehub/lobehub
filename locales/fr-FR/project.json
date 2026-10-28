@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Choisir un répertoire de travail",
   "topics.chooseTopic": "Choisissez un sujet dans la barre latérale ou créez-en un pour commencer à travailler",
   "topics.complete": "Marquer comme terminé",
-  "topics.conversationOnly": "Conversation uniquement, sans répertoire de travail",
   "topics.executionContext": "Lieu de travail",
   "topics.gatewayUnavailable": "Activez la passerelle Agent avant d'utiliser ce lieu de travail du projet.",
   "topics.group.agent": "Par agent",

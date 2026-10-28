@@ -439,6 +439,7 @@ describe('RecentModel', () => {
         expect(result).toHaveLength(1);
         expect(result[0]).toMatchObject({
           id: 'task-active',
+          taskIdentifier: 'T-1',
           type: 'task',
           title: 'Active Task',
           routeId: 'agent-assignee',

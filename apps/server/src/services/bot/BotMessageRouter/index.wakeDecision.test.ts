@@ -114,7 +114,7 @@ describe('BotMessageRouter bot-wake decision records', () => {
         externalId: 'app-1:telegram:chat-1:msg-1',
         finalReason: 'explicit-mention',
         outcome: 'wake',
-        pipelineVersion: 'bot-wake@1',
+        pipelineVersion: 'bot-wake@3',
         scopeKey: 'telegram:app-1',
         toTag: 'mention',
         verdicts: [

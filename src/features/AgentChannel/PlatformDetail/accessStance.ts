@@ -79,6 +79,8 @@ export const applyDmStance = (stance: DmStance, settings: StanceSettings): Stanc
 export type AccessIssue = 'approverMissing' | 'groupListEmpty' | 'listEmpty';
 
 export interface AccessSettings extends StanceSettings {
+  deviceAllowFrom?: unknown;
+  devicePolicy?: string;
   groupAllowFrom?: unknown;
   groupPolicy?: string;
   userId?: unknown;
@@ -114,7 +116,7 @@ export const dropHiddenIncompleteRows = (
   settings: AccessSettings & { groupAllowFrom?: unknown; groupPolicy?: string },
 ): Record<string, unknown> => {
   const patch: Record<string, unknown> = {};
-  const prune = (key: 'allowFrom' | 'groupAllowFrom') => {
+  const prune = (key: 'allowFrom' | 'deviceAllowFrom' | 'groupAllowFrom') => {
     const list = settings[key];
     if (Array.isArray(list) && list.some((entry) => !hasId(entry))) patch[key] = list.filter(hasId);
   };
@@ -124,6 +126,7 @@ export const dropHiddenIncompleteRows = (
     stance === 'approval' || stance === 'listed' || countListed(settings.allowFrom) > 0;
   if (!peopleListShown) prune('allowFrom');
   if (settings.groupPolicy !== 'allowlist') prune('groupAllowFrom');
+  if (settings.devicePolicy !== 'allowlist') prune('deviceAllowFrom');
 
   return patch;
 };

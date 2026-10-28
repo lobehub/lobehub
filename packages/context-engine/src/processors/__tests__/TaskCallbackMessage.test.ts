@@ -28,7 +28,7 @@ describe('TaskCallbackMessageProcessor', () => {
     expect(result.messages).toHaveLength(3);
     const last = result.messages[2];
     expect(last.role).toBe('user');
-    expect(last.content).toContain('<task_result task="T-42" status="done">');
+    expect(last.content).toContain('<task_result task="T-42" id="t1" status="done">');
     expect(last.content).toContain('Fixed the null deref');
     expect(result.metadata.taskCallbackMessagesSurfaced).toBe(1);
   });

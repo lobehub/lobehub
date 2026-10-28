@@ -104,6 +104,7 @@ export default {
   'metaCard.ci.pending': 'CI running',
   'metaCard.ci.success': 'CI passed',
   'metaCard.detached': 'Detached HEAD at {{sha}}',
+  'metaCard.goal': 'Linked goal',
   'metaCard.pr.closed': 'Closed',
   'metaCard.pr.merged': 'Merged',
   'metaCard.pr.open': 'Open',

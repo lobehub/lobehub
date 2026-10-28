@@ -24,8 +24,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import AddAgentMemberModal from '@/features/AddAgentMemberModal';
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
 import { useAgentStore } from '@/store/agent';
@@ -190,9 +189,11 @@ export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
               padding={16}
               style={rowStyle(index)}
             >
-              <Avatar
-                avatar={member.agent.avatar || DEFAULT_AVATAR}
+              <AgentAvatar
+                agentId={member.agent.id}
+                avatar={member.agent.avatar}
                 background={member.agent.backgroundColor ?? undefined}
+                shape={'circle'}
                 size={36}
                 title={name}
               />

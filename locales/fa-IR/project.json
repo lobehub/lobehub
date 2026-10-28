@@ -306,7 +306,6 @@
   "topics.chooseLocation": "انتخاب یک دایرکتوری کاری",
   "topics.chooseTopic": "یک موضوع را در نوار کناری انتخاب کنید، یا یکی ایجاد کنید تا کار را شروع کنید",
   "topics.complete": "علامت‌گذاری به‌عنوان تکمیل‌شده",
-  "topics.conversationOnly": "فقط مکالمه، بدون دایرکتوری کاری",
   "topics.executionContext": "محل کار",
   "topics.gatewayUnavailable": "ایجنت Gateway را قبل از استفاده از این محل کار پروژه فعال کنید.",
   "topics.group.agent": "بر اساس ایجنت",

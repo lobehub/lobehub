@@ -2,6 +2,8 @@ import type { ChannelMemberActorType } from '@lobechat/types';
 
 export interface ComposerMember {
   actorType: ChannelMemberActorType;
+  /** Seeds the generated avatar of an Agent without one of its own. */
+  agentId?: string | null;
   avatar: string;
   id: string;
   name: string;

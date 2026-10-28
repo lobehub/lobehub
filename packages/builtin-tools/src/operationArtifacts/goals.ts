@@ -1,3 +1,4 @@
+import { isGoalIdentifier } from '@lobechat/builtin-tool-goal';
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
 export interface OperationGoal {
@@ -29,7 +30,10 @@ const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value : undefined;
 
 const deriveBuiltinGoal = (tool: ChatToolPayloadWithResult): OperationGoal[] => {
-  if (!['lobe-goal', 'lobe-task'].includes(tool.identifier) || tool.apiName !== 'createGoal')
+  if (
+    !(isGoalIdentifier(tool.identifier) || tool.identifier === 'lobe-task') ||
+    tool.apiName !== 'createGoal'
+  )
     return [];
   if (tool.result?.error || !isRecord(tool.result?.state) || tool.result.state.success !== true)
     return [];

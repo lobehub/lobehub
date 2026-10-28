@@ -114,7 +114,7 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
       ? (memberLabel(membersById.get(task.assigneeAgentId)) ?? task.assigneeAgentId)
       : 'unassigned';
     lines.push(
-      `  ${task.identifier} ${statusIcon(task.status)} ${task.status}  [${priorityLabel(task.priority)}]  ${task.name || '(unnamed)'} — ${assignee}`,
+      `  ${task.identifier} (id: ${task.id}) ${statusIcon(task.status)} ${task.status}  [${priorityLabel(task.priority)}]  ${task.name || '(unnamed)'} — ${assignee}`,
     );
   }
   if (totalOpenTasks > openTasks.length) {

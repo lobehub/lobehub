@@ -1,7 +1,9 @@
 import type { ChannelDetail } from '@lobechat/types';
-import { Avatar, Button, Popover } from '@lobehub/ui';
+import { Button, Popover } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import { channelJobStatus, memberCurrentJob, replyActivityJobs } from './jobStatus';
 import { replyEntries, ReplyList } from './MessageReceipts';
@@ -70,7 +72,15 @@ export function ReplyActivity({
       >
         <span aria-hidden {...stylex.props(activityStyles.avatars)}>
           {avatars.map((entry) => (
-            <Avatar avatar={entry.avatar} key={entry.job.id} size={16} title={entry.name} />
+            <AgentAvatar
+              agentId={entry.agentId}
+              avatar={entry.avatar}
+              key={entry.job.id}
+              name={entry.name}
+              shape={'circle'}
+              size={16}
+              title={entry.name}
+            />
           ))}
         </span>
         <span role="status" {...stylex.props(activityStyles.label)}>

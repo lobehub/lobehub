@@ -1,5 +1,5 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
-import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
@@ -163,7 +163,11 @@ export const discoverTools = async (
       ? [GoalIdentifier]
       : [
           ...new Set([
-            ...getActivePluginIds(agentConfig?.plugins),
+            // An agent that pinned the goal tool before its rename still
+            // carries the legacy id; resolve it to the current one.
+            ...getActivePluginIds(agentConfig?.plugins).map((id) =>
+              isGoalIdentifier(id) ? GoalIdentifier : id,
+            ),
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),

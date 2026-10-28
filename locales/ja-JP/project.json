@@ -306,7 +306,6 @@
   "topics.chooseLocation": "作業ディレクトリを選択",
   "topics.chooseTopic": "サイドバーでトピックを選択するか、新しいトピックを作成して作業を開始してください",
   "topics.complete": "完了としてマーク",
-  "topics.conversationOnly": "作業ディレクトリなしの会話のみ",
   "topics.executionContext": "作業場所",
   "topics.gatewayUnavailable": "このプロジェクトの作業場所を使用する前にエージェントゲートウェイを有効にしてください。",
   "topics.group.agent": "エージェント別",

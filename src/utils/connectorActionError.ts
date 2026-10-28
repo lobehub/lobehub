@@ -6,7 +6,7 @@
 export interface ConnectorActionError {
   action: 'connect' | 'remove';
   /**
-   * tRPC error code (e.g. `FORBIDDEN`) when the server rejected the call,
+   * Structured business reason, or tRPC code (e.g. `FORBIDDEN`) for a rejection,
    * `NETWORK` when the request never reached it, or `AUTH_INCOMPLETE` when the
    * OAuth window closed without granting access.
    */
@@ -32,16 +32,25 @@ export const errorInScope = (
 
 const NETWORK_MESSAGE_PATTERN = /failed to fetch|network|load failed/i;
 
+export const getConnectorActionErrorCode = (error: unknown): string | undefined => {
+  const data = (
+    error as
+      { data?: { code?: string; errorData?: { code?: string }; httpStatus?: number } } | undefined
+  )?.data;
+  const message = error instanceof Error ? error.message : error ? String(error) : undefined;
+
+  let code = data?.errorData?.code ?? data?.code;
+  if (!code && data?.httpStatus === 403) code = 'FORBIDDEN';
+  if (!code && !data && message && NETWORK_MESSAGE_PATTERN.test(message)) code = 'NETWORK';
+
+  return code;
+};
+
 export const toConnectorActionError = (
   action: ConnectorActionError['action'],
   error: unknown,
 ): ConnectorActionError => {
-  const data = (error as { data?: { code?: string; httpStatus?: number } } | undefined)?.data;
   const message = error instanceof Error ? error.message : error ? String(error) : undefined;
 
-  let code = data?.code;
-  if (!code && data?.httpStatus === 403) code = 'FORBIDDEN';
-  if (!code && !data && message && NETWORK_MESSAGE_PATTERN.test(message)) code = 'NETWORK';
-
-  return { action, code, message };
+  return { action, code: getConnectorActionErrorCode(error), message };
 };

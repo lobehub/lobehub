@@ -7,7 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
 import type { ChannelFormValues } from './index';
@@ -146,7 +146,7 @@ const Words = ({ children, skin }: { children: ReactNode; skin: Skin }) => (
 
 interface QuickViewProps {
   /** The agent's avatar and its background, shown on the bot's messages. */
-  botAvatar?: { avatar?: string; background?: string };
+  botAvatar?: { agentId?: string; avatar?: string; background?: string };
   /** The agent's name, shown as the bot's name in the preview. */
   botName?: string;
   /** Something at the right of the title, e.g. the button that folds the preview away. */
@@ -243,7 +243,8 @@ export const QuickView = memo<QuickViewProps>(
             skin={skin}
             tag={skin === 'discord' ? <span {...stylex.props(styles.appTag)}>APP</span> : undefined}
             avatar={
-              <Avatar
+              <AgentAvatar
+                agentId={botAvatar?.agentId}
                 avatar={botAvatar?.avatar}
                 background={botAvatar?.background}
                 name={name}

@@ -245,6 +245,7 @@ export class MessageKeywordSearchQueries extends MessageScope {
       truncated,
       hasMore: rows.length > pageSize,
       items: rows.slice(0, pageSize).map(({ content, summary, ...row }) => {
+        /* v8 ignore next -- unreachable: `searchableMessage()` requires searchable text in `content` or `summary` */
         const body = content || summary || '';
         return {
           ...row,

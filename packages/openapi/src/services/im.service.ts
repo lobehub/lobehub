@@ -4,12 +4,14 @@ import { and, asc, desc, eq, inArray, isNull, lte, type SQL, sql } from 'drizzle
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { FileModel } from '@/database/models/file';
 import { PushLiveActivityModel, PushTokenModel } from '@/database/models/pushToken';
 import { TopicModel } from '@/database/models/topic';
-import { agentOperations, messages, pushTokens, topics } from '@/database/schemas';
+import { agentOperations, messages, messagesFiles, pushTokens, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { FileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
@@ -123,12 +125,18 @@ const toImMessage = (row: Omit<MessageRow, 'createdAtUs'>): ImMessage => ({
  * words. Expressed in SQL as well ({@link visibleRow}) so a `limit` counts
  * bubbles rather than the working rows hidden behind them.
  */
-const VISIBLE_BUBBLE = sql`(${messages.error} is not null or (btrim(coalesce(${messages.content}, '')) <> '' and btrim(coalesce(${messages.content}, '')) <> ${LOADING_PLACEHOLDER}))`;
+const HAS_FILES = sql<boolean>`exists (select 1 from ${messagesFiles} where ${messagesFiles.messageId} = ${messages.id})`;
+const VISIBLE_BUBBLE = sql`(${messages.error} is not null or ${HAS_FILES} or (btrim(coalesce(${messages.content}, '')) <> '' and btrim(coalesce(${messages.content}, '')) <> ${LOADING_PLACEHOLDER}))`;
 
 const visibleRow = (): SQL => sql`(${messages.role} = 'user' or ${VISIBLE_BUBBLE})`;
 
 /** JS twin of {@link VISIBLE_BUBBLE}'s agent branch: a row that says something (or failed). */
-const isDeliveredAgentRow = (row: { content: string | null; error: unknown }) => {
+const isDeliveredAgentRow = (row: {
+  content: string | null;
+  error: unknown;
+  hasFiles: boolean;
+}) => {
+  if (row.hasFiles) return true;
   if (row.error !== null && row.error !== undefined) return true;
   const content = (row.content ?? '').trim();
   return content !== '' && content !== LOADING_PLACEHOLDER;
@@ -187,6 +195,15 @@ export class ImRestService extends BaseService {
     const receipt = await this.idempotentReceipt(input.clientMessageId);
     if (receipt) return receipt;
 
+    if (input.fileIds?.length) {
+      const accessible = await new FileModel(this.db, this.userId, this.workspaceId).findByIds(
+        input.fileIds,
+      );
+      if (accessible.length !== new Set(input.fileIds).size) {
+        throw this.createAuthorizationError('One or more attachments are unavailable');
+      }
+    }
+
     const aiAgentService = new AiAgentService(this.db, this.userId, {
       workspaceId: this.workspaceId,
     });
@@ -200,6 +217,7 @@ export class ImRestService extends BaseService {
           ? await aiAgentService.execGroupAgent({
               agentId: supervisorId,
               clientIds,
+              ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
               groupId: input.groupId,
               interactiveStart: true,
               message: input.content,
@@ -209,6 +227,7 @@ export class ImRestService extends BaseService {
               agentId: input.agentId,
               appContext: input.topicId ? { topicId: input.topicId } : undefined,
               clientIds,
+              ...(input.fileIds?.length ? { fileIds: input.fileIds } : {}),
               interactiveStart: true,
               prompt: input.content,
               trigger: RequestTrigger.Chat,
@@ -237,7 +256,7 @@ export class ImRestService extends BaseService {
       accepted: true,
       operationId: result.operationId,
       topicId: result.topicId,
-      userMessage: toImMessage(userMessage),
+      userMessage: (await this.withFiles([userMessage]))[0]!,
     };
   }
 
@@ -382,7 +401,7 @@ export class ImRestService extends BaseService {
       accepted: false,
       operationId: null,
       topicId: existing.topicId,
-      userMessage: toImMessage(existing),
+      userMessage: (await this.withFiles([existing]))[0]!,
     };
   }
 
@@ -443,6 +462,56 @@ export class ImRestService extends BaseService {
     return row;
   }
 
+  private async withFiles(rows: Omit<MessageRow, 'createdAtUs'>[]): Promise<ImMessage[]> {
+    if (rows.length === 0) return [];
+    const links = await this.db
+      .select({ messageId: messagesFiles.messageId, fileId: messagesFiles.fileId })
+      .from(messagesFiles)
+      .where(
+        and(
+          inArray(
+            messagesFiles.messageId,
+            rows.map((row) => row.id),
+          ),
+          this.buildWorkspaceWhere(messagesFiles),
+        ),
+      );
+    if (links.length === 0) return rows.map(toImMessage);
+    const records = await new FileModel(this.db, this.userId, this.workspaceId).findByIds(
+      links.map((link) => link.fileId),
+    );
+    const attachments = new Map(
+      await Promise.all(
+        records.map(
+          async (file) =>
+            [
+              file.id,
+              {
+                id: file.id,
+                name: file.name,
+                fileType: file.fileType,
+                size: file.size,
+                url: file.url.startsWith('http')
+                  ? file.url
+                  : (await new FileService(this.db, this.userId, this.workspaceId).getFullFileUrl(
+                      file.url,
+                    )) || file.url,
+              },
+            ] as const,
+        ),
+      ),
+    );
+    return rows.map((row) => {
+      const files = links
+        .filter((link) => link.messageId === row.id)
+        .flatMap((link) => {
+          const file = attachments.get(link.fileId);
+          return file ? [file] : [];
+        });
+      return { ...toImMessage(row), ...(files.length ? { files } : {}) };
+    });
+  }
+
   /** The newest top-level run on the conversation — the one the user is waiting on. */
   private async latestRun(topicId: string): Promise<LatestRun | undefined> {
     const [run] = await this.db
@@ -481,6 +550,7 @@ export class ImRestService extends BaseService {
   }
 
   private readonly rowSelect = {
+    hasFiles: HAS_FILES,
     agentId: messages.agentId,
     content: messages.content,
     createdAt: messages.createdAt,
@@ -525,7 +595,7 @@ export class ImRestService extends BaseService {
 
     return {
       cursor,
-      messages: delivered.map(toImMessage),
+      messages: await this.withFiles(delivered),
       readUpTo: readUpTo && { messageId: readUpTo.messageId, readAt: readUpTo.readAt },
       // `state` doubles as the long-poll's change token: it must move for every
       // fact the client can observe, including a new message. It is deliberately

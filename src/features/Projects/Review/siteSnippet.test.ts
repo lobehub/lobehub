@@ -23,14 +23,30 @@ describe('siteSnippet', () => {
 });
 
 describe('reviewLink', () => {
-  it('opens the first exact origin with the wake parameter', () => {
-    expect(reviewLink(['https://*.fieldnotes.app', 'https://fieldnotes.app'])).toBe(
-      'https://fieldnotes.app/?lh-review',
+  it('opens the first exact origin with the activation parameter', () => {
+    expect(reviewLink(['https://*.fieldnotes.app', 'https://fieldnotes.app'], 'acc_1')).toBe(
+      'https://fieldnotes.app/?lh-acceptance=acc_1',
     );
   });
 
+  it('escapes the acceptance id instead of appending it raw', () => {
+    expect(reviewLink(['https://fieldnotes.app'], 'acc&next=1')).toBe(
+      'https://fieldnotes.app/?lh-acceptance=acc%26next%3D1',
+    );
+  });
+
+  it('leaves the site unreachable for review without an acceptance', () => {
+    expect(reviewLink(['https://fieldnotes.app'])).toBeNull();
+    expect(reviewLink(['https://fieldnotes.app'], null)).toBeNull();
+  });
+
   it('has nothing to open when every origin is a wildcard', () => {
-    expect(reviewLink(['https://*.fieldnotes.app'])).toBeNull();
+    expect(reviewLink(['https://*.fieldnotes.app'], 'acc_1')).toBeNull();
+  });
+
+  it('refuses an origin that is not an http URL instead of throwing', () => {
+    expect(reviewLink(['fieldnotes.app'], 'acc_1')).toBeNull();
+    expect(reviewLink(['javascript:alert(1)'], 'acc_1')).toBeNull();
   });
 });
 

@@ -306,7 +306,6 @@
   "topics.chooseLocation": "選擇工作目錄",
   "topics.chooseTopic": "在側邊欄選擇一個主題，或建立一個以開始工作",
   "topics.complete": "標記為完成",
-  "topics.conversationOnly": "僅對話，無工作目錄",
   "topics.executionContext": "工作位置",
   "topics.gatewayUnavailable": "啟用 Agent Gateway 後才能使用此專案工作位置。",
   "topics.group.agent": "按 Agent",

@@ -1,6 +1,7 @@
 export * from './abstractChunk';
 export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
+export * from './botReplyOpener';
 export * from './botWakeClassifier';
 export * from './builderSuggestion';
 export * from './channelRouting';

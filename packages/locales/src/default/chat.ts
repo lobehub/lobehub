@@ -1545,6 +1545,13 @@ export default {
   'platformAgent.deviceGuard.refresh': 'Refresh',
   'platformAgent.deviceGuard.configure': 'Configure',
   'newPage': 'Create Page',
+  'noReply.reason.already_handled': 'Someone else is on it',
+  'noReply.reason.duplicate': 'Already answered',
+  'noReply.reason.not_addressed': 'Not addressed to me',
+  'noReply.reason.nothing_to_add': 'Nothing to add',
+  'noReply.reason.off_topic': 'Not relevant to me',
+  'noReply.reason.stand_down': 'Stepping back from this conversation',
+  'noReply.title': 'Read the message and chose not to reply',
   'noAgentsYet': 'This group has no members yet. Click the + button to invite agents.',
   'noAvailableAgents': 'No members available to invite',
   'noMatchingAgents': 'No matching members found',
@@ -2659,15 +2666,13 @@ export default {
   'goalProcess.decision.effect.releaseBatch':
     'Release the next wave on the current recipe. Each later wave goes to the main Agent, which releases it or brings it back to you.',
   'goalProcess.signOff.islandSubtitle': 'is done and waiting for your sign-off',
-  'goalProcess.signOff.question': 'Do you accept what this goal delivered?',
+  'goalProcess.signOff.islandSummary':
+    'Goal-level acceptance passed. Read the delivery report, then sign off or request changes.',
+  'goalProcess.signOff.openReport': 'View details',
   'goalProcess.signOff.description': 'Goal-level acceptance passed. Your sign-off closes the goal.',
   'goalProcess.signOff.accept': 'Sign off',
   'goalProcess.signOff.acceptEffect': 'Close the goal as delivered.',
   'goalProcess.signOff.requestChanges': 'Request changes',
-  'goalProcess.signOff.requestChangesEffect':
-    'Send it back to the Agent. Say what to change in the notes.',
-  'goalProcess.signOff.notePlaceholder':
-    'What should change? The Agent reworks the delivery with this.',
   'goalProcess.signOff.accepted': 'Signed off',
   'goalProcess.signOff.sentBack': 'Sent back for changes',
   'goalProcess.gate.title.agentQuestion': "Answer the main Agent's question",

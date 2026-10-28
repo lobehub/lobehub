@@ -1,6 +1,25 @@
+import { ConnectorErrorCode } from '@lobechat/types';
 import { type TFunction } from 'i18next';
 
-import { type ConnectorActionError } from '@/utils/connectorActionError';
+import {
+  type ConnectorActionError,
+  getConnectorActionErrorCode,
+} from '@/utils/connectorActionError';
+
+/** Shared by sync, disconnect, delete and permission changes in the detail panel. */
+export const formatConnectorActionErrorToast = (t: TFunction<'tool'>, error: unknown): string => {
+  switch (getConnectorActionErrorCode(error)) {
+    case ConnectorErrorCode.StdioDesktopOnly: {
+      return t('connector.error.stdioDesktopOnly');
+    }
+    case 'NETWORK': {
+      return t('connector.error.network');
+    }
+    default: {
+      return t('connector.actionFailed');
+    }
+  }
+};
 
 /**
  * Localized, in-row explanation of a failed connector write. A permission

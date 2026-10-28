@@ -53,7 +53,7 @@ export const resolveSubjects = async (
 
   try {
     const [tasks, topics, documents] = await Promise.all([
-      new TaskModel(deps.db, deps.userId, deps.workspaceId).resolveMany(
+      new TaskModel(deps.db, deps.userId, deps.workspaceId).resolveRefs(
         idsByType.get('task') ?? [],
       ),
       // Creator-facing lookup: exclude agent-share visitor topics from the
@@ -66,10 +66,9 @@ export const resolveSubjects = async (
       ),
     ]);
     const taskTitles = new Map<string, string | null>();
-    for (const task of tasks) {
+    for (const [ref, task] of tasks.byRef) {
       const title = task.name ?? task.identifier;
-      taskTitles.set(task.id, title);
-      taskTitles.set(task.identifier, title);
+      taskTitles.set(ref, title);
     }
     const topicTitles = new Map(topics.map((topic) => [topic.id, topic.title ?? null]));
     const documentTitles = new Map(

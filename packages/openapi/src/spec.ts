@@ -486,6 +486,21 @@ const imMessageSchema: SchemaObject = {
     content: { type: 'string' },
     createdAt: dateTime,
     error: { type: 'boolean' },
+    files: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          fileType: { type: 'string' },
+          size: { type: 'number' },
+          url: { type: 'string' },
+        },
+        required: ['id', 'name', 'fileType', 'size', 'url'],
+      },
+    },
     id: { type: 'string' },
     role: { enum: ['assistant', 'user'], type: 'string' },
   },

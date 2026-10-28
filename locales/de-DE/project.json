@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Ein Arbeitsverzeichnis auswählen",
   "topics.chooseTopic": "Wählen Sie ein Thema in der Seitenleiste aus oder erstellen Sie eines, um mit der Arbeit zu beginnen",
   "topics.complete": "Als abgeschlossen markieren",
-  "topics.conversationOnly": "Nur Gespräch, ohne Arbeitsverzeichnis",
   "topics.executionContext": "Arbeitsort",
   "topics.gatewayUnavailable": "Aktivieren Sie das Agent Gateway, bevor Sie diesen Projektarbeitsort verwenden.",
   "topics.group.agent": "Nach Agent",

@@ -476,7 +476,7 @@ describe('BuiltinToolsExecutor manifest-driven Work registration', () => {
     expect(result.workRegistration).toEqual({
       action: 'create',
       changeType: 'created',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
   });

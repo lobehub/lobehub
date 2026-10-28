@@ -1,15 +1,16 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
-import { ActionIcon, Avatar } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
-import { DEFAULT_AVATAR } from '@/const/meta';
+import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
@@ -41,10 +42,13 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
 
     return {
       icon: (
-        <Avatar
+        <AgentAvatar
+          agentId={item.id}
           alt={agentDisplayName(item, t('defaultAgent', { ns: 'chat' }))}
-          avatar={item.avatar || DEFAULT_AVATAR}
+          avatar={isInbox ? item.avatar || DEFAULT_INBOX_AVATAR : item.avatar}
           background={item.backgroundColor || undefined}
+          name={agentDisplayName(item, t('defaultAgent', { ns: 'chat' }))}
+          shape={'circle'}
           size={20}
         />
       ),

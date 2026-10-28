@@ -132,6 +132,13 @@ export interface VerifyStateResponse {
 export type VerifyEvidenceWithUrl = VerifyEvidence & {
   fileName: string | null;
   fileUrl: string | null;
+  /** `terminal` evidence only: signed URLs for the stdout / stderr / output / recording files. */
+  terminalArtifacts?: Partial<
+    Record<
+      'cast' | 'output' | 'stderr' | 'stdout',
+      { fileUrl: string | null; sha256: string; size: number }
+    >
+  >;
 };
 
 /** One check result plus the evidence artifacts attached to it. */

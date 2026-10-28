@@ -32,23 +32,40 @@ export interface SettingsGroup {
   key: SettingsGroupKey;
 }
 
+export type AccessSectionKey = 'conversation' | 'device' | 'identity';
+
+export interface AccessSectionGroup {
+  fields: FieldSchema[];
+  key: AccessSectionKey;
+}
+
 /**
- * Who the bot talks to, in the order a person decides it: who you are and which
- * server is yours, then DMs
- * (and the list they lean on), then groups.
+ * The access tab's blocks, in page order, each answering one question:
+ *
+ * - identity: who the owner is (their own ID, and the server that is theirs)
+ * - conversation: who may talk to the bot, in DMs (and the list they lean on) and in groups
+ * - device: who, besides the owner, may use the owner's devices through the bot
  */
-const ACCESS_KEYS = [
-  'userId',
-  'serverId',
-  'dmPolicy',
-  'allowFrom',
-  'guestPolicy',
-  'groupPolicy',
-  'groupAllowFrom',
+const ACCESS_SECTION_KEYS: Array<[AccessSectionKey, string[]]> = [
+  ['identity', ['userId', 'serverId']],
+  ['conversation', ['dmPolicy', 'allowFrom', 'guestPolicy', 'groupPolicy', 'groupAllowFrom']],
+  ['device', ['devicePolicy', 'deviceAllowFrom']],
 ];
 
+const ACCESS_KEYS = ACCESS_SECTION_KEYS.flatMap(([, keys]) => keys);
+
+/** Split the access tab's fields into its blocks. Empty blocks are dropped. */
+export const groupAccessFields = (fields: FieldSchema[]): AccessSectionGroup[] => {
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+
+  return ACCESS_SECTION_KEYS.map(([key, keys]) => ({
+    fields: keys.map((k) => byKey.get(k)).filter((field): field is FieldSchema => !!field),
+    key,
+  })).filter((section) => section.fields.length > 0);
+};
+
 /** What a reply looks like in the chat. */
-export const REPLY_KEYS = ['displayToolCalls', 'showUsageStats', 'reactionMode'];
+export const REPLY_KEYS = ['replyPlacement', 'displayToolCalls', 'showUsageStats', 'reactionMode'];
 
 /**
  * When the bot speaks up without being @mentioned: first the keywords that wake it, then the
@@ -69,11 +86,10 @@ export interface WakeSection {
  * them. The strings are the keys of `BOT_WAKE_SETTING_KEYS` (a test keeps the two in step); they
  * are spelled out here so the page does not pull the server's settings parser into the bundle.
  *
- * - judgement (shown as "initiative"), first: the decision a person makes before any other, when
- *   the bot may speak up without being called. In the order a person thinks about it: for me (the
- *   owner's own remarks), for others (a message plainly for the bot that nobody addressed to it),
- *   then the custom instructions behind both. Each is a switch with its dial or text area opening
- *   under it.
+ * - judgement (shown as "duties"), first: the decision a person makes before any other, what the
+ *   bot is responsible for, so it may speak up without being called when a message falls within
+ *   it. The duties text area with its dial under it, then the custom instructions (a switch with
+ *   its text area opening under it) that guide every judgement.
  * - keywords: words that wake the bot with no @
  * - channels: where it may join a conversation nobody addressed to it
  * - pace: how soon and how often it speaks up on its own, as a preset; `custom` opens the numbers
@@ -83,10 +99,8 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   [
     'judgement',
     [
-      'botWakeProactiveEnabled',
-      'botWakeProactiveThreshold',
-      'botWakeClassifierInitiateEnabled',
-      'botWakeClassifierInitiateThreshold',
+      'botWakeDuties',
+      'botWakeDutiesThreshold',
       'botWakeCustomInstructionsEnabled',
       'botWakeCustomInstructions',
     ],

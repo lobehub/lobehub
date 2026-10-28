@@ -306,7 +306,6 @@
   "topics.chooseLocation": "Kies een werkmap",
   "topics.chooseTopic": "Kies een onderwerp in de zijbalk, of maak er een aan om te beginnen met werken",
   "topics.complete": "Markeer als voltooid",
-  "topics.conversationOnly": "Alleen gesprek, zonder werkmap",
   "topics.executionContext": "Werklocatie",
   "topics.gatewayUnavailable": "Schakel Agent Gateway in voordat je deze projectwerkplek gebruikt.",
   "topics.group.agent": "Per Agent",

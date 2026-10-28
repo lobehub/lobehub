@@ -22,12 +22,14 @@ import type { LobeChatDatabase } from '../../type';
 import { ProjectModel } from '../project';
 import type { TaskListFilterOptions, TaskListOptions } from '../taskListFilters';
 import * as activities from './activities';
+import { checkpointTaskMatcher } from './checkpoint';
 import * as comments from './comments';
 import * as config from './config';
 import { getTaskVisibility, type TaskModelContext, taskOwnership } from './context';
 import * as dependencies from './dependencies';
 import * as documents from './documents';
 import * as queries from './queries';
+import { resolveRefs } from './refs';
 import * as rows from './rows';
 import type { OrphanedRunningTopic } from './scheduling';
 import * as scheduling from './scheduling';
@@ -125,18 +127,14 @@ export class TaskModel {
     return rows.findAssigneesByIds(this.ctx, ids);
   }
 
-  async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
-    return rows.resolveMany(this.ctx, idsOrIdentifiers);
+  async resolveRefs(refs: string[]) {
+    return resolveRefs(this.ctx, refs);
   }
 
-  // Resolve id or identifier (e.g. 'T-1') to a task
-  async resolve(idOrIdentifier: string): Promise<TaskItem | null> {
-    if (idOrIdentifier.startsWith('task_')) return this.findById(idOrIdentifier);
-    return this.findByIdentifier(idOrIdentifier.toUpperCase());
-  }
-
-  async findByIdentifier(identifier: string): Promise<TaskItem | null> {
-    return rows.findByIdentifier(this.ctx, identifier);
+  async resolve(ref: string): Promise<TaskItem | null> {
+    const result = await this.resolveRefs([ref]);
+    if (result.ambiguous.length) throw new Error(`Ambiguous task reference: ${ref}`);
+    return result.byRef.get(ref) ?? null;
   }
 
   async update(
@@ -408,15 +406,21 @@ export class TaskModel {
   }
 
   // Check if a task should be paused before starting (parent's tasks.beforeIds)
-  shouldPauseBeforeStart(parentTask: TaskItem, childIdentifier: string): boolean {
+  shouldPauseBeforeStart(
+    parentTask: TaskItem,
+    child: Pick<TaskItem, 'id' | 'identifier'>,
+  ): boolean {
     const checkpoint = this.getCheckpointConfig(parentTask);
-    return checkpoint.tasks?.beforeIds?.includes(childIdentifier) ?? false;
+    return checkpointTaskMatcher(checkpoint.tasks?.beforeIds, checkpoint.tasks?.beforeTasks)(child);
   }
 
   // Check if a task should be paused after completing (parent's tasks.afterIds)
-  shouldPauseAfterComplete(parentTask: TaskItem, childIdentifier: string): boolean {
+  shouldPauseAfterComplete(
+    parentTask: TaskItem,
+    child: Pick<TaskItem, 'id' | 'identifier'>,
+  ): boolean {
     const checkpoint = this.getCheckpointConfig(parentTask);
-    return checkpoint.tasks?.afterIds?.includes(childIdentifier) ?? false;
+    return checkpointTaskMatcher(checkpoint.tasks?.afterIds, checkpoint.tasks?.afterTasks)(child);
   }
 
   // ========== Heartbeat ==========

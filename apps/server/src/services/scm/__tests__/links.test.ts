@@ -388,6 +388,46 @@ describe('resolveChangeRequestLinks', () => {
     expect(await resolve({ ...base, number: 19_720, scope })).toEqual({});
   });
 
+  it("finds a teammate's round in a workspace the author can write to", async () => {
+    // A teammate verified the delivery and ingested its rounds; the author
+    // opened the PR and never touched the acceptance.
+    const workspace = await workspaceWith('scm-links-run-ws', otherUserId);
+    await serverDB.insert(acceptances).values({
+      id: acceptanceId,
+      subjectId: 's',
+      subjectType: 'standalone',
+      userId: otherUserId,
+      workspaceId: workspace.id,
+    });
+    await serverDB.insert(verifyRuns).values({
+      acceptanceId,
+      context: { pullRequest: { number: 19_719, url: base.url } },
+      roundIndex: 1,
+      scenario: 'coding',
+      userId: otherUserId,
+      workspaceId: workspace.id,
+    });
+    const scope = { kind: 'author', userId } as const;
+
+    // Not a member: the round stays out of reach.
+    expect(await resolve({ ...base, scope })).toEqual({});
+
+    // A viewer cannot accept it in the app, so a merge must not either.
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'viewer', userId, workspaceId: workspace.id });
+    expect(await resolve({ ...base, scope })).toEqual({});
+
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'member' })
+      .where(eq(workspaceMembers.userId, userId));
+    expect(await resolveChangeRequestLinks(serverDB, { ...base, scope })).toEqual({
+      links: { acceptanceId },
+      workspaceId: workspace.id,
+    });
+  });
+
   it('keeps the acceptance the row already carries over a later hand link', async () => {
     // Two acceptances list the same PR: the first claimed the row, the second
     // was refused by `link-pr` and kept its link. The newest link must not

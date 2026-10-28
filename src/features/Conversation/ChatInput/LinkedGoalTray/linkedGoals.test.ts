@@ -23,7 +23,7 @@ const createGoalTurn = (goalId: string) =>
             apiName: 'createGoal',
             arguments: '{}',
             id: `call-${goalId}`,
-            identifier: 'lobe-goal',
+            identifier: 'builtin-goal',
             result: { content: 'started', id: 'tool-1', state: { goalId, success: true } },
             type: 'builtin',
           },

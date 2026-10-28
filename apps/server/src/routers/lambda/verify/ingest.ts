@@ -1,19 +1,10 @@
-import { normalizeEvidenceMetadata } from '@lobechat/const/verify';
-import type {
-  VerifyCheckItem,
-  VerifyCheckResultMetadata,
-  VerifyEvidenceCapturedBy,
-  VerifyEvidenceType,
-} from '@lobechat/types';
+import type { VerifyCheckItem, VerifyCheckResultMetadata } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import pMap from 'p-map';
 import { z } from 'zod';
 
-import type { FileModel } from '@/database/models/file';
-import type { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import type { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
-import { evidenceTypeForStoredFile, resolveLiveRoundForItem } from '@/server/services/verify';
+import { prepareEvidenceRows, resolveLiveRoundForItem } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
@@ -45,6 +36,7 @@ const evidenceTypeSchema = z.enum([
   'markdown',
   'dom_snapshot',
   'transcript',
+  'terminal',
 ]);
 
 const evidenceCapturedBySchema = z.enum(['agent-browser', 'cdp', 'cli', 'program', 'llm_judge']);
@@ -60,12 +52,22 @@ const toulminSchema = z.object({
 const statusForVerdict = (verdict: 'passed' | 'failed' | 'uncertain') =>
   verdict === 'passed' ? ('passed' as const) : ('failed' as const);
 
+// The CLI inlines fewer than 5000 UTF-16 code units. Leave 20% headroom at
+// the API boundary; larger evidence must go through file storage.
+const MAX_INLINE_EVIDENCE_CONTENT_LENGTH = 6000;
+const inlineEvidenceContentSchema = z
+  .string()
+  .min(1)
+  .refine((content) => content.length <= MAX_INLINE_EVIDENCE_CONTENT_LENGTH, {
+    message: `Inline evidence content must not exceed ${MAX_INLINE_EVIDENCE_CONTENT_LENGTH} UTF-16 code units. Upload larger evidence as a file and provide fileId instead.`,
+  });
+
 const uploadEvidenceInputSchema = z
   .object({
     capturedBy: evidenceCapturedBySchema.optional(),
     // Exactly one of `content` (inline text) or `fileId` (already-uploaded artifact).
     checkResultId: z.string(),
-    content: z.string().min(1).optional(),
+    content: inlineEvidenceContentSchema.optional(),
     description: z.string().optional(),
     fileId: z.string().min(1).optional(),
     metadata: z.unknown().optional(),
@@ -86,46 +88,6 @@ const resolveRunByOperation = async (ctx: { runModel: VerifyRunModel }, operatio
 
   return run;
 };
-
-interface VerifyEvidenceRowInput {
-  capturedBy?: VerifyEvidenceCapturedBy | null;
-  content?: string | null;
-  description?: string | null;
-  fileId?: string | null;
-  metadata?: unknown;
-  type: VerifyEvidenceType;
-}
-
-/**
- * Store one evidence artifact on a check result — the single write path behind
- * `uploadEvidence` and `submitCheckEvidence`. A file-backed artifact is stored
- * under the medium of the file itself, not the caller's label, and its metadata
- * (a video's chapters, a comparison pair) is normalized for that medium.
- */
-const createVerifyEvidenceRow = async (
-  ctx: { evidenceModel: VerifyEvidenceModel; fileModel: FileModel },
-  checkResultId: string,
-  input: VerifyEvidenceRowInput,
-) => {
-  const type = input.fileId
-    ? evidenceTypeForStoredFile(input.type, await ctx.fileModel.findById(input.fileId))
-    : input.type;
-
-  return ctx.evidenceModel.create({
-    capturedAt: new Date(),
-    capturedBy: input.capturedBy ?? null,
-    checkResultId,
-    content: input.content ?? null,
-    description: input.description ?? null,
-    fileId: input.fileId ?? null,
-    metadata: normalizeEvidenceMetadata(input.metadata, type) ?? null,
-    type,
-  });
-};
-
-// A submitted result carries a runtime-sized evidence list; cap the per-entry
-// file lookup + insert.
-const EVIDENCE_WRITE_CONCURRENCY = 5;
 
 export const ingestRouter = router({
   ingestResult: verifyWriteProcedure
@@ -208,7 +170,8 @@ export const ingestRouter = router({
         assertOperationInScope(ctx, run?.operationId);
       }
 
-      return createVerifyEvidenceRow(ctx, result.id, input);
+      const [row] = await prepareEvidenceRows(ctx.fileModel, [input]);
+      return ctx.evidenceModel.create({ ...row, checkResultId: result.id });
     }),
   /**
    * Builder self-evidence contract: submit a check item's verdict AND its
@@ -230,10 +193,10 @@ export const ingestRouter = router({
               z
                 .object({
                   capturedBy: evidenceCapturedBySchema.optional(),
-                  content: z.string().min(1).optional(),
+                  content: inlineEvidenceContentSchema.optional(),
                   description: z.string().optional(),
                   fileId: z.string().min(1).optional(),
-                  metadata: z.unknown().optional(), // as on uploadEvidence: a video's chapters
+                  metadata: z.unknown().optional(),
                   type: evidenceTypeSchema,
                 })
                 .refine((e) => Boolean(e.content) !== Boolean(e.fileId), {
@@ -293,6 +256,9 @@ export const ingestRouter = router({
             .join('; ')}`,
         });
 
+      // Validate every record before writing a verdict or any evidence.
+      const evidenceRows = await prepareEvidenceRows(ctx.fileModel, input.evidence ?? []);
+
       const checkResult = await ctx.resultModel.upsertByCheckItem({
         checkItemId: input.checkItemId,
         checkItemIndex: input.checkItemIndex ?? planItem?.index,
@@ -308,11 +274,12 @@ export const ingestRouter = router({
         verifyRunId: run.id,
       });
 
-      const evidence = input.evidence?.length
-        ? await pMap(input.evidence, (e) => createVerifyEvidenceRow(ctx, checkResult.id, e), {
-            concurrency: EVIDENCE_WRITE_CONCURRENCY,
-          })
-        : [];
+      const evidence =
+        evidenceRows.length === 0
+          ? []
+          : await ctx.evidenceModel.createMany(
+              evidenceRows.map((row) => ({ ...row, checkResultId: checkResult.id })),
+            );
 
       return { checkResult, evidence };
     }),

@@ -18,15 +18,16 @@ const setup = (deps: { decision?: unknown; rolledOut?: boolean; scheduler?: unkn
   const observe = vi.fn();
   const judge = vi.fn(async () => deps.decision as never);
   const isRolledOut = vi.fn(async () => deps.rolledOut ?? true);
+  const rememberEngaged = vi.fn(async () => {});
   const gate = createFollowupGate({
     applicationId: 'app',
     observe,
     platform: 'discord',
-    recorder: { isRolledOut, judge },
+    recorder: { isRolledOut, judge, rememberEngaged },
     scheduler: deps.scheduler as never,
   });
 
-  return { gate, isRolledOut, judge, observe };
+  return { gate, isRolledOut, judge, observe, rememberEngaged };
 };
 
 describe('follow-up gate', () => {
@@ -128,6 +129,27 @@ describe('follow-up gate', () => {
       'scheduled',
       true,
     );
+  });
+
+  it('keeps an edit from answering a parked message before its replay does', async () => {
+    const scheduler = { submit: vi.fn(async () => 'hold') };
+    const { gate, rememberEngaged } = setup({ scheduler });
+    const replay = { id: 'm1:replay:1710000000000:0', text: 'm1' } as never;
+
+    await gate(base({ merged: replay, parked: [replay, msg('m2')] }));
+
+    // Marked under the platform ids, which are what an edit of the message carries.
+    expect(rememberEngaged).toHaveBeenCalledWith(['m1', 'm2']);
+  });
+
+  it('marks nothing when the scheduler lets the batch through', async () => {
+    const { gate, rememberEngaged } = setup({
+      scheduler: { submit: vi.fn(async () => 'release') },
+    });
+
+    await gate(base());
+
+    expect(rememberEngaged).not.toHaveBeenCalled();
   });
 
   it('files a Discord thread message under its parent channel so one run covers both', async () => {

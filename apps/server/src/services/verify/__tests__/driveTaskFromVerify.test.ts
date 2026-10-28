@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { reviewGoalDelivery } from '../goalReview';
-import { maybeAutoRepair } from '../repairService';
+import { maybeAutoRepair, repairRejectedReview } from '../repairService';
 import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from '../taskAcceptance';
 
@@ -28,6 +28,7 @@ vi.mock('../taskAcceptance', () => ({
 
 vi.mock('../repairService', () => ({
   maybeAutoRepair: vi.fn(),
+  repairRejectedReview: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../reporter', () => ({
   VerifyReporterService: vi.fn(function () {
@@ -155,6 +156,62 @@ describe('driveTaskFromVerify', () => {
       error: 'Delivery did not pass verification.',
     });
     expect(deliverMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'error' }));
+    expect(scheduleGoalAdvance).toHaveBeenCalledWith(
+      expect.objectContaining({ goalId: 'goal-1', trigger: 'settle' }),
+    );
+  });
+
+  /**
+   * Regression: a Goal Task whose content was done in its first attempt ran
+   * seven more, each a fresh topic re-capturing evidence, because a review
+   * rejection always paused the Task into another attempt. A repairable check is
+   * now fixed inside the round, and the repair round settles the Task.
+   */
+  it('repairs a rejected check in the round instead of pausing the Goal Task', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    const rejectedChecks = [{ checkItemId: 'c1', feedback: 'Add the second screenshot.' }];
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'rejected',
+      feedback: 'Landing: Add the second screenshot.',
+      predictionIds: ['p1'],
+      rejectedChecks,
+    });
+    vi.mocked(repairRejectedReview).mockResolvedValueOnce({ repairOperationId: 'repair-op' });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(repairRejectedReview).toHaveBeenCalledWith(db, 'u1', 'op-1', rejectedChecks, undefined);
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(deliverMock).not.toHaveBeenCalled();
+    expect(scheduleGoalAdvance).not.toHaveBeenCalled();
+  });
+
+  it('pauses the Goal Task as before when no in-round repair can start', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'rejected',
+      feedback: 'Landing: Add the second screenshot.',
+      predictionIds: ['p1'],
+      rejectedChecks: [{ checkItemId: 'c1', feedback: 'Add the second screenshot.' }],
+    });
+    vi.mocked(repairRejectedReview).mockResolvedValueOnce(null);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
     expect(scheduleGoalAdvance).toHaveBeenCalledWith(
       expect.objectContaining({ goalId: 'goal-1', trigger: 'settle' }),
     );

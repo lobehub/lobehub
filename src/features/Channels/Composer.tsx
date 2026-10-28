@@ -161,6 +161,7 @@ export function Composer({
                 inThread,
                 members: members.map((member) => ({
                   actorType: member.actorType,
+                  agentId: member.agentId,
                   avatar: memberAvatar(member),
                   id: member.id,
                   name: memberName(member, t('deletedMember')),

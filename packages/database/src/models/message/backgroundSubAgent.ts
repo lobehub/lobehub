@@ -60,6 +60,7 @@ export class MessageBackgroundSubAgentQueries extends MessageScope {
       )
       .orderBy(asc(messages.createdAt), asc(messages.id));
 
+    /* v8 ignore next -- unreachable: `state` is never null here: the WHERE clause requires `state->>'background' = 'true'` */
     return rows.map((row) => ({ ...row, state: (row.state ?? {}) as Record<string, any> }));
   };
 

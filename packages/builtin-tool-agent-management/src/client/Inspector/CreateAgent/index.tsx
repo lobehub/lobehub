@@ -1,13 +1,11 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cx, useTheme } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox, useTheme } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
 import type { CreateAgentParams } from '../../../types';
@@ -50,8 +48,8 @@ export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams
         <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-agent-management.inspector.createAgent.title')}
         </span>
-        <Avatar
-          avatar={avatar || DEFAULT_AVATAR}
+        <AgentAvatar
+          avatar={avatar}
           background={backgroundColor || theme.colorBgContainer}
           shape={'square'}
           size={24}

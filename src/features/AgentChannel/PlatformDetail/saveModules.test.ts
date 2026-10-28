@@ -21,6 +21,8 @@ describe('resolveSaveModules', () => {
     'userId',
     'dmPolicy',
     'groupPolicy',
+    'devicePolicy',
+    'deviceAllowFrom',
     'watchKeywords',
     'botWakeEnabled',
     'botWakeScope',
@@ -36,7 +38,9 @@ describe('resolveSaveModules', () => {
     expect(resolveSaveModules(discord, true).map((m) => m.id)).toEqual([
       'credentials',
       'connection',
-      'access',
+      'access-identity',
+      'access-conversation',
+      'access-device',
       'wake-judgement',
       'wake-keywords',
       'wake-channels',
@@ -60,10 +64,12 @@ describe('resolveSaveModules', () => {
   });
 
   it('has a credentials module only when the platform asks for credentials', () => {
-    expect(resolveSaveModules(groups(['dmPolicy']), false).map((m) => m.id)).toEqual(['access']);
+    expect(resolveSaveModules(groups(['dmPolicy']), false).map((m) => m.id)).toEqual([
+      'access-conversation',
+    ]);
     expect(resolveSaveModules(groups(['dmPolicy']), true).map((m) => m.id)).toEqual([
       'credentials',
-      'access',
+      'access-conversation',
     ]);
   });
 
@@ -74,10 +80,34 @@ describe('resolveSaveModules', () => {
     for (const module of wake) expect(module.alsoWrites).toEqual(['botWakeEnabled']);
   });
 
+  it('splits access into owner identity, conversation and device blocks', () => {
+    const access = resolveSaveModules(discord, false).filter((m) => m.id.startsWith('access-'));
+
+    expect(access.map((m) => [m.id, m.keys])).toEqual([
+      ['access-identity', ['userId']],
+      ['access-conversation', ['dmPolicy', 'groupPolicy']],
+      ['access-device', ['devicePolicy', 'deviceAllowFrom']],
+    ]);
+  });
+
+  it('saves the owner ID with the conversation block, which a pairing policy needs', () => {
+    const conversation = resolveSaveModules(discord, false).find(
+      (m) => m.id === 'access-conversation',
+    )!;
+
+    expect(
+      settingsToSave(
+        conversation,
+        { settings: { dmPolicy: 'pairing', userId: 'owner-1' } },
+        { settings: { dmPolicy: 'open' } },
+      ),
+    ).toEqual({ dmPolicy: 'pairing', userId: 'owner-1' });
+  });
+
   it('maps a module to the tab it sits on', () => {
     expect(tabOfModule('credentials')).toBe('connect');
     expect(tabOfModule('connection')).toBe('connect');
-    expect(tabOfModule('access')).toBe('access');
+    expect(tabOfModule('access-device')).toBe('access');
     expect(tabOfModule('wake-pace')).toBe('wake');
     expect(tabOfModule('advanced')).toBe('advanced');
   });

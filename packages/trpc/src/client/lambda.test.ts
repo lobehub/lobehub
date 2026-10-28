@@ -219,6 +219,23 @@ describe('lambdaClient transport lanes', () => {
     expect(settingsUrl).not.toContain('agent.getAgentConfigById');
   });
 
+  // A project topic asks for the project's topics beside its detail; batched,
+  // the heavy detail held the topic list and the pane stayed blank.
+  it('sends the project detail read as its own unbatched request', async () => {
+    fetchMock.mockImplementation(respondByLane);
+
+    await Promise.all([
+      lambdaClient.project.detail.query({ id: 'prj_test' }),
+      lambdaClient.agent.getAgentConfigById.query({ agentId: 'agt_test' }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const detailUrl = requestedUrls().find((url) => url.includes('project.detail'));
+    expect(detailUrl).toBeDefined();
+    expect(detailUrl).not.toContain('batch=1');
+    expect(detailUrl).not.toContain('agent.getAgentConfigById');
+  });
+
   // One-shot relay: the server reads the channel this tab subscribed from the
   // request headers, so the call carries its own headers and never shares a
   // batch with calls that must not be relayed.

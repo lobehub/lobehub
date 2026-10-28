@@ -24,6 +24,7 @@ import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
+import { SkillListVariantProvider } from './SkillListRow';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -31,6 +32,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     padding-block: 4px;
     padding-inline: 8px;
+  `,
+  pageBody: css`
+    padding-block: 0 24px;
+    padding-inline: 0;
+  `,
+  pageHeader: css`
+    display: flex;
+    flex-shrink: 0;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    padding-block: 24px 16px;
+    padding-inline: 12px;
   `,
   header: css`
     display: flex;
@@ -62,13 +77,15 @@ interface LeftPanelProps {
   fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
+  /** Render as the page-level list a row opens a second-level detail from. */
+  page?: boolean;
   selectedIdentifier?: string;
   viewMode: SkillViewMode;
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ fullWidth, onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
-    const { t } = useTranslation('setting');
+  ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
+    const { t } = useTranslation(['setting', 'tool']);
     const [showAddConnector, setShowAddConnector] = useState(false);
 
     const handleOpenStore = useCallback(() => {
@@ -78,6 +95,64 @@ const LeftPanel = memo<LeftPanelProps>(
     const isConnectorView = viewMode === 'connector';
     // Adding a workspace connector follows the same member policy as editing one.
     const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
+    const addConnectorTitle = t('connector.add.title', {
+      defaultValue: 'Add Custom Connector',
+      ns: 'tool',
+    });
+    const isConnectorPage = page && isConnectorView;
+
+    if (isConnectorPage)
+      return (
+        <SkillListVariantProvider value={'page'}>
+          <div className={styles.pageHeader}>
+            <Flexbox gap={4}>
+              <Text as={'h1'} fontSize={20} style={{ margin: 0 }} weight={600}>
+                {t('skillView.connectors', 'Connectors')}
+              </Text>
+              <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+            </Flexbox>
+            <Flexbox horizontal flex={'none'} gap={8}>
+              <Tooltip title={t('skillStore.title')}>
+                <Button
+                  aria-label={t('skillStore.title')}
+                  icon={<Icon icon={Store} />}
+                  onClick={handleOpenStore}
+                />
+              </Tooltip>
+              <Tooltip
+                title={
+                  canAddConnector || isPolicyPending
+                    ? undefined
+                    : t('tools.connectorFeedback.manageOnly')
+                }
+              >
+                {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
+                <span className={styles.tooltipAnchor}>
+                  <Button
+                    disabled={!canAddConnector}
+                    icon={Grid2x2Plus}
+                    onClick={() => setShowAddConnector(true)}
+                  >
+                    {addConnectorTitle}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Flexbox>
+          </div>
+          <ConnectorManagePolicy variant={'page'} />
+          <div className={styles.pageBody}>
+            <SkillList
+              viewMode={viewMode}
+              onDeleteSelected={onDeleteSelected}
+              onSelect={onSelect}
+            />
+          </div>
+          <CustomConnectorModal
+            open={showAddConnector}
+            onClose={() => setShowAddConnector(false)}
+          />
+        </SkillListVariantProvider>
+      );
 
     return (
       <>
@@ -98,10 +173,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 <Tooltip
                   title={
                     canAddConnector || isPolicyPending
-                      ? t('connector.add.title', {
-                          defaultValue: 'Add Custom Connector',
-                          ns: 'tool',
-                        })
+                      ? addConnectorTitle
                       : t('tools.connectorFeedback.manageOnly')
                   }
                 >

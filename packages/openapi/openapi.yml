@@ -13548,6 +13548,28 @@ paths:
                             type: string
                           error:
                             type: boolean
+                          files:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  type: string
+                                fileType:
+                                  type: string
+                                size:
+                                  type: number
+                                url:
+                                  type: string
+                              required:
+                                - id
+                                - name
+                                - fileType
+                                - size
+                                - url
                           id:
                             type: string
                           role:
@@ -13653,8 +13675,13 @@ paths:
                       pattern: ^msg_[\w-]{8,64}$
                     content:
                       type: string
-                      minLength: 1
                       maxLength: 100000
+                    fileIds:
+                      maxItems: 10
+                      type: array
+                      items:
+                        type: string
+                        minLength: 1
                     groupId:
                       type: string
                       minLength: 1
@@ -13676,8 +13703,13 @@ paths:
                       pattern: ^msg_[\w-]{8,64}$
                     content:
                       type: string
-                      minLength: 1
                       maxLength: 100000
+                    fileIds:
+                      maxItems: 10
+                      type: array
+                      items:
+                        type: string
+                        minLength: 1
                     groupId:
                       type: string
                       minLength: 1
@@ -13722,6 +13754,28 @@ paths:
                               type: string
                             error:
                               type: boolean
+                            files:
+                              type: array
+                              items:
+                                type: object
+                                additionalProperties: false
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    type: string
+                                  fileType:
+                                    type: string
+                                  size:
+                                    type: number
+                                  url:
+                                    type: string
+                                required:
+                                  - id
+                                  - name
+                                  - fileType
+                                  - size
+                                  - url
                             id:
                               type: string
                             role:

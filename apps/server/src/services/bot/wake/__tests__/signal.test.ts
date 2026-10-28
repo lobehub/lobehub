@@ -75,6 +75,20 @@ describe('buildWakeSignal', () => {
     ).toBeUndefined();
   });
 
+  it('reads the name a Discord reply author shows: display name first, then username', () => {
+    const reply = (author: Record<string, unknown>) =>
+      build({ raw: { referenced_message: { author }, type: 19 } });
+
+    expect(reply({ global_name: 'Innei', id: 'i1', username: 'innei_' })).toMatchObject({
+      replyToAuthorId: 'i1',
+      replyToAuthorName: 'Innei',
+    });
+    expect(reply({ global_name: null, id: 'i1', username: 'innei_' }).replyToAuthorName).toBe(
+      'innei_',
+    );
+    expect(reply({ id: 'i1' }).replyToAuthorName).toBeUndefined();
+  });
+
   it('reads who a Discord reply points at, and nothing elsewhere', () => {
     const raw = { referenced_message: { author: { id: 'teammate' } }, type: 19 };
 

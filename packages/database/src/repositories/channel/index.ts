@@ -78,6 +78,8 @@ export class ChannelRepository {
   create = async (params: {
     agentId?: string;
     agents?: ChannelAddAgentInput[];
+    /** Callers check that the project is readable in this scope. */
+    projectId?: string;
     title: string;
     visibility?: ChannelVisibility;
   }) =>
@@ -98,6 +100,7 @@ export class ChannelRepository {
       }
       const insert = tx.insert(channels).values({
         agentId,
+        projectId: params.projectId,
         userId: this.userId,
         title: params.title,
         visibility: params.visibility,

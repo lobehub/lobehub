@@ -18,6 +18,7 @@ import {
   markdownTextEvidenceTypes,
   rendersAsMarkdown,
 } from '../../Report/MarkdownEvidence';
+import { TerminalEvidenceCard } from '../../Report/TerminalEvidence';
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { ScreenshotTiles } from '../Evidence/ScreenshotTiles';
@@ -29,6 +30,7 @@ import { VideoEvidenceDiscussion } from './Video/VideoEvidenceDiscussion';
 
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
 const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?: ReactNode) => {
+  if (item.type === 'terminal') return <TerminalEvidenceCard defaultExpanded evidence={item} />;
   if (item.type === 'video') return video;
   if (item.type === 'audio')
     return (
@@ -102,7 +104,8 @@ export const EvidenceList = memo<{
   // artifact, matching the ingest CLI's warning semantics.
   const groups = new Map<string, Partial<Record<'after' | 'before', AcceptanceEvidence>>>();
   for (const item of sorted) {
-    if (!isVisual(item)) continue;
+    // Two runs of one command pair like two captures of one view.
+    if (!isVisual(item) && item.type !== 'terminal') continue;
     const comparison = readEvidenceComparison(item.metadata);
     if (!comparison) continue;
     const group = groups.get(comparison.id) ?? {};
@@ -320,6 +323,9 @@ export const EvidenceList = memo<{
             </Flexbox>
           );
         }
+        // A command execution: the record first, then its output — whether the
+        // row carries its transcript inline or as a file.
+        if (item.type === 'terminal') return <TerminalEvidenceCard evidence={item} key={item.id} />;
         if (item.content && markdownTextEvidenceTypes.has(item.type))
           return (
             // An authored alt/description becomes the fold row's title itself —

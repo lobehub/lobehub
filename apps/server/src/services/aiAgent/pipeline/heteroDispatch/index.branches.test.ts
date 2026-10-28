@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   recordStart: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
+  scheduleTimedOutDispatchConfirmation: vi.fn(),
   selectCodexDeviceDispatch: vi.fn(),
   signHeteroOperationJWT: vi.fn(),
   signUserJWT: vi.fn(),
@@ -96,6 +97,10 @@ vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
 
 vi.mock('../finalizeHeteroDispatchError', () => ({
   finalizeHeteroDispatchError: mocks.finalizeHeteroDispatchError,
+}));
+
+vi.mock('./timeoutConfirmation', () => ({
+  scheduleTimedOutDispatchConfirmation: mocks.scheduleTimedOutDispatchConfirmation,
 }));
 
 vi.mock('../codexDeviceRuntime', () => ({
@@ -612,16 +617,17 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
     );
   });
 
-  it('settles a dispatch timeout as a device timeout, even when the device is now offline', async () => {
+  it('keeps a timed-out dispatch alive and settles it later as a device timeout', async () => {
     // Whether the run started is unknowable after a timeout: the device may
-    // have received it before dropping. Asking the device now must not turn
-    // "may still be starting" into "never started".
+    // have received it before the ack was lost, and its CLI may already be
+    // starting. Failing it now would refuse that CLI's first batch as
+    // `operation-not-running`; asking the device now must not decide it either.
     const raw = JSON.stringify({ error: 'TIMEOUT', success: false, timeSinceHeartbeatMs: 70_000 });
     mocks.dispatchAgentRun.mockResolvedValueOnce({ error: raw, success: false });
     mocks.readDeviceSystemInfo.mockResolvedValue({ ok: false, reason: 'DEVICE_OFFLINE' });
-    const { deps } = createDeps();
+    const { deps, topicModel } = createDeps();
 
-    await dispatchHeteroAgent(
+    const result = await dispatchHeteroAgent(
       deps,
       createCtx({
         boundDeviceId: 'dev-1',
@@ -631,14 +637,27 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       createInput('claude-code'),
     );
 
-    expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
+    expect(mocks.finalizeHeteroDispatchError).not.toHaveBeenCalled();
+    expect(mocks.scheduleTimedOutDispatchConfirmation).toHaveBeenCalledWith(
       deps,
-      expect.objectContaining({
-        detail: raw,
-        errorType: ChatErrorType.DeviceResponseTimeout,
-        message: humanizeHeteroDispatchError('DEVICE_RESPONSE_TIMEOUT'),
-      }),
+      expect.objectContaining({ operationId: result.operationId }),
+      {
+        dispatchedAt: expect.any(Date),
+        finalize: expect.objectContaining({
+          detail: raw,
+          errorType: ChatErrorType.DeviceResponseTimeout,
+          message: humanizeHeteroDispatchError('DEVICE_RESPONSE_TIMEOUT'),
+        }),
+        result: expect.objectContaining({ error: raw }),
+      },
     );
+    // Stop must still reach a run that may be live on the device.
+    expect(topicModel.patchRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      result.operationId,
+      expect.objectContaining({ deviceId: 'dev-1' }),
+    );
+    expect(result).toMatchObject({ status: 'created', success: true });
     expect(mocks.readDeviceSystemInfo).not.toHaveBeenCalled();
   });
 

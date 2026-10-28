@@ -396,6 +396,7 @@ export class MessageLookupQueries extends MessageScope {
 
     return rows.map(({ content, ...row }) => ({
       ...row,
+      /* v8 ignore next -- unreachable: `content` is never null: the ILIKE filter on `content` drops NULL rows */
       ...buildMessageSearchSnippet(content ?? '', needle),
     }));
   };

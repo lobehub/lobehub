@@ -85,6 +85,21 @@ describe('accessIssues', () => {
 });
 
 describe('dropHiddenIncompleteRows', () => {
+  it('drops a half-added device row once devices are back to the owner only', () => {
+    expect(
+      dropHiddenIncompleteRows({
+        deviceAllowFrom: [{ id: '7' }, { id: '' }],
+        devicePolicy: 'owner',
+      }),
+    ).toEqual({ deviceAllowFrom: [{ id: '7' }] });
+  });
+
+  it('keeps an incomplete device row while the device list is shown', () => {
+    expect(
+      dropHiddenIncompleteRows({ deviceAllowFrom: [{ id: '' }], devicePolicy: 'allowlist' }),
+    ).toEqual({});
+  });
+
   it('drops a half-added group row once groups are no longer limited to a list', () => {
     expect(
       dropHiddenIncompleteRows({

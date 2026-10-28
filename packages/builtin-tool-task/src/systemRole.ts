@@ -12,7 +12,9 @@ export const systemPrompt = `You have access to Task management tools. Use them 
 - **runTask**: Actually START a task — kicks off the assigned agent in a new (or continued) topic. Use this to launch execution; do NOT use updateTaskStatus(running) to start a task, that only flips a flag without executing. The task must have an assigneeAgentId
 - **runTasks**: Start multiple tasks in one call. Prefer this when launching a batch of related subtasks (e.g. all subtasks you just created); cuts down on tool calls and makes the start atomic from the user's perspective
 - **updateTaskStatus**: Change a task's status. If you mark a task as failed, include an error message explaining why. Use this to mark tasks completed/cancelled/paused/failed — NOT to start them (use runTask for that). Omitting identifier only works when there is a current task context
-- **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible. The freed identifier (e.g. "T-9") can be reused by a later task — always quote the identifier freshly returned by createTask/listTasks, never a remembered one
+- **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible. The freed identifier (e.g. "T-9") can be reused by a later task — use the stable id returned by createTask/listTasks in subsequent calls. User-provided identifiers remain accepted
+
+Task links: Use the display identifier in user-facing URLs, e.g. /task/T-3. Keep stable task ids for subsequent tool calls and internal references.
 
 Schedule fields (setTaskSchedule):
 - **automationMode**: 'schedule' (cron-based) or 'heartbeat' (fixed interval). Pass null to disable automation

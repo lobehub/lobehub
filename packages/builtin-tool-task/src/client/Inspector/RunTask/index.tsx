@@ -1,8 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
 import { Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,11 +50,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export const RunTaskInspector = memo<BuiltinInspectorProps<RunTaskParams, RunTaskState>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
     const params = args || partialArgs || ({} as Partial<RunTaskParams>);
-    const identifier = params.identifier;
+    const identifier = pluginState?.identifier ?? params.identifier;
     const continueTopicId = params.continueTopicId;
     const prompt = params.prompt;
 

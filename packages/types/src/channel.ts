@@ -216,6 +216,8 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /** The project the channel is grouped under; null for a standalone channel. */
+  projectId: string | null;
   sequence: number;
   status: ChannelStatus;
   title: string;

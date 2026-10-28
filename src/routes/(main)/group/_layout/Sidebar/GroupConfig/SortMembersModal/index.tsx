@@ -72,6 +72,7 @@ const SortMembersModal = memo<SortMembersModalProps>(({ groupId, open, onCancel 
               id={item.id}
             >
               <MemberItem
+                agentId={item.id}
                 avatar={item.avatar || undefined}
                 background={item.backgroundColor ?? undefined}
                 disabled={!canEdit}

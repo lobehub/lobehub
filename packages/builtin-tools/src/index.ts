@@ -552,7 +552,9 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
+    // Hidden from the Tools popover (a goal starts from `/goal`), but
+    // discoverable so the activator can enable it when the user asks for a goal
+    // in plain words or wants a rejected goal proposal redone.
     hidden: true,
     identifier: GoalManifest.identifier,
     manifest: GoalManifest,

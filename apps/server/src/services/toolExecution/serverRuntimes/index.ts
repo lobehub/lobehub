@@ -7,6 +7,8 @@
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
 
+import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
+
 import type { ToolExecutionContext } from '../types';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
@@ -113,6 +115,9 @@ registerRuntimes([
   pageAgentRuntime,
   verifyResultRuntime,
 ]);
+
+// Goal calls approved after the rename still name the tool `lobe-goal`.
+serverRuntimeFactories.set(LegacyGoalIdentifier, goalRuntime.factory);
 
 // ==================== Registry API ====================
 

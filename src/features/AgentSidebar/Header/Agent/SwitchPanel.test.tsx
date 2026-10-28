@@ -5,12 +5,11 @@ import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
 import type { SwitcherItem } from '@/features/NavPanel/switcher/switcherItems';
 
 import SwitchPanel from './SwitchPanel';
 
-const captured = vi.hoisted(() => ({ items: [] as SwitcherItem[] }));
+const captured = vi.hoisted(() => ({ items: [] as SwitcherItem[], kind: '' as string }));
 const rows = vi.hoisted(() => ({
   private: [] as Array<Record<string, unknown>>,
   workspace: [] as Array<Record<string, unknown>>,
@@ -54,8 +53,9 @@ vi.mock('@/features/NavPanel/SidebarHeaderSelect', () => ({
   ),
 }));
 vi.mock('@/features/NavPanel/switcher/SwitcherMenu', () => ({
-  default: ({ items }: { items: SwitcherItem[] }) => {
+  default: ({ items, kind }: { items: SwitcherItem[]; kind: string }) => {
     captured.items = items;
+    captured.kind = kind;
     return null;
   },
 }));
@@ -70,15 +70,17 @@ describe('AgentSidebar SwitchPanel', () => {
     ];
   });
 
-  // Agents without an avatar used to reach the switcher as undefined and render empty,
-  // while the header trigger already falls back to the default agent avatar.
-  it('gives agents without an avatar the default agent avatar', () => {
+  // Agents without an avatar reach the switcher empty, keyed by id: the agent
+  // switcher draws each one's generated character from that id, the same one the
+  // header trigger shows.
+  it('hands agents without an avatar to the agent switcher by id', () => {
     render(<SwitchPanel />);
 
-    expect(captured.items.map((item) => item.avatar)).toEqual([
-      DEFAULT_AVATAR,
-      DEFAULT_AVATAR,
-      '🤖',
+    expect(captured.kind).toBe('agent');
+    expect(captured.items.map((item) => [item.id, item.avatar])).toEqual([
+      ['a1', undefined],
+      ['a2', undefined],
+      ['a3', '🤖'],
     ]);
   });
 });

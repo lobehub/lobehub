@@ -85,7 +85,11 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
               title={title}
               agent={
                 agent
-                  ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
+                  ? {
+                      avatar: agent.avatar || undefined,
+                      backgroundColor: agent.backgroundColor,
+                      id: agentId,
+                    }
                   : undefined
               }
             />

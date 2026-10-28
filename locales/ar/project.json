@@ -306,7 +306,6 @@
   "topics.chooseLocation": "اختر دليل عمل",
   "topics.chooseTopic": "اختر موضوعًا في الشريط الجانبي، أو أنشئ واحدًا لبدء العمل",
   "topics.complete": "وضع علامة مكتمل",
-  "topics.conversationOnly": "المحادثة فقط، بدون دليل عمل",
   "topics.executionContext": "موقع العمل",
   "topics.gatewayUnavailable": "قم بتمكين بوابة الوكيل قبل استخدام موقع العمل لهذا المشروع.",
   "topics.group.agent": "حسب الوكيل",

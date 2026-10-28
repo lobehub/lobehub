@@ -72,7 +72,7 @@ ChatAssistControl.displayName = 'ChatAssistControl';
 /**
  * The chat-assist entries of the service-model settings that stay personal
  * inside a workspace (follow-up chips, input completion). Unlike
- * `ModelAssignmentsForm`, nothing here is gated on workspace permissions:
+ * `ServiceModelForm`, nothing here is gated on workspace permissions:
  * every member configures their own.
  */
 const ChatAssistForm = memo(() => {

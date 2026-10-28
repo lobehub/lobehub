@@ -57,16 +57,14 @@ const runnable = (instanceId: string) => ({
 
 vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectories: () => directories,
+  useProjectDirectoryStore: (selector: (state: object) => unknown) =>
+    selector({ createProjectTopic, startTopic: vi.fn() }),
 }));
 
-const { navigate, openProjectTopicModal, startProjectTopicDraft } = vi.hoisted(() => ({
+const { createProjectTopic, navigate, startProjectTopicDraft } = vi.hoisted(() => ({
+  createProjectTopic: vi.fn(async () => ({ id: 'tpc_new' })),
   navigate: vi.fn(),
-  openProjectTopicModal: vi.fn(),
   startProjectTopicDraft: vi.fn(),
-}));
-
-vi.mock('@/features/Projects/WorkingDirectories/StartDirectoryModal', () => ({
-  openProjectTopicModal,
 }));
 vi.mock(
   '@/features/Projects/WorkingDirectories/startProjectTopicDraft',
@@ -242,7 +240,7 @@ describe('TopicByAgentGroupItem', () => {
       navigate,
       projectId: 'project-1',
     });
-    expect(openProjectTopicModal).not.toHaveBeenCalled();
+    expect(createProjectTopic).not.toHaveBeenCalled();
   });
 
   /** @example Review: the agent "+" staged a read-only directory, so the first send was refused. */
@@ -299,7 +297,7 @@ describe('TopicByAgentGroupItem', () => {
     );
   });
 
-  it('opens the modal instead of a draft for an agent fixed to a non-device target', () => {
+  it('goes straight into a conversation-only topic for an agent fixed to a non-device target', async () => {
     subGroupModes[GROUP_ID] = 'byDevice';
     directories[0] = { ...directories[0], ...runnable('ins-mac') };
     directories[1] = { ...directories[1], ...runnable('ins-linux') };
@@ -311,16 +309,26 @@ describe('TopicByAgentGroupItem', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sidebar.newConversation' }));
 
     expect(startProjectTopicDraft).not.toHaveBeenCalled();
-    expect(openProjectTopicModal).toHaveBeenCalledTimes(1);
+    await expect
+      .poll(() => navigate.mock.calls.at(-1)?.[0])
+      .toBe('/project/project-1/topic/tpc_new');
   });
 
-  it('keeps the modal for a project with no runnable directory, so one can be added', () => {
+  /** @example Review feedback: "new topic" must go straight into the agent, never through the work-location modal. */
+  it('opens a conversation-only topic of this agent when the project has no runnable directory', async () => {
     renderGroup();
 
     fireEvent.click(screen.getByRole('button', { name: 'sidebar.newConversation' }));
 
     expect(startProjectTopicDraft).not.toHaveBeenCalled();
-    expect(openProjectTopicModal).toHaveBeenCalledTimes(1);
+    expect(createProjectTopic).toHaveBeenCalledWith({
+      agentId: 'agt_acc_merge_alpha',
+      projectId: 'project-1',
+      title: 'directories.untitled',
+    });
+    await expect
+      .poll(() => navigate.mock.calls.at(-1)?.[0])
+      .toBe('/project/project-1/topic/tpc_new');
   });
 
   /** @example User report: the project sidebar hid devices that had no topics yet. */
@@ -504,6 +512,48 @@ describe('TopicByAgentGroupItem', () => {
 
     expect(screen.getAllByText('Cook').length).toBeGreaterThan(0);
     expect(screen.queryByText('公共CC(美国 100刀)')).toBeNull();
+  });
+
+  /** @example Review feedback: a project with no topic should show the main agent group with "new topic". */
+  it('offers a new topic inside the main agent group before the project has any topic', () => {
+    directories[0] = { ...directories[0], ...runnable('ins-mac') };
+    render(
+      <TopicListScopeContext
+        value={{
+          coordinatorAgent: { avatar: '🚀', title: '官网改版 Coordinator' },
+          coordinatorAgentId: 'agt_lead',
+          projectId: 'prj_1',
+        }}
+      >
+        <AccordionRoot defaultValue={['agent:agt_lead']}>
+          <GroupItem
+            expanded
+            group={{ children: [], id: 'agent:agt_lead', title: '官网改版 Coordinator' }}
+          />
+        </AccordionRoot>
+      </TopicListScopeContext>,
+    );
+
+    expect(screen.getAllByText('官网改版 Coordinator').length).toBeGreaterThan(0);
+    // The header "+" shares the label; the extra match is the row inside the empty group.
+    const entries = screen.getAllByText('sidebar.newConversation');
+    expect(entries).toHaveLength(2);
+    fireEvent.click(entries[1]);
+
+    expect(startProjectTopicDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agt_lead',
+        directoryId: 'binding-mac',
+        projectId: 'prj_1',
+      }),
+    );
+  });
+
+  it('adds no extra "new topic" row to a group that already has topics', () => {
+    renderInProject('agt_lead');
+
+    // Only the header "+" carries the label.
+    expect(screen.getAllByText('sidebar.newConversation')).toHaveLength(1);
   });
 
   it("tags the project's main agent as its lead", () => {

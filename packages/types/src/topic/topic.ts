@@ -51,6 +51,12 @@ export interface TopicUserMemoryExtractRunState {
 export interface ChatTopicBotContext {
   applicationId: string;
   /**
+   * Whether the sender, not being the owner, is on the owner's device list
+   * (`settings.devicePolicy = 'allowlist'` + `settings.deviceAllowFrom`).
+   * Computed with `isOwner` in `buildBotContext`; absent means not trusted.
+   */
+  isDeviceTrusted?: boolean;
+  /**
    * Whether the message sender is the bot owner. Computed at the bot
    * router/dispatcher entry point as
    *   `senderExternalUserId === settings.userId`.
@@ -726,6 +732,12 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   favorite?: boolean;
   /** First user message (sliced server-side, used as preview fallback). */
   firstUserMessage?: string | null;
+  /**
+   * Whether a goal was planned in this conversation (`goals.subject_type =
+   * 'topic'`). Only the per-agent sidebar list and the project topic list
+   * select it; absent elsewhere.
+   */
+  hasGoal?: boolean;
   historySummary?: string;
   /** Total message count for the topic. */
   messageCount?: number | null;

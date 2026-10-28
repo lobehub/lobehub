@@ -5,8 +5,9 @@ import { Avatar, cssVar, Icon, Tag } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import { memo } from 'react';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import type { AgentBoundConnector } from '@/store/tool/slices/connector/types';
+
+import SkillListRow, { useSkillListVariant } from './SkillListRow';
 
 /**
  * A row in the unified settings' "Agent Connectors" section.
@@ -24,6 +25,7 @@ const AgentConnectorItem = memo<{
 }>(({ connector, isSelected, onSelect }) => {
   // Resolve the same brand icon a base connector of this identifier would use;
   // fall back to the generic MCP icon for custom/unknown connectors.
+  const iconSize = useSkillListVariant() === 'page' ? 20 : 18;
   const brand =
     getComposioAppByIdentifier(connector.identifier) ??
     getLobehubSkillProviderById(connector.identifier);
@@ -31,14 +33,14 @@ const AgentConnectorItem = memo<{
   const renderIcon = () => {
     if (brand) {
       const { icon, label } = brand;
-      if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={18} />;
-      return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+      if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={iconSize} />;
+      return <Icon fill={cssVar.colorText} icon={icon} size={iconSize} />;
     }
-    return <Icon icon={McpIcon} size={18} />;
+    return <Icon icon={McpIcon} size={iconSize} />;
   };
 
   return (
-    <NavItem
+    <SkillListRow
       active={isSelected}
       extra={connector.agentTitle ? <Tag size="small">{connector.agentTitle}</Tag> : undefined}
       icon={renderIcon}

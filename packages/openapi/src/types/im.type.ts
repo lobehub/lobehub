@@ -27,7 +27,9 @@ const ImSendFieldsSchema = z.object({
     .regex(/^msg_[\w-]{8,64}$/, 'clientMessageId must look like msg_<8-64 url-safe chars>')
     .optional(),
   /** The message text. */
-  content: z.string().trim().min(1).max(100_000),
+  content: z.string().trim().max(100_000),
+  /** Already-uploaded files to attach to this turn. */
+  fileIds: z.array(z.string().min(1)).max(10).optional(),
   /** The group chat the user is talking to; its supervisor orchestrates the members. */
   groupId: z.string().min(1).optional(),
   /** The conversation to continue; omit to start a new one for the agent or group. */
@@ -35,10 +37,14 @@ const ImSendFieldsSchema = z.object({
 });
 
 // A union rather than .refine() so the generated spec and SDK require a target too.
-export const ImSendRequestSchema = z.union([
-  ImSendFieldsSchema.extend({ agentId: z.string().min(1) }),
-  ImSendFieldsSchema.extend({ groupId: z.string().min(1) }),
-]);
+export const ImSendRequestSchema = z
+  .union([
+    ImSendFieldsSchema.extend({ agentId: z.string().min(1) }),
+    ImSendFieldsSchema.extend({ groupId: z.string().min(1) }),
+  ])
+  .refine((input) => input.content.length > 0 || !!input.fileIds?.length, {
+    message: 'A message needs text or an attachment',
+  });
 export type ImSendRequest = z.infer<typeof ImSendRequestSchema>;
 
 export const ImTopicParamSchema = z.object({
@@ -85,8 +91,17 @@ export interface ImMessage {
   createdAt: string;
   /** Set when the agent's turn failed; the client shows a retry affordance. */
   error: boolean;
+  files?: ImAttachment[];
   id: string;
   role: 'assistant' | 'user';
+}
+
+export interface ImAttachment {
+  fileType: string;
+  id: string;
+  name: string;
+  size: number;
+  url: string;
 }
 
 export interface ImSendResult {

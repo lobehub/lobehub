@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentModel } from '@/database/models/agent';
 import { ProjectModel } from '@/database/models/project';
 import { TopicModel } from '@/database/models/topic';
-import { topics, trashItems, users, workspaces } from '@/database/schemas';
+import { agents, topics, trashItems, users, workspaces } from '@/database/schemas';
 import { TrashService } from '@/server/services/trash';
 
 let testDB: LobeChatDatabase;
@@ -28,8 +28,11 @@ const workspaceId = 'trash-filter-ws';
 const otherWorkspaceId = 'trash-filter-ws-2';
 
 const personalCtx = (userId: string) => ({ userId }) as any;
-const workspaceCtx = (userId: string, workspaceRole: 'member' | 'owner', ws = workspaceId) =>
-  ({ userId, workspaceId: ws, workspaceRole }) as any;
+const workspaceCtx = (
+  userId: string,
+  workspaceRole: 'admin' | 'member' | 'owner',
+  ws = workspaceId,
+) => ({ userId, workspaceId: ws, workspaceRole }) as any;
 
 const createProject = (
   userId: string,
@@ -187,7 +190,7 @@ describe('trashRouter project filter', () => {
     ).toEqual({ topic: 1 });
   });
 
-  it('applies the member actor filter inside a project while the owner sees every root', async () => {
+  it('shows every member the public side and keeps a request without a side to own roots', async () => {
     const team = await createProject(ownerId, workspaceId, 'TEAM');
     const ownerRoots = await trashTopics(ownerId, workspaceId, team.id, 2);
     const memberRoots = await trashTopics(memberId, workspaceId, team.id, 2);
@@ -195,14 +198,22 @@ describe('trashRouter project filter', () => {
 
     const owner = workspaceCtx(ownerId, 'owner');
     const member = workspaceCtx(memberId, 'member');
-    expect((await listIds(owner, { projectId: team.id })).sort()).toEqual(
-      [...ownerRoots, ...memberRoots].sort(),
+    for (const ctx of [owner, member]) {
+      expect((await listIds(ctx, { projectId: team.id, visibility: 'public' })).sort()).toEqual(
+        [...ownerRoots, ...memberRoots].sort(),
+      );
+      expect(await caller(ctx).countByType({ projectId: null, visibility: 'public' })).toEqual({
+        topic: 1,
+      });
+      expect(await caller(ctx).countByType({ visibility: 'private' })).toEqual({});
+    }
+    // Without a side, older clients still get only their own deletions.
+    expect((await listIds(owner, { projectId: team.id })).sort()).toEqual([...ownerRoots].sort());
+    expect(await caller(owner).countByType({ projectId: null })).toEqual({});
+    // The personal bin of the same user is a different scope with no sides.
+    expect(await listIds(personalCtx(ownerId), { projectId: null, visibility: 'public' })).toEqual(
+      [],
     );
-    expect((await listIds(member, { projectId: team.id })).sort()).toEqual([...memberRoots].sort());
-    expect(await caller(member).countByType({ projectId: team.id })).toEqual({ topic: 2 });
-    expect(await caller(owner).countByType({ projectId: null })).toEqual({ topic: 1 });
-    // The personal bin of the same user is a different scope.
-    expect(await listIds(personalCtx(ownerId), { projectId: null })).toEqual([]);
   });
 
   it('empties only the matching roots of type, actor and project, each with its whole cascade', async () => {
@@ -235,8 +246,8 @@ describe('trashRouter project filter', () => {
       if (!batch.hasMore) break;
     }
     expect(purged).toBe(memberTeam.length);
-    const remaining = (await listIds(workspaceCtx(ownerId, 'owner'))).sort();
-    expect(remaining).toEqual([...ownerTeam, ...memberOther, memberAgent.agentId].sort());
+    expect((await listIds(member)).sort()).toEqual([...memberOther, memberAgent.agentId].sort());
+    expect(await listIds(workspaceCtx(ownerId, 'owner'))).toEqual(ownerTeam);
     // The agent's cascaded team topic is not a root of the project, so it survived…
     expect(
       await testDB.select().from(topics).where(eq(topics.id, memberAgent.topicId)),
@@ -254,9 +265,91 @@ describe('trashRouter project filter', () => {
     expect(
       await testDB.select().from(topics).where(eq(topics.id, memberAgent.topicId)),
     ).toHaveLength(0);
-    expect((await listIds(workspaceCtx(ownerId, 'owner'))).sort()).toEqual(
-      [...ownerTeam, ...memberOther].sort(),
+    expect(await listIds(member)).toEqual(memberOther);
+    expect(await listIds(workspaceCtx(ownerId, 'owner'))).toEqual(ownerTeam);
+  });
+
+  it('keeps private deletions on the deleter’s private side, out of every manager’s reach', async () => {
+    const privateAgent = await new AgentModel(testDB, memberId, workspaceId).create({
+      title: 'secret agent',
+      visibility: 'private',
+    });
+    await new TopicModel(testDB, memberId, workspaceId).create({
+      agentId: privateAgent.id,
+      title: 'secret topic',
+    });
+    await new TrashService(testDB, memberId, workspaceId).trashAgent(privateAgent.id);
+    // A topic of a private agent is private too, even trashed on its own.
+    const otherPrivateAgent = await new AgentModel(testDB, memberId, workspaceId).create({
+      visibility: 'private',
+    });
+    const privateTopic = await new TopicModel(testDB, memberId, workspaceId).create({
+      agentId: otherPrivateAgent.id,
+    });
+    await new TrashService(testDB, memberId, workspaceId).trashTopics([privateTopic.id]);
+    const privateProject = await createProject(memberId, workspaceId, 'MINE', 'private');
+    const [projectTopic] = await trashTopics(memberId, workspaceId, privateProject.id, 1);
+    const [publicTopic] = await trashTopics(memberId, workspaceId, null, 1);
+
+    const member = workspaceCtx(memberId, 'member');
+    const admin = workspaceCtx(strangerId, 'admin');
+    const owner = workspaceCtx(ownerId, 'owner');
+
+    expect((await listIds(member, { visibility: 'private' })).sort()).toEqual(
+      [privateAgent.id, privateTopic.id, projectTopic].sort(),
     );
+    expect(await listIds(member, { visibility: 'public' })).toEqual([publicTopic]);
+    for (const manager of [admin, owner]) {
+      expect(await listIds(manager, { visibility: 'public' })).toEqual([publicTopic]);
+      expect(await listIds(manager, { visibility: 'private' })).toEqual([]);
+      expect(await caller(manager).countByType({ visibility: 'public' })).toEqual({ topic: 1 });
+    }
+
+    const registry = await testDB.select().from(trashItems);
+    const rowOf = (resourceId: string) => registry.find((row) => row.resourceId === resourceId)!.id;
+    for (const manager of [admin, owner]) {
+      await expect(
+        caller(manager).restore({ ids: [rowOf(privateAgent.id)] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(caller(manager).purge({ ids: [rowOf(projectTopic)] })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+    }
+    // Emptying the public side leaves every private deletion in place.
+    expect(await caller(admin).emptyTrash({ visibility: 'public', workspaceId })).toEqual({
+      blocked: 0,
+      hasMore: false,
+      purged: 1,
+    });
+    expect(await testDB.select().from(agents).where(eq(agents.id, privateAgent.id))).toHaveLength(
+      1,
+    );
+    expect((await listIds(member, { visibility: 'private' })).sort()).toEqual(
+      [privateAgent.id, privateTopic.id, projectTopic].sort(),
+    );
+  });
+
+  it('lets managers, not other members, manage and empty the public side', async () => {
+    const [memberTopic] = await trashTopics(memberId, workspaceId, null, 1);
+    const [ownerTopic] = await trashTopics(ownerId, workspaceId, null, 1);
+    const registry = await testDB.select().from(trashItems);
+    const rowOf = (resourceId: string) => registry.find((row) => row.resourceId === resourceId)!.id;
+    const member = workspaceCtx(memberId, 'member');
+    const admin = workspaceCtx(strangerId, 'admin');
+
+    await expect(caller(member).purge({ ids: [rowOf(ownerTopic)] })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(
+      caller(member).emptyTrash({ visibility: 'public', workspaceId }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(await caller(admin).restore({ ids: [rowOf(memberTopic)] })).toMatchObject({
+      failed: [],
+    });
+    await caller(admin).purge({ ids: [rowOf(ownerTopic)] });
+    expect(await listIds(member, { visibility: 'public' })).toEqual([]);
+    expect(await testDB.select().from(topics).where(eq(topics.id, memberTopic))).toHaveLength(1);
   });
 
   it('refuses a batch whose request scope no longer matches the scope the sweep started in', async () => {

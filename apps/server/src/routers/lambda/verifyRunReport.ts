@@ -13,7 +13,7 @@ import {
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { createEvidenceFileResolver } from '@/server/services/verify';
+import { createEvidenceFileResolver, resolveEvidenceFiles } from '@/server/services/verify';
 
 const publicVerifyReportProcedure = publicProcedure.use(serverDatabase);
 
@@ -106,11 +106,9 @@ export const verifyRunReportProcedures = {
             .orderBy(asc(verifyEvidence.createdAt));
           return {
             ...r,
-            evidence: await pMap(
-              evidence,
-              async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId)) }),
-              { concurrency: EVIDENCE_LOAD_CONCURRENCY },
-            ),
+            evidence: await pMap(evidence, (e) => resolveEvidenceFiles(resolveFileMeta, e), {
+              concurrency: EVIDENCE_LOAD_CONCURRENCY,
+            }),
           };
         },
         { concurrency: EVIDENCE_LOAD_CONCURRENCY },

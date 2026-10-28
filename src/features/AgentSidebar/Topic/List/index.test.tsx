@@ -24,6 +24,10 @@ const chatStoreStateMock = vi.hoisted(() => ({
   topics: [],
 }));
 const skeletonRenderCount = vi.hoisted(() => ({ value: 0 }));
+const userStoreStateMock = vi.hoisted(() => ({
+  topicIncludeCompleted: false,
+  topicSortBy: 'updatedAt',
+}));
 
 vi.mock('./TopicListSkeleton', () => ({
   default: () => {
@@ -109,9 +113,9 @@ vi.mock('@/store/global/selectors', () => ({
 }));
 
 vi.mock('@/store/user', () => ({
-  useUserStore: (
-    selector: (state: { topicIncludeCompleted: boolean; topicSortBy: string }) => unknown,
-  ) => selector({ topicIncludeCompleted: false, topicSortBy: 'updatedAt' }),
+  getUserStoreState: () => userStoreStateMock,
+  useUserStore: (selector: (state: typeof userStoreStateMock) => unknown) =>
+    selector(userStoreStateMock),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
