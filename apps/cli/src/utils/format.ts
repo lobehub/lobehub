@@ -45,6 +45,8 @@ export function timeUntil(date: Date | string): string {
 }
 
 export function truncate(str: string, maxWidth: number): string {
+  if (displayWidth(str) <= maxWidth) return str;
+
   let width = 0;
   let i = 0;
   for (const char of str) {

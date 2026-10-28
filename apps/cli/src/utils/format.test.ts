@@ -1,6 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { formatCost, formatNumber, outputJson, printBoxTable, timeUntil } from './format';
+import { formatCost, formatNumber, outputJson, printBoxTable, timeUntil, truncate } from './format';
+
+describe('truncate', () => {
+  it.each([
+    ['', 5],
+    ['Hi', 5],
+    ['Hello', 5],
+    ['你好', 4],
+    ['你abc', 5],
+    ['𠀀abc', 5],
+    ['A', 1],
+  ])('preserves %j when it fits within %i columns', (text, maxWidth) => {
+    expect(truncate(text, maxWidth)).toBe(text);
+  });
+
+  it.each([
+    ['Hello!', 5, 'Hell…'],
+    ['你好啊', 4, '你…'],
+    ['你abcd', 5, '你ab…'],
+    ['𠀀abcd', 5, '𠀀ab…'],
+    ['AB', 1, '…'],
+  ])('truncates %j to %i columns including the ellipsis', (text, maxWidth, expected) => {
+    expect(truncate(text, maxWidth)).toBe(expected);
+  });
+});
 
 describe('formatNumber', () => {
   it('should format numbers with commas', () => {
