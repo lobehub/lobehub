@@ -548,9 +548,11 @@ export default {
   'plans.downgradeWillCancel': 'This action will cancel your scheduled plan downgrade',
   'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
   'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
-  'plans.legacy.desc':
-    'No longer on sale. Your subscription keeps renewing, and you can switch to a new plan anytime.',
-  'plans.legacy.tag': 'Legacy',
+  'plans.legacy.banner.desc':
+    'It keeps its current price. You can upgrade anytime to a plan priced above it, and what you have used this billing period is on us.',
+  'plans.legacy.banner.downgrade': 'Switches to {{plan}} when this billing period ends',
+  'plans.legacy.banner.title': 'You are on {{plan}}, a legacy plan',
+  'plans.legacy.upgradeOnly': 'A legacy plan can only move up to a plan priced above it',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.artifactSiteSize': 'Up to {{value}} per published site',
