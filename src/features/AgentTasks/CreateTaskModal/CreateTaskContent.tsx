@@ -23,6 +23,7 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
@@ -239,6 +240,10 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const handleTitleKeyDown = useTitleEnterToInstruction(editor);
 
+    // An image pasted into the instruction finishes uploading later; without
+    // this, that update would move the caret back from the title mid-typing.
+    const handleTitleFocus = useCallback(() => releaseEditorSelection(editor), [editor]);
+
     return (
       <Flexbox flex={1} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
         <Flexbox
@@ -265,6 +270,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               padding: '4px 0',
             }}
             onChange={(e) => setTitle(e.target.value)}
+            onFocus={handleTitleFocus}
             onKeyDown={handleTitleKeyDown}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
