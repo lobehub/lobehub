@@ -1,11 +1,14 @@
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { CoverageEvidence } from '@lobechat/utils/verify/evidenceCoverage';
+
 import type { TrpcClient } from '../../../api/client';
 import { resolveWorkspaceId } from '../../../api/workspace';
 import { resolveServerUrl } from '../../../settings';
 import { outputJson } from '../../../utils/format';
 import { log } from '../../../utils/logger';
+import { terminalBundleDir } from '../../../utils/terminalEvidence/bundle';
 import { uploadLocalFile } from '../../../utils/uploadLocalFile';
 import type { EvidenceType } from '../utils';
 import {
@@ -14,6 +17,7 @@ import {
   inlineTextEvidenceForFile,
   reportEvidence,
 } from '../utils';
+import { publishTerminalBundle } from './terminal';
 
 export async function storageQuotaRecovery(client: TrpcClient) {
   const serverUrl = new URL(resolveServerUrl());
@@ -83,6 +87,37 @@ export async function uploadAcceptanceFile(
   }
 }
 
+/** Thrown by an uploader once the storage-quota recovery has been printed. */
+class EvidenceUploadStopped extends Error {}
+
+/**
+ * Publish a terminal bundle for an atomic submission (`result submit` /
+ * `evidence upload`). Undefined when storage quota stopped the upload — the
+ * recovery is already printed; any other failure ends the command.
+ */
+export async function terminalEvidenceFor(
+  client: TrpcClient,
+  bundle: string,
+  options: { by?: string; desc?: string; json?: boolean | string },
+) {
+  try {
+    const payload = await publishTerminalBundle(
+      async (file) => {
+        const uploaded = await uploadAcceptanceFile(client, file, options.json);
+        if (!uploaded) throw new EvidenceUploadStopped();
+        return uploaded;
+      },
+      bundle,
+      options.desc,
+    );
+    return { ...payload, capturedBy: (options.by ?? 'cli') as 'cli' };
+  } catch (error) {
+    if (error instanceof EvidenceUploadStopped) return undefined;
+    log.error((error as Error).message);
+    process.exit(1);
+  }
+}
+
 export interface FailedReportEvidence {
   checkResultId: string;
   error: string;
@@ -104,11 +139,54 @@ export async function uploadReportEvidence(
   const failedEvidence: FailedReportEvidence[] = [];
   /** Each stored artifact by its position in the authored `evidence` list. */
   const published: { evidenceId: string; position: number }[] = [];
+  /** What landed, with metadata — the coverage rule reads a terminal's provenance. */
+  const coverage: CoverageEvidence[] = [];
   const types = new Set<EvidenceType>();
   let count = 0;
   let inlined = 0;
   for (const [position, input] of reportEvidence(params.evidence).entries()) {
     const absolutePath = path.resolve(params.dir, input.path);
+    // A case may list a terminal evidence bundle (its directory or its
+    // terminal.json) as an evidence path; it publishes as one terminal row.
+    if (terminalBundleDir(absolutePath)) {
+      try {
+        const payload = await publishTerminalBundle(
+          (file) => uploadLocalFile(client, file),
+          absolutePath,
+          input.description,
+        );
+        // A before/after pair of runs renders as one comparison, like screenshots.
+        const metadata = input.comparison
+          ? { ...payload.metadata, comparison: input.comparison }
+          : payload.metadata;
+        const row = await client.verify.uploadEvidence.mutate({
+          ...payload,
+          capturedBy: 'cli',
+          checkResultId: params.checkResultId,
+          metadata,
+        });
+        if (row?.id) published.push({ evidenceId: row.id, position });
+        types.add('terminal');
+        coverage.push({ metadata, type: 'terminal' });
+        count += 1;
+        if (payload.content !== undefined) inlined += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const args = ['--check', params.checkResultId, '--terminal', absolutePath];
+        failedEvidence.push({
+          checkResultId: params.checkResultId,
+          error: message,
+          path: absolutePath,
+          reason: message.includes('storage_block:') ? 'storage_quota' : 'upload_failed',
+          retryArgs: ['acceptance', 'run', 'evidence', 'upload', ...args],
+          retryCommand: `lh acceptance run evidence upload ${args.map((arg) => `'${arg.replaceAll("'", "'\\''")}'`).join(' ')}`,
+          retryCommandShell: 'posix',
+          type: 'terminal',
+        });
+        log.warn(`terminal evidence not published: ${absolutePath}: ${message}`);
+      }
+      continue;
+    }
     const type = evidenceTypeForFile(absolutePath);
     const description = evidenceDescriptionForFile(input.description, absolutePath);
     const metadata =
@@ -140,6 +218,7 @@ export async function uploadReportEvidence(
       });
       if (row?.id) published.push({ evidenceId: row.id, position });
       types.add(type);
+      coverage.push({ metadata, type });
       count += 1;
       if (content !== undefined) inlined += 1;
     } catch (error) {
@@ -176,5 +255,5 @@ export async function uploadReportEvidence(
       log.warn(`evidence not published: ${path.basename(absolutePath)}: ${message}`);
     }
   }
-  return { count, failedEvidence, inlined, published, types };
+  return { count, coverage, failedEvidence, inlined, published, types };
 }

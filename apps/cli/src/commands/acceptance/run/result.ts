@@ -14,7 +14,7 @@ import {
   inlineTextEvidenceForFile,
   printResults,
 } from '../utils';
-import { uploadAcceptanceFile } from './evidenceUpload';
+import { terminalEvidenceFor, uploadAcceptanceFile } from './evidenceUpload';
 
 // ── result ──
 
@@ -90,6 +90,7 @@ export interface SubmitOptions {
   metadata?: string;
   operation?: string;
   run?: string;
+  terminal?: string;
   title?: string;
   type?: string;
   verdict?: string;
@@ -100,17 +101,26 @@ export async function submitAction(options: SubmitOptions): Promise<void> {
     log.error('Provide --run <verifyRunId> or --operation <operationId>');
     process.exit(1);
   }
-  const hasEvidence = Boolean(options.file) || Boolean(options.content);
-  if (Boolean(options.file) && Boolean(options.content)) {
-    log.error('Provide at most one of --file or --content');
+  const hasEvidence =
+    Boolean(options.file) || Boolean(options.content) || Boolean(options.terminal);
+  if ([options.file, options.content, options.terminal].filter(Boolean).length > 1) {
+    log.error('Provide at most one of --file, --content or --terminal');
     process.exit(1);
   }
-  if (hasEvidence && !options.type) {
+  if (hasEvidence && !options.terminal && !options.type) {
     log.error('--type is required when attaching evidence');
     process.exit(1);
   }
+  if (options.terminal && options.type && options.type !== 'terminal') {
+    log.error('--terminal publishes terminal evidence; drop --type or pass --type terminal');
+    process.exit(1);
+  }
+  if (options.terminal && (options.chapters || options.metadata)) {
+    log.error('--terminal carries its own record; drop --chapters/--metadata');
+    process.exit(1);
+  }
   if (!hasEvidence && !options.verdict) {
-    log.error('Provide evidence (--file/--content) and/or a --verdict');
+    log.error('Provide evidence (--file/--content/--terminal) and/or a --verdict');
     process.exit(1);
   }
   if (!hasEvidence && (options.chapters || options.metadata)) {
@@ -128,6 +138,11 @@ export async function submitAction(options: SubmitOptions): Promise<void> {
   ]);
   let fileId: string | undefined;
   let inlineContent = options.content;
+  let terminal: Awaited<ReturnType<typeof terminalEvidenceFor>>;
+  if (options.terminal) {
+    terminal = await terminalEvidenceFor(client, options.terminal, options);
+    if (!terminal) return;
+  }
   if (options.file) {
     inlineContent = inlineTextEvidenceForFile(options.file, options.type!);
     if (inlineContent === undefined) {
@@ -136,18 +151,20 @@ export async function submitAction(options: SubmitOptions): Promise<void> {
       fileId = uploaded.id;
     }
   }
-  const evidence = hasEvidence
-    ? [
-        {
-          capturedBy: options.by as any,
-          content: inlineContent,
-          description: evidenceDescriptionForFile(options.desc, options.file),
-          fileId,
-          metadata,
-          type: options.type as any,
-        },
-      ]
-    : undefined;
+  const evidence = terminal
+    ? [terminal]
+    : hasEvidence
+      ? [
+          {
+            capturedBy: options.by as any,
+            content: inlineContent,
+            description: evidenceDescriptionForFile(options.desc, options.file),
+            fileId,
+            metadata,
+            type: options.type as any,
+          },
+        ]
+      : undefined;
   const res = await client.verify.submitCheckEvidence.mutate({
     checkItemId: options.item,
     checkItemTitle: options.title,
@@ -229,6 +246,10 @@ export function withSubmitOptions(cmd: Command): Command {
     .option('--type <type>', 'screenshot|gif|video|audio|text|markdown|dom_snapshot|transcript')
     .option('--file <path>', 'Local file to upload as the evidence artifact')
     .option('--content <text>', 'Inline text payload (instead of a file)')
+    .option(
+      '--terminal <dir>',
+      'Terminal evidence bundle written by `lh acceptance run evidence capture|import`',
+    )
     .option('--verdict <verdict>', 'passed|failed|uncertain')
     .option('--title <text>', 'Check item title snapshot')
     .option('--by <capturedBy>', 'agent-browser|cdp|cli|program|llm_judge', 'cli')

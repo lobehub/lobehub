@@ -314,7 +314,7 @@ export class VerifyExecutorService {
         // Format alone never covers an execution requirement: an authored
         // example or a bare log carries no execution provenance.
         executionGaps.length > 0 &&
-          'Run the command for real and publish it as terminal evidence (captured or imported, not authored).',
+          `Run the command for real and publish its terminal evidence: \`lh acceptance run evidence capture --out <dir> -- <command>\` (or \`lh acceptance run evidence import\` for output that already ran), then \`lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item ${item.id} --terminal <dir>\`.`,
       ].filter(Boolean);
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),

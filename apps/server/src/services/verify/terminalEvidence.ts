@@ -35,7 +35,7 @@ export const resolveEvidenceMetadata = async (
   if (!parsed.ok)
     throw new TRPCError({
       code: 'BAD_REQUEST',
-      message: `Invalid terminal evidence metadata: ${parsed.error}. Publish terminal evidence from a captured or imported command execution bundle, not an authored example.`,
+      message: `Invalid terminal evidence metadata: ${parsed.error}. Publish terminal evidence from a bundle written by \`lh acceptance run evidence capture\` or \`import\`.`,
     });
 
   for (const key of TERMINAL_ARTIFACT_KEYS) {

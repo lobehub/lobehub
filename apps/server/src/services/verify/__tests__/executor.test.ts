@@ -567,7 +567,7 @@ describe('VerifyExecutorService', () => {
       'cli',
       expect.objectContaining({
         suggestion: expect.stringContaining(
-          'Run the command for real and publish it as terminal evidence (captured or imported, not authored).',
+          'lh acceptance run evidence capture --out <dir> -- <command>',
         ),
         toulmin: {
           limitation: 'Required evidence not provided: terminal from a real command execution.',

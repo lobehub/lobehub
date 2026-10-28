@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { normalizeEvidenceMetadata } from '@lobechat/const/verify';
 import type { VerifyRunContext, VerifyRunMetadata } from '@lobechat/types';
+import type { CoverageEvidence } from '@lobechat/utils/verify/evidenceCoverage';
 import type {
   LocalEvidenceSource,
   LocalResultSource,
@@ -10,6 +11,11 @@ import type {
 } from '@lobechat/utils/verify/localAcceptance';
 
 import { log } from '../../../utils/logger';
+import {
+  loadTerminalBundle,
+  terminalBundleDir,
+  terminalEvidenceDescription,
+} from '../../../utils/terminalEvidence/bundle';
 import {
   caseResult,
   missingEvidenceLimitation,
@@ -99,12 +105,44 @@ export function readLocalRound(params: {
     const result = caseResult(c, checkItemId, index, round.caseMetadata[index]);
     const resultId = localId(acceptanceId, 'result', dir, checkItemId);
 
-    const present = new Set<EvidenceType>();
+    const present: CoverageEvidence[] = [];
     for (const [position, input] of reportEvidence(c.evidence).entries()) {
       const file = path.resolve(roundPath, input.path);
       if (!existsSync(file)) {
         failedEvidence.push({ checkItemId, path: file, reason: 'file_missing' });
         if (params.warn) log.warn(`evidence not found: ${input.path}`);
+        continue;
+      }
+      // A terminal bundle renders as its command card with the transcript
+      // inline: a page opened from disk cannot fetch the stream files or the
+      // recording, so the card falls back to the text record it carries.
+      if (terminalBundleDir(file)) {
+        let bundle: ReturnType<typeof loadTerminalBundle>;
+        try {
+          bundle = loadTerminalBundle(file);
+        } catch (error) {
+          failedEvidence.push({ checkItemId, path: file, reason: 'file_missing' });
+          if (params.warn) log.warn(`terminal evidence not readable: ${(error as Error).message}`);
+          continue;
+        }
+        const metadata = {
+          ...(input.comparison ? { comparison: input.comparison } : {}),
+          terminal: bundle.metadata,
+        };
+        present.push({ metadata, type: 'terminal' });
+        evidence.push({
+          checkResultId: resultId,
+          content: bundle.transcript,
+          createdAt,
+          description: input.description?.trim() || terminalEvidenceDescription(bundle.metadata),
+          fileHeight: null,
+          fileName: null,
+          fileUrl: null,
+          fileWidth: null,
+          id: localEvidenceId(acceptanceId, dir, checkItemId, position),
+          metadata,
+          type: 'terminal',
+        });
         continue;
       }
       const type = evidenceTypeForFile(file);
@@ -121,7 +159,7 @@ export function readLocalRound(params: {
           : null;
       const content = inlineText(file, type);
       const size = type === 'screenshot' || type === 'gif' ? readImageSize(file) : null;
-      present.add(type);
+      present.push({ metadata, type });
       evidence.push({
         checkResultId: resultId,
         content,
@@ -137,12 +175,13 @@ export function readLocalRound(params: {
       });
     }
 
-    const gaps = requiredEvidenceGaps(round.plan, checkItemId, present);
+    const { executionGaps, gaps } = requiredEvidenceGaps(round.plan, checkItemId, present);
     const verdict = publishedVerdictFor(result.verdict, gaps);
     publishedVerdicts.push(verdict);
+    const limitation = missingEvidenceLimitation(gaps, executionGaps);
     if (gaps.length > 0) {
       missingEvidence.push({ checkItemId, types: gaps });
-      if (params.warn) log.warn(`${checkItemId}: ${missingEvidenceLimitation(gaps)}`);
+      if (params.warn) log.warn(`${checkItemId}: ${limitation}`);
     }
     results.push({
       checkItemId,
@@ -153,10 +192,7 @@ export function readLocalRound(params: {
       metadata: (result.metadata as LocalResultSource['metadata']) ?? null,
       required: Boolean(result.required),
       suggestion: result.suggestion,
-      toulmin:
-        gaps.length > 0
-          ? { ...result.toulmin, limitation: missingEvidenceLimitation(gaps) }
-          : result.toulmin,
+      toulmin: gaps.length > 0 ? { ...result.toulmin, limitation } : result.toulmin,
       verdict,
     });
   }

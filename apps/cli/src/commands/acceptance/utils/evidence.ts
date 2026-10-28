@@ -1,14 +1,13 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { VerifyEvidenceChapter } from '@lobechat/const/verify';
+import type { VerifyEvidenceChapter, VerifyEvidenceType } from '@lobechat/const/verify';
 import { MAX_VERIFY_EVIDENCE_CHAPTERS, readEvidenceChapters } from '@lobechat/const/verify';
 
 import { log } from '../../../utils/logger';
 import { firstString, objectValue } from './values';
 
-export type EvidenceType =
-  'audio' | 'dom_snapshot' | 'gif' | 'markdown' | 'screenshot' | 'text' | 'transcript' | 'video';
+export type EvidenceType = VerifyEvidenceType;
 
 export const INLINE_TEXT_EVIDENCE_LIMIT = 5000;
 export const INLINE_TEXT_EVIDENCE_TYPES = new Set<EvidenceType>([
