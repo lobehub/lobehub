@@ -5,5 +5,6 @@ export * from './identity';
 export * from './layers';
 export * from './list';
 export * from './shared';
+export * from './structure';
 export * from './tools';
 export * from './trace';
