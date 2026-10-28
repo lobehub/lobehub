@@ -226,6 +226,23 @@ describe('analyzeShellCommand', () => {
       expect(attached.resolvedCommand).toBe('rm');
       expect(attached.homeTargets).toContain('~');
 
+      // The attached value is an arbitrary string: `_` and `/` are part of the
+      // argument, so the wrapper still ends before `rm`. Restricting the token
+      // to a letter run swallowed `rm` here and left `~` as the executable.
+      const [attachedScored] = analyzeShellCommand('env -uFOO_BAR rm -rf /tmp/cache ~');
+      expect(attachedScored.resolvedCommand).toBe('rm');
+      expect(attachedScored.homeTargets).toContain('~');
+
+      const [attachedPath] = analyzeShellCommand('env -C/tmp rm -rf /tmp/cache ~');
+      expect(attachedPath.resolvedCommand).toBe('rm');
+      expect(attachedPath.homeTargets).toContain('~');
+
+      // The same letter value-free but detached (`-u FOO`) still takes the
+      // next word, so the command is the word after it.
+      const [detached] = analyzeShellCommand('env -u FOO rm -rf /tmp/cache ~');
+      expect(detached.resolvedCommand).toBe('rm');
+      expect(detached.homeTargets).toContain('~');
+
       // Bare OPTIONAL-argument xargs long options take no value word either:
       // `--replace` defaults to `{}`, so `rm` is the wrapped command.
       const xargsSegments = analyzeShellCommand('printf x | xargs --replace rm -rf ~');

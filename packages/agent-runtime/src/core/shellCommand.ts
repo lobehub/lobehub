@@ -1213,32 +1213,42 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
           // Report ambiguity and let the segment-level fallback judge it.
           return null;
         }
-        // `-abc` / `-0` combined short flags. getopt reads letters left to
-        // right: the first value-taking letter either takes the NEXT word
-        // (when it is the last letter: `-u FOO`) or the REST of this token as
-        // its ATTACHED value (`-uFOO`, where `FOO` is already the argument and
-        // `rm` that follows is the command). Treating every value-taking flag
-        // as "consume the next word" ate `rm` in `env -uFOO rm -rf /tmp/cache
-        // ~`, which left `~` as a confidently unrelated executable.
-        const letters = /^-([a-z0-9]+)$/i.exec(token);
-        if (letters === null) {
+        // `-abc` / `-0` / `-uFOO` combined short flags. getopt reads letters
+        // left to right and the FIRST value-taking letter decides the arity:
+        // alone as the last letter it takes the NEXT word (`-u FOO`), and an
+        // earlier one carries the REST of the token as its ATTACHED value
+        // (`-uFOO`, `-C/tmp`). That remainder is an arbitrary string, not a
+        // letter run: restricting the token to `[a-z0-9]` made
+        // `env -uFOO_BAR rm -rf /tmp/cache ~` look like a foreign cluster, so
+        // the loop swallowed `rm` and `~` became a confidently unrelated
+        // executable.
+        const shortFlag = /^-(.+)$/s.exec(token);
+        if (shortFlag === null) {
           // Foreign/unknown short form: keep the security-first default and
           // assume the next word is its value.
           index += 2;
           continue;
         }
-        const lettersOfFlag = letters[1].split('');
+        const flagBody = shortFlag[1];
+        const flagHead = flagBody[0];
+        if (valueTakingShortFlags?.has(flagHead)) {
+          // `-u` reads the next word; `-uFOO` / `-C/tmp` already carry it.
+          index += flagBody.length === 1 ? 2 : 1;
+          continue;
+        }
+        const lettersOfFlag = flagBody.split('');
         const valueAt = lettersOfFlag.findIndex((letter) => !valueFreeFlags?.has(letter));
         // Every letter whitelisted: a pure flag cluster (`env -i0`).
         if (valueAt === -1) {
           index++;
           continue;
         }
-        // A value-taking letter last takes the NEXT word (`-u FOO`). An
-        // earlier value-taking letter can carry an ATTACHED value (`-uFOO`)
-        // — but only for a letter this wrapper is known to give a value to;
-        // a foreign cluster like `-rf` (left over after a swallowed command)
-        // keeps the security-first default and consumes the next word.
+        // The head was value-free, so a later value-taking letter decides:
+        // last position takes the NEXT word (`-nu ROOT`), an earlier one can
+        // carry an ATTACHED value (`-nuROOT`) — but only for a letter this
+        // wrapper is known to give a value to. A foreign cluster like `-rf`
+        // (left over after a swallowed command) keeps the security-first
+        // default and consumes the next word.
         const takesAttachedValue =
           valueAt !== lettersOfFlag.length - 1 &&
           valueTakingShortFlags?.has(lettersOfFlag[valueAt]) === true;
