@@ -96,9 +96,9 @@ export const blockAt = (body: HTMLElement, target: EventTarget | null): HTMLElem
 };
 
 /**
- * The editor's table scroll wrapper bleeds into the column's anchor padding on
- * both sides (`margin-inline: -padding`), so a table wider than the column
- * scrolls through the very margin the marker sits in.
+ * The editor's table scroll wrapper bleeds past the column on both sides
+ * (`--lobe-table-bleed`), so a table wider than the column scrolls into the
+ * margin the marker sits in.
  */
 const TABLE_SCROLL_WRAPPER_SELECTOR = '.lobe-editor-table-scroll-wrapper';
 

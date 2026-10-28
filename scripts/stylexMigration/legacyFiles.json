@@ -957,7 +957,6 @@
   "src/features/PageEditor/History/DocumentHistoryDiff.tsx",
   "src/features/PageEditor/History/HistoryListItem.tsx",
   "src/features/PageEditor/History/index.tsx",
-  "src/features/PageEditor/PageEditor.tsx",
   "src/features/PageEditor/RightPanel/index.tsx",
   "src/features/PageExplorer/PageExplorerPlaceholder.tsx",
   "src/features/PageShell/ShellTopBar.tsx",
