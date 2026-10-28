@@ -12,6 +12,10 @@ import ChatList from './ChatList';
 import { ConversationProvider } from './ConversationProvider';
 import { dataSelectors, useConversationStore, useConversationStoreApi } from './store';
 
+vi.mock('./hooks/useFetchMcpElicitations', () => ({
+  useFetchMcpElicitations: () => ({ data: undefined }),
+}));
+
 const chatListMocks = vi.hoisted(() => ({
   isStreaming: false,
   refreshError: {
