@@ -173,7 +173,11 @@ export class CanvasStorageService {
     const added = new Map<string, (typeof files)[number]>();
     for (const file of files) if (!inThisCanvas.has(file.hash)) added.set(file.hash, file);
 
-    const addedBytes = [...added.values()].reduce((sum, file) => sum + file.size, 0);
+    // Usage counts a stored blob once however many canvases use it, so only a
+    // blob this scope has not stored yet adds to it.
+    const addedBytes = [...added.values()]
+      .filter((file) => !uploaded.has(file.hash))
+      .reduce((sum, file) => sum + file.size, 0);
     if (addedBytes > 0 && this.deps.checkQuota) {
       const quota = await this.deps.checkQuota({
         addedBytes,

@@ -157,6 +157,23 @@ describe('CanvasStorageService', () => {
     expect(store.write).not.toHaveBeenCalled();
   });
 
+  it('counts a blob shared by two canvases once, in usage and in the quota check', async () => {
+    const { store } = createMemoryStore();
+    const checkQuota = vi.fn().mockResolvedValue({ ok: true });
+    const service = new CanvasStorageService({ checkQuota, db: serverDB, store, userId });
+    const image = { content: new Uint8Array(1000).fill(7), path: 'a.png' };
+    const html = page('<img src="a.png">');
+
+    await service.commit('cvs_a', [{ content: html, path: 'index.html' }, image]);
+    await service.commit('cvs_b', [{ content: html, path: 'index.html' }, image]);
+
+    // The second canvas stores nothing new, so it needs no quota.
+    expect(checkQuota).toHaveBeenCalledTimes(1);
+    expect(await new FileModel(serverDB, userId).countUsage()).toBe(
+      1000 + new TextEncoder().encode(html).byteLength,
+    );
+  });
+
   it('refuses to read another user’s manifest', async () => {
     const { store } = createMemoryStore();
     const service = new CanvasStorageService({ db: serverDB, store, userId });

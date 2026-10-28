@@ -13,11 +13,15 @@ import {
   eq,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   like,
   ne,
+  not,
   notExists,
+  notLike,
   or,
+  type SQL,
   sql,
   sum,
 } from 'drizzle-orm';
@@ -364,16 +368,38 @@ export class FileModel {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
   };
 
-  countUsage = async (trx?: Transaction) => {
-    const db = trx ?? this.db;
-    const result = await db
-      .select({
-        totalSize: sum(files.size),
-      })
-      .from(files)
-      .where(this.ownership());
+  countUsage = async (trx?: Transaction) =>
+    FileModel.sumStorageBytes(trx ?? this.db, this.ownership());
 
-    return parseInt(result[0].totalSize!) || 0;
+  /**
+   * Bytes the rows matched by `scope` occupy in object storage.
+   *
+   * Several rows can point at one stored object: a re-uploaded file reuses the
+   * object of its hash, and every Canvas that uses a blob gets its own row for
+   * the shared `canvas/<userId>/blobs/<sha>` object. Rows with the same `url`
+   * and `fileHash` are therefore counted once. Rows without a hash, inline
+   * `internal://` documents, and a path rewritten with new content (same `url`,
+   * different hash) still count per row.
+   */
+  static sumStorageBytes = async (
+    db: LobeChatDatabase | Transaction,
+    scope: SQL | undefined,
+  ): Promise<number> => {
+    const sharedObject = and(isNotNull(files.fileHash), notLike(files.url, 'internal://%'));
+
+    const objects = db
+      .selectDistinctOn([files.url, files.fileHash], { size: files.size })
+      .from(files)
+      .where(and(scope, sharedObject))
+      .as('objects');
+
+    const [rows] = await db
+      .select({ totalSize: sum(files.size) })
+      .from(files)
+      .where(and(scope, not(sharedObject!)));
+    const [deduped] = await db.select({ totalSize: sum(objects.size) }).from(objects);
+
+    return (Number(rows?.totalSize) || 0) + (Number(deduped?.totalSize) || 0);
   };
 
   /**
