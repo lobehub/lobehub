@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   fileList: [] as unknown[],
   getAgentConfigById: vi.fn(),
   internal_dispatchAgentMap: vi.fn(),
+  activeAgentId: undefined as string | undefined,
+  activeTopicId: undefined as string | undefined,
   mainInputEditor: null as unknown,
   navigate: vi.fn(),
   restoreChatUploadFileList: vi.fn(),
@@ -58,16 +60,23 @@ vi.mock('@/store/task', () => ({
 }));
 
 vi.mock('@/store/chat', () => {
-  const state = () => ({ mainInputEditor: mocks.mainInputEditor, sendMessage: mocks.sendMessage });
+  const state = () => ({
+    activeAgentId: mocks.activeAgentId,
+    activeTopicId: mocks.activeTopicId,
+    mainInputEditor: mocks.mainInputEditor,
+    sendMessage: mocks.sendMessage,
+  });
   const useChatStore = Object.assign((selector: (s: unknown) => unknown) => selector(state()), {
     getState: state,
   });
   return { useChatStore };
 });
 
-/** The conversation page mounts its composer, which registers as the main editor. */
-const mountConversationEditor = () => {
+/** A conversation page mounts its composer, which registers as the main editor. */
+const mountConversationEditor = (topicId = 'tpc_1', agentId = 'coordinator') => {
   const editor = { setDocument: vi.fn(), setJSONState: vi.fn() };
+  mocks.activeAgentId = agentId;
+  mocks.activeTopicId = topicId;
   mocks.mainInputEditor = editor;
   return editor;
 };
@@ -129,6 +138,8 @@ describe('useProjectComposer', () => {
     mocks.agentMap = { coordinator: {} };
     mocks.fileList = [];
     mocks.workspaceSlug = null;
+    mocks.activeAgentId = undefined;
+    mocks.activeTopicId = undefined;
     mocks.mainInputEditor = null;
     localStorage.clear();
     // The conversation takes the message, then the run goes on in the background.
@@ -265,7 +276,9 @@ describe('useProjectComposer', () => {
     mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
     mocks.fileList = [image];
     const editor = mountConversationEditor();
-    mocks.sendMessage.mockImplementation(async ({ onPreflightFailure }) => {
+    // The send's own recovery: text into the composer it names, then the files.
+    mocks.sendMessage.mockImplementation(async ({ inputEditor, onPreflightFailure }) => {
+      inputEditor.setJSONState(editorData);
       onPreflightFailure();
       throw new Error('refused');
     });
@@ -275,7 +288,63 @@ describe('useProjectComposer', () => {
       await result.current.send(composer('Hello'));
     });
 
+    expect(editor.setJSONState).toHaveBeenCalledTimes(1);
     expect(mocks.restoreChatUploadFileList).toHaveBeenCalledTimes(1);
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example Codex review: a skill or local file that cannot be read makes the
+   * send hand back only the attachments before rejecting, and the text was lost.
+   */
+  it('puts the text back when the refusal only returned the attachments', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    mocks.fileList = [image];
+    const editor = mountConversationEditor();
+    mocks.sendMessage.mockImplementation(async ({ onPreflightFailure }) => {
+      onPreflightFailure();
+      throw new Error('skill unavailable');
+    });
+    const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
+
+    await act(async () => {
+      await result.current.send(composer('Hello'));
+    });
+
+    expect(editor.setJSONState).toHaveBeenCalledWith(editorData);
+    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledTimes(1);
+    expect(mocks.toastError).toHaveBeenCalledWith('overview.messageNotSent');
+  });
+
+  /**
+   * @example Codex review: the user opened another conversation while the send
+   * was pending, and the refused draft overwrote that conversation's composer.
+   */
+  it('keeps a refused draft out of another conversation the user has opened', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    const other = mountConversationEditor('tpc_other');
+    mocks.sendMessage.mockRejectedValue(new Error('device offline'));
+    const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
+
+    await act(async () => {
+      await result.current.send(composer('Hello'));
+    });
+
+    expect(other.setJSONState).not.toHaveBeenCalled();
+    expect(getDraft('main_coordinator_tpc_1')).toEqual(editorData);
+  });
+
+  it('leaves a stopped send to the stop flow', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    const editor = mountConversationEditor();
+    const abort = Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+    mocks.sendMessage.mockRejectedValue(abort);
+    const { result } = renderHook(() => useProjectComposer(project, 'chat', 'coordinator'));
+
+    await act(async () => {
+      await result.current.send(composer('Hello'));
+    });
+
     expect(editor.setJSONState).not.toHaveBeenCalled();
     expect(mocks.toastError).not.toHaveBeenCalled();
   });

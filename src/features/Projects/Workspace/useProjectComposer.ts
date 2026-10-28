@@ -47,15 +47,24 @@ const ensureAgentConfigLoaded = async (agentId: string) => {
 /**
  * The composer that owns a send from the project home: the conversation page's,
  * which mounts only after the navigation. It is looked up when the send needs
- * it — to put a refused draft back — not when the send starts. Until it has
- * mounted, the draft goes to the drafts that composer restores for this
- * conversation: it settles its document after it first registers, which would
- * wipe a draft written into the editor directly.
+ * it — to put a refused draft back — not when the send starts, and only while
+ * that conversation is the open one: every conversation registers as the main
+ * editor, so a user who has moved on keeps their own draft. Otherwise the draft
+ * goes to the drafts that composer restores for this conversation — also before
+ * it has mounted, since it settles its document after it first registers and
+ * would wipe a draft written into the editor directly.
  */
-export const createConversationComposer = (draftKey: string): ChatInputEditor => {
-  const mounted = () => useChatStore.getState().mainInputEditor;
+export const createConversationComposer = (conversation: { agentId: string; topicId: string }) => {
+  const draftKey = messageMapKey(conversation);
+  let textRestored = false;
+  const mounted = () => {
+    const { activeAgentId, activeTopicId, mainInputEditor } = useChatStore.getState();
+    return activeAgentId === conversation.agentId && activeTopicId === conversation.topicId
+      ? mainInputEditor
+      : null;
+  };
 
-  return {
+  const editor: ChatInputEditor = {
     clearContent: () => mounted()?.clearContent(),
     focus: () => mounted()?.focus(),
     getJSONState: () => mounted()?.getJSONState(),
@@ -64,15 +73,26 @@ export const createConversationComposer = (draftKey: string): ChatInputEditor =>
       return mounted()?.instance as IEditor;
     },
     // Only the plain-text fallback for a send without editor data comes here.
-    setDocument: (type, content, options) => mounted()?.setDocument(type, content, options),
+    setDocument: (type, content, options) => {
+      textRestored = true;
+      mounted()?.setDocument(type, content, options);
+    },
     setExpand: (expand) => mounted()?.setExpand(expand),
     setJSONState: (content) => {
-      const editor = mounted();
-      if (editor) editor.setJSONState(content);
+      textRestored = true;
+      const current = mounted();
+      if (current) current.setJSONState(content);
       else saveDraft(draftKey, content);
     },
   };
+
+  /** Whether the send has put the text back; attachments are reported apart. */
+  return { editor, textRestored: () => textRestored };
 };
+
+/** A user's stop restores the draft through the stop flow itself. */
+const isAbort = (error: unknown) =>
+  error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted'));
 
 export class AttachmentsNotReadyError extends Error {
   constructor() {
@@ -139,33 +159,33 @@ export const useProjectComposer = (
       clearChatUploadFileList();
       navigate(getProjectTopicPath(project.slug ?? project.id, topic.id));
 
-      const conversationComposer = createConversationComposer(
-        messageMapKey({ agentId, topicId: topic.id }),
-      );
+      const conversation = createConversationComposer({ agentId, topicId: topic.id });
       let accepted = false;
-      let restored = false;
+      let filesRestored = false;
       const restoreFiles = () => {
-        restored = true;
+        filesRestored = true;
         useFileStore.getState().restoreChatUploadFileList(files);
       };
       sendMessage({
         context: { agentId, topicId: topic.id, ...(workspaceSlug ? { workspaceSlug } : {}) },
         editorData,
         files,
-        inputEditor: conversationComposer,
+        inputEditor: conversation.editor,
         message,
         onMessageAccepted: () => {
           accepted = true;
         },
-        // The send already put the text back into the composer it names.
         onPreflightFailure: restoreFiles,
       }).catch((error) => {
         console.error('[ProjectComposer] send failed', error);
-        if (accepted || restored) return;
-        // A refusal thrown before the send reached its own recovery.
-        if (editorData) conversationComposer.setJSONState(editorData);
-        else conversationComposer.setDocument('markdown', message);
-        restoreFiles();
+        if (accepted || isAbort(error)) return;
+        // Some refusals hand back only the attachments before rejecting (a
+        // skill or local file that cannot be read): put back whatever the send
+        // did not.
+        if (!filesRestored) restoreFiles();
+        if (conversation.textRestored()) return;
+        if (editorData) conversation.editor.setJSONState(editorData);
+        else conversation.editor.setDocument('markdown', message);
         toast.error(t('overview.messageNotSent'));
       });
     } finally {
