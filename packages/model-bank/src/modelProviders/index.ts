@@ -22,6 +22,7 @@ import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
 import FalProvider from './fal';
+import FikraProvider from './fikra';
 import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
@@ -235,6 +236,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   MagpieProvider,
   StreamLakeProvider,
   AntGroupProvider,
+  FikraProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -326,6 +328,7 @@ export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
 export { default as FalProviderCard } from './fal';
+export { default as FikraProviderCard } from './fikra';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
@@ -392,3 +395,4 @@ export { default as XinferenceProviderCard } from './xinference';
 export { default as ZenMuxProviderCard } from './zenmux';
 export { default as ZeroOneProviderCard } from './zeroone';
 export { default as ZhiPuProviderCard } from './zhipu';
+
