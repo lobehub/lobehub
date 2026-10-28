@@ -2,20 +2,27 @@ import isEqual from 'fast-deep-equal';
 
 import type { ChannelTab, ChannelValues } from './channelTabs';
 import { pickKeys, replyDiffers } from './replySettings';
-import { groupAccessFields, groupWakeFields, type SettingsGroup } from './settingsGroups';
+import {
+  groupAccessFields,
+  groupReplyFields,
+  groupWakeFields,
+  type SettingsGroup,
+} from './settingsGroups';
 
 /**
  * The page saves one block at a time. A block is a titled group of options with its own Save
  * button: the long page has no single button to scroll to, and a person who changes an option
  * knows exactly what pressing Save will write.
  *
- * Replies are not a block: they take effect as soon as they change and save themselves.
+ * How a reply looks is not a block: those options take effect as soon as they change and save
+ * themselves. How the bot talks (its reply style and emoji) is long text, so it is a block.
  */
 export type SaveModuleId =
   | `access-${'conversation' | 'device' | 'identity'}`
   | 'advanced'
   | 'connection'
   | 'credentials'
+  | 'reply-style'
   | `wake-${'channels' | 'judgement' | 'keywords' | 'more' | 'pace'}`;
 
 export interface SaveModule {
@@ -42,7 +49,7 @@ const WAKE_MASTER = 'botWakeEnabled';
  *
  * Returns:
  * - A `credentials` block when the platform asks for credentials, then one block per titled group
- *   of settings. Every option the page shows, other than the replies, is in exactly one.
+ *   of settings. Every option the page shows, other than how a reply looks, is in exactly one.
  */
 export const resolveSaveModules = (
   groups: SettingsGroup[],
@@ -86,7 +93,13 @@ export const resolveSaveModules = (
         }
         break;
       }
-      // Replies save themselves.
+      case 'reply': {
+        // How a reply looks saves itself; only how the bot talks waits for a Save.
+        for (const section of groupReplyFields(group.fields)) {
+          if (section.key === 'style') settings('reply-style', section.fields);
+        }
+        break;
+      }
     }
   }
 
@@ -98,6 +111,7 @@ export const tabOfModule = (id: SaveModuleId): ChannelTab => {
   if (id === 'credentials' || id === 'connection') return 'connect';
   if (id.startsWith('access-')) return 'access';
   if (id === 'advanced') return id;
+  if (id === 'reply-style') return 'reply';
 
   return 'wake';
 };

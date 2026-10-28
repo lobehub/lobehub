@@ -64,8 +64,35 @@ export const groupAccessFields = (fields: FieldSchema[]): AccessSectionGroup[] =
   })).filter((section) => section.fields.length > 0);
 };
 
-/** What a reply looks like in the chat. */
+/** What a reply looks like in the chat. These save themselves as soon as they change. */
 export const REPLY_KEYS = ['replyPlacement', 'displayToolCalls', 'showUsageStats', 'reactionMode'];
+
+/**
+ * How the bot talks: its style everywhere, a style per channel, and the emoji it may use. Long
+ * text a person writes and rewrites, so it waits for its own Save instead of saving per keystroke.
+ */
+export const REPLY_STYLE_KEYS = ['replyStyle', 'channelReplyStyles', 'replyEmojis'];
+
+export type ReplySectionKey = 'display' | 'style';
+
+export interface ReplySection {
+  fields: FieldSchema[];
+  key: ReplySectionKey;
+}
+
+/** Split the reply tab's fields into how a reply looks and how the bot talks. Empty blocks are dropped. */
+export const groupReplyFields = (fields: FieldSchema[]): ReplySection[] => {
+  const byKey = new Map(fields.map((field) => [field.key, field]));
+  const pick = (keys: string[]) =>
+    keys.map((key) => byKey.get(key)).filter((field): field is FieldSchema => !!field);
+
+  return (
+    [
+      { fields: pick(REPLY_KEYS), key: 'display' },
+      { fields: pick(REPLY_STYLE_KEYS), key: 'style' },
+    ] satisfies ReplySection[]
+  ).filter((section) => section.fields.length > 0);
+};
 
 /**
  * When the bot speaks up without being @mentioned: first the keywords that wake it, then the
@@ -169,7 +196,7 @@ export const groupSettingsFields = (fields: FieldSchema[]): SettingsGroup[] => {
 
   const connect = pick(CONNECT_KEYS);
   const access = pick(ACCESS_KEYS);
-  const reply = pick(REPLY_KEYS);
+  const reply = pick([...REPLY_KEYS, ...REPLY_STYLE_KEYS]);
   const wake = [
     ...pick(WAKE_KEYS),
     ...fields.filter((field) => field.key.startsWith(WAKE_KEY_PREFIX)),

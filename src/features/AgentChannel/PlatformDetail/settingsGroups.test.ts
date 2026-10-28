@@ -7,6 +7,7 @@ import type { FieldSchema } from '@/server/services/bot/platforms/types';
 import {
   getSchemaFields,
   groupAccessFields,
+  groupReplyFields,
   groupSettingsFields,
   groupWakeFields,
 } from './settingsGroups';
@@ -103,6 +104,19 @@ describe('groupSettingsFields', () => {
       ['access', ['dmPolicy']],
       ['wake', ['watchKeywords', 'botWakeEnabled', 'botWakeScope']],
       ['reply', ['displayToolCalls']],
+      ['advanced', ['charLimit']],
+    ]);
+  });
+
+  it('puts the reply style and emoji with the replies, not in advanced', () => {
+    const groups = groupSettingsFields(
+      ['charLimit', 'replyStyle', 'displayToolCalls', 'channelReplyStyles', 'replyEmojis'].map(
+        field,
+      ),
+    );
+
+    expect(groups.map((g) => [g.key, g.fields.map((f) => f.key)])).toEqual([
+      ['reply', ['displayToolCalls', 'replyStyle', 'channelReplyStyles', 'replyEmojis']],
       ['advanced', ['charLimit']],
     ]);
   });
@@ -232,5 +246,24 @@ describe('groupWakeFields', () => {
         .filter((key) => key !== K.enabled)
         .sort(),
     );
+  });
+});
+
+describe('groupReplyFields', () => {
+  it('splits the replies into how they look, then how the bot talks', () => {
+    const sections = groupReplyFields(
+      ['replyEmojis', 'reactionMode', 'replyStyle', 'displayToolCalls', 'channelReplyStyles'].map(
+        field,
+      ),
+    );
+
+    expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
+      ['display', ['displayToolCalls', 'reactionMode']],
+      ['style', ['replyStyle', 'channelReplyStyles', 'replyEmojis']],
+    ]);
+  });
+
+  it('drops a block the platform has no fields for', () => {
+    expect(groupReplyFields(['replyStyle'].map(field)).map((s) => s.key)).toEqual(['style']);
   });
 });
