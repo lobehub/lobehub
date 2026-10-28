@@ -65,7 +65,7 @@ For image generation models that are not compatible with OpenAI format, you need
 
 ### Method 1: Using OpenAI Compatible Factory
 
-Most Providers use `openaiCompatibleFactory` for OpenAI compatibility. You can pass in a custom `createImage` function (reference [PR #8534](https://github.com/lobehub/lobehub/pull/8534)).
+Most Providers use `createOpenAICompatibleRuntime` for OpenAI compatibility. You can pass in a custom `createImage` function (reference [PR #8534](https://github.com/lobehub/lobehub/pull/8534)).
 
 **Implementation Steps**:
 
@@ -113,7 +113,7 @@ export const createProviderImage = async (
 
 ```ts
 // packages/model-runtime/src/providers/<provider-name>/index.ts
-export const LobeProviderAI = openaiCompatibleFactory({
+export const LobeProviderAI = createOpenAICompatibleRuntime({
   constructorOptions: {
     // ... other configurations
   },
