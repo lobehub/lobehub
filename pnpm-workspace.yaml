@@ -65,9 +65,7 @@ allowBuilds:
 overrides:
   '@lobehub/ui': ^6.9.0
   '@lobehub/icons': ^6.0.0
-  # Exact: patches/@lobehub__editor.patch (image node constructors that @lexical/yjs
-  # calls without arguments) is keyed to this version; drop both once upstream fixes it.
-  '@lobehub/editor': 7.0.0
+  '@lobehub/editor': ^7.0.2
   '@lobehub/charts': ^6.0.0
   '@lobehub/fluent-emoji': ^5.0.0
   # Stay on the latest 1.9.x: @opentelemetry/*@2.x peers reject 1.10.0, and mixing both splits drizzle-orm into duplicate peer variants.
@@ -97,7 +95,6 @@ overrides:
   'zod@^4': 4.6.5
 
 patchedDependencies:
-  '@lobehub/editor@7.0.0': patches/@lobehub__editor.patch
   '@upstash/qstash': patches/@upstash__qstash.patch
   micromark@4.0.3: patches/micromark@4.0.3.patch
   micromark-extension-gfm-autolink-literal@2.1.0: patches/micromark-extension-gfm-autolink-literal@2.1.0.patch
