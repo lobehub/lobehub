@@ -261,11 +261,11 @@ export class RecentModel {
         status: row.status,
         title: row.title,
         type: row.type,
+        // Unreachable fallback: drizzle's timestamp column maps every driver value to a Date.
         updatedAt:
           row.updatedAt instanceof Date
             ? row.updatedAt
-            : /* v8 ignore next -- unreachable: drizzle's timestamp column maps every driver value to a Date */
-              new Date(row.updatedAt as any),
+            : /* v8 ignore next -- unreachable: see note */ new Date(row.updatedAt as any),
         userId: row.userId,
       };
     });
