@@ -45,6 +45,7 @@ export const AgentSearchList = memo<AgentSearchListProps>(({ dataSource }) => {
           onClick={(event) => onNavigate(event, item)}
         >
           <ListItem
+            agentId={item.id}
             avatar={item.avatar || DEFAULT_AVATAR}
             avatarBackground={item.backgroundColor || undefined}
             title={title}

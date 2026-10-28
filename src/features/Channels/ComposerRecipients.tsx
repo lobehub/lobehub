@@ -1,6 +1,8 @@
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import type { composerRecipients } from './recipients';
 import { styles } from './styles';
@@ -41,7 +43,15 @@ export function ComposerRecipients({
       {agents.length > 0 && (
         <Flexbox horizontal flex="none" gap={2}>
           {agents.slice(0, MAX_AVATARS).map((agent) => (
-            <Avatar avatar={agent.avatar} key={agent.id} size={16} title={agent.name} />
+            <AgentAvatar
+              agentId={agent.agentId}
+              avatar={agent.avatar}
+              key={agent.id}
+              name={agent.name}
+              shape={'circle'}
+              size={16}
+              title={agent.name}
+            />
           ))}
         </Flexbox>
       )}

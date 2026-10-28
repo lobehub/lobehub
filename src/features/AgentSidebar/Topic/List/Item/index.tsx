@@ -1,4 +1,4 @@
-import { AGENT_CHAT_TOPIC_URL, DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { formatElapsedClockTime } from '@lobechat/utils';
 import {
@@ -25,7 +25,7 @@ import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import DotsLoading from '@/components/DotsLoading';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
@@ -568,13 +568,15 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const ownIconNode = statusIconNode ?? identityIconNode;
     const leadingIconNode =
       scopedTopic && !suppressAgentAvatar ? (
-        <Avatar
+        <AgentAvatar
+          agentId={scopedTopic.agentId}
           name={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
+          shape={'circle'}
           size={20}
           title={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
           avatar={
             scopedTopic.agentAvatar ||
-            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)
+            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : undefined)
           }
         />
       ) : author ? (

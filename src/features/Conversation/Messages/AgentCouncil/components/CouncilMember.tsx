@@ -68,6 +68,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
       showTitle
       aboveMessage={null}
       actions={actionBarHolder}
+      agentId={agentId ?? null}
       avatar={avatar}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
       editing={editing}

@@ -1,20 +1,19 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { memo } from 'react';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 
-interface AgentAvatarProps {
+interface SidebarItemAvatarProps {
   item: SidebarAgentItem;
   size: number;
 }
 
 /** Agent avatar that renders the stacked group variant for group chats. */
-const AgentAvatar = memo<AgentAvatarProps>(({ item, size }) => {
-  const { avatar, backgroundColor, type } = item;
+const SidebarItemAvatar = memo<SidebarItemAvatarProps>(({ item, size }) => {
+  const { avatar, backgroundColor, id, type } = item;
 
   return type === 'group' ? (
     <AgentGroupAvatar
@@ -24,17 +23,16 @@ const AgentAvatar = memo<AgentAvatarProps>(({ item, size }) => {
       size={size}
     />
   ) : (
-    <Avatar
-      emojiScaleWithBackground
-      avatar={typeof avatar === 'string' ? avatar : DEFAULT_AVATAR}
+    <AgentAvatar
+      agentId={id}
+      avatar={typeof avatar === 'string' ? avatar : undefined}
       background={backgroundColor || undefined}
       name={agentDisplayName(item)}
-      shape={'square'}
       size={size}
     />
   );
 });
 
-AgentAvatar.displayName = 'AgentViewAllAgentAvatar';
+SidebarItemAvatar.displayName = 'SidebarItemAvatar';
 
-export default AgentAvatar;
+export default SidebarItemAvatar;

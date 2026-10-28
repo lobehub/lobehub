@@ -1,12 +1,12 @@
 'use client';
 
 import { ThreadStatus } from '@lobechat/types';
-import { Avatar, Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { BrainCircuit, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 
 import { formatDuration, formatElapsedTime, isProcessingStatus } from '../../Tasks/shared';
 
@@ -28,6 +28,7 @@ interface TaskTitleProps {
   agent?: {
     avatar?: string;
     backgroundColor?: string | null;
+    id?: string | null;
   };
   /** Metrics to display (LLM calls, tool calls, elapsed time) */
   metrics?: TaskMetrics;
@@ -155,8 +156,9 @@ const TaskTitle = memo<TaskTitleProps>(({ title, status, metrics, agent }) => {
     <Flexbox horizontal align="center" gap={6}>
       <TaskStatusIndicator status={status} />
       {agent && (
-        <Avatar
-          avatar={agent.avatar || DEFAULT_AVATAR}
+        <AgentAvatar
+          agentId={agent.id}
+          avatar={agent.avatar}
           background={agent.backgroundColor || undefined}
           shape={'circle'}
           size={20}

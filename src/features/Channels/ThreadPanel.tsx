@@ -1,5 +1,5 @@
 import type { ChannelDetail } from '@lobechat/types';
-import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { GitBranch, MoreHorizontal, X } from 'lucide-react';
 import { Activity, type ComponentProps, useState } from 'react';
@@ -11,7 +11,8 @@ import { channelSelectors, useChannelStore } from '@/store/channel';
 
 import { ChannelConversation } from './ChannelConversation';
 import { DraftThreadConversation } from './DraftThreadConversation';
-import { memberAvatar, memberName } from './memberName';
+import { MemberAvatar } from './MemberAvatar';
+import { memberName } from './memberName';
 import { styles } from './styles';
 import { type ChannelThreadDraft, draftThreadFollowerIds } from './threadDraft';
 import { threadTitle } from './threadTitle';
@@ -51,12 +52,7 @@ const ThreadFollowers = ({
       title={t('followers', { names })}
     >
       {followers.slice(0, MAX_FOLLOWER_AVATARS).map((member) => (
-        <Avatar
-          avatar={memberAvatar(member)}
-          key={member.id}
-          size={20}
-          title={memberName(member, t('deletedMember'))}
-        />
+        <MemberAvatar key={member.id} member={member} size={20} />
       ))}
       {overflow > 0 && (
         <Text fontSize={12} type="secondary">

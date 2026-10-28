@@ -1,10 +1,11 @@
 import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
-import { Avatar, Button, Flexbox, Popover, Text, usePopoverContext } from '@lobehub/ui';
+import { Button, Flexbox, Popover, Text, usePopoverContext } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, Square } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { channelActions } from '@/store/channel';
@@ -65,7 +66,14 @@ export function ReplyDetail({
   return (
     <Flexbox gap={8}>
       <Flexbox horizontal align="center" gap={8}>
-        <Avatar avatar={avatar} size={24} title={name} />
+        <AgentAvatar
+          agentId={agentId}
+          avatar={avatar}
+          name={name}
+          shape={'circle'}
+          size={24}
+          title={name}
+        />
         <Text ellipsis style={{ flex: 1 }} weight={500}>
           {name}
         </Text>

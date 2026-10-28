@@ -14,7 +14,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -138,7 +138,11 @@ export const TopicForwardContent = ({
                   }
                 >
                   <AgentAvatar
+                    agentId={agent.id}
                     avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+                    background={agent.backgroundColor || undefined}
+                    name={agent.title || undefined}
+                    size={22}
                   />
                   <Text ellipsis style={{ flex: 1 }}>
                     {agent.title || t('untitledAgent')}

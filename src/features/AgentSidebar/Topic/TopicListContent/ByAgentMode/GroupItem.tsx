@@ -24,7 +24,7 @@ import { ListFilter, LucideCheck, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
@@ -151,7 +151,13 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center className={styles.avatarWrap} flex={'none'} height={18} width={18}>
-              <Avatar avatar={avatar} name={name} size={18} />
+              <AgentAvatar
+                agentId={agentId ?? (isOwnBucket ? activeAgentId : undefined)}
+                avatar={avatar}
+                name={name}
+                shape={'circle'}
+                size={18}
+              />
               {agentId && <DevicePresenceDot agentId={agentId} />}
             </Center>
             <Text ellipsis fontSize={14} style={{ flex: 1 }}>

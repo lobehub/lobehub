@@ -6,8 +6,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import type { DeviceListResult } from '@/store/device/useDeviceList';
 
 import type { ChannelAgentDraft } from './agentEnvironment';
@@ -51,9 +50,12 @@ export const SelectedAgent = ({
   return (
     <Flexbox gap={4}>
       <Flexbox horizontal align="center" gap={8} padding={8}>
-        <Avatar
-          avatar={typeof agent?.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+        <AgentAvatar
+          agentId={input.agentId}
+          avatar={typeof agent?.avatar === 'string' ? agent.avatar : undefined}
           background={agent?.backgroundColor ?? undefined}
+          name={name}
+          shape={'circle'}
           size={28}
         />
         <Text ellipsis style={{ flex: 1 }}>

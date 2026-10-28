@@ -1,9 +1,4 @@
-import {
-  AGENT_CHAT_TOPIC_URL,
-  DEFAULT_AVATAR,
-  GROUP_CHAT_TOPIC_URL,
-  GROUP_CHAT_URL,
-} from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Command } from 'cmdk';
@@ -26,7 +21,7 @@ import {
 import { memo, type ReactNode, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
@@ -303,10 +298,12 @@ const SearchResults = memo<SearchResultsProps>(
         }
         return (
           <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
-            <Avatar
-              avatar={result.agent.avatar || DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={result.agentId}
+              avatar={result.agent.avatar}
               background={result.agent.backgroundColor || undefined}
               name={agentDisplayName(result.agent, t('defaultAgent'))}
+              shape={'circle'}
               size={14}
             />
             <span style={{ flex: 'none' }}>

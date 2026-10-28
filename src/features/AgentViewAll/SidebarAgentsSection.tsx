@@ -13,8 +13,8 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 // "In sidebar" overview: a collapsible card grid pinned above the main list
 // so the user can see at a glance which agents currently show in the sidebar
@@ -124,7 +124,7 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
       >
         <Block clickable className={styles.card} height={'100%'} variant={'outlined'}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <AgentAvatar item={item} size={24} />
+            <SidebarItemAvatar item={item} size={24} />
             <Text ellipsis style={{ minWidth: 0 }} weight={600}>
               {displayTitle}
             </Text>

@@ -19,10 +19,10 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-import AgentAvatar from './AgentAvatar';
 import { type AgentRowAuthor, formatUpdatedAt } from './AgentRow';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 // Card layout mirrors the agent channel platform cards
 // (src/features/AgentChannel/PlatformGrid.tsx): icon + title + trailing state on
@@ -142,7 +142,7 @@ const AgentCard = memo<AgentCardProps>(
                 gap={8}
                 style={{ minWidth: 0, paddingInlineEnd: 28 }}
               >
-                <AgentAvatar item={item} size={24} />
+                <SidebarItemAvatar item={item} size={24} />
                 <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
                   <Text ellipsis style={{ minWidth: 0 }} weight={600}>
                     {displayTitle}
