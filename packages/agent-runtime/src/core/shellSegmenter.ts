@@ -32,6 +32,40 @@ const isEscapedAt = (text: string, index: number): boolean => {
   return backslashes % 2 === 1;
 };
 
+/** A word that EXECUTES a command: `$(…)` and backtick substitutions. */
+const EXECUTABLE_EXPANSION = /\$\(|`/;
+
+/**
+ * Index of the `)` closing a process-substitution body that starts at `start`
+ * (the character after the opening paren). Quotes hide parens, escapes skip
+ * one character, and nested parens nest. `text.length` means unbalanced.
+ */
+const findProcessSubstitutionEnd = (text: string, start: number): number => {
+  let depth = 1;
+  let quote: '"' | "'" | null = null;
+  for (let index = start; index < text.length; index++) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '\\') {
+      index++;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth++;
+      continue;
+    }
+    if (char === ')' && --depth === 0) return index;
+  }
+  return text.length;
+};
+
 /**
  * Split command string into segments on `;`, `&`, `|`, `&&`, `||` while
  * respecting single/double quotes and skipping command substitution bodies
@@ -485,12 +519,24 @@ export const tokenizeWords = (raw: string): string[] => {
   // a naive scan stops inside the filename and the trailing quote then swallows
   // `rm -rf ~` into an unrelated word, hiding the real command.
   let discardNextWord = false;
+  // Executable expansions that live OUTSIDE argv: a redirection operand
+  // (`echo >$(rm -rf ~)`) or a process-substitution body (`cat <(rm -rf ~)`).
+  // Bash runs them BEFORE the outer command, so dropping them along with the
+  // operand hid the deletion from every predicate. They are collected
+  // separately and appended after the argv words, so command resolution never
+  // reads an operand expansion as an argument.
+  const executableWords: string[] = [];
 
   const flush = () => {
     if (discardNextWord) {
       // The first word after a redirection operator is its target, not argv.
       // Whitespace before it must not clear the pending discard.
-      if (hasWord) discardNextWord = false;
+      if (hasWord) {
+        discardNextWord = false;
+        // Only a word that IS an expansion executes; a plain filename is just
+        // a path and stays dropped.
+        if (EXECUTABLE_EXPANSION.test(word)) executableWords.push(word);
+      }
     } else if (hasWord) {
       words.push(word);
     }
@@ -646,6 +692,20 @@ export const tokenizeWords = (raw: string): string[] => {
       continue;
     }
 
+    // Process substitution: `<(cmd)` / `>(cmd)` runs `cmd` and hands its file
+    // descriptor to the outer command. Reading `<(` as an input redirection
+    // discarded `(rm -rf ~)` as a filename, so `cat <(rm -rf ~)` never reached
+    // the predicates. Keep the body as an executable word instead.
+    if ((char === '<' || char === '>') && raw[i + 1] === '(') {
+      flush();
+      const end = findProcessSubstitutionEnd(raw, i + 2);
+      const body = raw.slice(i + 2, end);
+      if (body.trim()) executableWords.push(`$(${body})`);
+      // `end` is the closing paren index, or raw.length when unbalanced.
+      i = Math.min(end + 1, raw.length);
+      continue;
+    }
+
     if (isRedirectAt(i)) {
       // Skip the redirection operator (and any fd digits before it).
       flush();
@@ -685,5 +745,7 @@ export const tokenizeWords = (raw: string): string[] => {
   }
 
   flush();
-  return words;
+  // Appended AFTER argv: an operand expansion is not an argument, and letting
+  // it shift the command slot would change which word gets resolved.
+  return [...words, ...executableWords];
 };

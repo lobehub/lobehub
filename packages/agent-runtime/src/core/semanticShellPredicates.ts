@@ -186,8 +186,19 @@ const payloadIsDangerous = (
   if (operand !== undefined) candidates.push(operand);
   return candidates.some((candidate) =>
     analyzeShellCommand(candidate).some((segment) => {
-      if (segment.resolvedCommand === 'rm')
-        return hasRecursiveRmWithDangerousTarget(segment, predicate);
+      if (segment.resolvedCommand === 'rm') {
+        // The precise predicates read only the LEVEL of argv they resolve to:
+        // in `echo $(rm -f $(rm -rf ~))` the reparsed payload resolves to `rm`
+        // with the nonrecursive `-f`, and the inner substitution — which runs
+        // first and does carry `-rf ~` — sits inside an operand word. Inspect
+        // those bodies too instead of returning early on the outer flags.
+        if (hasRecursiveRmWithDangerousTarget(segment, predicate)) return true;
+        return segment.words.some((word) =>
+          substitutionPayloads(word).some((payload) =>
+            payloadIsDangerous(payload, depth + 1, predicate),
+          ),
+        );
+      }
       return hasAmbiguousRmShape(segment, depth + 1, predicate);
     }),
   );

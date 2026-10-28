@@ -979,4 +979,49 @@ describe('matchSemanticShellPredicate', () => {
       );
     });
   });
+
+  describe('executable expansions outside argv', () => {
+    // A redirection operand and a process substitution both RUN their command
+    // before the outer command; the operand is not argv, so the tokenizer used
+    // to drop it wholesale and the deletion never reached the predicates.
+    it.each([
+      ['rmRecursiveHomeTarget', 'echo >$(rm -rf ~); echo ~'],
+      ['rmRecursiveRootTarget', 'echo >$(rm -rf /); echo ~'],
+      ['rmRecursiveHomeTarget', 'echo >$(rm -rf ~)'],
+    ] as const)('reads a substitution in a redirection operand (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each([
+      ['rmRecursiveHomeTarget', 'cat <(rm -rf ~); echo ~'],
+      ['rmRecursiveHomeTarget', 'cat <(rm -rf ~)'],
+      ['rmRecursiveHomeTarget', 'diff <(ls ~) <(rm -rf ~)'],
+      ['rmRecursiveRootTarget', 'tee >(rm -rf /)'],
+    ] as const)('reads a process substitution body (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    // The payload of an outer substitution resolves to `rm` with only `-f`, so
+    // the precise check passes — and the inner substitution, which runs first
+    // and carries `-rf ~`, used to be skipped by the early return.
+    it.each([
+      ['rmRecursiveHomeTarget', 'echo $(rm -f $(rm -rf ~)); echo ~'],
+      ['rmRecursiveRootTarget', 'echo $(rm -f $(rm -rf /))'],
+      ['rmRecursiveHomeTarget', 'echo `rm -f $(rm -rf ~)`'],
+    ] as const)('inspects nested substitutions of a resolved rm payload (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it('leaves data-only operands and benign substitutions alone', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo >/tmp/out')).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo >$(date)')).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'cat <(echo hi)')).toBe(false);
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', 'cat <(rm -rf /tmp/build-cache)'),
+      ).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo $(rm -f $(date))')).toBe(
+        false,
+      );
+    });
+  });
 });
