@@ -484,6 +484,7 @@ export class DocumentCommentModel {
           )
           .groupBy(documentComments.parentCommentId)
       : [];
+    /* v8 ignore next -- unreachable: the `[]` arm; inArray(parent_comment_id, rootIds) never matches a NULL parent */
     const countByRoot = new Map(
       replyCounts.flatMap(({ parentCommentId, total }) =>
         parentCommentId ? [[parentCommentId, total] as const] : [],
