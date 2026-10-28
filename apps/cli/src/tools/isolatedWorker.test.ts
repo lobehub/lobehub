@@ -143,4 +143,32 @@ describe('executeToolCallInWorker', () => {
     });
     expect(kill).toHaveBeenCalledWith('SIGKILL');
   });
+
+  it('should hide the worker console window on Windows', async () => {
+    spawnMock.mockImplementation(() => {
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      const child = {
+        kill: vi.fn(),
+        on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+          if (event === 'close') {
+            stdout.write(JSON.stringify({ content: 'ok', success: true }));
+            stdout.end();
+            stderr.end();
+            setImmediate(() => handler(0, null));
+          }
+          return child;
+        }),
+        stderr,
+        stdout,
+      } as unknown as ChildProcessWithoutNullStreams;
+
+      return child;
+    });
+
+    const { executeToolCallInWorker } = await import('./isolatedWorker');
+    await executeToolCallInWorker('globFiles', '{"pattern":"*.ts"}');
+
+    expect(spawnMock.mock.calls[0][2]).toMatchObject({ windowsHide: true });
+  });
 });
