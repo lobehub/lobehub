@@ -9,7 +9,7 @@ import {
   SettingsIcon,
   TargetIcon,
 } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 
@@ -22,6 +22,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
+import { projectComposerAgents } from '../Workspace/projectComposerAgents';
 import {
   getProjectAcceptancePath,
   getProjectDashboardPath,
@@ -47,6 +48,12 @@ const ProjectSidebarContent = memo(() => {
   const projectGoalsPath = getProjectGoalsPath(projectId!);
   const projectAcceptancePath = getProjectAcceptancePath(projectId!);
   const projectDashboardPath = getProjectDashboardPath(projectId!);
+
+  // The main agent leads the composer list; its meta names its topic group before any topic.
+  const coordinatorAgent = useMemo(
+    () => (detail?.project ? projectComposerAgents(detail)[0] : undefined),
+    [detail],
+  );
 
   const header = <ProjectHeader project={detail?.project} />;
 
@@ -105,6 +112,7 @@ const ProjectSidebarContent = memo(() => {
           />
           {detail?.project && (
             <SidebarSections
+              coordinatorAgent={coordinatorAgent}
               coordinatorAgentId={detail.project.coordinatorAgentId}
               projectId={detail.project.id}
             />

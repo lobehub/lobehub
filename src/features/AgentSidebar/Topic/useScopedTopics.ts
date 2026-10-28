@@ -1,3 +1,4 @@
+import { agentDisplayName } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
@@ -16,7 +17,12 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import type { ChatTopic, GroupedTopic, TopicGroupMode, TopicSortBy } from '@/types/topic';
 import { filterTopics } from '@/utils/client/topic';
 
-import { useTopicListFilter, useTopicListReveal, useTopicListScope } from './TopicListScope';
+import {
+  type TopicListScopeAgent,
+  useTopicListFilter,
+  useTopicListReveal,
+  useTopicListScope,
+} from './TopicListScope';
 
 export const useScopedTopics = () => {
   const scope = useTopicListScope();
@@ -48,6 +54,25 @@ export const pinCoordinatorGroup = (groups: GroupedTopic[], coordinatorAgentId?:
   const rest = groups.filter((_, i) => i !== index);
   return [...rest.slice(0, leadIndex), groups[index], ...rest.slice(leadIndex)];
 };
+
+/**
+ * A project with no topic yet still shows its main agent's group, so starting
+ * the first topic reads the same as adding one later. Only when nothing is
+ * filtered: a filter that matches nothing keeps its own empty state.
+ */
+export const withCoordinatorGroup = (
+  groups: GroupedTopic[],
+  scope: { coordinatorAgent?: TopicListScopeAgent; coordinatorAgentId?: string } | null,
+): GroupedTopic[] =>
+  groups.length || !scope?.coordinatorAgentId
+    ? groups
+    : [
+        {
+          children: [],
+          id: `agent:${scope.coordinatorAgentId}`,
+          title: agentDisplayName(scope.coordinatorAgent),
+        },
+      ];
 
 export const useScopedTopic = (id?: string) =>
   useScopedTopics().topics?.find((topic) => topic.id === id);
@@ -117,8 +142,10 @@ export const useScopedSidebarTopics = (
   const coordinatorAgentId = scope?.coordinatorAgentId;
   const groups = useMemo(() => {
     const grouped = groupSidebarTopics(visible, groupMode, sortBy, running, directories);
-    return groupMode === 'byAgent' ? pinCoordinatorGroup(grouped, coordinatorAgentId) : grouped;
-  }, [visible, groupMode, sortBy, running, directories, coordinatorAgentId]);
+    if (groupMode !== 'byAgent') return grouped;
+    const pinned = pinCoordinatorGroup(grouped, coordinatorAgentId);
+    return filtering ? pinned : withCoordinatorGroup(pinned, scope);
+  }, [visible, groupMode, sortBy, running, directories, coordinatorAgentId, filtering, scope]);
   const hasMore =
     candidates.filtered.filter((topic) => includeCompleted || topic.status !== 'completed').length >
     visibleLimit;

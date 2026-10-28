@@ -2,8 +2,16 @@ import { createContext, use } from 'react';
 
 import type { TopicListFilter } from '@/utils/client/topic';
 
+export interface TopicListScopeAgent {
+  avatar?: string | null;
+  name?: string | null;
+  title?: string | null;
+}
+
 /** Host identity keeps the shared list inside its Project route and data scope. */
 export const TopicListScopeContext = createContext<{
+  /** The main agent's display meta, for its group before it has any topic. */
+  coordinatorAgent?: TopicListScopeAgent;
   coordinatorAgentId?: string;
   projectId: string;
 } | null>(null);

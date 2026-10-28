@@ -506,6 +506,48 @@ describe('TopicByAgentGroupItem', () => {
     expect(screen.queryByText('公共CC(美国 100刀)')).toBeNull();
   });
 
+  /** @example Review feedback: a project with no topic should show the main agent group with "new topic". */
+  it('offers a new topic inside the main agent group before the project has any topic', () => {
+    directories[0] = { ...directories[0], ...runnable('ins-mac') };
+    render(
+      <TopicListScopeContext
+        value={{
+          coordinatorAgent: { avatar: '🚀', title: '官网改版 Coordinator' },
+          coordinatorAgentId: 'agt_lead',
+          projectId: 'prj_1',
+        }}
+      >
+        <AccordionRoot defaultValue={['agent:agt_lead']}>
+          <GroupItem
+            expanded
+            group={{ children: [], id: 'agent:agt_lead', title: '官网改版 Coordinator' }}
+          />
+        </AccordionRoot>
+      </TopicListScopeContext>,
+    );
+
+    expect(screen.getAllByText('官网改版 Coordinator').length).toBeGreaterThan(0);
+    // The header "+" shares the label; the extra match is the row inside the empty group.
+    const entries = screen.getAllByText('sidebar.newConversation');
+    expect(entries).toHaveLength(2);
+    fireEvent.click(entries[1]);
+
+    expect(startProjectTopicDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agt_lead',
+        directoryId: 'binding-mac',
+        projectId: 'prj_1',
+      }),
+    );
+  });
+
+  it('adds no extra "new topic" row to a group that already has topics', () => {
+    renderInProject('agt_lead');
+
+    // Only the header "+" carries the label.
+    expect(screen.getAllByText('sidebar.newConversation')).toHaveLength(1);
+  });
+
   it("tags the project's main agent as its lead", () => {
     renderInProject('agt_lead');
 

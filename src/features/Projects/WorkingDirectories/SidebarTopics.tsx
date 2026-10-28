@@ -26,6 +26,7 @@ import FlatMode from '@/features/AgentSidebar/Topic/TopicListContent/FlatMode';
 import {
   TopicListFilterContext,
   TopicListRevealContext,
+  type TopicListScopeAgent,
   TopicListScopeContext,
   useTopicListFilter,
 } from '@/features/AgentSidebar/Topic/TopicListScope';
@@ -46,6 +47,8 @@ import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
 
 interface ProjectDirectoryTopicsProps {
+  /** The main agent's display meta, for its group before the project has any topic. */
+  coordinatorAgent?: TopicListScopeAgent;
   coordinatorAgentId: string;
   /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
   itemKey: string;
@@ -54,8 +57,12 @@ interface ProjectDirectoryTopicsProps {
 
 export function ProjectDirectoryTopics(props: ProjectDirectoryTopicsProps) {
   const scope = useMemo(
-    () => ({ coordinatorAgentId: props.coordinatorAgentId, projectId: props.projectId }),
-    [props.projectId, props.coordinatorAgentId],
+    () => ({
+      coordinatorAgent: props.coordinatorAgent,
+      coordinatorAgentId: props.coordinatorAgentId,
+      projectId: props.projectId,
+    }),
+    [props.projectId, props.coordinatorAgentId, props.coordinatorAgent],
   );
   const reveal = useProjectTopicReveal(props.projectId);
   const [filter, setFilter] = useState<TopicListFilter>({});
@@ -156,7 +163,8 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
           ) : null}
           {!request.hasData || isPreferenceLoading ? (
             <SkeletonList />
-          ) : !topics.length && !request.error ? (
+          ) : !topics.length && !request.error && topicGroupMode !== 'byAgent' ? (
+            // By agent, the main agent's empty group offers the first topic instead.
             <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
               {t('directories.noConversations')}
             </Text>

@@ -114,7 +114,6 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   return (
     <Flexbox gap={16}>
       <Flexbox gap={8} inert={busy}>
-        {!existing && <Text weight={500}>{t('agents')}</Text>}
         <MemberSelection
           exclude={existing?.agentIds}
           options={options}
