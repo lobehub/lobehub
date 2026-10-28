@@ -86,7 +86,7 @@ overrides:
   pdfjs-dist: 5.4.530
   react: 19.2.7
   react-dom: 19.2.7
-  's3rver>fast-xml-parser': 3.21.1
+  's3rver>fast-xml-parser': 5.7.0
   stylelint-config-clean-order: 7.0.0
   typescript: 6.0.3
   # 5.1 changes leading/trailing slash handling and breaks provider URL contracts.
