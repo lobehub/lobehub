@@ -18,6 +18,7 @@ import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
 import { useStyles } from './styles';
+import { isTabClosable, shouldCloseOnAuxClick } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
@@ -106,9 +107,8 @@ const TabItem = memo<TabItemProps>(
     // Which tiers actually show the button is settled in CSS so that it can fade rather
     // than unmount. Staying mounted below the compact tier would otherwise leave an
     // invisible button in the focus order, so those tiers are made inert rather than
-    // merely transparent. A lone tab offers no close at all: closing it only swaps in a
-    // fresh home tab, so the button would read as a way out that does not exist.
-    const closable = totalCount > 1;
+    // merely transparent. A lone tab is not closable at all (see tabClose).
+    const closable = isTabClosable(totalCount);
     const closeInert = !closable || (tier !== 'full' && tier !== 'compact');
 
     const isDragging = !!drag;
@@ -212,9 +212,9 @@ const TabItem = memo<TabItemProps>(
       (e: React.MouseEvent) => {
         if (e.button !== 1) return;
         e.preventDefault();
-        onClose(id);
+        if (shouldCloseOnAuxClick(e.button, totalCount)) onClose(id);
       },
-      [onClose, id],
+      [onClose, id, totalCount],
     );
 
     const contextMenuItems = useCallback(

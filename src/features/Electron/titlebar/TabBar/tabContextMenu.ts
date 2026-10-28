@@ -1,5 +1,7 @@
 import type { DropdownItem } from '@lobehub/ui';
 
+import { isTabClosable } from './tabClose';
+
 type TabContextMenuLabelKey =
   | 'tab.closeCurrentTab'
   | 'tab.closeLeftTabs'
@@ -67,6 +69,7 @@ export const buildTabContextMenuItems = ({
       : null,
     { type: 'divider' },
     {
+      disabled: !isTabClosable(totalCount),
       key: 'closeCurrentTab',
       label: t('tab.closeCurrentTab'),
       onClick: () => onClose(id),

@@ -43,13 +43,17 @@ describe('tab context menu ownership', () => {
 });
 
 describe('close entries', () => {
-  it('lets a lone tab close itself while the bulk closes have nothing to reach', () => {
+  it('offers no close at all for a lone tab', () => {
     const items = build(0, 1);
 
-    expect(isDisabled(items, 'closeCurrentTab')).toBe(false);
+    expect(isDisabled(items, 'closeCurrentTab')).toBe(true);
     expect(isDisabled(items, 'closeOtherTabs')).toBe(true);
     expect(isDisabled(items, 'closeLeftTabs')).toBe(true);
     expect(isDisabled(items, 'closeRightTabs')).toBe(true);
+  });
+
+  it('lets a tab close itself once another tab exists', () => {
+    expect(isDisabled(build(0, 2), 'closeCurrentTab')).toBe(false);
   });
 });
 
