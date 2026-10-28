@@ -147,7 +147,7 @@ describe('useDeleteCanvas', () => {
 
 describe('useCleanOrphanCanvasFiles', () => {
   it('frees every leftover canvas by id after one confirmation', async () => {
-    canvas.delete.mockResolvedValue(undefined);
+    canvas.delete.mockResolvedValue({ deleted: true });
     const { result } = renderHook(() => useCleanOrphanCanvasFiles());
 
     act(() =>
@@ -158,14 +158,44 @@ describe('useCleanOrphanCanvasFiles', () => {
     );
     await confirmLatest();
 
-    expect(canvas.delete.mock.calls).toEqual([['cvs_a'], ['cvs_b']]);
+    expect(canvas.delete.mock.calls).toEqual([
+      ['cvs_a', { orphanOnly: true }],
+      ['cvs_b', { orphanOnly: true }],
+    ]);
     expect(work.removeWork).not.toHaveBeenCalled();
     expect(mutate).toHaveBeenCalledWith(['canvas:storage']);
     expect(ui.success).toHaveBeenCalledWith('canvasStorage.orphan.success {"size":"2.0 KB"}');
   });
 
+  it('counts only what was freed when a leftover turned out to have a Work', async () => {
+    canvas.delete
+      .mockResolvedValueOnce({ deleted: true })
+      .mockResolvedValueOnce({ deleted: false });
+    const { result } = renderHook(() => useCleanOrphanCanvasFiles());
+
+    act(() =>
+      result.current([
+        item({ canvasId: 'cvs_a', totalSize: 1024, workId: null }),
+        item({ canvasId: 'cvs_live', totalSize: 4096, workId: null }),
+      ]),
+    );
+    await confirmLatest();
+
+    expect(ui.success).toHaveBeenCalledWith('canvasStorage.orphan.success {"size":"1.0 KB"}');
+  });
+
+  it('counts a delete from a server that reports no result as freed', async () => {
+    canvas.delete.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useCleanOrphanCanvasFiles());
+
+    act(() => result.current([item({ canvasId: 'cvs_a', totalSize: 1024, workId: null })]));
+    await confirmLatest();
+
+    expect(ui.success).toHaveBeenCalledWith('canvasStorage.orphan.success {"size":"1.0 KB"}');
+  });
+
   it('refreshes what is left when a cleanup fails part way', async () => {
-    canvas.delete.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('boom'));
+    canvas.delete.mockResolvedValueOnce({ deleted: true }).mockRejectedValueOnce(new Error('boom'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result } = renderHook(() => useCleanOrphanCanvasFiles());
 

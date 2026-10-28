@@ -123,17 +123,27 @@ export const useCleanOrphanCanvasFiles = () => {
 
   return useCallback(
     (orphans: CanvasStorageItem[]) => {
-      const size = formatSize(orphans.reduce((sum, item) => sum + item.totalSize, 0));
+      const total = (list: CanvasStorageItem[]) =>
+        list.reduce((sum, item) => sum + item.totalSize, 0);
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
-        content: t('canvasStorage.orphan.confirm', { size }),
+        content: t('canvasStorage.orphan.confirm', { size: formatSize(total(orphans)) }),
         okButtonProps: { danger: true },
         okText: t('delete', { ns: 'common' }),
         onOk: async () => {
           try {
-            for (const orphan of orphans) await canvasService.delete(orphan.canvasId);
+            // Orphan-only: a canvas whose Work appeared since the list loaded
+            // (its files land just before its Work) is skipped, not deleted.
+            const freed: CanvasStorageItem[] = [];
+            for (const orphan of orphans) {
+              const result = await canvasService.delete(orphan.canvasId, {
+                orphanOnly: true,
+              });
+              // A server predating the result always deletes.
+              if (result?.deleted !== false) freed.push(orphan);
+            }
             await afterCanvasDelete([]);
-            toast.success(t('canvasStorage.orphan.success', { size }));
+            toast.success(t('canvasStorage.orphan.success', { size: formatSize(total(freed)) }));
           } catch (error) {
             console.error('[useCleanOrphanCanvasFiles] failed to delete canvas files', error);
             await refreshCanvasStorage();

@@ -35,15 +35,24 @@ export const canvasRouter = router({
   // Frees a canvas's storage: the Work, its versions and every file it holds.
   delete: canvasProcedure
     .use(requireWorkspaceRoleWhenScoped('member'))
-    .input(z.object({ canvasId: z.string().min(1).max(128) }))
-    .mutation(({ ctx, input }) =>
-      deleteCanvas(input.canvasId, {
-        db: ctx.serverDB,
-        storage: createCanvasStorageService(ctx.serverDB, ctx.userId, ctx.workspaceId),
-        userId: ctx.userId,
-        workModel: ctx.workModel,
-        workspaceId: ctx.workspaceId,
+    .input(
+      z.object({
+        canvasId: z.string().min(1).max(128),
+        orphanOnly: z.boolean().optional(),
       }),
+    )
+    .mutation(({ ctx, input }) =>
+      deleteCanvas(
+        input.canvasId,
+        {
+          db: ctx.serverDB,
+          storage: createCanvasStorageService(ctx.serverDB, ctx.userId, ctx.workspaceId),
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId,
+        },
+        { orphanOnly: input.orphanOnly },
+      ),
     ),
 
   getPublishContext: canvasProcedure.query(({ ctx }) => ({

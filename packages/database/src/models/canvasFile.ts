@@ -42,6 +42,16 @@ export class CanvasFileModel {
       .where(and(this.ownership(), inArray(files.fileHash, hashes)));
   };
 
+  /** Whether the caller still holds any file of this canvas in the active space. */
+  hasCanvasFiles = async (canvasId: string) => {
+    const [row] = await this.db
+      .select({ id: files.id })
+      .from(files)
+      .where(and(this.ownership(), eq(canvasIdField, canvasId)))
+      .limit(1);
+    return !!row;
+  };
+
   /** Bytes and blob count each of the caller's canvases holds, largest first. */
   summarizeByCanvas = async () => {
     const rows = await this.db

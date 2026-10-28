@@ -132,7 +132,10 @@ describe('canvasRouter storage', () => {
     const keys = [...objects.keys()].sort();
 
     expect(await caller(strangerId).listStorage()).toEqual([]);
-    await caller(strangerId).delete({ canvasId: 'cvs_storage' });
+    // Nothing of the stranger's to free: an error, never a silent "deleted".
+    await expect(caller(strangerId).delete({ canvasId: 'cvs_storage' })).rejects.toThrow(
+      'NOT_FOUND',
+    );
 
     expect(await new FileModel(serverDB, userId).countUsage()).toBe(usage);
     expect(await model.findCanvas('cvs_storage')).not.toBeNull();
@@ -177,5 +180,33 @@ describe('canvasRouter storage', () => {
     await caller().delete({ canvasId: 'cvs_storage' });
 
     expect(unpublishCanvasSite).not.toHaveBeenCalled();
+  });
+
+  it('skips a canvas that has a Work when only leftovers are asked for', async () => {
+    const { model } = await createCanvas('cvs_storage', 'Climate Alarm');
+    const usage = await new FileModel(serverDB, userId).countUsage();
+
+    await expect(caller().delete({ canvasId: 'cvs_storage', orphanOnly: true })).resolves.toEqual({
+      deleted: false,
+    });
+
+    expect(await model.findCanvas('cvs_storage')).not.toBeNull();
+    expect(await new FileModel(serverDB, userId).countUsage()).toBe(usage);
+  });
+
+  it('frees leftovers when only leftovers are asked for', async () => {
+    await commit('cvs_orphan', '<html><body>never registered</body></html>');
+
+    await expect(caller().delete({ canvasId: 'cvs_orphan', orphanOnly: true })).resolves.toEqual({
+      deleted: true,
+    });
+    expect(await new FileModel(serverDB, userId).countUsage()).toBe(0);
+  });
+
+  it('reports a canvas with nothing left to free', async () => {
+    await expect(caller().delete({ canvasId: 'cvs_missing' })).rejects.toThrow('NOT_FOUND');
+    await expect(caller().delete({ canvasId: 'cvs_missing', orphanOnly: true })).resolves.toEqual({
+      deleted: false,
+    });
   });
 });

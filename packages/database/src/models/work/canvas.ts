@@ -117,6 +117,20 @@ export const findCanvasWork = async (
   return row ? { version: row.version, work: row.work as CanvasWorkWithVersion['work'] } : null;
 };
 
+/** The canvas a Work id stands for, when it is a canvas Work this caller can see. */
+export const findCanvasIdByWorkId = async (
+  ctx: WorkContext,
+  workId: string,
+): Promise<string | null> => {
+  const [row] = await ctx.db
+    .select({ canvasId: works.resourceId })
+    .from(works)
+    .where(and(workOwnership(ctx), eq(works.id, workId), eq(works.resourceType, 'canvas')))
+    .limit(1);
+
+  return row?.canvasId ?? null;
+};
+
 export const findCanvasWorkVersion = async (
   ctx: WorkContext,
   workId: string,

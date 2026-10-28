@@ -45,6 +45,27 @@ export class CanvasFileRepository {
     });
   };
 
+  private canvasWorks = () =>
+    and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, works),
+      eq(works.userId, this.userId),
+      eq(works.resourceType, 'canvas'),
+    );
+
+  /**
+   * The caller's Work for a canvas in the active space, regardless of the
+   * share-scope filter the Work surfaces apply: any Work at all means the
+   * canvas's files are not leftovers.
+   */
+  findCanvasWorkId = async (canvasId: string): Promise<string | null> => {
+    const [row] = await this.db
+      .select({ id: works.id })
+      .from(works)
+      .where(and(this.canvasWorks(), eq(works.resourceId, canvasId)))
+      .limit(1);
+    return row?.id ?? null;
+  };
+
   /**
    * The caller's canvas file usage per canvas, named by the canvas Work that
    * owns it. The resource library hides canvas files, so this is the only place
@@ -64,9 +85,7 @@ export class CanvasFileRepository {
       .from(works)
       .where(
         and(
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, works),
-          eq(works.userId, this.userId),
-          eq(works.resourceType, 'canvas'),
+          this.canvasWorks(),
           inArray(
             works.resourceId,
             usage.map((row) => row.canvasId),
