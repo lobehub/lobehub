@@ -456,7 +456,7 @@ const portalWidths = (s: GlobalState) => s.status.portalWidths;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
-const agentListViewMode = (s: GlobalState) => s.status.agentListViewMode || 'list';
+const agentListViewMode = (s: GlobalState) => s.status.agentListViewMode || 'card';
 const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   by: 'name',
   foldersFirst: true,

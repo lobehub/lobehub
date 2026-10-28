@@ -208,7 +208,7 @@ export interface SystemStatus {
    */
   agentListSidebarSectionCollapsed?: boolean;
   /**
-   * View mode of the agent view-all page (card grid vs table list)
+   * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
    */
   agentListViewMode?: 'card' | 'list';
   /**
@@ -578,7 +578,7 @@ export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentListExpandedGroupKeys: [] as string[],
   agentListSidebarSectionCollapsed: false,
-  agentListViewMode: 'list' as const,
+  agentListViewMode: 'card' as const,
   agentListViewOptions: {
     groupBy: 'none' as const,
     orderBy: 'updatedAt' as const,
