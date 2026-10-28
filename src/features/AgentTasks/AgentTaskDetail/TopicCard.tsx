@@ -38,6 +38,7 @@ import RunReplyEditor from './RunReplyEditor';
 import RunVerifyDetail from './RunVerifyDetail';
 import RunVerifyTag from './RunVerifyTag';
 import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
+import { resolveRunAcceptanceWait } from './taskAcceptanceWait';
 import TopicStatusIcon from './TopicStatusIcon';
 import { resolveRunAgentId, useRunFollowUp } from './useRunFollowUp';
 
@@ -296,7 +297,16 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
           ) : (
             avatarNode
           )}
-          <TopicStatusIcon size={16} status={activity.status} />
+          <TopicStatusIcon
+            size={16}
+            // A `running` row with no live operation is not executing: its agent
+            // stopped and the acceptance round bound to it has yet to settle.
+            status={
+              isRunning && resolveRunAcceptanceWait(activity)
+                ? 'awaiting_acceptance'
+                : activity.status
+            }
+          />
           {activity.sourceTaskIdentifier && (
             <Tag
               size={'small'}

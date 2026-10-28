@@ -1,10 +1,11 @@
 import { cssVar, Icon } from '@lobehub/ui';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, Stamp } from 'lucide-react';
 import { memo } from 'react';
 
 import { EXECUTION_STATUS_VISUALS, type ExecutionStatusVisual } from '@/components/ExecutionStatus';
 
 type TopicRunStatus =
+  | 'awaiting_acceptance'
   | 'canceled'
   | 'completed'
   | 'device_offline'
@@ -16,6 +17,8 @@ type TopicRunStatus =
   | 'transient_failed';
 
 const STATIC_META: Record<Exclude<TopicRunStatus, 'running'>, ExecutionStatusVisual> = {
+  // The agent stopped; the run's acceptance round still has to settle.
+  awaiting_acceptance: { color: cssVar.colorWarning, icon: Stamp },
   canceled: EXECUTION_STATUS_VISUALS.canceled,
   completed: EXECUTION_STATUS_VISUALS.completed,
   // The run's device was unavailable; it is retried, not failed.
