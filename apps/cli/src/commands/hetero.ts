@@ -1144,10 +1144,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
           terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
           // Stream and finish must persist one status-guide payload, or the
           // client falls back from the guide card to the generic alert.
-          terminalErrorData = resolveTerminalErrorGuide(data, {
-            agentType,
-            command: options.command,
-          });
+          terminalErrorData = resolveTerminalErrorGuide(data, agentType, options.command);
           if (terminalErrorData) event.data = terminalErrorData;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);

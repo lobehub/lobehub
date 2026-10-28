@@ -16,10 +16,11 @@ import {
  */
 export const resolveTerminalErrorGuide = (
   data: Record<string, unknown> | undefined,
-  agent: { agentType: string; command?: string },
+  agentType: string,
+  command?: string,
 ): Record<string, unknown> | undefined => {
   if (isHeteroStatusGuideErrorData(data)) return data;
   const detail = String(data?.message ?? data?.error ?? '');
-  const classified = classifyHeteroProcessFailure({ ...agent, detail });
+  const classified = classifyHeteroProcessFailure({ agentType, command, detail });
   return classified && { ...data, ...classified };
 };
