@@ -84,6 +84,8 @@ export class MessageTrashMutations extends MessageScope {
           .from(messagePlugins)
           .where(inArray(messagePlugins.toolCallId, toolCallIds));
         for (const row of companionRows) {
+          // `toolCallId` is never null: `inArray(messagePlugins.toolCallId, …)` excludes NULL.
+          /* v8 ignore next */
           const owner = row.toolCallId ? toolCallOwner.get(row.toolCallId) : undefined;
           if (owner && !requestedIds.has(row.id)) companionOwner.set(row.id, owner);
         }

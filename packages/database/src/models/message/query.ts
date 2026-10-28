@@ -83,6 +83,8 @@ export class MessageConversationQueries extends MessageScope {
 
     const result = new Map<string, string>();
     for (const row of rows) {
+      // `content` and `topicId` are never null: the WHERE clause filters both.
+      /* v8 ignore next */
       const content = (row.content ?? '').trim();
       if (row.topicId && content) result.set(row.topicId, content);
     }

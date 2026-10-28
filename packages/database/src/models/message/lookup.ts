@@ -394,8 +394,10 @@ export class MessageLookupQueries extends MessageScope {
       .orderBy(asc(messages.createdAt), asc(messages.id))
       .limit(limit);
 
+    // `content` is never null: the ILIKE filter on `content` drops NULL rows.
     return rows.map(({ content, ...row }) => ({
       ...row,
+      /* v8 ignore next */
       ...buildMessageSearchSnippet(content ?? '', needle),
     }));
   };
