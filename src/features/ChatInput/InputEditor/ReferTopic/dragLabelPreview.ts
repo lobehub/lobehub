@@ -49,7 +49,7 @@ export const setDragLabelPreview = (
     left: '0',
     lineHeight: '20px',
     maxWidth: '240px',
-    padding: '4px 10px 4px 8px',
+    padding: '6px 12px',
     pointerEvents: 'none',
     position: 'fixed',
     top: '0',
