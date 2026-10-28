@@ -6,6 +6,7 @@ import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { openRenameProjectModal } from '@/features/Projects/RenameProjectModal';
@@ -29,6 +30,19 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
   const [deleting, setDeleting] = useState(false);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const canManage = useCanManageProject();
+  const projectPath = `/project/${project.slug ?? project.id}`;
+  const favoriteMenuItem = useFavoriteMenuItem(
+    {
+      icon: project.avatar ?? null,
+      // The slug can be renamed from Project Settings, where this row is not
+      // mounted to refresh the snapshot; the id link always resolves.
+      path: `/project/${project.id}`,
+      targetId: project.id,
+      title: project.name,
+      type: 'project',
+    },
+    { showHotkey: false },
+  );
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -42,46 +56,48 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
     }
   };
 
-  const menuItems: DropdownItem[] = canManage
-    ? [
-        {
-          icon: <Icon icon={PencilIcon} />,
-          key: 'rename',
-          label: t('rename.action'),
-          onClick: () => openRenameProjectModal(project),
-        },
-        { type: 'divider' },
-        {
-          danger: true,
-          icon: <Icon icon={TrashIcon} />,
-          key: 'delete',
-          label: t('list.deleteAction'),
-          onClick: () =>
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('list.deleteConfirmDescription', { name: project.name }),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: () => void handleDelete(),
-              title: t('list.deleteConfirmTitle'),
-            }),
-        },
-      ]
-    : [];
+  const menuItems: DropdownItem[] = [
+    ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+    ...(canManage
+      ? ([
+          { type: 'divider' },
+          {
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: t('rename.action'),
+            onClick: () => openRenameProjectModal(project),
+          },
+          { type: 'divider' },
+          {
+            danger: true,
+            icon: <Icon icon={TrashIcon} />,
+            key: 'delete',
+            label: t('list.deleteAction'),
+            onClick: () =>
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: t('list.deleteConfirmDescription', { name: project.name }),
+                okButtonProps: { danger: true },
+                okText: t('delete', { ns: 'common' }),
+                onOk: () => void handleDelete(),
+                title: t('list.deleteConfirmTitle'),
+              }),
+          },
+        ] satisfies DropdownItem[])
+      : []),
+  ];
 
   return (
-    <WorkspaceLink to={`/project/${project.slug ?? project.id}`}>
+    <WorkspaceLink to={projectPath}>
       <NavItem
-        contextMenuItems={canManage ? menuItems : undefined}
+        contextMenuItems={menuItems}
         disabled={deleting}
         icon={projectIcon(project)}
         title={project.name}
         actions={
-          canManage ? (
-            <DropdownMenu items={menuItems}>
-              <ActionIcon icon={MoreHorizontalIcon} loading={deleting} size={'small'} />
-            </DropdownMenu>
-          ) : undefined
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontalIcon} loading={deleting} size={'small'} />
+          </DropdownMenu>
         }
       />
     </WorkspaceLink>

@@ -17,6 +17,7 @@ export type HotkeyId =
   | 'showApp'
   | 'switchAgent'
   | 'switchTab'
+  | 'toggleFavorite'
   | 'toggleLeftPanel'
   | 'toggleRightPanel'
   | 'toggleTerminalPanel';

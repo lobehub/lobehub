@@ -80,6 +80,11 @@ vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
   useIsWorkspaceOwner: () => mocks.isWorkspaceOwner,
 }));
 
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: () => null,
+}));
 vi.mock('@/features/VisibilityConfirmContent', () => ({
   default: () => <div />,
 }));

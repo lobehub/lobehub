@@ -13,6 +13,8 @@ import { type HomeStoreState } from './initialState';
 import { initialState } from './initialState';
 import { type AgentListAction } from './slices/agentList/action';
 import { createAgentListSlice } from './slices/agentList/action';
+import { type FavoriteAction } from './slices/favorite/action';
+import { createFavoriteSlice } from './slices/favorite/action';
 import { type GroupAction } from './slices/group/action';
 import { createGroupSlice } from './slices/group/action';
 import { type HomeInputAction } from './slices/homeInput/action';
@@ -31,6 +33,7 @@ import { createSidebarUISlice } from './slices/sidebarUI/action';
 export interface HomeStore
   extends
     AgentListAction,
+    FavoriteAction,
     GroupAction,
     RecentAction,
     HomeInboxAction,
@@ -41,6 +44,7 @@ export interface HomeStore
     HomeStoreState {}
 
 type HomeStoreAction = AgentListAction &
+  FavoriteAction &
   GroupAction &
   RecentAction &
   HomeInboxAction &
@@ -59,6 +63,7 @@ const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (
   ...initialState,
   ...flattenActions<HomeStoreAction>([
     createAgentListSlice(...parameters),
+    createFavoriteSlice(...parameters),
     createGroupSlice(...parameters),
     createRecentSlice(...parameters),
     createHomeInboxSlice(...parameters),

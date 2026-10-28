@@ -43,6 +43,8 @@
   "switchAgent.title": "도우미 빠르게 전환",
   "switchTab.desc": "데스크톱 앱 탭 바에서 위치(1–9)에 따라 특정 탭으로 바로 이동합니다.",
   "switchTab.title": "번호로 탭 전환",
+  "toggleFavorite.desc": "열린 페이지를 사이드바의 즐겨찾기 섹션에 추가하거나 제거합니다",
+  "toggleFavorite.title": "즐겨찾기에 추가 / 제거",
   "toggleLeftPanel.desc": "왼쪽 패널 표시 또는 숨기기",
   "toggleLeftPanel.title": "왼쪽 패널 표시/숨기기",
   "toggleRightPanel.desc": "오른쪽 패널 표시 또는 숨기기",

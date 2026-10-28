@@ -1,11 +1,24 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as FavoritesModule from '@/features/Favorites';
 import type { ProjectListItem } from '@/store/project';
 
 import ProjectItem from './ProjectItem';
 
 const permission = vi.hoisted(() => ({ allowed: true }));
+const favorite = vi.hoisted(() => ({ path: undefined as string | undefined }));
+
+vi.mock('@/features/Favorites', async (importOriginal) => {
+  const actual = await importOriginal<typeof FavoritesModule>();
+  return {
+    ...actual,
+    useFavoriteMenuItem: (...args: Parameters<typeof actual.useFavoriteMenuItem>) => {
+      favorite.path = args[0]?.path;
+      return actual.useFavoriteMenuItem(...args);
+    },
+  };
+});
 
 vi.mock('@/features/Workspace/WorkspaceLink', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -48,10 +61,17 @@ describe('ProjectItem', () => {
     expect(container.querySelector('.nav-item-actions')).not.toBeNull();
   });
 
-  it('hides the actions menu from members without edit permission', () => {
+  it('keeps the actions menu for members without edit permission, who can still favorite', () => {
     permission.allowed = false;
     const { container } = render(<ProjectItem project={project} />);
 
-    expect(container.querySelector('.nav-item-actions')).toBeNull();
+    expect(container.querySelector('.nav-item-actions')).not.toBeNull();
+  });
+
+  // A slug can be renamed from Project Settings, so the favorite keeps the id link.
+  it('favorites the project under its id, not its renameable slug', () => {
+    render(<ProjectItem project={project} />);
+
+    expect(favorite.path).toBe('/project/proj_1');
   });
 });

@@ -43,6 +43,8 @@
   "switchAgent.title": "Trocar Agente Rapidamente",
   "switchTab.desc": "Ir para uma aba específica pela sua posição (1–9) na barra de abas do aplicativo Desktop",
   "switchTab.title": "Alternar para Aba por Número",
+  "toggleFavorite.desc": "Adicione a página aberta à seção Favoritos da barra lateral ou remova-a",
+  "toggleFavorite.title": "Adicionar aos / Remover dos Favoritos",
   "toggleLeftPanel.desc": "Mostrar ou ocultar o painel esquerdo",
   "toggleLeftPanel.title": "Alternar Painel Esquerdo",
   "toggleRightPanel.desc": "Mostrar ou ocultar o painel direito",

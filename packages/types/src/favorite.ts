@@ -23,6 +23,13 @@ export type FavoriteType = (typeof FAVORITE_TYPES)[number];
  */
 export const FAVORITE_LIMIT = 1000;
 
+/** Longest title a favorite keeps. Longer page titles are cut rather than refused. */
+export const FAVORITE_TITLE_MAX_LENGTH = 512;
+
+/** A title as a favorite stores it: trimmed, then cut on a code point so an emoji is never split. */
+export const toFavoriteTitle = (title: string): string =>
+  Array.from(title.trim()).slice(0, FAVORITE_TITLE_MAX_LENGTH).join('');
+
 export interface FavoriteItem {
   /** Emoji or avatar URL captured when the item was favorited; null falls back to the type icon. */
   icon: string | null;

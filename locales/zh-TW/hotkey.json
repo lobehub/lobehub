@@ -43,6 +43,8 @@
   "switchAgent.title": "快捷切換助手",
   "switchTab.desc": "根據其在桌面應用程式標籤列中的位置（1–9）跳轉到特定標籤頁",
   "switchTab.title": "按編號切換到標籤頁",
+  "toggleFavorite.desc": "將打開的頁面添加到側邊欄的收藏夾部分，或將其移除",
+  "toggleFavorite.title": "添加到收藏夾 / 從收藏夾移除",
   "toggleLeftPanel.desc": "顯示或隱藏左側面板",
   "toggleLeftPanel.title": "顯示/隱藏左側面板",
   "toggleRightPanel.desc": "顯示或隱藏右側面板",

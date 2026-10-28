@@ -43,6 +43,8 @@
   "switchAgent.title": "تغییر سریع نماینده",
   "switchTab.desc": "به یک تب خاص بر اساس موقعیت آن (۱–۹) در نوار تب‌های برنامه دسکتاپ بروید",
   "switchTab.title": "انتقال به تب بر اساس شماره",
+  "toggleFavorite.desc": "صفحه باز را به بخش علاقه‌مندی‌ها در نوار کناری اضافه کنید یا آن را حذف کنید",
+  "toggleFavorite.title": "اضافه کردن به / حذف از علاقه‌مندی‌ها",
   "toggleLeftPanel.desc": "نمایش یا پنهان کردن پنل سمت چپ",
   "toggleLeftPanel.title": "تغییر وضعیت پنل چپ",
   "toggleRightPanel.desc": "نمایش یا پنهان کردن پنل سمت راست",

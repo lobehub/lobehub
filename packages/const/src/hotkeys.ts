@@ -58,6 +58,7 @@ export const HotkeyEnum = {
   ShowApp: 'showApp',
   SwitchAgent: 'switchAgent',
   SwitchTab: 'switchTab',
+  ToggleFavorite: 'toggleFavorite',
   ToggleLeftPanel: 'toggleLeftPanel',
   ToggleRightPanel: 'toggleRightPanel',
   ToggleTerminalPanel: 'toggleTerminalPanel',
@@ -140,6 +141,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.OpenHotkeyHelper,
     keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.QuestionMark]),
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.ToggleFavorite,
+    keys: combineKeys([KeyEnum.Alt, 'f']),
     scopes: [HotkeyScopeEnum.Global],
   },
   // Chat

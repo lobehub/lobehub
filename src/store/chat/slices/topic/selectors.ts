@@ -430,7 +430,7 @@ const buildGroupedTopics = (
         {
           children: favTopics,
           id: 'favorite',
-          title: t('favorite', { ns: 'topic' }),
+          title: t('pinned', { ns: 'topic' }),
         },
         ...groupFn(unfavTopics),
       ]

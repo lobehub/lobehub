@@ -276,10 +276,11 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
-        // Defaults missing from a saved layout (here the newer `goals` and
-        // `dashboard`) are backfilled.
+        // Defaults missing from a saved layout (here the newer `goals`,
+        // `dashboard` and `favorites`) are backfilled.
         'goals',
         'dashboard',
+        'favorites',
         'private',
         'agent',
         'recents',
@@ -299,6 +300,7 @@ describe('systemStatusSelectors', () => {
         'pages',
         'goals',
         'dashboard',
+        'favorites',
         'project',
         'recents',
         'private',
@@ -339,6 +341,7 @@ describe('systemStatusSelectors', () => {
         'pages',
         'goals',
         'dashboard',
+        'favorites',
         'recents',
         'project',
         'private',
@@ -347,6 +350,41 @@ describe('systemStatusSelectors', () => {
         'image',
         'community',
         'resource',
+        'memory',
+      ]);
+    });
+
+    it('should backfill favorites at the head of a saved accordion block', () => {
+      const stored = [
+        'tasks',
+        'goals',
+        'dashboard',
+        'resource',
+        'recents',
+        'project',
+        'private',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
+        'memory',
+      ];
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: stored },
+      });
+      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
+        'tasks',
+        'goals',
+        'dashboard',
+        'resource',
+        'favorites',
+        'recents',
+        'project',
+        'private',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
         'memory',
       ]);
     });
@@ -387,6 +425,7 @@ describe('systemStatusSelectors', () => {
         'goals',
         'dashboard',
         'resource',
+        'favorites',
         'private',
         'agent',
         'recents',
@@ -410,6 +449,7 @@ describe('systemStatusSelectors', () => {
         'goals',
         'dashboard',
         'resource',
+        'favorites',
         'private',
         'recents',
         'project',
