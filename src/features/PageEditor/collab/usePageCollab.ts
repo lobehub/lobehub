@@ -9,7 +9,7 @@ import { analyticsClient } from '@/libs/analytics/client';
 import { getGatewayMux } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDocumentStore } from '@/store/document';
 import { registerPageCollab } from '@/store/document/collabRegistry';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -72,7 +72,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
       onAccess: (access) => setCollab({ access }),
       onBootstrap: () => {
         const editor = storeApi.getState().editor;
-        if (editor) void useDocumentStore.getState().onEditorInit(editor);
+        if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);
       },
       onPendingChange: (pending) => setCollab({ pending }),
       onReset: () => {
@@ -139,7 +139,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
       syncMeta(title, emoji);
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(
-        () => void usePageStore.getState().refreshDocuments(),
+        () => void pageActions.refreshDocuments(),
         PAGE_LIST_REFRESH_DELAY_MS,
       );
     };
