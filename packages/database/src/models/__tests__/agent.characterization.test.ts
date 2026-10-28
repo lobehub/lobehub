@@ -86,6 +86,7 @@ const PUBLIC_METHODS = [
   'lockTrashedForPurge',
   'publishToWorkspace',
   'purge',
+  'queryAgencyRoutingByIds',
   'queryAgents',
   'queryBoundToDevice',
   'rank',

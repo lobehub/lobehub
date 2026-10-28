@@ -170,6 +170,19 @@ describe('agentSteerQueueRouter.append', () => {
     });
   });
 
+  it('stores a follow-up sent in the old shape with its selections as attached content', async () => {
+    const quote = { content: 'Quoted reply', id: 'selection-1', source: 'text' as const };
+
+    await caller().append({
+      ...appendInput,
+      request: { ...appendInput.request, contextSelections: [quote] },
+    });
+
+    const [, entry] = mocks.append.mock.calls[0];
+    expect(entry.request.userMessage).toEqual({ metadata: { contextSelections: [quote] } });
+    expect(entry.request).not.toHaveProperty('contextSelections');
+  });
+
   it('tells the client to send directly when no run is live', async () => {
     mocks.isRunningOperationAlive.mockResolvedValue(false);
 

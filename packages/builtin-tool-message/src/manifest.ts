@@ -185,6 +185,51 @@ const botSettingsSchema = {
       },
       type: 'array',
     },
+    replyEmojis: {
+      description:
+        'Emoji and stickers the bot may use in its replies: `[{ emoji, usage? }]`, where `emoji` is pasted into the text as is (a Unicode emoji, a Discord custom emoji `<:name:id>` or `<a:name:id>`, a Slack `:name:`) and `usage` says when it fits ("someone ships something", "a teasing reply"). Overwrite-replace: read with getBotDetail, edit, write the whole array back. Only change it when the bot\'s owner asks; up to 50.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          emoji: { type: 'string' },
+          usage: { type: 'string' },
+        },
+        required: ['emoji'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    replyStyle: {
+      description:
+        'How the bot talks in every channel, as free text: tone, length, formatting, language, emoji use ("casual, short, like a teammate; no bullet lists; reply in the language you were spoken to"). Only how it speaks, not what it does (that is botWakeDuties). channelReplyStyles replaces it for one channel. Empty string clears it. Only change it when the bot\'s owner asks; up to 2000 characters.',
+      type: 'string',
+    },
+    botWakeDuties: {
+      description:
+        'The bot\'s duties (职责边界): free text, one duty per line, saying what the bot is responsible for in its channels (e.g. "When someone describes a feature request, assess it; for easy ones create a task for dario"). When bot-wake is on (botWakeEnabled), a message from anyone that nobody addressed to the bot but that falls within these duties may wake it. Empty string turns this off. Overwrite-replace: to add or change one duty, read the current text with getBotDetail, edit it, and write the whole text back. Only change it when the bot\'s owner asks; up to 4000 characters.',
+      type: 'string',
+    },
+    botWakeDutiesThreshold: {
+      description:
+        'How sure the bot must be that a message falls within botWakeDuties before it steps in, 0..1 (default 0.65). Higher = steps in less often.',
+      maximum: 1,
+      minimum: 0,
+      type: 'number',
+    },
+    channelReplyStyles: {
+      description:
+        "A reply style for one channel or thread, replacing replyStyle there: `[{ channelId, style }]` (the Discord channel or thread id, the Slack channel id, …). Overwrite-replace like watchKeywords: read with getBotDetail, edit, write the whole array back. Only change it when the bot's owner asks.",
+      items: {
+        additionalProperties: false,
+        properties: {
+          channelId: { type: 'string' },
+          style: { type: 'string' },
+        },
+        required: ['channelId', 'style'],
+        type: 'object',
+      },
+      type: 'array',
+    },
     dmPolicy: {
       description:
         'Direct-message gate. open=accept DMs from anyone (default); allowlist=only users in allowFrom can DM, fails closed if list is empty; pairing=non-listed senders get a one-time code and the owner runs /approve <code> to add them; disabled=ignore all DMs. pairing requires settings.userId (owner platform ID).',
@@ -227,10 +272,15 @@ const botSettingsSchema = {
     },
     watchKeywords: {
       description:
-        'Channel-side keyword wake list. When a non-mention message in a non-DM channel contains any of these keywords (case-insensitive, whole-word), the bot wakes without an @mention. If the matched entry has an `instruction`, it is prepended to the user message as an extra prompt before being sent to the AI — so a bare trigger like "bug" can carry a directive ("Scan the recent thread and reply if there is a real bug report"). Empty/absent instructions just wake the bot with the raw user text. Same overwrite-replace semantics as allowFrom — read-modify-write via getBotDetail to add/remove entries.',
+        'Channel-side keyword wake list. When a non-mention message in a non-DM channel contains any of these keywords (case-insensitive, whole-word), the bot wakes without an @mention. If the matched entry has an `instruction`, it is prepended to the user message as an extra prompt before being sent to the AI — so a bare trigger like "bug" can carry a directive ("Scan the recent thread and reply if there is a real bug report"). Empty/absent instructions just wake the bot with the raw user text. Set `asName: true` on an entry to make the keyword one of the bot\'s names (a nickname or alias such as "canis" or "倏昱"): saying it calls the bot like its display name does. Same overwrite-replace semantics as allowFrom — read-modify-write via getBotDetail to add/remove entries.',
       items: {
         additionalProperties: false,
         properties: {
+          asName: {
+            description:
+              'Mark this keyword as a name the bot answers to (an alias or nickname). A message that says it is treated as calling the bot by name: answered right away, even while the owner is active in the channel. Omit (or false) for an ordinary trigger word like "bug" or "mobile". Its `instruction`, if any, still applies.',
+            type: 'boolean',
+          },
           instruction: {
             description:
               'Optional operator-authored prompt prepended to the user message when this keyword fires. Omit for "just wake the bot" behaviour.',
@@ -918,7 +968,7 @@ export const MessageManifest: BuiltinToolManifest = {
           settings: {
             ...botSettingsSchema,
             description:
-              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords).',
+              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords, botWakeDuties, botWakeDutiesThreshold, replyStyle, channelReplyStyles, replyEmojis).',
           },
         },
         required: ['botId'],

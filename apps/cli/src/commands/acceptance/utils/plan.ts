@@ -41,6 +41,7 @@ export interface ProgrammaticTestScreen {
  */
 export function screenProgrammaticTestChecks(
   result: Record<string, unknown>,
+  options: { quiet?: boolean } = {},
 ): ProgrammaticTestScreen {
   const droppedIds = new Set<string>();
   const droppedLabels: string[] = [];
@@ -75,7 +76,7 @@ export function screenProgrammaticTestChecks(
     );
   }
 
-  if (droppedLabels.length > 0) {
+  if (droppedLabels.length > 0 && !options.quiet) {
     log.warn(
       `dropping ${droppedLabels.length} programmatic-test check(s) from this acceptance round:`,
     );

@@ -18,6 +18,7 @@ import {
   markdownTextEvidenceTypes,
   rendersAsMarkdown,
 } from '../../Report/MarkdownEvidence';
+import { TerminalEvidenceCard } from '../../Report/TerminalEvidence';
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { ScreenshotTiles } from '../Evidence/ScreenshotTiles';
@@ -25,12 +26,12 @@ import { IMAGE_EVIDENCE, imageRatio, isAnnotatable, isVisual } from './evidence'
 import FloatingCommentAction, { FLOATING_ACTION_HOST } from './FloatingCommentAction';
 import type { EvidenceOverlayMap } from './overlay';
 import { styles } from './styles';
-import { VideoEvidencePlayer } from './Video/VideoEvidencePlayer';
+import { VideoEvidenceDiscussion } from './Video/VideoEvidenceDiscussion';
 
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
-const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode) => {
-  if (item.type === 'video')
-    return <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />;
+const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?: ReactNode) => {
+  if (item.type === 'terminal') return <TerminalEvidenceCard defaultExpanded evidence={item} />;
+  if (item.type === 'video') return video;
   if (item.type === 'audio')
     return (
       <AudioPlayer
@@ -76,7 +77,7 @@ export const EvidenceList = memo<{
    * Comment on (or mark) one picture straight from it — floats over each
    * annotatable image, labelled for what it opens.
    */
-  onComment?: { label: string; open: (id: string) => void };
+  onComment?: { label: string; open: (id: string, time?: number) => void };
   onReviewEvidence?: (id: string) => void;
   /**
    * Regions to draw over an evidence image, keyed by evidence id. Used by the
@@ -103,7 +104,8 @@ export const EvidenceList = memo<{
   // artifact, matching the ingest CLI's warning semantics.
   const groups = new Map<string, Partial<Record<'after' | 'before', AcceptanceEvidence>>>();
   for (const item of sorted) {
-    if (!isVisual(item)) continue;
+    // Two runs of one command pair like two captures of one view.
+    if (!isVisual(item) && item.type !== 'terminal') continue;
     const comparison = readEvidenceComparison(item.metadata);
     if (!comparison) continue;
     const group = groups.get(comparison.id) ?? {};
@@ -116,12 +118,29 @@ export const EvidenceList = memo<{
       .flatMap((group) => [group.before!.id, group.after!.id]),
   );
 
+  const videoContent = (item: AcceptanceEvidence, caption?: ReactNode) => (
+    <VideoEvidenceDiscussion
+      caption={caption}
+      chapters={readEvidenceChapters(item.metadata)}
+      evidenceId={item.id}
+      notes={reviewNotes?.filter((note) => note.evidenceId === item.id)}
+      overlays={overlays?.get(item.id)}
+      src={item.fileUrl!}
+      onComment={onComment ? (time) => onComment.open(item.id, time) : undefined}
+      onRefreshSource={onRefreshEvidenceUrl ? () => onRefreshEvidenceUrl(item.id) : undefined}
+    />
+  );
+
   const comparisonSide = (item: AcceptanceEvidence) => ({
     caption:
       readEvidenceComparison(item.metadata)?.label ??
       meaningfulEvidenceCaption(item.description) ??
       undefined,
-    content: comparisonContent(item, commentAction(item)),
+    content: comparisonContent(
+      item,
+      commentAction(item),
+      item.type === 'video' ? videoContent(item) : undefined,
+    ),
   });
 
   const consumedScreenshotIds = new Set<string>();
@@ -148,18 +167,7 @@ export const EvidenceList = memo<{
         const description = meaningfulEvidenceCaption(item.description);
         const caption = description && <span className={styles.caption}>{description}</span>;
         if (item.fileUrl && item.type === 'video')
-          return (
-            <VideoEvidencePlayer
-              caption={caption}
-              chapters={readEvidenceChapters(item.metadata)}
-              key={item.id}
-              notes={reviewNotes?.filter((note) => note.evidenceId === item.id)}
-              src={item.fileUrl}
-              onRefreshSource={
-                onRefreshEvidenceUrl ? () => onRefreshEvidenceUrl(item.id) : undefined
-              }
-            />
-          );
+          return <div key={item.id}>{videoContent(item, caption)}</div>;
         if (item.fileUrl && item.type === 'audio')
           return (
             <Flexbox gap={4} key={item.id} width={'100%'}>
@@ -174,7 +182,17 @@ export const EvidenceList = memo<{
               {caption}
             </Flexbox>
           );
-        if (!md && onReviewEvidence && item.fileUrl && IMAGE_EVIDENCE.has(item.type)) {
+        const overlay = overlays?.get(item.id);
+        // Posted screenshot threads must remain readable on touch screens too.
+        const hasImageThreads =
+          item.type === 'screenshot' && overlay?.some((note) => note.threadId);
+        if (
+          !md &&
+          onReviewEvidence &&
+          item.fileUrl &&
+          IMAGE_EVIDENCE.has(item.type) &&
+          !hasImageThreads
+        ) {
           const action = commentAction(item);
           // The tap reviews; the comment shortcut sits beside the button rather
           // than inside it, since a button cannot hold another one.
@@ -216,13 +234,14 @@ export const EvidenceList = memo<{
             </div>
           );
         }
-        const overlay = overlays?.get(item.id);
         if (item.fileUrl && item.type === 'screenshot') {
           const run = [item];
           const start = sorted.indexOf(item);
           for (let index = start + 1; index < sorted.length; index++) {
             const next = sorted[index]!;
             if (pairedIds.has(next.id) || !next.fileUrl || next.type !== 'screenshot') break;
+            if (!md && onReviewEvidence && !overlays?.get(next.id)?.some((note) => note.threadId))
+              break;
             run.push(next);
             consumedScreenshotIds.add(next.id);
           }
@@ -304,6 +323,9 @@ export const EvidenceList = memo<{
             </Flexbox>
           );
         }
+        // A command execution: the record first, then its output — whether the
+        // row carries its transcript inline or as a file.
+        if (item.type === 'terminal') return <TerminalEvidenceCard evidence={item} key={item.id} />;
         if (item.content && markdownTextEvidenceTypes.has(item.type))
           return (
             // An authored alt/description becomes the fold row's title itself —

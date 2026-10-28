@@ -1,3 +1,4 @@
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
 import type {
   CheckpointConfig,
   TaskAutomationMode,
@@ -26,6 +27,8 @@ class TaskService {
     after?: { at: Date | string; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
+    /** Keep completed / canceled tasks only when closed within this window. */
+    completedWithin?: TaskCompletedWindow;
     /** Archived tasks are left out unless this is set. */
     includeArchived?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
@@ -44,6 +47,7 @@ class TaskService {
   groupList = async (params: {
     assigneeAgentId?: string;
     automated?: boolean;
+    completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
     groupBy?: 'assignee' | 'member' | 'priority';
     groups?: Array<{

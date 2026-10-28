@@ -1,12 +1,12 @@
 'use client';
 
 import { ThreadStatus } from '@lobechat/types';
-import { Avatar, Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
-import { Footprints, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
+import { Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { BrainCircuit, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 
 import { formatDuration, formatElapsedTime, isProcessingStatus } from '../../Tasks/shared';
 
@@ -15,10 +15,10 @@ export interface TaskMetrics {
   duration?: number;
   /** Whether metrics are still loading */
   isLoading?: boolean;
+  /** Number of LLM calls made by the task */
+  llmCalls?: number;
   /** Start time timestamp for elapsed time calculation */
   startTime?: number;
-  /** Number of execution steps/blocks */
-  steps?: number;
   /** Total tool calls count */
   toolCalls?: number;
 }
@@ -28,8 +28,9 @@ interface TaskTitleProps {
   agent?: {
     avatar?: string;
     backgroundColor?: string | null;
+    id?: string | null;
   };
-  /** Metrics to display (steps, tool calls, elapsed time) */
+  /** Metrics to display (LLM calls, tool calls, elapsed time) */
   metrics?: TaskMetrics;
   status?: ThreadStatus;
   title?: string;
@@ -81,7 +82,7 @@ interface MetricsDisplayProps {
 
 const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
   const { t } = useTranslation('chat');
-  const { steps, toolCalls, startTime, duration, isLoading } = metrics;
+  const { llmCalls, toolCalls, startTime, duration, isLoading } = metrics;
   const [elapsedTime, setElapsedTime] = useState(0);
 
   const isProcessing = status ? isProcessingStatus(status) : false;
@@ -107,21 +108,21 @@ const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
   // Don't show metrics if loading or no data
   if (isLoading) return null;
 
-  const hasSteps = steps !== undefined && steps > 0;
+  const hasLlmCalls = llmCalls !== undefined && llmCalls > 0;
   const hasToolCalls = toolCalls !== undefined && toolCalls > 0;
   const hasTime = isProcessing ? startTime !== undefined : duration !== undefined;
 
   // Don't render if no metrics to show
-  if (!hasSteps && !hasToolCalls && !hasTime) return null;
+  if (!hasLlmCalls && !hasToolCalls && !hasTime) return null;
 
   return (
     <Flexbox horizontal align="center" gap={8}>
-      {/* Steps */}
-      {hasSteps && (
+      {/* LLM calls */}
+      {hasLlmCalls && (
         <Flexbox horizontal align="center" gap={2}>
-          <Icon color={cssVar.colorTextTertiary} icon={Footprints} size={12} />
+          <Icon color={cssVar.colorTextTertiary} icon={BrainCircuit} size={12} />
           <Text fontSize={12} type="secondary">
-            {steps}
+            {llmCalls}
           </Text>
         </Flexbox>
       )}
@@ -155,8 +156,9 @@ const TaskTitle = memo<TaskTitleProps>(({ title, status, metrics, agent }) => {
     <Flexbox horizontal align="center" gap={6}>
       <TaskStatusIndicator status={status} />
       {agent && (
-        <Avatar
-          avatar={agent.avatar || DEFAULT_AVATAR}
+        <AgentAvatar
+          agentId={agent.id}
+          avatar={agent.avatar}
           background={agent.backgroundColor || undefined}
           shape={'circle'}
           size={20}

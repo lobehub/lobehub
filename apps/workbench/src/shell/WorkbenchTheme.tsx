@@ -12,9 +12,17 @@ import { memo, type PropsWithChildren } from 'react';
 import Image from '@/libs/next/Image';
 import Link from '@/libs/next/Link';
 
-const WorkbenchTheme = memo<PropsWithChildren>(({ children }) => {
+interface WorkbenchThemeProps extends PropsWithChildren {
+  enableCustomFonts?: boolean;
+}
+
+const WorkbenchTheme = memo<WorkbenchThemeProps>(({ children, enableCustomFonts }) => {
   return (
-    <ConfigProvider config={{ aAs: Link, imgAs: Image, imgUnoptimized: true }} motion={m}>
+    <ConfigProvider
+      config={{ aAs: Link, imgAs: Image, imgUnoptimized: true }}
+      enableCustomFonts={enableCustomFonts}
+      motion={m}
+    >
       <div
         className={'workbench-layout'}
         style={{ height: '100%', minHeight: '100dvh', width: '100%' }}

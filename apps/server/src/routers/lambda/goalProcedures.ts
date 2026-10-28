@@ -6,6 +6,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { GoalModel } from '@/database/models/goal';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
+import { GoalSubscriptionService } from '@/server/services/goal/subscriptions';
 
 /** Procedures and helpers shared by `goalRouter` and its spread-in procedure groups. */
 export const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
@@ -17,6 +18,11 @@ export const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
         opts.ctx.workspaceId ?? undefined,
       ),
       goalService: new GoalService(
+        opts.ctx.serverDB,
+        opts.ctx.userId,
+        opts.ctx.workspaceId ?? undefined,
+      ),
+      goalSubscriptionService: new GoalSubscriptionService(
         opts.ctx.serverDB,
         opts.ctx.userId,
         opts.ctx.workspaceId ?? undefined,

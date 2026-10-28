@@ -2,6 +2,7 @@ import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
 import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
   ClientLlmWaitItem,
+  ComposerUserMessage,
   ContextSelection,
   ExecAgentAppContext,
   ExecAgentClientIds,
@@ -148,7 +149,7 @@ export interface ExecAgentTaskParams {
    * live, to tell whether the client never saw it or its stop never landed.
    */
   clientOperations?: ClientOperationSnapshot[];
-  /** Content attached from the conversation, a page or code; persisted on the user message. */
+  /** @deprecated Mirror of `userMessage.metadata.contextSelections` for servers that predate it. */
   contextSelections?: ContextSelection[];
   deviceId?: string;
   existingMessageIds?: string[];
@@ -161,7 +162,7 @@ export interface ExecAgentTaskParams {
    * context so the supervisor run delegates to them instead of answering itself.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
-  /** Page-editor selections, mirrored from `contextSelections` for compatibility. */
+  /** @deprecated Mirror of `userMessage.metadata.pageSelections` for servers that predate it. */
   pageSelections?: PageSelection[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
@@ -192,6 +193,8 @@ export interface ExecAgentTaskParams {
    */
   trigger?: string;
   userInterventionConfig?: UserInterventionConfig;
+  /** The composer-authored part of the new user message; see `ExecAgentParams.userMessage`. */
+  userMessage?: ComposerUserMessage;
 }
 
 /**
@@ -293,6 +296,7 @@ export interface UpdateClientTaskThreadStatusParams {
   error?: string;
   metadata?: {
     totalCost?: number;
+    totalLlmCalls?: number;
     totalMessages?: number;
     totalSteps?: number;
     totalTokens?: number;

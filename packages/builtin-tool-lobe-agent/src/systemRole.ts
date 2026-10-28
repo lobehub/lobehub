@@ -38,6 +38,12 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
 - To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
 
+**Background sub-agents (\`runInBackground: true\`):**
+- By default you wait for a sub-agent's result in the same turn. That is the right choice whenever your next step depends on the result.
+- Set \`runInBackground: true\` only when you have other independent work to do meanwhile, or when the user should not have to wait for this result. The call returns right away with the sub-agent's id.
+- The background result is delivered to you later as a message from the sub-agent wrapped in \`<sub_agent_result>\`; if your turn has already ended, it starts a new turn. Do not poll, sleep, or call the sub-agent again to check on it — continue with your other work, or end your turn and tell the user what is running.
+- When the result arrives, use it to finish what the user asked for; the user has not seen it yet.
+
 **Continuing an earlier sub-agent:**
 - Every sub-agent result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` to send the same sub-agent a new instruction; it resumes with all of its previous work (searches, pages read, tool results) instead of starting over.
 - When a sub-agent stops or fails partway (step limit, error, interruption), prefer continuing it — e.g. ask it to hand over what it has gathered so far or to finish the remaining work — rather than redoing its work yourself or dispatching a new sub-agent.

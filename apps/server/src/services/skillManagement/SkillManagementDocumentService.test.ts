@@ -586,6 +586,53 @@ describe('SkillManagementDocumentService', () => {
     );
   });
 
+  it('falls back to the name selector when a mistyped agent document id is also given (T-507)', async () => {
+    const { service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Name fallback lookup',
+      name: 'dual-gate-review',
+      title: 'Dual Gate Review',
+    });
+
+    // Reproduces the SATO incident: the model passes both selectors but copies
+    // one id character wrong; the stable name selector must still resolve.
+    await expect(
+      service.getSkill({
+        agentDocumentId: '30b88ca8-5c56-4e09-96b9-4610e39c0add',
+        agentId: 'agent-1',
+        includeContent: true,
+        name: 'dual-gate-review',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        bundle: created.bundle,
+        index: created.index,
+        name: 'dual-gate-review',
+      }),
+    );
+  });
+
+  it('stays not-found when the mistyped id has no name selector to fall back on', async () => {
+    const { service } = createService();
+    await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Id only lookup',
+      name: 'id-only-skill',
+      title: 'Id Only Skill',
+    });
+
+    await expect(
+      service.getSkill({
+        agentDocumentId: '30b88ca8-5c56-4e09-96b9-4610e39c0add',
+        agentId: 'agent-1',
+        name: undefined,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('renames bundle identity and synchronizes index frontmatter content', async () => {
     const { agentDocumentModel, documentService, service } = createService();
     const created = await service.createSkill({

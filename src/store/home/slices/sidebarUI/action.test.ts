@@ -202,7 +202,6 @@ describe('createSidebarUISlice', () => {
         await result.current.removeAgent(mockAgentId);
       });
 
-      // removeAgent only removes and refreshes the agent list; session switching is handled in SessionStore.removeSession
       expect(mockSwitchSession).not.toHaveBeenCalledWith(INBOX_SESSION_ID);
     });
   });

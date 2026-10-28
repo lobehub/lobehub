@@ -92,7 +92,14 @@ export class MetricModel {
       .returning();
     if (inserted) return inserted;
 
-    return this.findByKey(params.subjectType, params.subjectId, params.key);
+    const existing = await this.findByKey(params.subjectType, params.subjectId, params.key);
+    if (
+      existing?.subjectType === 'widget' &&
+      (existing.kind !== (params.kind ?? 'gauge') || existing.unit !== (params.unit ?? null))
+    ) {
+      throw new Error('Metric semantics changed: publish a new metric key');
+    }
+    return existing;
   };
 
   findById = async (id: string): Promise<MetricItem | undefined> => {
@@ -169,6 +176,14 @@ export class MetricModel {
   };
 
   update = async (id: string, patch: MetricPatch): Promise<MetricItem | undefined> => {
+    const current = await this.findById(id);
+    if (
+      current?.subjectType === 'widget' &&
+      ((patch.kind !== undefined && patch.kind !== current.kind) ||
+        (patch.unit !== undefined && patch.unit !== current.unit) ||
+        patch.metadata !== undefined)
+    )
+      throw new Error('Widget metric semantics are immutable: publish a new metric key');
     const [row] = await this.db
       .update(metrics)
       .set(patch)

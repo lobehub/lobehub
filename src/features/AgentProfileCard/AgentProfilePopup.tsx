@@ -214,6 +214,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       </div>
     ) : (
       <AgentProfileCard
+        agentId={agentId}
         avatar={merged.avatar}
         backgroundColor={merged.backgroundColor}
         description={merged.description}

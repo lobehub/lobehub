@@ -7,6 +7,10 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
+import {
+  InboxNotProvisionedError,
+  resolveAgentReference,
+} from '@/server/services/agent/resolveReference';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
@@ -70,26 +74,34 @@ export const configRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      if (input.sessionId === INBOX_SESSION_ID) {
-        const item = await ctx.sessionModel.findByIdOrSlug(INBOX_SESSION_ID);
-        // if there is no session for user, create one
-        if (!item) {
-          // if there is no user, return default config
+      if (input.sessionId === INBOX_SESSION_ID || input.sessionId === 'ssn_inbox') {
+        try {
+          const resolved = await resolveAgentReference(
+            input.sessionId,
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          );
+          const config = await ctx.agentService.getAgentConfigById(resolved.agentId);
+          return protectAgentConfig(ctx, resolved.agentId, config);
+        } catch (error) {
+          if (!(error instanceof TRPCError) || !(error.cause instanceof InboxNotProvisionedError))
+            throw error;
           const user = await UserModel.findById(ctx.serverDB, ctx.userId);
           if (!user) return DEFAULT_AGENT_CONFIG;
-
-          const res = await ctx.agentService.createInbox();
-          console.info('create inbox session', res);
+          const config = await ctx.agentService.getBuiltinAgent(INBOX_SESSION_ID);
+          return config?.id ? protectAgentConfig(ctx, config.id, config) : config;
         }
       }
 
-      const session = await ctx.sessionModel.findByIdOrSlug(input.sessionId);
-
-      if (!session) throw new Error(`Session [${input.sessionId}] not found`);
-      const sessionId = session.id;
-
-      const config = await ctx.agentModel.findBySessionId(sessionId);
-      return config?.id ? protectAgentConfig(ctx, config.id, config) : config;
+      const { agentId } = await resolveAgentReference(
+        input.sessionId,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const config = await ctx.agentService.getAgentConfigById(agentId);
+      return protectAgentConfig(ctx, agentId, config);
     }),
   getAgentConfigById: agentProcedure
     .input(
@@ -98,8 +110,14 @@ export const configRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const config = await ctx.agentService.getAgentConfigById(input.agentId);
-      return protectAgentConfig(ctx, input.agentId, config);
+      const { agentId } = await resolveAgentReference(
+        input.agentId,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const config = await ctx.agentService.getAgentConfigById(agentId);
+      return protectAgentConfig(ctx, agentId, config);
     }),
   /**
    * Get a builtin agent by slug, creating it if it doesn't exist.
@@ -126,10 +144,17 @@ export const configRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const resolved = await resolveAgentReference(
+        input.agentId,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const agentId = resolved.agentId;
       // General-access write guard: only `edit` permits collaborative updates.
       await assertCanEditResource({
         db: ctx.serverDB,
-        resourceId: input.agentId,
+        resourceId: agentId,
         resourceType: 'agent',
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
@@ -147,7 +172,7 @@ export const configRouter = router({
 
         if (policyPatch) {
           const canUpdatePolicies =
-            (await ctx.agentModel.existsOwnedById(input.agentId)) ||
+            (await ctx.agentModel.existsOwnedById(agentId)) ||
             (await isWorkspacePrimaryOwner({
               db: ctx.serverDB,
               userId: ctx.userId,
@@ -161,7 +186,7 @@ export const configRouter = router({
       // Collaborative edit lock: reject writes to a workspace agent another
       // member is actively editing. Inert until a client acquires the lock.
       if (ctx.workspaceId) {
-        const blockedBy = await ctx.editLockService.getBlockingHolder('agent', input.agentId);
+        const blockedBy = await ctx.editLockService.getBlockingHolder('agent', agentId);
         if (blockedBy) {
           throw new TRPCError({
             cause: { data: { code: 'DocumentLocked' } },
@@ -173,7 +198,7 @@ export const configRouter = router({
 
       // Use AgentService to update and return the updated agent data
       return ctx.agentService.updateAgentConfig(
-        input.agentId,
+        agentId,
         safeValue,
         input.replaceWorkingDirDeviceIds,
       );

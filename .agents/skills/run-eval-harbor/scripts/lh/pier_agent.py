@@ -90,8 +90,10 @@ class LhPierInstalledAgent(BaseInstalledAgent):
                 host_dir / "package.json", f"{DEV_CLI_DIR}/package.json"
             )
             await environment.upload_dir(host_dir / "dist", f"{DEV_CLI_DIR}/dist")
-        for command in self._lh.run_commands(self.render_instruction(instruction)):
-            await self.exec_as_agent(environment, command=command)
+            await self.exec_as_root(
+                environment, command="/installed-agent/install-lh.sh --install-runtime"
+            )
+        await self._lh.run(environment, self.exec_as_agent, self.render_instruction(instruction))
 
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         status_log = self.logs_dir / "operation-status.jsonl"

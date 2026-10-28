@@ -98,6 +98,8 @@ export interface NewChatGroup {
   pinned?: boolean | null;
   title?: string | null;
   userId: string;
+  /** Visibility forwarded to the existing group creation API. */
+  visibility?: 'private' | 'public';
 }
 
 // Chat Group Item type (independent from schema)

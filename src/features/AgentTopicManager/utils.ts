@@ -5,6 +5,7 @@ import {
 } from '@lobechat/utils/client/topic';
 import dayjs from 'dayjs';
 
+import { TopicTrigger } from '@/const/topic';
 import type { ChatTopic } from '@/types/topic';
 
 import type {
@@ -51,6 +52,8 @@ export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
 };
 
 export const matchesTrigger = (topic: ChatTopic, triggers: TriggerFilter[]): boolean => {
+  // Search can hydrate older cached results before the request revalidates.
+  if (topic.trigger === TopicTrigger.Channel) return false;
   if (triggers.length === 0) return true;
   const effective: TriggerFilter = (topic.trigger as TriggerFilter | null | undefined) ?? 'chat';
   return triggers.includes(effective);
@@ -114,7 +117,12 @@ export const getProjectFilterLabel = (topic: ChatTopic): string | undefined => {
   return source ? getPathName(source) : undefined;
 };
 
-export const getProjectLabel = (topic: ChatTopic): string | undefined => {
+export interface ProjectInfo {
+  branch?: string;
+  path: string;
+}
+
+export const getProjectInfo = (topic: ChatTopic): ProjectInfo | undefined => {
   const source = getTopicWorkingDirectorySourcePath(topic);
   const effective = getTopicWorkingDirectoryEffectivePath(topic);
   const labelPath = effective ?? source;
@@ -122,10 +130,17 @@ export const getProjectLabel = (topic: ChatTopic): string | undefined => {
 
   const label = getPathName(labelPath);
   const sourceName = source ? getPathName(source) : undefined;
-  const pathLabel = sourceName && sourceName !== label ? `${sourceName}/${label}` : label;
-  const branch = topic.metadata?.workingDirectoryConfig?.git?.branch;
+  const path = sourceName && sourceName !== label ? `${sourceName}/${label}` : label;
+  const branch = topic.metadata?.workingDirectoryConfig?.git?.branch || undefined;
 
-  return branch ? `${pathLabel} · ${branch}` : pathLabel;
+  return { branch, path };
+};
+
+export const getProjectLabel = (topic: ChatTopic): string | undefined => {
+  const info = getProjectInfo(topic);
+  if (!info) return undefined;
+
+  return info.branch ? `${info.path} · ${info.branch}` : info.path;
 };
 
 /** Client-side platform display names (server `PlatformDefinition.name`). */

@@ -6,6 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ExportLayout from '../components/ExportLayout';
+import { flattenExportMessages } from '../flattenExportMessages';
 import { useShareData } from '../ShareDataProvider';
 import { useExportMessages } from '../useExportMessages';
 import Preview from './Preview';
@@ -24,14 +25,16 @@ const ShareText = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
 
-  const { displayMessages, systemRole, title } = useShareData();
-  // Markdown serializes each tool's `content` too, so the same omitted rows
-  // would export as empty code blocks — see `useExportMessages`.
+  const { dbMessages, displayMessages, systemRole, title } = useShareData();
+  // Assistant turns are folded into groups in the display list — unfold them,
+  // or only the user's messages are exported. Markdown serializes each tool's
+  // `content` too, so the same omitted rows would export as empty code blocks
+  // — see `useExportMessages`.
   const {
     isHydrating,
     isIncomplete,
     messages: exportMessages,
-  } = useExportMessages(displayMessages);
+  } = useExportMessages(flattenExportMessages(displayMessages, dbMessages));
   const content = generateMarkdown({
     ...fieldValue,
     messages: exportMessages,

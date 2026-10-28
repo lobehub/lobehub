@@ -15,11 +15,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  IndexedDBQueryProjectionStorage,
-  LocalStorageQueryProjectionStorage,
-} from '@/libs/queryProjectionStorage';
-import { cacheScope } from '@/libs/replica';
+import { AppIndexedDBStorage, AppLocalStorage, cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
@@ -53,10 +49,10 @@ const wrapper = ({ children }: PropsWithChildren) =>
 /** The network never answers: whatever paints came from the device. */
 const pending = () => new Promise<never>(() => {}) as Promise<any>;
 
-const availableAgentsStorage = new IndexedDBQueryProjectionStorage<unknown>({
+const availableAgentsStorage = new AppIndexedDBStorage<unknown>({
   namespace: 'replica:availableAgents:v1',
 });
-const capabilityStorage = new LocalStorageQueryProjectionStorage<unknown>({
+const capabilityStorage = new AppLocalStorage<unknown>({
   namespace: 'replica:heteroServerDefaultCapability:v1',
 });
 

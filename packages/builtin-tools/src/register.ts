@@ -29,6 +29,12 @@ import {
   BrowserManifest,
   BrowserRenders,
 } from '@lobechat/builtin-tool-browser/client';
+import { CanvasInspectors, CanvasManifest } from '@lobechat/builtin-tool-canvas/client';
+import {
+  ChannelInspectors,
+  ChannelManifest,
+  ChannelRenders,
+} from '@lobechat/builtin-tool-channel/client';
 import {
   ClaudeCodeApiName,
   ClaudeCodeIdentifier,
@@ -58,6 +64,7 @@ import {
   GoalRenders,
   GoalSupervisorInspectors,
   GoalSupervisorManifest,
+  LegacyGoalIdentifier,
 } from '@lobechat/builtin-tool-goal/client';
 import {
   GroupAgentBuilderInspectors,
@@ -261,6 +268,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [ChannelManifest.identifier]: ChannelRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
@@ -280,6 +288,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
     [GoalManifest.identifier]: GoalRenders as Record<string, BuiltinRender>,
+    // Goal tool calls persisted before the rename to `builtin-goal`.
+    [LegacyGoalIdentifier]: GoalRenders as Record<string, BuiltinRender>,
     [ImageGenerationManifest.identifier]: ImageGenerationRenders as Record<string, BuiltinRender>,
     [VideoGenerationManifest.identifier]: VideoGenerationRenders as Record<string, BuiltinRender>,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
@@ -311,6 +321,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [ChannelManifest.identifier]: ChannelInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.
     // New manifests and execution routes only advertise lobe-computer-use.
@@ -343,6 +354,8 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [GoalManifest.identifier]: GoalInspectors as Record<string, BuiltinInspector>,
+    // Goal tool calls persisted before the rename to `builtin-goal`.
+    [LegacyGoalIdentifier]: GoalInspectors as Record<string, BuiltinInspector>,
     [GoalSupervisorManifest.identifier]: GoalSupervisorInspectors,
     [ImageGenerationManifest.identifier]: ImageGenerationInspectors as Record<
       string,
@@ -367,6 +380,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+    [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
@@ -441,6 +455,8 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [GoalManifest.identifier]: GoalInterventions as Record<string, BuiltinIntervention>,
+    // Goal tool calls persisted before the rename to `builtin-goal`.
+    [LegacyGoalIdentifier]: GoalInterventions as Record<string, BuiltinIntervention>,
     [LobeAgentManifest.identifier]: LobeAgentInterventions as Record<string, BuiltinIntervention>,
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,

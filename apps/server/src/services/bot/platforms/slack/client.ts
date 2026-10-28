@@ -17,6 +17,7 @@ import {
   messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
+  type ReplyTargets,
   type UsageStats,
   type ValidationResult,
 } from '../types';
@@ -42,6 +43,37 @@ function extractChannelId(platformThreadId: string): string {
 
 function extractThreadTs(platformThreadId: string): string | undefined {
   return platformThreadId.split(':')[2];
+}
+
+/**
+ * A top-level channel message arrives keyed by the thread under it (`slack:<channel>:<ts>`: the
+ * adapter uses `thread_ts ?? ts`, and the message id is its own `ts`), so it is top-level exactly
+ * when the two match. Its reply can stay in that thread or go to the channel (`slack:<channel>`,
+ * posted without `thread_ts`). DMs and replies inside a thread answer where they are.
+ */
+function slackReplyTargets(
+  platformThreadId: string,
+  message: { id?: string },
+): ReplyTargets | undefined {
+  const channelId = extractChannelId(platformThreadId);
+  const threadTs = extractThreadTs(platformThreadId);
+  if (!channelId || !threadTs || channelId.startsWith('D')) return undefined;
+  if (message.id !== threadTs) return undefined;
+
+  return {
+    channel: `slack:${channelId}`,
+    // A Slack thread has no name, and it exists once the first reply lands in it.
+    namesThread: false,
+    openThread: async () => platformThreadId,
+  };
+}
+
+/**
+ * `slack:<channel>` is a reply posted at the top level of the channel. Subscribing it would route
+ * every later message in the channel to the bot, so only a thread is subscribed.
+ */
+function isSlackSubscribable(platformThreadId: string): boolean {
+  return platformThreadId.split(':').length !== 2;
 }
 
 // ---------- Shared runtime operations mixin ----------
@@ -226,6 +258,17 @@ class SlackWebhookClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     return createMessenger(this.config, platformThreadId);
+  }
+
+  getReplyTargets(
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    return slackReplyTargets(platformThreadId, message);
+  }
+
+  shouldSubscribe(platformThreadId: string): boolean {
+    return isSlackSubscribable(platformThreadId);
   }
 
   async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
@@ -425,6 +468,17 @@ class SlackSocketModeClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     return createMessenger(this.config, platformThreadId);
+  }
+
+  getReplyTargets(
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    return slackReplyTargets(platformThreadId, message);
+  }
+
+  shouldSubscribe(platformThreadId: string): boolean {
+    return isSlackSubscribable(platformThreadId);
   }
 
   async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {

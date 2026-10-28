@@ -2,41 +2,31 @@
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
 import type { GoogleGenAIOptions } from '@google/genai';
-import type {
-  ChatModelCard,
-  ModelPricingContext,
-  RouterRuntimeRequestContext,
-} from '@lobechat/types';
+import type { ModelPricingContext, RouterRuntimeRequestContext } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
+import { createTimingHelpers, getDurationMs } from '../../utils/timing';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
-import type { ClientOptions } from 'openai';
-import type OpenAI from 'openai';
-import type { Stream } from 'openai/streaming';
 
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeVertexAI } from '../../providers/vertexai';
 import type {
   ASROptions,
   ASRPayload,
-  ChatCompletionErrorPayload,
   ChatMethodOptions,
-  ChatStreamCallbacks,
   ChatStreamPayload,
   CreateImageMethodOptions,
   CreateImagePayload,
-  CreateImageResponse,
   CreateVideoMethodOptions,
   CreateVideoPayload,
-  CreateVideoResult,
+  DecisionOptions,
+  DecisionPayload,
+  DecisionQuestions,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
   GenerateObjectPayload,
   HandleCreateVideoWebhookPayload,
-  HandleCreateVideoWebhookResult,
-  ILobeAgentRuntimeErrorType,
   TextToSpeechPayload,
   VideoPollingRoute,
 } from '../../types';
@@ -48,72 +38,33 @@ import { safeParseJSON } from '../../utils/safeParseJSON';
 import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from '../BaseAI';
-import type {
-  CreateImageOptions,
-  CreateVideoOptions,
-  CustomClientOptions,
-} from '../openaiCompatibleFactory';
-import type { ApiType, RuntimeClass } from './apiTypes';
+import type { ApiType } from './apiTypes';
 import { getChatAttemptObservation, observeChatAttempt } from './chatAttempt';
+import { createChatAttemptFallbackCheck, resolveHoldReasoning } from './chatFallbackHooks';
 import type { ChatStreamFallbackAttempt } from './chatStreamFallback';
 import { createChatStreamFallbackResponse } from './chatStreamFallback';
-import type { RouteAttemptFinished, RouteAttemptResult, RouteAttemptStart } from './routeAttempt';
+import { runDecision } from './decisionRuntime';
+import type { RouteAttemptResult, RouteAttemptStart } from './routeAttempt';
 import { createRouteRequestTasks } from './routeRequestTasks';
+import type {
+  CreateRouterRuntimeOptions,
+  LobeClientOptions,
+  RouterInstance,
+  RouterOptionItem,
+  RouterRuntimeMethod,
+  Routers,
+} from './routerOptions';
 
 export type { RouteAttemptResult } from './routeAttempt';
+export type {
+  CreateRouterRuntimeOptions,
+  RouterRuntimeMethod,
+  RouteSuccessParams,
+  SortRouterOptionsParams,
+} from './routerOptions';
 
 const log = debug('lobe-model-runtime:router-runtime');
 const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
-
-interface ProviderIniOptions extends Record<string, any> {
-  accessKeyId?: string;
-  accessKeySecret?: string;
-  apiKey?: string;
-  apiVersion?: string;
-  baseURL?: string;
-  baseURLOrAccountID?: string;
-  dangerouslyAllowBrowser?: boolean;
-  modelIdMapping?: Record<string, string>;
-  region?: string;
-  sdkType?: string;
-  sessionToken?: string;
-}
-
-/**
- * Router option item used for inference.
- * When `options` is an array, items are tried in order for chat fallback.
- * `apiType` allows switching provider when falling back.
- */
-interface RouterOptionItem extends ProviderIniOptions {
-  apiType?: ApiType;
-  id?: string;
-  remark?: string;
-  /** Relative share of new user bindings; zero keeps the channel as fallback only. */
-  weight?: number;
-}
-
-type RouterOptions = RouterOptionItem | RouterOptionItem[];
-
-interface RouterInstance {
-  apiType: ApiType;
-  baseURLPattern?: RegExp;
-  id?: string;
-  models?: string[];
-  options: RouterOptions;
-  runtime?: RuntimeClass;
-}
-
-// OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
-// passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
-type LobeClientOptions = Omit<ClientOptions, 'apiKey'> & { apiKey?: string };
-type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions & T;
-
-type Routers =
-  | RouterInstance[]
-  | ((
-      options: LobeClientOptions & Record<string, any>,
-      runtimeContext: RouterRuntimeRequestContext,
-    ) => RouterInstance[] | Promise<RouterInstance[]>);
 
 interface RouteAttemptMetadata {
   apiType: string;
@@ -151,122 +102,6 @@ interface RouteAttemptContextValidationParams extends RouteAttemptContext {
   channelId?: string;
   model: string;
   routerId?: string;
-}
-
-export interface SortRouterOptionsParams {
-  metadata?: Record<string, unknown>;
-  method: RouterRuntimeMethod;
-  model: string;
-  options: RouterOptionItem[];
-  routerId?: string;
-  userId?: string;
-}
-
-export interface RouteSuccessParams {
-  channelId?: string;
-  channelWeight?: number;
-  firstChannelId?: string;
-  method: RouterRuntimeMethod;
-  model: string;
-  routeRequestManaged?: boolean;
-  routerId?: string;
-  trackDeferredWork?: (task: Promise<void>) => void;
-  userId?: string;
-  weighted: boolean;
-}
-
-export type RouterRuntimeMethod =
-  | 'chat'
-  | 'createImage'
-  | 'createVideo'
-  | 'embeddings'
-  | 'generateObject'
-  | 'textToSpeech'
-  | 'transcribe';
-
-export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
-  apiKey?: string;
-  chatCompletion?: {
-    excludeUsage?: boolean;
-    handleError?: (
-      error: any,
-      options: ConstructorOptions<T>,
-    ) => Omit<ChatCompletionErrorPayload, 'provider'> | undefined;
-    handlePayload?: (
-      payload: ChatStreamPayload,
-      options: ConstructorOptions<T>,
-    ) => OpenAI.ChatCompletionCreateParamsStreaming;
-    handleStream?: (
-      stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
-      { callbacks, inputStartAt }: { callbacks?: ChatStreamCallbacks; inputStartAt?: number },
-    ) => ReadableStream;
-    handleStreamBizErrorType?: (error: {
-      message: string;
-      name: string;
-    }) => ILobeAgentRuntimeErrorType | undefined;
-    handleTransformResponseToStream?: (
-      data: OpenAI.ChatCompletion,
-    ) => ReadableStream<OpenAI.ChatCompletionChunk>;
-    noUserId?: boolean;
-  };
-  constructorOptions?: ConstructorOptions<T>;
-  createImage?: (
-    payload: CreateImagePayload,
-    options: CreateImageOptions,
-  ) => Promise<CreateImageResponse>;
-  createVideo?: (
-    payload: CreateVideoPayload,
-    options: CreateVideoOptions,
-  ) => Promise<CreateVideoResult>;
-  customClient?: CustomClientOptions<T>;
-  debug?: {
-    chatCompletion: () => boolean;
-    responses?: () => boolean;
-  };
-  defaultHeaders?: Record<string, any>;
-  errorType?: {
-    bizError: ILobeAgentRuntimeErrorType;
-    invalidAPIKey: ILobeAgentRuntimeErrorType;
-  };
-  handleCreateVideoWebhook?: (
-    payload: HandleCreateVideoWebhookPayload,
-    options: CreateVideoOptions,
-  ) => Promise<HandleCreateVideoWebhookResult>;
-  id: string;
-  models?:
-    | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
-    | {
-        transformModel?: (model: OpenAI.Model) => ChatModelCard;
-      };
-  onRouteAttempt?: (result: RouteAttemptResult) => Promise<void>;
-  onRouteAttemptFinished?: (result: RouteAttemptFinished) => Promise<void>;
-  /** Awaited before returning so a successful fallback can update routing affinity. */
-  onRouteSuccess?: (result: RouteSuccessParams) => void | Promise<void>;
-  responses?: {
-    handlePayload?: (
-      payload: ChatStreamPayload,
-      options: ConstructorOptions<T>,
-    ) => ChatStreamPayload;
-  };
-  routers: Routers;
-  /** Register once while the request context is available. */
-  scheduleRouteRequestSettled?: (settled: Promise<void>) => void | Promise<void>;
-  shouldFallbackChatAttempt?: (result: RouteAttemptFinished) => boolean | Promise<boolean>;
-  shouldStopFallback?: (params: {
-    error: unknown;
-    metadata?: Record<string, unknown>;
-    model: string;
-    optionIndex: number;
-  }) => boolean | Promise<boolean>;
-  /**
-   * Reorder fallback options before each request (e.g. demote temporarily
-   * unhealthy channels). Must return a permutation of the input options;
-   * any other result (wrong length, foreign items, thrown error) is ignored
-   * so a misbehaving hook can never reduce availability.
-   */
-  sortRouterOptions?: (
-    params: SortRouterOptionsParams,
-  ) => RouterOptionItem[] | Promise<RouterOptionItem[]>;
 }
 
 export const createRouterRuntime = ({
@@ -307,7 +142,10 @@ export const createRouterRuntime = ({
       const trigger = metadata?.trigger;
       const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : undefined;
 
-      if (this._id !== 'lobehub' || (effectiveUserId && trigger)) return effectiveUserId;
+      /** Pre-auth flows have no user id yet, so their stable trace id identifies the request. */
+      if (this._id !== 'lobehub' || ((effectiveUserId || traceId) && trigger)) {
+        return effectiveUserId;
+      }
       if (process.env.NODE_ENV !== 'development') return effectiveUserId;
 
       const diagnostic = {
@@ -702,6 +540,8 @@ export const createRouterRuntime = ({
         }
       };
 
+      const holdReasoning = await resolveHoldReasoning(params.isImageOutputModel, payload.model);
+
       const startAttempt = async (optionIndex: number): Promise<ChatStreamFallbackAttempt> => {
         const optionItem = routerOptions[optionIndex];
         const {
@@ -747,7 +587,7 @@ export const createRouterRuntime = ({
               if (routeTasks) routeTasks.track(Promise.resolve(task));
               else return task;
             },
-            { deferCallbacks: true },
+            { deferCallbacks: true, holdReasoning },
           );
           const durationMs = Date.now() - attempt.startedAt;
           reportReturnedAttempt(attempt, {
@@ -833,14 +673,7 @@ export const createRouterRuntime = ({
       try {
         return await createChatStreamFallbackResponse({
           onSettled: routeTasks?.settle,
-          shouldFallback: async (result) => {
-            try {
-              return Boolean(await params.shouldFallbackChatAttempt?.(result));
-            } catch (error) {
-              log('shouldFallbackChatAttempt callback error: %O', error);
-              return false;
-            }
-          },
+          shouldFallback: createChatAttemptFallbackCheck(params.shouldFallbackChatAttempt),
           startAttempt,
           totalAttempts: routerOptions.length,
         });
@@ -1380,6 +1213,22 @@ export const createRouterRuntime = ({
         payload.model,
         (runtime) => runtime.transcribe!(payload, options),
         { metadata: options?.metadata, method: 'transcribe', user: options?.user },
+      );
+    }
+
+    async decide<Q extends DecisionQuestions>(
+      payload: DecisionPayload<Q>,
+      options?: DecisionOptions,
+    ) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runDecision(runtime, payload, options, this._id),
+        {
+          metadata: options?.metadata,
+          method: 'decide',
+          pricingContext: options?.pricingContext,
+          user: options?.user,
+        },
       );
     }
   };

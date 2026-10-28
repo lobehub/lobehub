@@ -159,7 +159,17 @@ const actionsFor = (
     // A form resolved by approval (the secure credential form): the card
     // approves after its own write, so there are no arguments to edit and no
     // allow-list entry to remember.
-    return ['approve_tool', 'reject_continue', 'stop'];
+    //
+    // `approve_tool` must NOT be offered here. The form IS the approval: it
+    // writes the secret to the credential store before the card approves, and
+    // the executor only confirms the key exists afterwards. An approval that
+    // skips the form (IM bot / push action) therefore approves a call whose
+    // credential was never entered — the run gets `CredentialNotFound`, the
+    // agent re-requests, and the user is stuck in an approve-without-form
+    // loop. Web already gates this (card-only resolution); the notification
+    // surface must fail closed the same way, leaving only reject/stop so the
+    // run can continue without the secret.
+    return ['reject_continue', 'stop'];
   }
 
   if (interactionKind === 'question') {

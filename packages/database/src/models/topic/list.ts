@@ -22,8 +22,10 @@ import {
 } from 'drizzle-orm';
 
 import { agentOperations, agents, chatGroups, messages, topics } from '../../schemas';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
+import { topicHasGoal } from '../topicGoal';
 import type { TopicModelContext } from './context';
 import type { QueryTopicParams, TopicListItem } from './types';
 
@@ -75,6 +77,8 @@ export const query = async (
     pageSize = 9999,
     groupId,
     isInbox,
+    legacySessionId,
+    onlyMine,
     sortBy,
     timing,
     triggers,
@@ -184,6 +188,9 @@ export const query = async (
     excludeStatuses && excludeStatuses.length > 0
       ? or(isNull(topics.status), not(inArray(topics.status, excludeStatuses as ChatTopicStatus[])))
       : undefined;
+  // In a workspace `ownership()` matches every member's rows; this narrows the
+  // list to the caller's own topics.
+  const onlyMineCondition = onlyMine ? eq(topics.userId, ctx.userId) : undefined;
   // Topics created before the marker existed carry neither key and therefore
   // match no target — they cannot: what they configured was never recorded
   // anywhere in the row. `topics_agent_id_idx` still drives the scan, so the
@@ -197,11 +204,13 @@ export const query = async (
     const whereCondition = and(
       ctx.ownership(),
       ctx.notShareVisitor(),
+      notChannelTopic(),
       eq(topics.groupId, groupId),
       includeTriggerCondition,
       excludeTriggerCondition,
       triggerCondition,
       excludeStatusCondition,
+      onlyMineCondition,
     );
 
     const [items, totalResult] = await Promise.all([
@@ -270,22 +279,27 @@ export const query = async (
   // inbox agent additionally adopts very old orphan rows where every owner
   // column (session / group / agent) is null.
   if (agentId) {
-    const agentCondition = isInbox
-      ? or(
-          eq(topics.agentId, agentId),
-          and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
-        )
-      : eq(topics.agentId, agentId);
+    const agentCondition = or(
+      eq(topics.agentId, agentId),
+      legacySessionId
+        ? and(isNull(topics.agentId), eq(topics.sessionId, legacySessionId))
+        : undefined,
+      isInbox
+        ? and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId))
+        : undefined,
+    );
 
     const agentWhere = and(
       ctx.ownership(),
       ctx.notShareVisitor(),
+      notChannelTopic(),
       agentCondition,
       editingTargetCondition,
       includeTriggerCondition,
       excludeTriggerCondition,
       triggerCondition,
       excludeStatusCondition,
+      onlyMineCondition,
     );
 
     const [items, totalResult] = await Promise.all([
@@ -299,6 +313,8 @@ export const query = async (
               completedAt: topics.completedAt,
               createdAt: topics.createdAt,
               favorite: topics.favorite,
+              // Marks the goal's planning conversation in the agent sidebar.
+              hasGoal: topicHasGoal(ctx.db, ctx),
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topicMetadataWithCreator(ctx.db, ctx.messageOwnership()),
@@ -355,11 +371,13 @@ export const query = async (
   const whereCondition = and(
     ctx.ownership(),
     ctx.notShareVisitor(),
+    notChannelTopic(),
     ctx.matchContainer(containerId),
     includeTriggerCondition,
     excludeTriggerCondition,
     triggerCondition,
     excludeStatusCondition,
+    onlyMineCondition,
   );
 
   const [items, totalResult] = await Promise.all([
@@ -476,6 +494,7 @@ export const queryTopics = async (
   const where = and(
     ctx.ownership(),
     ctx.notShareVisitor(),
+    notChannelTopic(),
     visibleParentWhere,
     statuses && statuses.length > 0
       ? inArray(topics.status, statuses as ChatTopicStatus[])

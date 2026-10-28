@@ -6,10 +6,12 @@ import {
 } from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
 import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
+import { toRecord } from '@lobechat/utils/object';
 import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
+import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -90,10 +92,25 @@ class MCPService {
         );
         return deserializeMcpIpcPayload<MCPToolCallResult>(result);
       }
-      return (await lambdaClient.connector.callTool.mutate(
-        { args, identifier, toolName: apiName },
-        { signal },
-      )) as MCPToolCallResult;
+      try {
+        return (await lambdaClient.connector.callTool.mutate(
+          { args, identifier, toolName: apiName },
+          { signal },
+        )) as MCPToolCallResult;
+      } catch (error) {
+        const data = toRecord(toRecord(error)?.data)?.errorData;
+        const type = getMCPConnectionErrorType({ data });
+        if (!type) throw error;
+        // Keep expected upstream connection errors visible in tool cards. An
+        // unrelated connector or LobeHub authentication failure still throws.
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: message,
+          error: { message, type },
+          state: { content: [{ text: message, type: 'text' }], isError: true },
+          success: false,
+        } satisfies MCPToolCallResult;
+      }
     }
 
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);

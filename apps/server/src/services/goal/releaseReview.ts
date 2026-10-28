@@ -19,8 +19,8 @@ import type {
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { BatchPlanSkillService } from './batchPlanSkill';
@@ -190,7 +190,7 @@ export class GoalReleaseReview {
     // Same claim as the pattern break: overlapping advances can both see the
     // passed gate, and only the first may open the question.
     const claim = await this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const locked = await goalModel.lockById(goalId);
       const current = locked?.config?.rolloutState;
       if (!locked || !current) return undefined;
@@ -298,7 +298,7 @@ export class GoalReleaseReview {
         graph.goal.config?.rolloutState?.releaseGateAcceptanceId,
       );
       await this.db.transaction(async (tx) => {
-        const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+        const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
         const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
         if (current?.phase !== 'release_review' || current.releaseReviewNodeId !== gateNodeId)
           return;
@@ -324,7 +324,7 @@ export class GoalReleaseReview {
     optionId: ReleaseOption,
     resolution?: string,
   ): Promise<string> => {
-    const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findByNode(
+    const goal = await new GoalRepository(this.db, this.userId, this.workspaceId).findByNode(
       subjectNodeId,
     );
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
@@ -393,7 +393,7 @@ export class GoalReleaseReview {
         message: 'Revising the recipe needs a correction',
       });
     const moved = await this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const locked = await goalModel.lockById(goalId);
       const current = locked?.config?.rolloutState;
       if (
@@ -509,7 +509,7 @@ export class GoalReleaseReview {
     const planSkill = version === undefined ? undefined : state.planSkill;
     const reopened: string[] = [];
     const applied = await this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
       if (current?.phase !== 'plan_revision' || !current.pendingRevision?.revisedRecipe)
         return false;
@@ -592,7 +592,7 @@ export class GoalReleaseReview {
     resolution: string | undefined,
   ) => {
     const resolved = await this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
       if (current?.phase !== 'release_review') return undefined;
       const answered = await new GoalGraphModel(tx, this.userId, this.workspaceId).resolveDecision(
@@ -644,7 +644,7 @@ export class GoalReleaseReview {
     const wave = roster.slice(released, released + waveSize);
 
     if (!wave.length) {
-      await new GoalModel(this.db, this.userId, this.workspaceId).updateRolloutState(goalId, {
+      await new GoalRepository(this.db, this.userId, this.workspaceId).updateRolloutState(goalId, {
         ...state,
         phase: 'done',
       });
@@ -657,7 +657,7 @@ export class GoalReleaseReview {
     // advance read it.
     const created: GoalAdvanceEffect[] = [];
     const message = await this.db.transaction(async (tx) => {
-      const goalModel = new GoalModel(tx, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(tx, this.userId, this.workspaceId);
       const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
       if (
         !current ||

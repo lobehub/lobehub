@@ -17,7 +17,7 @@ import {
   SteerQueueWriteUnknownError,
 } from '@/server/services/redis/steerQueue';
 
-import { ExecAgentFieldsSchema } from './aiAgent/execSchemas';
+import { ExecAgentFieldsSchema, foldLegacyUserMessageFields } from './aiAgent/execSchemas';
 import { assertCanUseAgentRunConversation } from './aiAgent/guards';
 import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './aiAgent/utils';
 
@@ -165,7 +165,8 @@ export const agentSteerQueueRouter = router({
       createdAt: Date.now(),
       id: input.id ?? randomUUID(),
       request: {
-        ...request,
+        // A client from before `userMessage` sends the top-level selection fields.
+        ...foldLegacyUserMessageFields(request),
         acceptsFileWorks: acceptsFileWorksOf(streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(streamFeatures),
         // A follow-up continues the conversation it was typed into; it never

@@ -50,6 +50,20 @@ const isAgentHiddenFromSidebar =
 /** Per-member sidebar sections layout for the active workspace. */
 const sidebarLayout = (s: UserStore) => s.workspaceUserPreference.sidebar;
 
+/**
+ * Whether topic sidebars list only the caller's own topics in `workspaceId`
+ * (the active one). The loaded bucket can still belong to the previous
+ * workspace right after a switch — back to personal mode included — so it only
+ * counts when it was loaded for this workspace. Always false in personal mode,
+ * where every topic is the caller's.
+ */
+const topicOnlyMine =
+  (workspaceId: string | null) =>
+  (s: UserStore): boolean =>
+    !!workspaceId &&
+    s.workspaceUserPreferenceWorkspaceId === workspaceId &&
+    !!s.workspaceUserPreference.topicOnlyMine;
+
 /** The workspace whose preference row is currently loaded (null = not yet fetched). */
 const preferenceWorkspaceId = (s: UserStore) => s.workspaceUserPreferenceWorkspaceId;
 
@@ -62,4 +76,5 @@ export const workspaceUserSettingsSelectors = {
   sidebarHiddenAgentIds,
   sidebarHiddenGroupIds,
   sidebarLayout,
+  topicOnlyMine,
 };

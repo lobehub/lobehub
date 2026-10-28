@@ -14,16 +14,19 @@ const log = debug('lobe-server:agent:bearer-secret-auth');
  * - Returns `401` on header mismatch.
  */
 export const bearerSecretAuth =
-  (getSecret: () => string | undefined): MiddlewareHandler =>
+  (getSecret: () => string | readonly (string | undefined)[] | undefined): MiddlewareHandler =>
   async (c, next) => {
-    const secret = getSecret();
-    if (!secret) {
+    const configured = getSecret();
+    const secrets = (Array.isArray(configured) ? configured : [configured]).filter(
+      (secret): secret is string => !!secret?.trim(),
+    );
+    if (secrets.length === 0) {
       log('Secret is not configured for %s', c.req.path);
       return c.json({ error: 'Service not configured' }, 503);
     }
 
     const authHeader = c.req.header('authorization');
-    if (authHeader !== `Bearer ${secret}`) {
+    if (!secrets.some((secret) => authHeader === `Bearer ${secret}`)) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 

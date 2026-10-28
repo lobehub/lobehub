@@ -4,7 +4,7 @@ import type {
   AcceptanceCheckReviewAction,
   AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
-  AcceptanceSubjectType,
+  CreatableAcceptanceSubjectType,
   ReviewAdjudication,
   ReviewProposalEdit,
   VerifierType,
@@ -132,6 +132,13 @@ export interface VerifyStateResponse {
 export type VerifyEvidenceWithUrl = VerifyEvidence & {
   fileName: string | null;
   fileUrl: string | null;
+  /** `terminal` evidence only: signed URLs for the stdout / stderr / output / recording files. */
+  terminalArtifacts?: Partial<
+    Record<
+      'cast' | 'output' | 'stderr' | 'stdout',
+      { fileUrl: string | null; sha256: string; size: number }
+    >
+  >;
 };
 
 /** One check result plus the evidence artifacts attached to it. */
@@ -184,19 +191,19 @@ export class VerifyService {
     lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
 
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
-  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+  getAcceptanceBySubject = (subjectType: CreatableAcceptanceSubjectType, subjectId: string) =>
     lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
 
   /** Persist a subject's standing acceptance checklist (topic tray). */
   saveAcceptanceChecklist = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     checklist: AcceptanceChecklistItem[],
   ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
 
   /** Set/update a subject's acceptance goal (the one-sentence outcome). */
   saveAcceptanceGoal = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
@@ -237,7 +244,7 @@ export class VerifyService {
    * per-row state must ask about its own subjects instead.
    */
   listAcceptanceStatuses = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectIds: string[],
   ): Promise<Array<{ status: string; subjectId: string }>> =>
     lambdaClient.acceptance.listStatusesBySubjects.query({ subjectIds, subjectType });
@@ -325,6 +332,9 @@ export class VerifyService {
 
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
+  requestAcceptanceRepair = (id: string, comment?: string) =>
+    lambdaClient.acceptance.requestRepair.mutate({ id, comment });
 
   /** Rename the acceptance's sidebar entry (a metadata title override). */
   renameAcceptance = (id: string, title: string) =>

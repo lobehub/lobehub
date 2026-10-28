@@ -53,6 +53,7 @@ export interface HeteroDispatchInput {
   pinnedHeterogeneousTopicSources?: HeterogeneousRuntimePinSources;
   requestedDeviceId?: string;
   requestTrigger?: RequestTrigger;
+  reservedOperationId?: string;
   runAttachments: Pick<RunAttachments, 'audioList' | 'fileList' | 'imageList' | 'videoList'>;
   /** Ids of the rows THIS turn just persisted (excluded from recovery history). */
   selfMessageIds: Set<string>;

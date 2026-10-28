@@ -1,10 +1,11 @@
 'use client';
 
+import { findLatestWorkRootOperationId } from '@lobechat/conversation-flow';
 import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
 import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
-import { memo, Suspense, useCallback, useMemo } from 'react';
+import { Fragment, memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -31,7 +32,6 @@ import {
   useConversationStore,
 } from '../../store';
 import type { SteerContinuation } from '../../store/slices/data/steerChains';
-import { getOperationFinalRootId } from '../../store/slices/data/workSummaries';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
@@ -49,8 +49,10 @@ import SignalCallbacks from '../SignalCallbacks';
 import FileListViewer from '../User/components/FileListViewer';
 import Group from './components/Group';
 import { resolveWorkflowExpandLevel } from './components/segments';
+import TaskCompletionNotice from './components/TaskCompletionNotice';
 import type { WorkflowExpandLevelDefault } from './components/WorkflowCollapse';
 import { buildContinuationChains, collectSignalCallbacks } from './utils/continuations';
+import { resolveTaskCompletionSource } from './utils/taskCompletionSource';
 
 const EditState = dynamic(() => import('./components/EditState'), {
   ssr: false,
@@ -62,21 +64,6 @@ const actionBarHolder = (
     style={{ height: '28px' }}
   />
 );
-
-const findLatestWorkRootOperationId = (
-  metadata?: { work?: { rootOperationId?: unknown } } | null,
-  children?: AssistantContentBlock[],
-  taskCompletions?: AssistantContentBlock[],
-) => {
-  const blocks = [...(children ?? []), ...(taskCompletions ?? [])];
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const rootOperationId = getOperationFinalRootId(blocks[index]?.metadata);
-    if (rootOperationId) return rootOperationId;
-  }
-
-  return getOperationFinalRootId(metadata);
-};
 
 interface GroupMessageProps {
   /** Later turns steered onto this one, rendered as one continuous chain. */
@@ -144,6 +131,22 @@ const GroupMessage = memo<GroupMessageProps>(
     const allChildren = useMemo(
       () => [...(children ?? []), ...chains.flatMap((chain) => chain.blocks)],
       [chains, children],
+    );
+    // One Group per wake-up turn, each preceded by a notice naming the tool
+    // whose completion woke it. The block arrays depend on the completions
+    // only, so the main chain streaming does not re-render those Groups.
+    const completionBlocks = useMemo(
+      () =>
+        ((taskCompletions as AssistantContentBlock[] | undefined) ?? []).map((block) => [block]),
+      [taskCompletions],
+    );
+    const completionItems = useMemo(
+      () =>
+        completionBlocks.map((blocks: AssistantContentBlock[]) => ({
+          blocks,
+          source: resolveTaskCompletionSource(blocks[0]!, allChildren),
+        })),
+      [allChildren, completionBlocks],
     );
 
     // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
@@ -299,6 +302,7 @@ const GroupMessage = memo<GroupMessageProps>(
         // The supervisor row is labelled by the group, not by the agent behind it —
         // drop `name` too, or the renderer's name-first resolution would surface the
         // agent's personal name over the group title.
+        agentId={agentId ?? null}
         avatar={isSupervisor ? { ...avatar, name: undefined, title: groupMeta.title } : avatar}
         id={id}
         placement={'left'}
@@ -407,16 +411,19 @@ const GroupMessage = memo<GroupMessageProps>(
           {allSignalCallbacks.map((block) => (
             <SignalCallbacks block={block} key={block.sourceToolMessageId} />
           ))}
-          {taskCompletions && taskCompletions.length > 0 && (
-            <Group
-              blocks={taskCompletions}
-              contentId={taskCompletions.at(-1)?.id}
-              defaultWorkflowExpandLevel={workflowExpandLevel}
-              disableEditing={disableEditing}
-              id={id}
-              messageIndex={index}
-            />
-          )}
+          {completionItems.map(({ blocks, source }) => (
+            <Fragment key={blocks[0]!.id}>
+              {source && <TaskCompletionNotice {...source} />}
+              <Group
+                blocks={blocks}
+                contentId={blocks[0]!.id}
+                defaultWorkflowExpandLevel={workflowExpandLevel}
+                disableEditing={disableEditing}
+                id={id}
+                messageIndex={index}
+              />
+            </Fragment>
+          ))}
         </Flexbox>
 
         {aggregatedFileList.length > 0 && (

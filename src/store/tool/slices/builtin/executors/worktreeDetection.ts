@@ -1,9 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import type {
-  DeviceGitLinkedPullRequest,
-  DeviceGitUpstreamRef,
-  WorkingDirConfig,
-} from '@lobechat/types';
+import type { DeviceGitUpstreamRef } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
@@ -12,6 +8,17 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { getChatStoreState } from '@/store/chat/store';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
+
+import {
+  applyBranchToConfig,
+  applyDetachedToConfig,
+  applyPullRequestToConfig,
+  applyPushToConfig,
+  applyWorktreeAddToConfig,
+  applyWorktreeExitToConfig,
+  type PullRequestCreateInfo,
+  type WorktreeAddInfo,
+} from './worktreeConfigEffects';
 
 /**
  * Detect git / gh side effects in a heterogeneous CLI agent's successful shell
@@ -93,11 +100,6 @@ const CC_EXIT_PATTERN = /^Exited\b/;
  */
 const CC_SESSION_ENTER_MARKER = 'The session is now working in the worktree';
 
-interface WorktreeAddInfo {
-  branch?: string;
-  path: string;
-}
-
 interface WorktreeAddParseResult {
   branch?: string;
   /** Resolved absolute path, present only when the command yielded a trustworthy literal. */
@@ -107,11 +109,6 @@ interface WorktreeAddParseResult {
 }
 
 type BranchSwitchInfo = { branch: string } | { detached: true };
-
-interface PullRequestCreateInfo {
-  branch?: string;
-  pullRequest: DeviceGitLinkedPullRequest;
-}
 
 const stripQuotes = (token: string): string => {
   if (token.length >= 2) {
@@ -265,6 +262,7 @@ const getOptionValue = (
 const parseGitSubcommand = (
   tokens: string[],
   cwd?: string,
+  env?: ShellEnv,
 ): { args: string[]; baseCwd?: string; subcommand: string } | undefined => {
   let i = consumeCommandPreamble(tokens);
   if (!isGitExecutable(tokens[i] ?? '')) return undefined;
@@ -273,7 +271,7 @@ const parseGitSubcommand = (
   let baseCwd = cwd;
   while (i < tokens.length && tokens[i].startsWith('-')) {
     if (tokens[i] === '-C') {
-      const dir = stripQuotes(tokens[i + 1] ?? '');
+      const dir = resolveToken(tokens[i + 1] ?? '', env);
       if (dir) baseCwd = resolveWorktreePath(dir, baseCwd);
       i += 2;
     } else if (GIT_VALUE_OPTS.has(tokens[i])) {
@@ -535,166 +533,6 @@ const parseGitPush = (
   return { branch: remoteBranch, remote: push.remote ?? 'origin' };
 };
 
-const applyBranchToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-  branch: string,
-): WorkingDirConfig => {
-  const branchChanged = currentConfig?.git?.branch !== branch;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    branch,
-  };
-
-  delete git.detached;
-  // The old branch's remote ref and PR describe a branch the topic has left. Held
-  // onto, `upstream` would aim the PR lookup at the wrong head — worse than none.
-  if (branchChanged) {
-    delete git.github;
-    delete git.upstream;
-  }
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
-  };
-};
-
-const applyDetachedToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-): WorkingDirConfig => {
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    detached: true,
-  };
-
-  delete git.branch;
-  delete git.github;
-  delete git.upstream;
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
-  };
-};
-
-const applyPullRequestToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-  info: PullRequestCreateInfo,
-): WorkingDirConfig => {
-  const branch = info.branch ?? currentConfig?.git?.branch;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    ...(branch ? { branch } : {}),
-    github: {
-      pullRequest: info.pullRequest,
-      pullRequestStatus: 'ok',
-    },
-  };
-
-  delete git.detached;
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    repoType: 'github',
-  };
-};
-
-/**
- * Record where the branch now publishes to. This is what makes the PR lookup work at
- * all for a worktree: its local branch name (`worktree-feat+x`) never exists on the
- * remote, so only the ref the push actually created (`feat/y`) can find the PR.
- */
-const applyPushToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-  upstream: DeviceGitUpstreamRef,
-): WorkingDirConfig => {
-  const previous = currentConfig?.git?.upstream?.branch;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    upstream,
-  };
-
-  // Re-pointing the branch at a DIFFERENT remote ref orphans the PR bound to the old
-  // one. Only a change invalidates it — a first push must not drop a PR that a
-  // preceding `gh pr create` in the same run just recorded.
-  if (previous && previous !== upstream.branch) delete git.github;
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
-  };
-};
-
-const applyWorktreeAddToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-  info: WorktreeAddInfo,
-): WorkingDirConfig => {
-  const branchChanged = !!info.branch && currentConfig?.git?.branch !== info.branch;
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    activeWorktree: info.path,
-    ...(info.branch ? { branch: info.branch } : {}),
-    isWorktree: true,
-  };
-
-  if (info.branch) delete git.detached;
-  if (branchChanged) {
-    delete git.github;
-    delete git.upstream;
-  }
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
-  };
-};
-
-/**
- * The session left the worktree and is back in the source repo. `branch`, its
- * `upstream` ref and the linked `github` PR described the worktree's branch, not the
- * source repo's, so they are dropped rather than left pointing at a branch the topic
- * is no longer on — the source branch is unknown until the next `git switch` /
- * `checkout` refreshes it.
- */
-const applyWorktreeExitToConfig = (
-  currentConfig: WorkingDirConfig | undefined,
-  source: string,
-): WorkingDirConfig => {
-  const git: NonNullable<WorkingDirConfig['git']> = {
-    ...currentConfig?.git,
-    isWorktree: false,
-  };
-
-  delete git.activeWorktree;
-  if (currentConfig?.git?.isWorktree) {
-    delete git.branch;
-    delete git.github;
-    delete git.upstream;
-  }
-
-  return {
-    ...currentConfig,
-    git,
-    path: source,
-    ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
-  };
-};
-
 /** Collapse `.`/`..` segments in a POSIX path without touching the filesystem. */
 const normalizePosix = (p: string): string => {
   const isAbs = p.startsWith('/');
@@ -885,14 +723,16 @@ const parseWorktreeAddInfo = (
   const unwrapped = unwrapShellCommand(command);
   if (!/\bworktree\s+add\b/.test(unwrapped)) return undefined;
 
+  // The LAST add wins: it is where the command left things, so an earlier scratch
+  // worktree that was removed again (`add a && remove a && add b`) never sticks.
   const env: ShellEnv = {};
+  let last: WorktreeAddParseResult | undefined;
   for (const segment of unwrapped.split(/[\n;|&]/)) {
     const tokens = tokenize(segment);
-    const info = parseGitWorktreeAddTokens(tokens, cwd, env);
-    if (info) return info;
+    last = parseGitWorktreeAddTokens(tokens, cwd, env) ?? last;
     collectSegmentAssignments(tokens, env);
   }
-  return undefined;
+  return last;
 };
 
 /**
@@ -913,6 +753,62 @@ export const parseWorktreeAddPath = (
   return parseWorktreeAddInfo(command, cwd)?.path;
 };
 
+const isWindowsPath = (p: string): boolean => /^[A-Z]:[\\/]/i.test(p) || p.startsWith('\\\\');
+
+/** Path equality that ignores a trailing slash, and separators and case on Windows. */
+const isSamePath = (a: string, b: string): boolean => {
+  const normalize = (p: string) => {
+    const path = p.replace(/[\\/]+$/, '');
+    return isWindowsPath(p) ? path.replaceAll('\\', '/').toLowerCase() : path;
+  };
+  return normalize(a) === normalize(b);
+};
+
+/**
+ * Whether the command's last word on `target` is a real `git worktree remove` of it.
+ * Paths resolve like `add` paths; segments are read in shell order, so a later
+ * `add` of the same path recreates it. Text only — the caller confirms on the
+ * device, since `cond && git worktree remove …` may never have run.
+ */
+const removesWorktree = (command: string | string[], target: string, cwd?: string) => {
+  let removed = false;
+  findInCommand(command, (tokens, env) => {
+    const added = parseGitWorktreeAddTokens(tokens, cwd, env)?.path;
+    if (added && isSamePath(added, target)) removed = false;
+    const git = parseGitSubcommand(tokens, cwd, env);
+    if (git?.subcommand !== 'worktree' || stripQuotes(git.args[0] ?? '') !== 'remove') return;
+    for (const token of git.args.slice(1)) {
+      if (/^\d*[<>]/.test(token)) return; // redirection — git's args end here
+      if (token.startsWith('-')) continue;
+      const path = resolveToken(token, env);
+      if (isLiteralPath(path) && isSamePath(resolveWorktreePath(path, git.baseCwd), target))
+        removed = true;
+      return;
+    }
+  });
+  return removed;
+};
+
+/**
+ * The source repo's worktrees as the run's device reports them; undefined when the
+ * device cannot be asked. The topic's bound device (written at dispatch) or,
+ * unbound, this machine — the local device answers over IPC, a remote one over RPC.
+ */
+const listDeviceWorktrees = async (source: string, boundDeviceId?: string) => {
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const targetDeviceId = boundDeviceId ?? currentDeviceId;
+  const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
+
+  try {
+    return await gitService.listGitWorktrees({
+      deviceId: isLocalDevice ? undefined : targetDeviceId,
+      path: source,
+    });
+  } catch {
+    return undefined;
+  }
+};
+
 /**
  * Ground truth for a worktree-add whose path token never survives static parsing
  * (`git worktree add "$WT" …`, `$(mktemp -d)`, `~/wt`): ask the run's target
@@ -928,27 +824,27 @@ const resolveWorktreeAddFromDevice = async (
   const branchHint = normalizeBranch(parsed.branch ?? parsed.ref);
   if (!branchHint) return undefined;
 
-  // The topic's bound device (written at dispatch) or, unbound, this machine.
-  // Mirrors WorkingDirectorySection: the local device answers over IPC
-  // (deviceId omitted), a remote one over RPC.
-  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-  const targetDeviceId = boundDeviceId ?? currentDeviceId;
-  const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
-
-  try {
-    const worktrees = await gitService.listGitWorktrees({
-      deviceId: isLocalDevice ? undefined : targetDeviceId,
-      path: source,
-    });
-    const match = worktrees.find((worktree) => worktree.branch === branchHint);
-    if (!match) return undefined;
-    return { ...(match.branch ? { branch: match.branch } : {}), path: match.path };
-  } catch {
-    return undefined;
-  }
+  const match = (await listDeviceWorktrees(source, boundDeviceId))?.find(
+    (worktree) => worktree.branch === branchHint,
+  );
+  if (!match) return undefined;
+  return { ...(match.branch ? { branch: match.branch } : {}), path: match.path };
 };
 
-const isWindowsPath = (p: string): boolean => /^[A-Z]:[\\/]/i.test(p) || p.startsWith('\\\\');
+/**
+ * Whether the device's worktree list proves `worktree` is gone. An empty list is a
+ * failed probe (a repository always lists its own checkout), not a confirmation.
+ * The recorded branch is matched too: git lists the canonical path, which differs
+ * from the recorded one when the worktree was added through a symlink, while a
+ * branch is checked out in at most one worktree.
+ */
+const isWorktreeGone = (
+  worktrees: { branch?: string; path: string }[] | undefined,
+  worktree: string,
+  branch?: string,
+): boolean =>
+  !!worktrees?.length &&
+  !worktrees.some((w) => isSamePath(w.path, worktree) || (!!branch && w.branch === branch));
 
 /**
  * The recorded worktree becomes the cwd of every later command on the source's
@@ -1015,6 +911,7 @@ export const recordWorktreeAdd = async (params: {
 /**
  * Record successful heterogeneous CLI shell side effects onto the run topic:
  * - `git worktree add` selects the created worktree and explicit branch.
+ * - `git worktree remove` of that worktree returns the topic to its source repo.
  * - `git switch` / confirmed `git checkout` updates the branch snapshot.
  * - `git push` records the remote ref the branch publishes to.
  * - `gh pr create` binds the created PR URL to the topic.
@@ -1041,6 +938,17 @@ export const recordGitCommandEffects = async (params: {
   );
   if (worktreeInfo && worktreeInfo.path !== source) {
     nextConfig = applyWorktreeAddToConfig(nextConfig, source, worktreeInfo);
+  }
+
+  // Removing the worktree the topic runs in leaves it pointing at a deleted
+  // directory, and every later run would fail to spawn there. The device has the
+  // last word: a skipped or failed removal still lists the worktree, and an
+  // unreachable device changes nothing.
+  const activeWorktree = nextConfig?.git?.activeWorktree;
+  if (activeWorktree && removesWorktree(command, activeWorktree, source)) {
+    const worktrees = await listDeviceWorktrees(source, topic?.metadata?.boundDeviceId);
+    if (isWorktreeGone(worktrees, activeWorktree, nextConfig?.git?.branch))
+      nextConfig = applyWorktreeExitToConfig(nextConfig, source);
   }
 
   const branchSwitch = parseGitBranchSwitch(command, resultContent);

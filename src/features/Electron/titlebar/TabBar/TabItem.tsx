@@ -9,6 +9,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { electronStylish } from '@/styles/electron';
 
 import { type ResolvedTab } from './hooks/useResolvedTabs';
@@ -17,6 +18,7 @@ import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
 import { useStyles } from './styles';
+import { isTabClosable } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
@@ -105,8 +107,9 @@ const TabItem = memo<TabItemProps>(
     // Which tiers actually show the button is settled in CSS so that it can fade rather
     // than unmount. Staying mounted below the compact tier would otherwise leave an
     // invisible button in the focus order, so those tiers are made inert rather than
-    // merely transparent.
-    const closeInert = tier !== 'full' && tier !== 'compact';
+    // merely transparent. A lone tab is not closable at all (see tabClose).
+    const closable = isTabClosable(totalCount);
+    const closeInert = !closable || (tier !== 'full' && tier !== 'compact');
 
     const isDragging = !!drag;
 
@@ -209,9 +212,9 @@ const TabItem = memo<TabItemProps>(
       (e: React.MouseEvent) => {
         if (e.button !== 1) return;
         e.preventDefault();
-        onClose(id);
+        if (closable) onClose(id);
       },
-      [onClose, id],
+      [closable, onClose, id],
     );
 
     const contextMenuItems = useCallback(
@@ -257,7 +260,9 @@ const TabItem = memo<TabItemProps>(
 
     const indicator = (
       <span className={styles.avatarWrapper}>
-        {meta.avatar ? (
+        {meta.avatarSeed ? (
+          <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+        ) : meta.avatar ? (
           <Avatar
             emojiScaleWithBackground
             avatar={meta.avatar}
@@ -277,6 +282,7 @@ const TabItem = memo<TabItemProps>(
     const face = (
       <m.div
         data-active={isActive ? 'true' : undefined}
+        data-closable={closable ? 'true' : undefined}
         data-tier={tier}
         role="button"
         tabIndex={0}

@@ -2,13 +2,17 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  DocsPageSectionKey,
+  DocsPageSectionView,
   GlobalState,
   ModelDetailPanelExpandedKey,
+  ProjectListSortBy,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
 } from '../initialState';
 import {
+  DEFAULT_DOCS_PAGE_SECTION_VIEW,
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
   INITIAL_STATUS,
   MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
@@ -92,6 +96,15 @@ const collapsedTopicGroupKeys =
   (s: GlobalState): string[] | undefined =>
     s.status.collapsedTopicGroupKeysByMode?.[mode];
 
+const docsPageSectionView =
+  (section: DocsPageSectionKey) =>
+  (s: GlobalState): DocsPageSectionView => {
+    const stored = s.status.docsPageSectionViews?.[section];
+    return stored
+      ? { ...DEFAULT_DOCS_PAGE_SECTION_VIEW, ...stored }
+      : DEFAULT_DOCS_PAGE_SECTION_VIEW;
+  };
+
 const projectTopicSubGroupMode =
   (groupId: string) =>
   (s: GlobalState): ProjectTopicSubGroupMode =>
@@ -101,6 +114,11 @@ const agentSidebarSections =
   (agentId: string | undefined) =>
   (s: GlobalState): Record<string, boolean> | undefined =>
     agentId ? s.status.expandAgentSidebarSectionsByAgent?.[agentId] : undefined;
+
+const projectSidebarSections =
+  (projectId: string | undefined) =>
+  (s: GlobalState): Record<string, boolean> | undefined =>
+    projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
 
 /** Upper bound of `topic.getTopics`'s `pageSize` input on the server. */
 export const MAX_TOPIC_PAGE_SIZE = 100;
@@ -123,7 +141,6 @@ const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 const taskListViewOptions = (s: GlobalState) =>
   s.status.taskListViewOptions || {
     groupBy: 'status',
-    hideCompleted: true,
     nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
@@ -204,7 +221,6 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   SIDEBAR_SPACER_ID,
   'image',
   'community',
-  'pages',
   'memory',
 ];
 
@@ -446,6 +462,8 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   foldersFirst: true,
   order: 'asc',
 };
+const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
+  s.status.projectListSortBy ?? 'manual';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
@@ -497,6 +515,7 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
+  projectListSortBy,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
@@ -506,6 +525,7 @@ export const systemStatusSelectors = {
   disabledModelProvidersSortType,
   disabledModelsSortType,
   expandInputActionbar,
+  docsPageSectionView,
   filePanelWidth,
   getAgentSystemRoleExpanded,
   groupAgentBuilderPanelWidth,
@@ -543,6 +563,7 @@ export const systemStatusSelectors = {
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,
+  projectSidebarSections,
   sidebarItems,
   sessionGroupKeys,
   showAgentBuilderPanel,

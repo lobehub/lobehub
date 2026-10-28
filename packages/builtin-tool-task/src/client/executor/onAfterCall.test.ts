@@ -28,6 +28,7 @@ vi.mock('@/store/task/slices/detail/reducer', () => ({
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    find: vi.fn(async (ref) => ({ data: { id: ref, identifier: ref } })),
     updateVerifyConfig: mocks.updateVerifyConfig,
   },
 }));

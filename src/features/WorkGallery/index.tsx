@@ -24,6 +24,7 @@ import { useWorkspaceWorksInfinite } from './hooks';
 import WorkGallerySkeleton, { WorkGalleryCardsSkeleton } from './Skeleton';
 import { useOpenWork } from './useOpenWork';
 import WorkPreviewCard from './WorkPreviewCard';
+import WorksTypeTabs from './WorksTypeTabs';
 
 const styles = createStaticStyles(({ css }) => ({
   agentFilter: css`
@@ -123,6 +124,11 @@ const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorTextTertiary};
       color: ${cssVar.colorText};
     }
+  `,
+  typeBar: css`
+    flex: none;
+    padding-block: 12px 0;
+    padding-inline: 24px;
   `,
   scroll: css`
     overflow: hidden auto;
@@ -314,10 +320,20 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     );
   };
 
+  const typeTabs = (
+    <Flexbox className={styles.typeBar}>
+      <WorksTypeTabs activeKey={galleryKey} />
+    </Flexbox>
+  );
+
   return isLoadingInitial && items.length === 0 ? (
-    <WorkGallerySkeleton />
+    <Flexbox className={styles.container}>
+      {typeTabs}
+      <WorkGallerySkeleton />
+    </Flexbox>
   ) : (
     <Flexbox className={styles.container}>
+      {typeTabs}
       {agentIds.length > 0 && (
         <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
           <Button

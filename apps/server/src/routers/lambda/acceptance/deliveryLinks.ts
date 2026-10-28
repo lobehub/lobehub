@@ -5,11 +5,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { parseChangeRequestUrl } from '@/server/services/scm/changeRequestUrl';
-import {
-  addPullRequestLink,
-  removePullRequestLink,
-  updateAcceptancePullRequests,
-} from '@/server/services/verify/acceptancePullRequests';
+import { linkHandPullRequest, unlinkHandPullRequest } from '@/server/services/scm/handLink';
 
 import { previewUrlSchema, recordPreviewUrl } from '../_helpers/acceptancePreviewUrl';
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
@@ -54,10 +50,11 @@ export const deliveryLinksRouter = router({
    * acceptance, not on a round: the pull request usually opens after the
    * rounds that verified it, and stacked pull requests share one acceptance.
    *
-   * Stored on the acceptance rather than on the shared `scm_change_requests`
-   * row: that row is keyed globally and owned by whichever tenant the
-   * provider routes the PR to, so a pasted URL must not claim it. A hand
-   * link is display-only and never drives merge → accepted.
+   * Stored on the acceptance, because the PR may not have reached us yet.
+   * When the provider row already exists in the acceptance's own tenant it
+   * is bound too, so the merge accepts this delivery (right away, if the PR
+   * is already merged). The row is keyed globally, so a row in another
+   * tenant is never claimed — a pasted URL stays display-only there.
    */
   linkPullRequest: acceptanceWriteProcedure
     .input(
@@ -78,9 +75,7 @@ export const deliveryLinksRouter = router({
         });
       }
 
-      await updateAcceptancePullRequests(ctx.serverDB, acceptance.id, (links) =>
-        addPullRequestLink(links, parsed, input.title),
-      );
+      await linkHandPullRequest(ctx.serverDB, acceptance, parsed, input.title);
       return parsed;
     }),
   unlinkPullRequest: acceptanceWriteProcedure
@@ -88,12 +83,10 @@ export const deliveryLinksRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
       const parsed = parseChangeRequestUrl(input.url);
-      const pullRequests = parsed
-        ? await updateAcceptancePullRequests(ctx.serverDB, acceptance.id, (links) =>
-            removePullRequestLink(links, parsed),
-          )
-        : null;
-      if (!pullRequests) {
+      const unlinked = parsed
+        ? await unlinkHandPullRequest(ctx.serverDB, acceptance, parsed)
+        : false;
+      if (!unlinked) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Linked pull request not found' });
       }
 

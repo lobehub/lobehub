@@ -12,6 +12,7 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useTaskStore } from '@/store/task';
 
 import { resolveTaskHandoffTopic } from './taskHandoff';
 
@@ -51,7 +52,10 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>((props) => {
   // `:slug?` is the readable title tail the detail route appends; it never
   // participates in resolution, so the match must tolerate it being absent.
   const detailMatch = useMatch('/task/:taskId/:slug?');
-  const resolvedViewedTaskId = viewedTaskId || detailMatch?.params.taskId;
+  const viewedTaskRef = viewedTaskId || detailMatch?.params.taskId;
+  const resolvedViewedTaskId = useTaskStore((s) =>
+    viewedTaskRef ? s.taskRefIndex?.[viewedTaskRef] : undefined,
+  );
 
   const scopedSelectedAgentId =
     scopedSelection.scopeAgentId === preferredAgentId

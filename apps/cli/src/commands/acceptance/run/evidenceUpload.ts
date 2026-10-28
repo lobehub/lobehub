@@ -102,10 +102,12 @@ export async function uploadReportEvidence(
   params: { checkResultId: string; dir: string; evidence: unknown },
 ) {
   const failedEvidence: FailedReportEvidence[] = [];
+  /** Each stored artifact by its position in the authored `evidence` list. */
+  const published: { evidenceId: string; position: number }[] = [];
   const types = new Set<EvidenceType>();
   let count = 0;
   let inlined = 0;
-  for (const input of reportEvidence(params.evidence)) {
+  for (const [position, input] of reportEvidence(params.evidence).entries()) {
     const absolutePath = path.resolve(params.dir, input.path);
     const type = evidenceTypeForFile(absolutePath);
     const description = evidenceDescriptionForFile(input.description, absolutePath);
@@ -127,7 +129,7 @@ export async function uploadReportEvidence(
       }
       const content = inlineTextEvidenceForFile(absolutePath, type);
       if (content === undefined) fileId = (await uploadLocalFile(client, absolutePath)).id;
-      await client.verify.uploadEvidence.mutate({
+      const row = await client.verify.uploadEvidence.mutate({
         capturedBy: 'cli',
         checkResultId: params.checkResultId,
         content,
@@ -136,6 +138,7 @@ export async function uploadReportEvidence(
         metadata,
         type,
       });
+      if (row?.id) published.push({ evidenceId: row.id, position });
       types.add(type);
       count += 1;
       if (content !== undefined) inlined += 1;
@@ -173,5 +176,5 @@ export async function uploadReportEvidence(
       log.warn(`evidence not published: ${path.basename(absolutePath)}: ${message}`);
     }
   }
-  return { count, failedEvidence, inlined, types };
+  return { count, failedEvidence, inlined, published, types };
 }

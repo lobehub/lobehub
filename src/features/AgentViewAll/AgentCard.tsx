@@ -10,7 +10,6 @@ import {
   createStaticStyles,
   type DropdownItem,
   Flexbox,
-  responsive,
   Tag,
   Text,
   Tooltip,
@@ -20,10 +19,10 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-import AgentAvatar from './AgentAvatar';
 import { type AgentRowAuthor, formatUpdatedAt } from './AgentRow';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 // Card layout mirrors the agent channel platform cards
 // (src/features/AgentChannel/PlatformGrid.tsx): icon + title + trailing state on
@@ -59,19 +58,13 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   grid: css`
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    /* Full-width page: as many 280px+ columns as fit, one column on narrow screens. */
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 12px;
 
     width: 100%;
     min-width: 0;
-
-    ${responsive.md} {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    ${responsive.sm} {
-      grid-template-columns: minmax(0, 1fr);
-    }
   `,
   /* Top-right "…" slot, a SIBLING of the card link (absolutely positioned
      over it) — nesting an interactive menu trigger inside the <a> would put
@@ -149,7 +142,7 @@ const AgentCard = memo<AgentCardProps>(
                 gap={8}
                 style={{ minWidth: 0, paddingInlineEnd: 28 }}
               >
-                <AgentAvatar item={item} size={24} />
+                <SidebarItemAvatar item={item} size={24} />
                 <Flexbox horizontal align={'center'} flex={1} gap={6} style={{ minWidth: 0 }}>
                   <Text ellipsis style={{ minWidth: 0 }} weight={600}>
                     {displayTitle}

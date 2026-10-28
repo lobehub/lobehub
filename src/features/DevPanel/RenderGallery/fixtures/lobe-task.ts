@@ -33,7 +33,7 @@ const goalArgs = {
 };
 
 export default defineFixtures({
-  identifier: 'lobe-goal',
+  identifier: 'builtin-goal',
   fixtures: {
     createGoal: variants([
       {

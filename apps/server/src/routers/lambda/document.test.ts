@@ -8,6 +8,7 @@ import { documentRouter } from './document';
 
 const mocks = vi.hoisted(() => ({
   createDocument: vi.fn(),
+  createDocuments: vi.fn(),
   findDocumentById: vi.fn(),
   findOwnOperationById: vi.fn(),
   getDocumentById: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn().mockImplementation(function () {
     return {
       createDocument: mocks.createDocument,
+      createDocuments: mocks.createDocuments,
       getDocumentById: mocks.getDocumentById,
       updateDocument: mocks.updateDocument,
     };
@@ -238,6 +240,72 @@ describe('HTML document writes', () => {
     expect(mocks.updateDocument).toHaveBeenCalledWith(
       'doc-1',
       expect.objectContaining({ editorData: expect.objectContaining({ root: expect.anything() }) }),
+    );
+  });
+});
+
+/**
+ * Regression: `lh doc create --title X` with a body that opens with `# X`
+ * rendered the title twice on the page — once as the page header, once as
+ * the body H1. Only agent documents dropped that heading.
+ */
+describe('Markdown writes drop the heading that repeats the title', () => {
+  const title = 'rc 与 device — 讨论纪要（2026-10-20）';
+  const content = `# ${title}\n\n来源：eval 频道\n`;
+
+  beforeEach(() => {
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.createDocument.mockResolvedValue({ id: 'doc-1', visibility: 'private' });
+    mocks.createDocuments.mockResolvedValue([]);
+    mocks.updateDocument.mockResolvedValue({ id: 'doc-1' });
+  });
+
+  it('on create', async () => {
+    await (await caller()).createDocument({ content, title });
+
+    expect(mocks.createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '来源：eval 频道\n', title }),
+    );
+  });
+
+  it('on batch create', async () => {
+    await (await caller()).createDocuments({ documents: [{ content, title }] });
+
+    expect(mocks.createDocuments).toHaveBeenCalledWith([
+      expect.objectContaining({ content: '来源：eval 频道\n', title }),
+    ]);
+  });
+
+  it('on a content-only edit, against the stored title', async () => {
+    mocks.findDocumentById.mockResolvedValue({ fileType: 'custom/document', id: 'doc-1', title });
+
+    await (await caller()).updateDocument({ content, id: 'doc-1' });
+
+    expect(mocks.updateDocument).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ content: '来源：eval 频道\n' }),
+    );
+  });
+
+  it('keeps an opening heading that names something else', async () => {
+    await (await caller()).createDocument({ content: '# Background\n\nbody', title });
+
+    expect(mocks.createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '# Background\n\nbody' }),
+    );
+  });
+
+  it('keeps an editor save, which sends its own editorData, as written', async () => {
+    const editorData = { root: { children: [{ type: 'heading' }], type: 'root' } };
+
+    await (
+      await caller()
+    ).updateDocument({ content, editorData: JSON.stringify(editorData), id: 'doc-1' });
+
+    expect(mocks.findDocumentById).not.toHaveBeenCalled();
+    expect(mocks.updateDocument).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ content, editorData }),
     );
   });
 });

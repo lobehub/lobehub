@@ -230,8 +230,17 @@ export const acceptanceSubjectTypes = [
   'document',
   'standalone',
   'goal_gate',
+  'site',
 ] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -367,6 +376,9 @@ export const verifyEvidenceTypes = [
   'markdown',
   'dom_snapshot',
   'transcript',
+  // One command execution: a readable text payload plus structured execution
+  // facts, provenance and stdout / stderr / recording artifacts in metadata.
+  'terminal',
 ] as const;
 export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
 
@@ -441,6 +453,42 @@ export const runEvidenceGaps = (
     readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
     evidence,
   );
+/**
+ * Evidence whose payload is text a reader or model can take in directly. A
+ * `terminal` evidence belongs here because its payload is the text fallback of
+ * the execution, written for exactly the readers that have no player.
+ */
+export const verifyTextEvidenceTypes: ReadonlySet<string> = new Set([
+  'dom_snapshot',
+  'markdown',
+  'terminal',
+  'text',
+  'transcript',
+]);
+
+/**
+ * Every stored file an evidence row references: its own payload file, plus —
+ * for a `terminal` evidence — the stdout / stderr / output / recording files its
+ * record names. Anything that follows evidence to its files (library hiding,
+ * permanent purge) must use this, or those artifacts outlive their evidence.
+ * Reads ids leniently; the record itself was validated when it was stored.
+ */
+export const verifyEvidenceFileIds = (evidence: {
+  fileId?: string | null;
+  metadata?: unknown;
+  type: string;
+}): string[] => {
+  const ids = evidence.fileId ? [evidence.fileId] : [];
+  if (evidence.type !== 'terminal') return ids;
+  const artifacts = (evidence.metadata as { terminal?: { artifacts?: unknown } } | null | undefined)
+    ?.terminal?.artifacts;
+  if (!artifacts || typeof artifacts !== 'object') return ids;
+  for (const artifact of Object.values(artifacts as Record<string, unknown>)) {
+    const fileId = (artifact as { fileId?: unknown } | null)?.fileId;
+    if (typeof fileId === 'string' && fileId.length > 0) ids.push(fileId);
+  }
+  return [...new Set(ids)];
+};
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
@@ -518,6 +566,12 @@ export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | 
  */
 export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  // Only a `terminal` row may carry an execution record — on any other medium
+  // it would claim provenance no reader checks.
+  if (type !== 'terminal' && 'terminal' in metadata) {
+    const { terminal: _terminal, ...rest } = metadata as Record<string, unknown>;
+    return normalizeEvidenceMetadata(Object.keys(rest).length > 0 ? rest : null, type);
+  }
   if (!('chapters' in metadata)) return metadata;
   const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
   const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;

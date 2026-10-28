@@ -5,6 +5,7 @@ import type { TaskDetailDispatch } from './reducer';
 import { findSubtaskParentId, taskDetailReducer } from './reducer';
 
 const mockDetail: TaskDetailData = {
+  id: 'T-1',
   identifier: 'T-1',
   instruction: 'Test instruction',
   name: 'Test Task',
@@ -13,6 +14,7 @@ const mockDetail: TaskDetailData = {
 };
 
 const mockDetail2: TaskDetailData = {
+  id: 'T-2',
   identifier: 'T-2',
   instruction: 'Another instruction',
   name: 'Another Task',
@@ -84,6 +86,7 @@ describe('taskDetailReducer', () => {
 
     describe('nested subtasks', () => {
       const buildParentWithSubtasks = (): TaskDetailData => ({
+        id: 'T-3',
         identifier: 'T-3',
         instruction: 'Parent',
         name: 'Parent',
@@ -96,6 +99,7 @@ describe('taskDetailReducer', () => {
               id: 'agent-old',
               title: 'Old Agent',
             },
+            id: 'T-3.1',
             identifier: 'T-3.1',
             name: 'Sub 1',
             priority: 2,
@@ -105,11 +109,13 @@ describe('taskDetailReducer', () => {
             children: [
               {
                 assignee: null,
+                id: 'T-3.2.1',
                 identifier: 'T-3.2.1',
                 name: 'Nested',
                 status: 'backlog',
               },
             ],
+            id: 'T-3.2',
             identifier: 'T-3.2',
             name: 'Sub 2',
             status: 'backlog',
@@ -214,16 +220,24 @@ describe('taskDetailReducer', () => {
 
   describe('findSubtaskParentId', () => {
     const buildParent = (): TaskDetailData => ({
+      id: 'T-parent',
       identifier: 'T-parent',
       instruction: 'Parent',
       name: 'Parent',
       status: 'backlog',
       subtasks: [
-        { assignee: null, identifier: 'T-sub-1', name: 'Sub 1', status: 'backlog' },
+        { assignee: null, id: 'T-sub-1', identifier: 'T-sub-1', name: 'Sub 1', status: 'backlog' },
         {
           children: [
-            { assignee: null, identifier: 'T-sub-2-1', name: 'Nested', status: 'backlog' },
+            {
+              assignee: null,
+              id: 'T-sub-2-1',
+              identifier: 'T-sub-2-1',
+              name: 'Nested',
+              status: 'backlog',
+            },
           ],
+          id: 'T-sub-2',
           identifier: 'T-sub-2',
           name: 'Sub 2',
           status: 'backlog',
@@ -251,6 +265,7 @@ describe('taskDetailReducer', () => {
         'T-parent': buildParent(),
         // The subtask is also cached under its own key (e.g. user opened it as a detail page).
         'T-sub-1': {
+          id: 'T-sub-1',
           identifier: 'T-sub-1',
           instruction: 'Sub',
           name: 'Sub 1',

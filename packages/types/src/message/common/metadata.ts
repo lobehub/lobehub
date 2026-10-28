@@ -177,6 +177,13 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+export const MessageSubAgentCallbackSchema = z.object({
+  agentId: z.string().optional(),
+  name: z.string(),
+  status: z.enum(['completed', 'error']),
+  threadId: z.string(),
+});
+
 export const MessageTaskCallbackSchema = z.object({
   // Task identifier (e.g. `T-42`) for the card header + jump link.
   identifier: z.string(),
@@ -357,6 +364,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
+  // User message carrying a background sub-agent's answer back to its parent;
+  // its sender is that sub-agent.
+  subAgentCallback: MessageSubAgentCallbackSchema.optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
   // conversation, and the run outcome. The card header + jump link read this.
@@ -645,6 +655,13 @@ export interface MessageMetadata {
    * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
    * Used by callAgent tool (sub_agent) and group orchestration (group modes)
    */
+  /**
+   * Present on a user message that delivers a background sub-agent's answer
+   * (`callSubAgent` / `callAgent` with `runInBackground`) back to its parent
+   * conversation: the answer is the content, and this is its sender in place
+   * of the human.
+   */
+  subAgentCallback?: MessageSubAgentCallback;
   subAgentId?: string;
   /**
    * Task-callback card pointer (for role='taskCallback' messages). Identifies
@@ -702,6 +719,20 @@ export interface MessageMetadata {
 export interface MessageWorkMetadata {
   rootOperationId: string;
   userMessageId?: string;
+}
+
+/** Who sent a background sub-agent's answer — see `MessageMetadata.subAgentCallback`. */
+export interface MessageSubAgentCallback {
+  /**
+   * The agent that answered: a `callAgent` target, or the parent agent itself
+   * for an anonymous `callSubAgent` clone. Its avatar is the sender's.
+   */
+  agentId?: string;
+  /** The sender's label: the call's description, or the target agent's name. */
+  name: string;
+  status: 'completed' | 'error';
+  /** The sub-agent's isolation thread (its full trace, and its id to follow up). */
+  threadId: string;
 }
 
 /**

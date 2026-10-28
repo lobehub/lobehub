@@ -1,3 +1,5 @@
+import '@/styles/stylex.css';
+
 import { RouterProvider } from 'react-router/dom';
 
 import BootErrorBoundary from '@/components/BootErrorBoundary';

@@ -7,7 +7,7 @@ units of agent work with an identifier such as \`LOBE-12\`.
 
 - \`lh project list [--status <statuses...>] [--json]\` - List projects
 - \`lh project view <id> [--json]\` - View project detail
-- \`lh project create -i <identifierPrefix> -n <name> [-d <desc>] [--slug <slug>] [--visibility <v>]\` - Create a project (\`-i\` is the task prefix, e.g. \`LOBE\`)
+- \`lh project create -n <name> [-i <identifierPrefix>] [-d <desc>] [--slug <slug>] [--visibility <v>]\` - Create a project (optional \`-i\` replaces the task prefix, e.g. \`ACE\`; omit it to keep the default prefix)
 - \`lh project edit <id> [-n <name>] [-d <desc>] [--slug <slug>] [--visibility <v>]\` - Edit a project
 - \`lh project status <id> <status>\` - Set backlog / active / paused / canceled / archived
 - \`lh project request-review <id>\` / \`accept <id> [-m <comment>]\` / \`reject <id> -m <feedback>\` / \`reopen <id>\` - Review flow (\`reviewing\` / \`completed\` go through these)

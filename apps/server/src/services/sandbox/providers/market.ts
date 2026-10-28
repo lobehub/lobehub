@@ -1,4 +1,4 @@
-import type { SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox';
+import type { SandboxCallToolResult, SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
 
@@ -16,7 +16,10 @@ import type {
 
 const log = debug('lobe-server:sandbox:market');
 const REDACTED_SANDBOX_PARAM = '[redacted]';
-const SANDBOX_AUTH_ENV_PATTERN = /\b(LOBEHUB_JWT|GITHUB_TOKEN)=("[^"]*"|'[^']*'|\S+)/g;
+// `GIT_CONFIG_VALUE_<n>` carries the clone credential an environment's
+// initializer exports for git; see `buildSandboxEnvironmentInitCommand`.
+const SANDBOX_AUTH_ENV_PATTERN =
+  /\b(LOBEHUB_JWT|GITHUB_TOKEN|GIT_CONFIG_VALUE_\d+)=("[^"]*"|'[^']*'|\S+)/g;
 /**
  * Any command that writes into `~/.creds/env` (the path documented to the
  * model as where `injectCredsToSandbox` places credentials) carries
@@ -89,7 +92,11 @@ export class MarketSandboxProvider implements SandboxProvider {
           // the request body itself, so naming them costs nothing on the wire.
           sandboxCwd,
           sandboxInstanceId,
-          sandboxMode,
+          // Widened for `drive` alone, which the market accepts from the
+          // release that added it while the published SDK still types the
+          // pair it shipped with. Remove the cast with the SDK bump; the field
+          // itself stays named, so it is still checked.
+          sandboxMode: sandboxMode as Exclude<SandboxMode, 'drive'> | undefined,
           // The SDK types this one loosely (`Record<string, unknown>`) while
           // ours is a named shape, so only this field is widened — the rest
           // stay checked, which is the point of dropping the blanket cast.
@@ -137,15 +144,34 @@ export class MarketSandboxProvider implements SandboxProvider {
     path,
     uploadUrl,
   }: SandboxProviderFileExportRequest): Promise<SandboxProviderFileExportResult> {
-    const { marketService, topicId, userId } = this.options;
+    const {
+      marketService,
+      sandboxCwd,
+      sandboxInstanceId,
+      sandboxMode,
+      sandboxSpecification,
+      sandboxWorkingDir,
+      topicId,
+      userId,
+    } = this.options;
 
     try {
-      const response = await marketService.exportFile({
-        path,
-        topicId,
-        uploadUrl,
-        userId,
-      });
+      const response = await marketService.exportFile(
+        { path, uploadUrl },
+        {
+          // Named one by one for the same reason callTool's context is — see
+          // the comment there: a dropped field silently runs the export in a
+          // throwaway sandbox that cannot see the persistent volume's file.
+          sandboxCwd,
+          sandboxInstanceId,
+          // Widened for `drive` like callTool's; remove with the SDK bump.
+          sandboxMode: sandboxMode as Exclude<SandboxMode, 'drive'> | undefined,
+          sandboxSpecification: sandboxSpecification as Record<string, unknown> | undefined,
+          sandboxWorkingDir,
+          topicId,
+          userId,
+        },
+      );
 
       log('Sandbox exportFile response: %O', response);
 

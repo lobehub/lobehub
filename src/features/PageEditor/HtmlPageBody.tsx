@@ -1,11 +1,25 @@
 'use client';
 
 import { HTML_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import { HtmlDocumentFrame } from '@/components/HtmlPreview';
 import { useDocumentStore } from '@/store/document';
 
 import { usePageEditorStore } from './store';
+
+const styles = stylex.create({
+  // The artifact keeps its own background; the frame edge marks where it ends
+  // against either theme.
+  frame: {
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: 12,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+});
 
 /** Whether the loaded page is an HTML page rather than a rich-text one. */
 export const useIsHtmlPage = (documentId: string | undefined) =>
@@ -29,7 +43,11 @@ const HtmlPageBody = () => {
 
   if (!data) return null;
 
-  return <HtmlDocumentFrame content={data.content ?? ''} title={data.title ?? undefined} />;
+  return (
+    <div {...stylex.props(styles.frame)}>
+      <HtmlDocumentFrame content={data.content ?? ''} title={data.title ?? undefined} />
+    </div>
+  );
 };
 
 export default HtmlPageBody;

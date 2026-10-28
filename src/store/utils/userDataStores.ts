@@ -4,6 +4,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentDocumentActions } from '@/store/agentDocument';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useAgentQuotaStore } from '@/store/agentQuota';
+import { channelActions } from '@/store/channel';
 import { useChatStore } from '@/store/chat';
 import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDiscoverStore } from '@/store/discover';
@@ -55,6 +56,7 @@ const resetableStores: ResetableStoreApi[] = [
 ];
 
 const resetableActions: ResetableStore[] = [
+  channelActions,
   agentDocumentActions,
   pageActions,
   projectFileActions,

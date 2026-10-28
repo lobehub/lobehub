@@ -6,6 +6,8 @@ export interface ProjectDeviceTarget {
   active: boolean;
   /** False when the agent is fixed to another device — the move would be refused. */
   allowed: boolean;
+  /** The registered device behind the directory, when the device list knows it. */
+  device?: DeviceListItem;
   directory: ProjectDirectory;
   label: string;
   online: boolean;
@@ -42,6 +44,7 @@ export const listProjectDeviceTargets = (
       return {
         active: directory.id === currentDirectoryId,
         allowed: !fixedDeviceId || directory.deviceId === fixedDeviceId,
+        device,
         directory,
         label: projectDirectoryDeviceName(directory, devices),
         online: !!device?.online,

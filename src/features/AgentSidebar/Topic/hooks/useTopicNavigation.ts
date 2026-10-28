@@ -3,7 +3,7 @@ import { useCallback, useMemo } from 'react';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { getProjectConversationPath } from '@/features/Projects/Layout/navigation';
+import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -66,7 +66,7 @@ export const useTopicNavigation = () => {
       if (scope && topicId) {
         router.push(
           buildWorkspaceAwarePath(
-            getProjectConversationPath(scope.projectId, topicId),
+            getProjectTopicPath(scope.projectId, topicId),
             activeWorkspaceSlug,
           ),
         );

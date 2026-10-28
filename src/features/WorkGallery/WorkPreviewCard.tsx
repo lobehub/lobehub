@@ -125,6 +125,9 @@ interface WorkPreviewCardProps {
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'canvas': {
+      return 'work.type.canvas';
+    }
     case 'document': {
       return 'work.type.document';
     }

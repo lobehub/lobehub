@@ -25,9 +25,19 @@ const CONTENT_CLASS_NAME = 'nav-item-content';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
+    /* Width the title fades out under: one small action icon (24px) plus spacing.
+       Each extra icon adds its 24px plus the 2px gap. The focus guards and the
+       aria-owns portal marker an open menu inserts beside its trigger are not
+       icons, so they are not counted. */
+    --nav-item-actions-inset: 28px;
+
     user-select: none;
     overflow: hidden;
     min-width: 32px;
+
+    &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns]))) {
+      --nav-item-actions-inset: 54px;
+    }
 
     /* focus-visible, not focus-within: closing a dropdown hands focus back to its
        trigger, which would pin the actions open after the pointer has left. */
@@ -44,8 +54,8 @@ const styles = createStaticStyles(({ css }) => ({
       .${CONTENT_CLASS_NAME} {
         mask-image: linear-gradient(
           to right,
-          #000 calc(100% - 56px),
-          transparent calc(100% - 28px)
+          #000 calc(100% - var(--nav-item-actions-inset) - 28px),
+          transparent calc(100% - var(--nav-item-actions-inset))
         );
       }
     }

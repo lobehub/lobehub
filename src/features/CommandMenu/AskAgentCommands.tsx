@@ -1,10 +1,11 @@
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { preventDefault } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import Avatar from '@/components/Avatar';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
@@ -85,13 +86,13 @@ const AskAgentCommands = memo(() => {
             handleAgentSelect(
               agent.id,
               agentDisplayName(agent, t('defaultAgent')),
-              typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR,
+              typeof agent.avatar === 'string' ? agent.avatar : '',
             )
           }
         >
-          <Avatar
-            emojiScaleWithBackground
-            avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={agent.id}
+            avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
             name={agentDisplayName(agent, t('defaultAgent'))}
             shape="square"
             size={18}

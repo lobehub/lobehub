@@ -1,0 +1,5 @@
+/* Result caps the subtitle at 36ch, which makes it narrower than the title.
+   Keep the subtitle paragraph at full width inside the Result root. */
+.fullWidthSubTitle p {
+  max-width: 100%;
+}

@@ -1,0 +1,228 @@
+@layer lobe-canvas-base {
+  html {
+    color-scheme: light dark;
+  }
+
+  /* The host owns the side gutter and the centered reading width. Models write
+     `body { margin: 0; padding: 4px 2px }`, which left content touching the edge and a
+     published page stretched across the whole window; a layered !important outranks
+     unlayered page CSS. */
+  body {
+    box-sizing: border-box;
+    max-width: 1024px;
+    margin: 0;
+    margin-inline: auto !important;
+    padding: 24px;
+    padding-inline: 24px !important;
+    font-family: var(--lobe-font-family);
+    font-size: var(--lobe-font-size);
+    line-height: var(--lobe-line-height);
+    color: var(--lobe-color-text);
+    background: var(--lobe-color-bg-layout, var(--lobe-color-bg-container));
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Models wrap pages in <main>/<section> and stack blocks inside tabs, so block
+     spacing cannot rely on being a direct child of <body>. Flex and grid
+     components space their items with gap and are left out. */
+  :where(body, main, section, article, header, footer, aside, [data-lobe-canvas-flow]) > * + * {
+    margin-block-start: 16px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin-block: 24px 8px;
+    font-weight: var(--lobe-font-weight-strong);
+    color: var(--lobe-color-text-heading, var(--lobe-color-text));
+  }
+
+  h1 {
+    font-size: var(--lobe-font-size-heading-3);
+    line-height: var(--lobe-line-height-heading-3);
+  }
+
+  h2 {
+    font-size: var(--lobe-font-size-heading-4);
+    line-height: var(--lobe-line-height-heading-4);
+  }
+
+  h3 {
+    font-size: var(--lobe-font-size-heading-5);
+    line-height: var(--lobe-line-height-heading-5);
+  }
+
+  h4 {
+    font-size: var(--lobe-font-size);
+  }
+
+  p,
+  ul,
+  ol,
+  blockquote {
+    margin-block: 8px;
+  }
+
+  a {
+    color: var(--lobe-color-link, var(--lobe-color-primary));
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  blockquote {
+    margin-inline: 0;
+    padding-inline-start: 12px;
+    border-inline-start: 3px solid var(--lobe-color-border);
+    color: var(--lobe-color-text-secondary);
+  }
+
+  code {
+    font-family: var(--lobe-font-family-code);
+    font-size: 0.9em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+
+  th,
+  td {
+    padding: 8px 12px;
+    border-block-end: 1px solid var(--lobe-color-border-secondary);
+    text-align: start;
+  }
+
+  th {
+    font-weight: 500;
+    color: var(--lobe-color-text-secondary);
+  }
+
+  lobe-flex,
+  lobe-grid,
+  lobe-card,
+  lobe-tabs,
+  lobe-accordion,
+  lobe-alert,
+  lobe-table,
+  lobe-steps,
+  lobe-descriptions,
+  lobe-code,
+  lobe-mermaid,
+  lobe-area-chart,
+  lobe-bar-chart,
+  lobe-line-chart,
+  lobe-scatter-chart,
+  lobe-radar-chart,
+  lobe-donut-chart,
+  lobe-bar-list,
+  lobe-tracker,
+  lobe-heatmap,
+  lobe-funnel-chart,
+  lobe-divider {
+    display: block;
+  }
+
+  [data-lobe-canvas-slot] {
+    display: contents;
+  }
+
+  [data-lobe-canvas-card-body] > [data-lobe-canvas-flow] > :first-child {
+    margin-block-start: 0;
+  }
+
+  [data-lobe-canvas-card-body] > [data-lobe-canvas-flow] > :last-child {
+    margin-block-end: 0;
+  }
+
+  /* macOS overlay scrollbars stay hidden until scrolled, so a wide table or diagram read
+     as clipped. Styling the scrollbar switches Chromium to an always-visible one. */
+  :is(lobe-table, lobe-mermaid, lobe-code, pre) ::-webkit-scrollbar,
+  :is([data-lobe-canvas-mermaid], pre)::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  :is(lobe-table, lobe-mermaid, lobe-code, pre) ::-webkit-scrollbar-thumb,
+  :is([data-lobe-canvas-mermaid], pre)::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: var(--lobe-color-fill);
+  }
+
+  :is(lobe-table, lobe-mermaid, lobe-code, pre) ::-webkit-scrollbar-track,
+  :is([data-lobe-canvas-mermaid], pre)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  [data-lobe-canvas-root] {
+    display: contents;
+  }
+}
+
+@layer lobe-canvas-base {
+  pre {
+    overflow: auto;
+    margin: 0;
+    padding: 12px 16px;
+    border: 1px solid var(--lobe-color-border-secondary);
+    border-radius: var(--lobe-border-radius);
+    background: var(--lobe-color-fill-quaternary);
+  }
+
+  pre code {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+@layer lobe-canvas-base {
+  [data-lobe-canvas-code] {
+    overflow: hidden;
+    border: 1px solid var(--lobe-color-border-secondary);
+    border-radius: var(--lobe-border-radius);
+    background: var(--lobe-color-fill-quaternary);
+  }
+
+  [data-lobe-canvas-code-header] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 4px;
+    padding-inline: 12px 4px;
+    border-block-end: 1px solid var(--lobe-color-border-secondary);
+    font-family: var(--lobe-font-family-code);
+    font-size: 12px;
+    color: var(--lobe-color-text-description);
+  }
+
+  /* the highlighter writes the theme background on the <pre> as an inline style */
+  [data-lobe-canvas-code] pre {
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+  }
+
+  [data-lobe-canvas-mermaid] {
+    overflow-x: auto;
+    padding: 16px;
+    border: 1px solid var(--lobe-color-border-secondary);
+    border-radius: var(--lobe-border-radius);
+  }
+
+  /* pele caps the SVG at max-width:100% inline; a wide diagram shrunk to the pane leaves
+     unreadable text, so keep its natural size and scroll instead */
+  [data-lobe-canvas-mermaid] svg {
+    display: block;
+    max-width: none !important;
+    margin-inline: auto;
+  }
+}

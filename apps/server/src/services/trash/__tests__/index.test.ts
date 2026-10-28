@@ -618,7 +618,7 @@ describe('TrashService', () => {
       const widget = await widgetModel.create({ title: 'Open PRs' });
       await widgetModel.trash(widget.id);
 
-      expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 1 });
+      expect(await service.emptyTrash()).toEqual({ blocked: 0, hasMore: false, purged: 1 });
       expect(await serverDB.select().from(widgets)).toHaveLength(0);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
@@ -648,7 +648,7 @@ describe('TrashService', () => {
       const board = await dashboardModel.create({ title: 'Ops' });
       await dashboardModel.trash(board.id);
 
-      expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 1 });
+      expect(await service.emptyTrash()).toEqual({ blocked: 0, hasMore: false, purged: 1 });
       expect(await serverDB.select().from(dashboards)).toHaveLength(0);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
@@ -708,11 +708,11 @@ describe('TrashService', () => {
       await service.trashTopics(created.map((t) => t.id));
 
       const first = await service.emptyTrash();
-      expect(first).toEqual({ hasMore: true, purged: TRASH_EMPTY_BATCH_SIZE });
+      expect(first).toEqual({ blocked: 0, hasMore: true, purged: TRASH_EMPTY_BATCH_SIZE });
       expect((await service.countByType()).topic).toBe(3);
 
       const second = await service.emptyTrash();
-      expect(second).toEqual({ hasMore: false, purged: 3 });
+      expect(second).toEqual({ blocked: 0, hasMore: false, purged: 3 });
       expect(await serverDB.select().from(topics)).toHaveLength(0);
     });
 

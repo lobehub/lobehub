@@ -2,7 +2,7 @@
 // `../index` so the module mocks are registered before the pane loads.
 
 import { fireEvent, screen } from '@testing-library/react';
-import type { ReactNode as ReactNodeType, Ref } from 'react';
+import type { ComponentProps, ReactNode as ReactNodeType, Ref } from 'react';
 import { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, vi } from 'vitest';
 
@@ -237,8 +237,19 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       ...((await importOriginal()) as Record<string, unknown>),
       confirmModal: uiSpies.confirmModal,
       toast: { error: uiSpies.toastError, success: uiSpies.toastSuccess },
-      ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-        <button title={title} type={'button'} onClick={onClick} />
+      ActionIcon: ({
+        'aria-pressed': pressed,
+        disabled,
+        onClick,
+        title,
+      }: ComponentProps<'button'>) => (
+        <button
+          aria-pressed={pressed}
+          disabled={disabled}
+          title={title}
+          type={'button'}
+          onClick={onClick}
+        />
       ),
       Button: ({ children, title }: { children?: ReactNodeType; title?: string }) => (
         <button title={title} type={'button'}>

@@ -6,6 +6,8 @@ import type {
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
+  LobeAgentConfig,
+  MessageMetadata,
   RuntimeMentionedAgent,
   UserInterventionConfig,
   WorkingDirConfig,
@@ -38,14 +40,21 @@ export interface ExecRunContext {
   appContext?: InternalExecAgentParams['appContext'];
   /** Persisted assistant placeholder row id (spinner anchor / error sink). */
   assistantMessageId: string;
+  /**
+   * Channel facts of a bot-originated run. Ambient like the agent config: the
+   * operation keeps them on `principal.actor.bot` / `world.channel`, so a stage
+   * that re-runs later reads them back from there rather than from the turn's
+   * request.
+   */
+  botContext?: InternalExecAgentParams['botContext'];
+  botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   canUseDevice: boolean;
-  /** Selections attached to this turn's user message; see `ExecAgentParams.contextSelections`. */
-  contextSelections?: ExecAgentParams['contextSelections'];
   deviceAccessReason: DeviceAccessReason;
+  /** Tri-state disabled plugin identifiers; mirrored on `world.disabledPluginIds`. */
+  disabledPluginIds: string[];
+  discordContext?: InternalExecAgentParams['discordContext'];
   /** Effective model for this run (topic-pinned model already applied). */
   model: string;
-  /** Page-editor selections attached to this turn; see `ExecAgentParams.pageSelections`. */
-  pageSelections?: ExecAgentParams['pageSelections'];
   parentMessageId?: string;
   /** Persistence-attribution agent id (Agent Signal marker aware). */
   persistAgentId: string;
@@ -72,6 +81,13 @@ export interface ExecRunContext {
   trigger?: string;
   /** User turn row id; undefined when the run starts from history (resume). */
   userMessageId?: string;
+  /**
+   * Metadata the user turn row was persisted with (attached content, steer,
+   * trigger, …); undefined when no row was created. Stages read attached content
+   * from here rather than from request fields, so a field persisted on the row
+   * is also the field the run sees.
+   */
+  userMessageMetadata?: MessageMetadata;
 }
 
 /**
@@ -93,6 +109,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   acceptsMemberRuntimeEnd?: boolean;
   /** Additional plugin IDs to inject (e.g., task tool during task execution) */
   additionalPluginIds?: string[];
+  /** Trusted settings frozen by a durable dispatcher, never accepted from a client. */
+  agentConfigSnapshot?: LobeAgentConfig;
   /**
    * Server-authored generic intervention claim id. When present, the message
    * claim stores this exact id so a retry after dispatch-but-before-publish can
@@ -180,6 +198,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
   /** External lifecycle hooks (auto-adapt to local/production mode) */
   hooks?: AgentHook[];
+  /** Initial LLM-call count offset for resumed operations (accumulated from previous runs) */
+  initialLlmCalls?: number;
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
   /**
@@ -211,6 +231,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   parentMessageId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
+  reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
   /**

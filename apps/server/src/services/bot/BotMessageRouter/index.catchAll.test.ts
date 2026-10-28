@@ -545,10 +545,14 @@ describe('BotMessageRouter', () => {
       // composite threadId so the chat-sdk routes reactions / typing /
       // post to a fresh sub-thread instead of the parent channel.
       mockOpenThreadForChannelWake.mockResolvedValueOnce('discord:guild-1:channel-1:new-thread-1');
-      const handler = await loadDmCatchAllHandler({
-        dmPolicy: 'open',
-        watchKeywords: [{ instruction: 'Scan.', keyword: 'bug' }],
-      });
+      const handler = await loadDmCatchAllHandler(
+        {
+          dmPolicy: 'open',
+          replyPlacement: 'thread',
+          watchKeywords: [{ instruction: 'Scan.', keyword: 'bug' }],
+        },
+        'discord',
+      );
       if (!handler) throw new Error('expected catch-all to be registered');
       const thread = {
         id: 'discord:guild-1:channel-1',
@@ -574,9 +578,9 @@ describe('BotMessageRouter', () => {
       expect(dispatchedThread.id).toBe('discord:guild-1:channel-1:new-thread-1');
     });
 
-    it('falls back to the original threadId when openThreadForChannelWake returns undefined', async () => {
-      // Threadless platforms (Telegram / WeChat / QQ) return undefined
-      // from the hook; the bot replies inline in the channel/chat.
+    it('keeps the original threadId on a platform that offers no reply targets', async () => {
+      // Threadless platforms (Telegram / WeChat / QQ) implement no
+      // `getReplyTargets`; the bot replies inline in the channel/chat.
       const handler = await loadDmCatchAllHandler({
         dmPolicy: 'open',
         watchKeywords: [{ instruction: 'Scan.', keyword: 'bug' }],
@@ -595,7 +599,7 @@ describe('BotMessageRouter', () => {
 
       await handler(thread, message);
 
-      expect(mockOpenThreadForChannelWake).toHaveBeenCalledTimes(1);
+      expect(mockOpenThreadForChannelWake).not.toHaveBeenCalled();
       expect(thread.id).toBe('telegram:chat-1');
       const [dispatchedThread] = mockHandleMention.mock.calls[0];
       expect(dispatchedThread.id).toBe('telegram:chat-1');
@@ -605,10 +609,10 @@ describe('BotMessageRouter', () => {
       // A platform API failure must not drop the user's message. The
       // router logs the error and posts in the original channel instead.
       mockOpenThreadForChannelWake.mockRejectedValueOnce(new Error('discord 500'));
-      const handler = await loadDmCatchAllHandler({
-        dmPolicy: 'open',
-        watchKeywords: [{ keyword: 'bug' }],
-      });
+      const handler = await loadDmCatchAllHandler(
+        { dmPolicy: 'open', replyPlacement: 'thread', watchKeywords: [{ keyword: 'bug' }] },
+        'discord',
+      );
       if (!handler) throw new Error('expected catch-all to be registered');
       const thread = {
         id: 'discord:guild-1:channel-1',
@@ -623,6 +627,7 @@ describe('BotMessageRouter', () => {
 
       await handler(thread, message);
 
+      expect(mockOpenThreadForChannelWake).toHaveBeenCalledTimes(1);
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
       const [dispatchedThread] = mockHandleMention.mock.calls[0];
       expect(dispatchedThread.id).toBe('discord:guild-1:channel-1');

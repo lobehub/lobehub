@@ -97,36 +97,6 @@ export const findAssigneesByIds = async (
     .where(and(inArray(tasks.id, ids), taskOwnership(ctx)));
 };
 
-export const resolveMany = async (
-  ctx: TaskModelContext,
-  idsOrIdentifiers: string[],
-): Promise<TaskItem[]> => {
-  if (idsOrIdentifiers.length === 0) return [];
-  const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());
-  return ctx.db
-    .select()
-    .from(tasks)
-    .where(
-      and(
-        or(inArray(tasks.id, idsOrIdentifiers), inArray(tasks.identifier, identifiers)),
-        taskOwnership(ctx),
-      ),
-    );
-};
-
-export const findByIdentifier = async (
-  ctx: TaskModelContext,
-  identifier: string,
-): Promise<TaskItem | null> => {
-  const result = await ctx.db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.identifier, identifier), taskOwnership(ctx)))
-    .limit(1);
-
-  return result[0] || null;
-};
-
 /** The column write itself — the assignee rule lives in `update`. */
 export const writeRow = async (
   ctx: TaskModelContext,

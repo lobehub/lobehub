@@ -134,16 +134,19 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
        too. The button stays mounted at every tier and fades; unmounting it made it vanish
        mid-pin.
 
+       A lone tab is not closable, so the rule is gated on data-closable as well; the
+       button then stays faded and inert, and the title keeps its full width.
+
        :has() carries the keyboard path — the button is focusable at these tiers, so
        without it a tabbing user would land on something invisible.
 
        Reservation is 20px button + 3px inset - the tab's own 6px end padding. Margin
        rather than padding: the mask applies to the padding box, so padding would put the
        gradient inside the reservation instead of at the text's edge. */
-    &[data-tier='full']:hover,
-    &[data-tier='compact']:hover,
-    &[data-tier='full']:has([data-tab-close]:focus-visible),
-    &[data-tier='compact']:has([data-tab-close]:focus-visible) {
+    &[data-closable][data-tier='full']:hover,
+    &[data-closable][data-tier='compact']:hover,
+    &[data-closable][data-tier='full']:has([data-tab-close]:focus-visible),
+    &[data-closable][data-tier='compact']:has([data-tab-close]:focus-visible) {
       [data-tab-close] {
         pointer-events: auto;
         opacity: 1;

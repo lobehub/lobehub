@@ -45,9 +45,8 @@ const createFakeStreamManager = () => {
 };
 
 const createFakePersistenceHandler = () => {
-  // Faithful publish-gate fake: same latch semantics as the real handler
-  // (filter by event identity, latch per event) so batch-retry tests exercise
-  // the real skip/resume behavior instead of a stub that returns everything.
+  // Faithful publish-gate fake (filter by event identity, latch per event) so batch-retry
+  // tests exercise the real skip/resume behavior; `publishData` passes data through.
   const publishedKeys = new Set<string>();
   const gateKey = (event: AgentStreamEvent) =>
     `${event.stepIndex}:${event.type}:${event.timestamp}`;
@@ -60,6 +59,7 @@ const createFakePersistenceHandler = () => {
     markEventPublished: vi.fn((_operationId: string, event: AgentStreamEvent) => {
       publishedKeys.add(gateKey(event));
     }),
+    publishData: vi.fn((_operationId: string, event: AgentStreamEvent) => event.data),
   };
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
@@ -432,14 +432,10 @@ describe('HeterogeneousAgentService', () => {
         }),
       };
       const persistenceHandler = {
-        filterUnpublishedEvents: vi.fn(
-          (_operationId: string, events: AgentStreamEvent[]) => events,
-        ),
-        finish: vi.fn(async () => {}),
+        ...createFakePersistenceHandler(),
         ingest: vi.fn(async () => {
           callOrder.push('persist');
         }),
-        markEventPublished: vi.fn(),
       } as unknown as HeterogeneousPersistenceHandler;
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
         agentOperationModel: createFakeAgentOperationModel() as any,

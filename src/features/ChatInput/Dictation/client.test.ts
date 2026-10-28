@@ -5,6 +5,7 @@ import type { RealtimeAsrWebSocket, RealtimeDictationTiming } from './client';
 import { REALTIME_DICTATION_PERFORMANCE_MARKS, RealtimeDictationClient } from './client';
 import {
   REALTIME_ASR_AUDIO,
+  REALTIME_ASR_DEFERRED_LIMITS,
   REALTIME_ASR_LIMITS,
   type RealtimeAsrServerEvent,
   type RealtimeAsrSessionResponse,
@@ -90,7 +91,22 @@ const ready = (sequence = 1): RealtimeAsrServerEvent => ({
   type: 'session.ready',
 });
 
-const createFixture = () => {
+const accepted = (sequence = 1, sessionId = SESSION_ID): RealtimeAsrServerEvent => ({
+  audio: REALTIME_ASR_AUDIO,
+  deferredLimits: REALTIME_ASR_DEFERRED_LIMITS,
+  limits: REALTIME_ASR_LIMITS,
+  protocolVersion: 1,
+  sequence,
+  sessionId,
+  type: 'session.accepted',
+});
+
+const sentControls = (socket: FakeSocket) =>
+  socket.sent
+    .filter((data): data is string => typeof data === 'string')
+    .map((data) => JSON.parse(data) as Record<string, unknown>);
+
+const createFixture = (microphone?: () => Promise<MediaStream>) => {
   const socket = new FakeSocket();
   let onFrame: ((frame: ArrayBuffer) => void) | undefined;
   const capture: RealtimeAudioCapture = {
@@ -112,30 +128,41 @@ const createFixture = () => {
   };
   const track = { stop: vi.fn() };
   const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  const createSession = vi.fn().mockResolvedValue(session());
+  const createWebSocket = vi.fn(() => socket as unknown as RealtimeAsrWebSocket);
   const client = new RealtimeDictationClient({
     createCapture: vi.fn().mockResolvedValue(capture),
-    createSession: vi.fn().mockResolvedValue(session()),
-    createWebSocket: vi.fn(() => socket as unknown as RealtimeAsrWebSocket),
+    createSession,
+    createWebSocket,
     editor,
-    requestMicrophone: vi.fn().mockResolvedValue(stream),
+    requestMicrophone: microphone ?? vi.fn().mockResolvedValue(stream),
   });
 
-  const start = async () => {
-    await client.start();
-    expect(client.getSnapshot().status).toBe('connecting');
+  const handshake = async (event: RealtimeAsrServerEvent = accepted()) => {
+    await vi.waitFor(() => expect(createWebSocket).toHaveBeenCalled());
     socket.open();
-    socket.serverEvent(ready());
-    await vi.waitFor(() => expect(client.getSnapshot().status).toBe('listening'));
+    socket.serverEvent(event);
+  };
+
+  const start = async (event: RealtimeAsrServerEvent = accepted()) => {
+    const starting = client.start();
+    await handshake(event);
+    await starting;
+    expect(client.getSnapshot().status).toBe('listening');
   };
 
   return {
     capture,
     client,
+    createSession,
+    createWebSocket,
     editor,
+    handshake,
     emitFrame: (frame: ArrayBuffer) => onFrame?.(frame),
     onUserEdit: () => onUserEdit?.(),
     socket,
     start,
+    stream,
     track,
   };
 };
@@ -146,31 +173,24 @@ describe('RealtimeDictationClient', () => {
     vi.useRealTimers();
   });
 
-  it('starts permission and Admission together but waits for capture before opening the WS', async () => {
+  it('connects during the permission prompt and starts the Provider before capture setup ends', async () => {
     let resolvePermission!: (stream: MediaStream) => void;
     let resolveCapture!: (capture: RealtimeAudioCapture) => void;
-    let resolveSession!: (session: RealtimeAsrSessionResponse) => void;
+    const socket = new FakeSocket();
     const capture: RealtimeAudioCapture = {
       cancel: vi.fn().mockResolvedValue(undefined),
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
     };
-    const capturePromise = new Promise<RealtimeAudioCapture>((resolve) => {
-      resolveCapture = resolve;
-    });
-    const sessionPromise = new Promise<RealtimeAsrSessionResponse>((resolve) => {
-      resolveSession = resolve;
-    });
-    const permissionPromise = new Promise<MediaStream>((resolve) => {
-      resolvePermission = resolve;
-    });
-    const createCapture = vi.fn(() => capturePromise);
-    const createSession = vi.fn(() => sessionPromise);
-    const createWebSocket = vi.fn(() => new FakeSocket() as unknown as RealtimeAsrWebSocket);
-    const stream = { getTracks: () => [] } as unknown as MediaStream;
+    const createWebSocket = vi.fn(() => socket as unknown as RealtimeAsrWebSocket);
     const client = new RealtimeDictationClient({
-      createCapture,
-      createSession,
+      createCapture: vi.fn(
+        () =>
+          new Promise<RealtimeAudioCapture>((resolve) => {
+            resolveCapture = resolve;
+          }),
+      ),
+      createSession: vi.fn().mockResolvedValue(session()),
       createWebSocket,
       editor: {
         begin: vi.fn(() => ({ anchor: 0, prefix: '', suffix: '' })),
@@ -178,31 +198,33 @@ describe('RealtimeDictationClient', () => {
         finalize: vi.fn(),
         render: vi.fn(),
       },
-      requestMicrophone: vi.fn(() => permissionPromise),
+      requestMicrophone: vi.fn(
+        () =>
+          new Promise<MediaStream>((resolve) => {
+            resolvePermission = resolve;
+          }),
+      ),
     });
 
-    const startPromise = client.start();
-    await vi.waitFor(() => {
-      expect(createSession).toHaveBeenCalledOnce();
-      expect(client.getSnapshot().status).toBe('requesting_permission');
-    });
-    expect(createCapture).not.toHaveBeenCalled();
-    expect(createWebSocket).not.toHaveBeenCalled();
+    const starting = client.start();
+    await vi.waitFor(() => expect(createWebSocket).toHaveBeenCalledOnce());
+    socket.open();
+    expect(sentControls(socket)).toEqual([
+      { protocolVersion: 1, start: 'deferred', token: TEST_JWT, type: 'session.auth' },
+    ]);
+    socket.serverEvent(accepted());
+    await Promise.resolve();
+    expect(client.getSnapshot().status).toBe('requesting_permission');
+    expect(sentControls(socket)).toHaveLength(1);
 
-    resolveSession(session());
-    await vi.waitFor(() => expect(createSession).toHaveBeenCalledOnce());
-    expect(createWebSocket).not.toHaveBeenCalled();
-
-    resolvePermission(stream);
-    await vi.waitFor(() => expect(createCapture).toHaveBeenCalledOnce());
-    expect(createWebSocket).not.toHaveBeenCalled();
+    resolvePermission({ getTracks: () => [] } as unknown as MediaStream);
+    await vi.waitFor(() => expect(sentControls(socket).at(-1)).toEqual({ type: 'session.start' }));
+    expect(capture.start).not.toHaveBeenCalled();
 
     resolveCapture(capture);
-    await startPromise;
-
-    expect(createWebSocket).toHaveBeenCalledOnce();
-    expect(capture.start).not.toHaveBeenCalled();
-    expect(client.getSnapshot().status).toBe('connecting');
+    await starting;
+    expect(capture.start).toHaveBeenCalledOnce();
+    expect(client.getSnapshot().status).toBe('listening');
   });
 
   it('aborts Admission and stops a late microphone stream when cancelled during permission', async () => {
@@ -332,11 +354,10 @@ describe('RealtimeDictationClient', () => {
     const fixture = createFixture();
     await fixture.start();
 
-    expect(JSON.parse(fixture.socket.sent[0] as string)).toEqual({
-      protocolVersion: 1,
-      token: TEST_JWT,
-      type: 'session.auth',
-    });
+    expect(sentControls(fixture.socket).slice(0, 2)).toEqual([
+      { protocolVersion: 1, start: 'deferred', token: TEST_JWT, type: 'session.auth' },
+      { type: 'session.start' },
+    ]);
     fixture.socket.serverEvent({
       segmentId: 'segment-1',
       sequence: 2,
@@ -356,7 +377,14 @@ describe('RealtimeDictationClient', () => {
 
     await fixture.client.stop();
     expect(fixture.client.getSnapshot().status).toBe('finalizing');
-    expect(JSON.parse(fixture.socket.sent.at(-1) as string)).toEqual({ type: 'session.end' });
+    expect(sentControls(fixture.socket).at(-1)).toEqual({
+      clientTimings: {
+        pressToFirstPartialMs: expect.any(Number),
+        pressToMicMs: expect.any(Number),
+        pressToStartSentMs: expect.any(Number),
+      },
+      type: 'session.end',
+    });
     fixture.socket.serverEvent({
       forwardedAudioMs: 200,
       sequence: 4,
@@ -368,10 +396,8 @@ describe('RealtimeDictationClient', () => {
     expect(fixture.editor.finalize).toHaveBeenCalledWith('hello');
   });
 
-  it('refreshes an Admission that became too close to expiry while permission was pending', async () => {
-    let resolvePermission!: (stream: MediaStream) => void;
+  it('refreshes an Admission that arrives too close to expiry before opening the WS', async () => {
     let timingNow = 0;
-    let wallClockNow = 100_000;
     const timings: RealtimeDictationTiming[] = [];
     const socket = new FakeSocket();
     const firstSession = session({
@@ -386,8 +412,14 @@ describe('RealtimeDictationClient', () => {
     });
     const createSession = vi
       .fn()
-      .mockResolvedValueOnce(firstSession)
-      .mockResolvedValueOnce(freshSession);
+      .mockImplementationOnce(async () => {
+        timingNow = 10;
+        return firstSession;
+      })
+      .mockImplementationOnce(async () => {
+        timingNow = 40;
+        return freshSession;
+      });
     const createWebSocket = vi.fn(() => socket as unknown as RealtimeAsrWebSocket);
     const client = new RealtimeDictationClient({
       createCapture: vi.fn().mockResolvedValue({
@@ -405,29 +437,17 @@ describe('RealtimeDictationClient', () => {
       },
       now: () => timingNow,
       onTiming: (timing) => timings.push(timing),
-      requestMicrophone: vi.fn(
-        () =>
-          new Promise<MediaStream>((resolve) => {
-            resolvePermission = resolve;
-          }),
-      ),
-      wallClockNow: () => wallClockNow,
+      requestMicrophone: vi.fn().mockResolvedValue({ getTracks: () => [] }),
+      wallClockNow: () => 129_500,
     });
 
-    const startPromise = client.start();
-    await vi.waitFor(() => expect(createSession).toHaveBeenCalledOnce());
-    expect(createWebSocket).not.toHaveBeenCalled();
-
-    wallClockNow = 129_500;
-    timingNow = 40;
-    resolvePermission({ getTracks: () => [] } as unknown as MediaStream);
-    await startPromise;
+    void client.start();
+    await vi.waitFor(() => expect(createWebSocket).toHaveBeenCalledOnce());
 
     expect(createSession).toHaveBeenCalledTimes(2);
-    expect(createWebSocket).toHaveBeenCalledOnce();
     expect(createWebSocket).toHaveBeenCalledWith(freshSession.websocketUrl);
     expect(timings.filter(({ stage }) => stage.startsWith('admission'))).toEqual([
-      { durationMs: 0, stage: 'admission' },
+      { durationMs: 10, stage: 'admission' },
       { durationMs: 40, stage: 'admission_refresh' },
     ]);
     socket.open();
@@ -532,13 +552,13 @@ describe('RealtimeDictationClient', () => {
 
     clock = 160;
     resolveCapture(capture);
-    await startPromise;
-    expect(timings.at(-1)).toEqual({ durationMs: 60, stage: 'capture' });
+    await vi.waitFor(() => expect(timings.at(-1)).toEqual({ durationMs: 60, stage: 'capture' }));
 
     socket.open();
     clock = 200;
-    socket.serverEvent(ready());
-    await vi.waitFor(() => expect(client.getSnapshot().status).toBe('listening'));
+    socket.serverEvent(accepted());
+    await startPromise;
+    expect(client.getSnapshot().status).toBe('listening');
 
     expect(timings).toEqual([
       { durationMs: 20, stage: 'admission' },
@@ -555,12 +575,11 @@ describe('RealtimeDictationClient', () => {
     ]);
   });
 
-  it('closes an open pre-ready socket without sending cancel or waiting for a terminal event', async () => {
+  it('closes an open pre-accepted socket without sending cancel or waiting for a terminal event', async () => {
     const fixture = createFixture();
-    await fixture.client.start();
+    void fixture.client.start();
+    await vi.waitFor(() => expect(fixture.client.getSnapshot().status).toBe('listening'));
     fixture.socket.open();
-
-    expect(fixture.client.getSnapshot().status).toBe('connecting');
     expect(fixture.socket.sent).toHaveLength(1);
 
     await fixture.client.cancel();
@@ -613,7 +632,7 @@ describe('RealtimeDictationClient', () => {
     await fixture.client.stop();
 
     expect(fixture.client.getSnapshot().status).toBe('finalizing');
-    expect(JSON.parse(fixture.socket.sent.at(-1) as string)).toEqual({ type: 'session.end' });
+    expect(sentControls(fixture.socket).at(-1)).toMatchObject({ type: 'session.end' });
 
     await fixture.client.cancel('audio_interruption');
 
@@ -682,7 +701,7 @@ describe('RealtimeDictationClient', () => {
 
     fixture.onUserEdit();
     await vi.waitFor(() => expect(fixture.client.getSnapshot().status).toBe('finalizing'));
-    await vi.waitFor(() => expect(fixture.socket.sent).toHaveLength(2));
+    await vi.waitFor(() => expect(fixture.socket.sent).toHaveLength(3));
 
     expect(fixture.editor.finalize).toHaveBeenCalledWith('confirmed');
     expect(JSON.parse(fixture.socket.sent.at(-1) as string)).toEqual({
@@ -741,6 +760,7 @@ describe('RealtimeDictationClient', () => {
     vi.useFakeTimers();
     const fixture = createFixture();
     await fixture.start();
+    fixture.socket.serverEvent(ready(2));
     await fixture.client.stop();
 
     await vi.advanceTimersByTimeAsync(REALTIME_ASR_LIMITS.finalTimeoutMs);
@@ -752,14 +772,165 @@ describe('RealtimeDictationClient', () => {
     });
   });
 
+  it('waits for the Provider before timing out a release that came before session.ready', async () => {
+    vi.useFakeTimers();
+    const fixture = createFixture();
+    await fixture.start();
+    await fixture.client.stop();
+
+    await vi.advanceTimersByTimeAsync(REALTIME_ASR_LIMITS.finalTimeoutMs);
+    expect(fixture.client.getSnapshot().status).toBe('finalizing');
+  });
+
+  it('fails at once when the held connection closed while the microphone prompt was open', async () => {
+    let grant!: (stream: MediaStream) => void;
+    const fixture = createFixture(
+      () =>
+        new Promise<MediaStream>((resolve) => {
+          grant = resolve;
+        }),
+    );
+    const starting = fixture.client.start();
+    await fixture.handshake();
+    fixture.socket.readyState = 3;
+    grant(fixture.stream);
+    await starting;
+
+    expect(fixture.client.getSnapshot()).toMatchObject({ errorCode: 'NETWORK_DISCONNECTED' });
+    expect(sentControls(fixture.socket).map(({ type }) => type)).not.toContain('session.start');
+  });
+
+  it('closes a connection that resolved before the microphone was denied', async () => {
+    let deny!: (error: Error) => void;
+    const fixture = createFixture(
+      () =>
+        new Promise<MediaStream>((_, reject) => {
+          deny = reject;
+        }),
+    );
+    const starting = fixture.client.start();
+    await fixture.handshake();
+    deny(new DOMException('denied', 'NotAllowedError'));
+    await starting;
+
+    await vi.waitFor(() =>
+      expect(fixture.socket.close).toHaveBeenCalledWith(1000, 'dictation_finished'),
+    );
+  });
+
   it('fails instead of growing the send queue without bound', async () => {
     const fixture = createFixture();
     await fixture.start();
-    fixture.socket.bufferedAmount = 64_000;
+    fixture.socket.bufferedAmount =
+      REALTIME_ASR_AUDIO.frameBytes * REALTIME_ASR_DEFERRED_LIMITS.maxPrerollFrames;
 
-    for (let index = 0; index < 6; index += 1) fixture.emitFrame(new ArrayBuffer(6400));
+    for (let index = 0; index <= REALTIME_ASR_DEFERRED_LIMITS.maxPrerollFrames; index += 1) {
+      fixture.emitFrame(new ArrayBuffer(6400));
+    }
 
     await vi.waitFor(() => expect(fixture.client.getSnapshot().status).toBe('error'));
     expect(fixture.client.getSnapshot().errorCode).toBe('BACKPRESSURE');
+  });
+
+  it('buffers audio captured before the Gateway accepts and flushes it after session.start', async () => {
+    const fixture = createFixture();
+    const starting = fixture.client.start();
+    await vi.waitFor(() => expect(fixture.client.getSnapshot().status).toBe('listening'));
+    fixture.emitFrame(new ArrayBuffer(6400));
+    fixture.emitFrame(new ArrayBuffer(6400));
+    expect(fixture.socket.sent.filter((data) => typeof data !== 'string')).toHaveLength(0);
+
+    await fixture.handshake();
+    await starting;
+
+    const startIndex = fixture.socket.sent.findIndex(
+      (data) => typeof data === 'string' && data.includes('session.start'),
+    );
+    expect(startIndex).toBeGreaterThan(0);
+    expect(
+      fixture.socket.sent.slice(startIndex + 1).filter((data) => data instanceof ArrayBuffer),
+    ).toHaveLength(2);
+  });
+
+  it('ends a session released before the Gateway accepts once it is connected', async () => {
+    const fixture = createFixture();
+    const starting = fixture.client.start();
+    await vi.waitFor(() => expect(fixture.client.getSnapshot().status).toBe('listening'));
+    fixture.emitFrame(new ArrayBuffer(6400));
+    const stopping = fixture.client.stop();
+    expect(fixture.client.getSnapshot().status).toBe('finalizing');
+
+    await fixture.handshake();
+    await Promise.all([starting, stopping]);
+
+    expect(sentControls(fixture.socket).map(({ type }) => type)).toEqual([
+      'session.auth',
+      'session.start',
+      'session.end',
+    ]);
+  });
+
+  it('hands a prefetched session to the next press without admitting again', async () => {
+    const fixture = createFixture();
+    const prefetching = fixture.client.prefetch();
+    await fixture.handshake();
+    await prefetching;
+    expect(fixture.client.getSnapshot().status).toBe('idle');
+
+    await fixture.client.start();
+
+    expect(fixture.createSession).toHaveBeenCalledOnce();
+    expect(fixture.createWebSocket).toHaveBeenCalledOnce();
+    expect(sentControls(fixture.socket).at(-1)).toEqual({ type: 'session.start' });
+    expect(fixture.client.getSnapshot().status).toBe('listening');
+  });
+
+  it('drops a prefetched session the Gateway expires while idle', async () => {
+    const fixture = createFixture();
+    const prefetching = fixture.client.prefetch();
+    await fixture.handshake();
+    await prefetching;
+
+    fixture.socket.serverEvent({
+      code: 'SESSION_EXPIRED',
+      retryable: true,
+      sequence: 2,
+      sessionId: SESSION_ID,
+      type: 'session.error',
+    });
+    expect(fixture.socket.close).toHaveBeenCalledWith(1000, 'dictation_finished');
+
+    const fresh = new FakeSocket();
+    fixture.createWebSocket.mockReturnValueOnce(fresh as unknown as RealtimeAsrWebSocket);
+    const starting = fixture.client.start();
+    await vi.waitFor(() => expect(fixture.createWebSocket).toHaveBeenCalledTimes(2));
+    fresh.open();
+    fresh.serverEvent(accepted());
+    await starting;
+    expect(fixture.createSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to the legacy flow when the Gateway does not support deferred start', async () => {
+    const fixture = createFixture();
+    const prefetching = fixture.client.prefetch();
+    await fixture.handshake(ready());
+    await prefetching;
+    expect(fixture.socket.close).toHaveBeenCalledWith(1000, 'dictation_finished');
+
+    await fixture.client.prefetch();
+    expect(fixture.createSession).toHaveBeenCalledOnce();
+
+    const legacy = new FakeSocket();
+    fixture.createWebSocket.mockReturnValueOnce(legacy as unknown as RealtimeAsrWebSocket);
+    const starting = fixture.client.start();
+    await vi.waitFor(() => expect(fixture.client.getSnapshot().status).toBe('listening'));
+    for (let index = 0; index < 8; index += 1) fixture.emitFrame(new ArrayBuffer(6400));
+    await vi.waitFor(() => expect(fixture.createWebSocket).toHaveBeenCalledTimes(2));
+    legacy.open();
+    legacy.serverEvent(ready());
+    await starting;
+
+    expect(sentControls(legacy).map(({ type }) => type)).toEqual(['session.auth']);
+    expect(legacy.sent.filter((data) => data instanceof ArrayBuffer)).toHaveLength(2);
   });
 });

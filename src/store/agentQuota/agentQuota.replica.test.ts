@@ -368,6 +368,24 @@ describe('agent quota replicas', () => {
         ).toBe('Work'),
       );
     });
+
+    it('takes an account out of rotation in the replica and on the server', async () => {
+      vi.spyOn(agentQuotaService, 'listAccounts')
+        .mockResolvedValueOnce([account('a1', { enabled: true })])
+        .mockRejectedValue(new Error('offline'));
+      const updateAccount = vi
+        .spyOn(agentQuotaService, 'updateAccount')
+        .mockResolvedValue(undefined as never);
+      renderHook(() => useAgentQuotaStore.getState().useFetchQuotaAccounts(), { wrapper });
+      await waitFor(() =>
+        expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())).toBeDefined(),
+      );
+
+      await act(() => useAgentQuotaStore.getState().setQuotaAccountEnabled('a1', false));
+
+      expect(updateAccount).toHaveBeenCalledWith('a1', { enabled: false });
+      expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())?.[0]?.enabled).toBe(false);
+    });
   });
 
   describe('user-data reset', () => {

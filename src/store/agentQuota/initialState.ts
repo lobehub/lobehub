@@ -1,3 +1,5 @@
+import type { ClaudeCodeLocalAccount } from '@lobechat/electron-client-ipc';
+
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 
 import type {
@@ -9,6 +11,13 @@ import type {
 } from './projection';
 
 export interface State {
+  /**
+   * Claude Code logins held on THIS desktop (default login + per-account
+   * profiles). `undefined` until listed, and always on the web.
+   */
+  claudeLocalAccounts?: ClaudeCodeLocalAccount[];
+  /** A browser sign-in started from the account manager is in progress. */
+  claudeLoginPending: boolean;
   /** Replica view of the quota account list (one entry, `QUOTA_ACCOUNTS_KEY`). */
   quotaAccountsMap: Record<string, QuotaAccount[]>;
   /** Replica bookkeeping of `quotaAccountsMap`. */
@@ -39,6 +48,8 @@ export interface State {
 }
 
 export const initialState: State = {
+  claudeLocalAccounts: undefined,
+  claudeLoginPending: false,
   quotaAccountsMap: {},
   quotaAccountsReplica: createReplicaState(),
   quotaBindingsMap: {},

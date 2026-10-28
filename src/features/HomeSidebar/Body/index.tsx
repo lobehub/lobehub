@@ -8,6 +8,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import ChannelList from '@/features/Channels/ChannelList';
 import Recents from '@/features/Home/Recents';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -239,6 +240,11 @@ const Body = memo(() => {
       } else if (ACCORDION_KEYS.has(key)) {
         const comp = accordionComponents[key]?.(key);
         if (comp) accGroup.push({ element: comp, key });
+        // Channels sit right below Agents, in their own accordion.
+        if (key === GroupKey.Agent) {
+          flushAccordion();
+          elements.push(<ChannelList key="channels" />);
+        }
       } else {
         flushAccordion();
         const link = renderNavLink(key);

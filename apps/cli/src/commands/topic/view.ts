@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { timeAgo } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { readTopicTranscript } from './readTranscript';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 500;
@@ -278,12 +279,11 @@ export function registerTopicViewCommand(topic: Command) {
         ? resolvePagination(options)
         : { from: 1, limit: DEFAULT_LIMIT, offset: 0 };
       const client = await getTrpcClient(options.workspace);
-      const result = await client.topic.getTopicTranscript.query({
-        includeMessages,
-        limit: pagination.limit,
-        offset: pagination.offset,
-        topicId: id,
-      });
+      const result = await readTopicTranscript(
+        client,
+        { includeMessages, limit: pagination.limit, offset: pagination.offset, topicId: id },
+        options.workspace,
+      );
 
       const messages = result.items as TranscriptMessage[];
       const topicDetail = result.topic as TopicDetail;

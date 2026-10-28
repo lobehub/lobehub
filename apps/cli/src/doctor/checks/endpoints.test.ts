@@ -5,7 +5,13 @@ import { endpointChecks } from './endpoints';
 
 const settings = vi.hoisted(() => ({ value: null as any }));
 
+const authKind = vi.hoisted(() => ({ value: 'stored' }));
+
+vi.mock('../../auth/source', () => ({ pickAuthSource: () => ({ kind: authKind.value }) }));
+
 vi.mock('../../settings', () => ({
+  // Saved per server; only `settings.deviceGatewayUrls` of the probed server counts.
+  loadDeviceGatewayUrl: (serverUrl: string) => settings.value?.deviceGatewayUrls?.[serverUrl],
   loadSettings: () => settings.value,
   normalizeUrl: (url?: string) => (url ? url.replace(/\/$/, '') : undefined),
   resolveAgentGatewayUrl: () => process.env.AGENT_GATEWAY_URL || 'wss://agent-gateway.lobehub.com',
@@ -21,6 +27,7 @@ vi.mock('../../constants/urls', () => ({
 describe('endpoints.resolution', () => {
   beforeEach(() => {
     settings.value = null;
+    authKind.value = 'stored';
     delete process.env.LOBEHUB_SERVER;
     delete process.env.AGENT_GATEWAY_URL;
   });
@@ -30,25 +37,42 @@ describe('endpoints.resolution', () => {
 
     expect(outcome.status).toBe('ok');
     expect(outcome.evidence).toMatchObject({
-      gatewaySource: 'built-in default',
       serverSource: 'built-in default',
       serverUrl: 'https://app.lobehub.com',
     });
+    expect(outcome.detail).toContain('device gateway asked of the server');
   });
 
-  it('warns — never fails — about a self-hosted server on the official device gateway', async () => {
+  it("names the gateway saved for this server, and only this server's", async () => {
     process.env.LOBEHUB_SERVER = 'https://lobe.internal';
+    process.env.AGENT_GATEWAY_URL = 'wss://agents.internal';
+    authKind.value = 'env-jwt';
+    settings.value = {
+      deviceGatewayUrls: {
+        'https://lobe.internal': 'https://gw.lobe.internal',
+        'https://other.internal': 'https://gw.other.internal',
+      },
+    };
 
     const outcome = await runCheck(endpointChecks, 'endpoints.resolution');
 
-    // A failure here would skip every server-side check through the dependency
-    // chain, leaving an API-only installation undiagnosable.
-    expect(outcome.status).toBe('warn');
-    expect(outcome.detail).toContain('device gateway is still the official');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.evidence).toMatchObject({ savedDeviceGatewayUrl: 'https://gw.lobe.internal' });
+    expect(outcome.detail).toContain('https://gw.lobe.internal (saved for this server)');
   });
 
-  it('warns when the gateway is on localhost but the server is not', async () => {
-    settings.value = { gatewayUrl: 'http://127.0.0.1:8788' };
+  it('warns when LOBEHUB_SERVER sends the stored login to another server', async () => {
+    process.env.LOBEHUB_SERVER = 'https://other.internal';
+    settings.value = { serverUrl: 'https://lobe.internal' };
+
+    const outcome = await runCheck(endpointChecks, 'endpoints.resolution');
+
+    expect(outcome.status).toBe('warn');
+    expect(outcome.detail).toContain('the saved login is for https://lobe.internal');
+  });
+
+  it('warns when the saved gateway is on localhost but the server is not', async () => {
+    settings.value = { deviceGatewayUrls: { 'https://app.lobehub.com': 'http://127.0.0.1:8788' } };
 
     const outcome = await runCheck(endpointChecks, 'endpoints.resolution');
 
@@ -58,7 +82,7 @@ describe('endpoints.resolution', () => {
 
   it('warns when a self-hosted server still streams agents from the official gateway', async () => {
     process.env.LOBEHUB_SERVER = 'https://lobe.internal';
-    settings.value = { gatewayUrl: 'wss://gateway.internal' };
+    authKind.value = 'env-jwt';
 
     const outcome = await runCheck(endpointChecks, 'endpoints.resolution');
 

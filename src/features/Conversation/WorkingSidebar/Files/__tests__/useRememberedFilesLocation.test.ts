@@ -158,7 +158,7 @@ describe('useRememberedFilesLocation', { timeout: 15_000 }, () => {
   });
 
   it('keeps its replica keys out of the SWR persistent cache', async () => {
-    const { replicaKeys } = await import('@lobechat/replica');
+    const { replicaKeys } = await import('local-replica');
     const { unstable_serialize } = await import('swr');
     const { CACHE_TIERS } = await import('@/libs/swr/localStorageProvider');
     const { filesLocationResource } = await import('@/store/projectFile/projection');

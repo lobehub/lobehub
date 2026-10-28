@@ -74,7 +74,9 @@ export const canJoinRunningTurn = (entry: QueuedFollowUp, state: AgentState): bo
   const { request } = entry;
   if (!request.prompt.trim()) return false;
   if (request.fileIds?.length) return false;
-  if (request.contextSelections?.length || request.pageSelections?.length) return false;
+  // Attached content is injected per user message; a steer message joins a
+  // turn whose context is already built.
+  if (request.userMessage?.metadata) return false;
   if (request.selectedToolIds?.length || request.selectedSkillIds?.length) return false;
   if (request.mentionedAgents?.length) return false;
 
@@ -136,6 +138,7 @@ export const injectQueuedFollowUp = async (
     const message = await messageModel.create({
       agentId: state.origin?.agentId,
       content: request.prompt,
+      editorData: request.userMessage?.editorData,
       groupId,
       metadata: buildUserTurnMetadata({
         steer: true,

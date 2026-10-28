@@ -216,9 +216,23 @@ describe('LobeHub CLI plugin', () => {
     ['2.1.0', true],
     ['10.0.0', true],
     ['2.1.301 (Claude Code)', true],
+    ['Claude Code v2.0.20', true],
+    ['1.2 then 2.0.20', true],
+    ['0.2.0.20', false],
     ['2.0.19', false],
     ['1.9.99', false],
   ])('treats Claude Code %s as loading plugin skills: %s', (version, expected) => {
+    expect(claudeCodeLoadsPluginSkills(version)).toBe(expected);
+  });
+
+  it.each([
+    ['major without separators', (digits: string) => digits, false],
+    ['missing patch', (digits: string) => `${digits}.0`, false],
+    ['long minor', (digits: string) => `2.${digits}`, false],
+    ['digits before a valid version', (digits: string) => `${digits}x 2.0.20`, true],
+  ] as const)('parses a long banner with %s', (_name, banner, expected) => {
+    const version = banner('9'.repeat(100_000));
+
     expect(claudeCodeLoadsPluginSkills(version)).toBe(expected);
   });
 });

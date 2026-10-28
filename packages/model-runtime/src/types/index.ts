@@ -1,5 +1,6 @@
 export * from './asr';
 export * from './chat';
+export * from './decision';
 export * from './embeddings';
 export * from './error';
 export * from './image';

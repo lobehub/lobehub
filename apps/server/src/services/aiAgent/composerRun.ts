@@ -22,7 +22,6 @@ export type ComposerRunRequest = Pick<
   | 'autoStart'
   | 'clientIds'
   | 'clientProtocol'
-  | 'contextSelections'
   | 'deviceId'
   | 'existingMessageIds'
   | 'fileIds'
@@ -30,7 +29,6 @@ export type ComposerRunRequest = Pick<
   | 'llmExecutor'
   | 'localDeviceId'
   | 'mentionedAgents'
-  | 'pageSelections'
   | 'parentMessageId'
   | 'prompt'
   | 'replacesOperationId'
@@ -44,6 +42,7 @@ export type ComposerRunRequest = Pick<
   | 'steer'
   | 'trigger'
   | 'userInterventionConfig'
+  | 'userMessage'
 > & {
   clientOperations?: NonNullable<InternalExecAgentParams['clientRunSnapshot']>['operations'];
 };
@@ -103,7 +102,6 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
       replacesOperationId: input.replacesOperationId,
     },
     clientProtocol: input.clientProtocol,
-    contextSelections: input.contextSelections,
     includeFinalState: input.includeFinalState,
     llmExecutor: input.llmExecutor,
     // This path serves the composer (`aiAgentService.execAgentTask`).
@@ -143,7 +141,6 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     }),
     fileIds: input.fileIds,
     mentionedAgents: input.mentionedAgents,
-    pageSelections: input.pageSelections,
     parentMessageId,
     prompt: input.prompt,
     replacesOperationId: input.replacesOperationId,
@@ -161,6 +158,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     trigger: input.trigger ?? RequestTrigger.Chat,
     userAgent: ctx.userAgent,
     userInterventionConfig: input.userInterventionConfig,
+    userMessage: input.userMessage,
   });
   // The run was dispatched but it did not take the Task's run row over. Two
   // ways that happens: the Task was retired while the run was starting (the
