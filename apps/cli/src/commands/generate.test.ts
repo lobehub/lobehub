@@ -11,6 +11,7 @@ import { registerGenerateCommand } from './generate';
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     aiChat: {
+      decide: { mutate: vi.fn() },
       outputJSON: { mutate: vi.fn() },
     },
     asr: {
@@ -332,6 +333,153 @@ describe('generate command', () => {
       await program.parseAsync(['node', 'test', 'generate', 'text', 'fail']);
 
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('500'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('decide', () => {
+    const questions = {
+      helpful: {
+        criteria: { false: 'Chatter.', true: 'An open question.' },
+        instructions: 'Would stepping in help?',
+        type: 'boolean',
+      },
+    };
+
+    it('should send the questions and state to aiChat.decide', async () => {
+      const response = {
+        answers: { helpful: { probability: 0.7, type: 'boolean' } },
+        model: 'jev',
+      };
+      mockTrpcClient.aiChat.decide.mutate.mockResolvedValue({ data: response, tracingId: 't' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'decide',
+        'Newest message: is it ready?',
+        '--model',
+        'lobehub/jev-1.14.0',
+        '--questions',
+        JSON.stringify(questions),
+      ]);
+
+      expect(mockTrpcClient.aiChat.decide.mutate).toHaveBeenCalledWith({
+        metadata: { trigger: 'cli' },
+        model: 'jev-1.14.0',
+        provider: 'lobehub',
+        questions,
+        state: 'Newest message: is it ready?',
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(response, null, 2));
+    });
+
+    it('should read questions and state from files', async () => {
+      mockTrpcClient.aiChat.decide.mutate.mockResolvedValue({ data: { answers: {} } });
+      const dir = os.tmpdir();
+      const questionsPath = path.join(dir, `lh-gen-decide-q-${process.pid}.json`);
+      const statePath = path.join(dir, `lh-gen-decide-s-${process.pid}.txt`);
+      await fsWriteFile(questionsPath, JSON.stringify(questions));
+      await fsWriteFile(statePath, 'state from file');
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'generate',
+          'decide',
+          '-m',
+          'lobehub/jev-1.14.0',
+          '-q',
+          questionsPath,
+          '--state-file',
+          statePath,
+        ]);
+
+        expect(mockTrpcClient.aiChat.decide.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ questions, state: 'state from file' }),
+        );
+      } finally {
+        await fsRm(questionsPath, { force: true });
+        await fsRm(statePath, { force: true });
+      }
+    });
+
+    it('should require --model', async () => {
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'decide',
+        'state',
+        '--questions',
+        JSON.stringify(questions),
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('`--model` is required'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.aiChat.decide.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should reject a question without a known type', async () => {
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'decide',
+        'state',
+        '-m',
+        'lobehub/jev-1.14.0',
+        '--questions',
+        '{"ok":{"instructions":"Is it ok?","type":"yesno"}}',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Question "ok" needs a type'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.aiChat.decide.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should require a state', async () => {
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'decide',
+        '-m',
+        'lobehub/jev-1.14.0',
+        '--questions',
+        JSON.stringify(questions),
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('No state'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should report a server error and exit', async () => {
+      mockTrpcClient.aiChat.decide.mutate.mockRejectedValue(
+        new Error('Decision models are not supported by this provider'),
+      );
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'decide',
+        'state',
+        '-m',
+        'openai/gpt-4o',
+        '--questions',
+        JSON.stringify(questions),
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Decision failed'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });

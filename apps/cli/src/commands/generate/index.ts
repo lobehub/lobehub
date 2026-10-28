@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../../utils/format';
 import { registerAsrCommand } from './asr';
+import { registerDecideCommand } from './decide';
 import { registerImageCommand } from './image';
 import { registerJsonCommand } from './json';
 import { registerTextCommand } from './text';
@@ -73,6 +74,7 @@ export function registerGenerateCommand(program: Command) {
 
   registerTextCommand(generate);
   registerJsonCommand(generate);
+  registerDecideCommand(generate);
   registerImageCommand(generate);
   registerVideoCommand(generate);
   registerTtsCommand(generate);

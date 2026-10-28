@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { DecisionPayload, DecisionQuestions } from '@lobechat/model-runtime';
 import { getErrorCodeSpec, StructuredOutputError } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
-import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
+import {
+  AiSendMessageServerSchema,
+  DecisionOutputSchema,
+  RequestTrigger,
+  StructureOutputSchema,
+} from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
@@ -147,6 +153,44 @@ const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 const aiChatWriteProcedure = aiChatProcedure.use(withScopedPermission('message:create'));
 
 export const aiChatRouter = router({
+  /**
+   * Asks a decision model (e.g. `lobehub/jev-1.14.0`) typed questions about one state and returns
+   * its answers with probabilities: `lh generate decide`. The same `runtime.decide` call bot wake
+   * and channel routing make, so a prompt can be replayed on the model production uses.
+   */
+  decide: aiChatWriteProcedure.input(DecisionOutputSchema).mutation(async ({ input, ctx }) => {
+    log('decide called with provider: %s, model: %s', input.provider, input.model);
+
+    const tracingId = input.tracing?.tracingId ?? randomUUID();
+
+    try {
+      const data = await ctx.aiGenerationService.decide(
+        {
+          model: input.model,
+          provider: input.provider,
+          // Validated by `DecisionOutputSchema`, which mirrors the runtime's decision types.
+          questions: input.questions as DecisionQuestions,
+          state: input.state as DecisionPayload['state'],
+        },
+        {
+          metadata: {
+            trigger: RequestTrigger.Chat,
+            ...input.metadata,
+            userAgent: ctx.userAgent,
+          },
+          tracing: { ...input.tracing, tracingId },
+        },
+      );
+
+      return { data, tracingId };
+    } catch (error) {
+      const runtimeTRPCError = createRuntimeTRPCError(error);
+      if (runtimeTRPCError) throw runtimeTRPCError;
+
+      throw error;
+    }
+  }),
+
   outputJSON: aiChatWriteProcedure.input(StructureOutputSchema).mutation(async ({ input, ctx }) => {
     log('outputJSON called with provider: %s, model: %s', input.provider, input.model);
     log('messages count: %d', input.messages.length);
