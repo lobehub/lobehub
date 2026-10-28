@@ -482,7 +482,7 @@
     "tokenx": "^1.6.0",
     "ts-md5": "^2.0.1",
     "ua-parser-js": "^1.0.41",
-    "undici": "^7.29.0",
+    "undici": "^7.30.1",
     "unist-builder": "^4.0.0",
     "url-join": "^5.0.0",
     "use-merge-value": "^1.2.0",
