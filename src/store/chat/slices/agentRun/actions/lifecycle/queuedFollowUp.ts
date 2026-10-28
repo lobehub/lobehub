@@ -28,7 +28,11 @@ export const findOrphanedQueueKey = (
     });
   });
 
-/** Send drained queued messages as one steered turn. */
+/**
+ * Send drained queued messages as one turn of their own. The run they waited
+ * behind already ended, so this is a fresh turn — not a steer of it — and the
+ * user message stays unmarked.
+ */
 export const sendQueuedMessages = (
   get: () => ChatStore,
   context: ConversationContext,
@@ -48,7 +52,7 @@ export const sendQueuedMessages = (
     files: mergedFiles,
     ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
     message: merged.content,
-    metadata: { ...merged.metadata, steer: true },
+    metadata: merged.metadata,
   });
 };
 

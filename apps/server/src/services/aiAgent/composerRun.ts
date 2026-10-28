@@ -31,6 +31,7 @@ export type ComposerRunRequest = Pick<
   | 'mentionedAgents'
   | 'parentMessageId'
   | 'prompt'
+  | 'queuedSuccessor'
   | 'replacesOperationId'
   | 'resumeApproval'
   | 'resumeApprovals'
@@ -143,6 +144,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     mentionedAgents: input.mentionedAgents,
     parentMessageId,
     prompt: input.prompt,
+    queuedSuccessor: input.queuedSuccessor,
     replacesOperationId: input.replacesOperationId,
     // When parentMessageId is provided, this is a regeneration/continue or a
     // human-approval resume — either way, skip user message creation.

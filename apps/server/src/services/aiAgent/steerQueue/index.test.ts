@@ -122,7 +122,7 @@ describe('startQueuedFollowUp', () => {
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
   });
 
-  it('starts the drained follow-ups as one steered turn on the same surface', async () => {
+  it('starts the drained follow-ups as their own turn on the same surface', async () => {
     drain.mockResolvedValue([followUp('a', 1, {}), followUp('b', 2, {})]);
 
     await expect(
@@ -142,9 +142,12 @@ describe('startQueuedFollowUp', () => {
       expect.objectContaining({
         appContext: { threadId: 'thd-1', topicId: 'tpc-1' },
         prompt: 'a\n\nb',
-        steer: true,
+        queuedSuccessor: true,
       }),
     );
+    // A drained follow-up opens a turn of its own; only a steer of the run it
+    // waited behind would mark the user message.
+    expect(startComposerRun.mock.calls[0][1].steer).toBeUndefined();
     // Delivered: the slots the drain reserved are free again.
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ topicId: 'tpc-1' }),

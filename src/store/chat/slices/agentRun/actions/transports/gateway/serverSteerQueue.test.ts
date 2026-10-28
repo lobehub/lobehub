@@ -143,9 +143,9 @@ describe('handOffQueuedMessage', () => {
     await handOffQueuedMessage(get, key, context, 'q1', async () => request);
     await vi.advanceTimersByTimeAsync(200);
 
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'q1', metadata: { steer: true } }),
-    );
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ message: 'q1' }));
+    // The run it waited behind is over: the send is a fresh turn, not a steer.
+    expect(sendMessage.mock.calls[0][0].metadata?.steer).toBeUndefined();
   });
 
   it('retries an append whose outcome is unknown with the same id', async () => {

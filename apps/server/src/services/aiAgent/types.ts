@@ -229,6 +229,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   onOperationCreated?: (operationId: string) => Promise<void>;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
+  /**
+   * A server-started turn that takes over where a finished run left off (the
+   * server-side drain of queued follow-ups). Non-interactive thread starts
+   * must hold the thread-start fence and find no other live run — see
+   * `startOnThread`. Unlike `steer`, it never marks the user message.
+   */
+  queuedSuccessor?: boolean;
   queueRetries?: number;
   queueRetryDelay?: string;
   /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
@@ -308,9 +315,10 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
-   * The prompt was queued while the previous turn was still running. The user
-   * message is persisted with `metadata.steer` so it renders as a continuation
-   * of that turn.
+   * The send directly steered the turn it replaces: an interrupting "send
+   * now", not a follow-up that waited in queue and started as the next turn.
+   * The user message is persisted with `metadata.steer` so it renders as a
+   * continuation of the steered turn.
    */
   steer?: boolean;
   /**

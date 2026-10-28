@@ -497,7 +497,6 @@ export class ScmControlService {
     if (!topic?.agentId) return { detail: 'conversation has no agent', outcome: 'skipped' };
 
     const prompt = await this.buildPrompt(row, reason, trigger);
-    const running = Boolean(topic.metadata?.runningOperation);
 
     // Take the slot before starting anything: the check above read a row
     // snapshot, and on a Redis-less deployment there is no debounce to stop
@@ -509,8 +508,9 @@ export class ScmControlService {
     }
 
     // A busy topic: execAgent's reservation retries briefly for the running
-    // turn to hand back (queued-steer semantics); if it does not, the wake is
-    // dropped and the next event tries again.
+    // turn to hand back; if it does not, the wake is dropped and the next
+    // event tries again. The wake starts a turn of its own after the hand-back,
+    // so it is not a steer of the run it waited behind.
     let operationId: string;
     try {
       const result = await new AiAgentService(this.db, row.userId, {
@@ -527,7 +527,6 @@ export class ScmControlService {
           url: row.url,
         },
         prompt,
-        steer: running,
         trigger: RequestTrigger.Scm,
         userInterventionConfig: { approvalMode: 'headless' },
       });

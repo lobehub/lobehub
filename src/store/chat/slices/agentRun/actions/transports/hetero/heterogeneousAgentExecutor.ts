@@ -2720,7 +2720,7 @@ export const executeHeterogeneousAgent = async (
               files: mergedFiles,
               ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: merged.content,
-              metadata: { ...merged.metadata, steer: true },
+              metadata: merged.metadata,
             })
             .catch((e: unknown) => {
               console.error(
