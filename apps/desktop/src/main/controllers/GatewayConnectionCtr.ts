@@ -214,7 +214,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up agent run handler
     srv.setAgentRunHandler((request) =>
       executeGatewayAgentRun(request, {
-        getAccessToken: () => this.remoteServerConfigCtr.getAccessToken(),
         getServerUrl: () => this.remoteServerConfigCtr.getRemoteServerUrl(),
         heterogeneousAgentCtr: this.heterogeneousAgentCtr,
         platformTasks: this.platformTasks,
