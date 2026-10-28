@@ -38,6 +38,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     observe,
     observeBurst,
     operatorUserId,
+    replyVoiceFor,
     passGatesOrNotify,
     platform,
     reactionMode,
@@ -290,6 +291,7 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           replyLocale,
           duty: initiation?.reason === 'in-duty' ? { matched: initiation.duty } : undefined,
           named: wakeReason === 'named-in-text',
+          ...replyVoiceFor(thread.id),
           wakeKind,
         });
       } catch (error) {

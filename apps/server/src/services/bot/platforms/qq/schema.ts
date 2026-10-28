@@ -8,6 +8,7 @@ import {
   makeUserIdField,
   watchKeywordsField,
 } from '../const';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import { DEFAULT_QQ_CONNECTION_MODE } from './const';
 
@@ -100,6 +101,7 @@ export const schema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
     ],
     type: 'object',
   },

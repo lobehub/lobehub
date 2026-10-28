@@ -441,6 +441,30 @@ export default {
   'channel.watchKeywordsAdd': 'Add keyword',
   'channel.watchKeywordsEmpty':
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
+  'channel.replyStyle': 'Reply style',
+  'channel.replyStyleHint':
+    'How the bot talks in every channel, in your own words: tone, length, formatting, language, emoji. It shapes how the bot speaks, not what it does. You can also ask the bot to update this itself. Up to 2000 characters.',
+  'channel.replyStylePlaceholder':
+    'Casual and short, like a teammate. No bullet lists. Reply in the language you were spoken to.',
+  'channel.channelReplyStyles': 'Reply style per channel',
+  'channel.channelReplyStylesHint':
+    'A style for one channel or thread, used there instead of the reply style above.',
+  'channel.channelReplyStylesAdd': 'Add channel',
+  'channel.channelReplyStylesEmpty':
+    'No channel has its own style. Every channel uses the reply style above.',
+  'channel.channelReplyStyleChannelLabel': 'Channel ID',
+  'channel.channelReplyStyleChannelPlaceholder': 'Channel or thread ID',
+  'channel.channelReplyStyleStyleLabel': 'Style',
+  'channel.replyEmojis': 'Emoji the bot can use',
+  'channel.replyEmojisHint':
+    "Emoji and stickers the bot may drop into a reply, and when each fits. Paste the code as it appears in a message: a Discord custom emoji is <:name:id>; send \\:name: in Discord to see it. The bot uses them sparingly and never any custom emoji that isn't listed.",
+  'channel.replyEmojisAdd': 'Add emoji',
+  'channel.replyEmojisEmpty':
+    'No emoji added. The bot uses plain Unicode emoji only when its style calls for it.',
+  'channel.replyEmojiLabel': 'Emoji',
+  'channel.replyEmojiPlaceholder': 'e.g. <:doge:1234567890>',
+  'channel.replyEmojiUsageLabel': 'When to use',
+  'channel.replyEmojiUsagePlaceholder': 'e.g. when someone ships something',
   'channel.botWakeEnabled': 'Judge unprompted follow-ups',
   'channel.botWakeEnabledHint':
     "Turns on the wake options below. The bot judges messages nobody addressed to it and may join in; off keeps today's behavior, where a watch keyword wakes the bot without any check.",

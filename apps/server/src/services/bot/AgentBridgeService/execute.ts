@@ -63,6 +63,10 @@ export async function executeWithCallback(
     duty?: { matched?: string };
     /** The bot woke only because its name is in the text; told to the agent with a `followup`. */
     named?: boolean;
+    /** Emoji the owner lets the bot use in this conversation. */
+    replyEmojis?: { emoji: string; usage?: string }[];
+    /** How the bot talks in this conversation, as the owner wrote it. */
+    replyStyle?: string;
     /** Acknowledgement posted before the run; the agent is told not to repeat it. */
     openingReply?: string;
     reactionMode?: BotReactionMode;
@@ -300,6 +304,10 @@ export async function executeWithCallback(
     if (opts.named) botPlatformContext.named = true;
   }
   if (opts.openingReply && botPlatformContext) botPlatformContext.openingReply = opts.openingReply;
+  if (botPlatformContext) {
+    if (opts.replyStyle) botPlatformContext.replyStyle = opts.replyStyle;
+    if (opts.replyEmojis?.length) botPlatformContext.replyEmojis = opts.replyEmojis;
+  }
 
   // Attach file warnings to botPlatformContext for injection via context engine
   if (fileWarnings?.length && botPlatformContext) {

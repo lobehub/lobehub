@@ -69,6 +69,13 @@ export interface BotPlatformInfo {
   platformName: string;
   /** Pre-injected recent same-channel history (cross-session). */
   recentChannelHistory?: RecentChannelHistory;
+  /**
+   * Emoji and stickers the owner lets the bot use, pasted as written (`<:doge:123>`, `:doge:`, 🐶),
+   * each with when it fits.
+   */
+  replyEmojis?: { emoji: string; usage?: string }[];
+  /** How the bot talks in this conversation, as the owner wrote it (the channel's or the default). */
+  replyStyle?: string;
   supportsMarkdown: boolean;
   /**
    * How the bot was woken. On `followup` the agent is told it may stay silent; on `mention` (or
@@ -104,6 +111,8 @@ export const formatBotPlatformContext = ({
   openingReply,
   platformName,
   recentChannelHistory,
+  replyEmojis,
+  replyStyle,
   supportsMarkdown,
   wakeKind,
   warnings,
@@ -137,6 +146,7 @@ export const formatBotPlatformContext = ({
     'When someone here tells you how to do better — corrects a mistake, says what to do next time, or gives a standing rule — make the change durable in this same turn. A promise only said in chat ("next time I will…") is lost when this run ends.',
     'Pick where it goes by what the lesson is (activate the tool first if it is not loaded):',
     "- When you should step in, in this channel → your bot duties (`botWakeDuties`): `lobe-message` getBotDetail → updateBot. Only the bot's owner may change bot settings; if updateBot refuses, put the rule in your system prompt instead.",
+    '- How you talk here (tone, length, emoji) → your bot reply style: `replyStyle` for every channel, `channelReplyStyles` for one channel, `replyEmojis` for the emoji you may use; same tools and owner rule as the duties.',
     '- How you work, wherever you are asked → your system prompt: `lobe-agent-management` getAgentDetail → updatePrompt, with your own id from `current_agent`.',
     '- A multi-step procedure or checklist you will reuse → `lobe-agent-documents` createDocument with hintIsSkill=true.',
     '- Facts, references or a longer spec → `lobe-agent-documents` createDocument; when it must be read before some task, also say so in your system prompt.',
@@ -211,6 +221,34 @@ export const formatBotPlatformContext = ({
           ]
         : []),
       '</optional_reply>',
+    );
+  }
+
+  // Owner-written; only the tag characters are escaped so the text cannot close the block.
+  const style = replyStyle?.trim().replaceAll('<', '‹').replaceAll('>', '›');
+  if (style) {
+    lines.push(
+      '',
+      '<reply_style>',
+      'How you talk in this conversation, as your owner wrote it. It shapes your tone and form, not what you do or whether you reply; where it conflicts with the platform rules below, the platform rules win.',
+      style,
+      '</reply_style>',
+    );
+  }
+
+  // Pasted verbatim: a custom emoji code (`<:doge:123>`) only renders unescaped. One line each.
+  const emojis = (replyEmojis ?? []).filter(({ emoji }) => emoji.trim() && !/[\n\r`]/.test(emoji));
+  if (emojis.length > 0) {
+    lines.push(
+      '',
+      '<reply_emojis>',
+      'Emoji and stickers you may use, one per line: write the code before the dash exactly as listed, without backticks around it. Use one when it fits the moment, the way people in this chat do; most replies need none, and never more than one or two. Do not write any other custom emoji code: one not on this list shows as broken text.',
+      ...emojis.map(({ emoji, usage }) =>
+        usage?.trim()
+          ? `- ${emoji.trim()} — ${usage.trim().replaceAll(/\s+/g, ' ')}`
+          : `- ${emoji.trim()}`,
+      ),
+      '</reply_emojis>',
     );
   }
 

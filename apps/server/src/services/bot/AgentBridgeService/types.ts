@@ -49,12 +49,16 @@ export interface BridgeHandlerOpts {
    * `DEFAULT_BOT_REACTION_MODE` for callers that predate the setting.
    */
   reactionMode?: BotReactionMode;
+  /** Emoji the owner lets the bot use; told to the agent. See `formatBotPlatformContext`. */
+  replyEmojis?: { emoji: string; usage?: string }[];
   /**
    * Locale for system-generated reply text (errors, stopped notice, etc.).
    * Picked per platform — see `getBotReplyLocale`. When omitted we fall back
    * to inferring from `botContext.platform`, then to English.
    */
   replyLocale?: BotReplyLocale;
+  /** How the bot talks in this conversation, as the owner wrote it. See `formatBotPlatformContext`. */
+  replyStyle?: string;
   /**
    * How the bot was woken. `followup` lets the agent end in silence and holds back every visible
    * side effect (reaction, typing, progress message) until it decides to speak; `mention`

@@ -7,6 +7,7 @@
  */
 import { vi } from 'vitest';
 
+import type * as ReplyStyle from '../platforms/replyStyle';
 import type * as PlatformUtils from '../platforms/utils';
 
 // ==================== Hoisted mocks ====================
@@ -311,6 +312,11 @@ export const platformsModule = async () => ({
   // mocked because it instantiates every platform definition, `utils` does not.
   resolveBotConcurrency: (await vi.importActual<typeof PlatformUtils>('../platforms/utils'))
     .resolveBotConcurrency,
+  // Pure parsers, safe to import for real like `utils`.
+  extractReplyEmojis: (await vi.importActual<typeof ReplyStyle>('../platforms/replyStyle'))
+    .extractReplyEmojis,
+  resolveReplyStyle: (await vi.importActual<typeof ReplyStyle>('../platforms/replyStyle'))
+    .resolveReplyStyle,
   getBotReplyLocale: (platform: string | undefined): string => {
     if (platform === 'feishu' || platform === 'qq' || platform === 'wechat') return 'zh-CN';
     return 'en-US';

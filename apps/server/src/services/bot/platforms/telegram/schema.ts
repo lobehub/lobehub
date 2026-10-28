@@ -10,6 +10,7 @@ import {
   reactionModeField,
   watchKeywordsField,
 } from '../const';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -98,6 +99,7 @@ export const schema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
     ],
     type: 'object',
   },

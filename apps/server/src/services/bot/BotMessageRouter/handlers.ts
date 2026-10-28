@@ -5,6 +5,7 @@ import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import type { LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
 
 import { AgentBridgeService } from '../AgentBridgeService';
@@ -17,6 +18,7 @@ import {
   extractDmSettings,
   extractGroupSettings,
   extractGuestSettings,
+  extractReplyEmojis,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   getBotReplyLocale,
@@ -26,6 +28,7 @@ import {
   normalizeBotReplyLocale,
   normalizeBotReplyPlacementMode,
   type PlatformClient,
+  resolveReplyStyle,
   type UserAllowlist,
 } from '../platforms';
 import { renderThrownAgentError } from '../renderThrownError';
@@ -46,7 +49,7 @@ import {
   PARTICIPANTS_TTL_MS,
 } from './participants';
 import { createReplyOpening } from './replyOpening';
-import type { BotCommand, BotHandlerContext, ResolvedAgentInfo } from './types';
+import type { BotCommand, BotHandlerContext, BotReplyVoice, ResolvedAgentInfo } from './types';
 import {
   applyWatchKeywordInstructions,
   burstMatchesWatchKeyword,
@@ -89,6 +92,14 @@ export function registerHandlers(
   const { agentId, applicationId, platform, userId, workspaceId } = info;
   const bridge = new AgentBridgeService(serverDB, userId, workspaceId);
   const charLimit = (info.settings?.charLimit as number) || undefined;
+  const replyEmojis = extractReplyEmojis(info.settings);
+  const replyVoiceFor = (platformThreadId: string): BotReplyVoice => ({
+    replyEmojis: replyEmojis.length > 0 ? replyEmojis : undefined,
+    replyStyle: resolveReplyStyle(
+      info.settings,
+      resolveChannelKeys(platform, applicationId, platformThreadId).ids,
+    ),
+  });
   const displayToolCalls = info.settings?.displayToolCalls === true;
   const reactionMode = normalizeBotReactionMode(info.settings?.reactionMode);
   const dmSettings: DmSettings = extractDmSettings(info.settings);
@@ -540,6 +551,7 @@ export function registerHandlers(
         openingReply,
         reactionMode,
         replyLocale,
+        ...replyVoiceFor(thread.id),
       });
     } catch (error) {
       const operationId = AgentBridgeService.getActiveOperationId(thread.id);
@@ -844,6 +856,7 @@ export function registerHandlers(
         openingReply,
         reactionMode,
         replyLocale,
+        ...replyVoiceFor(thread.id),
         wakeKind,
       });
     } catch (error) {
@@ -882,6 +895,7 @@ export function registerHandlers(
     agentId,
     applicationId,
     botWakeEnabled: isBotWakeEnabled(parseBotWakeSettings(info.settings).config),
+    replyVoiceFor,
     bridge,
     charLimit,
     client,

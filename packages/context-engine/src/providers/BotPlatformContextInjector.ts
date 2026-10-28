@@ -21,6 +21,10 @@ export interface BotPlatformContext {
   platformName: string;
   /** Pre-injected recent same-channel history for platforms without history-read. */
   recentChannelHistory?: BotPlatformInfo['recentChannelHistory'];
+  /** Emoji the owner lets the bot use (see `formatBotPlatformContext`). */
+  replyEmojis?: BotPlatformInfo['replyEmojis'];
+  /** How the bot talks in this conversation (see `formatBotPlatformContext`). */
+  replyStyle?: BotPlatformInfo['replyStyle'];
   supportsMarkdown: boolean;
   /** `followup` tells the agent it may stay silent (see `formatBotPlatformContext`). */
   wakeKind?: BotPlatformInfo['wakeKind'];

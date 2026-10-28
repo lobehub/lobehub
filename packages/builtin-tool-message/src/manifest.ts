@@ -185,6 +185,25 @@ const botSettingsSchema = {
       },
       type: 'array',
     },
+    replyEmojis: {
+      description:
+        'Emoji and stickers the bot may use in its replies: `[{ emoji, usage? }]`, where `emoji` is pasted into the text as is (a Unicode emoji, a Discord custom emoji `<:name:id>` or `<a:name:id>`, a Slack `:name:`) and `usage` says when it fits ("someone ships something", "a teasing reply"). Overwrite-replace: read with getBotDetail, edit, write the whole array back. Only change it when the bot\'s owner asks; up to 50.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          emoji: { type: 'string' },
+          usage: { type: 'string' },
+        },
+        required: ['emoji'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    replyStyle: {
+      description:
+        'How the bot talks in every channel, as free text: tone, length, formatting, language, emoji use ("casual, short, like a teammate; no bullet lists; reply in the language you were spoken to"). Only how it speaks, not what it does (that is botWakeDuties). channelReplyStyles replaces it for one channel. Empty string clears it. Only change it when the bot\'s owner asks; up to 2000 characters.',
+      type: 'string',
+    },
     botWakeDuties: {
       description:
         'The bot\'s duties (职责边界): free text, one duty per line, saying what the bot is responsible for in its channels (e.g. "When someone describes a feature request, assess it; for easy ones create a task for dario"). When bot-wake is on (botWakeEnabled), a message from anyone that nobody addressed to the bot but that falls within these duties may wake it. Empty string turns this off. Overwrite-replace: to add or change one duty, read the current text with getBotDetail, edit it, and write the whole text back. Only change it when the bot\'s owner asks; up to 4000 characters.',
@@ -196,6 +215,20 @@ const botSettingsSchema = {
       maximum: 1,
       minimum: 0,
       type: 'number',
+    },
+    channelReplyStyles: {
+      description:
+        "A reply style for one channel or thread, replacing replyStyle there: `[{ channelId, style }]` (the Discord channel or thread id, the Slack channel id, …). Overwrite-replace like watchKeywords: read with getBotDetail, edit, write the whole array back. Only change it when the bot's owner asks.",
+      items: {
+        additionalProperties: false,
+        properties: {
+          channelId: { type: 'string' },
+          style: { type: 'string' },
+        },
+        required: ['channelId', 'style'],
+        type: 'object',
+      },
+      type: 'array',
     },
     dmPolicy: {
       description:
@@ -935,7 +968,7 @@ export const MessageManifest: BuiltinToolManifest = {
           settings: {
             ...botSettingsSchema,
             description:
-              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords, botWakeDuties, botWakeDutiesThreshold).',
+              'Updated settings (partial update at the key level). See nested field descriptions for the allowed keys (dmPolicy, allowFrom, userId, groupPolicy, groupAllowFrom, serverId, watchKeywords, botWakeDuties, botWakeDutiesThreshold, replyStyle, channelReplyStyles, replyEmojis).',
           },
         },
         required: ['botId'],

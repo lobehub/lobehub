@@ -64,6 +64,12 @@ export {
   WORKING_REACTION_EMOJI,
 } from './const';
 export { PlatformRegistry } from './registry';
+export {
+  extractReplyEmojis,
+  type ReplyEmojiEntry,
+  replyStyleFields,
+  resolveReplyStyle,
+} from './replyStyle';
 export type {
   BotMessageAttachment,
   BotPlatformRedisClient,

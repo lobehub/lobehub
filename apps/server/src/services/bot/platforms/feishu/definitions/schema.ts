@@ -14,6 +14,7 @@ import {
   reactionModeField,
   watchKeywordsField,
 } from '../../const';
+import { replyStyleFields } from '../../replyStyle';
 import type { FieldSchema } from '../../types';
 import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
 
@@ -122,6 +123,7 @@ export const sharedSchema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
     ],
     type: 'object',
   },

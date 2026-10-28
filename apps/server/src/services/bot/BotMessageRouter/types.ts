@@ -8,6 +8,7 @@ import type {
   BotReplyLocale,
   DmSettings,
   PlatformClient,
+  ReplyEmojiEntry,
   WatchKeywordEntry,
 } from '../platforms';
 import type { WakeMessageLike } from '../wake/signal';
@@ -116,6 +117,12 @@ export type BotAccessGate = (
   caller: string,
 ) => Promise<boolean>;
 
+/** The owner's reply style for one conversation and the emoji the bot may use there. */
+export interface BotReplyVoice {
+  replyEmojis?: ReplyEmojiEntry[];
+  replyStyle?: string;
+}
+
 /** Per-bot values `registerHandlers` hands to the DM / keyword catch-all. */
 export interface BotHandlerContext {
   agentId: string;
@@ -176,6 +183,8 @@ export interface BotHandlerContext {
     messages: WakeMessageLike[],
     thread: { id: string },
   ) => void;
+  /** How the bot talks in a conversation: the owner's reply style for it and the emoji it may use. */
+  replyVoiceFor: (platformThreadId: string) => BotReplyVoice;
   serverDB: LobeChatDatabase;
   /**
    * Opens the reply to a message that woke the bot (an acknowledgement, and the channel or a new

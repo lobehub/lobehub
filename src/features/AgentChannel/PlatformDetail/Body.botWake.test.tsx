@@ -271,8 +271,8 @@ describe('channel settings form: bot-wake options', () => {
     expect(area).toBeInTheDocument();
     expect(Number(area.getAttribute('rows'))).toBeGreaterThanOrEqual(8);
     expect(Number(area.getAttribute('maxlength'))).toBeGreaterThanOrEqual(2000);
-    // Multi-line next to the duties only: the others stay single-line.
-    expect(container.querySelectorAll('textarea')).toHaveLength(2);
+    // Multi-line next to the duties and the reply style only: the others stay single-line.
+    expect(container.querySelectorAll('textarea')).toHaveLength(3);
   });
 
   it('opens the wake options with the duties: a text area, empty by default, and its dial', () => {
