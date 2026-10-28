@@ -332,7 +332,7 @@ export class PluginTypesActionImpl {
     while (root && !root.metadata.mcpClientStep && root.parentOperationId)
       root = this.#get().operations[root.parentOperationId];
     const stepBindings = toRecord(root?.metadata.mcpClientSteps);
-    const clientStep = (stepBindings?.[id] ?? root?.metadata.mcpClientStep) as
+    const clientStep = (stepBindings ? stepBindings[id] : root?.metadata.mcpClientStep) as
       | {
           operationId: string;
           deadline: number;

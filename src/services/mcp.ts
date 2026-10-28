@@ -96,6 +96,7 @@ class MCPService {
     const runDurableClientTool = async () => {
       if (!elicitation) throw new Error('Client MCP invocation has no durable identity');
       let enqueueUnconfirmed = true;
+      let observationFailures = 0;
       while (!signal?.aborted && Date.now() < elicitation.deadline + 60_000) {
         if (enqueueUnconfirmed) {
           try {
@@ -111,11 +112,33 @@ class MCPService {
             // exact saved result; an empty long poll retries the same fenced outbox.
           }
         }
-        const outcome = await executionClient.mcpElicitation.clientToolOutcome.query(
-          elicitation.identity,
-          { signal },
-        );
-        if (outcome) return outcome as MCPToolCallResult;
+        try {
+          const outcome = await executionClient.mcpElicitation.clientToolOutcome.query(
+            elicitation.identity,
+            { signal },
+          );
+          observationFailures = 0;
+          if (outcome) return outcome as MCPToolCallResult;
+        } catch (error) {
+          const status = toRecord(toRecord(error)?.data)?.httpStatus;
+          if (
+            signal?.aborted ||
+            (typeof status === 'number' &&
+              status >= 400 &&
+              status < 500 &&
+              status !== 408 &&
+              status !== 429)
+          )
+            throw error;
+          // A failed read says nothing about the worker's result. Retry observation only.
+          console.warn('MCP outcome observation failed; awaiting the durable result', error);
+          const delay = Math.min(
+            10_000,
+            500 * 2 ** Math.min(observationFailures++, 5),
+            elicitation.deadline + 60_000 - Date.now(),
+          );
+          if (delay > 0) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        }
       }
       throw new Error(
         signal?.aborted

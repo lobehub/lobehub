@@ -42,7 +42,11 @@ export async function resolveMcpProducerUser(
     ctx.workspaceId,
   ).findWorkspaceDeviceById(grant.deviceId);
   // Recheck registry ownership and visibility, including unshare since dispatch.
-  if (!device || device.userId !== ctx.userId || device.visibility !== 'public')
+  if (
+    !device ||
+    device.userId !== ctx.userId ||
+    (grant.userId !== ctx.userId && device.visibility !== 'public')
+  )
     throw new Error('MCP callback device is no longer authorized');
   return grant.userId;
 }

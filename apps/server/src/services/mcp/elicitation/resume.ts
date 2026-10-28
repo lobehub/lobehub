@@ -12,6 +12,7 @@ import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import type { ToolExecutionService } from '@/server/services/toolExecution';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 import type { ToolExecutionResultResponse } from '@/server/services/toolExecution/types';
 
 import { buildPluginMcpParams } from '../pluginParams';
@@ -20,9 +21,12 @@ import { McpElicitationService } from './McpElicitationService';
 
 export interface McpElicitationRuntime extends Pick<
   AgentRuntimeService,
-  'controlCompletedToolResult' | 'tryResumeParentFromAsyncTool'
+  'controlCompletedToolResult' | 'tryResumeParentFromAsyncTool' | 'isOperationInterrupted'
 > {
   executeTool: ToolExecutionService['executeTool'];
+  getToolResultPolicy: (
+    operationId: string,
+  ) => Promise<{ limit?: number; canReadArchive: boolean }>;
 }
 
 /** First-winner outbox + fenced execution; a lost response never replays a mutating tools/call. */
@@ -95,9 +99,12 @@ export async function resumeMcpElicitation(
         Object.values(params.responses).some((response) => response.action !== 'accept')
       )
         throw new Error('The user cancelled the pending MCP operation.');
+      if (await runtime.isOperationInterrupted(identity.operationId))
+        throw new Error('The MCP operation was stopped before its continuation started.');
       result = await runtime.executeTool(
         { ...tool, type: 'mcp' },
         {
+          skipResultTruncation: true,
           agentId: operation.agentId ?? undefined,
           assistantMessageId: identity.assistantMessageId,
           executionTimeoutMs: Math.max(1, executionDeadline - Date.now()),
@@ -138,15 +145,27 @@ export async function resumeMcpElicitation(
       toolMessageId: item.toolMessageId,
       result,
     });
+    const operation = await service.operations.findById(identity.operationId);
+    const policy = await runtime.getToolResultPolicy(identity.operationId);
+    const archive = controlled.blocked
+      ? { content: controlled.result.content }
+      : await archiveToolResultIfNeeded({
+          ...policy,
+          content: controlled.result.content,
+          agentId: operation?.agentId,
+          topicId: operation?.topicId,
+          identifier: identity.identifier,
+          toolCallId: identity.toolCallId,
+          serverDB: service.db,
+          userId: service.userId,
+          workspaceId: service.workspaceId,
+        });
     await service.messages.updateToolMessage(item.toolMessageId, {
-      content: controlled.result.content,
+      content: archive.content,
       onlyIfEmpty: true,
       pluginError: controlled.result.error ?? null,
-      pluginState: { ...controlled.result.state, mcpElicitation: null, mcpClientComplete: true },
+      pluginState: { ...controlled.result.state, mcpElicitation: pending, mcpClientComplete: true },
       ...(controlled.blocked && { replacePluginState: true }),
-    });
-    await service.messages.updateMessagePlugin(item.toolMessageId, {
-      intervention: { batchId: item.batchId, operationId: item.operationId, status: 'none' },
     });
     await runtime.tryResumeParentFromAsyncTool(
       { parentOperationId: identity.operationId },
@@ -155,6 +174,13 @@ export async function resumeMcpElicitation(
   }
   await service.interventions.markResolutionPublished(params.resolutionRequestId);
   await service.interventions.completeMcpResolution(params.resolutionRequestId);
+  if (!result.deferred) {
+    // Keep both checkpoint and current-batch recovery projection until parent dispatch is durable.
+    await service.messages.updatePluginState(item.toolMessageId, { mcpElicitation: null });
+    await service.messages.updateMessagePlugin(item.toolMessageId, {
+      intervention: { batchId: item.batchId, operationId: item.operationId, status: 'none' },
+    });
+  }
   return { state: result.deferred ? ('pending' as const) : ('resolved' as const) };
 }
 

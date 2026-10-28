@@ -131,7 +131,10 @@ export class McpInvocationModel {
             .from(agentOperations)
             .where(eq(agentOperations.id, row.operationId))
             .for('update');
-          if (!op || !['running', 'waiting_for_client'].includes(op.status)) return false;
+          const allowedStatuses = client
+            ? ['running', 'waiting_for_client']
+            : ['running', 'waiting_for_client', 'waiting_for_async_tool'];
+          if (!op || !allowedStatuses.includes(op.status)) return false;
           const claims = toRecord(op.metadata?.mcpRecoveryClaims) ?? {};
           const itemId = 'itemId' in row ? row.itemId : '';
           if (Number(client ? op.metadata?.mcpClientRecoveryUntil : claims[itemId]) > now)

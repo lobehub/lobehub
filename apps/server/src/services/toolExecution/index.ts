@@ -351,6 +351,13 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
+      if (elicitationService && identity) {
+        const toolMessageId = await elicitationService.ensureToolMessage(identity);
+        await elicitationService.messages.updatePluginState(toolMessageId, {
+          mcpInvocationDeadline: deadline,
+        });
+      }
+
       // Stdio must run on a desktop device. Without a configured gateway or a
       // reachable device, fail instead of executing the command on the server.
       // Private HTTP also uses the device when a gateway is configured, while

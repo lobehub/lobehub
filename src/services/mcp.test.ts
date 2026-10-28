@@ -216,6 +216,55 @@ describe('MCPService', () => {
         expect(lambdaClient.mcpElicitation.startClientTool.mutate).toHaveBeenCalledOnce();
       });
 
+      it('keeps observing a durable execution after a transient outcome read fails without re-enqueueing it', async () => {
+        vi.useFakeTimers();
+        try {
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          vi.mocked(lambdaClient.connector.list.query).mockResolvedValueOnce([
+            {
+              id: 'http-id',
+              identifier: 'http-mcp',
+              isEnabled: true,
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://example.com/mcp',
+            },
+          ] as never);
+          vi.mocked(lambdaClient.mcpElicitation.startClientTool.mutate).mockResolvedValueOnce(
+            undefined as never,
+          );
+          vi.mocked(lambdaClient.mcpElicitation.clientToolOutcome.query)
+            .mockRejectedValueOnce(new TypeError('fetch failed'))
+            .mockResolvedValueOnce({
+              content: 'actual committed receipt',
+              success: true,
+              state: {},
+            } as never);
+          const result = mcpService.invokeMcpToolCall(payload, {
+            clientRuntime: true,
+            elicitation: {
+              identity: {
+                apiName: 'echo',
+                identifier: 'http-mcp',
+                operationId: 'op',
+                assistantMessageId: 'assistant',
+                toolCallId: 'call_1',
+                toolMessageId: 'tool',
+              },
+              deadline: Date.now() + 10000,
+            },
+          });
+          const observed = result.catch((error: unknown) => error);
+          await vi.advanceTimersByTimeAsync(2000);
+          expect(await observed).toMatchObject({
+            content: 'actual committed receipt',
+            success: true,
+          });
+          expect(lambdaClient.mcpElicitation.startClientTool.mutate).toHaveBeenCalledOnce();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
       it.each(['AUTHORIZATION_ERROR', 'INITIALIZATION_TIMEOUT', 'CONNECTION_FAILED'])(
         'preserves readable %s as a failed tool result',
         async (type) => {

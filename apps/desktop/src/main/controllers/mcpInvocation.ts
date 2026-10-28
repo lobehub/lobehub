@@ -22,7 +22,7 @@ export class McpInvocationRegistry {
       () => {
         if (this.calls.get(key) === entry) this.calls.delete(key);
       },
-      Math.max(1, Math.min(deadline - Date.now(), 120_000) + 300_000),
+      Math.max(1, deadline - Date.now() + 300_000),
     ).unref();
     return promise;
   }

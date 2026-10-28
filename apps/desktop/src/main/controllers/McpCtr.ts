@@ -30,6 +30,7 @@ import type {
   ToolCallResult,
 } from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
+import { McpCompletionDelivery } from './mcpCompletionDelivery';
 import { checkDeployOption } from './mcpInstallCheck';
 import { McpInvocationRegistry } from './mcpInvocation';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -228,6 +229,7 @@ const toMarkdown = async (
  */
 export default class McpCtr extends ControllerModule {
   private mcpInvocations?: McpInvocationRegistry;
+  private readonly mcpCompletions = new McpCompletionDelivery();
   private mcpProducerId?: string;
   static override readonly groupName = 'mcp';
 
@@ -663,35 +665,43 @@ export default class McpCtr extends ControllerModule {
     result: { content: string; state: unknown; success: boolean },
     owner: { userId: string; serverUrl: string },
   ) {
-    if (!elicitation?.relayResult) return;
-    try {
-      const config = this.app.getController(RemoteServerConfigCtr);
-      const [serverUrl, token] = await Promise.all([
-        config.getRemoteServerUrl(),
-        config.getAccessToken(),
-      ]);
-      if (!serverUrl || !token) throw new Error('MCP completion has no authenticated server');
+    if (!elicitation?.relayResult) return true;
+    const config = this.app.getController(RemoteServerConfigCtr);
+    const [serverUrl, token] = await Promise.all([
+      config.getRemoteServerUrl(),
+      config.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) throw new Error('MCP completion has no authenticated server');
+    if (
+      (await config.getRemoteServerUrl()) !== owner.serverUrl ||
+      config.getDesktopBootstrapIdentity().userId !== owner.userId
+    )
+      return false;
+    const response = await fetch(`${serverUrl}/trpc/lambda/mcpElicitation.producerResult`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': token,
+        ...(elicitation.workspaceId && { 'X-Workspace-Id': elicitation.workspaceId }),
+      },
+      body: JSON.stringify({
+        json: { identity: elicitation.identity, delegation: elicitation.delegation, result },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
       if (
-        (await config.getRemoteServerUrl()) !== owner.serverUrl ||
-        config.getDesktopBootstrapIdentity().userId !== owner.userId
-      )
-        throw new Error('MCP producer login changed');
-      const response = await fetch(`${serverUrl}/trpc/lambda/mcpElicitation.producerResult`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Oidc-Auth': token,
-          ...(elicitation.workspaceId && { 'X-Workspace-Id': elicitation.workspaceId }),
-        },
-        body: JSON.stringify({
-          json: { identity: elicitation.identity, delegation: elicitation.delegation, result },
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!response.ok) throw new Error(`MCP completion relay failed: HTTP ${response.status}`);
-    } catch (error) {
-      logger.warn('MCP completion relay failed; retaining IPC result delivery', error);
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 408 &&
+        response.status !== 429
+      ) {
+        logger.warn(`MCP completion authorization ended: HTTP ${response.status}`);
+        return false;
+      }
+      throw new Error(`MCP completion relay failed: HTTP ${response.status}`);
     }
+    return true;
   }
 
   private async runMcpTool(
@@ -755,24 +765,33 @@ export default class McpCtr extends ControllerModule {
         workspaceId: elicitation.workspaceId,
       }),
     ]);
-    return this.mcpInvocations.run(key, fingerprint, elicitation.deadline, async () => {
-      try {
-        const result = await this.runMcpToolOnce(params, toolName, rawArgs, elicitation, owner);
-        await this.relayMcpResult(elicitation, result, owner);
-        return result;
-      } catch (error) {
-        await this.relayMcpResult(
-          elicitation,
-          {
+    const deliver = (result: { content: string; state: unknown; success: boolean }) => {
+      if (!elicitation.relayResult) return;
+      void this.mcpCompletions
+        .deliver(key, elicitation.deadline + 60_000, () =>
+          this.relayMcpResult(elicitation, result, owner),
+        )
+        .catch((error) => logger.warn('MCP completion delivery stopped', error));
+    };
+    const result = await this.mcpInvocations.run(
+      key,
+      fingerprint,
+      elicitation.deadline,
+      async () => {
+        try {
+          return await this.runMcpToolOnce(params, toolName, rawArgs, elicitation, owner);
+        } catch (error) {
+          deliver({
             content: error instanceof Error ? error.message : 'MCP tool failed',
             success: false,
             state: {},
-          },
-          owner,
-        );
-        throw error;
-      }
-    });
+          });
+          throw error;
+        }
+      },
+    );
+    deliver(result);
+    return result;
   }
 
   private async runMcpToolOnce(

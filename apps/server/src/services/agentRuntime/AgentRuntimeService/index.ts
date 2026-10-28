@@ -1,4 +1,7 @@
 import type { Agent, GeneralAgentConfig } from '@lobechat/agent-runtime';
+import { selectOperationToolSet } from '@lobechat/agent-runtime';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import type { LobeAgentConfig } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -225,6 +228,17 @@ export class AgentRuntimeService {
   getMcpElicitationRuntime(): McpElicitationRuntime {
     return {
       executeTool: (...args) => this.toolExecutionService.executeTool(...args),
+      isOperationInterrupted: (id) => this.isOperationInterrupted(id),
+      getToolResultPolicy: async (id) => {
+        const state = await this.coordinator.loadAgentState(id);
+        return {
+          limit: (state?.world?.agent as LobeAgentConfig | undefined)?.chatConfig
+            ?.toolResultMaxLength,
+          canReadArchive:
+            !!state &&
+            selectOperationToolSet(state).enabledToolIds.includes(AgentDocumentsIdentifier),
+        };
+      },
       controlCompletedToolResult: (...args) => this.controlCompletedToolResult(...args),
       tryResumeParentFromAsyncTool: async (...args) => {
         const operation = await new AgentOperationModel(

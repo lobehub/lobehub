@@ -67,3 +67,10 @@ describe('workspace device MCP callback delegation', () => {
     }
   });
 });
+
+it('allows the initiating device owner to use a private workspace device without granting other members access', async () => {
+  mocks.verify.mockResolvedValueOnce({ ...grant, userId: 'B' });
+  mocks.device.mockResolvedValue({ userId: 'B', visibility: 'private' });
+  await expect(resolveMcpProducerUser(ctx, identity, 'owner-ticket')).resolves.toBe('B');
+  await expect(resolveMcpProducerUser(ctx, identity, 'foreign-ticket')).rejects.toThrow('device');
+});
