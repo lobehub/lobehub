@@ -83,14 +83,14 @@ const qwenChatModels: AIChatModelCard[] = [
     generation: 'qwen3.8',
     id: 'qwen3.8-max-0902',
     maxOutput: 131_072,
-    /** @see https://help.aliyun.com/zh/model-studio/qwen3-8-max */
+    /** @see https://www.alibabacloud.com/help/en/model-studio/qwen3-8-max */
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-09-02',
@@ -118,14 +118,14 @@ const qwenChatModels: AIChatModelCard[] = [
     generation: 'qwen3.8',
     id: 'qwen3.8-max',
     maxOutput: 131_072,
-    /** @see https://help.aliyun.com/zh/model-studio/qwen3-8-max */
+    /** @see https://www.alibabacloud.com/help/en/model-studio/qwen3-8-max */
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-08-02',
@@ -260,14 +260,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 1,
-              '[0.032, 0.128]': 1.5,
-              '[0.128, infinity]': 3,
+              '[0, 0.032]': 0.2,
+              '[0.032, 0.128]': 0.3,
+              '[0.128, infinity]': 0.6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -278,9 +278,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 10,
-              '[0.032, 0.128]': 15,
-              '[0.128, infinity]': 30,
+              '[0, 0.032]': 1.6,
+              '[0.032, 0.128]': 2.4,
+              '[0.128, infinity]': 4.8,
             },
             pricingParams: ['textInputRange'],
           },
@@ -315,14 +315,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 0.15,
-              '[0.032, 0.128]': 0.3,
-              '[0.128, 0.256]': 0.6,
+              '[0, 0.032]': 0.05,
+              '[0.032, 0.128]': 0.075,
+              '[0.128, 1]': 0.12,
             },
             pricingParams: ['textInputRange'],
           },
@@ -333,9 +333,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 1.5,
-              '[0.032, 0.128]': 3,
-              '[0.128, 0.256]': 6,
+              '[0, 0.032]': 0.4,
+              '[0.032, 0.128]': 0.6,
+              '[0.128, 1]': 0.96,
             },
             pricingParams: ['textInputRange'],
           },
@@ -365,10 +365,10 @@ const qwenChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-flash',
     maxOutput: 393_216,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -392,10 +392,10 @@ const qwenChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-pro',
     maxOutput: 393_216,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -419,10 +419,10 @@ const qwenChatModels: AIChatModelCard[] = [
     id: 'deepseek-v3.2',
     maxOutput: 65_536,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.57, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.71, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -552,11 +552,11 @@ const qwenChatModels: AIChatModelCard[] = [
     id: 'glm-5.2',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-06-17',
@@ -579,32 +579,10 @@ const qwenChatModels: AIChatModelCard[] = [
     id: 'glm-5.1',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 6,
-              '[0.032, infinity]': 8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 24,
-              '[0.032, infinity]': 28,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-14',
@@ -865,14 +843,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 1,
-              '[0.032, 0.128]': 1.5,
-              '[0.128, infinity]': 2.5,
+              '[0, 0.032]': 0.3,
+              '[0.032, 0.128]': 0.5,
+              '[0.128, infinity]': 0.8,
             },
             pricingParams: ['textInputRange'],
           },
@@ -883,9 +861,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 4,
-              '[0.032, 0.128]': 6,
-              '[0.128, infinity]': 10,
+              '[0, 0.032]': 1.5,
+              '[0.032, 0.128]': 2.5,
+              '[0.128, infinity]': 4,
             },
             pricingParams: ['textInputRange'],
           },
@@ -914,15 +892,15 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 4 * 0.2,
-              '[0.032, 0.128]': 6 * 0.2,
-              '[0.128, 0.256]': 10 * 0.2,
-              '[0.256, infinity]': 20 * 0.2,
+              '[0, 0.032]': 0.2,
+              '[0.032, 0.128]': 0.36,
+              '[0.128, 0.256]': 0.6,
+              '[0.256, infinity]': 1.2,
             },
             pricingParams: ['textInputRange'],
           },
@@ -933,10 +911,10 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 4,
-              '[0.032, 0.128]': 6,
-              '[0.128, 0.256]': 10,
-              '[0.256, infinity]': 20,
+              '[0, 0.032]': 1,
+              '[0.032, 0.128]': 1.8,
+              '[0.128, 0.256]': 3,
+              '[0.256, infinity]': 6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -947,10 +925,10 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 16,
-              '[0.032, 0.128]': 24,
-              '[0.128, 0.256]': 40,
-              '[0.256, infinity]': 200,
+              '[0, 0.032]': 5,
+              '[0.032, 0.128]': 9,
+              '[0.128, 0.256]': 15,
+              '[0.256, infinity]': 60,
             },
             pricingParams: ['textInputRange'],
           },
@@ -979,15 +957,15 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 0.2,
-              '[0.032, 0.128]': 0.3,
-              '[0.128, 0.256]': 0.5,
-              '[0.256, 1]': 1,
+              '[0, 0.032]': 0.06,
+              '[0.032, 0.128]': 0.1,
+              '[0.128, 0.256]': 0.16,
+              '[0.256, 1]': 0.32,
             },
             pricingParams: ['textInputRange'],
           },
@@ -998,10 +976,10 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 1,
-              '[0.032, 0.128]': 1.5,
-              '[0.128, 0.256]': 2.5,
-              '[0.256, 1]': 5,
+              '[0, 0.032]': 0.3,
+              '[0.032, 0.128]': 0.5,
+              '[0.128, 0.256]': 0.8,
+              '[0.256, 1]': 1.6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1012,10 +990,10 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 4,
-              '[0.032, 0.128]': 6,
-              '[0.128, 0.256]': 10,
-              '[0.256, 1]': 25,
+              '[0, 0.032]': 1.5,
+              '[0.032, 0.128]': 2.5,
+              '[0.128, 0.256]': 4,
+              '[0.256, 1]': 9.6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1041,14 +1019,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 6,
-              '[0.032, 0.128]': 9,
-              '[0.128, 0.2]': 15,
+              '[0, 0.032]': 1.5,
+              '[0.032, 0.128]': 2.7,
+              '[0.128, 0.2]': 4.5,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1059,9 +1037,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 24,
-              '[0.032, 0.128]': 36,
-              '[0.128, 0.2]': 60,
+              '[0, 0.032]': 7.5,
+              '[0.032, 0.128]': 13.5,
+              '[0.128, 0.2]': 22.5,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1087,14 +1065,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 1.5,
-              '[0.032, 0.128]': 2.25,
-              '[0.128, 0.2]': 3.75,
+              '[0, 0.032]': 0.45,
+              '[0.032, 0.128]': 0.75,
+              '[0.128, 0.2]': 1.2,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1105,9 +1083,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 6,
-              '[0.032, 0.128]': 9,
-              '[0.128, 0.2]': 15,
+              '[0, 0.032]': 2.25,
+              '[0.032, 0.128]': 3.75,
+              '[0.128, 0.2]': 6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1136,10 +1114,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-23',
@@ -1165,10 +1143,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.25, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-16',
@@ -1194,32 +1172,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 1.5,
-              '[0.128, infinity]': 3,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 7.2,
-              '[0.128, infinity]': 18,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-16',
@@ -1245,32 +1201,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, infinity]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 6.4,
-              '[0.128, infinity]': 16,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-24',
@@ -1296,32 +1230,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.6,
-              '[0.128, infinity]': 1.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 4.8,
-              '[0.128, infinity]': 14.4,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-24',
@@ -1347,32 +1259,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.4,
-              '[0.128, infinity]': 1.6,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 3.2,
-              '[0.128, infinity]': 12.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-24',
@@ -1396,10 +1286,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.23, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.3, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-07-25',
@@ -1422,10 +1312,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.23, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.92, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-07-22',
@@ -1446,10 +1336,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-07-30',
@@ -1472,10 +1362,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-07-29',
@@ -1496,10 +1386,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-09-12',
@@ -1522,10 +1412,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-09-12',
@@ -1546,10 +1436,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-04-28',
@@ -1573,10 +1463,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.64, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-04-28',
@@ -1600,10 +1490,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-04-28',
@@ -1627,10 +1517,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.35, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-04-28',
@@ -1654,10 +1544,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-04-28',
@@ -1766,10 +1656,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-03-05',
@@ -1800,16 +1690,11 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 131_072,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.7, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          name: 'textInput_cacheRead',
-          rate: 0.8 * 0.2,
-          strategy: 'fixed',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.47, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.016, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-08-26',
@@ -1840,15 +1725,15 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 32_000 },
-            { rate: 0.6, upTo: 256_000 },
-            { rate: 1.2, upTo: 'infinity' },
+            { rate: 0.03, upTo: 32_000 },
+            { rate: 0.1, upTo: 256_000 },
+            { rate: 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -1856,9 +1741,9 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.8, upTo: 32_000 },
-            { rate: 2.4, upTo: 256_000 },
-            { rate: 4.8, upTo: 'infinity' },
+            { rate: 0.13, upTo: 32_000 },
+            { rate: 0.4, upTo: 256_000 },
+            { rate: 0.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -1866,9 +1751,9 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2 * 0.2, upTo: 32_000 },
-            { rate: 0.6 * 0.2, upTo: 256_000 },
-            { rate: 1.2 * 0.2, upTo: 'infinity' },
+            { rate: 0.006, upTo: 32_000 },
+            { rate: 0.02, upTo: 256_000 },
+            { rate: 0.04, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -1902,14 +1787,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.2, upTo: 256_000 },
-            { rate: 4.8, upTo: 'infinity' },
+            { rate: 0.25, upTo: 256_000 },
+            { rate: 1, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -1917,8 +1802,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 7.2, upTo: 256_000 },
-            { rate: 28.8, upTo: 'infinity' },
+            { rate: 1.5, upTo: 256_000 },
+            { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -1926,8 +1811,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.2 * 0.2, upTo: 256_000 },
-            { rate: 4.8 * 0.2, upTo: 'infinity' },
+            { rate: 0.05, upTo: 256_000 },
+            { rate: 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -1961,38 +1846,11 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.2, upTo: 128_000 },
-            { rate: 0.8, upTo: 256_000 },
-            { rate: 1.2, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 2, upTo: 128_000 },
-            { rate: 8, upTo: 256_000 },
-            { rate: 12, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.2 * 0.2, upTo: 128_000 },
-            { rate: 0.8 * 0.2, upTo: 256_000 },
-            { rate: 1.2 * 0.2, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-24',
@@ -2019,15 +1877,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.15, upTo: 128_000 },
-            { rate: 0.6, upTo: 256_000 },
-            { rate: 1.2, upTo: 'infinity' },
+            { rate: 0.05, upTo: 256_000 },
+            { rate: 0.25, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -2035,9 +1892,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.5, upTo: 128_000 },
-            { rate: 6, upTo: 256_000 },
-            { rate: 12, upTo: 'infinity' },
+            { rate: 0.4, upTo: 256_000 },
+            { rate: 2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -2045,9 +1901,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.15 * 0.2, upTo: 128_000 },
-            { rate: 0.6 * 0.2, upTo: 256_000 },
-            { rate: 1.2 * 0.2, upTo: 'infinity' },
+            { rate: 0.01, upTo: 256_000 },
+            { rate: 0.05, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -2078,11 +1933,11 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 16_384,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.3 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-07-15',
@@ -2114,11 +1969,35 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.08, upTo: 256_000 },
+            { rate: 0.24, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.4, upTo: 256_000 },
+            { rate: 1.2, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.6, upTo: 256_000 },
+            { rate: 4.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-06-01',
@@ -2149,13 +2028,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.256]': 2,
-              '[0.256, 1]': 8,
+              '[0, 0.256]': 0.5,
+              '[0.256, 1]': 2,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2166,8 +2045,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.256]': 12,
-              '[0.256, 1]': 48,
+              '[0, 0.256]': 3,
+              '[0.256, 1]': 6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2178,8 +2057,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.256]': 2 * 0.2,
-              '[0.256, 1]': 8 * 0.2,
+              '[0, 0.256]': 0.1,
+              '[0.256, 1]': 0.4,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2217,14 +2096,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 0.1,
-              '[0.128, 0.256]': 2 * 0.1,
-              '[0.256, infinity]': 4 * 0.1,
+              '[0, 0.256]': 0.04,
+              '[0.256, infinity]': 0.05,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2235,9 +2113,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 1.25,
-              '[0.128, 0.256]': 2 * 1.25,
-              '[0.256, infinity]': 4 * 1.25,
+              '[0, 0.256]': 0.5,
+              '[0.256, infinity]': 0.625,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2248,9 +2125,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, 0.256]': 2,
-              '[0.256, infinity]': 4,
+              '[0, 0.256]': 0.4,
+              '[0.256, infinity]': 0.5,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2261,9 +2137,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 4.8,
-              '[0.128, 0.256]': 12,
-              '[0.256, infinity]': 24,
+              '[0, 0.256]': 2.4,
+              '[0.256, infinity]': 3,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2301,14 +2176,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 0.1,
-              '[0.128, 0.256]': 2 * 0.1,
-              '[0.256, infinity]': 4 * 0.1,
+              '[0, 0.256]': 0.04,
+              '[0.256, infinity]': 0.05,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2319,9 +2193,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 1.25,
-              '[0.128, 0.256]': 2 * 1.25,
-              '[0.256, infinity]': 4 * 1.25,
+              '[0, 0.256]': 0.5,
+              '[0.256, infinity]': 0.625,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2332,9 +2205,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, 0.256]': 2,
-              '[0.256, infinity]': 4,
+              '[0, 0.256]': 0.4,
+              '[0.256, infinity]': 0.5,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2345,9 +2217,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 4.8,
-              '[0.128, 0.256]': 12,
-              '[0.256, infinity]': 24,
+              '[0, 0.256]': 2.4,
+              '[0.256, infinity]': 3,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2382,14 +2253,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8 * 0.2,
-              '[0.128, 0.256]': 2.4 * 0.2,
-              '[0.256, infinity]': 4.8 * 0.2,
+              '[0, 0.256]': 0.08,
+              '[0.256, infinity]': 0.24,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2400,9 +2270,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, 0.256]': 2.4,
-              '[0.256, infinity]': 4.8,
+              '[0, 0.256]': 0.4,
+              '[0.256, infinity]': 1.2,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2413,12 +2282,10 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]_[false]': 2,
-              '[0, 0.128]_[true]': 8,
-              '[0.128, 0.256]_[false]': 20,
-              '[0.128, 0.256]_[true]': 24,
-              '[0.256, infinity]_[false]': 48,
-              '[0.256, infinity]_[true]': 64,
+              '[0, 0.256]_[false]': 1.2,
+              '[0, 0.256]_[true]': 4,
+              '[0.256, infinity]_[false]': 3.6,
+              '[0.256, infinity]_[true]': 12,
             },
             pricingParams: ['textInputRange', 'thinkingMode'],
           },
@@ -2454,11 +2321,11 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 12 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-05-20',
@@ -2487,13 +2354,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 9 * 0.2,
-              '[0.128, infinity]': 15 * 0.2,
+              '[0, 0.128]': 0.26,
+              '[0.128, infinity]': 0.4,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2504,8 +2371,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 9,
-              '[0.128, infinity]': 15,
+              '[0, 0.128]': 1.3,
+              '[0.128, infinity]': 2,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2516,8 +2383,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.128]': 54,
-              '[0.128, infinity]': 90,
+              '[0, 0.128]': 7.8,
+              '[0.128, infinity]': 12,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2553,14 +2420,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 2.5 * 0.2,
-              '[0.032, 0.128]': 4 * 0.2,
-              '[0.128, infinity]': 7 * 0.2,
+              '[0, 0.032]': 0.24,
+              '[0.032, 0.128]': 0.48,
+              '[0.128, infinity]': 0.6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2571,9 +2438,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 2.5,
-              '[0.032, 0.128]': 4,
-              '[0.128, 0.252]': 7,
+              '[0, 0.032]': 1.2,
+              '[0.032, 0.128]': 2.4,
+              '[0.128, infinity]': 3,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2584,9 +2451,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 10,
-              '[0.032, 0.128]': 16,
-              '[0.128, 0.252]': 28,
+              '[0, 0.032]': 6,
+              '[0.032, 0.128]': 12,
+              '[0.128, infinity]': 15,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2622,14 +2489,14 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 6 * 0.2,
-              '[0.032, 0.128]': 10 * 0.2,
-              '[0.128, infinity]': 15 * 0.2,
+              '[0, 0.032]': 0.24,
+              '[0.032, 0.128]': 0.48,
+              '[0.128, infinity]': 0.6,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2640,9 +2507,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 6,
-              '[0.032, 0.128]': 10,
-              '[0.128, infinity]': 15,
+              '[0, 0.032]': 1.2,
+              '[0.032, 0.128]': 2.4,
+              '[0.128, infinity]': 3,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2653,9 +2520,9 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.032]': 24,
-              '[0.032, 0.128]': 40,
-              '[0.128, infinity]': 60,
+              '[0, 0.032]': 6,
+              '[0.032, 0.128]': 12,
+              '[0.128, infinity]': 15,
             },
             pricingParams: ['textInputRange'],
           },
@@ -2689,11 +2556,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2.4 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 9.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -2744,13 +2610,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 53, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioOutput', rate: 213, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 11, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 44, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -2778,13 +2644,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 13.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioOutput', rate: 72, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 11.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -2813,13 +2679,13 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 16_384,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioInput', rate: 15.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'audioOutput', rate: 62.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.43, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 3.81, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.78, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.66, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 15.11, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-04',
@@ -2845,10 +2711,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 2048,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.63, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -2868,10 +2734,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 2048,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.84, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -2893,11 +2759,11 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.8 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.042, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.63, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -2919,11 +2785,11 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 1.6 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -2944,10 +2810,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 4096,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -2967,10 +2833,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -2992,10 +2858,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -3015,10 +2881,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -3040,10 +2906,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -3063,10 +2929,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -3088,10 +2954,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -3111,10 +2977,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.64, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -3136,10 +3002,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 32_768,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.64, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -3291,10 +3157,10 @@ const qwenChatModels: AIChatModelCard[] = [
     maxOutput: 8192,
     organization: 'Qwen',
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 32, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-05-15',
@@ -3824,8 +3690,8 @@ const qwenImageModels: AIImageModelCard[] = [
       promptExtend: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.015, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-12-19',
     type: 'image',
@@ -3851,8 +3717,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-04-22',
     type: 'image',
@@ -3877,8 +3743,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-03-03',
     type: 'image',
@@ -3904,8 +3770,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.035, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-03-03',
     type: 'image',
@@ -3930,8 +3796,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-01-17',
     type: 'image',
@@ -3956,8 +3822,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-12-23',
     type: 'image',
@@ -3980,8 +3846,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.045, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-09-18',
     type: 'image',
@@ -4005,8 +3871,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-12-31',
     type: 'image',
@@ -4030,8 +3896,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-01-12',
     type: 'image',
@@ -4055,8 +3921,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.035, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-08-13',
     type: 'image',
@@ -4081,8 +3947,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.075, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-04-01',
     type: 'image',
@@ -4107,8 +3973,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-04-01',
     type: 'image',
@@ -4133,8 +3999,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-07-28',
     type: 'image',
@@ -4157,8 +4023,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-12-16',
     type: 'image',
@@ -4182,8 +4048,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-09-23',
     type: 'image',
@@ -4205,8 +4071,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-09-23',
     type: 'image',
@@ -4228,8 +4094,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.025, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-07-28',
     type: 'image',
@@ -4251,8 +4117,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.05, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-07-28',
     type: 'image',
@@ -4274,8 +4140,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.025, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-01-08',
     type: 'image',
@@ -4297,8 +4163,8 @@ const qwenImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.05, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-01-08',
     type: 'image',
@@ -4431,8 +4297,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-22',
     type: 'video',
@@ -4462,8 +4328,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-26',
     type: 'video',
@@ -4489,8 +4355,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-21',
     type: 'video',
@@ -4519,8 +4385,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-26',
     type: 'video',
@@ -4548,8 +4414,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-03',
     type: 'video',
@@ -4580,8 +4446,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-03',
     type: 'video',
@@ -4608,8 +4474,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-26',
     type: 'video',
@@ -4635,8 +4501,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-04-03',
     type: 'video',
@@ -4662,8 +4528,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.075, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-01-17',
     type: 'video',
@@ -4688,8 +4554,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-12-16',
     type: 'video',
@@ -4727,8 +4593,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.075, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-12-16',
     type: 'video',
@@ -4765,8 +4631,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-12-16',
     type: 'video',
@@ -4799,8 +4665,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-12-16',
     type: 'video',
@@ -4824,8 +4690,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-09-23',
     type: 'video',
@@ -4860,8 +4726,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-09-23',
     type: 'video',
@@ -4887,8 +4753,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.036, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-09-12',
     type: 'video',
@@ -4939,8 +4805,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.036, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-08-11',
     type: 'video',
@@ -4964,8 +4830,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-07-28',
     type: 'video',
@@ -4995,8 +4861,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-07-28',
     type: 'video',
@@ -5019,8 +4885,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.036, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-02-25',
     type: 'video',
@@ -5044,8 +4910,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-01-17',
     type: 'video',
@@ -5074,8 +4940,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.24, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.036, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-01-08',
     type: 'video',
@@ -5096,8 +4962,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-01-08',
     type: 'video',
@@ -5701,8 +5567,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.054, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-03-30',
     type: 'video',
@@ -5798,8 +5664,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.054, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-03-30',
     type: 'video',
@@ -5883,8 +5749,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.054, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-03-30',
     type: 'video',

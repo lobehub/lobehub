@@ -12,6 +12,68 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
+      "Kimi K3.1 Pro is the first model in the K3.1 series and Kimi's most capable flagship to date: a 3T-class model with native visual understanding and a 1M-token context window, with major gains in coding, 3D creation, and financial research and modeling. Reasoning is always on, configured via the top-level reasoning_effort field.",
+    displayName: 'Kimi K3.1 Pro',
+    family: 'kimi',
+    generation: 'kimi-k3.1',
+    id: 'kimi-k3.1-pro',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-23',
+    settings: {
+      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
+      extendParams: ['kimiK3ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Kimi K3.1 Pro HighSpeed is the high-speed variant of Kimi K3.1 Pro with the same capabilities and 1M-token context window at roughly 2-3x the output speed, for scenarios that need faster responses.',
+    displayName: 'Kimi K3.1 Pro HighSpeed',
+    family: 'kimi',
+    generation: 'kimi-k3.1',
+    id: 'kimi-k3.1-pro-highspeed',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-23',
+    settings: {
+      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
+      extendParams: ['kimiK3ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
       "Kimi K3 is Kimi's most capable model to date, with 2.8 trillion parameters. Built on Kimi Delta Attention and Attention Residuals, it offers native visual understanding and a 1M-token context window for frontier intelligence scenarios such as software engineering, knowledge work, and deep reasoning. Reasoning is always on, configured via the top-level reasoning_effort field.",
     displayName: 'Kimi K3',
     enabled: true,
@@ -54,11 +116,11 @@ const moonshotChatModels: AIChatModelCard[] = [
     id: 'kimi-k2.7-code',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 1.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.19, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.95, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-06-12',
@@ -81,11 +143,11 @@ const moonshotChatModels: AIChatModelCard[] = [
     id: 'kimi-k2.7-code-highspeed',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 13, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 54, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.38, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-06-15',
@@ -108,11 +170,11 @@ const moonshotChatModels: AIChatModelCard[] = [
     id: 'kimi-k2.6',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.95, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-20',

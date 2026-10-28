@@ -252,11 +252,11 @@ describe('computeChatPricing', () => {
     it('keeps official DeepSeek provider pricing unchanged', () => {
       const pricing = deepseekChatModels.find((model) => model.id === 'deepseek-v4-flash')?.pricing;
       expect(pricing).toEqual({
-        currency: 'CNY',
+        currency: 'USD',
         units: [
-          { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput_cacheRead', rate: 0.006, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
         ],
       });
     });
@@ -716,15 +716,10 @@ describe('computeChatPricing', () => {
     });
 
     it('bills Gemini Omni video output separately from input and text output', () => {
-      const pricing: Pricing = {
-        units: [
-          { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-          { name: 'videoGeneration', rate: 17.5, strategy: 'fixed', unit: 'millionTokens' },
-        ],
-      };
+      const pricing = googleChatModels.find(
+        (model: { id: string }) => model.id === 'gemini-omni-1.1-flash',
+      )?.pricing;
+      expect(pricing).toBeDefined();
 
       // A real conversational edit: the source video is billed as input.
       const usage: ModelTokensUsage = {
@@ -1214,18 +1209,18 @@ describe('computeChatPricing', () => {
 
       const input1 = result1?.breakdown.find((item) => item.unit.name === 'textInput');
       expect(input1?.quantity).toBe(100_000);
-      expect(input1?.credits).toBe(29_495); // Math.ceil((100,000 * 2.1) / 7.12)
-      expect(input1?.segments).toEqual([{ quantity: 100_000, rate: 2.1, credits: 210_000 }]);
+      expect(input1?.credits).toBe(30_000); // 100,000 * 0.3
+      expect(input1?.segments).toEqual([{ quantity: 100_000, rate: 0.3, credits: 30_000 }]);
 
       const cached1 = result1?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached1?.quantity).toBe(20_000);
-      expect(cached1?.credits).toBe(1_180); // Math.ceil((20,000 * 0.42) / 7.12)
-      expect(cached1?.segments).toEqual([{ quantity: 20_000, rate: 0.42, credits: 8_400 }]);
+      expect(cached1?.credits).toBe(1_200); // 20,000 * 0.06
+      expect(cached1?.segments).toEqual([{ quantity: 20_000, rate: 0.06, credits: 1_200 }]);
 
       const output1 = result1?.breakdown.find((item) => item.unit.name === 'textOutput');
       expect(output1?.quantity).toBe(10_000);
-      expect(output1?.credits).toBe(11_798); // Math.ceil((10,000 * 8.4) / 7.12)
-      expect(output1?.segments).toEqual([{ quantity: 10_000, rate: 8.4, credits: 84_000 }]);
+      expect(output1?.credits).toBe(12_000); // 10,000 * 1.2
+      expect(output1?.segments).toEqual([{ quantity: 10_000, rate: 1.2, credits: 12_000 }]);
 
       // Higher tier test (> 512,000 tokens)
       const usage2: ModelTokensUsage = {
@@ -1244,18 +1239,18 @@ describe('computeChatPricing', () => {
 
       const input2 = result2?.breakdown.find((item) => item.unit.name === 'textInput');
       expect(input2?.quantity).toBe(500_000);
-      expect(input2?.credits).toBe(294_944); // Math.ceil((500,000 * 4.2) / 7.12)
-      expect(input2?.segments).toEqual([{ quantity: 500_000, rate: 4.2, credits: 2_100_000 }]);
+      expect(input2?.credits).toBe(300_000); // 500,000 * 0.6
+      expect(input2?.segments).toEqual([{ quantity: 500_000, rate: 0.6, credits: 300_000 }]);
 
       const cached2 = result2?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
       expect(cached2?.quantity).toBe(100_000);
-      expect(cached2?.credits).toBe(11_798); // Math.ceil((100,000 * 0.84) / 7.12)
-      expect(cached2?.segments).toEqual([{ quantity: 100_000, rate: 0.84, credits: 84_000 }]);
+      expect(cached2?.credits).toBe(12_000); // 100,000 * 0.12
+      expect(cached2?.segments).toEqual([{ quantity: 100_000, rate: 0.12, credits: 12_000 }]);
 
       const output2 = result2?.breakdown.find((item) => item.unit.name === 'textOutput');
       expect(output2?.quantity).toBe(50_000);
-      expect(output2?.credits).toBe(117_978); // Math.ceil((50,000 * 16.8) / 7.12)
-      expect(output2?.segments).toEqual([{ quantity: 50_000, rate: 16.8, credits: 840_000 }]);
+      expect(output2?.credits).toBe(120_000); // 50,000 * 2.4
+      expect(output2?.segments).toEqual([{ quantity: 50_000, rate: 2.4, credits: 120_000 }]);
     });
   });
 

@@ -4,7 +4,8 @@ import {
   type AIVideoModelCard,
 } from '../types/aiModel';
 
-// price: https://bigmodel.cn/pricing
+// USD price: https://docs.z.ai/guides/overview/pricing
+// CNY price (cards z.ai does not sell): https://bigmodel.cn/pricing
 // ref: https://docs.bigmodel.cn/cn/guide/start/model-overview
 
 const zhipuChatModels: AIChatModelCard[] = [
@@ -25,11 +26,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-5.3',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-08-14',
@@ -60,11 +61,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     // List price; the 50% launch promo ends 2026-09-09, so it is intentionally not encoded here.
     // https://docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.23, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-08-26',
@@ -90,11 +91,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-5.2',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-06-17',
@@ -119,44 +120,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-5.1',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.3,
-              '[0.032, infinity]': 2,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 6,
-              '[0.032, infinity]': 8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 24,
-              '[0.032, infinity]': 28,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-27',
@@ -184,44 +152,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-5v-turbo',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.2,
-              '[0.032, infinity]': 1.8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 5,
-              '[0.032, infinity]': 7,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 22,
-              '[0.032, infinity]': 26,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -245,44 +180,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-5-turbo',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.2,
-              '[0.032, infinity]': 1.8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 5,
-              '[0.032, infinity]': 7,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 22,
-              '[0.032, infinity]': 26,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-15',
@@ -307,44 +209,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-5',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1,
-              '[0.032, infinity]': 1.5,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 4,
-              '[0.032, infinity]': 6,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 18,
-              '[0.032, infinity]': 22,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-12',
@@ -369,47 +238,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.7',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 0.4,
-              '[0, 0.032]_[0.0002, infinity]': 0.6,
-              '[0.032, 0.2]': 0.8,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 2,
-              '[0, 0.032]_[0.0002, infinity]': 3,
-              '[0.032, 0.2]': 4,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 8,
-              '[0, 0.032]_[0.0002, infinity]': 14,
-              '[0.032, 0.2]': 16,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-22',
@@ -435,7 +268,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.7-flash',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
@@ -464,11 +297,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.7-flashx',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-01-19',
@@ -495,44 +328,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.6v',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.2,
-              '[0.032, infinity]': 0.4,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1,
-              '[0.032, infinity]': 2,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 3,
-              '[0.032, infinity]': 6,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-08',
@@ -559,44 +359,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.6v-flashx',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.03,
-              '[0.032, infinity]': 0.03,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.15,
-              '[0.032, infinity]': 0.3,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.5,
-              '[0.032, infinity]': 3,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.004, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-08',
@@ -623,7 +390,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.6v-flash',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
@@ -652,47 +419,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.6',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 0.4,
-              '[0, 0.032]_[0.0002, infinity]': 0.6,
-              '[0.032, 0.2]': 0.8,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 2,
-              '[0, 0.032]_[0.0002, infinity]': 3,
-              '[0.032, 0.2]': 4,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 8,
-              '[0, 0.032]_[0.0002, infinity]': 14,
-              '[0.032, 0.2]': 16,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-09-08',
@@ -719,44 +450,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.5v',
     maxOutput: 16_384,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.4,
-              '[0.032, infinity]': 0.8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 2,
-              '[0.032, infinity]': 4,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 6,
-              '[0.032, infinity]': 12,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -780,47 +478,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.5',
     maxOutput: 98_304,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 0.4,
-              '[0, 0.032]_[0.0002, infinity]': 0.6,
-              '[0.032, 0.128]': 0.8,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 2,
-              '[0, 0.032]_[0.0002, infinity]': 3,
-              '[0.032, 0.128]': 4,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 8,
-              '[0, 0.032]_[0.0002, infinity]': 14,
-              '[0.032, 0.128]': 16,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -844,47 +506,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.5-x',
     maxOutput: 98_304,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.6,
-              '[0, 0.032]_[0.0002, infinity]': 2.4,
-              '[0.032, 0.128]': 3.2,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 8,
-              '[0, 0.032]_[0.0002, infinity]': 12,
-              '[0.032, 0.128]': 16,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 16,
-              '[0, 0.032]_[0.0002, infinity]': 32,
-              '[0.032, 0.128]': 64,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.45, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -908,45 +534,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.5-air',
     maxOutput: 98_304,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.16,
-              '[0.032, 0.128]': 0.24,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.8,
-              '[0.032, 0.128]': 1.2,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 2,
-              '[0, 0.032]_[0.0002, infinity]': 6,
-              '[0.032, 0.128]': 8,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -969,45 +561,11 @@ const zhipuChatModels: AIChatModelCard[] = [
     id: 'glm-4.5-airx',
     maxOutput: 98_304,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.8,
-              '[0.032, 0.128]': 1.6,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 4,
-              '[0.032, 0.128]': 8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 12,
-              '[0, 0.032]_[0.0002, infinity]': 16,
-              '[0.032, 0.128]': 32,
-            },
-            pricingParams: ['textInput', 'textOutput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput_cacheRead', rate: 0.22, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     settings: {
@@ -1496,8 +1054,8 @@ const zhipuImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.015, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-01-14',
     type: 'image',
@@ -1523,8 +1081,8 @@ const zhipuImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.06, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.01, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-03-04',
     type: 'image',
@@ -1760,8 +1318,8 @@ const zhipuVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'video' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.2, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-07-15',
     type: 'video',

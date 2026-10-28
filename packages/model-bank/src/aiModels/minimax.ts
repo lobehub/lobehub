@@ -4,6 +4,8 @@ import {
   type AIVideoModelCard,
 } from '../types/aiModel';
 
+// USD price: https://platform.minimax.io/docs/guides/pricing-paygo
+// CNY price (cards the international platform does not sell): https://platform.minimaxi.com/docs/guides/pricing
 const minimaxChatModels: AIChatModelCard[] = [
   {
     abilities: {
@@ -22,11 +24,11 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M3.1-Flash',
     maxOutput: 524_288,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.015, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-10-19',
@@ -53,14 +55,14 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M3',
     maxOutput: 524_288,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
         {
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2.1, upTo: 512_000 },
-            { rate: 4.2, upTo: 'infinity' },
+            { rate: 0.3, upTo: 512_000 },
+            { rate: 0.6, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -68,8 +70,8 @@ const minimaxChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 8.4, upTo: 512_000 },
-            { rate: 16.8, upTo: 'infinity' },
+            { rate: 1.2, upTo: 512_000 },
+            { rate: 2.4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -77,8 +79,8 @@ const minimaxChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.42, upTo: 512_000 },
-            { rate: 0.84, upTo: 'infinity' },
+            { rate: 0.06, upTo: 512_000 },
+            { rate: 0.12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -105,12 +107,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2.7',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.42, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-18',
@@ -129,12 +131,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2.7-highspeed',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.42, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-18',
@@ -154,12 +156,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2.5',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-12',
@@ -178,12 +180,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2.5-highspeed',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-02-12',
@@ -220,12 +222,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2.1',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-23',
@@ -245,12 +247,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2.1-highspeed',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-23',
@@ -269,12 +271,12 @@ const minimaxChatModels: AIChatModelCard[] = [
     id: 'MiniMax-M2',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-10-27',
@@ -374,8 +376,8 @@ const minimaxImageModels: AIImageModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.025, strategy: 'fixed', unit: 'image' }],
+      currency: 'USD',
+      units: [{ name: 'imageGeneration', rate: 0.0035, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-02-28',
     type: 'image',
@@ -464,8 +466,8 @@ const minimaxVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.35, strategy: 'fixed', unit: 'video' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.19, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-10-28',
     type: 'video',
@@ -490,8 +492,8 @@ const minimaxVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.28, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-10-28',
     type: 'video',
@@ -518,8 +520,8 @@ const minimaxVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
     },
     pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'video' }],
+      currency: 'USD',
+      units: [{ name: 'videoGeneration', rate: 0.28, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',

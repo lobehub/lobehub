@@ -83,6 +83,49 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      'Claude Sonnet 5.5 is a smarter, more efficient Sonnet that improves on Sonnet 5 in coding and knowledge work at the same base price, with cache reads at half the cost.',
+    displayName: 'Claude Sonnet 5.5',
+    enabled: true,
+    family: 'claude-sonnet',
+    generation: 'claude-5.5',
+    id: 'claude-sonnet-5-5',
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    // https://platform.claude.com/docs/en/about-claude/pricing
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 4, '5m': 2.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-09-28',
+    // Like Opus 5.5, thinking is always on (`thinking.type: disabled` is rejected), so the
+    // `enableAdaptiveThinking` toggle is intentionally omitted.
+    // https://platform.claude.com/docs/en/models/sonnet-5-5/migration-guide#thinking-runs-by-default
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'opus47Effort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       'Claude Opus 5.5 is built for long-running agentic coding and knowledge work, outperforming Claude Fable 5.1 on Terminal-Bench 4.0 at a lower price than Claude Opus 5.',
     displayName: 'Claude Opus 5.5',
     enabled: true,
