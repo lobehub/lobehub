@@ -1008,9 +1008,12 @@ describe('matchSemanticShellPredicate', () => {
       ['rmRecursiveHomeTarget', 'echo $(rm -f $(rm -rf ~)); echo ~'],
       ['rmRecursiveRootTarget', 'echo $(rm -f $(rm -rf /))'],
       ['rmRecursiveHomeTarget', 'echo `rm -f $(rm -rf ~)`'],
-    ] as const)('inspects nested substitutions of a resolved rm payload (%s): %s', (predicate, command) => {
-      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
-    });
+    ] as const)(
+      'inspects nested substitutions of a resolved rm payload (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
 
     it('leaves data-only operands and benign substitutions alone', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo >/tmp/out')).toBe(false);
@@ -1049,7 +1052,40 @@ describe('matchSemanticShellPredicate', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo \\\\$(rm -rf ~)')).toBe(
         true,
       );
-      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo \\$(rm -rf ~)')).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo \\$(rm -rf ~)')).toBe(
+        false,
+      );
+    });
+
+    // Inside double quotes a backslash still escapes `$` and the backtick, so
+    // the escaped body is printed, not run.
+    it.each(['echo "\\$(rm -rf ~)"', 'echo "pre \\$(rm -rf ~) post"', 'echo "\\`rm -rf ~\\`"'])(
+      'keeps a backslash-escaped sigil inside double quotes inert: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      },
+    );
+
+    // The caller's quoting does not survive an interpreter boundary: the outer
+    // single quotes only stop the CALLING shell from expanding, while the child
+    // shell runs the substitution.
+    it.each([
+      "bash -c 'echo $(rm -rf ~)'",
+      "sh -c 'echo $(rm -rf ~)'",
+      "eval 'echo $(rm -rf ~)'",
+      "bash -c 'pre $(rm -rf ~) post'",
+      "bash -c 'echo `rm -rf ~`'",
+      "xargs bash -c 'echo $(rm -rf ~)'",
+    ])('reads a quoted interpreter payload as fresh source: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it('keeps the literal rule inside a non-interpreter wrapper', () => {
+      // `timeout` does not evaluate its arguments as shell source, so the
+      // quoted text stays literal all the way down.
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', "timeout 5 echo '$(rm -rf ~)'"),
+      ).toBe(false);
     });
   });
 });

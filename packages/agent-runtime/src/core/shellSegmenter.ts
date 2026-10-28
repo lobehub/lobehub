@@ -585,7 +585,15 @@ export const tokenizeWords = (raw: string): string[] => {
         // it is a LITERAL backslash — `rm -rf "\/"` passes the two-character
         // operand `\/`, not the filesystem root. Dropping the backslash here
         // turned it into `//` and falsely matched the root predicate.
-        word += next === '$' || next === '`' || next === '"' || next === '\\' ? next : char + next;
+        // `\$` and `` \` `` inside double quotes suppress the expansion, so the
+        // sigil is literal TEXT here exactly like the single-quote case above:
+        // mark it, or `echo "\$(rm -rf ~)"` reads as a running substitution and
+        // blocks a command that only prints.
+        if (next === '$' || next === '`') {
+          word += isLiteralExpansionAt(raw, i + 1) ? LITERAL_EXPANSION_MARKER + next : next;
+        } else {
+          word += next === '"' || next === '\\' ? next : char + next;
+        }
         hasWord = true;
         i += 2;
         continue;
@@ -601,7 +609,8 @@ export const tokenizeWords = (raw: string): string[] => {
       // which made the predicate layer read such an argument as a real
       // substitution and block a harmless `echo`. Keep a backslash marker on
       // the sigil so the executable-expansion scan can tell the two apart.
-      word += quote === "'" && isLiteralExpansionAt(raw, i) ? LITERAL_EXPANSION_MARKER + char : char;
+      word +=
+        quote === "'" && isLiteralExpansionAt(raw, i) ? LITERAL_EXPANSION_MARKER + char : char;
       hasWord = true;
       i++;
       continue;

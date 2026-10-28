@@ -221,6 +221,23 @@ const payloadIsDangerous = (
 const isLiteralExpansionAt = (text: string, index: number): boolean =>
   index > 0 && text[index - 1] === LITERAL_EXPANSION_MARKER;
 
+/**
+ * Shells that execute one of their arguments as NEW shell source (`bash -c '…'`,
+ * `eval '…'`), including when the interpreter sits behind another wrapper
+ * (`xargs bash -c '…'`). Quote provenance from the calling shell stops at that
+ * boundary, so the markers the tokenizer wrote for the CALLER's quotes must be
+ * dropped before the payload is re-parsed: `bash -c 'echo $(rm -rf ~)'` still
+ * runs the substitution in the child shell.
+ */
+const SHELL_INTERPRETER_COMMANDS = new Set(['bash', 'dash', 'eval', 'ksh', 'sh', 'zsh']);
+
+const isShellInterpreterWord = (word: string): boolean =>
+  SHELL_INTERPRETER_COMMANDS.has(word.replace(/^.*\//, ''));
+
+/** Drop literal-expansion markers: the payload is a fresh shell level. */
+const withoutLiteralMarkers = (word: string): string =>
+  word.includes(LITERAL_EXPANSION_MARKER) ? word.split(LITERAL_EXPANSION_MARKER).join('') : word;
+
 const substitutionPayloads = (word: string): string[] => {
   const payloads: string[] = [];
   for (let index = 0; index < word.length; index++) {
@@ -332,7 +349,16 @@ const hasAmbiguousRmShape = (
     // after quote stripping (`bash -c "rm -rf /"` → word `rm -rf /`). Parse
     // the payload instead of pattern-guessing its shape — this also covers
     // an expansion whose operand is the whole command (`${X:-rm -rf /}`).
-    return words.some((word) => payloadIsDangerous(word, depth, predicate));
+    //
+    // The caller's quoting provenance does NOT cross an interpreter boundary:
+    // in `bash -c 'echo $(rm -rf ~)'` the single quotes only suppress expansion
+    // in the CALLING shell, while the child shell runs the substitution. Clear
+    // the markers before the re-parse so quoting cannot launder a real
+    // substitution into literal text.
+    const freshSource = words.some((word) => isShellInterpreterWord(word));
+    return words.some((word) =>
+      payloadIsDangerous(freshSource ? withoutLiteralMarkers(word) : word, depth, predicate),
+    );
   }
   // Recursive flag detection shared with the precise predicates: long names
   // (--recursive) and combined short flags (-rf) both count.
