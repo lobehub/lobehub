@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Gerätestatus wird überprüft…",
   "environment.directoryLabel": "Arbeitsverzeichnis für {{name}}",
   "environment.directoryRequired": "Wählen Sie ein Arbeitsverzeichnis auf diesem Gerät.",
-  "environment.directoryUnavailable": "Das Verzeichnis konnte nicht überprüft werden. Überprüfen Sie die Geräteverbindung und wählen Sie das Verzeichnis erneut aus.",
   "environment.editNamed": "Ändern, wo {{name}} ausgeführt wird",
   "environment.executionRequired": "Wählen Sie ein Online-Gerät und ein Arbeitsverzeichnis für jeden Coding-Agenten.",
   "environment.permissionRequired": "Sie haben keine Berechtigung, diese Mitglieder zu speichern. Überprüfen Sie den Kanal- und Agentenzugriff.",

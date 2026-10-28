@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Apparaatstatus controleren…",
   "environment.directoryLabel": "Werkmap voor {{name}}",
   "environment.directoryRequired": "Kies een werkmap op dit apparaat.",
-  "environment.directoryUnavailable": "Kon de map niet verifiëren. Controleer de apparaatverbinding en kies de map opnieuw.",
   "environment.editNamed": "Wijzig waar {{name}} wordt uitgevoerd",
   "environment.executionRequired": "Kies een online apparaat en werkmap voor elke codeeragent.",
   "environment.permissionRequired": "Je hebt geen toestemming om deze leden op te slaan. Controleer kanaal- en Agenttoegang.",

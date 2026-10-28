@@ -60,7 +60,6 @@
   "environment.devicesLoading": "در حال بررسی وضعیت دستگاه…",
   "environment.directoryLabel": "دایرکتوری کاری برای {{name}}",
   "environment.directoryRequired": "یک دایرکتوری کاری روی این دستگاه انتخاب کنید.",
-  "environment.directoryUnavailable": "دایرکتوری تأیید نشد. اتصال دستگاه را بررسی کرده و دوباره دایرکتوری را انتخاب کنید.",
   "environment.editNamed": "تغییر محل اجرای {{name}}",
   "environment.executionRequired": "یک دستگاه آنلاین و دایرکتوری کاری برای هر عامل کدنویسی انتخاب کنید.",
   "environment.permissionRequired": "شما اجازه ذخیره این اعضا را ندارید. دسترسی کانال و عامل را بررسی کنید.",

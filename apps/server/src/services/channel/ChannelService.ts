@@ -12,7 +12,6 @@ import type {
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
 import { AgentService } from '@/server/services/agent';
-import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
@@ -70,22 +69,14 @@ export class ChannelService {
           'BAD_REQUEST',
           'Native Channel execution is not supported on Windows devices yet',
         );
-      if (!input.workingDirectory?.trim())
+      const workingDirectory = input.workingDirectory?.trim();
+      if (!workingDirectory)
         throw new ChannelError('BAD_REQUEST', 'Choose a working directory for this device');
-      const path = await deviceGateway.statPath({
-        deviceId: input.deviceId,
-        path: input.workingDirectory,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      });
-      if (!path?.isDirectory || !path.canonicalPath)
-        throw new ChannelError(
-          'BAD_REQUEST',
-          'The device must be online and support directory verification',
-        );
+      // Where a member runs is not a precondition for the channel. The coordinator confirms
+      // the directory once the device is online, before the member claims any work.
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
-      config.workingDirectory = path.canonicalPath;
+      config.pendingWorkingDirectory = workingDirectory;
     } else if (runtime !== 'native' || input.workingDirectory) {
       throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
     }
@@ -100,7 +91,6 @@ export class ChannelService {
     // The project must be readable in this scope, the same visibility as the project list.
     if (input.projectId && !(await this.projectModel.findById(input.projectId)))
       throw new ChannelError('NOT_FOUND', 'Project not found');
-    // Resolving probes devices, so cap the work one request can start.
     const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
       concurrency: 5,
     });
@@ -108,7 +98,7 @@ export class ChannelService {
   };
 
   addAgent = async (channelId: string, input: ChannelAgentSelection) => {
-    // Check membership before probing a device; the write rechecks the current admin role.
+    // Check membership before reading the Agent; the write rechecks the current admin role.
     if (!(await this.repository.findAccess(channelId)))
       throw new ChannelError('NOT_FOUND', 'Channel not found');
     const member = await this.repository.addAgent(channelId, await this.resolveAgent(input));

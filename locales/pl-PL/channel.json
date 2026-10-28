@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Sprawdzanie statusu urządzenia…",
   "environment.directoryLabel": "Działający katalog dla {{name}}",
   "environment.directoryRequired": "Wybierz działający katalog na tym urządzeniu.",
-  "environment.directoryUnavailable": "Nie udało się zweryfikować katalogu. Sprawdź połączenie urządzenia i wybierz katalog ponownie.",
   "environment.editNamed": "Zmień, gdzie działa {{name}}",
   "environment.executionRequired": "Wybierz online urządzenie i działający katalog dla każdego kodującego Agenta.",
   "environment.permissionRequired": "Nie masz uprawnień do zapisania tych członków. Sprawdź dostęp do kanału i Agenta.",

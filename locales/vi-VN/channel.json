@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Đang kiểm tra trạng thái thiết bị…",
   "environment.directoryLabel": "Thư mục làm việc cho {{name}}",
   "environment.directoryRequired": "Chọn một thư mục làm việc trên thiết bị này.",
-  "environment.directoryUnavailable": "Không thể xác minh thư mục. Kiểm tra kết nối thiết bị và chọn lại thư mục.",
   "environment.editNamed": "Thay đổi nơi {{name}} chạy",
   "environment.executionRequired": "Chọn một thiết bị trực tuyến và thư mục làm việc cho mỗi Ajan mã hóa.",
   "environment.permissionRequired": "Bạn không có quyền lưu các thành viên này. Kiểm tra quyền truy cập kênh và Ajan.",

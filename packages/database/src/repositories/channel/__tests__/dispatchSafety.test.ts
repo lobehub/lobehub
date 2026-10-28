@@ -69,6 +69,56 @@ describe('Channel dispatch reservation', () => {
     expect(claimed?.job.operationId).toBeTruthy();
     expect(claimed?.job.blockedCode).toBeNull();
   });
+  it('starts a member saved without its device only after the device confirms the directory', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const { workingDirectory: _, ...config } = deviceConfig();
+    const agent = await fixture.addAgent(channel.id, 'Device agent', {
+      ...config,
+      pendingWorkingDirectory: '~/repo/',
+    });
+    const message = await asOwner.send(channel.id, {
+      content: 'Wait for the directory',
+      requestKey: 'pending-directory',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const online = { ...lease, onlineDeviceIds: ['device-1'] };
+
+    expect(
+      await executions.claim(channel.id, job.id, { ...lease, onlineDeviceIds: [] }),
+    ).toBeNull();
+    expect(await jobById(db, job.id)).toMatchObject({ blockedCode: 'device_offline' });
+    // Online, but the device could not confirm the directory.
+    expect(await executions.claim(channel.id, job.id, online)).toBeNull();
+    expect(await jobById(db, job.id)).toMatchObject({
+      blockedCode: 'directory_unavailable',
+      operationId: null,
+    });
+
+    // A confirmation for an environment that changed meanwhile is ignored.
+    expect(
+      await executions.confirmDirectory(channel.id, agent.id, {
+        canonicalPath: '/home/u/other',
+        deviceId: 'device-1',
+        pendingWorkingDirectory: '~/other',
+      }),
+    ).toBe(false);
+    expect(
+      await executions.confirmDirectory(channel.id, agent.id, {
+        canonicalPath: '/home/u/repo',
+        deviceId: 'device-1',
+        pendingWorkingDirectory: '~/repo/',
+      }),
+    ).toBe(true);
+
+    const claimed = await executions.claim(channel.id, job.id, online);
+    expect(claimed?.job).toMatchObject({ blockedCode: null, workingDirectory: '/home/u/repo' });
+    expect(claimed?.member.config).toEqual({
+      deviceId: 'device-1',
+      workingDirectory: '/home/u/repo',
+    });
+  });
+
   it('fences a dispatcher that resumes after its reservation was retired', async () => {
     const { channel, job, operationId, start } = await reserve();
     expect(await executions.retireReservation(channel.id, job.id)).toBe(true);

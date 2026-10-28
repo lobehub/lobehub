@@ -14,6 +14,7 @@ import {
   channelMessages,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { memberEnvironment } from './agent';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
 import { claimJob } from './claim';
 import { appendMessage } from './delivery';
@@ -216,6 +217,40 @@ export class ChannelExecutionRepository {
       inFlight,
     };
   };
+
+  /**
+   * Replaces a member's pending directory with the device's canonical path. Under the
+   * channel lock and only if the environment is still the one that was verified, so an
+   * environment change made meanwhile is not overwritten.
+   */
+  confirmDirectory = async (
+    channelId: string,
+    memberId: string,
+    verified: { canonicalPath: string; deviceId: string; pendingWorkingDirectory: string },
+  ) =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const [member] = await tx
+        .select({ config: channelMembers.config })
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, channelId),
+            eq(channelMembers.id, memberId),
+            eq(channelMembers.status, 'active'),
+          ),
+        );
+      const { pendingWorkingDirectory, ...config } = memberEnvironment(member?.config);
+      if (
+        config.deviceId !== verified.deviceId ||
+        pendingWorkingDirectory !== verified.pendingWorkingDirectory
+      )
+        return false;
+      await tx
+        .update(channelMembers)
+        .set({ config: { ...config, workingDirectory: verified.canonicalPath } })
+        .where(eq(channelMembers.id, memberId));
+      return true;
+    });
 
   /** Starts a queued job; null when it cannot start now. See {@link claimJob}. */
   claim = async (

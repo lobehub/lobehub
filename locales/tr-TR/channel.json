@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Cihaz durumu kontrol ediliyor…",
   "environment.directoryLabel": "{{name}} için çalışma dizini",
   "environment.directoryRequired": "Bu cihazda bir çalışma dizini seçin.",
-  "environment.directoryUnavailable": "Dizin doğrulanamadı. Cihaz bağlantısını kontrol edin ve dizini tekrar seçin.",
   "environment.editNamed": "{{name}}'in çalıştığı yeri değiştir",
   "environment.executionRequired": "Her kodlama Ajanı için çevrimiçi bir cihaz ve çalışma dizini seçin.",
   "environment.permissionRequired": "Bu üyeleri kaydetme izniniz yok. Kanal ve Ajan erişimini kontrol edin.",

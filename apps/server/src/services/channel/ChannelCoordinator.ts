@@ -1,7 +1,7 @@
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
-import type { ChannelExecutionConfig } from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelMemberConfig } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
@@ -55,7 +55,7 @@ export class ChannelCoordinator {
 
     const members = heads.length
       ? await this.db
-          .select({ config: channelMembers.config })
+          .select({ config: channelMembers.config, id: channelMembers.id })
           .from(channelMembers)
           .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')))
       : [];
@@ -73,6 +73,7 @@ export class ChannelCoordinator {
       .flat()
       .filter((device) => device.online)
       .map((device) => device.deviceId);
+    await this.confirmDirectories(channelId, channel.workspaceId, members, onlineDeviceIds);
 
     try {
       await pMap(
@@ -102,6 +103,39 @@ export class ChannelCoordinator {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
   };
+
+  /**
+   * Members save their directory without asking the device. Ask once it is online; a
+   * directory the device cannot find stays pending and the claim reports it.
+   */
+  private async confirmDirectories(
+    channelId: string,
+    workspaceId: string | null,
+    members: { config: ChannelMemberConfig | null; id: string }[],
+    onlineDeviceIds: string[],
+  ) {
+    await pMap(
+      members,
+      async ({ config, id }) => {
+        const { deviceId, deviceOwnerId, pendingWorkingDirectory } = config ?? {};
+        if (!deviceId || !deviceOwnerId || !pendingWorkingDirectory) return;
+        if (!onlineDeviceIds.includes(deviceId)) return;
+        const path = await deviceGateway.statPath({
+          deviceId,
+          path: pendingWorkingDirectory,
+          userId: deviceOwnerId,
+          workspaceId: workspaceId ?? undefined,
+        });
+        if (!path?.isDirectory || !path.canonicalPath) return;
+        await this.executions.confirmDirectory(channelId, id, {
+          canonicalPath: path.canonicalPath,
+          deviceId,
+          pendingWorkingDirectory,
+        });
+      },
+      { concurrency: STARTUP_CONCURRENCY },
+    );
+  }
 
   private async dispatch({ job, member, topic }: ChannelClaim, workspaceId: string | null) {
     if (

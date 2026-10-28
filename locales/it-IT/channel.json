@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Verifica dello stato del dispositivo…",
   "environment.directoryLabel": "Directory di lavoro per {{name}}",
   "environment.directoryRequired": "Scegli una directory di lavoro su questo dispositivo.",
-  "environment.directoryUnavailable": "Impossibile verificare la directory. Controlla la connessione del dispositivo e scegli di nuovo la directory.",
   "environment.editNamed": "Cambia dove esegue {{name}}",
   "environment.executionRequired": "Scegli un dispositivo online e una directory di lavoro per ogni agente di codifica.",
   "environment.permissionRequired": "Non hai il permesso di salvare questi membri. Controlla l'accesso al canale e agli agenti.",

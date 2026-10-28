@@ -60,7 +60,6 @@
   "environment.devicesLoading": "Проверка статуса устройства…",
   "environment.directoryLabel": "Рабочая директория для {{name}}",
   "environment.directoryRequired": "Выберите рабочую директорию на этом устройстве.",
-  "environment.directoryUnavailable": "Не удалось проверить директорию. Проверьте подключение устройства и выберите директорию снова.",
   "environment.editNamed": "Изменить, где работает {{name}}",
   "environment.executionRequired": "Выберите онлайн-устройство и рабочую директорию для каждого кодирующего агента.",
   "environment.permissionRequired": "У вас нет разрешения на сохранение этих участников. Проверьте доступ к каналу и агенту.",

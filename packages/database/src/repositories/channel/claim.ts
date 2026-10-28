@@ -135,6 +135,25 @@ const deviceBlock = async (
     return { code: 'unavailable', reason: 'The device owner did not allow this environment' };
 };
 
+/**
+ * A directory the device has not confirmed yet. The coordinator verifies it before claiming
+ * whenever the device is online, so an online device that still leaves it pending could not
+ * find it.
+ */
+const pendingDirectoryBlock = (
+  member: ChannelMemberItem,
+  onlineDeviceIds?: string[],
+): Block | undefined => {
+  const { deviceId, pendingWorkingDirectory } = member.config ?? {};
+  if (!pendingWorkingDirectory) return;
+  if (deviceId && onlineDeviceIds && !onlineDeviceIds.includes(deviceId))
+    return { code: 'device_offline', reason: 'Waiting for the configured device to connect' };
+  return {
+    code: 'directory_unavailable',
+    reason: 'The working directory was not found on the device',
+  };
+};
+
 /** Another channel's live writer in the same device directory. */
 const directoryBlock = async (
   tx: Transaction,
@@ -287,7 +306,10 @@ export const claimJob = async (
     return null;
   }
 
-  const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
+  const blocked =
+    pendingDirectoryBlock(member, options.onlineDeviceIds) ??
+    (await deviceBlock(tx, channel, member)) ??
+    (await directoryBlock(tx, member));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
     return null;

@@ -13,9 +13,6 @@ export const getChannelSaveErrorKey = (error: unknown) => {
     case 'Choose an accessible device shared with this workspace': {
       return 'environment.deviceUnavailable';
     }
-    case 'The device must be online and support directory verification': {
-      return 'environment.directoryUnavailable';
-    }
     case 'Unsupported Channel runtime': {
       return 'environment.unsupportedRuntime';
     }

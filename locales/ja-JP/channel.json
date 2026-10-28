@@ -60,7 +60,6 @@
   "environment.devicesLoading": "デバイスのステータスを確認中…",
   "environment.directoryLabel": "{{name}} 用の作業ディレクトリ",
   "environment.directoryRequired": "このデバイス上の作業ディレクトリを選択してください。",
-  "environment.directoryUnavailable": "ディレクトリを確認できませんでした。デバイス接続を確認し、再度ディレクトリを選択してください。",
   "environment.editNamed": "{{name}} の実行場所を変更",
   "environment.executionRequired": "すべてのコーディングエージェントにオンラインデバイスと作業ディレクトリを選択してください。",
   "environment.permissionRequired": "これらのメンバーを保存する権限がありません。チャンネルとエージェントのアクセスを確認してください。",
