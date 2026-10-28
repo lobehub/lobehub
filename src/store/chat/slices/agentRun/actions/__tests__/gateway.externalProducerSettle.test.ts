@@ -317,3 +317,70 @@ describe('external producer session ending without its terminal', () => {
     expect(run.internalDispatchTopic).not.toHaveBeenCalled();
   });
 });
+
+describe('a run the server failed at dispatch', () => {
+  it('never marks the topic running or opens a gateway socket', async () => {
+    const connectToGateway = vi.fn();
+    const completeOperation = vi.fn();
+    const updateTopicStatus = vi.fn();
+    const replaceMessages = vi.fn();
+    const state: Record<string, any> = {
+      activeAgentId: 'agent-1',
+      activeTopicId: 'topic-1',
+      gatewayConnections: {},
+      operations: {},
+      topicDataMap: {},
+    };
+    const set = vi.fn((updater: any) => {
+      Object.assign(state, typeof updater === 'function' ? updater(state) : updater);
+    });
+    const get = vi.fn(() => ({
+      ...state,
+      associateMessageWithOperation: vi.fn(),
+      completeOperation,
+      connectToGateway,
+      getOperationAbortSignal: vi.fn(() => new AbortController().signal),
+      internal_dispatchTopic: vi.fn(),
+      internal_pinTopicStatus: vi.fn(),
+      moveQueuedMessages: vi.fn(),
+      moveVoiceMessages: vi.fn(),
+      onOperationCancel: vi.fn(),
+      replaceMessages,
+      startOperation: vi.fn(() => ({ operationId: 'gw-op' })),
+      updateTopicStatus,
+    })) as any;
+    (globalThis as any).window = {
+      global_serverConfigStore: {
+        getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+      },
+    };
+
+    const action = new GatewayActionImpl(set as any, get, undefined);
+    action.createClient = vi.fn(() => createMockClient());
+    // A device dispatch the server refused: it already wrote the error bubble and
+    // settled the topic before answering, and there is no gateway token.
+    vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+      ...serverResult,
+      autoStarted: false,
+      error: 'DEVICE_OFFLINE',
+      heteroType: 'claude-code',
+      status: 'error',
+      success: false,
+      token: undefined,
+    } as any);
+
+    await action.executeGatewayAgent({
+      context,
+      message: 'Hello',
+      parentOperationId: 'send-op',
+    } as any);
+
+    expect(updateTopicStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'running' }),
+    );
+    expect(connectToGateway).not.toHaveBeenCalled();
+    expect(completeOperation).toHaveBeenCalledWith('send-op');
+    // The server's error bubble is pulled in, since no stream will deliver it.
+    expect(replaceMessages).toHaveBeenCalled();
+  });
+});

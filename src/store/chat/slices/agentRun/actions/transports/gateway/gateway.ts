@@ -1337,7 +1337,10 @@ export class GatewayActionImpl {
       }
     }
 
-    if (!isCreateNewTopic && cancelledAfterPersistence) {
+    // A run the server failed at dispatch is already settled and has no token;
+    // treating it as started wrote `running` back over that settlement.
+    const failedBeforeStart = result.success === false && result.status === 'error';
+    if (!isCreateNewTopic && (cancelledAfterPersistence || failedBeforeStart)) {
       try {
         const messages = await messageService.getMessages(resolvedMessageContext);
         this.#get().replaceMessages(messages, { context: resolvedMessageContext });
@@ -1422,11 +1425,10 @@ export class GatewayActionImpl {
       );
     cancelledAfterPersistence = interruptIfCancelledAfterPersistence() || cancelledAfterPersistence;
 
-    if (cancelledAfterPersistence) {
-      // This path never opens a socket, so no terminal frame will ever retire
-      // the topic row. Settle it once the stop is confirmed AND the sidebar
-      // refetch has landed: settling first would find no marker to clear, and
-      // the refetch would then install a `running` row nobody retires.
+    if (cancelledAfterPersistence || failedBeforeStart) {
+      // No socket opens here, so no terminal frame retires the row. A stop settles
+      // once confirmed AND the sidebar refetch landed: settling first finds no
+      // marker, and the refetch would reinstall a `running` row nobody retires.
       const { topicId } = result;
       if (lateInterruptConfirmed && topicId) {
         void Promise.all([lateInterruptConfirmed, topicRefresh]).then(([confirmed]) => {
@@ -1443,10 +1445,9 @@ export class GatewayActionImpl {
       return result;
     }
 
-    // `updateTopicStatus` persists through the owner-scoped `topic.updateTopic`
-    // procedure, which a share visitor is never authorized to call — firing it
-    // would only produce a rejected request (and a pinned optimistic write that
-    // no owner topic list ever consumes).
+    // `updateTopicStatus` persists through the owner-scoped `topic.updateTopic`,
+    // which a share visitor may never call — it would only be rejected (and pin
+    // an optimistic write that no owner topic list ever consumes).
     if (result.topicId && !agentShareId) {
       void this.#get().updateTopicStatus?.({
         agentId: messageContext.agentId,
