@@ -470,6 +470,8 @@ describe('matchSemanticShellPredicate', () => {
       'env --ignore-environment rm -rf /tmp/cache ~',
       'env --ignore-environment rm -rf /',
       'env --unset FOO rm -rf ~',
+      'env -uFOO rm -rf /tmp/cache ~',
+      'printf x | xargs --replace rm -rf ~',
       'sudo --user root rm -rf ~',
       'rm -rf /tmp/../*/',
       'rm -rf /tmp/../',

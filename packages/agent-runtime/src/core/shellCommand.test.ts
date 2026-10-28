@@ -219,6 +219,19 @@ describe('analyzeShellCommand', () => {
       // resolution reports ambiguity and the segment-level fallback judges it.
       const [unknown] = analyzeShellCommand('env --made-up-option rm -rf ~');
       expect(unknown.resolvedCommand).toBeNull();
+
+      // Short options with an ATTACHED value: `-uFOO` already carries its
+      // argument, so the following `rm` is the command, not another argument.
+      const [attached] = analyzeShellCommand('env -uFOO rm -rf /tmp/cache ~');
+      expect(attached.resolvedCommand).toBe('rm');
+      expect(attached.homeTargets).toContain('~');
+
+      // Bare OPTIONAL-argument xargs long options take no value word either:
+      // `--replace` defaults to `{}`, so `rm` is the wrapped command.
+      const xargsSegments = analyzeShellCommand('printf x | xargs --replace rm -rf ~');
+      const [xargsReplace] = xargsSegments.slice(-1);
+      expect(xargsReplace.resolvedCommand).toBe('rm');
+      expect(xargsReplace.homeTargets).toContain('~');
     });
 
     it('unwraps env with variables set inline and command', () => {

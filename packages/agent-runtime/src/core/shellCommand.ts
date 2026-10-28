@@ -939,6 +939,25 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
 };
 
 /**
+ * Wrapper short flags that TAKE a value (`env -uNAME`, `sudo -p prompt`).
+ * Only used to tell an ATTACHED value (`-uFOO`: the rest of the token is the
+ * argument, so the next word is the command) from a foreign cluster (`-rf`
+ * arriving after a swallowed command). A letter absent here is not known to
+ * take a value, so the security-first "consume the next word" default stays.
+ */
+const WRAPPER_VALUE_SHORT_FLAGS: Record<string, ReadonlySet<string>> = {
+  env: new Set(['u', 'C', 'S']),
+  sudo: new Set(['p', 'u', 'g', 'C', 'R', 'r', 't', 'T', 'D']),
+  xargs: new Set(['a', 'E', 'I', 'L', 'n', 'P', 's', 'd']),
+  runuser: new Set(['u', 'g', 'c']),
+  timeout: new Set(['k', 's']),
+  nice: new Set(['n']),
+  stdbuf: new Set(['i', 'o', 'e']),
+  ionice: new Set(['c', 'n', 'p']),
+  flock: new Set(['w', 'E']),
+};
+
+/**
  * Wrapper-owned LONG options, split by arity. The single-letter model above
  * cannot answer the question for `--long` names, and guessing is not safe in
  * either direction: assuming "value-free" resolves the option's VALUE as the
@@ -978,8 +997,20 @@ const WRAPPER_VALUE_FREE_LONG_FLAGS: Record<string, ReadonlySet<string>> = {
     '--stdin',
     '--validate',
   ]),
-  // GNU xargs: only the switches without a value word.
-  xargs: new Set(['--null', '--no-run-if-empty', '--verbose', '--interactive', '--exit', '--open-tty']),
+  // GNU xargs: switches without a value word, including the OPTIONAL-argument
+  // forms (`--replace[=R]`, `--eof[=END]`): getopt_long only accepts an
+  // optional argument attached with `=`, so the bare form takes no value word
+  // and `xargs --replace rm -rf ~` runs rm.
+  xargs: new Set([
+    '--null',
+    '--no-run-if-empty',
+    '--verbose',
+    '--interactive',
+    '--exit',
+    '--open-tty',
+    '--replace',
+    '--eof',
+  ]),
 };
 
 /**
@@ -1008,8 +1039,6 @@ const WRAPPER_VALUE_LONG_FLAGS: Record<string, ReadonlySet<string>> = {
   xargs: new Set([
     '--arg-file',
     '--delimiter',
-    '--eof',
-    '--replace',
     '--max-lines',
     '--max-args',
     '--max-procs',
@@ -1134,6 +1163,7 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
     if (!EXEC_PREFIX_WRAPPERS.has(base)) break;
     const valueFreeFlags = WRAPPER_VALUE_FREE_FLAGS[base];
     const valueFreeLongFlags = WRAPPER_VALUE_FREE_LONG_FLAGS[base];
+    const valueTakingShortFlags = WRAPPER_VALUE_SHORT_FLAGS[base];
     const valueTakingLongFlags = WRAPPER_VALUE_LONG_FLAGS[base];
     index++;
     // Consume wrapper-owned positional values first (timeout DURATION, flock
@@ -1183,13 +1213,36 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
           // Report ambiguity and let the segment-level fallback judge it.
           return null;
         }
-        // `-abc` / `-0` combined short flags: consumes a value unless EVERY
-        // letter/digit is whitelisted value-free. Unknown/foreign flags
-        // consume — the safe direction for a blacklist (over-detection).
+        // `-abc` / `-0` combined short flags. getopt reads letters left to
+        // right: the first value-taking letter either takes the NEXT word
+        // (when it is the last letter: `-u FOO`) or the REST of this token as
+        // its ATTACHED value (`-uFOO`, where `FOO` is already the argument and
+        // `rm` that follows is the command). Treating every value-taking flag
+        // as "consume the next word" ate `rm` in `env -uFOO rm -rf /tmp/cache
+        // ~`, which left `~` as a confidently unrelated executable.
         const letters = /^-([a-z0-9]+)$/i.exec(token);
-        const consumesValue =
-          letters === null || !letters[1].split('').every((letter) => valueFreeFlags?.has(letter));
-        index += consumesValue ? 2 : 1;
+        if (letters === null) {
+          // Foreign/unknown short form: keep the security-first default and
+          // assume the next word is its value.
+          index += 2;
+          continue;
+        }
+        const lettersOfFlag = letters[1].split('');
+        const valueAt = lettersOfFlag.findIndex((letter) => !valueFreeFlags?.has(letter));
+        // Every letter whitelisted: a pure flag cluster (`env -i0`).
+        if (valueAt === -1) {
+          index++;
+          continue;
+        }
+        // A value-taking letter last takes the NEXT word (`-u FOO`). An
+        // earlier value-taking letter can carry an ATTACHED value (`-uFOO`)
+        // — but only for a letter this wrapper is known to give a value to;
+        // a foreign cluster like `-rf` (left over after a swallowed command)
+        // keeps the security-first default and consumes the next word.
+        const takesAttachedValue =
+          valueAt !== lettersOfFlag.length - 1 &&
+          valueTakingShortFlags?.has(lettersOfFlag[valueAt]) === true;
+        index += takesAttachedValue ? 1 : 2;
         continue;
       }
       // Bare word: either a positional wrapper value (timeout 30) or the
