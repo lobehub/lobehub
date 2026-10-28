@@ -939,6 +939,88 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
 };
 
 /**
+ * Wrapper-owned LONG options, split by arity. The single-letter model above
+ * cannot answer the question for `--long` names, and guessing is not safe in
+ * either direction: assuming "value-free" resolves the option's VALUE as the
+ * command (`sudo --user root rm -rf ~` → "root"), while assuming
+ * "value-taking" eats the wrapped command (`env --ignore-environment rm -rf
+ * /tmp/cache ~` → `-rf` ate `/tmp/cache` and left `~` as a confidently
+ * unrelated executable, so every predicate returned false while bash deleted
+ * the home dir). Both shapes are listed explicitly per wrapper below; a long
+ * option with unknown arity makes resolution report ambiguity instead.
+ */
+const WRAPPER_VALUE_FREE_LONG_FLAGS: Record<string, ReadonlySet<string>> = {
+  // GNU coreutils env: -i/-0/-v and the optional-argument signal switches
+  // (`--default-signal[=SIG]`) take no separate word.
+  env: new Set([
+    '--ignore-environment',
+    '--null',
+    '--debug',
+    '--list-signal-handling',
+    '--default-signal',
+    '--ignore-signal',
+    '--block-signal',
+  ]),
+  // sudo 1.9 value-free long forms (mirrors the short whitelist above).
+  sudo: new Set([
+    '--askpass',
+    '--background',
+    '--bell',
+    '--edit',
+    '--set-home',
+    '--login',
+    '--remove-timestamp',
+    '--reset-timestamp',
+    '--list',
+    '--non-interactive',
+    '--preserve-env',
+    '--shell',
+    '--stdin',
+    '--validate',
+  ]),
+  // GNU xargs: only the switches without a value word.
+  xargs: new Set(['--null', '--no-run-if-empty', '--verbose', '--interactive', '--exit', '--open-tty']),
+};
+
+/**
+ * `runuser` is deliberately absent from both tables: `runuser --login nobody
+ * rm -rf /` takes the USER as a positional, so no listed arity describes it —
+ * unknown-arity → ambiguity keeps the segment blockable.
+ *
+ * Wrapper LONG options that consume the NEXT WORD as their value. GNU
+ * getopt_long accepts the space-separated form for required arguments, so
+ * `--user root` and `--user=root` are both valid and both must consume.
+ */
+const WRAPPER_VALUE_LONG_FLAGS: Record<string, ReadonlySet<string>> = {
+  env: new Set(['--unset', '--chdir', '--split-string']),
+  sudo: new Set([
+    '--prompt',
+    '--user',
+    '--group',
+    '--close-from',
+    '--chroot',
+    '--role',
+    '--type',
+    '--command-timeout',
+    '--chdir',
+    '--other-user',
+  ]),
+  xargs: new Set([
+    '--arg-file',
+    '--delimiter',
+    '--eof',
+    '--replace',
+    '--max-lines',
+    '--max-args',
+    '--max-procs',
+    '--max-chars',
+  ]),
+};
+
+/** Long options that never run a command, so their arity cannot hide one. */
+const GLOBAL_VALUE_FREE_LONG_FLAGS = new Set(['--help', '--version']);
+
+/**
  * Exec-prefix commands that run their first non-flag argument as a program.
  * Unwrapped so `exec rm -rf /`, `xargs rm -rf /`, `timeout 30 rm -rf /`,
  * `nice rm -rf /` … resolve to the real command. (The old substring regex
@@ -986,8 +1068,10 @@ const WRAPPER_POSITIONAL_VALUES: Record<string, number> = {
  *
  * Option model is security-first: a single-letter flag is presumed to
  * consume the next word unless whitelisted value-free (see
- * WRAPPER_VALUE_FREE_FLAGS); long flags are presumed value-free unless they
- * embed `=value`. A bare word after a value-consuming flag is that flag's
+ * WRAPPER_VALUE_FREE_FLAGS); a long flag's arity comes from its own
+ * per-wrapper table (WRAPPER_VALUE_FREE_LONG_FLAGS / WRAPPER_VALUE_LONG_FLAGS),
+ * and an unlisted long flag yields an ambiguous resolution rather than a
+ * confident guess. A bare word after a value-consuming flag is that flag's
  * value, not the command.
  */
 /**
@@ -1049,10 +1133,12 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
     }
     if (!EXEC_PREFIX_WRAPPERS.has(base)) break;
     const valueFreeFlags = WRAPPER_VALUE_FREE_FLAGS[base];
+    const valueFreeLongFlags = WRAPPER_VALUE_FREE_LONG_FLAGS[base];
+    const valueTakingLongFlags = WRAPPER_VALUE_LONG_FLAGS[base];
     index++;
     // Consume wrapper-owned positional values first (timeout DURATION, flock
     // LOCKFILE): bare words that are NOT the wrapped command.
-    let positional = WRAPPER_POSITIONAL_VALUES[commandBasename(word)] ?? 0;
+    let positional = WRAPPER_POSITIONAL_VALUES[base] ?? 0;
     // Skip wrapper-owned tokens: assignments after `env`, wrapper flags, and
     // the value word of any flag presumed to consume one (security-first
     // default, see WRAPPER_VALUE_FREE_FLAGS).
@@ -1079,6 +1165,23 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
         if (token.includes('=')) {
           index++;
           continue;
+        }
+        // Long options have their own arity table; the single-letter regex
+        // below cannot read them, and `--name` always failed it, so the
+        // "unknown flags consume" default swallowed the wrapped command.
+        if (token.startsWith('--')) {
+          if (GLOBAL_VALUE_FREE_LONG_FLAGS.has(token) || valueFreeLongFlags?.has(token)) {
+            index++;
+            continue;
+          }
+          if (valueTakingLongFlags?.has(token)) {
+            index += 2;
+            continue;
+          }
+          // Unknown arity: the next word is either this option's value or the
+          // wrapped command, and either guess hides a real rm invocation.
+          // Report ambiguity and let the segment-level fallback judge it.
+          return null;
         }
         // `-abc` / `-0` combined short flags: consumes a value unless EVERY
         // letter/digit is whitelisted value-free. Unknown/foreign flags

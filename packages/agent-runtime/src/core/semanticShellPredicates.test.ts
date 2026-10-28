@@ -465,6 +465,12 @@ describe('matchSemanticShellPredicate', () => {
       'rm${IFS}-rf${IFS}/',
       'runuser -u nobody -- rm -rf /',
       'runuser --login nobody rm -rf /',
+      // Thirteenth codex round: a value-free LONG wrapper option must not
+      // swallow the wrapped command (`env --ignore-environment rm -rf ~`).
+      'env --ignore-environment rm -rf /tmp/cache ~',
+      'env --ignore-environment rm -rf /',
+      'env --unset FOO rm -rf ~',
+      'sudo --user root rm -rf ~',
       'rm -rf /tmp/../*/',
       'rm -rf /tmp/../',
       'rm -rf /tmp/..',
@@ -490,6 +496,8 @@ describe('matchSemanticShellPredicate', () => {
       'timeout 30 ls /',
       'flock /tmp/lock ls /',
       'stdbuf -o0 ls /',
+      'env --ignore-environment ls /',
+      'sudo --user root ls /',
       // Quoted/argument rm strings under confident non-rm commands stay
       // allowed — no re-creation of the substring false-positive class.
       "echo 'rm -rf /'",

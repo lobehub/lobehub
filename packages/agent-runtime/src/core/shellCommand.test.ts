@@ -191,6 +191,36 @@ describe('analyzeShellCommand', () => {
       expect(sudo.homeTargets).toContain('~');
     });
 
+    it('reads wrapper long options by their declared arity', () => {
+      // `env --ignore-environment rm -rf /tmp/cache ~`: the long option takes
+      // no argument, so `rm` is the wrapped command. The single-letter regex
+      // could not read `--ignore-environment`, the "unknown flag consumes a
+      // value" default ate `rm`, `-rf` ate `/tmp/cache`, and `~` was left as a
+      // confidently unrelated executable while bash deleted the home dir.
+      const [envSeg] = analyzeShellCommand('env --ignore-environment rm -rf /tmp/cache ~');
+      expect(envSeg.resolvedCommand).toBe('rm');
+      expect(envSeg.hasFlag('r')).toBe(true);
+      expect(envSeg.homeTargets).toContain('~');
+
+      // Value-taking long options still consume their value word, so a
+      // `--user root` value cannot become the executable.
+      const [sudoSeg] = analyzeShellCommand('sudo --user root rm -rf ~');
+      expect(sudoSeg.resolvedCommand).toBe('rm');
+      expect(sudoSeg.homeTargets).toContain('~');
+
+      const [envUnset] = analyzeShellCommand('env --unset FOO rm -rf ~');
+      expect(envUnset.resolvedCommand).toBe('rm');
+
+      // `--flag=value` keeps its embedded value attached.
+      const [envChdir] = analyzeShellCommand('env --chdir=/tmp rm -rf ~');
+      expect(envChdir.resolvedCommand).toBe('rm');
+
+      // Unknown arity: either guess would hide a real rm invocation, so the
+      // resolution reports ambiguity and the segment-level fallback judges it.
+      const [unknown] = analyzeShellCommand('env --made-up-option rm -rf ~');
+      expect(unknown.resolvedCommand).toBeNull();
+    });
+
     it('unwraps env with variables set inline and command', () => {
       const segments = analyzeShellCommand('FOO=bar env rm file');
       // Leading assignments are skipped as part of lightweight word initializers
