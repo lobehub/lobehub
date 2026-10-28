@@ -547,63 +547,69 @@ describe('MCPService', () => {
       expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
     });
 
-    it('should call toolsClient.market.callCloudMcpEndpoint for cloud type and not report from frontend', async () => {
-      const { discoverService } = await import('./discover');
-      const { toolsClient } = await import('@/libs/trpc/client');
+    it.each([false, true])(
+      'keeps cloud MCP on its market endpoint with clientRuntime=%s',
+      async (clientRuntime) => {
+        const { discoverService } = await import('./discover');
+        const { toolsClient } = await import('@/libs/trpc/client');
 
-      // Use cloud type which now reports from server-side
-      const mockPlugin = {
-        customParams: {
-          mcp: { type: 'cloud' },
-        },
-        manifest: {
-          meta: { title: 'Cloud Plugin' },
-          version: '1.0.0',
-        },
-      };
+        // Use cloud type which now reports from server-side
+        const mockPlugin = {
+          customParams: {
+            mcp: { type: 'cloud' },
+          },
+          manifest: {
+            meta: { title: 'Cloud Plugin' },
+            version: '1.0.0',
+          },
+        };
 
-      mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => mockPlugin);
-      mockPluginSelectors.getCustomPluginById.mockReturnValue(() => null);
+        mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => mockPlugin);
+        mockPluginSelectors.getCustomPluginById.mockReturnValue(() => null);
 
-      // Mock the toolsClient for cloud type
-      const mockResult = {
-        content: 'response data',
-        state: {
-          content: [{ text: 'response data', type: 'text' as const }],
-        },
-        success: true,
-      };
-      vi.mocked(toolsClient.market.callCloudMcpEndpoint.mutate).mockResolvedValue(mockResult);
+        // Mock the toolsClient for cloud type
+        const mockResult = {
+          content: 'response data',
+          state: {
+            content: [{ text: 'response data', type: 'text' as const }],
+          },
+          success: true,
+        };
+        vi.mocked(toolsClient.market.callCloudMcpEndpoint.mutate).mockResolvedValue(mockResult);
 
-      const payload: ChatToolPayload = {
-        id: 'tool-call-6',
-        identifier: 'cloud-plugin',
-        apiName: 'cloudMethod',
-        arguments: '{"key": "value"}',
-        type: 'standalone',
-      };
+        const payload: ChatToolPayload = {
+          id: 'tool-call-6',
+          identifier: 'cloud-plugin',
+          apiName: 'cloudMethod',
+          arguments: '{"key": "value"}',
+          type: 'standalone',
+        };
 
-      const result = await mcpService.invokeMcpToolCall(payload, { topicId: 'topic-123' });
+        const result = await mcpService.invokeMcpToolCall(payload, {
+          topicId: 'topic-123',
+          clientRuntime,
+        });
 
-      expect(result).toEqual(mockResult);
-      expect(toolsClient.market.callCloudMcpEndpoint.mutate).toHaveBeenCalledWith({
-        apiParams: { key: 'value' },
-        identifier: 'cloud-plugin',
-        meta: {
-          customPluginInfo: undefined,
-          isCustomPlugin: false,
-          sessionId: 'topic-123',
-          version: '1.0.0',
-        },
-        toolName: 'cloudMethod',
-      });
+        expect(result).toEqual(mockResult);
+        expect(toolsClient.market.callCloudMcpEndpoint.mutate).toHaveBeenCalledWith({
+          apiParams: { key: 'value' },
+          identifier: 'cloud-plugin',
+          meta: {
+            customPluginInfo: undefined,
+            isCustomPlugin: false,
+            sessionId: 'topic-123',
+            version: '1.0.0',
+          },
+          toolName: 'cloudMethod',
+        });
 
-      // Wait for async reporting
-      await new Promise((resolve) => setTimeout(resolve, 10));
+        // Wait for async reporting
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Cloud type should NOT report from frontend (handled server-side)
-      expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
-    });
+        // Cloud type should NOT report from frontend (handled server-side)
+        expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
+      },
+    );
 
     it('should handle abort signal', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');

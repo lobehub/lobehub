@@ -375,10 +375,13 @@ class MCPService {
     }
 
     if (!plugin) return;
-    if (clientRuntime && !(isDesktop && plugin.customParams?.mcp?.type === 'stdio'))
-      return runDurableClientTool();
-
     const connection = plugin.customParams?.mcp;
+    if (
+      clientRuntime &&
+      (connection?.type === 'http' || connection?.type === 'stdio') &&
+      !(isDesktop && connection.type === 'stdio')
+    )
+      return runDurableClientTool();
     const configured = buildPluginMcpParams(plugin, identifier);
     const { pluginSettings } = configured;
 
