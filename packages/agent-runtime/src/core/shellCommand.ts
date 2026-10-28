@@ -449,8 +449,16 @@ const splitIntoRawSegments = (command: string): string[] => {
 
     if (char === '<' && PREPARED[i + 1] === '<') {
       // `<<<` (here-string) and `<<=` are not heredoc operators.
-      if (PREPARED[i + 2] === '<' || PREPARED[i + 2] === '=') {
-        current += PREPARED[i + 2];
+      // The here-string operator is kept whole: its payload is stdin for the
+      // command, and the word scanner needs to see the three characters to
+      // keep that payload instead of dropping it as a redirection target.
+      if (PREPARED[i + 2] === '<') {
+        current += '<<<';
+        i += 2;
+        continue;
+      }
+      if (PREPARED[i + 2] === '=') {
+        current += '<=';
         i += 2;
         continue;
       }
@@ -741,6 +749,14 @@ const tokenizeWords = (raw: string): string[] => {
         i++;
         continue;
       }
+      // `<<<` is a here-string: its payload becomes the command's stdin, and a
+      // shell interpreter executes stdin. Keep the payload as a word so the
+      // predicate layer can read it as a payload; `<<` (heredoc) still has no
+      // inline word to keep.
+      if (op === '<' && raw[j + 1] === '<' && raw[j + 2] === '<') {
+        i = Math.max(j + 3, i + 1);
+        continue;
+      }
       // '>>' counts as two operator chars; '<<' (heredoc) has no target to skip.
       if (raw[j + 1] === op) {
         j += 2;
@@ -776,12 +792,15 @@ const tokenizeWords = (raw: string): string[] => {
 
 const isHomePath = (word: string): boolean => {
   const operand = stripGroupingParens(word);
+  // `${HOME}` names the same directory as `$HOME`; normalize the braced
+  // spelling so it cannot slip past the classifier.
+  const home = operand.replace(/^\$\{HOME\}/, '$HOME');
   return (
-    operand === '~' ||
-    operand.startsWith('~/') ||
-    operand === '$HOME' ||
-    operand.startsWith('$HOME/') ||
-    /^\/(?:Users|home)\/[^/]+/.test(operand)
+    home === '~' ||
+    home.startsWith('~/') ||
+    home === '$HOME' ||
+    home.startsWith('$HOME/') ||
+    /^\/(?:Users|home)\/[^/]+/.test(home)
   );
 };
 

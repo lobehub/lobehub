@@ -114,8 +114,10 @@ const isHomeTarget = withExpansionOperand((word: string): boolean => {
   return (
     operand === '~' ||
     operand === '$HOME' ||
+    operand === '${HOME}' ||
     operand === '~/' ||
     operand === '$HOME/' ||
+    operand === '${HOME}/' ||
     /^\/(?:Users|home)\/[^/]+\/?$/.test(operand)
   );
 });

@@ -887,6 +887,30 @@ describe('matchSemanticShellPredicate', () => {
     });
   });
 
+  describe('braced HOME and here-string payloads', () => {
+    // Both are equivalent spellings of a recursive home deletion that the
+    // replaced regex caught: `${HOME}` expands to the same directory as `$HOME`,
+    // and a shell reads a here-string as its own stdin and executes it.
+    it.each(['rm -rf ${HOME}', 'rm -rf ${HOME}/'])(
+      'reads a braced HOME as a home target: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      },
+    );
+
+    it.each(["bash <<< 'rm -rf ~'", 'bash <<< rm\\ -rf\\ ~'])(
+      'reads a here-string payload as the interpreter stdin: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      },
+    );
+
+    it('leaves a here-string payload that is not a command alone', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'cat <<< "hello"')).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'cat <<< "hello"')).toBe(false);
+    });
+  });
+
   describe('command substitution containment', () => {
     // Substitution bodies stay embedded inside words rather than splitting the
     // outer command. The predicates above only fire on `rm` as the RESOLVED
