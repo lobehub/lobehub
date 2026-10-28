@@ -143,7 +143,10 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
             <Flexbox gap={8} paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
               {/* A run whose agent stopped but whose acceptance round has not
                   settled still reads as running; say what it waits on. */}
-              <TaskAcceptanceWaitNotice topicId={topicId} />
+              <TaskAcceptanceWaitNotice
+                activity={drawerActivity}
+                runningOperation={currentRunningOperation}
+              />
               <FeedbackInput
                 defaultExpanded={defaultInputExpanded}
                 disableCollapse={disableInputCollapse}
