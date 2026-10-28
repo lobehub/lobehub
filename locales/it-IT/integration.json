@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Sincronizzazione di tutto ciò che corrisponde alla regola…",
   "linear.sync.job.skipReason.closed": "Chiuso in Linear e mai importato",
   "linear.sync.job.skipReason.failed": "Non è stato possibile scriverlo; la prossima sincronizzazione lo riproverà",
+  "linear.sync.job.skipReason.missing": "Non è più in Linear o non è visibile a questa connessione",
   "linear.sync.job.skipReason.running": "L'attività è in corso, quindi non è stata chiusa",
   "linear.sync.job.skipReason.unavailable": "L'attività è nel cestino o non è visibile per te",
   "linear.sync.job.skippedTitle": "{{count}} saltati",

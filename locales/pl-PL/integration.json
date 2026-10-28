@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Synchronizowanie wszystkiego, co pasuje do reguły…",
   "linear.sync.job.skipReason.closed": "Zamknięte w Linear i nigdy nie zaimportowane",
   "linear.sync.job.skipReason.failed": "Nie można zapisać; następna synchronizacja spróbuje ponownie",
+  "linear.sync.job.skipReason.missing": "Nie ma go już w Linear lub nie jest widoczne dla tego połączenia",
   "linear.sync.job.skipReason.running": "Zadanie jest w toku, więc nie zostało zamknięte",
   "linear.sync.job.skipReason.unavailable": "Zadanie jest w koszu lub nie jest widoczne dla Ciebie",
   "linear.sync.job.skippedTitle": "{{count}} pominiętych",

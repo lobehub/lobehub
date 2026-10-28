@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Kuralın eşleştiği her şey senkronize ediliyor…",
   "linear.sync.job.skipReason.closed": "Linear'da kapatıldı ve hiç içe aktarılmadı",
   "linear.sync.job.skipReason.failed": "Yazılamadı; bir sonraki senkronizasyon bunu yeniden deneyecek",
+  "linear.sync.job.skipReason.missing": "Artık Linear’da yok veya bu bağlantı tarafından görülemiyor",
   "linear.sync.job.skipReason.running": "Görev çalışıyor, bu yüzden kapatılmadı",
   "linear.sync.job.skipReason.unavailable": "Görev çöp kutusunda veya size görünür değil",
   "linear.sync.job.skippedTitle": "{{count}} atlandı",

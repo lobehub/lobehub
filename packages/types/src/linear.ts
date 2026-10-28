@@ -108,7 +108,9 @@ export type LinearSyncSkipReason =
   /** Closed in Linear and never imported, so there is nothing to close. */
   | 'closed'
   /** Writing the task failed; the next sync retries it. */
-  | 'failed';
+  | 'failed'
+  /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
+  | 'missing';
 
 export interface LinearSyncResult {
   /** Tasks closed because their issue was completed or canceled in Linear. */

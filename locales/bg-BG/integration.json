@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Синхронизират се всички съвпадащи с правилото…",
   "linear.sync.job.skipReason.closed": "Затворено в Linear и никога не е било импортирано",
   "linear.sync.job.skipReason.failed": "Не можа да бъде записано; следващата синхронизация ще го опита отново",
+  "linear.sync.job.skipReason.missing": "Вече не е в Linear или не е видимо за тази връзка",
   "linear.sync.job.skipReason.running": "Задачата е в процес на изпълнение, затова не беше затворена",
   "linear.sync.job.skipReason.unavailable": "Задачата е в кошчето или не е видима за вас",
   "linear.sync.job.skippedTitle": "{{count}} пропуснати",

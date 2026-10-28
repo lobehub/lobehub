@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Синхронизация всего, что соответствует правилу…",
   "linear.sync.job.skipReason.closed": "Закрыто в Linear и никогда не импортировалось",
   "linear.sync.job.skipReason.failed": "Не удалось записать; следующая синхронизация повторит попытку",
+  "linear.sync.job.skipReason.missing": "Больше нет в Linear или недоступно для этого подключения",
   "linear.sync.job.skipReason.running": "Задача выполняется, поэтому она не была закрыта",
   "linear.sync.job.skipReason.unavailable": "Задача находится в корзине или недоступна для вас",
   "linear.sync.job.skippedTitle": "{{count}} пропущено",

@@ -224,6 +224,16 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
     expect(result.skippedCount).toBe(105);
   });
 
+  it('reports picked issues Linear no longer returns instead of an empty run', async () => {
+    serve([issue({ id: '1' })]);
+
+    const result = await new LinearIssueSyncService(db, userId).importIssues(TOKEN, ['1', 'gone']);
+
+    expect(result.created).toBe(1);
+    expect(result.skipped).toEqual([{ identifier: 'gone', reason: 'missing' }]);
+    expect(result.skippedCount).toBe(1);
+  });
+
   it('keeps each scope separate: another user imports their own task', async () => {
     serve([issue({ id: '1' })]);
     await new LinearIssueSyncService(db, userId).importIssues(TOKEN, ['1']);

@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "正在同步规则匹配的全部 Issue…",
   "linear.sync.job.skipReason.closed": "在 Linear 中已关闭，未导入",
   "linear.sync.job.skipReason.failed": "写入失败，下次同步会重试",
+  "linear.sync.job.skipReason.missing": "Linear 中已不存在，或当前连接无权访问",
   "linear.sync.job.skipReason.running": "任务正在运行，未关闭",
   "linear.sync.job.skipReason.unavailable": "任务在回收站或你无权查看",
   "linear.sync.job.skippedTitle": "跳过 {{count}} 个",

@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "در حال همگام‌سازی همه مواردی که قانون مطابقت دارد…",
   "linear.sync.job.skipReason.closed": "در Linear بسته شده و هرگز وارد نشده است",
   "linear.sync.job.skipReason.failed": "نمی‌توانست نوشته شود؛ همگام‌سازی بعدی دوباره تلاش می‌کند",
+  "linear.sync.job.skipReason.missing": "دیگر در Linear وجود ندارد یا برای این اتصال قابل مشاهده نیست",
   "linear.sync.job.skipReason.running": "وظیفه در حال اجرا است، بنابراین بسته نشده است",
   "linear.sync.job.skipReason.unavailable": "وظیفه در سطل زباله است یا برای شما قابل مشاهده نیست",
   "linear.sync.job.skippedTitle": "{{count}} کنار گذاشته شده",

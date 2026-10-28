@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Sincronizando tudo que a regra corresponde…",
   "linear.sync.job.skipReason.closed": "Fechado no Linear e nunca importado",
   "linear.sync.job.skipReason.failed": "Não pôde ser gravado; a próxima sincronização tentará novamente",
+  "linear.sync.job.skipReason.missing": "Não está mais no Linear ou não é visível para esta conexão",
   "linear.sync.job.skipReason.running": "A tarefa está em execução, então não foi fechada",
   "linear.sync.job.skipReason.unavailable": "A tarefa está na lixeira ou não está visível para você",
   "linear.sync.job.skippedTitle": "{{count}} ignorados",

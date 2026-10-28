@@ -190,6 +190,19 @@ export class LinearIssueSyncService {
   ): Promise<LinearSyncResult> {
     const issues = await getLinearIssuesByIds(accessToken, issueIds);
     const result = emptyResult();
+    // An issue deleted or hidden since it was picked is not returned; say so
+    // instead of reporting an empty, "up to date" run.
+    const returned = new Set(issues.map((issue) => issue.id));
+    const missing = [...new Set(issueIds)].filter((id) => !returned.has(id));
+    if (missing.length > 0) {
+      const known = new Map(
+        (await this.linkModel.findByExternalIds('linear', missing)).map((link) => [
+          link.externalId,
+          link.externalIdentifier,
+        ]),
+      );
+      for (const id of missing) skip(result, known.get(id) ?? id, 'missing');
+    }
     await this.syncIssues(
       issues,
       { createClosed: true, targetProjectId: options.targetProjectId },

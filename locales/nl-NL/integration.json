@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Alles synchroniseren wat de regel overeenkomt…",
   "linear.sync.job.skipReason.closed": "Gesloten in Lineair en nooit geïmporteerd",
   "linear.sync.job.skipReason.failed": "Kon niet worden geschreven; de volgende synchronisatie probeert het opnieuw",
+  "linear.sync.job.skipReason.missing": "Niet meer in Linear of niet zichtbaar voor deze verbinding",
   "linear.sync.job.skipReason.running": "Taak is bezig, dus deze is niet gesloten",
   "linear.sync.job.skipReason.unavailable": "Taak bevindt zich in de prullenbak of is niet zichtbaar voor u",
   "linear.sync.job.skippedTitle": "{{count}} overgeslagen",

@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Đang đồng bộ mọi thứ mà quy tắc khớp…",
   "linear.sync.job.skipReason.closed": "Đã đóng trong Linear và chưa bao giờ được nhập",
   "linear.sync.job.skipReason.failed": "Không thể ghi; lần đồng bộ tiếp theo sẽ thử lại",
+  "linear.sync.job.skipReason.missing": "Không còn trong Linear hoặc kết nối này không xem được",
   "linear.sync.job.skipReason.running": "Nhiệm vụ đang chạy, vì vậy nó không được đóng",
   "linear.sync.job.skipReason.unavailable": "Nhiệm vụ nằm trong thùng rác hoặc không hiển thị với bạn",
   "linear.sync.job.skippedTitle": "{{count}} đã bị bỏ qua",

@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "ルールに一致するすべてを同期中…",
   "linear.sync.job.skipReason.closed": "Linearでクローズされ、インポートされませんでした",
   "linear.sync.job.skipReason.failed": "書き込みできませんでした。次回の同期で再試行されます",
+  "linear.sync.job.skipReason.missing": "Linear に存在しないか、この接続からは参照できません",
   "linear.sync.job.skipReason.running": "タスクが実行中のため、クローズされませんでした",
   "linear.sync.job.skipReason.unavailable": "タスクがゴミ箱にあるか、あなたには表示されません",
   "linear.sync.job.skippedTitle": "{{count}}件がスキップされました",

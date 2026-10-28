@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "규칙이 일치하는 모든 항목을 동기화 중…",
   "linear.sync.job.skipReason.closed": "Linear에서 닫혔으며 가져오지 않음",
   "linear.sync.job.skipReason.failed": "작성할 수 없었음; 다음 동기화에서 다시 시도됨",
+  "linear.sync.job.skipReason.missing": "Linear에 더 이상 없거나 이 연결에서 볼 수 없습니다",
   "linear.sync.job.skipReason.running": "작업이 진행 중이므로 닫히지 않음",
   "linear.sync.job.skipReason.unavailable": "작업이 휴지통에 있거나 사용자에게 보이지 않음",
   "linear.sync.job.skippedTitle": "{{count}}개 건너뜀",

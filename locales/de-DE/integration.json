@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Alles synchronisieren, was der Regel entspricht…",
   "linear.sync.job.skipReason.closed": "In Linear geschlossen und nie importiert",
   "linear.sync.job.skipReason.failed": "Konnte nicht geschrieben werden; die nächste Synchronisierung versucht es erneut",
+  "linear.sync.job.skipReason.missing": "Nicht mehr in Linear vorhanden oder für diese Verbindung nicht sichtbar",
   "linear.sync.job.skipReason.running": "Aufgabe läuft, daher wurde sie nicht geschlossen",
   "linear.sync.job.skipReason.unavailable": "Aufgabe befindet sich im Papierkorb oder ist für Sie nicht sichtbar",
   "linear.sync.job.skippedTitle": "{{count}} übersprungen",

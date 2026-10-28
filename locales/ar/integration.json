@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "جارٍ مزامنة كل ما تطابقه القاعدة…",
   "linear.sync.job.skipReason.closed": "مغلقة في Linear ولم يتم استيرادها أبدًا",
   "linear.sync.job.skipReason.failed": "لم يتم كتابتها؛ ستتم إعادة المحاولة في المزامنة التالية",
+  "linear.sync.job.skipReason.missing": "لم يعد موجودًا في Linear أو غير مرئي لهذا الاتصال",
   "linear.sync.job.skipReason.running": "المهمة قيد التشغيل، لذا لم يتم إغلاقها",
   "linear.sync.job.skipReason.unavailable": "المهمة في سلة المهملات أو غير مرئية لك",
   "linear.sync.job.skippedTitle": "{{count}} تم تخطيها",

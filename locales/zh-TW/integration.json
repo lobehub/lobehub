@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "正在同步符合規則的所有內容…",
   "linear.sync.job.skipReason.closed": "在 Linear 中已關閉且從未匯入",
   "linear.sync.job.skipReason.failed": "無法寫入；下一次同步會重試",
+  "linear.sync.job.skipReason.missing": "Linear 中已不存在，或目前的連線無權存取",
   "linear.sync.job.skipReason.running": "任務正在執行，因此未被關閉",
   "linear.sync.job.skipReason.unavailable": "任務在垃圾桶中或您無法查看",
   "linear.sync.job.skippedTitle": "{{count}} 個被跳過",

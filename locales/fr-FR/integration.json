@@ -93,6 +93,7 @@
   "linear.sync.job.runningRule": "Synchronisation de tout ce que la règle correspond…",
   "linear.sync.job.skipReason.closed": "Fermé dans Linear et jamais importé",
   "linear.sync.job.skipReason.failed": "N'a pas pu être écrit ; la prochaine synchronisation le réessaiera",
+  "linear.sync.job.skipReason.missing": "N’existe plus dans Linear ou n’est pas visible pour cette connexion",
   "linear.sync.job.skipReason.running": "La tâche est en cours d'exécution, elle n'a donc pas été fermée",
   "linear.sync.job.skipReason.unavailable": "La tâche est dans la corbeille ou n'est pas visible pour vous",
   "linear.sync.job.skippedTitle": "{{count}} ignorés",
