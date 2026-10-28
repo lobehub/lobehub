@@ -6,7 +6,7 @@ import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 
@@ -55,40 +55,27 @@ type DisplaySlot = Exclude<
 
 type RowKey = typeof DEFAULT_AGENT_ROW | DisplaySlot;
 
-// lobe-design-ignore DETAIL-NO-EMPTY: the groups and rows are a fixed list; a group left empty (personal rows hidden in a workspace) is filtered out
-/** 「高级」 is grouped by what the task is for, not by the model it follows. */
-const GROUPS: { key: string; rows: RowKey[] }[] = [
-  { key: 'agent', rows: [DEFAULT_AGENT_ROW, 'agentMeta', 'expertise', 'goal', 'verify'] },
-  { key: 'topic', rows: ['topic', 'thread', 'generationTopic', 'topicAutoSummary'] },
-  { key: 'content', rows: ['translation', 'historyCompress', 'promptRewrite'] },
-  {
-    key: 'memory',
-    rows: ['memoryAnalysisAgentConfig', 'userMemoryPersonaWriter', 'userMemoryEmbedding'],
-  },
-  { key: 'suggestion', rows: ['inputCompletion', 'followUpAction'] },
-  { key: 'voice', rows: ['asr'] },
-];
+/**
+ * Each tier is a top-level picker with the tasks that follow it folded under
+ * it. 新建助理 lives in `defaultAgent`, not in a tier, but reads as a main-model
+ * task. A tier with a single task needs no 「高级」: the tier is that task.
+ */
+const TIERS: { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[] = [
+  { key: 'main', modelKind: 'chat', rows: [DEFAULT_AGENT_ROW, ...SERVICE_MODEL_TIER_SLOTS.main] },
+  { key: 'flash', modelKind: 'chat', rows: SERVICE_MODEL_TIER_SLOTS.flash },
+  // The verifier reads screenshot evidence; a text-only model cannot judge it.
+  { key: 'verify', modelKind: 'vision', rows: SERVICE_MODEL_TIER_SLOTS.verify },
+  { key: 'embedding', modelKind: 'embedding', rows: SERVICE_MODEL_TIER_SLOTS.embedding },
+] as { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[];
 
-const TIERS: { key: ServiceModelTier; modelKind: ModelKind }[] = [
-  { key: 'main', modelKind: 'chat' },
-  { key: 'flash', modelKind: 'chat' },
-  { key: 'embedding', modelKind: 'embedding' },
-];
+/** Speech-to-text follows no tier; it is its own row after the tiers. */
+const ASR_ROW = 'asr' satisfies RowKey;
 
 const MEMORY_CONTEXT_LIMIT_SLOTS = new Set<RowKey>([
   'memoryAnalysisAgentConfig',
   'userMemoryEmbedding',
   'userMemoryPersonaWriter',
 ]);
-
-const MODEL_KIND_OF_ROW: Partial<Record<RowKey, ModelKind>> = {
-  asr: 'asr',
-  userMemoryEmbedding: 'embedding',
-  // The verifier reads screenshot evidence; a text-only model cannot judge it.
-  verify: 'vision',
-};
-
-const modelKindOf = (row: RowKey): ModelKind => MODEL_KIND_OF_ROW[row] ?? 'chat';
 
 const PERSONAL_SLOTS = new Set<UserServiceModelConfigKey>(PERSONAL_SYSTEM_AGENT_KEYS);
 const NO_SLOTS = new Set<UserServiceModelConfigKey>();
@@ -120,9 +107,11 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
       s.isUserStateInitError,
       s.refreshUserState,
     ]);
-  // A settings-search deep link to 「高级」 lands on it opened.
+  // A settings-search deep link to 「高级」 lands on every tier's list opened.
   const { hash } = useLocation();
-  const [expanded, setExpanded] = useState(() => hash === `#${ADVANCED_ANCHOR}`);
+  const [expanded, setExpanded] = useState<ReadonlySet<ServiceModelTier>>(
+    () => new Set(hash === `#${ADVANCED_ANCHOR}` ? TIERS.map(({ key }) => key) : []),
+  );
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const form = useForm();
 
@@ -140,16 +129,12 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
   }
 
   const skipSlots = hidePersonalPreferences ? PERSONAL_SLOTS : NO_SLOTS;
-  const groups = GROUPS.map((group) => ({
-    ...group,
-    rows: group.rows.filter(
+  const tiers = TIERS.map((tier) => ({
+    ...tier,
+    rows: tier.rows.filter(
       (row) => row === DEFAULT_AGENT_ROW || !skipSlots.has(row as UserServiceModelConfigKey),
     ),
-  })).filter((group) => group.rows.length > 0);
-  const slotRows = groups
-    .flatMap((group) => group.rows)
-    .filter((row): row is DisplaySlot => row !== DEFAULT_AGENT_ROW);
-  const rows: RowKey[] = [DEFAULT_AGENT_ROW, ...slotRows];
+  }));
 
   const pinnedDefaultAgent: ModelRef | undefined =
     storedDefaultAgent?.config?.model && storedDefaultAgent.config.provider
@@ -165,10 +150,6 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     const state = resolveSlotState(storedSystemAgent, defaults, row);
     return state.kind === 'custom' ? state : { kind: state.kind };
   };
-
-  const states = rows.map(rowState);
-  const customCount = states.filter((state) => state.kind === 'custom').length;
-  const offCount = states.filter((state) => state.kind === 'off').length;
 
   const write = (columns: Parameters<typeof replaceServiceModelSettings>[0]) =>
     save(() => replaceServiceModelSettings(columns));
@@ -195,13 +176,13 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
       },
     });
 
-  const restoreAll = () => {
+  /** 「全部恢复」 for one tier: its pinned tasks follow the tier again; disabled ones stay off. */
+  const restoreTier = (rows: RowKey[]) => {
+    const slots = rows.filter((row): row is DisplaySlot => row !== DEFAULT_AGENT_ROW);
     const columns: Parameters<typeof replaceServiceModelSettings>[0] = {
-      systemAgent: restoreAllSlots(storedSystemAgent, defaults, slotRows, {
-        skipSlots,
-      }),
+      systemAgent: restoreAllSlots(storedSystemAgent, defaults, slots, { skipSlots }),
     };
-    if (pinnedDefaultAgent) {
+    if (pinnedDefaultAgent && rows.includes(DEFAULT_AGENT_ROW)) {
       const config = { ...storedDefaultAgent?.config };
       delete config.model;
       delete config.provider;
@@ -211,9 +192,111 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
   };
 
   const followLabelOf = (row: RowKey) => {
-    if (row === DEFAULT_AGENT_ROW || row === 'asr') return t('serviceModel.systemRecommended');
+    if (row === DEFAULT_AGENT_ROW || row === ASR_ROW) return t('serviceModel.systemRecommended');
     const tier = TIERS.find(({ key }) => SERVICE_MODEL_TIER_SLOTS[key].includes(row));
     return tier ? t(`serviceModel.tier.${tier.key}.title`) : t('serviceModel.systemRecommended');
+  };
+
+  const renderRow = (row: RowKey, modelKind: ModelKind) => {
+    const state = rowState(row);
+    const title =
+      row === DEFAULT_AGENT_ROW ? t('defaultAgent.title') : t(`systemAgent.${row}.title`);
+
+    return (
+      <Flexbox key={row}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={24}
+          justify={'space-between'}
+          {...stylex.props(styles.row)}
+        >
+          <span {...stylex.props(state.kind === 'off' ? styles.taskNameOff : styles.taskName)}>
+            {title}
+          </span>
+          <SlotRow
+            canDisable={row !== DEFAULT_AGENT_ROW && canDisableSlot(row)}
+            disabled={!canManage}
+            followLabel={followLabelOf(row)}
+            followModel={followModelOf(row)}
+            modelKind={modelKind}
+            state={state}
+            title={title}
+            onChange={(choice) => writeSlot(row, choice)}
+          />
+        </Flexbox>
+        {renderExtra(row, state)}
+      </Flexbox>
+    );
+  };
+
+  /** A tier's own 「高级」: the tasks that follow it, folded under its picker. */
+  const renderAdvanced = (key: ServiceModelTier, modelKind: ModelKind, rows: RowKey[]) => {
+    const states = rows.map(rowState);
+    const customCount = states.filter((state) => state.kind === 'custom').length;
+    const offCount = states.filter((state) => state.kind === 'off').length;
+    const open = expanded.has(key);
+    const summary = [
+      t('serviceModel.advanced.summary.total', { count: rows.length }),
+      customCount > 0 && t('serviceModel.advanced.summary.custom', { count: customCount }),
+      offCount > 0 && t('serviceModel.advanced.summary.off', { count: offCount }),
+      t('serviceModel.advanced.summary.followTier', {
+        tier: t(`serviceModel.tier.${key}.title`),
+      }),
+    ]
+      .filter(Boolean)
+      .join(t('serviceModel.advanced.summary.separator'));
+    const toggle = () => {
+      const next = new Set(expanded);
+      if (open) next.delete(key);
+      else next.add(key);
+      setExpanded(next);
+    };
+    const heading = (
+      <span {...stylex.props(styles.sectionTitle)}>{t('serviceModel.advanced.title')}</span>
+    );
+
+    return (
+      <Flexbox {...stylex.props(styles.advanced)}>
+        <Flexbox horizontal align={'center'} gap={24} justify={'space-between'}>
+          <Flexbox horizontal align={'baseline'} gap={8} style={{ minWidth: 0 }}>
+            {key === 'main' ? (
+              <SettingsSearchAnchor id={ADVANCED_ANCHOR}>{heading}</SettingsSearchAnchor>
+            ) : (
+              heading
+            )}
+            <span {...stylex.props(styles.sectionDesc)}>{summary}</span>
+          </Flexbox>
+          <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
+            {customCount > 0 && (
+              <Button
+                disabled={!canManage}
+                size={'small'}
+                type={'text'}
+                onClick={() => restoreTier(rows)}
+              >
+                {t('serviceModel.advanced.restoreAll')}
+              </Button>
+            )}
+            <Button
+              aria-expanded={open}
+              icon={<Icon icon={open ? ChevronUp : ChevronDown} />}
+              iconPosition={'end'}
+              size={'small'}
+              type={'text'}
+              onClick={toggle}
+            >
+              {open ? t('serviceModel.advanced.collapse') : t('serviceModel.advanced.expand')}
+            </Button>
+          </Flexbox>
+        </Flexbox>
+        {open && (
+          <Flexbox style={{ paddingBlockStart: 8 }}>
+            {rows.map((row) => renderRow(row, modelKind))}
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
   };
 
   const followModelOf = (row: RowKey): ModelRef | undefined => {
@@ -278,135 +361,64 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     }
   };
 
-  const summary = [
-    t('serviceModel.advanced.summary.total', { count: states.length }),
-    customCount > 0 && t('serviceModel.advanced.summary.custom', { count: customCount }),
-    offCount > 0 && t('serviceModel.advanced.summary.off', { count: offCount }),
-    t('serviceModel.advanced.summary.rest'),
-  ]
-    .filter(Boolean)
-    .join(t('serviceModel.advanced.summary.separator'));
-
-  // One settings group per page. The tiers are form rows; 「高级」 stays a
-  // lighter sub-section inside the same card — small type, compact 40px rows —
-  // so it reads as a detail of 服务模型 rather than a second group.
+  // One settings group per page. Each tier is a form row; its 「高级」 is a
+  // lighter sub-section right under it — small type, compact 40px rows — so the
+  // tasks read as details of the tier they follow.
   const group: FormGroupItem = {
     children: (
       <>
-        {TIERS.map(({ key, modelKind }, index) => {
+        {tiers.map(({ key, modelKind, rows }, index) => {
           const title = t(`serviceModel.tier.${key}.title`);
           return (
-            <Form.Field
-              desc={t(`serviceModel.tier.${key}.desc`)}
-              divider={index > 0}
-              key={key}
-              label={
-                <SettingsSearchAnchor
-                  id={index === 0 ? 'service-model-assignments' : `service-model-${key}`}
-                >
-                  {title}
-                </SettingsSearchAnchor>
-              }
-            >
-              <TierRow
-                disabled={!canManage}
-                modelKind={modelKind}
-                recommended={resolveFollowModel({}, defaults, SERVICE_MODEL_TIER_SLOTS[key][0])!}
-                title={title}
-                value={getTierItem(storedSystemAgent, key)}
-                onChange={(value) =>
-                  write({
-                    systemAgent: applyTierChoice(storedSystemAgent, key, value, { skipSlots }),
-                  })
+            <Fragment key={key}>
+              <Form.Field
+                desc={t(`serviceModel.tier.${key}.desc`)}
+                divider={index > 0}
+                label={
+                  <SettingsSearchAnchor
+                    id={index === 0 ? 'service-model-assignments' : `service-model-${key}`}
+                  >
+                    {title}
+                  </SettingsSearchAnchor>
                 }
-              />
-            </Form.Field>
+              >
+                <TierRow
+                  disabled={!canManage}
+                  modelKind={modelKind}
+                  recommended={resolveFollowModel({}, defaults, SERVICE_MODEL_TIER_SLOTS[key][0])!}
+                  title={title}
+                  value={getTierItem(storedSystemAgent, key)}
+                  onChange={(value) =>
+                    write({
+                      systemAgent: applyTierChoice(storedSystemAgent, key, value, { skipSlots }),
+                    })
+                  }
+                />
+              </Form.Field>
+              {rows.length > 1 && renderAdvanced(key, modelKind, rows)}
+            </Fragment>
           );
         })}
 
-        <Form.Divider />
-
-        <Flexbox style={{ paddingBlock: 16 }}>
-          <Flexbox horizontal align={'center'} gap={24} justify={'space-between'}>
-            <Flexbox gap={2} style={{ minWidth: 0 }}>
-              <SettingsSearchAnchor id={ADVANCED_ANCHOR}>
-                <span {...stylex.props(styles.sectionTitle)}>
-                  {t('serviceModel.advanced.title')}
-                </span>
-              </SettingsSearchAnchor>
-              <span {...stylex.props(styles.sectionDesc)}>{summary}</span>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
-              {customCount > 0 && (
-                <Button disabled={!canManage} size={'small'} type={'text'} onClick={restoreAll}>
-                  {t('serviceModel.advanced.restoreAll')}
-                </Button>
-              )}
-              <Button
-                aria-expanded={expanded}
-                icon={<Icon icon={expanded ? ChevronUp : ChevronDown} />}
-                iconPosition={'end'}
-                size={'small'}
-                type={'text'}
-                onClick={() => setExpanded(!expanded)}
-              >
-                {expanded ? t('serviceModel.advanced.collapse') : t('serviceModel.advanced.expand')}
-              </Button>
-            </Flexbox>
-          </Flexbox>
-
-          {expanded && (
-            <Flexbox gap={20} style={{ paddingBlockStart: 16 }}>
-              {groups.map((purpose) => (
-                <Flexbox gap={4} key={purpose.key}>
-                  <span {...stylex.props(styles.groupTitle)}>
-                    {t(`serviceModel.group.${purpose.key}` as 'serviceModel.group.agent')}
-                  </span>
-                  <Flexbox>
-                    {purpose.rows.map((row) => {
-                      const state = rowState(row);
-                      const title =
-                        row === DEFAULT_AGENT_ROW
-                          ? t('defaultAgent.title')
-                          : t(`systemAgent.${row}.title`);
-
-                      return (
-                        <Flexbox key={row}>
-                          <Flexbox
-                            horizontal
-                            align={'center'}
-                            gap={24}
-                            justify={'space-between'}
-                            {...stylex.props(styles.row)}
-                          >
-                            <span
-                              {...stylex.props(
-                                state.kind === 'off' ? styles.taskNameOff : styles.taskName,
-                              )}
-                            >
-                              {title}
-                            </span>
-                            <SlotRow
-                              canDisable={row !== DEFAULT_AGENT_ROW && canDisableSlot(row)}
-                              disabled={!canManage}
-                              followLabel={followLabelOf(row)}
-                              followModel={followModelOf(row)}
-                              modelKind={modelKindOf(row)}
-                              state={state}
-                              title={title}
-                              onChange={(choice) => writeSlot(row, choice)}
-                            />
-                          </Flexbox>
-                          {renderExtra(row, state)}
-                        </Flexbox>
-                      );
-                    })}
-                  </Flexbox>
-                </Flexbox>
-              ))}
-            </Flexbox>
-          )}
-        </Flexbox>
+        <Form.Field
+          divider
+          label={
+            <SettingsSearchAnchor id={`service-model-${ASR_ROW}`}>
+              {t(`systemAgent.${ASR_ROW}.title`)}
+            </SettingsSearchAnchor>
+          }
+        >
+          <SlotRow
+            canDisable
+            disabled={!canManage}
+            followLabel={followLabelOf(ASR_ROW)}
+            followModel={followModelOf(ASR_ROW)}
+            modelKind={'asr'}
+            state={rowState(ASR_ROW)}
+            title={t(`systemAgent.${ASR_ROW}.title`)}
+            onChange={(choice) => writeSlot(ASR_ROW, choice)}
+          />
+        </Form.Field>
       </>
     ),
     collapsible: false,

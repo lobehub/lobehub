@@ -52,6 +52,24 @@ describe('resolveSlotState', () => {
 });
 
 describe('applyTierChoice', () => {
+  it('writes the verify tier into the verify slot the server reads, and only there', () => {
+    const VISION = { model: 'vision-z', provider: 'acme' };
+    const next = applyTierChoice({}, 'verify', VISION);
+
+    expect(next.tiers).toEqual({ verify: VISION });
+    expect(next.verify).toEqual(VISION);
+    expect(next.goal).toBeUndefined();
+    expect(resolveSlotState(next, defaults, 'verify')).toEqual({
+      kind: 'follow',
+      tier: 'verify',
+      value: VISION,
+    });
+
+    const cleared = applyTierChoice(next, 'verify', undefined);
+    expect(cleared.tiers).toBeUndefined();
+    expect(cleared.verify).toBeUndefined();
+  });
+
   it('writes the tier model into following slots and keeps custom ones', () => {
     const next = applyTierChoice({ translation: OTHER }, 'flash', FLASH);
 

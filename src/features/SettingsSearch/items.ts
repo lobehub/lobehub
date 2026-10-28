@@ -484,10 +484,21 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
       'memory',
       'prompt rewrite',
       'history compress',
-      'voice',
-      'transcription',
     ],
     labelKey: 'serviceModel.advanced.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-verify',
+    descKey: 'serviceModel.tier.verify.desc',
+    keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
+    labelKey: 'serviceModel.tier.verify.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-asr',
+    keywords: ['voice', 'transcription', 'speech to text'],
+    labelKey: 'systemAgent.asr.title',
     tab: SettingsTabs.ServiceModel,
   },
   // Chat Preferences (workspace only — the personal sidebar keeps these rows in

@@ -1532,7 +1532,7 @@ export default {
   'serviceModel.advanced.restoreAll': 'Restore all',
   'serviceModel.advanced.summary.custom': '{{count}} customized',
   'serviceModel.advanced.summary.off': '{{count}} off',
-  'serviceModel.advanced.summary.rest': 'the rest follow the settings above',
+  'serviceModel.advanced.summary.followTier': 'the rest follow {{tier}}',
   'serviceModel.advanced.summary.separator': ', ',
   'serviceModel.advanced.summary.total': '{{count}} tasks',
   'serviceModel.advanced.title': 'Advanced',
@@ -1540,12 +1540,6 @@ export default {
   'serviceModel.customModel': 'Choose a model',
   'serviceModel.desc':
     'Models LobeHub uses for background tasks. They follow the system recommendation by default and upgrade automatically when new models arrive.',
-  'serviceModel.group.agent': 'Agents & Goals',
-  'serviceModel.group.content': 'Content Processing',
-  'serviceModel.group.memory': 'Memory',
-  'serviceModel.group.suggestion': 'Suggestions',
-  'serviceModel.group.topic': 'Topic Naming & Summaries',
-  'serviceModel.group.voice': 'Voice',
   'serviceModel.off': 'Off',
   'serviceModel.systemRecommended': 'System recommended',
   'serviceModel.title': 'Service Model',
@@ -1556,6 +1550,9 @@ export default {
   'serviceModel.tier.flash.title': 'Flash Model',
   'serviceModel.tier.main.desc': 'Quality-sensitive tasks such as writing and reasoning',
   'serviceModel.tier.main.title': 'Main Model',
+  'serviceModel.tier.verify.desc':
+    'Task and goal acceptance. It reads screenshot evidence, so only vision models are listed',
+  'serviceModel.tier.verify.title': 'Acceptance Model',
   'serviceModel.topicAutoSummary.desc':
     'Summarizes topics created in the rolling 24-hour window after one hour without message activity.',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
@@ -1812,9 +1809,6 @@ When I am ___, I need ___
   'systemAgent.goal.modelDesc':
     'Model used to turn a persistent goal into its standing acceptance criteria.',
   'systemAgent.goal.title': 'Goal Creation',
-  'systemAgent.verify.modelDesc':
-    'Model the built-in verifier uses to check task results against their acceptance criteria. It reads screenshot evidence, so only vision models are listed. A task with its own verifier agent uses that agent instead.',
-  'systemAgent.verify.title': 'Task Acceptance',
   'systemAgent.customPrompt.addPrompt': 'Add Custom Prompt',
   'systemAgent.customPrompt.desc':
     'Once filled out, the system agent will use the custom prompt when generating content',
@@ -1867,6 +1861,7 @@ When I am ___, I need ___
   'systemAgent.translation.label': 'Model',
   'systemAgent.translation.modelDesc': 'Model used to translate messages',
   'systemAgent.translation.title': 'Message Translation',
+  'systemAgent.verify.title': 'Task Acceptance',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
   'tab.advanced.appUpdates.title': 'App updates',

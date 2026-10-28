@@ -67,9 +67,9 @@ export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = 
   provider: DEFAULT_EMBEDDING_PROVIDER,
 };
 
-// Verification is the quality gate and reads screenshot evidence, so it stays on
-// one vision-capable model instead of following a tier. Deployments can repoint
-// it with `SYSTEM_AGENT=verify=<provider>/<model>`.
+// Verification is the quality gate and reads screenshot evidence, so it has its
+// own vision-capable tier instead of following 主模型 / Flash. Deployments can
+// repoint it with `SYSTEM_AGENT=verify=<provider>/<model>`.
 export const DEFAULT_VERIFY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   model: DEFAULT_VERIFY_MODEL,
   provider: DEFAULT_VERIFY_PROVIDER,
@@ -103,7 +103,7 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
  * above is its tier's default, so a slot that follows an unset tier runs the
  * same system-recommended model the tier shows. The first slot of a tier
  * stands for the tier's own recommendation. Slots left out (`asr`,
- * `channelRouting`, onboarding, `verify`) keep their own system default and ignore tier changes.
+ * `channelRouting`, onboarding) keep their own system default and ignore tier changes.
  */
 export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModelConfigKey[]> = {
   embedding: ['userMemoryEmbedding'],
@@ -111,13 +111,15 @@ export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModel
     'topic',
     'thread',
     'generationTopic',
-    'promptRewrite',
+    'translation',
     'historyCompress',
+    'promptRewrite',
     'memoryAnalysisAgentConfig',
     'userMemoryPersonaWriter',
-    'translation',
     'inputCompletion',
     'followUpAction',
   ],
   main: ['agentMeta', 'expertise', 'goal', 'topicAutoSummary'],
+  // Must stay vision-capable: the picker for this tier lists only vision models.
+  verify: ['verify'],
 };

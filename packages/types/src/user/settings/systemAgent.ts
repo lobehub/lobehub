@@ -60,7 +60,7 @@ export interface UserServiceModelConfig
  * task slot follows one of them (see `SERVICE_MODEL_TIER_SLOTS`) unless the
  * user pins that slot to its own model.
  */
-export type ServiceModelTier = 'embedding' | 'flash' | 'main';
+export type ServiceModelTier = 'embedding' | 'flash' | 'main' | 'verify';
 
 export interface ServiceModelTierItem {
   model: string;
