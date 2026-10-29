@@ -431,9 +431,7 @@ export const queryRecent = async (ctx: TopicModelContext, limit: number = 12) =>
   return result.map((item) => ({
     ...item,
     type: item.groupId ? ('group' as const) : ('agent' as const),
-    /* v8 ignore start -- unreachable: the `new Date(…)` arm; `mapWith(topics.updatedAt)` decodes the timestamptz cell into a Date, whichever driver returns it */
     updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
-    /* v8 ignore stop */
   }));
 };
 
