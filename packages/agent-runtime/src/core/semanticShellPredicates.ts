@@ -160,6 +160,26 @@ const hasRecursiveRmWithDangerousTarget = (
   );
 };
 
+const MAX_PAYLOAD_DEPTH = 2;
+
+/**
+ * Past the payload depth limit the leftover source still runs, so reporting it
+ * as safe would clear a `$( … $(rm -rf ~) … )` chain that Bash happily
+ * executes. Flatten the remaining substitution syntax into plain argv and judge
+ * every `rm` still visible: the depth cap then costs precision, never
+ * detection.
+ */
+const deepPayloadIsDangerous = (word: string, predicate: SemanticShellPredicate): boolean => {
+  const tokens = word.replaceAll('$(', ' ').replaceAll(/[)`]/g, ' ').split(/\s+/).filter(Boolean);
+  return tokens.some((token, index) => {
+    if (token !== 'rm') return false;
+    return analyzeShellCommand(tokens.slice(index).join(' ')).some(
+      (segment) =>
+        segment.resolvedCommand === 'rm' && hasRecursiveRmWithDangerousTarget(segment, predicate),
+    );
+  });
+};
+
 /**
  * Interpreter payloads (bash -c '…', env -S'…') arrive as ONE word after
  * quote stripping. Re-analyze the payload with the same parser and apply the
@@ -177,7 +197,7 @@ const payloadIsDangerous = (
   depth: number,
   predicate: SemanticShellPredicate,
 ): boolean => {
-  if (depth > 2) return false;
+  if (depth > MAX_PAYLOAD_DEPTH) return deepPayloadIsDangerous(word, predicate);
   // A glued short-flag+value token (`-Srm -rf /` from `env -S'rm -rf /'`)
   // buries the payload after the flag letter; also try the un-glued tail.
   const candidates = word.startsWith('-') && word.length > 2 ? [word, word.slice(2)] : [word];

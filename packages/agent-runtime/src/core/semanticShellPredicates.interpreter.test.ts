@@ -581,3 +581,24 @@ describe('matchSemanticShellPredicate · multiword expansion defaults', () => {
     expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm ${FLAGS:-x y} ~')).toBe(false);
   });
 });
+
+describe('matchSemanticShellPredicate · payload depth cap', () => {
+  // Past the payload depth limit the nested source still executes, so the cap
+  // must degrade to a coarser check instead of reporting "safe".
+  it.each([
+    ['rmRecursiveHomeTarget', 'echo $(echo $(echo $(echo $(rm -rf ~))))'],
+    ['rmRecursiveHomeTarget', 'echo $(echo $(echo $(echo $(echo $(rm -rf ~)))))'],
+    ['rmRecursiveRootTarget', 'echo $(echo $(echo $(echo $(echo $(rm -rf /)))))'],
+  ] as const)('still blocks an rm nested past the depth cap (%s): %s', (predicate, command) => {
+    expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+  });
+
+  it('does not manufacture a match for a harmless deep payload', () => {
+    expect(
+      matchSemanticShellPredicate(
+        'rmRecursiveHomeTarget',
+        'echo $(echo $(echo $(echo $(echo hi))))',
+      ),
+    ).toBe(false);
+  });
+});
