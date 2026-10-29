@@ -86,6 +86,12 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     /* The sampled color fades in over the neutral band. */
     transition: background-color 0.3s;
 
+    /* An uploaded profile cover replaces both the tint and the texture. */
+    &[data-cover-image] {
+      background-position: center;
+      background-size: cover;
+    }
+
     &[data-pattern='grid'] {
       background-image:
         linear-gradient(var(--cover-faint) 1px, transparent 1px),
@@ -315,7 +321,7 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
   const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
   const roleTag = agentSecondaryDisplayName(item);
   const badge = resolveAgentBadge(item);
-  const coverColor = useAgentCoverColor(item, badge.cover);
+  const coverColor = useAgentCoverColor(item, badge.cover, !!badge.coverImage);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   // Right-click support — same bridge as AgentRow: the hook-bearing menu
@@ -341,8 +347,16 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
           <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
             <div
               className={cardStyles.cover}
-              data-pattern={coverPattern(item)}
-              style={{ '--agent-cover': coverColor } as CSSProperties}
+              data-cover-image={badge.coverImage ? '' : undefined}
+              data-pattern={badge.coverImage ? undefined : coverPattern(item)}
+              style={
+                {
+                  '--agent-cover': coverColor,
+                  'backgroundImage': badge.coverImage
+                    ? `url(${JSON.stringify(badge.coverImage)})`
+                    : undefined,
+                } as CSSProperties
+              }
             />
             <AgentPendant bottom={badge.bottom} top={badge.top}>
               <span

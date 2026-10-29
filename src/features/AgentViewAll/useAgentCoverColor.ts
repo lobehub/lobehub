@@ -11,10 +11,15 @@ import { coverImageSrc, sampledImageColor, sampleImageColor, seedCoverColor } fr
  * avatar image, then the color of its generated character (from the id).
  *
  * Returns `undefined` while an image is still being sampled, so the card shows
- * a neutral band rather than flashing an unrelated seed color first.
+ * a neutral band rather than flashing an unrelated seed color first, and when
+ * the card shows a profile cover image instead (`hasCoverImage`), which needs none.
  */
-export const useAgentCoverColor = (item: SidebarAgentItem, picked?: string): string | undefined => {
-  const src = picked ? undefined : coverImageSrc(item);
+export const useAgentCoverColor = (
+  item: SidebarAgentItem,
+  picked?: string,
+  hasCoverImage?: boolean,
+): string | undefined => {
+  const src = picked || hasCoverImage ? undefined : coverImageSrc(item);
   const [, rerender] = useState(0);
 
   useEffect(() => {
@@ -31,6 +36,7 @@ export const useAgentCoverColor = (item: SidebarAgentItem, picked?: string): str
   }, [src]);
 
   if (picked) return picked;
+  if (hasCoverImage) return undefined;
   if (!src) return seedCoverColor(item);
 
   const sampled = sampledImageColor(src);
