@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 
 import { createDocumentHeadlessEditor } from '@/server/services/agentDocuments/headlessEditor';
 
-import { loadEditorYjs } from './editorYjs';
+import { IYjsService, YjsPlugin } from './editorYjs';
 import type { PageDraft } from './session';
 
 type SerializedEditor = SerializedEditorState<SerializedLexicalNode>;
@@ -62,7 +62,6 @@ export const openPageFork = async (
   state: Uint8Array | undefined,
   bootstrapFrom?: SerializedEditor | null,
 ): Promise<PageFork> => {
-  const { IYjsService, YjsPlugin } = await loadEditorYjs();
   const doc = new Y.Doc();
   if (state && state.length > 0) Y.applyUpdate(doc, state);
   const baseVector = Y.encodeStateVector(doc);

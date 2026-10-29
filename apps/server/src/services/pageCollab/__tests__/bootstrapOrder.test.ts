@@ -3,11 +3,10 @@ import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { expect, it } from 'vitest';
 import * as Y from 'yjs';
 
-import { loadEditorYjs } from '../editorYjs';
+import { YjsPlugin } from '../editorYjs';
 import { projectPageState } from '../fork';
 
 it('bootstraps once when content is loaded after the provider synced', async () => {
-  const { YjsPlugin } = await loadEditorYjs();
   const listeners = new Map<string, Set<(...a: any[]) => void>>();
   const provider: any = {
     awareness: {
