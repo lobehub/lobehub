@@ -184,6 +184,9 @@ export const getLLMConfig = () => {
       ENABLED_SAMBANOVA: z.boolean(),
       SAMBANOVA_API_KEY: z.string().optional(),
 
+      ENABLED_GREENPT: z.boolean(),
+      GREENPT_API_KEY: z.string().optional(),
+
       ENABLED_PPIO: z.boolean(),
       PPIO_API_KEY: z.string().optional(),
 
@@ -443,6 +446,9 @@ export const getLLMConfig = () => {
 
       ENABLED_SAMBANOVA: !!process.env.SAMBANOVA_API_KEY,
       SAMBANOVA_API_KEY: process.env.SAMBANOVA_API_KEY,
+
+      ENABLED_GREENPT: !!process.env.GREENPT_API_KEY,
+      GREENPT_API_KEY: process.env.GREENPT_API_KEY,
 
       ENABLED_PPIO: !!process.env.PPIO_API_KEY,
       PPIO_API_KEY: process.env.PPIO_API_KEY,
