@@ -141,7 +141,10 @@ const collectFlags = (words: string[]): string[] =>
     // target positions (`${CMD} -rf /`, `rm -rf ${TARGET}`); the flag position
     // is the same question, so a dash-shaped operand counts as a flag word.
     const operand = parameterExpansionOperand(word);
-    return operand !== undefined && isDashWord(operand) ? [operand] : [];
+    if (operand === undefined) return [];
+    // A default may hold SEVERAL argv words — `rm ${FLAGS:--r -f} ~` expands to
+    // `rm -r -f ~`, so every dash-shaped piece counts, not just a leading one.
+    return operand.split(/\s+/).filter(isDashWord);
   });
 
 /**

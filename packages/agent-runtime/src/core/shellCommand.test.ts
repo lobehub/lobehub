@@ -335,6 +335,14 @@ describe('analyzeShellCommand', () => {
       // An expansion with no dash operand (or a harmless one) is not a flag.
       expect(analyzeShellCommand('rm ${FLAGS} ~')[0].flags).toEqual([]);
       expect(analyzeShellCommand('rm ${F:-x} ~')[0].hasFlag('r')).toBe(false);
+
+      // A default may hold several argv words, so every dash-shaped piece in
+      // it becomes its own flag: `rm ${FLAGS:--r -f} ~` runs `rm -r -f ~`.
+      const multi = analyzeShellCommand('rm ${FLAGS:--r -f} ~')[0];
+      expect(multi.flags).toEqual(['-r', '-f']);
+      expect(multi.hasFlag('r')).toBe(true);
+      expect(multi.homeTargets).toContain('~');
+      expect(analyzeShellCommand('rm ${FLAGS:-x y} ~')[0].flags).toEqual([]);
     });
 
     it('flags stop at file targets (flags-prefixed word after non-flag is treated as target)', () => {

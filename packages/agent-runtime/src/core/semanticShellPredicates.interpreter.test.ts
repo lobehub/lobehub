@@ -565,3 +565,19 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
     );
   });
 });
+
+describe('matchSemanticShellPredicate · multiword expansion defaults', () => {
+  // A default can carry several argv words: `rm ${FLAGS:--r -f} ~` runs
+  // `rm -r -f ~`, so a filter that only looks at the first dash word misses
+  // the recursive flag entirely.
+  it.each(['rm ${FLAGS:--r -f} ~', 'rm ${FLAGS:=-r -f} ~', 'rm ${FLAGS--r -f} ~'])(
+    'blocks a multiword expansion default in flag position: %s',
+    (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    },
+  );
+
+  it('leaves a multiword non-flag default alone', () => {
+    expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm ${FLAGS:-x y} ~')).toBe(false);
+  });
+});
