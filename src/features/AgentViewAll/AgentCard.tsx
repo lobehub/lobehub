@@ -164,8 +164,11 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 50%;
 
     /* Neutral face plate for emoji avatars without a background color;
-       images and colored avatars paint over it. */
-    background: ${cssVar.colorFillTertiary};
+       images and colored avatars paint over it. The fill is translucent, so it
+       sits on an opaque card-color base: a cover image would show through it. */
+    background:
+      linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary}),
+      ${cssVar.colorBgContainer};
     background-clip: padding-box;
   `,
   // Group avatars are a square member grid; a circle would clip its corners.
