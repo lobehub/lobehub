@@ -47,8 +47,6 @@ export function Composer({
   inThread = false,
   members,
   onSend,
-  stoppable,
-  onStop,
   placeholder,
 }: {
   /** Who is replying right now; shown on the line above the input. */
@@ -59,9 +57,6 @@ export function Composer({
   draftKey: string;
   inThread?: boolean;
   members: ChannelPublicMember[];
-  /** A reply here that the caller may stop is running; an empty input then offers Stop. */
-  stoppable?: boolean;
-  onStop?: () => void;
   placeholder?: string;
   onSend: (
     content: string,
@@ -256,13 +251,12 @@ export function Composer({
                 }}
               />
             </div>
+            {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
             <SendButton
-              aria-label={t(stoppable && !hasDraft ? 'stopReply' : 'send')}
+              aria-label={t('send')}
               disabled={busy || !hasDraft || attachments.blocked}
-              generating={stoppable && !hasDraft}
               loading={busy}
               onSend={() => void send()}
-              onStop={onStop}
             />
           </div>
         </ChatInput>

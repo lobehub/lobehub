@@ -15,7 +15,6 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
-import { isChannelJobActive } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { ReplyActivity } from './ReplyActivity';
@@ -42,7 +41,6 @@ const Timeline = ({
 }: ChannelConversationProps) => {
   const { t } = useTranslation('channel');
   const [before, setBefore] = useState<number>();
-  const [actionError, setActionError] = useState<unknown>();
   const params = { before, channelId, threadId };
   const sync = channelActions.useFetchDetail(params);
   const cached = useChannelStore(channelSelectors.detail(params));
@@ -65,16 +63,6 @@ const Timeline = ({
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
   }, [channelId, threadId, sequence, before]);
 
-  const stop = async () => {
-    setActionError(undefined);
-    try {
-      await channelActions.stop(channelId, { threadId });
-    } catch (cause) {
-      console.error('Failed to stop Channel replies', cause);
-      setActionError(cause);
-    }
-  };
-
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
   const channelArchived = detail?.channel.status === 'archived';
@@ -84,10 +72,6 @@ const Timeline = ({
     .filter((member) => member.actorType === 'agent')
     .filter((member) => !followerIds || followerIds.includes(member.id))
     .map((member) => member.id);
-  // Members stop only their own requests; the server narrows a branch stop the same way.
-  const stoppable = detail?.jobs.some(
-    (job) => (job.threadId ?? null) === threadId && isChannelJobActive(job) && job.canStop,
-  );
   // Join lines belong to the main conversation; a thread starts from its root message.
   const timeline = detail
     ? channelTimeline(
@@ -178,11 +162,6 @@ const Timeline = ({
                 )}
               </WideScreenContainer>
             </Flexbox>
-            {actionError !== undefined && (
-              <WideScreenContainer fullWidth paddingInline={24}>
-                <AsyncError error={actionError} variant="inline" />
-              </WideScreenContainer>
-            )}
             {channelArchived || thread?.status === 'archived' ? (
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
@@ -194,8 +173,6 @@ const Timeline = ({
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 placeholder={t(threadId ? 'threadComposer' : 'composer')}
-                stoppable={stoppable}
-                onStop={() => void stop()}
                 onSend={async (content, mentions, requestKey, fileIds) => {
                   followLatest.current = true;
                   await channelActions.send({
