@@ -85,6 +85,20 @@ describe('question submission feedback', () => {
     },
   );
 
+  it('reconciles a stale resolving flag from the authoritative pending row', async () => {
+    const { action, state } = createAction();
+    state.dbMessagesMap[key] = [
+      {
+        ...question,
+        pluginIntervention: { ...question.pluginIntervention!, resolving: true },
+      },
+    ];
+    vi.mocked(messageService.getMessages).mockResolvedValue([question]);
+    await action.checkQuestionSubmission(question.id, context);
+    expect(state.dbMessagesMap[key][0].pluginIntervention?.resolving).not.toBe(true);
+    expect(state.dbMessagesMap[key][0].pluginIntervention?.status).toBe('pending');
+  });
+
   it('restores the saved answers after a failed submit and authoritative pending read', async () => {
     const { action, state } = createAction();
     const error = new Error('submit failed');

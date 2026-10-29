@@ -1,14 +1,4 @@
-/**
- * Tests for heterogeneousAgentExecutor DB persistence layer.
- *
- * Verifies the critical path: CC stream events → messageService DB writes.
- * Covers:
- *   - Tool 3-phase persistence (pre-register → create → backfill)
- *   - Tool result content updates
- *   - Multi-step assistant message creation with correct parentId chain
- *   - Content/reasoning/model/usage final writes
- *   - Sync snapshot + reset to prevent cross-step content contamination
- */
+/** CLI stream → tool persistence, turn chaining and final snapshot regression tests. */
 
 import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
@@ -1102,7 +1092,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
     });
 
-    it('replays an early AskUserQuestion intervention after the batched tool row exists', async () => {
+    it('materializes an early question and closes it when the upstream tool returns', async () => {
       const optimisticUpdateMessagePlugin = vi.fn(async () => {});
       const updateTopicStatus = vi.fn(async () => {});
       const store = createMockStore({
@@ -1145,7 +1135,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
       await flush();
 
-      expect(optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
+      expect(optimisticUpdateMessagePlugin).toHaveBeenCalled();
 
       ipc.emitRawLine(
         'ipc-sess-1',
@@ -1181,6 +1171,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
 
       ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
+      await flush();
+      expect(optimisticUpdateMessagePlugin).toHaveBeenLastCalledWith(
+        expect.any(String),
+        { intervention: expect.objectContaining({ status: 'aborted' }) },
+        { operationId: 'op-1' },
+      );
       ipc.emitRawLine('ipc-sess-1', ccResult());
       ipc.emitComplete('ipc-sess-1');
       await flush();

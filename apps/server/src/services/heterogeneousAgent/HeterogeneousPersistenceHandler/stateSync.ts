@@ -279,7 +279,12 @@ export async function refreshToolMessageIndex(
           ? (metadata.provider as AgentInterventionProvider)
           : undefined;
 
-        if (transition) {
+        if (
+          transition &&
+          (plugin.intervention?.operationId ??
+            metadata.operationId ??
+            plugin.metadata?.operationId) === state.operationId
+        ) {
           const request =
             typeof plugin.apiName === 'string' &&
             typeof plugin.arguments === 'string' &&

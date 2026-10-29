@@ -342,6 +342,14 @@ const reduceInterventionRequest = (
   const intervention: MainAgentInterventionState = existing
     ? { ...existing, request }
     : { intervention: { status: 'pending' }, request, transition: 'pending' };
+  if (state.ended && intervention.intervention.status === 'pending') {
+    intervention.intervention = {
+      rejectedReason: 'session_ended',
+      resolving: false,
+      status: 'aborted',
+    };
+    intervention.transition = 'session_ended';
+  }
   preparedState.interventionsByCallId.set(request.toolCallId, intervention);
 
   // The bridge and the adapter run on independent async pumps, so the request
@@ -411,6 +419,31 @@ const reduceInterventionResponse = (state: MainAgentRunState, data: any): Reduce
   };
 };
 
+/** A terminal tool/run is authoritative even when its bridge ACK never arrives. */
+const endInterventions = (
+  state: MainAgentRunState,
+  toolCallIds: Iterable<string>,
+): ReduceResult => {
+  const next = copyState(state);
+  const intents: AnyIntent[] = [];
+  for (const toolCallId of toolCallIds) {
+    const existing = next.interventionsByCallId.get(toolCallId);
+    if (existing && existing.intervention.status !== 'pending') continue;
+    const ended: MainAgentInterventionState = {
+      ...existing,
+      intervention: { rejectedReason: 'session_ended', resolving: false, status: 'aborted' },
+      transition: 'session_ended',
+    };
+    // Remember results that race ahead of the bridge request, without creating
+    // an intervention write/notification for ordinary tools.
+    next.interventionsByCallId.set(toolCallId, ended);
+    if (existing?.request) {
+      intents.push({ ...ended, kind: 'setToolIntervention', toolCallId });
+    }
+  }
+  return { intents, state: next };
+};
+
 const reduceStreamChunk = (
   state: MainAgentRunState,
   data: any,
@@ -472,8 +505,9 @@ const reduceToolResult = (
     pluginState: data.pluginState,
     toolCallId,
   };
-  const delegated = delegateSubagent(state, event, ctx);
-  return { intents: [main, ...delegated.intents], state: delegated.state };
+  const ended = endInterventions(state, [toolCallId]);
+  const delegated = delegateSubagent(ended.state, event, ctx);
+  return { intents: [main, ...ended.intents, ...delegated.intents], state: delegated.state };
 };
 
 const reduceTurnMetadata = (state: MainAgentRunState, data: any): ReduceResult => {
@@ -553,12 +587,13 @@ const reduceTerminal = (
 
   // Reset accumulators so a follow-up terminal/flush is an idempotent no-op,
   // then drain any subagent runs that never saw their parent tool_result.
-  const drained = copyState(state);
+  const ended = endInterventions(state, state.interventionsByCallId.keys());
+  const drained = ended.state;
   drained.accContent = '';
   drained.accReasoning = '';
   drained.ended = true;
   const delegated = delegateSubagent(drained, event, ctx);
-  return { intents: [...intents, ...delegated.intents], state: delegated.state };
+  return { intents: [...intents, ...ended.intents, ...delegated.intents], state: delegated.state };
 };
 
 /**

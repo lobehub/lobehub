@@ -1776,12 +1776,11 @@ export class ConversationControlActionImpl {
     context?: ConversationContext,
   ): Promise<void> => {
     const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
-    if (!toolMessage) return;
+    if (!toolMessage) throw new Error('Question message is unavailable');
 
     const toolCallId = toolMessage.tool_call_id;
     if (!toolCallId) {
-      console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
-      return;
+      throw new Error('Question has no tool call identity');
     }
 
     const effectiveContext: ConversationContext = context ?? {
@@ -1841,8 +1840,7 @@ export class ConversationControlActionImpl {
       messageOperationMap?.[toolMessageId];
 
     if (!candidateOperationId) {
-      console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
-      return;
+      throw new Error('Question runtime is unavailable; refresh the conversation');
     }
 
     // Resolve the runtime execution op before choosing IPC vs remote transport.

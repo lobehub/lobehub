@@ -27,6 +27,7 @@ interface StoredHeterogeneousIntervention {
   deadline?: number;
   interactionKind?: AgentInterventionInteractionKind;
   notificationTransition?: MainAgentInterventionTransition;
+  operationId: string;
   provider?: AgentInterventionProvider;
   resolutionRequestId?: string;
   summary?: string;
@@ -144,6 +145,7 @@ export const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
   'cursor',
   'devin',
   'droid',
+  'opencode',
   'qoder',
 ]);
 
@@ -180,6 +182,7 @@ export async function applyToolIntervention(
   const durableState: StoredHeterogeneousIntervention = {
     deadline: intent.request?.deadline,
     interactionKind: intent.request?.interactionKind,
+    operationId: state.operationId,
     provider: intent.request?.provider,
     resolutionRequestId: intent.resolutionRequestId,
     summary,

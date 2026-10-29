@@ -9,6 +9,7 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
+import { Alert, Button, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,6 +52,12 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     )?.heterogeneousIntervention?.deadline;
     return typeof stored === 'number' ? stored : undefined;
   });
+  const context = useConversationStore((s) => s.context);
+  const checkQuestionSubmission = useChatStore((s) => s.checkQuestionSubmission);
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  const resolving = useConversationStore(
+    (s) => dataSelectors.getDbMessageById(messageId)(s)?.pluginIntervention?.resolving === true,
+  );
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
@@ -84,12 +91,26 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   };
 
   return (
-    <AskUserQuestionView
-      {...form}
-      showCountdown
-      actionsPortalTarget={actionsPortalTarget}
-      labels={labels}
-    />
+    <Flexbox gap={8}>
+      {form.submissionFailed && <Alert title={t('askUserQuestion.submitFailed')} type="error" />}
+      {(form.submissionFailed || resolving || submissionPhase === 'uncertain') && (
+        <Flexbox gap={8}>
+          <Text role="status">{t('askUserQuestion.uncertain')}</Text>
+          <Button
+            loading={submissionPhase === 'checking'}
+            onClick={() => checkQuestionSubmission(messageId, context)}
+          >
+            {t('askUserQuestion.checkStatus')}
+          </Button>
+        </Flexbox>
+      )}
+      <AskUserQuestionView
+        {...form}
+        showCountdown
+        actionsPortalTarget={actionsPortalTarget}
+        labels={labels}
+      />
+    </Flexbox>
   );
 });
 

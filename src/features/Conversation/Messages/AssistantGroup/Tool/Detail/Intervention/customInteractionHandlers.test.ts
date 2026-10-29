@@ -108,7 +108,7 @@ describe('customInteractionHandlers', () => {
     });
   });
 
-  it.each(['devin', 'droid', 'qoder'])(
+  it.each(['devin', 'droid', 'opencode', 'qoder'])(
     'routes %s tools through the heterogeneous custom flow',
     (type) => {
       expect(isCustomInteractionIdentifier(type, 'askUserQuestion')).toBe(true);

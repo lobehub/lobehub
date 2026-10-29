@@ -3431,9 +3431,9 @@ describe('ConversationControl actions', () => {
         .mockResolvedValue(undefined as any);
 
       await act(async () => {
-        await result.current.submitHeteroIntervention('tool-msg-source-unavailable', 'submit', {
-          Question: 'Answer',
-        });
+        await expect(
+          result.current.submitHeteroIntervention(toolMessage.id, 'submit', { Question: 'Answer' }),
+        ).rejects.toThrow('Question runtime is unavailable');
       });
 
       expect(sourceMutation).toHaveBeenCalledOnce();

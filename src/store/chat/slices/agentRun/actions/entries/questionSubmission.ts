@@ -71,6 +71,17 @@ export class QuestionSubmissionActionImpl {
           this.#setPhase(id);
           return true;
         }
+        // Reconcile stale client-only resolving flags as well as terminal results.
+        this.#applyResolution(
+          {
+            ...message,
+            pluginIntervention: {
+              ...message.pluginIntervention,
+              resolving: message.pluginIntervention.resolving === true,
+            },
+          },
+          context,
+        );
         this.#setPhase(id, 'failed');
         return false;
       }

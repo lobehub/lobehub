@@ -670,4 +670,52 @@ describe('reduceMainAgent — heterogeneous intervention ACK boundary', () => {
     });
     expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('resolved');
   });
+
+  it('closes only the question whose upstream tool has returned, without a user response', () => {
+    const other = { ...request, data: { ...request.data, toolCallId: 'question-2' } };
+    const { state, steps } = run([request, other, toolResultEvent('permission-1', 'done')]);
+
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        intervention: { rejectedReason: 'session_ended', resolving: false, status: 'aborted' },
+        toolCallId: 'permission-1',
+        transition: 'session_ended',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('question-2')?.transition).toBe('pending');
+  });
+
+  it.each(['agent_runtime_end', 'error'])('closes unanswered questions on %s', (type) => {
+    const { state, steps } = run([request, { data: {}, type }]);
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+  });
+
+  it('preserves an acknowledged answer after the tool and runtime finish', () => {
+    const ack = {
+      data: { producerAck: true, result: { 'Run command?': 'allow' }, toolCallId: 'permission-1' },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([
+      request,
+      ack,
+      toolResultEvent('permission-1', 'done'),
+      { type: 'agent_runtime_end' },
+    ]);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([]);
+    expect(ofKind(steps[3], 'setToolIntervention')).toEqual([]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('approved');
+  });
+
+  it.each(['tool_result', 'agent_runtime_end'])(
+    'does not reopen a late request after %s',
+    (type) => {
+      const end = { data: { toolCallId: 'permission-1', content: 'done' }, type };
+      const { state, steps } = run([end, request]);
+      expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+      expect(ofKind(steps[1], 'setToolIntervention')[0]?.transition).toBe('session_ended');
+    },
+  );
 });
