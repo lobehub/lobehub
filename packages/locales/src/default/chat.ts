@@ -3235,6 +3235,7 @@ export default {
   'tool.intervention.scrollToIntervention': 'View',
   'tool.intervention.viewParameters': 'View parameters ({{count}})',
   'tool.intervention.toolAbort': 'You canceled this Skill call',
+  'tool.intervention.toolEnded': 'This tool call has ended',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
   'tool.intervention.questionSkipped': 'You skipped this question',
   'tool.intervention.questionTimedOut': 'This question timed out before it was answered',

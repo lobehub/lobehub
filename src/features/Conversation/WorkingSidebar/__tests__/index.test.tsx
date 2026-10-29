@@ -655,6 +655,40 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.toggleRightPanel).not.toHaveBeenCalled();
   });
 
+  it('only exposes the close button on the selected tab', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'skills';
+
+    render(<AgentWorkingSidebar />);
+    const skillsTab = screen.getByRole('button', { name: 'workingPanel.resources.filter.skills' });
+    const documentsTab = screen.getByRole('button', {
+      name: 'workingPanel.resources.filter.documents',
+    });
+    fireEvent.mouseOver(documentsTab);
+
+    expect(skillsTab.parentElement!.querySelector('[data-tab-close]')).toBeInTheDocument();
+    expect(documentsTab.parentElement!.querySelector('[data-tab-close]')).toBeNull();
+    expect(document.querySelectorAll('[data-tab-close]')).toHaveLength(1);
+  });
+
+  it('closes an unselected tab on middle click', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'skills';
+
+    render(<AgentWorkingSidebar />);
+    fireEvent(
+      screen.getByRole('button', { name: 'workingPanel.resources.filter.documents' }),
+      new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.resources.filter.documents' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'workingPanel.resources.filter.skills' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps the panel open and selects a surviving pinned tab when the active tab closes', () => {
     agentStore.activeAgentId = 'agent';
     localStorageState.openTabsByContext = { 'draft:agent:none': ['works', 'params'] };
@@ -1068,7 +1102,12 @@ describe('AgentWorkingSidebar — tab strip', () => {
       expect(document.querySelector('button[data-tab-key="review"]')).toBeInTheDocument();
     });
 
-    fireEvent.click(document.querySelector('button[data-tab-key="review"]')!.nextElementSibling!);
+    // the review tab is not the selected one, so it exposes no close button —
+    // close it through the middle-click shortcut instead
+    fireEvent(
+      document.querySelector('button[data-tab-key="review"]')!,
+      new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+    );
     expect(document.querySelector('button[data-tab-key="review"]')).not.toBeInTheDocument();
 
     globalStore.status.workingSidebarTabRequest = { nonce: 2, tab: 'review' };

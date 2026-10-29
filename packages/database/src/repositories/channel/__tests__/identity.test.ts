@@ -15,7 +15,7 @@ const execution = new ChannelExecutionRepository(db);
 beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
-const sendInput = { content: 'Hello', requestKey: 'hello', routing: 'jev' as const };
+const sendInput = { content: 'Hello', requestKey: 'hello', routing: 'decision' as const };
 const createAgent = async (workspaceId: string | null = fixture.workspaceId) => {
   const [agent] = await db
     .insert(agents)

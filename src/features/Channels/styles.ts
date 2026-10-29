@@ -114,9 +114,14 @@ export const styles = stylex.create({
     gap: 4,
     maxWidth: '100%',
     marginInline: 2,
-    verticalAlign: 'middle',
+    verticalAlign: 'baseline',
   },
-  eventMemberName: { minWidth: 0, overflowWrap: 'anywhere' },
+  eventMemberName: {
+    // Let the name supply the inline flex baseline instead of the avatar.
+    alignSelf: 'baseline',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
+  },
   /** A mentioned member inside message text. */
   mention: {
     paddingBlock: 1,

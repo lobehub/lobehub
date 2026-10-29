@@ -1,37 +1,72 @@
-import { type ContextMenuItem, ContextMenuTrigger, Icon, type IconProps } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  type ContextMenuItem,
+  ContextMenuTrigger,
+  createStaticStyles,
+  Icon,
+  type IconProps,
+  keyframes,
+} from '@lobehub/ui';
 import { PinIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type MouseEvent, type ReactNode } from 'react';
+
+/**
+ * Room the trailing pin badge needs at the tab's end. Pinned tabs always reserve
+ * it; the active tab instead overlays its close button on the label's tail and
+ * fades the text out under it, browser-style, so selecting a tab never changes
+ * its width and unselected tabs carry no empty gap.
+ */
+const TRAILING_SLOT = 24;
+const TAB_PADDING = 8;
+const CLOSE_INSET = 4;
+const CLOSE_SIZE = 16;
+/** Label tail covered by the close button, measured from the label's end edge. */
+const LABEL_UNDER_CLOSE = CLOSE_INSET + CLOSE_SIZE - TAB_PADDING;
+const LABEL_FADE = 8;
+
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+`;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   close: css`
-    pointer-events: none;
     cursor: pointer;
 
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-start: 7px;
+    inset-inline-end: ${CLOSE_INSET}px;
     transform: translateY(-50%);
 
     display: grid;
     place-items: center;
 
-    width: 20px;
-    height: 20px;
+    width: ${CLOSE_SIZE}px;
+    height: ${CLOSE_SIZE}px;
     padding: 0;
     border: none;
     border-radius: 4px;
 
     color: ${cssVar.colorTextTertiary};
 
-    opacity: 0;
     background: transparent;
 
-    transition: opacity 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
+    animation: ${fadeIn} 0.15s ease-out;
 
     &:hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
     }
   `,
   container: css`
@@ -48,31 +83,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       background: ${cssVar.colorFillSecondary};
     }
-
-    /* the close button takes over the leading icon's slot instead of reserving
-       its own trailing space; while hidden it must not swallow taps on the icon */
-    &:hover [data-tab-close],
-    & [data-tab-close]:focus-visible {
-      pointer-events: auto;
-      opacity: 1;
-    }
-
-    /* keyboard focus on the select button keeps the icon, so the visible glyph
-       always matches the action Enter/Space would run */
-    &:hover [data-tab-icon],
-    &:has([data-tab-close]:focus-visible) [data-tab-icon] {
-      opacity: 0;
-    }
-
-    /* keyboard focus on the select button outranks hover */
-    &:has([data-tab-key]:focus-visible) [data-tab-icon] {
-      opacity: 1;
-    }
-
-    &:has([data-tab-key]:focus-visible) [data-tab-close] {
-      pointer-events: none;
-      opacity: 0;
-    }
   `,
   containerActive: css`
     background: ${cssVar.colorFillTertiary};
@@ -82,7 +92,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-end: 8px;
+    inset-inline-end: 6px;
     transform: translateY(-50%);
 
     display: grid;
@@ -92,18 +102,38 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   icon: css`
     display: flex;
-    transition: opacity 0.15s;
+    flex-shrink: 0;
   `,
   label: css`
     overflow: hidden;
+    min-width: 24px;
     max-width: 160px;
     text-overflow: ellipsis;
+  `,
+  labelUnderClose: css`
+    /* no ellipsis: the text runs on under the close button and fades out
+       before it, so the glyph never collides with a trailing "…" */
+    text-overflow: clip;
+
+    mask-image: linear-gradient(
+      to left,
+      transparent ${LABEL_UNDER_CLOSE}px,
+      black ${LABEL_UNDER_CLOSE + LABEL_FADE}px
+    );
+
+    &:dir(rtl) {
+      mask-image: linear-gradient(
+        to right,
+        transparent ${LABEL_UNDER_CLOSE}px,
+        black ${LABEL_UNDER_CLOSE + LABEL_FADE}px
+      );
+    }
   `,
   tab: css`
     cursor: pointer;
 
     padding-block: 4px;
-    padding-inline: 10px;
+    padding-inline: ${TAB_PADDING}px;
     border: none;
     border-radius: 6px;
 
@@ -126,7 +156,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   tabPinned: css`
-    padding-inline-end: 30px;
+    padding-inline-end: ${TRAILING_SLOT}px;
   `,
   trigger: css`
     display: flex;
@@ -163,30 +193,50 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
     pinnedLabel,
     tabKey,
   }) => {
+    const closable = !pinned && !!onClose;
+    const showClose = closable && active;
+
+    // Middle click closes any closable tab — a shortcut on top of the active
+    // tab's close button and the context menu, never the only way to close.
+    const handleMouseDown = (e: MouseEvent) => {
+      // keep the browser from entering autoscroll mode on middle press
+      if (closable && e.button === 1) e.preventDefault();
+    };
+    const handleAuxClick = (e: MouseEvent) => {
+      if (!closable || e.button !== 1) return;
+      e.preventDefault();
+      onClose?.();
+    };
+
     const content = (
       <div
         className={`${styles.container} ${active ? styles.containerActive : ''}`}
         data-pinned={pinned ? 'true' : undefined}
+        onAuxClick={handleAuxClick}
+        onMouseDown={handleMouseDown}
       >
         <button
           aria-pressed={active}
           className={`${styles.tab} ${pinned ? styles.tabPinned : ''}`}
           data-tab-key={tabKey}
+          title={typeof label === 'string' ? label : undefined}
           type="button"
           onClick={onSelect}
         >
           <span className={styles.trigger}>
-            <span className={styles.icon} data-tab-icon={onClose && !pinned ? '' : undefined}>
-              {iconNode ?? <Icon icon={icon} size={14} />}
+            <span className={styles.icon}>{iconNode ?? <Icon icon={icon} size={14} />}</span>
+            <span className={`${styles.label} ${showClose ? styles.labelUnderClose : ''}`}>
+              {label}
             </span>
-            <span className={styles.label}>{label}</span>
           </span>
         </button>
         {pinned ? (
           <span aria-label={pinnedLabel} className={styles.pinned} role="img">
             <Icon icon={PinIcon} size={12} />
           </span>
-        ) : onClose ? (
+        ) : showClose ? (
+          // Only the selected tab exposes a close button, so dense strips of
+          // short labels never fill up with close targets.
           <button
             data-tab-close
             aria-label={closeLabel}

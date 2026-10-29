@@ -235,6 +235,7 @@ export default {
   'management.bulk.moveSearchPlaceholder': 'Search agents…',
   'management.bulk.selectedCount_one': '{{count}} selected',
   'management.bulk.selectedCount_other': '{{count}} selected',
+  'management.bulk.unarchive': 'Unarchive',
   'management.card.noPreview': 'No preview available',
   'management.columns.project': 'Project',
   'management.columns.status': 'Status',

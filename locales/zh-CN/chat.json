@@ -2806,6 +2806,7 @@
   "tool.intervention.stopTooltip": "就停在这一步——待审批的工具都不会执行，Agent 也不会继续",
   "tool.intervention.submit": "提交",
   "tool.intervention.toolAbort": "你已取消本次技能调用",
+  "tool.intervention.toolEnded": "本次工具调用已结束",
   "tool.intervention.toolRejected": "本次技能调用已被拒绝",
   "tool.intervention.toolSkipped": "你已跳过此步骤",
   "tool.intervention.viewParameters": "查看参数 ({{count}})",
