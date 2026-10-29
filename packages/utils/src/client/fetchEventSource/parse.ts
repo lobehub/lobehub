@@ -127,14 +127,16 @@ export function getMessages(
   onMessage?: (msg: EventSourceMessage) => void,
 ) {
   let message = newMessage();
+  let hasData = false;
   const decoder = new TextDecoder();
 
   // return a function that can process each incoming line buffer:
   return function onLine(line: Uint8Array, fieldLength: number) {
     if (line.length === 0) {
-      // empty line denotes end of message. Trigger the callback and start a new message:
-      onMessage?.(message);
+      // Comments and control-only blocks do not dispatch messages; explicit empty data does.
+      if (hasData) onMessage?.(message);
       message = newMessage();
+      hasData = false;
     } else if (fieldLength > 0) {
       // exclude comments and lines with no values
       // line is of format "<field>:<value>" or "<field>: <value>"
@@ -145,6 +147,7 @@ export function getMessages(
 
       switch (field) {
         case 'data':
+          hasData = true;
           // if this message already has data, append the new value to the old.
           // otherwise, just set to the new value:
           message.data = message.data ? message.data + '\n' + value : value; // otherwise,

@@ -13,7 +13,10 @@ import type {
   ResponseAnimationStyle,
 } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { fetchEventSource } from '@lobechat/utils/client/fetchEventSource/index';
+import {
+  EventStreamContentType,
+  fetchEventSource,
+} from '@lobechat/utils/client/fetchEventSource/index';
 import { nanoid } from '@lobechat/utils/uuid';
 
 import { getMessageError } from './parseError';
@@ -541,8 +544,11 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
     }
 
     if (response.ok) {
-      // if there is no onMessageHandler, we should call onHandleMessage first
-      if (!triggerOnMessageHandler) {
+      const isEventStream =
+        response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ===
+        EventStreamContentType;
+      // Only non-SSE responses can fall back to raw text; SSE may contain only control frames.
+      if (!triggerOnMessageHandler && !isEventStream) {
         output = await response.clone().text();
         options.onMessageHandle?.({ text: output, type: 'text' });
       }
