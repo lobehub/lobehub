@@ -1258,9 +1258,11 @@ export default {
   'cliOverloadedGuide.retryHint':
     'Wait a few seconds and retry. If it keeps failing, the provider may be having a wider incident.',
   'cliOverloadedGuide.title': '{{name}} is temporarily overloaded',
+  'cliRateLimitGuide.actions.collapse': 'Collapse details',
   'cliRateLimitGuide.actions.handoff': 'Hand off to another Agent',
   'cliRateLimitGuide.actions.openSystemTools': 'Open System Tools',
   'cliRateLimitGuide.actions.retry': 'Retry message',
+  'cliRateLimitGuide.actions.showDetails': 'Show details',
   'cliRateLimitGuide.afterReset':
     'This account has reached its current usage limit. You can continue after {{resetAt}}.',
   'cliRateLimitGuide.afterResetWithLimitType':
