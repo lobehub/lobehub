@@ -1,88 +1,133 @@
 import { type UserCredSummary } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { credsApiForRow, isActionableCredRow, isOwnCredRow } from './credAccess';
+import { isOwnCredRow, workspaceCredRowAccess } from './credAccess';
 
-const baseCred = {
+const ME = 42;
+const OTHER = 99;
+
+const row = (overrides: Partial<UserCredSummary>): UserCredSummary => ({
   createdAt: '2024-01-01T00:00:00.000Z',
   id: 1,
   key: 'GITHUB_TOKEN',
   name: 'GitHub',
-  type: 'kv-env' as const,
+  type: 'kv-env',
   updatedAt: '2024-01-01T00:00:00.000Z',
-};
+  ...overrides,
+});
 
-const orgOwnedRow: UserCredSummary = {
-  ...baseCred,
-  ownerAccountId: 100,
-  ownerType: 'organization',
-};
-
-const myOwnRow: UserCredSummary = {
-  ...baseCred,
-  ownerAccountId: 42,
-  ownerType: 'user',
-};
-
-const anotherMembersRow: UserCredSummary = {
-  ...baseCred,
-  ownerAccountId: 99,
-  ownerType: 'user',
-};
-
-const myAccountId = 42;
+const member = { isAdmin: false, myAccountId: ME };
+const admin = { isAdmin: true, myAccountId: ME };
 
 describe('isOwnCredRow', () => {
-  it('is true for a "user"-owned row whose ownerAccountId matches the signed-in account', () => {
-    expect(isOwnCredRow(myOwnRow, myAccountId)).toBe(true);
+  it('is true only for my own personal credential', () => {
+    expect(isOwnCredRow(row({ ownerAccountId: ME, ownerType: 'user' }), ME)).toBe(true);
+    expect(isOwnCredRow(row({ ownerAccountId: OTHER, ownerType: 'user' }), ME)).toBe(false);
+    expect(isOwnCredRow(row({ ownerAccountId: ME, ownerType: 'organization' }), ME)).toBe(false);
   });
 
-  it("is false for another member's row even though ownerType is also 'user'", () => {
-    expect(isOwnCredRow(anotherMembersRow, myAccountId)).toBe(false);
-  });
-
-  it('is false for an org-owned row', () => {
-    expect(isOwnCredRow(orgOwnedRow, myAccountId)).toBe(false);
-  });
-
-  it('is false when the signed-in account id is unknown (not yet loaded)', () => {
-    expect(isOwnCredRow(myOwnRow, undefined)).toBe(false);
+  it('is false while my account id is unknown', () => {
+    expect(isOwnCredRow(row({ ownerType: 'user' }), undefined)).toBe(false);
   });
 });
 
-describe('isActionableCredRow', () => {
-  it('is true for an org-owned row', () => {
-    expect(isActionableCredRow(orgOwnedRow, myAccountId)).toBe(true);
+describe('workspaceCredRowAccess', () => {
+  describe('workspace credentials', () => {
+    it('lets the creator manage and publish a private one', () => {
+      const cred = row({
+        createdByAccountId: ME,
+        ownerType: 'organization',
+        visibility: 'private',
+      });
+
+      expect(workspaceCredRowAccess(cred, member)).toEqual({
+        makePrivate: false,
+        manage: true,
+        publish: true,
+        unshare: false,
+      });
+    });
+
+    it('lets the creator take a published one back', () => {
+      const cred = row({ createdByAccountId: ME, ownerType: 'organization', visibility: 'public' });
+
+      expect(workspaceCredRowAccess(cred, member)).toMatchObject({
+        makePrivate: true,
+        manage: true,
+        publish: false,
+      });
+    });
+
+    it("lets an admin manage another member's shared one but not change its visibility", () => {
+      const cred = row({
+        createdByAccountId: OTHER,
+        ownerType: 'organization',
+        visibility: 'public',
+      });
+
+      expect(workspaceCredRowAccess(cred, admin)).toEqual({
+        makePrivate: false,
+        manage: true,
+        publish: false,
+        unshare: false,
+      });
+    });
+
+    it("gives a member nothing on another member's shared one", () => {
+      const cred = row({
+        createdByAccountId: OTHER,
+        ownerType: 'organization',
+        visibility: 'public',
+      });
+
+      expect(workspaceCredRowAccess(cred, member)).toEqual({
+        makePrivate: false,
+        manage: false,
+        publish: false,
+        unshare: false,
+      });
+    });
+
+    it('leaves a credential with no recorded creator to admins', () => {
+      const cred = row({ ownerType: 'organization', visibility: 'public' });
+
+      expect(workspaceCredRowAccess(cred, admin).manage).toBe(true);
+      expect(workspaceCredRowAccess(cred, admin).makePrivate).toBe(false);
+      expect(workspaceCredRowAccess(cred, member).manage).toBe(false);
+    });
   });
 
-  it("is true for the signed-in member's own row", () => {
-    expect(isActionableCredRow(myOwnRow, myAccountId)).toBe(true);
-  });
+  describe('shared personal credentials', () => {
+    it('lets the owner publish a private share or unshare it, but edit it only on the personal page', () => {
+      const cred = row({ ownerAccountId: ME, ownerType: 'user', visibility: 'private' });
 
-  it("is false for another member's row — no endpoint can reach it", () => {
-    expect(isActionableCredRow(anotherMembersRow, myAccountId)).toBe(false);
-  });
-});
+      expect(workspaceCredRowAccess(cred, member)).toEqual({
+        makePrivate: false,
+        manage: false,
+        publish: true,
+        unshare: true,
+      });
+    });
 
-describe('credsApiForRow', () => {
-  const contextApi = 'workspaceCreds' as const;
-  const personalApi = 'marketCreds' as const;
+    it('lets the owner take a published share back', () => {
+      const cred = row({ ownerAccountId: ME, ownerType: 'user', visibility: 'public' });
 
-  it('routes an org-owned row to the context (workspace) API', () => {
-    expect(credsApiForRow(orgOwnedRow, myAccountId, contextApi, personalApi)).toBe(contextApi);
-  });
+      expect(workspaceCredRowAccess(cred, member)).toMatchObject({
+        makePrivate: true,
+        publish: false,
+      });
+    });
 
-  it("routes the signed-in member's own row to the personal API", () => {
-    expect(credsApiForRow(myOwnRow, myAccountId, contextApi, personalApi)).toBe(personalApi);
-  });
+    it("lets only an admin remove another member's published share", () => {
+      const cred = row({ ownerAccountId: OTHER, ownerType: 'user', visibility: 'public' });
 
-  it("routes another member's row to the context API, not the personal one — the caller must gate on isActionableCredRow first and never call this for such a row in practice", () => {
-    // credsApiForRow has no "no valid endpoint" return value, so this
-    // documents the fallback rather than endorsing it: CredsList only calls
-    // apiFor() after confirming isActionable(cred), so this branch is never
-    // reached for another member's row in the real component.
-    expect(credsApiForRow(anotherMembersRow, myAccountId, contextApi, personalApi)).toBe(
-      contextApi,
-    );
+      expect(workspaceCredRowAccess(cred, admin)).toEqual({
+        makePrivate: false,
+        manage: false,
+        publish: false,
+        unshare: true,
+      });
+      expect(workspaceCredRowAccess(cred, member).unshare).toBe(false);
+    });
   });
 });

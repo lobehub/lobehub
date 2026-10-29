@@ -8,8 +8,28 @@ export type CredType = 'kv-env' | 'kv-header' | 'oauth' | 'file';
 
 // ===== Credential Summary (for list display) =====
 
+/** One workspace organization a personal credential is shared into. */
+export interface CredShareSummary {
+  organizationAccountId: number;
+  /** Set while `visibility` is 'public': when it was last published. */
+  sharedAt?: string;
+  /**
+   * 'private': linked for the owner's own use in that workspace only.
+   * 'public': usable by every member of that workspace.
+   */
+  visibility: 'private' | 'public';
+  /** Cloud workspace the organization mirrors, when it mirrors one. */
+  workspaceId?: string;
+}
+
 export interface UserCredSummary {
   createdAt: string;
+  /**
+   * Market account of the member who created a workspace-owned credential.
+   * Unset on personal credentials and on workspace credentials created
+   * before creators were recorded (those are admin-managed).
+   */
+  createdByAccountId?: number;
   description?: string;
   // File type specific
   fileName?: string;
@@ -24,9 +44,8 @@ export interface UserCredSummary {
   oauthProvider?: string;
   oauthUsername?: string;
   /**
-   * Account id of the organization this credential is linked to. Present
-   * once linked via `share`, regardless of whether `visibility` has been
-   * flipped to 'public' yet (see `sharedAt`).
+   * Organization-scoped responses only: the organization the credential is
+   * being viewed in.
    */
   organizationAccountId?: number;
   /**
@@ -45,27 +64,24 @@ export interface UserCredSummary {
    */
   ownerType?: 'organization' | 'user';
   /**
-   * Timestamp when `visibility` last became 'public'. Unset while only
-   * draft-linked (`organizationAccountId` set, `visibility` still 'private').
+   * Organization-scoped responses, member-shared credentials only: when the
+   * share was last published.
    */
   sharedAt?: string;
   /**
-   * Cloud-computed enrichment on personal-scoped list responses only
-   * (`market.creds.list`, when called with an active workspace context):
-   * whether `organizationAccountId` actually points at the *current* active
-   * workspace's organization, as opposed to some other workspace the
-   * credential was previously shared to. A personal credential can only be
-   * linked to one organization at a time, so `organizationAccountId != null`
-   * alone can't distinguish "shared here" from "shared elsewhere" — always
-   * prefer this field over `organizationAccountId` for workspace-scoped UI.
-   * Absent entirely outside a workspace context.
+   * Personal responses only: whether the credential is shared into the
+   * active workspace (derived from `shares`). Absent outside a workspace
+   * context.
    */
   sharedToActiveWorkspace?: boolean;
+  /** Personal responses only: the workspaces this credential is shared into. */
+  shares?: CredShareSummary[];
   type: CredType;
   updatedAt: string;
   /**
-   * 'private' (default, only the owning account can see/use it) or 'public'
-   * (shared with organizationAccountId's members).
+   * Organization-scoped responses only. 'private': only its creator (a
+   * workspace credential) or its owner (a shared personal credential) can
+   * use it in this workspace. 'public': every member can.
    */
   visibility?: 'private' | 'public';
 }
