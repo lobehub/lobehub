@@ -65,6 +65,45 @@ describe('changing an Agent member’s channel environment', () => {
   });
   const service = () => new ChannelService({} as never, 'owner');
 
+  describe.each(['create', 'update'] as const)('%s directory validation', (action) => {
+    it.each([
+      {
+        message: 'Could not reach the device to verify the working directory',
+        name: 'unreachable device',
+        result: undefined,
+      },
+      {
+        message: 'The working directory does not exist or is not a directory',
+        name: 'missing directory',
+        result: { exists: false, isDirectory: false },
+      },
+      {
+        message: 'The working directory does not exist or is not a directory',
+        name: 'file instead of a directory',
+        result: { exists: true, isDirectory: false },
+      },
+      {
+        message: 'The device connector must be upgraded to verify the working directory',
+        name: 'legacy connector with an existing directory',
+        result: { exists: true, isDirectory: true, repoType: 'github' },
+      },
+    ])('reports $name without saving the environment', async ({ message, result }) => {
+      statPath.mockResolvedValue(result);
+      const input = { agentId: 'agent-1', deviceId: 'mac', workingDirectory: '/b' };
+
+      const save =
+        action === 'create'
+          ? service().create({ agents: [input], title: 'c' })
+          : service().updateAgentEnvironment('channel', 'member-1', input);
+
+      await expect(save).rejects.toMatchObject({ code: 'BAD_REQUEST', message });
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+      expect(wake).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
+    });
+  });
+
   it('validates the new directory on the device and stores its canonical path', async () => {
     await service().updateAgentEnvironment('channel', 'member-1', {
       deviceId: 'mac',

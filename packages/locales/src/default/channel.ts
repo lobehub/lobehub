@@ -23,17 +23,21 @@ export default {
   'environment.chooseDevice': 'Choose a device',
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
-  'environment.defaultsHint':
-    'Each Agent uses its own device and working directory. You can change them for this channel later from the member list.',
+  'environment.connectorUpgradeRequired':
+    'This device’s LobeHub connector needs an update. Update LobeHub Desktop or the LobeHub CLI on that device, then reconnect and try again.',
   'environment.deviceLabel': 'Device for {{name}}',
   'environment.deviceOffline': 'This device is offline. Reconnect it or choose another device.',
   'environment.deviceRequired': 'Choose an online device for this coding Agent.',
+  'environment.deviceUnreachable':
+    'Could not connect to the device to check the working directory. Check the device connection and try again.',
   'environment.deviceUnavailable':
     'This device is unavailable in the current space. Choose an accessible device.',
   'environment.devicesFailed':
     'Could not confirm device status. Refresh the device list and try again.',
   'environment.devicesLoading': 'Checking device status…',
   'environment.directoryLabel': 'Working directory for {{name}}',
+  'environment.directoryInvalid':
+    'The working directory does not exist or is not a folder on this device. Update the working directory and try again.',
   'environment.directoryRequired': 'Choose a working directory on this device.',
   'environment.inherited.deviceOffline':
     'This Agent’s device is offline. Reconnect the device, or remove the Agent.',
