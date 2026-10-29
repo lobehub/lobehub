@@ -26,53 +26,78 @@ describe('editLocalFile — concurrent edits to the same file', () => {
     await rm(dir, { force: true, recursive: true });
   });
 
-  it('applies every edit that reports success', async () => {
-    for (let trial = 0; trial < 20; trial++) {
-      await writeFile(file, base, 'utf8');
+  it.each(['same path', 'file symlink'])(
+    'applies every edit through %s',
+    async (kind) => {
+      const alias = path.join(dir, 'alias.md');
+      if (kind === 'file symlink') await symlink(file, alias);
+      const secondPath = kind === 'file symlink' ? alias : file;
+      for (let trial = 0; trial < 20; trial++) {
+        await writeFile(file, base, 'utf8');
 
-      const results = await Promise.all([
-        editLocalFile({
-          file_path: file,
-          new_string: 'anchor_600_end<E0>' + '「插」'.repeat(7) + 'x</E0>',
-          old_string: 'anchor_600_end',
-        }),
-        editLocalFile({
-          file_path: file,
-          new_string: 'anchor_1300_end<E1>' + '「插」'.repeat(40) + 'xx</E1>',
-          old_string: 'anchor_1300_end',
-        }),
-      ]);
-      const onDisk = await readFile(file, 'utf8');
+        const results = await Promise.all([
+          editLocalFile({
+            file_path: file,
+            new_string: 'anchor_600_end<E0>' + '「插」'.repeat(7) + 'x</E0>',
+            old_string: 'anchor_600_end',
+          }),
+          editLocalFile({
+            file_path: secondPath,
+            new_string: 'anchor_1300_end<E1>' + '「插」'.repeat(40) + 'xx</E1>',
+            old_string: 'anchor_1300_end',
+          }),
+        ]);
+        const onDisk = await readFile(file, 'utf8');
 
-      expect(results.map((r) => r.success)).toEqual([true, true]);
-      expect(onDisk).toContain('</E0>');
-      expect(onDisk).toContain('</E1>');
-      expect(onDisk).not.toContain('�');
-      expect(onDisk.match(/anchor_1999_end/g)).toHaveLength(1);
-    }
-    // 20 serialized trials; the default 5s is too tight on a loaded CI runner.
-  }, 30_000);
+        expect(results.map((r) => r.success)).toEqual([true, true]);
+        expect(onDisk).toContain('</E0>');
+        expect(onDisk).toContain('</E1>');
+        expect(onDisk).not.toContain('�');
+        expect(onDisk.match(/anchor_1999_end/g)).toHaveLength(1);
+      }
+      // 20 serialized trials; the default 5s is too tight on a loaded CI runner.
+    },
+    30_000,
+  );
 
-  it('queues a writeFile and an editFile to one path instead of interleaving them', async () => {
-    for (let trial = 0; trial < 20; trial++) {
-      await writeFile(file, base, 'utf8');
+  it.each(['same path', 'file symlink', 'new file under directory symlink'])(
+    'queues writeFile before editFile through %s',
+    async (kind) => {
+      const alias = path.join(dir, 'alias');
+      let secondPath = file;
+      if (kind === 'file symlink') {
+        await symlink(file, alias);
+        secondPath = alias;
+      } else if (kind === 'new file under directory symlink') {
+        await symlink(dir, alias, 'junction');
+        file = path.join(dir, 'new', 'doc.md');
+        secondPath = path.join(alias, 'new', 'doc.md');
+      }
+      for (let trial = 0; trial < 20; trial++) {
+        if (kind === 'new file under directory symlink') {
+          await rm(path.dirname(file), { recursive: true, force: true });
+        } else {
+          await writeFile(file, base, 'utf8');
+        }
 
-      const [write, edit] = await Promise.all([
-        writeLocalFile({ content: base.replace('anchor_5_end', 'anchor_5_end<W/>'), path: file }),
-        editLocalFile({
-          file_path: file,
-          new_string: 'anchor_1900_end<E/>',
-          old_string: 'anchor_1900_end',
-        }),
-      ]);
-      const onDisk = await readFile(file, 'utf8');
+        const [write, edit] = await Promise.all([
+          writeLocalFile({ content: base.replace('anchor_5_end', 'anchor_5_end<W/>'), path: file }),
+          editLocalFile({
+            file_path: secondPath,
+            new_string: 'anchor_1900_end<E/>',
+            old_string: 'anchor_1900_end',
+          }),
+        ]);
+        const onDisk = await readFile(file, 'utf8');
 
-      // The write lands first (emission order), then the edit applies on top of it.
-      expect([write.success, edit.success]).toEqual([true, true]);
-      expect(onDisk).toContain('<W/>');
-      expect(onDisk).toContain('<E/>');
-    }
-  }, 30_000);
+        // The write lands first (emission order), then the edit applies on top of it.
+        expect([write.success, edit.success]).toEqual([true, true]);
+        expect(onDisk).toContain('<W/>');
+        expect(onDisk).toContain('<E/>');
+      }
+    },
+    30_000,
+  );
 
   it('never shows a concurrent reader an empty or half-written file', async () => {
     // Large enough that a truncate-then-write takes several event-loop turns.
