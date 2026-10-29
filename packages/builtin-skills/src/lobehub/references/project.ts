@@ -1,7 +1,7 @@
 const content = `# lh project / lh task - Projects and Tasks
 
 A project groups tasks, agents and knowledge bases around one outcome. Tasks are
-units of agent work with an identifier such as \`LOBE-12\`.
+units of agent work with an identifier such as \`T-12\`.
 
 ## Projects
 

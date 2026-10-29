@@ -10,7 +10,7 @@ import { EntityLinkHostProvider } from '@/features/EntityLink/host';
 /**
  * Static on purpose: HomeModeContent already imports the inbox statically, so a
  * `lazy` wrapper saved no bytes and only suspended the rail for one frame on
- * every refresh, painting it empty before the cards arrived (LOBE-15206).
+ * every refresh, painting it empty before the cards arrived.
  */
 import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
@@ -365,7 +365,7 @@ const Home = memo(() => {
    * space without changing the preference. Only the loaded inbox may report it:
    * judging by an empty DOM node also matched while the lazy inbox was
    * suspended and while its feeds were still loading, so every refresh painted one column first and
-   * slid back once the cards arrived (LOBE-15206).
+   * slid back once the cards arrived.
    */
   const [railEmpty, setRailEmpty] = useState(false);
   const contentCollapsed = railCollapsed || (isLogin && railEmpty);
