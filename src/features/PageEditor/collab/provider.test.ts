@@ -223,6 +223,25 @@ describe('PageCollabProvider', () => {
     expect(updates()[2].bootstrap).toBeUndefined();
   });
 
+  it('flags what the editor writes into an empty room on sync while holding the claim', () => {
+    const { deliver, mux, ready, sent } = createMux();
+    const doc = new Y.Doc();
+    const provider = new PageCollabProvider('doc_1', doc, mux as any);
+    provider.on('sync', () => doc.getText('t').insert(0, 'root paragraph'));
+
+    provider.connect();
+    ready();
+    deliver(
+      synced({
+        bootstrap: true,
+        bootstrapped: false,
+        update: b64(Y.encodeStateAsUpdate(new Y.Doc())),
+      }),
+    );
+
+    expect(sent.filter((m) => m.type === 'doc_update').map((m) => m.bootstrap)).toEqual([true]);
+  });
+
   it('resets once when it lost the bootstrap race', () => {
     const { deliver, mux, ready } = createMux();
     const onReset = vi.fn();

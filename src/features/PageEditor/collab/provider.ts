@@ -243,7 +243,6 @@ export class PageCollabProvider extends Emitter {
     queueMicrotask(() => {
       if (!this.bootstrapPending) return;
       this.bootstrapPending = false;
-      this.bootstrapping = true;
       this.events.onBootstrap?.();
     });
   }
@@ -274,6 +273,9 @@ export class PageCollabProvider extends Emitter {
         }
         this.resendPending();
         if (message.bootstrap || message.bootstrapped) {
+          // The binding seeds an empty root as soon as it hears `sync`, before
+          // the bootstrap below runs; that write is part of our bootstrap too.
+          this.bootstrapping = message.bootstrap;
           this.markSynced();
           if (message.bootstrap) this.scheduleBootstrap();
         } else {

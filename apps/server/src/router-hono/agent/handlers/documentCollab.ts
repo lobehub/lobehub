@@ -43,6 +43,7 @@ export async function documentProjection(c: Context): Promise<Response> {
     if (error instanceof PageProjectionRejectedError) {
       return c.json({ error: error.message }, 409);
     }
+    console.error('[document-projection] failed for %s:', body.documentId, error);
     return c.json({ error: (error as Error).message }, 500);
   }
 }

@@ -1,3 +1,7 @@
+// The plugin loaded below resolves @lexical/yjs from the app root in a traced
+// server build; importing it here is what puts it in that trace.
+import '@lexical/yjs';
+
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
