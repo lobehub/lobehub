@@ -145,9 +145,11 @@ const explainDocumentReadError = (error: unknown): Error => {
 
 /**
  * `41050 no user authority error` from `/contact/v3/users/:id` means the user
- * is outside the app's contact range (通讯录权限范围), which the bot owner sets
- * in their own developer console — not a server fault. Raised as a 4xx so it
- * reaches the model as an actionable message instead of an opaque 500.
+ * is outside the app's contacts permission scope, which the bot owner sets in
+ * their own developer console — not a server fault. Raised as a 4xx so it
+ * reaches the model as an actionable message instead of an opaque 500. The
+ * hint is model-facing tool output (no UI renders it), so it stays English and
+ * the model relays it in the user's language.
  *
  * @see https://open.feishu.cn/document/server-docs/contact-v3/user/get
  */
@@ -163,7 +165,7 @@ const explainMemberInfoError = (error: unknown): Error => {
   return new TRPCError({
     cause: error,
     code: 'PRECONDITION_FAILED',
-    message: `${message} — this user is outside the app's contact range. In the Feishu/Lark developer console, include them under 权限管理 → 通讯录权限范围 (or set it to all members), then 创建版本 and 发布. Users from another tenant cannot be looked up.`,
+    message: `${message} — this user is outside the app's contacts permission scope. In the Feishu/Lark developer console, widen the app's contacts data range to include them (or all members), then create and publish a new app version for it to take effect. Users from another tenant cannot be looked up.`,
   });
 };
 

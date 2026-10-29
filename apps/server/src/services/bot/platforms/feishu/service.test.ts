@@ -165,7 +165,7 @@ describe('FeishuMessageService.getMemberInfo', () => {
 
     expect(error.code).toBe('PRECONDITION_FAILED');
     expect(error.message).toContain('41050');
-    expect(error.message).toContain('通讯录权限范围');
+    expect(error.message).toContain('contacts permission scope');
   });
 
   it('leaves unrecognized failures untouched', async () => {
