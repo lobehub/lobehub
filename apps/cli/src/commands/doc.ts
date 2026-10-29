@@ -95,19 +95,31 @@ export function registerDocCommand(program: Command) {
         let docs: any[] = [];
         let total: number | undefined;
         let page = startPage;
+        // `--all` normally stops when the server runs out of rows. If it stops
+        // because of MAX_ALL_PAGES instead, the result is incomplete and the
+        // caller has to be told rather than handed a short list as if complete.
+        let truncated = false;
 
         if (options.all) {
           // Walk forward until the server runs out of rows. The cap keeps a bad
           // `total` from turning the loop into an unbounded request stream.
+          let exhausted = false;
           for (let i = 0; i < MAX_ALL_PAGES; i++) {
             const chunk = await fetchPage(page);
             total = chunk.total ?? total;
-            if (chunk.items.length === 0) break;
+            if (chunk.items.length === 0) {
+              exhausted = true;
+              break;
+            }
 
             docs = docs.concat(chunk.items);
-            if (total !== undefined ? docs.length >= total : chunk.items.length < pageSize) break;
+            if (total !== undefined ? docs.length >= total : chunk.items.length < pageSize) {
+              exhausted = true;
+              break;
+            }
             page += 1;
           }
+          truncated = !exhausted;
           page = startPage;
         } else {
           const chunk = await fetchPage(page);
@@ -133,6 +145,11 @@ export function registerDocCommand(program: Command) {
               `${docs.length} row(s) returned, more available — continue with --page ${page + 1}\n`,
             );
           }
+          if (truncated) {
+            process.stderr.write(
+              `Warning: --all stopped at the ${MAX_ALL_PAGES}-page cap after ${docs.length}${total === undefined ? '' : ` of ${total}`} document(s); the list is incomplete — narrow the filters or raise --limit\n`,
+            );
+          }
           return;
         }
 
@@ -153,7 +170,13 @@ export function registerDocCommand(program: Command) {
         printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
 
         if (options.all) {
-          log.info(`Total: ${total ?? docs.length} (all pages)`);
+          if (truncated) {
+            log.warn(
+              `Showing ${docs.length}${total === undefined ? '' : ` of ${total}`} — stopped at the ${MAX_ALL_PAGES}-page cap, so the list is incomplete; narrow the filters or raise --limit`,
+            );
+          } else {
+            log.info(`Total: ${total ?? docs.length} (all pages)`);
+          }
           return;
         }
 
