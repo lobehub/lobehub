@@ -1217,7 +1217,6 @@ table channel_jobs {
   message_id uuid [not null]
   thread_id text
   requester_member_id uuid [not null]
-  delivery_key text [not null, default: 'initial']
   status text [not null, default: 'queued']
   blocked_reason text
   blocked_code text
@@ -1241,7 +1240,7 @@ table channel_jobs {
 
   indexes {
     (channel_id, id) [name: 'channel_jobs_scope_unique', unique]
-    (message_id, member_id, delivery_key) [name: 'channel_jobs_delivery_unique', unique]
+    (message_id, member_id) [name: 'channel_jobs_delivery_unique', unique]
     (channel_id, status) [name: 'channel_jobs_channel_status_idx']
     (member_id, requester_member_id, thread_id, claimed_at) [name: 'channel_jobs_continuation_idx']
     (topic_id, published_message_id) [name: 'channel_jobs_topic_idx']
