@@ -30,11 +30,12 @@ export const resourcePath = {
       ? libraryItemPath(doc.id, doc.knowledgeBaseId)
       : `/page/${seg(doc.id)}`;
   },
+  /** A library file opens inside its library, else in Docs at `/resource/file/<id>`. */
   file: (file: { id?: Id; knowledgeBaseId?: Id }) => {
     if (!file.id) return undefined;
     return file.knowledgeBaseId
       ? libraryItemPath(file.id, file.knowledgeBaseId)
-      : `/resource?file=${seg(file.id)}`;
+      : `/resource/file/${seg(file.id)}`;
   },
   goal: (id: Id) => (id ? `/goal/${seg(id)}` : undefined),
   group: (id: Id) => (id ? `/group/${seg(id)}` : undefined),

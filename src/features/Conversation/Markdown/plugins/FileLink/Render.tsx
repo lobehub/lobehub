@@ -7,6 +7,7 @@ import { memo, useCallback } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
+import { useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
 import type { MarkdownElementProps } from '../type';
@@ -16,6 +17,7 @@ interface FileLinkProperties {
   fileId?: string;
   linkHref?: string;
   linkLabel?: string;
+  proxyHref?: string;
 }
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -64,11 +66,40 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const FileLabel = ({ label }: { label: string }) => (
+  <>
+    <span aria-hidden className={styles.icon}>
+      <FileIcon fileName={label} size={16} variant={'raw'} />
+    </span>
+    <span>{label}</span>
+  </>
+);
+
+/**
+ * A pasted address (`https://…/resource/file/file_x`) says nothing about the
+ * file, so the owner sees its name instead — the same item the preview panel
+ * reads, so the click opens instantly.
+ */
+const OwnedFileLabel = memo<{ fallback: string; fileId: string }>(({ fallback, fileId }) => {
+  const useFetchKnowledgeItem = useFileStore((s) => s.useFetchKnowledgeItem);
+  const { data: file } = useFetchKnowledgeItem(fileId);
+
+  return <FileLabel label={file?.name || fallback} />;
+});
+
+OwnedFileLabel.displayName = 'FileLinkOwnedFileLabel';
+
 const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
-  const { fileId, linkHref, linkLabel } = node?.properties || {};
+  const { fileId, linkHref, linkLabel, proxyHref } = node?.properties || {};
   const openFilePreview = useChatStore((s) => s.openFilePreview);
   const isAgentShareVisitor = useConversationStore((s) => !!s.context.agentShareId);
+  // Share pages read the creator's transcript; the visitor's file store holds
+  // none of those files (and is an empty stub during share SSR).
+  const isShareVisitor = useConversationStore(
+    (s) => !!s.context.agentShareId || !!s.context.topicShareId,
+  );
   const label = linkLabel || linkHref || '';
+  const isBareLink = !linkLabel || linkLabel === linkHref || linkLabel === fileId;
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
@@ -79,14 +110,14 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
       event.preventDefault();
-      const action = getFileLinkOpenAction({ fileId, isAgentShareVisitor, label, linkHref });
+      const action = getFileLinkOpenAction({ fileId, isAgentShareVisitor, label, proxyHref });
       if (action.kind === 'newTab') {
         window.open(action.url, '_blank', 'noopener,noreferrer');
         return;
       }
       openFilePreview(action.params);
     },
-    [fileId, isAgentShareVisitor, label, linkHref, openFilePreview],
+    [fileId, isAgentShareVisitor, label, openFilePreview, proxyHref],
   );
 
   return (
@@ -97,10 +128,11 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
       rel="noopener noreferrer"
       onClick={handleClick}
     >
-      <span aria-hidden className={styles.icon}>
-        <FileIcon fileName={label} size={16} variant={'raw'} />
-      </span>
-      <span>{label}</span>
+      {fileId && isBareLink && !isShareVisitor ? (
+        <OwnedFileLabel fallback={label} fileId={fileId} />
+      ) : (
+        <FileLabel label={label} />
+      )}
     </A>
   );
 });

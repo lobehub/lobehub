@@ -50,6 +50,7 @@ describe('rehypeFileLink', () => {
       fileId: 'file_abc123',
       linkHref: href,
       linkLabel: 'bubble_sort.py',
+      proxyHref: href,
     });
     expect(node.children).toEqual([]);
   });

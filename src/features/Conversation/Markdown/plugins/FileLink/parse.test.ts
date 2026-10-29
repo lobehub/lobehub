@@ -8,18 +8,17 @@ describe('parseFileLinkHref', () => {
   it('matches a same-origin absolute file proxy link', () => {
     expect(parseFileLinkHref(`${ORIGIN}/f/file_abc123`, ORIGIN)).toEqual({
       fileId: 'file_abc123',
+      proxyHref: `${ORIGIN}/f/file_abc123`,
     });
   });
 
   it('matches a root-relative file proxy link regardless of currentOrigin', () => {
-    expect(parseFileLinkHref('/f/file_xyz')).toEqual({ fileId: 'file_xyz' });
-    expect(parseFileLinkHref('/f/file_xyz', ORIGIN)).toEqual({ fileId: 'file_xyz' });
+    expect(parseFileLinkHref('/f/file_xyz')?.fileId).toBe('file_xyz');
+    expect(parseFileLinkHref('/f/file_xyz', ORIGIN)?.fileId).toBe('file_xyz');
   });
 
   it('decodes an encoded file id', () => {
-    expect(parseFileLinkHref('/f/file%20with%20space', ORIGIN)).toEqual({
-      fileId: 'file with space',
-    });
+    expect(parseFileLinkHref('/f/file%20with%20space', ORIGIN)?.fileId).toBe('file with space');
   });
 
   it('returns null instead of throwing on a malformed percent-encoded file id', () => {
@@ -34,11 +33,11 @@ describe('parseFileLinkHref', () => {
     // Desktop cloud mode classifies against the gateway apex, while links
     // written earlier still point at app.lobehub.com.
     expect(
-      parseFileLinkHref('https://app.lobehub.com/f/file_abc123', 'https://lobehub.com'),
-    ).toEqual({ fileId: 'file_abc123' });
+      parseFileLinkHref('https://app.lobehub.com/f/file_abc123', 'https://lobehub.com')?.fileId,
+    ).toBe('file_abc123');
     expect(
-      parseFileLinkHref('https://lobehub.com/f/file_abc123', 'https://app.lobehub.com'),
-    ).toEqual({ fileId: 'file_abc123' });
+      parseFileLinkHref('https://lobehub.com/f/file_abc123', 'https://app.lobehub.com')?.fileId,
+    ).toBe('file_abc123');
   });
 
   it('does not treat other official subdomains as the app', () => {
@@ -78,8 +77,50 @@ describe('parseFileLinkHref', () => {
   });
 });
 
+describe('parseFileLinkHref Docs file links', () => {
+  // Regression: `lh file upload` prints `/resource/file/<id>` (and printed
+  // `/resource?file=<id>` before), which left the chat for the Docs page
+  // instead of previewing beside the conversation.
+  it('matches the Docs file path the CLI prints', () => {
+    expect(parseFileLinkHref('https://lobehub.com/resource/file/file_ynz', ORIGIN)).toEqual({
+      fileId: 'file_ynz',
+      proxyHref: 'https://lobehub.com/f/file_ynz',
+    });
+  });
+
+  it('matches the legacy ?file= Docs link and a library item', () => {
+    expect(parseFileLinkHref('https://lobehub.com/resource?file=file_ynz', ORIGIN)?.fileId).toBe(
+      'file_ynz',
+    );
+    expect(parseFileLinkHref('/resource/library/kb_1?file=file_ynz', ORIGIN)).toEqual({
+      fileId: 'file_ynz',
+      proxyHref: '/f/file_ynz',
+    });
+  });
+
+  it('leaves a page opened through ?file= to the entity link', () => {
+    expect(parseFileLinkHref('/resource?file=docs_abc', ORIGIN)).toBeNull();
+    expect(parseFileLinkHref('/resource/page/abc', ORIGIN)).toBeNull();
+  });
+
+  it('matches a link prefixed with the active workspace only', () => {
+    const href = `${ORIGIN}/acme/resource/file/file_ynz`;
+
+    expect(parseFileLinkHref(href, ORIGIN, { activeWorkspaceSlug: 'acme' })).toEqual({
+      fileId: 'file_ynz',
+      proxyHref: `${ORIGIN}/f/file_ynz`,
+    });
+    expect(parseFileLinkHref(href, ORIGIN, { activeWorkspaceSlug: 'other' })).toBeNull();
+    expect(parseFileLinkHref(href, ORIGIN)).toBeNull();
+  });
+
+  it('does not match a Docs path on a foreign host', () => {
+    expect(parseFileLinkHref('https://example.com/resource/file/file_ynz', ORIGIN)).toBeNull();
+  });
+});
+
 describe('getFileLinkOpenAction', () => {
-  const link = { fileId: 'file_1', label: 'report.md', linkHref: `${ORIGIN}/f/file_1` };
+  const link = { fileId: 'file_1', label: 'report.md', proxyHref: `${ORIGIN}/f/file_1` };
 
   it('opens the owner-scoped preview by id for the file owner', () => {
     expect(getFileLinkOpenAction({ ...link, isAgentShareVisitor: false })).toEqual({
