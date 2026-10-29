@@ -13,6 +13,7 @@ import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 import { usePageCollab } from '../collab/usePageCollab';
 import { usePageEditorStore } from '../store';
 import { usePageEditable } from '../usePageEditable';
+import RoomBodyPreview from './RoomBodyPreview';
 import { useAddCommentItem } from './useAddCommentItem';
 import { useAskCopilotItem } from './useAskCopilotItem';
 import { useDocumentMentionOption } from './useDocumentMentionOption';
@@ -43,19 +44,35 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
     [addCommentItem, askCopilotItem],
   );
 
+  const basePlugins = useMemo(
+    () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 }), ReactCollapsiblePlugin],
+    [],
+  );
   const extraPlugins = useMemo(
-    () => [
-      Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 }),
-      ReactCollapsiblePlugin,
-      ...(collabPlugin ? [collabPlugin] : []),
-    ],
-    [collabPlugin],
+    () => (collabPlugin ? [...basePlugins, collabPlugin] : basePlugins),
+    [basePlugins, collabPlugin],
+  );
+  const resolvedPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
+  const showStoredBody = !!collabPlugin && collabConnecting && !!documentId;
+  const pendingBody = useMemo(
+    () =>
+      showStoredBody ? (
+        <RoomBodyPreview
+          allowContentBleed
+          className={mentionPlainClassName}
+          documentId={documentId!}
+          enableInlineMath={false}
+          extraPlugins={basePlugins}
+          placeholder={resolvedPlaceholder}
+          style={style}
+        />
+      ) : undefined,
+    [basePlugins, documentId, resolvedPlaceholder, showStoredBody, style],
   );
 
   return (
     <SharedEditorCanvas
       allowContentBleed
-      bodyPending={!!collabPlugin && collabConnecting}
       className={mentionPlainClassName}
       collab={!!collabPlugin}
       documentId={documentId}
@@ -64,7 +81,8 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       enableInlineMath={false}
       extraPlugins={extraPlugins}
       mentionOption={mentionOption}
-      placeholder={placeholder || t('pageEditor.editorPlaceholder')}
+      pendingBody={pendingBody}
+      placeholder={resolvedPlaceholder}
       // Commenting on a selection is a read action: it must survive the page
       // being locked by another collaborator or opened view-only, when the
       // formatting toolbar (and Ask Copilot with it) is withheld.

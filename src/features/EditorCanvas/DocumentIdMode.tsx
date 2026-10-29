@@ -40,8 +40,8 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     editor,
     documentId,
     autoSave = true,
-    bodyPending = false,
     collab = false,
+    pendingBody,
     sourceType = 'page',
     topicId,
     onContentChange,
@@ -284,9 +284,9 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
             }}
           />
         )}
-        {bodyPending && <EditorSkeleton />}
-        {/* A room binds to the mounted editor, so it stays mounted while the skeleton shows. */}
-        <div style={{ display: bodyPending ? 'none' : 'contents' }}>
+        {pendingBody}
+        {/* A room binds to the mounted editor, so it stays mounted behind the pending body. */}
+        <div style={{ display: pendingBody ? 'none' : 'contents' }}>
           <InternalEditor
             contentChangeLockRef={contentChangeLockRef}
             editor={editor}

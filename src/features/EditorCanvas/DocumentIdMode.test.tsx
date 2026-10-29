@@ -72,10 +72,6 @@ vi.mock('@/store/document/slices/editor', () => ({
   },
 }));
 
-vi.mock('@/components/Skeleton', () => ({
-  ArticleSkeleton: vi.fn(() => <div data-testid="editor-skeleton" />),
-}));
-
 vi.mock('./InternalEditor', () => ({
   default: vi.fn(() => <div data-testid="internal-editor" />),
 }));
@@ -285,18 +281,23 @@ describe('DocumentIdMode', () => {
     expect(screen.getByTestId('not-found')).toBeInTheDocument();
     expect(screen.queryByTestId('internal-editor')).not.toBeInTheDocument();
   });
-  it('keeps the skeleton over the mounted editor until the room body arrives', () => {
+  it('shows the pending body over the mounted editor until the room body arrives', () => {
     const editor = { getLexicalEditor: vi.fn(() => ({})) } as any;
     const { rerender } = render(
-      <DocumentIdMode bodyPending collab documentId="doc-1" editor={editor} />,
+      <DocumentIdMode
+        collab
+        documentId="doc-1"
+        editor={editor}
+        pendingBody={<div data-testid="pending-body" />}
+      />,
     );
 
-    expect(screen.getByTestId('editor-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('pending-body')).toBeInTheDocument();
     expect(screen.getByTestId('internal-editor')).not.toBeVisible();
 
     rerender(<DocumentIdMode collab documentId="doc-1" editor={editor} />);
 
-    expect(screen.queryByTestId('editor-skeleton')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pending-body')).not.toBeInTheDocument();
     expect(screen.getByTestId('internal-editor')).toBeVisible();
   });
 });
