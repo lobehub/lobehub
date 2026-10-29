@@ -39,15 +39,3 @@ export const useSetTopicOnlyMine = () => {
     [updateSystemStatus],
   );
 };
-
-/**
- * The choice is part of the topic list identity and lives in the persisted
- * system status, which hydrates after the first render. Hold workspace topic
- * fetches until it has, so the unfiltered list never paints first. Always
- * ready in personal mode, where the filter does not exist.
- */
-export const useTopicOnlyMineReady = (): boolean => {
-  const hasActiveWorkspace = useHasActiveWorkspace();
-  const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
-  return !hasActiveWorkspace || isStatusInit;
-};

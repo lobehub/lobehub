@@ -32,7 +32,6 @@ import {
 } from '@/features/AgentSidebar/Topic/TopicListScope';
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useTopicOnlyMineReady } from '@/hooks/useTopicOnlyMine';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -96,10 +95,6 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
       filterTopics(scopedTopics, filter, { directories }).length === 0,
     [filter, scopedTopics, directories],
   );
-  // The rows are filtered client-side by the project's "only mine" choice,
-  // which lives in the persisted system status. Hold the list until it has
-  // hydrated so the unfiltered rows never paint.
-  const isPreferenceLoading = !useTopicOnlyMineReady();
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
   return (
@@ -147,7 +142,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
               onRetry={() => Promise.all([request.revalidate(), directoriesRequest.revalidate()])}
             />
           ) : null}
-          {!request.hasData || isPreferenceLoading ? (
+          {!request.hasData ? (
             <SkeletonList />
           ) : !topics.length && !request.error && topicGroupMode !== 'byAgent' ? (
             // By agent, the main agent's empty group offers the first topic instead.
@@ -162,7 +157,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
               </Button>
             </Flexbox>
           ) : null}
-          {isPreferenceLoading ? null : topicGroupMode === 'flat' ? (
+          {topicGroupMode === 'flat' ? (
             <FlatMode />
           ) : topicGroupMode === 'byStatus' ? (
             <ByStatusMode />

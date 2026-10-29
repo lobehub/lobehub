@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   topicOnlyMine: false,
   topicOnlyMineOwners: [] as (string | undefined)[],
   topicPageSize: 20,
-  statusLoading: false,
 }));
 
 vi.mock('@/hooks/useTopicOnlyMine', () => ({
@@ -26,7 +25,6 @@ vi.mock('@/hooks/useTopicOnlyMine', () => ({
     mocks.topicOnlyMineOwners.push(ownerId);
     return mocks.topicOnlyMine;
   },
-  useTopicOnlyMineReady: () => !mocks.statusLoading,
 }));
 
 vi.mock('@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode', () => ({
@@ -75,7 +73,6 @@ describe('chat topic list fetches', () => {
     mocks.storeFetchTopics.mockClear();
     mocks.topicOnlyMine = false;
     mocks.topicOnlyMineOwners = [];
-    mocks.statusLoading = false;
   });
 
   it('asks the same query for a named agent as the sidebar does for the active one', () => {
@@ -122,20 +119,6 @@ describe('chat topic list fetches', () => {
     renderHook(() => useFetchAgentChatTopics('agent-2'));
 
     expect(mocks.topicOnlyMineOwners.at(-1)).toBe('agent-2');
-  });
-
-  /** @example A cold workspace load must not paint the unfiltered list before "only mine" is known. */
-  it('holds both fetches until the local only-mine choice has hydrated', () => {
-    mocks.statusLoading = true;
-
-    renderHook(() => useFetchChatTopics());
-    const [sidebarEnabled] = mocks.storeFetchTopics.mock.calls.at(-1)!;
-
-    renderHook(() => useFetchAgentChatTopics('agent-1'));
-    const [panelEnabled] = mocks.storeFetchTopics.mock.calls.at(-1)!;
-
-    expect(sidebarEnabled).toBe(false);
-    expect(panelEnabled).toBe(false);
   });
 
   it('stays disabled until the panel knows its agent', () => {

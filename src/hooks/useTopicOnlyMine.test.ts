@@ -4,17 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '@/features/AgentSidebar/Topic/TopicListScope';
 
-import {
-  useSetTopicOnlyMine,
-  useTopicOnlyMine,
-  useTopicOnlyMineOwnerId,
-  useTopicOnlyMineReady,
-} from './useTopicOnlyMine';
+import { useSetTopicOnlyMine, useTopicOnlyMine, useTopicOnlyMineOwnerId } from './useTopicOnlyMine';
 
 const mocks = vi.hoisted(() => ({
   chat: { activeAgentId: 'agent-1', activeGroupId: undefined as string | undefined },
   global: {
-    isStatusInit: true,
     status: { topicOnlyMineByAgent: {} as Record<string, boolean> },
     updateSystemStatus: vi.fn(),
   },
@@ -38,7 +32,6 @@ describe('useTopicOnlyMine', () => {
   beforeEach(() => {
     mocks.chat.activeAgentId = 'agent-1';
     mocks.chat.activeGroupId = undefined;
-    mocks.global.isStatusInit = true;
     mocks.global.status.topicOnlyMineByAgent = {};
     mocks.global.updateSystemStatus.mockClear();
     mocks.hasActiveWorkspace = true;
@@ -82,13 +75,5 @@ describe('useTopicOnlyMine', () => {
     expect(mocks.global.updateSystemStatus).toHaveBeenCalledWith({
       topicOnlyMineByAgent: { 'agent-1': true },
     });
-  });
-
-  it('is ready once the system status hydrated, and always in personal mode', () => {
-    mocks.global.isStatusInit = false;
-    expect(renderHook(() => useTopicOnlyMineReady()).result.current).toBe(false);
-
-    mocks.hasActiveWorkspace = false;
-    expect(renderHook(() => useTopicOnlyMineReady()).result.current).toBe(true);
   });
 });
