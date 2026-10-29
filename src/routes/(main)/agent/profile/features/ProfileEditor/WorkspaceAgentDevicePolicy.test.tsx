@@ -227,6 +227,9 @@ describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
     render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
 
     expect(deviceOption()?.disabled).toBe(true);
+    expect(privateGroupOptions().map((option) => option.value)).toContain(
+      'status:privateUnavailable',
+    );
   });
 
   it('shows an already-bound private device as the current selection', () => {
