@@ -1,4 +1,4 @@
-import { Bing, Exa, Google, Jina, Search1API, Tavily } from '@lobehub/icons';
+import { Bing, DeepSeek, Exa, Google, Jina, Search1API, Tavily } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { Globe } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -14,6 +14,7 @@ const CHANNEL_DISPLAY_NAME: Record<string, string> = {
   bocha: 'Bocha',
   brave: 'Brave',
   browserless: 'Browserless',
+  deepseek: 'DeepSeek',
   exa: 'Exa',
   firecrawl: 'Firecrawl',
   google: 'Google',
@@ -35,6 +36,9 @@ export const getChannelIcon = (id: string, size = 24): ReactNode => {
   switch (id) {
     case 'bing': {
       return <Bing.Avatar size={size} />;
+    }
+    case 'deepseek': {
+      return <DeepSeek.Avatar size={size} />;
     }
     case 'exa': {
       return <Exa.Avatar size={size} />;

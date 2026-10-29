@@ -34,15 +34,16 @@ CRAWLER_IMPLS="naive,search1api"
 
 支持的爬虫类型如下：
 
-| 值             | 说明                                                               | 环境变量                                                                        |
-| ------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `browserless` | 基于 [Browserless](https://www.browserless.io/) 的无头浏览器爬虫，适合渲染复杂页面。 | `BROWSERLESS_TOKEN`                                                         |
-| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                       | `EXA_API_KEY`                                                               |
-| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。          | `FIRECRAWL_API_KEY`                                                         |
-| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                 | `JINA_READER_API_KEY`                                                       |
-| `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                              |                                                                             |
-| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。 | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
-| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。               | `TAVILY_API_KEY`                                                            |
+| 值             | 说明                                                                                         | 环境变量                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `browserless` | 基于 [Browserless](https://www.browserless.io/) 的无头浏览器爬虫，适合渲染复杂页面。                           | `BROWSERLESS_TOKEN`                                                         |
+| `deepseek`    | [DeepSeek](https://api-docs.deepseek.com/zh-cn/guides/search) 提供的网页抓取 API，以 Markdown 返回正文。 | `DEEPSEEK_SEARCH_API_KEY` `DEEPSEEK_API_KEY`                                |
+| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                                                 | `EXA_API_KEY`                                                               |
+| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。                                    | `FIRECRAWL_API_KEY`                                                         |
+| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                                           | `JINA_READER_API_KEY`                                                       |
+| `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                                                        |                                                                             |
+| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。                           | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。                                         | `TAVILY_API_KEY`                                                            |
 
 > 💡 设置多个爬虫可提升成功率，系统将根据优先级尝试不同爬虫。
 
@@ -93,19 +94,20 @@ SEARCH_PROVIDERS="searxng"
 
 支持的搜索引擎如下：
 
-| 值            | 说明                                                                                    | 环境变量                                                                        |
-| ------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `anspire`    | 基于 [Anspire（安思派）](https://anspire.ai/) 提供的搜索服务。                                       | `ANSPIRE_API_KEY`                                                           |
-| `bocha`      | 基于 [Bocha（博查）](https://open.bochaai.com/) 提供的搜索服务。                                    | `BOCHA_API_KEY`                                                             |
-| `brave`      | [Brave](https://search.brave.com/help/api)，隐私友好的搜索源。                                  | `BRAVE_API_KEY`                                                             |
-| `exa`        | [Exa](https://exa.ai/)，面向 AI 的搜索 API。                                                 | `EXA_API_KEY`                                                               |
-| `firecrawl`  | 支持 [Firecrawl](https://firecrawl.dev/) 提供的搜索服务。                                       | `FIRECRAWL_API_KEY`                                                         |
-| `google`     | 使用 [Google Programmable Search Engine](https://programmablesearchengine.google.com/)。 | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
-| `jina`       | 使用 [Jina AI](https://jina.ai/) 提供的语义搜索服务。                                             | `JINA_READER_API_KEY`                                                       |
-| `kagi`       | [Kagi](https://kagi.com/) 提供的高级搜索 API，需订阅 Key。                                        | `KAGI_API_KEY`                                                              |
-| `search1api` | 使用 [Search1API](https://www.search1api.com) 聚合搜索能力。                                   | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
-| `searxng`    | 使用自托管或公共 [SearXNG](https://searx.space/) 实例。                                          | `SEARXNG_URL`                                                               |
-| `tavily`     | [Tavily](https://www.tavily.com/)，快速网页摘要与答案返回。                                        | `TAVILY_API_KEY`                                                            |
+| 值            | 说明                                                                                     | 环境变量                                                                        |
+| ------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `anspire`    | 基于 [Anspire（安思派）](https://anspire.ai/) 提供的搜索服务。                                        | `ANSPIRE_API_KEY`                                                           |
+| `bocha`      | 基于 [Bocha（博查）](https://open.bochaai.com/) 提供的搜索服务。                                     | `BOCHA_API_KEY`                                                             |
+| `brave`      | [Brave](https://search.brave.com/help/api)，隐私友好的搜索源。                                   | `BRAVE_API_KEY`                                                             |
+| `deepseek`   | [DeepSeek](https://api-docs.deepseek.com/zh-cn/guides/search) 提供的联网搜索 API，返回适合模型阅读的摘要。 | `DEEPSEEK_SEARCH_API_KEY` `DEEPSEEK_API_KEY`                                |
+| `exa`        | [Exa](https://exa.ai/)，面向 AI 的搜索 API。                                                  | `EXA_API_KEY`                                                               |
+| `firecrawl`  | 支持 [Firecrawl](https://firecrawl.dev/) 提供的搜索服务。                                        | `FIRECRAWL_API_KEY`                                                         |
+| `google`     | 使用 [Google Programmable Search Engine](https://programmablesearchengine.google.com/)。  | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
+| `jina`       | 使用 [Jina AI](https://jina.ai/) 提供的语义搜索服务。                                              | `JINA_READER_API_KEY`                                                       |
+| `kagi`       | [Kagi](https://kagi.com/) 提供的高级搜索 API，需订阅 Key。                                         | `KAGI_API_KEY`                                                              |
+| `search1api` | 使用 [Search1API](https://www.search1api.com) 聚合搜索能力。                                    | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `searxng`    | 使用自托管或公共 [SearXNG](https://searx.space/) 实例。                                           | `SEARXNG_URL`                                                               |
+| `tavily`     | [Tavily](https://www.tavily.com/)，快速网页摘要与答案返回。                                         | `TAVILY_API_KEY`                                                            |
 
 > ⚠️ 某些搜索提供商需要单独申请 API Key，并在 `.env` 中配置相关凭证。
 
@@ -154,6 +156,18 @@ BROWSERLESS_STEALTH_MODE=1
 > - `0`：禁用隐身模式（默认）。
 
 > ⚠️ 某些网站存在高级反爬机制，启用隐身模式可以显著提升抓取成功率。
+
+---
+
+## `DEEPSEEK_SEARCH_API_KEY`
+
+[DeepSeek](https://api-docs.deepseek.com/zh-cn/guides/search) 搜索（`SEARCH_PROVIDERS=deepseek`）与抓取（`CRAWLER_IMPLS=deepseek`）API 使用的密钥。未设置时会使用 `DEEPSEEK_API_KEY`（DeepSeek 模型服务商的密钥），一个密钥即可同时用于对话、搜索与抓取。
+
+```env
+DEEPSEEK_SEARCH_API_KEY=sk-xxxxxx
+```
+
+> 💰 搜索与抓取由 DeepSeek 按成功请求次数单独计费，与模型 token 费用分开。
 
 ---
 
