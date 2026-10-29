@@ -93,9 +93,7 @@ export const resolveChannelKeys = (
   // whole id or by the id they see in the platform's UI (Telegram chat id, Slack channel id).
   // Feishu / Lark put the chat type there (`feishu:group:oc_…`), which is no id of the chat.
   const [, ...parts] = platformThreadId.split(':');
-  const ids = isLarkPlatform(platform)
-    ? parts.filter((part) => !LARK_CHAT_TYPES.has(part))
-    : parts;
+  const ids = isLarkPlatform(platform) ? parts.filter((part) => !LARK_CHAT_TYPES.has(part)) : parts;
 
   return {
     channelKey: `${base}:${platformThreadId}`,

@@ -19,6 +19,7 @@ const {
   mockGetModelMetadata,
   mockGetUserPreference,
   mockIsAgentSignalEnabledForUser,
+  mockIsSandboxAvailableForUser,
   mockMessageCreate,
   mockMessageQuery,
   mockResolveTask,
@@ -32,6 +33,7 @@ const {
   mockGetModelMetadata: vi.fn(),
   mockGetUserPreference: vi.fn(),
   mockIsAgentSignalEnabledForUser: vi.fn(),
+  mockIsSandboxAvailableForUser: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockResolveTask: vi.fn(),
@@ -40,6 +42,10 @@ const {
     MULTIMODAL_UNDERSTANDING_MODEL: undefined as string | undefined,
     MULTIMODAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
   },
+}));
+
+vi.mock('@/server/services/sandbox/availability', () => ({
+  isSandboxAvailableForUser: mockIsSandboxAvailableForUser,
 }));
 
 vi.mock('@/envs/tools', () => ({
@@ -281,6 +287,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockMessageQuery.mockResolvedValue([]);
     mockIsAgentSignalEnabledForUser.mockResolvedValue(true);
+    mockIsSandboxAvailableForUser.mockResolvedValue(true);
     mockResolveTask.mockResolvedValue(null);
     mockToolState.enabledToolIds = [];
     mockGetInfoForAIGeneration.mockResolvedValue({
@@ -792,6 +799,27 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
       expect(calls).toHaveLength(1);
     });
+  });
+
+  it('should leave the page agent out in page scope when no sandbox is available', async () => {
+    mockIsSandboxAvailableForUser.mockResolvedValue(false);
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'gpt-4',
+      plugins: ['lobe-agent-documents'],
+      provider: 'openai',
+      systemRole: 'Custom role.',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: { documentId: 'docs-1', scope: 'page', topicId: 'topic-1' },
+      prompt: 'Rewrite this page',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.plugins).toEqual(['lobe-agent-documents']);
   });
 
   it('should inject page-agent runtime for regular agents in page scope', async () => {

@@ -10,18 +10,14 @@ import { PinIcon, XIcon } from 'lucide-react';
 import { memo, type MouseEvent, type ReactNode } from 'react';
 
 /**
- * Room the trailing pin badge needs at the tab's end. Pinned tabs always reserve
- * it; the active tab instead overlays its close button on the label's tail and
- * fades the text out under it, browser-style, so selecting a tab never changes
- * its width and unselected tabs carry no empty gap.
+ * Room the trailing pin badge or close button needs at the tab's end. Pinned
+ * tabs always reserve it; the active tab reserves it for its close button so the
+ * label keeps its full width, and unselected tabs carry no empty gap.
  */
 const TRAILING_SLOT = 24;
 const TAB_PADDING = 8;
 const CLOSE_INSET = 4;
 const CLOSE_SIZE = 16;
-/** Label tail covered by the close button, measured from the label's end edge. */
-const LABEL_UNDER_CLOSE = CLOSE_INSET + CLOSE_SIZE - TAB_PADDING;
-const LABEL_FADE = 8;
 
 const fadeIn = keyframes`
   from {
@@ -110,25 +106,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     max-width: 160px;
     text-overflow: ellipsis;
   `,
-  labelUnderClose: css`
-    /* no ellipsis: the text runs on under the close button and fades out
-       before it, so the glyph never collides with a trailing "…" */
-    text-overflow: clip;
-
-    mask-image: linear-gradient(
-      to left,
-      transparent ${LABEL_UNDER_CLOSE}px,
-      black ${LABEL_UNDER_CLOSE + LABEL_FADE}px
-    );
-
-    &:dir(rtl) {
-      mask-image: linear-gradient(
-        to right,
-        transparent ${LABEL_UNDER_CLOSE}px,
-        black ${LABEL_UNDER_CLOSE + LABEL_FADE}px
-      );
-    }
-  `,
   tab: css`
     cursor: pointer;
 
@@ -155,7 +132,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
     }
   `,
-  tabPinned: css`
+  tabTrailing: css`
     padding-inline-end: ${TRAILING_SLOT}px;
   `,
   trigger: css`
@@ -217,7 +194,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
       >
         <button
           aria-pressed={active}
-          className={`${styles.tab} ${pinned ? styles.tabPinned : ''}`}
+          className={`${styles.tab} ${pinned || showClose ? styles.tabTrailing : ''}`}
           data-tab-key={tabKey}
           title={typeof label === 'string' ? label : undefined}
           type="button"
@@ -225,9 +202,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
         >
           <span className={styles.trigger}>
             <span className={styles.icon}>{iconNode ?? <Icon icon={icon} size={14} />}</span>
-            <span className={`${styles.label} ${showClose ? styles.labelUnderClose : ''}`}>
-              {label}
-            </span>
+            <span className={styles.label}>{label}</span>
           </span>
         </button>
         {pinned ? (

@@ -974,8 +974,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         const line = toConversationLine({
           // The send time comes from the message (a Discord id carries it), so two bots in one
           // channel write the identical line.
-          at:
-            discordMessageTime(message.id) ?? message.metadata?.dateSent?.getTime() ?? Date.now(),
+          at: discordMessageTime(message.id) ?? message.metadata?.dateSent?.getTime() ?? Date.now(),
           authorId: message.author?.userId,
           authorName: message.author?.userName ?? message.author?.fullName,
           hasAttachments: (message.attachments?.length ?? 0) > 0,

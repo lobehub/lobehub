@@ -10,6 +10,7 @@ import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionS
 import type { ComposerTarget } from '@/features/Conversation/types';
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 
+import { usePageCollab } from '../collab/usePageCollab';
 import { usePageEditorStore } from '../store';
 import { usePageEditable } from '../usePageEditable';
 import { useAddCommentItem } from './useAddCommentItem';
@@ -29,6 +30,8 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
+  const onCollabReset = usePageEditorStore((s) => s.onCollabReset);
+  const collabPlugin = usePageCollab(documentId, onCollabReset);
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
@@ -40,14 +43,19 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
   );
 
   const extraPlugins = useMemo(
-    () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 }), ReactCollapsiblePlugin],
-    [],
+    () => [
+      Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 }),
+      ReactCollapsiblePlugin,
+      ...(collabPlugin ? [collabPlugin] : []),
+    ],
+    [collabPlugin],
   );
 
   return (
     <SharedEditorCanvas
       allowContentBleed
       className={mentionPlainClassName}
+      collab={!!collabPlugin}
       documentId={documentId}
       editable={editable}
       editor={editor}

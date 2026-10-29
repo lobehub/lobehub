@@ -14,6 +14,7 @@
   },
   "peerDependencies": {
     "@lobehub/editor": "^7.0.3",
-    "debug": "*"
+    "debug": "*",
+    "lexical": "*"
   }
 }
