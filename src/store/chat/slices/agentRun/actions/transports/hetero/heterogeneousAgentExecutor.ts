@@ -84,6 +84,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { dispatchInterventionState } from '../../entries/interventionProjection';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
@@ -1489,8 +1490,7 @@ export const executeHeterogeneousAgent = async (
 
   // ─── Main-agent run coordinator (shared reducer) interpreter ─────────────
 
-  // Interpret main coordinator intents, including bridge transitions for tools
-  // already owned by a subagent thread. Ownership comes from the persisted row.
+  // The persisted row owns the thread for bridge transitions as well as tool results.
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
       case 'setToolIntervention': {
@@ -1504,16 +1504,16 @@ export const executeHeterogeneousAgent = async (
         const previous = getCurrentFrontendMessages(interventionContext).find(
           (msg) => msg.id === toolMsgId,
         );
-        await get().optimisticUpdateMessagePlugin(
-          toolMsgId,
-          {
-            intervention: preserveSkippedIntervention(
-              intent.intervention,
-              previous?.pluginIntervention,
-            ),
-          },
-          threadId ? { context: interventionContext, operationId } : { operationId },
+        const intervention = preserveSkippedIntervention(
+          intent.intervention,
+          previous?.pluginIntervention,
         );
+        const writeContext = threadId
+          ? { context: interventionContext, operationId }
+          : { operationId };
+        // Every tab's global approval island reads this shared projection.
+        dispatchInterventionState(get, toolMsgId, intervention, writeContext);
+        await get().optimisticUpdateMessagePlugin(toolMsgId, { intervention }, writeContext);
         if (intent.transition === 'pending') {
           writeTopicStatus('waitingForHuman');
           void notifyDesktopHumanApprovalRequired(get, context);

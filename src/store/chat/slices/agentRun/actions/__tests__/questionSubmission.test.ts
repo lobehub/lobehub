@@ -99,6 +99,20 @@ describe('question submission feedback', () => {
     expect(state.dbMessagesMap[key][0].pluginIntervention?.status).toBe('pending');
   });
 
+  it('unlocks a stale resolving form when automatic reconciliation is unavailable', async () => {
+    const { action, state } = createAction();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    state.dbMessagesMap[key] = [
+      { ...question, pluginIntervention: { ...question.pluginIntervention!, resolving: true } },
+    ];
+    vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('Temporary 503'));
+    await action.checkQuestionSubmission(question.id, context);
+    expect(state.dbMessagesMap[key][0].pluginIntervention?.resolving).toBe(false);
+    expect(state.dbMessagesMap[key][0].pluginIntervention?.status).toBe('pending');
+    expect(state.questionSubmissions.question).toBe('uncertain');
+    log.mockRestore();
+  });
+
   it('restores the saved answers after a failed submit and authoritative pending read', async () => {
     const { action, state } = createAction();
     const error = new Error('submit failed');
@@ -135,7 +149,7 @@ describe('question submission feedback', () => {
     expect(state.dbMessagesMap[key][0].pluginIntervention?.status).toBe('approved');
   });
 
-  it('keeps an unconfirmed response collapsed until checking succeeds', async () => {
+  it('automatically checks an uncertain response before retrying delivery', async () => {
     const { action, state } = createAction();
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('offline'));
@@ -146,11 +160,15 @@ describe('question submission feedback', () => {
     ).rejects.toThrow('offline');
     expect(state.questionSubmissions.question).toBe('uncertain');
     const submit = vi.fn();
-    await action.runQuestionSubmission(question.id, context, submit);
+    vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('offline'));
+    await expect(action.runQuestionSubmission(question.id, context, submit)).rejects.toThrow(
+      'could not be confirmed',
+    );
     expect(submit).not.toHaveBeenCalled();
     vi.mocked(messageService.getMessages).mockResolvedValueOnce([question]);
-    await action.checkQuestionSubmission(question.id, context);
-    expect(state.questionSubmissions.question).toBe('failed');
+    await action.runQuestionSubmission(question.id, context, submit);
+    expect(submit).toHaveBeenCalledOnce();
+    expect(state.questionSubmissions.question).toBeUndefined();
     log.mockRestore();
   });
 

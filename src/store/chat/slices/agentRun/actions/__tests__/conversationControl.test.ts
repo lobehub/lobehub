@@ -11,7 +11,6 @@ import { useUserStore } from '@/store/user';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
-import { dbMessageSelectors } from '../../../message/selectors';
 import * as agentDispatcher from '../dispatch/agentDispatcher';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
@@ -3503,11 +3502,10 @@ describe('ConversationControl actions', () => {
       expect(sourceMutation).toHaveBeenCalledWith(
         expect.objectContaining({ operationId: 'server-operation-local-fallback' }),
       );
-      expect(pluginSpy).toHaveBeenCalledWith(
-        'tool-msg-local-fallback',
-        { intervention: { status: 'approved' } },
-        { operationId: clientOperationId },
-      );
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-local-fallback')
+          ?.pluginIntervention,
+      ).toMatchObject({ status: 'pending', resolving: true });
       expect(localSubmit).toHaveBeenCalledWith({
         operationId: clientOperationId,
         result: { Question: 'Answer' },
@@ -3704,7 +3702,7 @@ describe('ConversationControl actions', () => {
       });
     });
 
-    it('submits via IPC, persists optimistic intervention, and flips topic status to running (submit)', async () => {
+    it('submits via IPC, awaits the producer result, and flips topic status to running', async () => {
       const { result } = renderHook(() => useChatStore());
 
       const agentId = 'hetero-agent';
@@ -3764,12 +3762,11 @@ describe('ConversationControl actions', () => {
         await result.current.submitHeteroIntervention('tool-msg-1', 'submit', payload);
       });
 
-      // Optimistic approval runs against the resolved op (operationId carried).
-      expect(result.current.optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        'tool-msg-1',
-        { intervention: { status: 'approved' } },
-        { operationId: assistantOpId },
-      );
+      // Publishing waits for the producer ACK instead of claiming approval.
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-1')
+          ?.pluginIntervention,
+      ).toMatchObject({ status: 'pending', resolving: true });
 
       // IPC submit forwards the resolved operationId + toolCallId + result.
       expect(submitInterventionSpy).toHaveBeenCalledWith({
@@ -3846,11 +3843,10 @@ describe('ConversationControl actions', () => {
       });
 
       expect(result.current.messageOperationMap[assistantMessage.id]).toBe(reasoningOpId);
-      expect(result.current.optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        'tool-msg-1',
-        { intervention: { status: 'approved' } },
-        { operationId: executionOpId },
-      );
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-1')
+          ?.pluginIntervention,
+      ).toMatchObject({ status: 'pending', resolving: true });
       expect(submitInterventionSpy).toHaveBeenCalledWith({
         operationId: executionOpId,
         result: payload,
@@ -3859,7 +3855,7 @@ describe('ConversationControl actions', () => {
       expect(lambdaClient.aiAgent.submitHeteroIntervention.mutate).not.toHaveBeenCalled();
     });
 
-    it("falls back to global-state optimistic context and routes a GC'd op to the remote tRPC transport", async () => {
+    it("keeps the card context and routes a GC'd op to the remote tRPC transport", async () => {
       // When the resolved op has already been garbage-collected (not present in
       // `operations`), the optimistic context is the empty object `{}`
       // (global-state fallback) rather than carrying the stale operationId. With
@@ -3921,7 +3917,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Remote publish is only transport acceptance: keep the form pending,
-      // mark it resolving, and use the empty global-state fallback context.
+      // mark it resolving in this card’s context even after the op is gone.
       // The hint is dispatched locally onto both projections the UI reads and
       // deliberately never persisted — a refresh must recover an actionable
       // card rather than a permanently disabled one.
@@ -3932,7 +3928,7 @@ describe('ConversationControl actions', () => {
           type: 'updateMessage',
           value: { pluginIntervention: resolvingIntervention },
         },
-        {},
+        { context: { agentId, topicId, threadId: undefined } },
       );
       expect(dispatchSpy).toHaveBeenCalledWith(
         {
@@ -3941,7 +3937,7 @@ describe('ConversationControl actions', () => {
           type: 'updateMessageTools',
           value: { intervention: resolvingIntervention },
         },
-        {},
+        { context: { agentId, topicId, threadId: undefined } },
       );
       expect(pluginSpy).not.toHaveBeenCalledWith(
         'tool-msg-1',
@@ -3988,255 +3984,11 @@ describe('ConversationControl actions', () => {
           publishError,
         );
       });
-      expect(pluginSpy).toHaveBeenLastCalledWith(
-        'tool-msg-1',
-        // A failed publish rolls back to pending AND drops the in-flight hint,
-        // so the card the user has to retry is actionable again.
-        { intervention: { resolving: false, status: 'pending' } },
-        {},
-      );
-    });
-
-    it('settles a remote card that the producer never acknowledges', async () => {
-      // Regression: the ask-user bridge stops waiting at its own deadline and
-      // its long-poll stops listening with it, so an answer published after
-      // that point can never be echoed back. The card was left on
-      // `pending + resolving` forever — every button disabled, the submit
-      // button spinning, with no way out but a refresh. The server accepted the
-      // answer, so the card settles as answered and leaves the surface; it is
-      // never re-offered, which would invite a duplicate answer.
-      vi.useFakeTimers();
-      const { result } = renderHook(() => useChatStore());
-
-      const agentId = 'hetero-agent';
-      const topicId = 'hetero-topic';
-      const chatKey = messageMapKey({ agentId, topicId });
-      const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-1',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        pluginIntervention: { status: 'pending' },
-        role: 'tool',
-        tool_call_id: 'cc_call_1',
-      } as any);
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeThreadId: undefined,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          // A GC'd op routes to the remote transport, the path that waits for
-          // a producer ACK.
-          messageOperationMap: { [assistantMessage.id]: 'gc-op-id' },
-          operations: {},
-        });
-      });
-
-      const pluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-        .mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
-      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
-        messages: [],
-        success: true,
-      });
-
-      await act(async () => {
-        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', { q: 'a' });
-      });
-
-      const resolvingMessage = dbMessageSelectors.getDbMessageById('tool-msg-1')(
-        useChatStore.getState(),
-      );
-      expect(resolvingMessage?.pluginIntervention?.resolving).toBe(true);
-      pluginSpy.mockClear();
-
-      // No ACK ever arrives.
-      await act(async () => {
-        vi.advanceTimersByTime(30 * 1000);
-      });
-
-      expect(pluginSpy).toHaveBeenCalledWith(
-        'tool-msg-1',
-        { intervention: { resolving: false, status: 'approved' } },
-        expect.anything(),
-      );
-
-      // The card must leave the surface on the local write alone. The durable
-      // write is best-effort; waiting on its echo is what left the card on
-      // screen in the first place.
-      const settled = dbMessageSelectors.getDbMessageById('tool-msg-1')(useChatStore.getState());
-      expect(settled?.pluginIntervention?.status).toBe('approved');
-      expect(settled?.pluginIntervention?.resolving).toBe(false);
-
-      vi.useRealTimers();
-    });
-
-    it.each([
-      {
-        actionType: 'skip' as const,
-        expected: {
-          rejectedReason: 'User skipped',
-          resolving: false,
-          skipped: true,
-          status: 'rejected',
-        },
-      },
-      {
-        actionType: 'cancel' as const,
-        expected: {
-          rejectedReason: 'User cancelled',
-          resolving: false,
-          skipped: false,
-          status: 'rejected',
-        },
-      },
-    ])(
-      'settles an unacknowledged $actionType as the decision the user made, not as an answer',
-      async ({ actionType, expected }) => {
-        // Regression: the settle timer runs for every remote action but always
-        // stamped `approved`, so an accepted skip/cancel that never got a
-        // producer ACK was rendered and persisted as an approved answer.
-        vi.useFakeTimers();
-        const { result } = renderHook(() => useChatStore());
-
-        const agentId = 'hetero-agent';
-        const topicId = 'hetero-topic';
-        const chatKey = messageMapKey({ agentId, topicId });
-        const assistantMessage = createMockMessage({
-          id: `assistant-${actionType}`,
-          role: 'assistant',
-        });
-        const toolMessage = createMockMessage({
-          id: `tool-${actionType}`,
-          parentId: assistantMessage.id,
-          plugin: {
-            apiName: 'askUserQuestion',
-            arguments: '{}',
-            identifier: 'lobe-claude-code',
-            type: 'default',
-          },
-          pluginIntervention: { status: 'pending' },
-          role: 'tool',
-          tool_call_id: `call-${actionType}`,
-        } as any);
-
-        act(() => {
-          useChatStore.setState({
-            activeAgentId: agentId,
-            activeThreadId: undefined,
-            activeTopicId: topicId,
-            dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-            messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-            messageOperationMap: { [assistantMessage.id]: `gc-op-${actionType}` },
-            operations: {},
-          });
-        });
-
-        const pluginSpy = vi
-          .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-          .mockResolvedValue(undefined);
-        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-        vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
-
-        await act(async () => {
-          await result.current.submitHeteroIntervention(toolMessage.id, actionType);
-        });
-        pluginSpy.mockClear();
-
-        await act(async () => {
-          vi.advanceTimersByTime(30 * 1000);
-        });
-
-        expect(pluginSpy).toHaveBeenCalledWith(
-          toolMessage.id,
-          { intervention: expected },
-          expect.anything(),
-        );
-        const settled = dbMessageSelectors.getDbMessageById(toolMessage.id)(
-          useChatStore.getState(),
-        );
-        expect(settled?.pluginIntervention).toMatchObject(expected);
-
-        vi.useRealTimers();
-      },
-    );
-
-    it('leaves an acknowledged card alone when the settle timer fires', async () => {
-      vi.useFakeTimers();
-      const { result } = renderHook(() => useChatStore());
-
-      const agentId = 'hetero-agent';
-      const topicId = 'hetero-topic';
-      const chatKey = messageMapKey({ agentId, topicId });
-      const assistantMessage = createMockMessage({ id: 'assistant-msg-2', role: 'assistant' });
-      const toolMessage = createMockMessage({
-        id: 'tool-msg-2',
-        parentId: assistantMessage.id,
-        plugin: {
-          apiName: 'askUserQuestion',
-          arguments: '{}',
-          identifier: 'lobe-claude-code',
-          type: 'default',
-        },
-        pluginIntervention: { status: 'pending' },
-        role: 'tool',
-        tool_call_id: 'cc_call_2',
-      } as any);
-
-      act(() => {
-        useChatStore.setState({
-          activeAgentId: agentId,
-          activeThreadId: undefined,
-          activeTopicId: topicId,
-          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
-          messageOperationMap: { [assistantMessage.id]: 'gc-op-id-2' },
-          operations: {},
-        });
-      });
-
-      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
-      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
-        messages: [],
-        success: true,
-      });
-
-      await act(async () => {
-        await result.current.submitHeteroIntervention('tool-msg-2', 'submit', { q: 'a' });
-      });
-
-      // The producer ACKs and the card goes terminal before the timer fires.
-      act(() => {
-        result.current.internal_dispatchMessage(
-          {
-            id: 'tool-msg-2',
-            type: 'updateMessage',
-            value: { pluginIntervention: { resolving: false, status: 'approved' } },
-          },
-          {},
-        );
-      });
-
-      await act(async () => {
-        vi.advanceTimersByTime(30 * 1000);
-      });
-
-      const settled = dbMessageSelectors.getDbMessageById('tool-msg-2')(useChatStore.getState());
-      expect(settled?.pluginIntervention?.status).toBe('approved');
-
-      vi.useRealTimers();
+      expect(
+        result.current.dbMessagesMap[chatKey].find((m) => m.id === 'tool-msg-1')
+          ?.pluginIntervention,
+      ).toMatchObject({ resolving: false, status: 'pending' });
+      expect(pluginSpy).not.toHaveBeenCalled();
     });
 
     it('flips topic status on the passed context, NOT the active topic, when submitting from a background conversation', async () => {

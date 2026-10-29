@@ -6,12 +6,13 @@ import {
   AskUserQuestionView,
   DEFAULT_COUNTDOWN_MS,
   DRAFT_PLUGIN_STATE_KEY,
+  SUBMIT_ACK_TIMEOUT_MS,
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { CircleAlert } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
@@ -75,6 +76,19 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     writeDraft,
   });
 
+  // Stream events normally settle the card. Revalidate a missed ACK after
+  // remount or reconnect without asking the user to inspect runtime state.
+  useEffect(() => {
+    if (!resolving) return;
+    const reconcile = () => void checkQuestionSubmission(messageId, context);
+    const timer = window.setTimeout(reconcile, SUBMIT_ACK_TIMEOUT_MS);
+    window.addEventListener('online', reconcile);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('online', reconcile);
+    };
+  }, [checkQuestionSubmission, context, messageId, resolving]);
+
   const labels = {
     customPlaceholder: t('claudeCode.askUserQuestion.customOption.placeholder'),
     escapeBack: t('claudeCode.askUserQuestion.escape.back'),
@@ -93,21 +107,12 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
   return (
     <Flexbox gap={8}>
-      {form.submissionFailed && (
+      {(form.submissionFailed ||
+        submissionPhase === 'failed' ||
+        submissionPhase === 'uncertain') && (
         <Text fontSize={12} role="alert" type="danger">
           <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
         </Text>
-      )}
-      {(form.submissionFailed || resolving || submissionPhase === 'uncertain') && (
-        <Flexbox gap={8}>
-          <Text role="status">{t('askUserQuestion.uncertain')}</Text>
-          <Button
-            loading={submissionPhase === 'checking'}
-            onClick={() => checkQuestionSubmission(messageId, context)}
-          >
-            {t('askUserQuestion.checkStatus')}
-          </Button>
-        </Flexbox>
       )}
       <AskUserQuestionView
         {...form}
