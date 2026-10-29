@@ -16,7 +16,12 @@ export interface FileShareSettings {
   visibility: FileShareVisibility;
 }
 
-/** What a share link visitor reads: the file and short-lived addresses to its bytes. */
+/**
+ * What a share link visitor reads: the file and stable addresses to its bytes.
+ * The addresses must outlive the page — the page reads the share once (each
+ * read counts a view), so a signed URL that expires would break a later
+ * download or a resumed video.
+ */
 export interface SharedFileData {
   file: {
     /** Address that downloads the bytes under the file's own name. */

@@ -197,22 +197,32 @@ export const isShareVisitorContext = (context: {
 }): boolean => !!context.agentShareId || !!context.topicShareId;
 
 /**
- * The address the copy button hands out: the link as written for the owner,
- * the public proxy for a share visitor (the Docs page is the owner's scope).
- * Root-relative addresses resolve against `origin`.
+ * Where the link points for this reader: the address as written for the
+ * owner, the public proxy for a share visitor (the Docs page is the owner's
+ * scope). The anchor's own `href` uses it too, so a modifier or middle click
+ * opens the same target an ordinary click previews.
  */
-export const getFileLinkCopyHref = ({
+export const getFileLinkTargetHref = ({
   isShareVisitor,
   linkHref,
-  origin,
   proxyHref,
+}: {
+  isShareVisitor: boolean;
+  linkHref?: string;
+  proxyHref?: string;
+}): string | undefined => (isShareVisitor ? (proxyHref ?? linkHref) : linkHref);
+
+/** The copy button's address: the link target, made absolute against `origin`. */
+export const getFileLinkCopyHref = ({
+  origin,
+  ...link
 }: {
   isShareVisitor: boolean;
   linkHref?: string;
   origin: string;
   proxyHref?: string;
 }): string | undefined => {
-  const href = isShareVisitor ? (proxyHref ?? linkHref) : linkHref;
+  const href = getFileLinkTargetHref(link);
   if (!href) return undefined;
 
   try {

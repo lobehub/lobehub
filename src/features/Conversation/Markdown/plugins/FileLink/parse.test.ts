@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getFileLinkCopyHref,
   getFileLinkOpenAction,
+  getFileLinkTargetHref,
   isShareVisitorContext,
   parseFileLinkHref,
 } from './parse';
@@ -205,5 +206,19 @@ describe('getFileLinkCopyHref', () => {
 
   it('copies nothing without an address', () => {
     expect(getFileLinkCopyHref({ isShareVisitor: false, origin: ORIGIN })).toBeUndefined();
+  });
+});
+
+describe('getFileLinkTargetHref', () => {
+  const link = { linkHref: '/resource/file/file_1', proxyHref: '/f/file_1' };
+
+  it('points at the address as written for the owner', () => {
+    expect(getFileLinkTargetHref({ ...link, isShareVisitor: false })).toBe('/resource/file/file_1');
+  });
+
+  // Regression: on a share page a modifier or middle click followed the anchor's
+  // own href, the owner's Docs page, instead of the public proxy.
+  it('points a share visitor at the public proxy', () => {
+    expect(getFileLinkTargetHref({ ...link, isShareVisitor: true })).toBe('/f/file_1');
   });
 });

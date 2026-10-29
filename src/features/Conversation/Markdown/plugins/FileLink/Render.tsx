@@ -13,7 +13,12 @@ import { useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
 import type { MarkdownElementProps } from '../type';
-import { getFileLinkCopyHref, getFileLinkOpenAction, isShareVisitorContext } from './parse';
+import {
+  getFileLinkCopyHref,
+  getFileLinkOpenAction,
+  getFileLinkTargetHref,
+  isShareVisitorContext,
+} from './parse';
 
 interface FileLinkProperties {
   fileId?: string;
@@ -129,7 +134,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
   const { t } = useTranslation('common');
   const label = linkLabel || linkHref || '';
   const isBareLink = !linkLabel || linkLabel === linkHref || linkLabel === fileId;
-  const hasCopyHref = !!(isShareVisitor ? (proxyHref ?? linkHref) : linkHref);
+  const targetHref = getFileLinkTargetHref({ isShareVisitor, linkHref, proxyHref });
 
   const handleCopy = useCallback(async () => {
     const href = getFileLinkCopyHref({
@@ -167,7 +172,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
       <A
         {...(fileId ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
         className={styles.link}
-        href={linkHref}
+        href={targetHref}
         rel="noopener noreferrer"
         onClick={handleClick}
       >
@@ -177,7 +182,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
           <FileLabel label={label} />
         )}
       </A>
-      {hasCopyHref && (
+      {targetHref && (
         <button
           aria-label={t('copy')}
           className={styles.copy}
