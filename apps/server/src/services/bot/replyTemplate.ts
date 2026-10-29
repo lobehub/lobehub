@@ -5,9 +5,6 @@ import {
 } from '@lobechat/model-runtime/errors';
 import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
-import modelRuntimeEnglish from '@/locales/default/modelRuntime';
-
-import modelRuntimeChinese from '../../../../../locales/zh-CN/modelRuntime.json';
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
 // Import from the leaf modules (`const` / `utils`) instead of the
@@ -261,6 +258,7 @@ type SystemStrings = {
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
   errorDeviceUnreachable: string;
+  errorDeviceResponseTimeout: string;
   errorEmptyCompletion: string;
   errorModelRefusal: string;
   errorHarnessInternal: string;
@@ -371,6 +369,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
     errorContentModeration:
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
+    errorDeviceResponseTimeout:
+      "**The device didn't respond in time.**\nIt may be offline or asleep, or it may still be starting this run. Check that the LobeHub desktop app (or the `lh` CLI) is connected and whether this run is already in progress, then try again.",
     errorDeviceUnreachable:
       "**Couldn't reach the device this agent runs on.**\nThe run never started. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again — or bind this agent to another online device in its settings.",
     errorEmptyCompletion:
@@ -497,6 +497,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
     errorContentModeration:
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
+    errorDeviceResponseTimeout:
+      '**设备未及时响应**\n设备可能已离线或休眠，也可能仍在启动本次运行。请确认 LobeHub 桌面端（或 `lh` CLI）已连接、且没有正在进行的本次运行后，再重试。',
     errorDeviceUnreachable:
       '**无法连接到运行该 Agent 的设备**\n本次执行没有启动。请确认 LobeHub 桌面端（或 `lh` CLI）正在运行且已连接后重试，也可以在 Agent 设置中改绑其他在线设备。',
     errorEmptyCompletion:
@@ -598,6 +600,7 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // `HETERO_DISPATCH_ERROR_TYPES`. Without it a hetero dispatch failure fell to
   // the legacy tier and told an IM user nothing but an Operation ID.
   DeviceGatewayNotConfigured: 'errorDeviceUnreachable',
+  DeviceResponseTimeout: 'errorDeviceResponseTimeout',
   ExceededContextWindow: 'errorExceededContextWindow',
   // Managed credits: all three codes come out of the same cost-admission gate,
   // so the fix is topping up / upgrading — not editing the input (without them
@@ -739,7 +742,7 @@ export function renderAgentError(
   heterogeneous?: ChatErrorHeterogeneousContext,
 ): string {
   const strings = getSystemStrings(lng);
-  const heteroReply = renderHeterogeneousError(heterogeneous, lng);
+  const heteroReply = renderHeterogeneousError(heterogeneous);
   if (heteroReply) return appendOperationId(heteroReply, operationId);
 
   const normalized = normalizeChatMessageError({
@@ -766,14 +769,6 @@ export function renderAgentError(
   }
 
   const friendlyKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
-  if (!friendlyKey && spec && !spec.isFallback) {
-    // Reuse the same maintained translations as message error cards. Never
-    // interpolate raw provider error text into a shared IM channel.
-    const catalog: Record<string, string> =
-      lng === 'zh-CN' ? modelRuntimeChinese : modelRuntimeEnglish;
-    const copy = catalog[spec.code];
-    if (copy && !copy.includes('{{')) return withReference(`${strings.error}\n${copy}`);
-  }
   const stringKey =
     (friendlyKey && BUDGET_ADMISSION_KEYS.has(friendlyKey) && budget?.budgetTypeAtError
       ? BUDGET_SCOPE_ERROR.get(budget.budgetTypeAtError)

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { unzip, zip } from 'fflate';
 import { sha256 } from 'js-sha256';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { SkillManifestError, SkillParseError } from './errors';
 import { SkillParser } from './parser';
@@ -31,6 +31,24 @@ describe('SkillParser', () => {
   const parser = new SkillParser();
 
   describe('parseSkillMd', () => {
+    it('rejects JavaScript frontmatter without executing it', () => {
+      const executed = vi.fn();
+      vi.stubGlobal('__skillFrontmatterExecuted', executed);
+      const content = `---js
+(() => { globalThis.__skillFrontmatterExecuted(); throw new Error('Executed frontmatter'); })()
+---
+# Skill
+
+Skill description.`;
+
+      try {
+        expect(() => parser.parseSkillMd(content)).toThrow(SkillParseError);
+        expect(executed).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('should parse valid SKILL.md with frontmatter', () => {
       const content = `---
 name: test-skill

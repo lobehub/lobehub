@@ -8,7 +8,6 @@ import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
 const mocks = vi.hoisted(() => ({
   archiveTask: vi.fn(),
-  isAdmin: false,
   manageable: true,
   closeContextMenu: vi.fn(),
   copyToClipboard: vi.fn(),
@@ -34,10 +33,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     toast: { ...actual.toast, error: mocks.toastError, success: vi.fn() },
   };
 });
-
-vi.mock('@/business/client/hooks/useIsWorkspaceAdmin', () => ({
-  useIsWorkspaceAdmin: () => mocks.isAdmin,
-}));
 
 vi.mock('@/hooks/useResourceManageable', () => ({
   useResourceManageableChecker: () => () => mocks.manageable,
@@ -107,13 +102,13 @@ vi.mock('react-i18next', () => ({
 describe('useTaskItemContextMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.isAdmin = false;
     mocks.manageable = true;
   });
 
   it('does not render adjacent dividers around transfer actions', () => {
     const { result } = renderHook(() =>
       useTaskItemContextMenu({
+        id: 'task_1',
         identifier: 'T-1',
         priority: 0,
         status: 'backlog',
@@ -132,7 +127,13 @@ describe('useTaskItemContextMenu', () => {
   describe('archive action', () => {
     const findArchiveItem = (archivedAt?: Date | null) => {
       const { result } = renderHook(() =>
-        useTaskItemContextMenu({ archivedAt, identifier: 'T-1', priority: 0, status: 'completed' }),
+        useTaskItemContextMenu({
+          archivedAt,
+          id: 'task_1',
+          identifier: 'T-1',
+          priority: 0,
+          status: 'completed',
+        }),
       );
       return result.current.items.find(
         (item) => item && typeof item === 'object' && 'key' in item && item.key === 'archive',
@@ -147,7 +148,7 @@ describe('useTaskItemContextMenu', () => {
 
       await click(item);
 
-      expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', true);
+      expect(mocks.archiveTask).toHaveBeenCalledWith('task_1', true);
     });
 
     it('restores an archived task', async () => {
@@ -156,13 +157,14 @@ describe('useTaskItemContextMenu', () => {
 
       await click(item);
 
-      expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', false);
+      expect(mocks.archiveTask).toHaveBeenCalledWith('task_1', false);
     });
 
     it('keeps restore available on an archived task whose work could still run', async () => {
       const { result } = renderHook(() =>
         useTaskItemContextMenu({
           archivedAt: new Date(),
+          id: 'task_1',
           identifier: 'T-1',
           priority: 0,
           status: 'running',
@@ -175,7 +177,7 @@ describe('useTaskItemContextMenu', () => {
       expect(item.disabled).toBe(false);
       expect(item.desc).toBeUndefined();
       await item.onClick({ domEvent: { stopPropagation: vi.fn() } });
-      expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', false);
+      expect(mocks.archiveTask).toHaveBeenCalledWith('task_1', false);
     });
 
     it('disables archiving work that can still run and says why', async () => {
@@ -184,6 +186,7 @@ describe('useTaskItemContextMenu', () => {
           archivedAt: null,
           automationMode: 'heartbeat',
           heartbeatInterval: 600,
+          id: 'task_1',
           identifier: 'T-1',
           priority: 0,
           status: 'backlog',
@@ -208,23 +211,8 @@ describe('useTaskItemContextMenu', () => {
       expect(mocks.toastError).toHaveBeenCalledWith('taskList.contextMenu.archiveFailed');
     });
 
-    it("disables archiving someone else's shared task and says why", async () => {
+    it("lets a member who can't manage the task still archive it", async () => {
       mocks.manageable = false;
-      const item = findArchiveItem(null) as unknown as {
-        desc?: string;
-        disabled: boolean;
-        onClick: (info: unknown) => Promise<void>;
-      };
-
-      expect(item.disabled).toBe(true);
-      expect(item.desc).toBe('taskList.contextMenu.archiveDenied.notCreatorOrAdmin');
-      await click(item);
-      expect(mocks.archiveTask).not.toHaveBeenCalled();
-    });
-
-    it("lets a workspace admin archive someone else's shared task", async () => {
-      mocks.manageable = false;
-      mocks.isAdmin = true;
       const item = findArchiveItem(null) as unknown as {
         desc?: string;
         disabled: boolean;
@@ -234,13 +222,14 @@ describe('useTaskItemContextMenu', () => {
       expect(item.disabled).toBe(false);
       expect(item.desc).toBeUndefined();
       await click(item);
-      expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', true);
+      expect(mocks.archiveTask).toHaveBeenCalledWith('task_1', true);
     });
 
     it('offers no Run now on an archived task', () => {
       const { result } = renderHook(() =>
         useTaskItemContextMenu({
           archivedAt: new Date(),
+          id: 'task_1',
           identifier: 'T-1',
           priority: 0,
           status: 'backlog',
@@ -262,6 +251,7 @@ describe('useTaskItemContextMenu', () => {
       useTaskItemContextMenu(
         {
           assigneeAgentId: 'agent-1',
+          id: 'task_1',
           identifier: 'T-1',
           priority: 0,
           status: 'backlog',
@@ -285,6 +275,7 @@ describe('useTaskItemContextMenu', () => {
     const { result } = renderHook(() =>
       useTaskItemContextMenu({
         assigneeUserId: 'user-1',
+        id: 'task_1',
         identifier: 'T-1',
         priority: 0,
         status: 'backlog',
@@ -300,12 +291,13 @@ describe('useTaskItemContextMenu', () => {
     });
 
     expect(mocks.updateTask).not.toHaveBeenCalled();
-    expect(mocks.runTask).toHaveBeenCalledWith('T-1');
+    expect(mocks.runTask).toHaveBeenCalledWith('task_1');
   });
 
   it('routes the keyboard-shortcut submenu selection through @/libs/contextMenu', () => {
     const { result } = renderHook(() =>
       useTaskItemContextMenu({
+        id: 'task_1',
         identifier: 'T-1',
         priority: 0,
         status: 'backlog',
@@ -340,6 +332,7 @@ describe('menu ownership', () => {
   it('must stay web because the status/priority submenus depend on number-shortcut extra badges', () => {
     const { result } = renderHook(() =>
       useTaskItemContextMenu({
+        id: 'task_1',
         identifier: 'T-1',
         priority: 0,
         status: 'backlog',

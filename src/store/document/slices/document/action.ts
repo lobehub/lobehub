@@ -10,12 +10,13 @@ import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { pageActions } from '@/store/page';
 import type { StoreSetter } from '@/store/types';
-import { isSkillMarkdownDocument, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
+import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import type { DocumentStore } from '../../store';
 import { useDocumentStore } from '../../store';
+import { resolveDocumentContentFormat } from '../editor/contentFormat';
 import type { DocumentContentFormat, DocumentSourceType } from '../editor/initialState';
 import type { DocumentDetail } from './projection';
 import { documentDetailResource } from './projection';
@@ -391,7 +392,7 @@ export class DocumentActionImpl {
     if (currentActiveId && currentActiveId !== documentId) return;
 
     if (this.#get().documents[documentId]) {
-      this.#get().reconcileRemote(documentId, document);
+      this.#reconcileWhenSettled(documentId, document);
       if (sourceType === 'notebook' && topicId) {
         this.#rememberTopicDocument(topicId, documentId);
       }
@@ -404,7 +405,7 @@ export class DocumentActionImpl {
     this.#get().initDocumentWithEditor({
       autoSave,
       content: document.content,
-      contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
+      contentFormat: resolveDocumentContentFormat(document),
       documentId,
       editor,
       editorData: document.editorData,
@@ -419,6 +420,30 @@ export class DocumentActionImpl {
     if (sourceType === 'page') {
       pageActions.upsertDocument(document);
     }
+  };
+
+  /**
+   * Reconcile a read once no save of this document is in flight.
+   *
+   * A read that lands mid-save (e.g. a focus revalidation after a tab switch)
+   * may carry the row that save is writing, without the edits typed since:
+   * adopting it then would wipe them from the editor. It may also carry a newer
+   * writer's revision, so it is deferred rather than dropped: once the save
+   * settles, the newest row in the view is reconciled, and `reconcileRemote`
+   * ignores it unless it is newer than what the save confirmed.
+   */
+  #reconcileWhenSettled = (documentId: string, row: DocumentItem): void => {
+    const pending = this.#get().getPendingSave(documentId);
+    if (!pending) {
+      this.#get().reconcileRemote(documentId, row);
+      return;
+    }
+
+    const retry = () => {
+      const latest = this.#get().documentDetailMap[documentId]?.document;
+      if (latest) this.#reconcileWhenSettled(documentId, latest);
+    };
+    void pending.then(retry, retry);
   };
 
   /**

@@ -123,6 +123,7 @@ export interface SendMessageServerParams {
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];
+    onlyMine?: boolean;
   };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
@@ -213,6 +214,7 @@ export const AiSendMessageServerSchema = z.object({
       excludeStatuses: z.array(z.string()).optional(),
       excludeTriggers: z.array(z.string()).optional(),
       includeTriggers: z.array(z.string()).optional(),
+      onlyMine: z.boolean().optional(),
     })
     .optional(),
   topicPageSize: z.number().int().min(1).max(100).optional(),
@@ -274,6 +276,51 @@ export const StructureOutputSchema = z.object({
    */
   tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
 });
+
+/** Plain text or structured JSON, as a decision model accepts for `state`, `instructions` and criteria. */
+const DecisionContentSchema = z.union([
+  z.string(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
+
+/** One typed question for a decision model; mirrors `DecisionQuestion` in `@lobechat/model-runtime`. */
+export const DecisionQuestionSchema = z.discriminatedUnion('type', [
+  z.object({
+    criteria: z.object({ false: DecisionContentSchema, true: DecisionContentSchema }).optional(),
+    instructions: DecisionContentSchema,
+    type: z.literal('boolean'),
+  }),
+  z.object({
+    criteria: z.record(z.string(), DecisionContentSchema.nullable()),
+    instructions: DecisionContentSchema,
+    type: z.literal('choice'),
+  }),
+  z.object({
+    criteria: z.array(DecisionContentSchema).min(1),
+    instructions: DecisionContentSchema,
+    type: z.literal('score'),
+  }),
+]);
+
+export const DecisionOutputSchema = z.object({
+  /** Free-form context forwarded to non-tracing hooks (e.g. billing), as on `outputJSON`. */
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  model: z.string(),
+  provider: z.string(),
+  /** Question name → question. The names come back as the keys of `answers`. */
+  questions: z
+    .record(z.string(), DecisionQuestionSchema)
+    .refine((questions) => Object.keys(questions).length > 0, {
+      message: 'A decision request needs at least one question',
+    }),
+  /** The content every question is evaluated against. */
+  state: DecisionContentSchema,
+  /** Structured tracing config, validated like `StructureOutputSchema.tracing`. */
+  tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
+});
+
+export type DecisionOutputParams = z.infer<typeof DecisionOutputSchema>;
 
 interface IStructureSchema {
   description?: string;

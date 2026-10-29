@@ -676,6 +676,26 @@ describe('MarketService', () => {
       expect(manifests[0].identifier).toBe('linear');
     });
 
+    it('lists tools only for the requested providers', async () => {
+      const service = new MarketService();
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [
+          { icon: '🐦', providerId: 'twitter', providerName: 'Twitter' },
+          { icon: '📋', providerId: 'linear', providerName: 'Linear' },
+        ],
+      });
+      const listTools = vi.fn().mockResolvedValue({
+        tools: [{ description: 'Create', inputSchema: {}, name: 'create' }],
+      });
+      (service as any).market.skills.listTools = listTools;
+
+      const manifests = await service.getLobehubSkillManifests({ providerIds: ['linear'] });
+
+      expect(manifests.map((m) => m.identifier)).toEqual(['linear']);
+      expect(listTools).toHaveBeenCalledTimes(1);
+      expect(listTools.mock.calls[0][0]).toBe('linear');
+    });
+
     it('should use the static Notion provider label for manifests', async () => {
       const service = new MarketService();
       (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({

@@ -369,6 +369,7 @@ export class GatewayMuxClient {
   private consecutiveDialFailures = 0;
   /** Whether the socket now being torn down ever reached `ready`. */
   private currentDialReachedReady = false;
+  private hasReachedReady = false;
   private declaredUnavailable = false;
   private browserListenersInstalled = false;
 
@@ -575,7 +576,7 @@ export class GatewayMuxClient {
         'error',
         error instanceof Error ? error : new Error('Failed to obtain gateway token'),
       );
-      this.handleConnectionLost();
+      this.handleConnectionLost(undefined, true);
       return;
     }
     // `disconnect()` or a newer attempt superseded this one while awaiting.
@@ -623,6 +624,7 @@ export class GatewayMuxClient {
         this.consecutiveAuthFailures = 0;
         this.consecutiveDialFailures = 0;
         this.currentDialReachedReady = true;
+        this.hasReachedReady = true;
         this.setStatus('connected');
         this.startHeartbeat();
         // Subscribe before flushing: the hub rejects op messages from a
@@ -638,6 +640,11 @@ export class GatewayMuxClient {
 
       case 'heartbeat_ack': {
         this.missedHeartbeats = 0;
+        break;
+      }
+
+      case 'channel_changed': {
+        this.listeners.emit('channel_changed', message);
         break;
       }
 
@@ -694,14 +701,15 @@ export class GatewayMuxClient {
     this.listeners.emit('error', new Error('Gateway WebSocket error'));
   };
 
-  private handleConnectionLost(delayOverride?: number): void {
-    // Only a dial that never reached `ready` counts against the budget. A
-    // socket that worked and then dropped is a network event, not evidence
-    // that this deployment cannot serve v2; a refused token (`delayOverride`
-    // 0, immediate refresh) has its own budget in `consecutiveAuthFailures`.
-    // Counting either here would spend the fallback budget on a link that is
-    // fine and strand the page on v1 for the rest of the session.
-    const failedDial = delayOverride === undefined && !this.currentDialReachedReady;
+  private handleConnectionLost(delayOverride?: number, tokenFailed = false): void {
+    // Once v2 has worked, failed network dials indicate an outage, not missing
+    // protocol support. Keep backing off so a Gateway restart can recover.
+    // Token minting still has a finite budget: the API may have been removed,
+    // and explicit 4401 refusals retain their separate auth failure budget.
+    const failedDial =
+      delayOverride === undefined &&
+      !this.currentDialReachedReady &&
+      (tokenFailed || !this.hasReachedReady);
     if (failedDial) this.consecutiveDialFailures++;
 
     // Retrying a deployment that cannot serve v2 at all only spins: give the

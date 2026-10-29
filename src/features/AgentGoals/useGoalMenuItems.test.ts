@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
     resumeGoal: vi.fn(),
     startGoal: vi.fn(),
   },
+  transferItems: null as DropdownItem[] | null,
+}));
+
+vi.mock('@/business/client/hooks/useGoalTransferMenuItem', () => ({
+  useGoalTransferMenuItem: () => mocks.transferItems,
 }));
 
 vi.mock('@/store/goal', () => ({
@@ -41,6 +46,7 @@ const pickStatus = (items: DropdownItem[], next: string) => {
 describe('useGoalItemMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.transferItems = null;
     mocks.store.pauseGoal.mockResolvedValue(undefined);
     mocks.store.resumeGoal.mockResolvedValue(undefined);
   });
@@ -78,5 +84,15 @@ describe('useGoalItemMenu', () => {
 
     // A host-supplied onDeleted replaces the redirect to the goal list.
     expect(mocks.deleteOptions?.onDeleted).toBeTypeOf('function');
+  });
+
+  it('places the cross-workspace copy entry above the delete group', () => {
+    mocks.transferItems = [{ key: 'copy-goal', label: 'Copy to…' }];
+    const { result } = renderHook(() =>
+      useGoalItemMenu({ agentId: 'agt_1', goal, routeAgentId: 'agt_1' }),
+    );
+
+    const keys = result.current.map((item) => (item && 'key' in item ? item.key : item?.type));
+    expect(keys.slice(-4)).toEqual(['copyLink', 'copy-goal', 'divider', 'delete']);
   });
 });

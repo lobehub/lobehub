@@ -16,8 +16,12 @@ const tunnels = vi.hoisted(() => ({
   value: [] as unknown[] | undefined,
 }));
 const isDesktop = vi.hoisted(() => ({ value: false }));
+const addTunnelLink = vi.hoisted(() => vi.fn());
+const removeTunnelLink = vi.hoisted(() => vi.fn());
 const detection = vi.hoisted(() => ({
   data: undefined as unknown,
+  error: undefined as unknown,
+  isConfirmed: true,
   isLoading: false,
   isValidating: false,
   mutate: vi.fn(),
@@ -30,6 +34,7 @@ vi.mock('@/services/device', () => ({
 const tunnelsEnabledArgs = vi.hoisted(() => [] as boolean[]);
 
 vi.mock('@/store/device', () => ({
+  getDeviceTunnelStoreState: () => ({ addTunnelLink, removeTunnelLink }),
   useFetchDeviceListeningPorts: () => detection,
   useFetchDeviceTunnels: (_deviceId: string, enabled: boolean) => {
     tunnelsEnabledArgs.push(enabled);
@@ -93,6 +98,8 @@ beforeEach(() => {
   tunnels.isLoading = false;
   isDesktop.value = false;
   detection.data = undefined;
+  detection.error = undefined;
+  detection.isConfirmed = true;
   detection.isLoading = false;
   detection.isValidating = false;
   tab.location.href = '';
@@ -114,6 +121,8 @@ describe('usePortTunnels', () => {
     await act(() => result.current.exposePort(3000));
 
     expect(createTunnel).toHaveBeenCalledWith({ deviceId: 'device-1', port: 3000 });
+    // The new link lands in the replica (memory + storage) before the re-read.
+    expect(addTunnelLink).toHaveBeenCalledWith(expect.objectContaining({ slug: 'abcdefgh' }));
     // Choosing a port means "let me see it": no second click to open it.
     expect(tab.location.href).toBe('https://3000--abcdefgh.lobe.sh/?token=fresh');
     expect(onOpened).toHaveBeenCalled();
@@ -151,14 +160,15 @@ describe('usePortTunnels', () => {
     expect(toastSuccess).toHaveBeenCalledWith('workingPanel.overview.ports.copied');
   });
 
-  it('refreshes the list after revoking', async () => {
+  it('drops the revoked link from the replica, not only from a refetch', async () => {
     revokeTunnel.mockResolvedValue({ success: true });
     const { result } = setup();
 
     await act(() => result.current.revokeLink(link));
 
     expect(revokeTunnel).toHaveBeenCalledWith({ slug: 'abcdefgh' });
-    expect(mutate).toHaveBeenCalled();
+    expect(removeTunnelLink).toHaveBeenCalledWith('device-1', 'abcdefgh');
+    expect(toastSuccess).toHaveBeenCalledWith('workingPanel.overview.ports.revoked');
     await waitFor(() => expect(result.current.busySlug).toBeUndefined());
   });
 
@@ -229,6 +239,33 @@ describe('usePortTunnels', () => {
   });
 
   describe('list states', () => {
+    it('keeps the known links on screen when a refresh fails', () => {
+      tunnels.value = [link];
+      tunnels.error = new Error('offline');
+
+      // Review P2: a failed background refresh must not hide every cached link
+      // behind the Retry state.
+      expect(setup().result.current).toMatchObject({
+        listFailed: false,
+        refreshFailed: true,
+        tunnels: [link],
+      });
+    });
+
+    it('reports a failure with no known links as a load failure', () => {
+      tunnels.value = undefined;
+      tunnels.error = new Error('offline');
+      expect(setup().result.current).toMatchObject({ listFailed: true, refreshFailed: false });
+    });
+
+    it('hides a persisted link that has expired since', () => {
+      tunnels.value = [
+        { ...link, expiresAt: Date.now() - 1000, port: 4000, slug: 'expired' },
+        { ...link, expiresAt: Date.now() + 60_000 },
+      ];
+      expect(setup().result.current.tunnels.map((l) => l.slug)).toEqual(['abcdefgh']);
+    });
+
     it('keeps loading and failure distinct from an empty list', () => {
       tunnels.value = undefined;
       tunnels.isLoading = true;
@@ -278,8 +315,49 @@ describe('usePortTunnels', () => {
     });
 
     it('reports no detection for a device that cannot answer', () => {
-      detection.data = null;
-      expect(setup().result.current).toMatchObject({ detected: [], detectionAvailable: false });
+      detection.data = undefined;
+      detection.error = new Error('Unable to detect listening ports');
+      detection.isConfirmed = false;
+      expect(setup().result.current).toMatchObject({
+        detected: [],
+        detectionAvailable: false,
+        detectionChecking: false,
+      });
+    });
+
+    it('treats ports from an earlier probe as unknown until the device answers', () => {
+      detection.data = { ports: [port({ port: 5173 })], supported: true };
+      detection.isConfirmed = false;
+
+      // Painted (the menu shows the last ports at once) but flagged as checking,
+      // so neither the badge nor the menu claims they are still running.
+      expect(setup().result.current).toMatchObject({ detectionChecking: true });
+      expect(setup().result.current.detected.map((p) => p.port)).toEqual([5173]);
+    });
+
+    // Review P2: a port from an earlier probe may have stopped since; exposing
+    // it would create, persist and open a link onto nothing.
+    it('does not expose a port from an unconfirmed probe', async () => {
+      detection.data = { ports: [port({ port: 5173 })], supported: true };
+      detection.isConfirmed = false;
+      const { result } = setup();
+
+      await act(() => result.current.exposePort(5173));
+
+      expect(createTunnel).not.toHaveBeenCalled();
+      expect(window.open).not.toHaveBeenCalled();
+    });
+
+    it('drops the earlier probe when the device cannot confirm it', () => {
+      detection.data = { ports: [port({ port: 5173 })], supported: true };
+      detection.isConfirmed = false;
+      detection.error = new Error('offline');
+
+      expect(setup().result.current).toMatchObject({
+        detected: [],
+        detectionAvailable: false,
+        detectionChecking: false,
+      });
     });
 
     it('shows a rescan in progress even though the previous answer is still there', () => {

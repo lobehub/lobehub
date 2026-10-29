@@ -3,7 +3,13 @@ import type { projectService } from '@/services/project';
 
 type ProjectListResponse = Awaited<ReturnType<typeof projectService.listAll>>;
 type ProjectDetailResponse = Awaited<ReturnType<typeof projectService.detail>>;
-export type ProjectListItem = ProjectListResponse['data'][number];
+type ProjectListRow = ProjectListResponse['data'][number];
+/**
+ * List and detail replicas share one project entity, and only `project.list`
+ * joins the main agent's display meta, so rows from create / detail lack it.
+ */
+export type ProjectListItem = Omit<ProjectListRow, 'coordinatorAgent'> &
+  Partial<Pick<ProjectListRow, 'coordinatorAgent'>>;
 export type ProjectDetail = ProjectDetailResponse['data'];
 
 /** The sidebar / list page reads every project, so the list has one entry. */

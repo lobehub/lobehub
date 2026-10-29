@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as AgentDocumentModels from '@/database/models/agentDocuments';
+import { TaskModel } from '@/database/models/task';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -83,8 +84,13 @@ describe('agentDocumentRouter tool outcomes', () => {
 
   let serviceImpl: MockAgentDocumentsService;
 
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
+      id: 'task-1',
+      identifier: 'T-1',
+    } as never);
     agentDocumentMocks.deleteDocumentWork.mockResolvedValue(undefined);
     agentDocumentMocks.getServerDB.mockResolvedValue({ kind: 'server-db' });
     agentDocumentMocks.findTopicById.mockResolvedValue({ title: 'Topic fallback' });
@@ -113,7 +119,7 @@ describe('agentDocumentRouter tool outcomes', () => {
       toolContext: {
         messageId: 'message-1',
         operationId: 'operation-1',
-        taskId: 'task-1',
+        taskId: 'T-1',
         threadId: 'thread-1',
         toolCallId: 'tool-call-1',
         toolMessageId: 'tool-message-1',
@@ -142,6 +148,21 @@ describe('agentDocumentRouter tool outcomes', () => {
     // Document Work registration moved to the client (legacy) runtime's stash +
     // `call_tool` write-once path, so the lambda no longer registers on create.
     expect(agentDocumentMocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invisible task context before creating a document', async () => {
+    vi.mocked(TaskModel.prototype.resolve).mockResolvedValue(null);
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+    await expect(
+      caller.createDocument({
+        agentId: 'agent-1',
+        content: 'body',
+        title: 'Title',
+        trigger: 'tool',
+        toolContext: { messageId: 'msg', taskId: 'T-1', toolCallId: 'call' },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
   });
 
   it('does not emit outcome for normal createDocument', async () => {

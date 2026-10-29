@@ -32,6 +32,11 @@ export default class RendererOtaCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async dismissAppliedNotice() {
+    this.app.coreUpdateManager.dismissAppliedNotice();
+  }
+
+  @IpcMethod()
   async getStatus() {
     return this.app.coreUpdateManager.getStatus();
   }

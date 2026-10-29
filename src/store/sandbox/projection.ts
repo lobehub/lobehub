@@ -1,10 +1,11 @@
-import { type EnvironmentKind, environmentKind } from '@lobechat/types';
+import type { EnvironmentKind } from '@lobechat/types';
 
 import { defineReplica } from '@/libs/replica';
+import type { environmentService } from '@/services/environment';
 import type { sandboxStorageService } from '@/services/sandboxStorage';
 
 type RawEnvironment = Awaited<
-  ReturnType<typeof sandboxStorageService.listEnvironments>
+  ReturnType<typeof environmentService.listEnvironments>
 >['environments'][number];
 type RawInstance = Awaited<
   ReturnType<typeof sandboxStorageService.listInstances>
@@ -56,7 +57,9 @@ export interface SandboxPickerEnvironment {
 
 export const toPickerEnvironment = (environment: RawEnvironment): SandboxPickerEnvironment => ({
   id: environment.id,
-  kind: environmentKind(environment),
+  // Every environment is a code environment now; the field stays so the
+  // picker's shape does not change under the persisted replica rows.
+  kind: 'code',
   name: environment.name,
   userId: environment.userId,
   visibility: environment.visibility,

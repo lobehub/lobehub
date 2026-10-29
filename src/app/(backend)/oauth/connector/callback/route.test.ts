@@ -1,5 +1,6 @@
 import { runInNewContext } from 'node:vm';
 
+import { IssuerMismatchError } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
@@ -7,25 +8,24 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { GET } from './route';
 
-const { mockConsume, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
-  mockConsume: vi.fn(),
-  mockExchange: vi.fn(),
-  mockFindById: vi.fn(),
-  mockSync: vi.fn(),
-  mockUpdate: vi.fn(),
-}));
+const { mockConsume, mockDiscover, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(
+  () => ({
+    mockConsume: vi.fn(),
+    mockDiscover: vi.fn().mockResolvedValue({ token_endpoint: 'https://as/token' }),
+    mockExchange: vi.fn(),
+    mockFindById: vi.fn(),
+    mockSync: vi.fn(),
+    mockUpdate: vi.fn(),
+  }),
+);
 
 vi.mock('@/database/server', () => ({ serverDB: {} }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com' } }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue({}) },
 }));
-vi.mock('@modelcontextprotocol/sdk/client/auth.js', () => ({
-  discoverAuthorizationServerMetadata: vi
-    .fn()
-    .mockResolvedValue({ token_endpoint: 'https://as/token' }),
-}));
 vi.mock('@/server/services/connector/oauth', () => ({
+  discoverConnectorAuthorizationServerMetadata: mockDiscover,
   exchangeConnectorCode: mockExchange,
   toClientInformation: (oidc: { clientId: string; clientSecret?: string }) => ({
     client_id: oidc.clientId,
@@ -189,5 +189,36 @@ describe('connector OAuth callback', () => {
     await GET(makeReq());
 
     expect(mockUpdate.mock.calls[0][1]).not.toHaveProperty('oidcConfig');
+  });
+});
+
+describe('SDK v2 OAuth callback regressions', () => {
+  it('passes iss from the callback to the code exchange', async () => {
+    await GET(makeReq('code=abc&state=xyz&iss=https%3A%2F%2Fas'));
+    expect(mockExchange).toHaveBeenCalledWith(expect.objectContaining({ iss: 'https://as' }));
+  });
+  it.each(['exchange', 'discovery'])(
+    'redacts the untrusted issuer on %s failure',
+    async (stage) => {
+      const error = new IssuerMismatchError(
+        'authorization_response',
+        'https://as',
+        'https://attacker.example/untrusted',
+      );
+      if (stage === 'exchange') mockExchange.mockRejectedValueOnce(error);
+      else mockDiscover.mockRejectedValueOnce(error);
+      const response = await GET(makeReq());
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain('issuer_mismatch');
+      expect(body).not.toContain('attacker.example');
+      expect(mockUpdate).not.toHaveBeenCalled();
+    },
+  );
+  it('renders a failure page when discovery has a network error', async () => {
+    mockDiscover.mockRejectedValueOnce(new TypeError('network unavailable'));
+    const response = await GET(makeReq());
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('Authorization failed.');
   });
 });

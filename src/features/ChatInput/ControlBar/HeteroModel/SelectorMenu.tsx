@@ -63,16 +63,15 @@ const SelectorMenu = memo<SelectorMenuProps>(
       [capability, patch, provider, view.isFastSpeed],
     );
 
-    const items = view.dimensions.map((dimension) => ({
-      ...buildSelectorSubmenu({
+    const items = view.dimensions.map((dimension) =>
+      buildSelectorSubmenu({
         current: dimension.current,
         label: dimension.label,
         onSelect: (value: string) => select(dimension.key, value),
         options: dimension.options,
         valueLabel: dimension.valueLabel,
       }),
-      desc: dimension.source,
-    }));
+    );
 
     return (
       <DropdownMenuRoot>
@@ -93,7 +92,6 @@ const SelectorMenu = memo<SelectorMenuProps>(
               {view.isCatalogModel && (
                 <ModelCatalogSelector
                   agentId={agentId}
-                  desc={view.modelSource}
                   disabled={false}
                   model={view.model}
                   permissionReason={permissionReason}

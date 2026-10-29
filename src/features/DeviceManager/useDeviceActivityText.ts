@@ -19,10 +19,15 @@ import { useTranslation } from 'react-i18next';
  *
  * A single connection drops the "1 connection" count — it is the common case
  * and would truncate a narrow line.
+ *
+ * A row restored from the persisted list (`onlineUnknown`) has no channels by
+ * construction, so it reads as "checking" rather than as offline.
  */
 export const useDeviceActivityText = (device: DeviceListItem) => {
   const { t } = useTranslation('setting');
   const channels = device.channels ?? [];
+
+  if (device.onlineUnknown) return t('devices.status.checking');
 
   if (channels.length === 0)
     return t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });

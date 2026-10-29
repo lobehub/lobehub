@@ -185,13 +185,23 @@ interface ExecutionTargetDeviceStatusProps {
   offlineLabel: string;
   online: boolean;
   onlineLabel: string;
+  /**
+   * Shown instead of offline for a row restored from the persisted device list
+   * (`onlineUnknown`): its `online: false` is a placeholder until the server
+   * confirms presence.
+   */
+  unknown?: boolean;
+  unknownLabel: string;
 }
 
 export const ExecutionTargetDeviceStatus = memo<ExecutionTargetDeviceStatusProps>(
-  ({ offlineLabel, online, onlineLabel }) => (
+  ({ offlineLabel, online, onlineLabel, unknown, unknownLabel }) => (
     <span className={styles.status}>
-      <span aria-hidden className={online ? styles.dotOnline : styles.dotOffline} />
-      <span>{online ? onlineLabel : offlineLabel}</span>
+      <span
+        aria-hidden
+        className={unknown ? styles.dotOffline : online ? styles.dotOnline : styles.dotOffline}
+      />
+      <span>{unknown ? unknownLabel : online ? onlineLabel : offlineLabel}</span>
     </span>
   ),
 );

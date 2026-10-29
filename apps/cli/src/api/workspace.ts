@@ -1,8 +1,18 @@
+import { toRecord } from '@lobechat/utils/object';
+
 import { resolveIdentityFingerprint } from '../auth/identity';
 import { loadActiveWorkspace, resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 
 export const WORKSPACE_ID_HEADER = 'X-Workspace-Id';
+
+/**
+ * `LOBEHUB_WORKSPACE_ID=personal` runs one command in personal scope. An empty
+ * value falls through to the saved scope, and `workspace use --personal`
+ * rewrites that scope for every later command, so there was no way to look
+ * something up in personal space without changing the machine's default.
+ */
+export const PERSONAL_SCOPE_ENV_VALUE = 'personal';
 
 export type WorkspaceScopeSource = 'explicit' | 'env' | 'settings' | 'stale' | 'personal';
 
@@ -56,6 +66,7 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
   if (explicit) return { source: 'explicit', workspaceId: explicit };
 
   const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
+  if (fromEnv === PERSONAL_SCOPE_ENV_VALUE) return { source: 'env' };
   if (fromEnv && fromEnv.length > 0) return { source: 'env', workspaceId: fromEnv };
 
   // A server-dispatched execution (operation-scoped `LOBEHUB_JWT`) carries its
@@ -68,6 +79,20 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
   if (process.env.LOBEHUB_JWT) return { source: 'personal' };
 
   return resolvePersistedScope() ?? { source: 'personal' };
+}
+
+/**
+ * The hint a `NOT_FOUND` needs when the command ran in a workspace scope. The
+ * server cannot tell "does not exist" from "lives in another space", so a bare
+ * "Goal not found" sent callers hunting for a deleted goal that was sitting in
+ * their personal space.
+ */
+export function describeScopedNotFound(error: unknown): string | undefined {
+  const data = toRecord(toRecord(error)?.data);
+  if (data?.code !== 'NOT_FOUND') return;
+  const { workspaceId } = resolveWorkspaceScope();
+  if (!workspaceId) return;
+  return `Looked in workspace ${workspaceId}. If it is in your personal space, rerun with LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE}; for another workspace, set LOBEHUB_WORKSPACE_ID=<id>.`;
 }
 
 export function resolveWorkspaceId(explicit?: string): string | undefined {

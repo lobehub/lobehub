@@ -34,6 +34,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import {
   getProjectAcceptancePath,
   getProjectGoalsPath,
+  getProjectSettingsPath,
   getProjectTasksPath,
 } from '@/features/Projects/Layout/navigation';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
@@ -98,6 +99,27 @@ const styles = createStaticStyles(({ css }) => ({
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
     background: color-mix(in srgb, ${cssVar.colorBgContainer} 78%, transparent);
+  `,
+  summaryLink: css`
+    cursor: pointer;
+
+    display: flex;
+    justify-content: space-between;
+
+    margin-inline: -6px;
+    padding-block: 2px;
+    padding-inline: 6px;
+    border: none;
+    border-radius: 6px;
+
+    font: inherit;
+
+    background: transparent;
+
+    &:hover,
+    &:focus-visible {
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   section: css`
     padding-block: 18px;
@@ -254,7 +276,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
                     {t(`goals.status.${task.status}`, { defaultValue: task.status })}
                   </Tag>
                 }
-                onClick={() => navigate(taskDetailPath(task.id, undefined, task.name))}
+                onClick={() => navigate(taskDetailPath(task.identifier, undefined, task.name))}
               />
             ))
           )}
@@ -328,14 +350,22 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
             <Text type={'secondary'}>{t('sections.tasks')}</Text>
             <Text>{tasks.length}</Text>
           </Flexbox>
-          <Flexbox horizontal justify={'space-between'}>
+          <button
+            className={styles.summaryLink}
+            type={'button'}
+            onClick={() => navigate(getProjectSettingsPath(projectReference, 'members'))}
+          >
             <Text type={'secondary'}>{t('sections.agents')}</Text>
             <Text>{detail.agents?.length ?? 0}</Text>
-          </Flexbox>
-          <Flexbox horizontal justify={'space-between'}>
+          </button>
+          <button
+            className={styles.summaryLink}
+            type={'button'}
+            onClick={() => navigate(getProjectSettingsPath(projectReference, 'knowledge'))}
+          >
             <Text type={'secondary'}>{t('sections.knowledgeBases')}</Text>
             <Text>{detail.knowledgeBases?.length ?? 0}</Text>
-          </Flexbox>
+          </button>
         </Flexbox>
       </Flexbox>
     </div>

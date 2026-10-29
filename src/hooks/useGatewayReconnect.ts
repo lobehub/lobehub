@@ -70,10 +70,12 @@ export const useGatewayReconnect = (
       revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      // Never retry the stale-marker case (operation already gone → NOT_FOUND) so a
-      // dead op can't loop 404s even if it escapes the fetcher-level catch; transient
-      // network/server errors keep SWR's default retry so a live run still resumes.
-      shouldRetryOnError: (error) => !isTrpcErrorCode(error, 'NOT_FOUND'),
+      // Never retry the stale-marker case (operation already gone → NOT_FOUND) or a
+      // teammate's run the gateway will not stream to this user (FORBIDDEN), even if
+      // either escapes the fetcher-level catch; transient network/server errors keep
+      // SWR's default retry so a live run still resumes.
+      shouldRetryOnError: (error) =>
+        !isTrpcErrorCode(error, 'NOT_FOUND') && !isTrpcErrorCode(error, 'FORBIDDEN'),
     },
   );
 };

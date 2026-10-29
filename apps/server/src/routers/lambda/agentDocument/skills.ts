@@ -7,8 +7,13 @@ import { deriveAgentDocumentFields } from '@/database/models/agentDocuments';
 import { router } from '@/libs/trpc/lambda';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
+import { safeMatterOptions } from '@/server/utils/safeMatterOptions';
 
-import { agentDocumentProcedureWrite, handleAgentDocumentVfsError } from './procedures';
+import {
+  agentDocumentProcedure,
+  agentDocumentProcedureWrite,
+  handleAgentDocumentVfsError,
+} from './procedures';
 
 const mountedSkillNamespaceSchema = z.literal('agent');
 
@@ -37,7 +42,7 @@ const updateMountedSkillSchema = z.object({
  */
 const stripLeadingFrontmatter = (content: string): string => {
   try {
-    const parsed = matter(content);
+    const parsed = matter(content, safeMatterOptions);
     return parsed.matter ? parsed.content.trimStart() : content;
   } catch {
     return content;
@@ -101,6 +106,25 @@ const resolveConvertibleDocumentBody = async (
 };
 
 export const skillsRouter = router({
+  /**
+   * Reads one managed skill with its `SKILL.md`, for read-only viewers such as
+   * the skill card on a self-review brief.
+   *
+   * `agentDocumentId` is either the skill bundle row or its `SKILL.md` index row;
+   * both resolve to the same skill. Returns `null` when the skill no longer
+   * exists for this agent, so a viewer can show it as gone instead of erroring.
+   */
+  getSkill: agentDocumentProcedure
+    .input(z.object({ agentDocumentId: z.string(), agentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const skill = await ctx.skillManagementService.getSkill({
+        agentDocumentId: input.agentDocumentId,
+        agentId: input.agentId,
+        includeContent: true,
+      });
+
+      return skill ?? null;
+    }),
   createSkillByPath: agentDocumentProcedureWrite
     .input(createMountedSkillSchema)
     .mutation(async ({ ctx, input }) => {

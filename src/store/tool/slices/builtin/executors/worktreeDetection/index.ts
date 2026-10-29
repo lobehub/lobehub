@@ -212,35 +212,6 @@ const findInCommand = <T>(
   }
 };
 
-/**
- * Shell-order position of the last command segment `matches` accepts, or -1. Walks
- * segments exactly like {@link findInCommand}, so positions from two calls on the
- * same command are comparable.
- */
-const lastIndexInCommand = (
-  command: string | string[],
-  matches: (tokens: string[], env?: ShellEnv) => boolean,
-): number => {
-  if (Array.isArray(command)) {
-    if (!command.every((t) => typeof t === 'string')) return -1;
-    const wrapped = unwrapShellArgv(command);
-    if (wrapped !== undefined) return lastIndexInCommand(wrapped, matches);
-    return matches(command) ? 0 : -1;
-  }
-  if (typeof command !== 'string') return -1;
-
-  const env: ShellEnv = {};
-  let last = -1;
-  unwrapShellCommand(command)
-    .split(/[\n;|&]/)
-    .forEach((segment, index) => {
-      const tokens = tokenize(segment);
-      if (matches(tokens, env)) last = index;
-      collectSegmentAssignments(tokens, env);
-    });
-  return last;
-};
-
 const parseBranchFromGitOutput = (content?: string): string | undefined => {
   if (!content) return undefined;
 
@@ -275,6 +246,7 @@ const getOptionValue = (
 const parseGitSubcommand = (
   tokens: string[],
   cwd?: string,
+  env?: ShellEnv,
 ): { args: string[]; baseCwd?: string; subcommand: string } | undefined => {
   let i = consumeCommandPreamble(tokens);
   if (!isGitExecutable(tokens[i] ?? '')) return undefined;
@@ -283,7 +255,7 @@ const parseGitSubcommand = (
   let baseCwd = cwd;
   while (i < tokens.length && tokens[i].startsWith('-')) {
     if (tokens[i] === '-C') {
-      const dir = stripQuotes(tokens[i + 1] ?? '');
+      const dir = resolveToken(tokens[i + 1] ?? '', env);
       if (dir) baseCwd = resolveWorktreePath(dir, baseCwd);
       i += 2;
     } else if (GIT_VALUE_OPTS.has(tokens[i])) {
@@ -297,28 +269,6 @@ const parseGitSubcommand = (
   if (!subcommand) return undefined;
 
   return { args: tokens.slice(i + 1), baseCwd, subcommand };
-};
-
-/**
- * The resolved path of ONE `git … worktree remove [-f] <path>` command. Its flags
- * take no value. A path that stays shell syntax after expansion yields nothing
- * rather than a guess.
- */
-const parseGitWorktreeRemoveTokens = (
-  tokens: string[],
-  cwd?: string,
-  env?: ShellEnv,
-): string | undefined => {
-  const git = parseGitSubcommand(tokens, cwd);
-  if (git?.subcommand !== 'worktree' || stripQuotes(git.args[0] ?? '') !== 'remove') return;
-
-  for (const token of git.args.slice(1)) {
-    if (/^\d*[<>]/.test(token)) return; // redirection — git's args end here
-    if (token.startsWith('-')) continue;
-    const value = resolveToken(token, env);
-    if (!value) continue;
-    return isLiteralPath(value) ? resolveWorktreePath(value, git.baseCwd) : undefined;
-  }
 };
 
 const parseGitBranchSwitchTokens = (
@@ -757,14 +707,16 @@ const parseWorktreeAddInfo = (
   const unwrapped = unwrapShellCommand(command);
   if (!/\bworktree\s+add\b/.test(unwrapped)) return undefined;
 
+  // The LAST add wins: it is where the command left things, so an earlier scratch
+  // worktree that was removed again (`add a && remove a && add b`) never sticks.
   const env: ShellEnv = {};
+  let last: WorktreeAddParseResult | undefined;
   for (const segment of unwrapped.split(/[\n;|&]/)) {
     const tokens = tokenize(segment);
-    const info = parseGitWorktreeAddTokens(tokens, cwd, env);
-    if (info) return info;
+    last = parseGitWorktreeAddTokens(tokens, cwd, env) ?? last;
     collectSegmentAssignments(tokens, env);
   }
-  return undefined;
+  return last;
 };
 
 /**
@@ -785,6 +737,62 @@ export const parseWorktreeAddPath = (
   return parseWorktreeAddInfo(command, cwd)?.path;
 };
 
+const isWindowsPath = (p: string): boolean => /^[A-Z]:[\\/]/i.test(p) || p.startsWith('\\\\');
+
+/** Path equality that ignores a trailing slash, and separators and case on Windows. */
+const isSamePath = (a: string, b: string): boolean => {
+  const normalize = (p: string) => {
+    const path = p.replace(/[\\/]+$/, '');
+    return isWindowsPath(p) ? path.replaceAll('\\', '/').toLowerCase() : path;
+  };
+  return normalize(a) === normalize(b);
+};
+
+/**
+ * Whether the command's last word on `target` is a real `git worktree remove` of it.
+ * Paths resolve like `add` paths; segments are read in shell order, so a later
+ * `add` of the same path recreates it. Text only — the caller confirms on the
+ * device, since `cond && git worktree remove …` may never have run.
+ */
+const removesWorktree = (command: string | string[], target: string, cwd?: string) => {
+  let removed = false;
+  findInCommand(command, (tokens, env) => {
+    const added = parseGitWorktreeAddTokens(tokens, cwd, env)?.path;
+    if (added && isSamePath(added, target)) removed = false;
+    const git = parseGitSubcommand(tokens, cwd, env);
+    if (git?.subcommand !== 'worktree' || stripQuotes(git.args[0] ?? '') !== 'remove') return;
+    for (const token of git.args.slice(1)) {
+      if (/^\d*[<>]/.test(token)) return; // redirection — git's args end here
+      if (token.startsWith('-')) continue;
+      const path = resolveToken(token, env);
+      if (isLiteralPath(path) && isSamePath(resolveWorktreePath(path, git.baseCwd), target))
+        removed = true;
+      return;
+    }
+  });
+  return removed;
+};
+
+/**
+ * The source repo's worktrees as the run's device reports them; undefined when the
+ * device cannot be asked. The topic's bound device (written at dispatch) or,
+ * unbound, this machine — the local device answers over IPC, a remote one over RPC.
+ */
+const listDeviceWorktrees = async (source: string, boundDeviceId?: string) => {
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const targetDeviceId = boundDeviceId ?? currentDeviceId;
+  const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
+
+  try {
+    return await gitService.listGitWorktrees({
+      deviceId: isLocalDevice ? undefined : targetDeviceId,
+      path: source,
+    });
+  } catch {
+    return undefined;
+  }
+};
+
 /**
  * Ground truth for a worktree-add whose path token never survives static parsing
  * (`git worktree add "$WT" …`, `$(mktemp -d)`, `~/wt`): ask the run's target
@@ -800,40 +808,27 @@ const resolveWorktreeAddFromDevice = async (
   const branchHint = normalizeBranch(parsed.branch ?? parsed.ref);
   if (!branchHint) return undefined;
 
-  // The topic's bound device (written at dispatch) or, unbound, this machine.
-  // Mirrors WorkingDirectorySection: the local device answers over IPC
-  // (deviceId omitted), a remote one over RPC.
-  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
-  const targetDeviceId = boundDeviceId ?? currentDeviceId;
-  const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
-
-  try {
-    const worktrees = await gitService.listGitWorktrees({
-      deviceId: isLocalDevice ? undefined : targetDeviceId,
-      path: source,
-    });
-    const match = worktrees.find((worktree) => worktree.branch === branchHint);
-    if (!match) return undefined;
-    return { ...(match.branch ? { branch: match.branch } : {}), path: match.path };
-  } catch {
-    return undefined;
-  }
+  const match = (await listDeviceWorktrees(source, boundDeviceId))?.find(
+    (worktree) => worktree.branch === branchHint,
+  );
+  if (!match) return undefined;
+  return { ...(match.branch ? { branch: match.branch } : {}), path: match.path };
 };
-
-const isWindowsPath = (p: string): boolean => /^[A-Z]:[\\/]/i.test(p) || p.startsWith('\\\\');
 
 /**
- * Equality key for two spellings of one directory. A Windows path takes either
- * separator and, on a drive, any casing (`C:\wt`, `c:/WT/`, `C:\repo/..\wt`);
- * `resolveWorktreePath` leaves those untouched. UNC paths keep their case: a
- * `\\wsl.localhost\…` share is a case-sensitive Linux filesystem.
+ * Whether the device's worktree list proves `worktree` is gone. An empty list is a
+ * failed probe (a repository always lists its own checkout), not a confirmation.
+ * The recorded branch is matched too: git lists the canonical path, which differs
+ * from the recorded one when the worktree was added through a symlink, while a
+ * branch is checked out in at most one worktree.
  */
-const toPathKey = (p: string): string => {
-  if (!isWindowsPath(p)) return p;
-  const slashed = p.replaceAll('\\', '/');
-  if (slashed.startsWith('//')) return `/${normalizePosix(slashed)}`;
-  return normalizePosix(slashed).toLowerCase();
-};
+const isWorktreeGone = (
+  worktrees: { branch?: string; path: string }[] | undefined,
+  worktree: string,
+  branch?: string,
+): boolean =>
+  !!worktrees?.length &&
+  !worktrees.some((w) => isSamePath(w.path, worktree) || (!!branch && w.branch === branch));
 
 /**
  * The recorded worktree becomes the cwd of every later command on the source's
@@ -900,7 +895,7 @@ export const recordWorktreeAdd = async (params: {
 /**
  * Record successful heterogeneous CLI shell side effects onto the run topic:
  * - `git worktree add` selects the created worktree and explicit branch.
- * - `git worktree remove` of the selected worktree returns the topic to the source.
+ * - `git worktree remove` of that worktree returns the topic to its source repo.
  * - `git switch` / confirmed `git checkout` updates the branch snapshot.
  * - `git push` records the remote ref the branch publishes to.
  * - `gh pr create` binds the created PR URL to the topic.
@@ -929,23 +924,15 @@ export const recordGitCommandEffects = async (params: {
     nextConfig = applyWorktreeAddToConfig(nextConfig, source, worktreeInfo);
   }
 
-  // Left recorded, a removed worktree is a directory that no longer exists. Shell
-  // order decides against an add in the same command: add-then-remove of a scratch
-  // worktree nets out, remove-then-recreate keeps it. Parsed rather than confirmed
-  // against the device: if a `;`-chained remove actually failed, dropping the
-  // selection is the cheap mistake to make.
+  // Removing the worktree the topic runs in leaves it pointing at a deleted
+  // directory, and every later run would fail to spawn there. The device has the
+  // last word: a skipped or failed removal still lists the worktree, and an
+  // unreachable device changes nothing.
   const activeWorktree = nextConfig?.git?.activeWorktree;
-  if (activeWorktree) {
-    const activeKey = toPathKey(resolveWorktreePath(activeWorktree, source));
-    const lastRemove = lastIndexInCommand(command, (tokens, env) => {
-      const removed = parseGitWorktreeRemoveTokens(tokens, source, env);
-      return removed !== undefined && toPathKey(removed) === activeKey;
-    });
-    const lastAdd = lastIndexInCommand(
-      command,
-      (tokens, env) => !!parseGitWorktreeAddTokens(tokens, source, env),
-    );
-    if (lastRemove > lastAdd) nextConfig = applyWorktreeExitToConfig(nextConfig, source);
+  if (activeWorktree && removesWorktree(command, activeWorktree, source)) {
+    const worktrees = await listDeviceWorktrees(source, topic?.metadata?.boundDeviceId);
+    if (isWorktreeGone(worktrees, activeWorktree, nextConfig?.git?.branch))
+      nextConfig = applyWorktreeExitToConfig(nextConfig, source);
   }
 
   const branchSwitch = parseGitBranchSwitch(command, resultContent);

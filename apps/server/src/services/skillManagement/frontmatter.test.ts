@@ -1,5 +1,5 @@
 import matter from 'gray-matter';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   normalizeSkillIndexContent,
@@ -64,6 +64,29 @@ describe('parseSkillFrontmatter', () => {
 });
 
 describe('normalizeSkillIndexContent', () => {
+  it('does not execute a second frontmatter block while serializing the body', () => {
+    const executed = vi.fn();
+    vi.stubGlobal('__skillFrontmatterExecuted', executed);
+    try {
+      expect(() =>
+        normalizeSkillIndexContent({
+          bundleName: 'skill',
+          content: `---
+name: skill
+description: Description
+---
+---js
+(() => { globalThis.__skillFrontmatterExecuted(); throw new Error('Executed frontmatter'); })()
+---
+Body`,
+        }),
+      ).toThrow();
+      expect(executed).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('rewrites the frontmatter name from the bundle filename and keeps the body', () => {
     expect(
       normalizeSkillIndexContent({

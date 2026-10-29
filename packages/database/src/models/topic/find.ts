@@ -27,6 +27,7 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../../utils/genWhere';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { searchableMessage } from '../../utils/searchableMessage';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import type { TopicModelContext } from './context';
 import type { TopicKeywordScope } from './types';
 
@@ -176,6 +177,7 @@ export const findRunInitiators = async (
     )
     .orderBy(agentOperations.topicId, desc(agentOperations.startedAt));
 
+  /* v8 ignore next -- unreachable: the null-topicId fallback; `inArray(agentOperations.topicId, …)` never matches a NULL topic_id */
   return new Map(rows.flatMap((row) => (row.topicId ? [[row.topicId, row.userId]] : [])));
 };
 
@@ -211,8 +213,13 @@ export const queryByKeyword = async (
   ctx: TopicModelContext,
   keyword: string,
   scope?: string | null | TopicKeywordScope,
+  { onlyMine }: { onlyMine?: boolean } = {},
 ): Promise<TopicItem[]> => {
   if (!keyword.trim()) return [];
+
+  // Mirrors the list's workspace "only mine" filter, so a search never brings
+  // back the other members' topics the list is hiding.
+  const onlyMineCondition = onlyMine ? eq(topics.userId, ctx.userId) : undefined;
 
   // Backward compatibility: a bare string / null second argument is treated
   // as the legacy `containerId` (sessionId or groupId).
@@ -250,7 +257,9 @@ export const queryByKeyword = async (
         and(
           ctx.ownership(),
           ctx.notShareVisitor(),
+          notChannelTopic(),
           scopeCondition,
+          onlyMineCondition,
           topicCandidateIds
             ? inJsonStringArray(topics.id, topicCandidateIds)
             : sql`${topics.title} @@@ ${bm25Query}`,
@@ -271,7 +280,9 @@ export const queryByKeyword = async (
             : sql`${messages.content} @@@ ${bm25Query}`,
           ctx.ownership(),
           ctx.notShareVisitor(),
+          notChannelTopic(),
           scopeCondition,
+          onlyMineCondition,
         ),
       )
       .groupBy(messages.topicId),
@@ -331,6 +342,7 @@ export const countTopics = async (
       genWhere([
         ctx.ownership(),
         ctx.notShareVisitor(),
+        notChannelTopic(),
         agentCondition,
         params?.containerId ? ctx.matchContainer(params.containerId) : undefined,
         params?.range
@@ -360,7 +372,7 @@ export const rank = async (
       title: topics.title,
     })
     .from(topics)
-    .where(and(ctx.ownership(), ctx.notShareVisitor()))
+    .where(and(ctx.ownership(), ctx.notShareVisitor(), notChannelTopic()))
     .leftJoin(messages, eq(topics.id, messages.topicId))
     .groupBy(topics.id)
     .orderBy(desc(sql`count`))
@@ -402,6 +414,7 @@ export const queryRecent = async (ctx: TopicModelContext, limit: number = 12) =>
       and(
         ctx.ownership(),
         ctx.notShareVisitor(),
+        notChannelTopic(),
         or(
           // Group topics: has groupId
           not(isNull(topics.groupId)),
@@ -418,7 +431,9 @@ export const queryRecent = async (ctx: TopicModelContext, limit: number = 12) =>
   return result.map((item) => ({
     ...item,
     type: item.groupId ? ('group' as const) : ('agent' as const),
+    /* v8 ignore start -- unreachable: the `new Date(…)` arm; `mapWith(topics.updatedAt)` decodes the timestamptz cell into a Date, whichever driver returns it */
     updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
+    /* v8 ignore stop */
   }));
 };
 

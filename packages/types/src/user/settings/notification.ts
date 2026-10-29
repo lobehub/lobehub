@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface NotificationChannelSettings {
   enabled?: boolean;
   /** Per-type overrides grouped by category. Missing = use scenario default (true) */
@@ -54,3 +56,38 @@ export interface NotificationSettings {
    */
   push?: NotificationChannelSettings;
 }
+
+const notificationItemsSchema = z.record(z.string(), z.record(z.string(), z.boolean()));
+
+const notificationChannelSettingsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    items: notificationItemsSchema.optional(),
+  })
+  .strict();
+
+/**
+ * Patch shape for `NotificationSettings`. Strict at every known level so a
+ * misspelled channel or key fails the call instead of being stored and silently
+ * ignored by delivery; category and type ids stay open strings because the
+ * scenario registry lives with the deployment, not in this package.
+ */
+export const NotificationSettingsSchema = z
+  .object({
+    content: z.object({ scheduledTaskSummary: z.boolean().optional() }).strict().optional(),
+    email: notificationChannelSettingsSchema.optional(),
+    im: notificationChannelSettingsSchema
+      .extend({
+        platforms: z
+          .record(
+            z.string(),
+            notificationChannelSettingsSchema.extend({ tenantId: z.string().optional() }).strict(),
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    inbox: notificationChannelSettingsSchema.optional(),
+    push: notificationChannelSettingsSchema.optional(),
+  })
+  .strict();

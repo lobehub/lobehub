@@ -11,37 +11,17 @@ import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
 import Item from './Item';
 
-interface PageListProps {
-  /**
-   * Bucket to render when the sidebar is in workspace mode. Omitting the prop
-   * renders the historical unified "All pages" list (personal mode).
-   */
-  visibility?: 'private' | 'workspace';
-}
-
-/**
- * Sidebar page list. In workspace mode the same component drives each of the
- * "Private" / "Workspace" accordions; personal mode collapses to a single
- * unified list.
- */
-const PageList = memo<PageListProps>(({ visibility }) => {
+const PageList = memo(() => {
   const { t } = useTranslation(['file', 'common']);
 
-  const [filteredDocuments, hasMore, isLoadingMore] = usePageStore((s) => {
-    let docs;
-    let more;
-    if (visibility === 'private') {
-      docs = pageSelectors.getPrivateFilteredDocumentsLimited(s);
-      more = pageSelectors.hasMorePrivateFilteredDocuments(s);
-    } else if (visibility === 'workspace') {
-      docs = pageSelectors.getWorkspaceFilteredDocumentsLimited(s);
-      more = pageSelectors.hasMoreWorkspaceFilteredDocuments(s);
-    } else {
-      docs = pageSelectors.getFilteredDocumentsLimited(s);
-      more = pageSelectors.hasMoreFilteredDocuments(s);
-    }
-    return [docs, more, pageSelectors.isLoadingMoreDocuments(s)] as const;
-  });
+  const [filteredDocuments, hasMore, isLoadingMore] = usePageStore(
+    (s) =>
+      [
+        pageSelectors.getFilteredDocumentsLimited(s),
+        pageSelectors.hasMoreFilteredDocuments(s),
+        pageSelectors.isLoadingMoreDocuments(s),
+      ] as const,
+  );
 
   return (
     <Flexbox gap={1}>

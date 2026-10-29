@@ -14,6 +14,7 @@ import {
   acceptances,
   agentOperations,
   agents,
+  documents,
   goalEdges,
   goalEvents,
   goalNodeDecisions,
@@ -569,6 +570,42 @@ describe('GoalReportStore.submit', () => {
     ).toMatchObject({
       items: expect.not.arrayContaining([expect.objectContaining({ type: 'goal_report' })]),
     });
+  });
+
+  it('stores the report as one HTML page per Goal, rewritten by later versions', async () => {
+    const { goalId, metadata, service, topicId } = await setup();
+    const reports = new GoalReportStore(serverDB, userId);
+    const page = (n: number) => `<!doctype html><html><body><h1>Report v${n}</h1></body></html>`;
+
+    await reports.submit(goalId, { content: '# Report v1', html: page(1), metadata }, { topicId });
+    const first = (await service.graph(goalId)).report?.latest;
+    expect(first?.pageDocumentId).toBeDefined();
+
+    await reports.submit(goalId, { content: '# Report v2', html: page(2), metadata }, { topicId });
+    const second = (await service.graph(goalId)).report?.latest;
+    // The same page, now holding the newer report; the markdown stays the fallback.
+    expect(second).toMatchObject({ content: '# Report v2', pageDocumentId: first?.pageDocumentId });
+
+    const [stored] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, first!.pageDocumentId!));
+    expect(stored).toMatchObject({ content: page(2), editorData: null, fileType: 'custom/html' });
+  });
+
+  it('writes no page for a report without HTML', async () => {
+    const { goalId, metadata, service, topicId } = await setup();
+
+    await new GoalReportStore(serverDB, userId).submit(
+      goalId,
+      { content: '# Report', metadata },
+      { topicId },
+    );
+
+    expect((await service.graph(goalId)).report?.latest?.pageDocumentId).toBeUndefined();
+    expect(
+      await serverDB.select().from(documents).where(eq(documents.fileType, 'custom/html')),
+    ).toHaveLength(0);
   });
 
   /**

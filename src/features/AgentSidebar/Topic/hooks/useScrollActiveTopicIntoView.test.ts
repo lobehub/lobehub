@@ -5,7 +5,12 @@ import { act, renderHook } from '@testing-library/react';
 import type { MutableRefObject } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useScrollActiveTopicIntoView } from './useScrollActiveTopicIntoView';
+import { useChatStore } from '@/store/chat';
+
+import {
+  markSidebarTopicActivation,
+  useScrollActiveTopicIntoView,
+} from './useScrollActiveTopicIntoView';
 
 const calls: { element: Element; options: unknown }[] = [];
 const originalScrollIntoView = Element.prototype.scrollIntoView;
@@ -19,7 +24,23 @@ beforeEach(() => {
 
 afterEach(() => {
   Element.prototype.scrollIntoView = originalScrollIntoView;
+  useChatStore.setState({ creatingTopicIds: [] });
 });
+
+const mountWithRow = (topicId: string) => {
+  const container = document.createElement('div');
+  const row = document.createElement('div');
+  row.dataset.topicId = topicId;
+  container.append(row);
+
+  const hook = renderHook(({ ready }) => useScrollActiveTopicIntoView(topicId, ready), {
+    initialProps: { ready: '' },
+  });
+  act(() => {
+    (hook.result.current as MutableRefObject<HTMLDivElement | null>).current = container;
+  });
+  return hook;
+};
 
 describe('useScrollActiveTopicIntoView', () => {
   it('scrolls the active topic row into the nearest visible position', () => {
@@ -75,6 +96,39 @@ describe('useScrollActiveTopicIntoView', () => {
     });
     rerender({ ready: 'topic-2' });
     rerender({ ready: 'topic-2:unrelated-group' });
+
+    expect(calls).toHaveLength(1);
+  });
+  it('does not reveal a topic the user opened from a sidebar row', () => {
+    markSidebarTopicActivation('topic-2');
+    const { rerender } = mountWithRow('topic-2');
+    rerender({ ready: 'topic-2' });
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('does not reveal a topic this client is creating for its first send', () => {
+    useChatStore.setState({ creatingTopicIds: ['topic-2'] });
+    const { rerender } = mountWithRow('topic-2');
+    rerender({ ready: 'topic-2' });
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('keeps the skip after the optimistic topic is confirmed', () => {
+    useChatStore.setState({ creatingTopicIds: ['topic-2'] });
+    const { rerender } = mountWithRow('topic-2');
+    rerender({ ready: 'topic-2' });
+    act(() => useChatStore.setState({ creatingTopicIds: [] }));
+    rerender({ ready: 'topic-2:other' });
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('still reveals an externally navigated topic after a sidebar click on another topic', () => {
+    markSidebarTopicActivation('topic-1');
+    const { rerender } = mountWithRow('topic-2');
+    rerender({ ready: 'topic-2' });
 
     expect(calls).toHaveLength(1);
   });

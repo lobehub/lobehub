@@ -7,7 +7,7 @@ import { shareKeys } from '@/libs/swr/keys';
 import { resolveRequestLocale } from '@/locales/requestLocale';
 
 import SharedArtifactView from '../../src/features/artifact/SharedArtifactView';
-import { loadShareResources } from '../../src/shell/createShareI18n';
+import { loadShareT } from '../../src/shell/createShareI18n';
 import { cloudflareContext } from '../lib/cloudflareContext';
 import { buildPageMeta, shareMetaDescription } from '../lib/seo';
 import { createServerLambdaClient } from '../lib/serverTrpc';
@@ -26,7 +26,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
 
   return {
     artifact,
-    description: shareMetaDescription(await loadShareResources(locale), 'artifactDescription'),
+    description: shareMetaDescription(await loadShareT(locale), 'artifactDescription'),
     id,
     locale,
   };

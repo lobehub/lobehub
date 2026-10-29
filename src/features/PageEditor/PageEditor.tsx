@@ -1,19 +1,16 @@
 'use client';
 
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
-import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
+import { cssVar, Flexbox } from '@lobehub/ui';
+import type { FC, ReactNode, UIEvent } from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
-import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePermission } from '@/hooks/usePermission';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
@@ -26,12 +23,14 @@ import DocumentLikes from './DocumentLikes';
 import EditorCanvas from './EditorCanvas';
 import { recallEditorScrollTop, rememberEditorScrollTop } from './editorScrollMemory';
 import Header from './Header';
+import HtmlPageBody, { useIsHtmlPage } from './HtmlPageBody';
 import LockedAlert from './LockedAlert';
 import LockStatusBanner from './LockStatusBanner';
 import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
+import TableOfContents from './TableOfContents';
 import TitleSection from './TitleSection';
 import { usePageEditable } from './usePageEditable';
 
@@ -45,9 +44,6 @@ import { usePageEditable } from './usePageEditable';
  * call hooks like `usePageEditorStore` and reuse internal pieces such as `useMenu`.
  */
 type PageEditorHeader = ReactNode | null;
-
-const WIDE_SCREEN_CONTAINER_PADDING = 16;
-const TABLE_BASE_BLEED = DEFAULT_BLOCK_ANCHOR_PADDING + WIDE_SCREEN_CONTAINER_PADDING;
 
 const getMaxScrollTop = (node: HTMLElement) => Math.max(node.scrollHeight - node.clientHeight, 0);
 
@@ -68,6 +64,11 @@ const shouldRestoreEditorScroll = ({
   !isUserInteractingWithEditor;
 
 const styles = StyleSheet.create({
+  artifactContent: {
+    minWidth: 0,
+    paddingBlock: 24,
+    paddingInline: 24,
+  },
   contentWrapper: {
     containerType: 'inline-size',
     display: 'flex',
@@ -87,23 +88,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 });
-
-const overrideStyles = createStaticStyles(({ css }) => ({
-  editorContent: css`
-    .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper {
-      --lobe-block-anchor-padding: var(--lobe-pageeditor-table-bleed-inline);
-
-      position: relative;
-      box-sizing: border-box;
-      width: 100cqi;
-      margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
-    }
-
-    .lobe-editor-table-scroll-wrapper .editor_table {
-      width: max-content;
-    }
-  `,
-}));
 
 interface PageEditorProps {
   /** Composer that receives selections created by the Ask Copilot toolbar item. */
@@ -159,14 +143,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const editable = usePageEditable();
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
-  const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
-  const tableBleedInline = wideScreen
-    ? `${TABLE_BASE_BLEED}px`
-    : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;
-  const editorContentStyle = {
-    ...styles.editorContent,
-    '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
-  } as CSSProperties;
+  const isHtmlPage = useIsHtmlPage(documentId);
   const resizeFrameRef = useRef<number | undefined>(undefined);
   const restoreScrollFrameRef = useRef<number | undefined>(undefined);
   const isRestoringScrollRef = useRef(false);
@@ -375,37 +352,52 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
         width={'100%'}
         onScroll={handleEditorScroll}
       >
-        <WideScreenContainer
-          wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
-          onChange={notifyEditorLayoutChange}
-          onClick={() => {
-            if (!editable) return;
-
-            editor?.focus();
-          }}
-        >
-          <Flexbox
-            className={overrideStyles.editorContent}
-            flex={1}
-            ref={editorContentRef}
-            style={editorContentStyle}
-            {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
-          >
-            <TitleSection />
-            <PageMetaBar />
-            {/* Surfaces local heartbeat health (unstable/lost) for the holder.
-                Suppressed when LockedAlert is showing — see LockStatusBanner. */}
-            <LockStatusBanner />
-            {/* Prominent in-body notice when another member holds the lock; the
-                compact status badge lives in the Header (EditingIndicator). */}
-            <LockedAlert />
-            <EditorCanvas askCopilotTarget={askCopilotTarget} />
-            <BlockCommentMarker hostRef={editorContentRef} />
-            {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
-            <DocumentComments />
+        {isHtmlPage ? (
+          // An artifact is a finished, self-styled page: it gets the pane's full
+          // width instead of the reading column, and no editable title above it
+          // (the header carries the title; the HTML has its own heading).
+          <Flexbox flex={1} gap={24} ref={editorContentRef} style={styles.artifactContent}>
+            <HtmlPageBody />
+            <WideScreenContainer>
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </WideScreenContainer>
           </Flexbox>
-        </WideScreenContainer>
+        ) : (
+          <WideScreenContainer
+            wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
+            onChange={notifyEditorLayoutChange}
+            onClick={() => {
+              if (!editable) return;
+
+              editor?.focus();
+            }}
+          >
+            <Flexbox
+              flex={1}
+              ref={editorContentRef}
+              style={styles.editorContent}
+              {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
+            >
+              <TitleSection />
+              <PageMetaBar />
+              {/* Surfaces local heartbeat health (unstable/lost) for the holder.
+                  Suppressed when LockedAlert is showing — see LockStatusBanner. */}
+              <LockStatusBanner />
+              {/* Prominent in-body notice when another member holds the lock; the
+                  compact status badge lives in the Header (EditingIndicator). */}
+              <LockedAlert />
+              <EditorCanvas askCopilotTarget={askCopilotTarget} />
+              <BlockCommentMarker hostRef={editorContentRef} />
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </Flexbox>
+          </WideScreenContainer>
+        )}
       </Flexbox>
+      {!isHtmlPage && (
+        <TableOfContents contentRef={editorContentRef} scrollRef={contentWrapperRef} />
+      )}
       {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
     </Flexbox>
   );

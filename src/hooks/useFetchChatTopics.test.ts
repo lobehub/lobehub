@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   ),
   topicGroupMode: 'byStatus' as string,
   topicIncludeCompleted: false,
+  topicOnlyMine: false,
   topicPageSize: 20,
+  workspacePreferenceLoading: false,
 }));
 
 vi.mock('@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode', () => ({
@@ -52,16 +54,22 @@ vi.mock('@/store/global/selectors', () => ({
 }));
 
 vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
+  useUserStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      useFetchWorkspaceUserPreference: () => ({ isLoading: mocks.workspacePreferenceLoading }),
+    }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: { topicIncludeCompleted: () => mocks.topicIncludeCompleted },
+  workspaceUserSettingsSelectors: { topicOnlyMine: () => () => mocks.topicOnlyMine },
 }));
 
 describe('chat topic list fetches', () => {
   beforeEach(() => {
     mocks.storeFetchTopics.mockClear();
+    mocks.topicOnlyMine = false;
+    mocks.workspacePreferenceLoading = false;
   });
 
   it('asks the same query for a named agent as the sidebar does for the active one', () => {
@@ -88,6 +96,33 @@ describe('chat topic list fetches', () => {
       sortBy: sidebarArgs.sortBy,
     });
     expect(panelArgs.excludeTriggers).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS);
+  });
+
+  it('forwards the workspace only-mine filter from both the sidebar and the panel', () => {
+    mocks.topicOnlyMine = true;
+
+    renderHook(() => useFetchChatTopics());
+    const [, sidebarArgs = {}] = mocks.storeFetchTopics.mock.calls.at(-1)!;
+
+    renderHook(() => useFetchAgentChatTopics('agent-1'));
+    const [, panelArgs = {}] = mocks.storeFetchTopics.mock.calls.at(-1)!;
+
+    expect(sidebarArgs.onlyMine).toBe(true);
+    expect(panelArgs.onlyMine).toBe(true);
+  });
+
+  /** @example A cold workspace load must not paint the unfiltered list before "only mine" is known. */
+  it('holds both fetches until the workspace preference has loaded', () => {
+    mocks.workspacePreferenceLoading = true;
+
+    renderHook(() => useFetchChatTopics());
+    const [sidebarEnabled] = mocks.storeFetchTopics.mock.calls.at(-1)!;
+
+    renderHook(() => useFetchAgentChatTopics('agent-1'));
+    const [panelEnabled] = mocks.storeFetchTopics.mock.calls.at(-1)!;
+
+    expect(sidebarEnabled).toBe(false);
+    expect(panelEnabled).toBe(false);
   });
 
   it('stays disabled until the panel knows its agent', () => {

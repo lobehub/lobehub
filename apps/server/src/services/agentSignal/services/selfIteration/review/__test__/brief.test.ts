@@ -5,7 +5,6 @@ import { BriefModel } from '@/database/models/brief';
 
 import { ActionStatus, ApplyMode, ReviewRunStatus, Risk, Scope } from '../../types';
 import { createBriefSelfReviewService, createServerSelfReviewBriefWriter } from '../brief';
-import type { SelfReviewBriefTextTranslator } from '../briefText';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,27 +26,6 @@ const getNightlySelfReview = (
 const getSelfReviewProposal = (
   brief: ReturnType<ReturnType<typeof createBriefSelfReviewService>['projectNightlyReviewBrief']>,
 ) => getNightlySelfReview(brief)?.selfReviewProposal;
-
-const zhCNBriefText: Record<string, string> = {
-  'brief.agentSignal.selfReview.applied.heading': '已更新',
-  'brief.agentSignal.selfReview.applied.summary': '已应用 {{count}} 条夜间回顾更新。',
-  'brief.agentSignal.selfReview.applied.summary_plural': '已应用 {{count}} 条夜间回顾更新。',
-  'brief.agentSignal.selfReview.applied.title': '夜间回顾已更新资源',
-  'brief.agentSignal.selfReview.ideas.summary': '已保存夜间回顾记录，供后续查看。',
-  'brief.agentSignal.selfReview.ideas.title': '夜间回顾记录',
-  'brief.agentSignal.selfReview.proposal.heading': '建议',
-  'brief.agentSignal.selfReview.proposal.summary': '有 {{count}} 条夜间回顾建议需要你确认。',
-  'brief.agentSignal.selfReview.proposal.summary_plural': '有 {{count}} 条夜间回顾建议需要你确认。',
-  'brief.agentSignal.selfReview.proposal.title': '有夜间回顾建议需要确认',
-};
-
-const createTranslator =
-  (resources: Record<string, string>): SelfReviewBriefTextTranslator =>
-  (key, options = {}) =>
-    Object.entries(options).reduce(
-      (content, [name, value]) => content.replace(`{{${name}}}`, value),
-      resources[key] ?? key,
-    );
 
 describe('briefSelfReviewService', () => {
   /**
@@ -206,9 +184,9 @@ describe('briefSelfReviewService', () => {
 
   /**
    * @example
-   * Nightly proposal briefs use server-translated shell text before persistence.
+   * Nightly proposal briefs persist source-English shell text around user-authored summaries.
    */
-  it('projects proposal results to Chinese decision briefs', () => {
+  it('keeps proposal shell text in English around localized action summaries', () => {
     const service = createBriefSelfReviewService();
 
     const brief = service.projectNightlyReviewBrief({
@@ -227,14 +205,13 @@ describe('briefSelfReviewService', () => {
       },
       reviewWindowEnd: '2026-05-09T20:00:00.000Z',
       reviewWindowStart: '2026-05-09T18:00:00.000Z',
-      t: createTranslator(zhCNBriefText),
       timezone: 'Asia/Shanghai',
       userId: 'user-1',
     });
 
-    expect(brief?.title).toBe('有夜间回顾建议需要确认');
+    expect(brief?.title).toBe('Dream suggestion needs review');
     expect(brief?.summary).toBe(
-      '有 1 条夜间回顾建议需要你确认。\n\n**建议**\n- 检查技能合并建议。',
+      '1 dream suggestion needs your review.\n\n**Suggestion**\n- 检查技能合并建议。',
     );
     expect(brief?.type).toBe('decision');
   });
@@ -433,10 +410,7 @@ describe('briefSelfReviewService', () => {
       target: { skillName: `pr-checklist-${index}` },
     });
 
-    const projectCreateSkillProposal = (
-      count: number,
-      options: { summary?: string; t?: SelfReviewBriefTextTranslator } = {},
-    ) => {
+    const projectCreateSkillProposal = (count: number, options: { summary?: string } = {}) => {
       const actions = Array.from({ length: count }, (_, index) => createSkillPlanAction(index + 1));
 
       return createBriefSelfReviewService().projectNightlyReviewBrief({
@@ -460,7 +434,6 @@ describe('briefSelfReviewService', () => {
         },
         reviewWindowEnd: '2026-05-09T20:00:00.000Z',
         reviewWindowStart: '2026-05-09T18:00:00.000Z',
-        t: options.t,
         timezone: 'Asia/Shanghai',
         userId: 'user-1',
       });
@@ -510,23 +483,6 @@ describe('briefSelfReviewService', () => {
           '- **New skill: Skill 2** — Rationale 2.',
         ].join('\n'),
       );
-    });
-
-    /**
-     * @example
-     * Specific proposal text is rendered through the owner's translator.
-     */
-    it('renders the specific title through the supplied translator', () => {
-      const brief = projectCreateSkillProposal(2, {
-        t: createTranslator({
-          ...zhCNBriefText,
-          'brief.agentSignal.selfReview.kind.create_skill.withTarget': '新建技能：{{target}}',
-          'brief.agentSignal.selfReview.title.more': '{{title}}（另有 {{count}} 项）',
-        }),
-      });
-
-      expect(brief?.title).toBe('新建技能：PR checklist（另有 1 项）');
-      expect(brief?.title).not.toBe('有夜间回顾建议需要确认');
     });
 
     /**

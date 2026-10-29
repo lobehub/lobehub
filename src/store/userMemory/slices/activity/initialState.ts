@@ -6,7 +6,7 @@ import { memoryListKey } from '../../utils/replica';
 import { type ActivityListData, type ActivityListSort } from './projection';
 
 /**
- * The activity list is a `@lobechat/replica` paged resource with one page set
+ * The activity list is a `local-replica` paged resource with one page set
  * per search / sort (`activityListEntries`). The long-standing flat fields
  * (`activityListData`, `activities`, `activitiesTotal`, `activitiesPage`,
  * `activitiesHasMore`, `activitiesInit`) mirror the active query's entry so every

@@ -12,10 +12,10 @@ import {
   mockGetPlatform,
   mockHandleSubscribedMessage,
   mockOnSubscribedMessage,
-  mockStateSetIfNotExists,
   resetBotMessageRouterMocks,
 } from './testUtils';
 
+vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -171,9 +171,10 @@ describe('BotMessageRouter', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('should announce mention-only mode once when a second human joins ()', async () => {
+    it('should skip without announcing mention-only mode when a second human joins', async () => {
       // Alice is already tracked; bob's first non-mention post is the
-      // multi-human transition.
+      // multi-human transition. Bot-wake decides whether the bot still speaks
+      // up, so "I'll only respond when you @mention me" would be untrue.
       mockGetList.mockResolvedValue(['alice-id']);
       const handler = await loadSubscribedHandler();
       const thread = makeThread({ isDM: false });
@@ -186,12 +187,7 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
-      expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
-        'messenger:thread-mention-required-announced:telegram:chat-1',
-        '1',
-        expect.any(Number),
-      );
-      expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
+      expect(thread.post).not.toHaveBeenCalled();
     });
 
     it('should respond to @-mentions in group threads', async () => {
@@ -275,50 +271,20 @@ describe('BotMessageRouter', () => {
         expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
       });
 
-      it('announces mention-only mode immediately when real membership reports a shared thread', async () => {
-        // Regression: one human + this bot + another bot has only one human
-        // speaker, but is still shared and must not silently enter mention-only
-        // mode without the one-time explanation.
+      it('skips a shared thread without posting a notice', async () => {
+        // One human + this bot + another bot has only one human speaker, but
+        // the platform reports it shared: the message is not for the bot.
         mockGetList.mockResolvedValue([]);
         const isSoloBotConversation = vi.fn().mockResolvedValue(false);
         withMembershipLookup(isSoloBotConversation);
         const handler = await loadSubscribedHandler();
         const thread = makeThread({ id: 'discord:guild-1:channel-1:thread-1' });
-        mockStateSetIfNotExists.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
         await handler(thread, makeMessage({ isMention: false, text: 'talking to another bot' }));
-        await handler(thread, makeMessage({ isMention: false, text: 'still talking' }));
 
-        expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
-        expect(mockStateSetIfNotExists).toHaveBeenCalledWith(
-          'messenger:thread-mention-required-announced:discord:guild-1:channel-1:thread-1',
-          '1',
-          expect.any(Number),
-        );
-        expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
-        expect(thread.post).toHaveBeenCalledTimes(1);
-      });
-
-      it('does not announce mention-only mode in a Feishu group main chat', async () => {
-        // Feishu group mains are already mention-only. Membership reports
-        // shared (isSoloBotConversation=false) but posting the English notice
-        // is spam.
-        mockGetList.mockResolvedValue([]);
-        const isSoloBotConversation = vi.fn().mockResolvedValue(false);
-        withMembershipLookup(isSoloBotConversation);
-        const handler = await loadSubscribedHandler();
-        const thread = makeThread({ id: 'feishu:group:oc_citic_sentry', isDM: false });
-
-        await handler(thread, makeMessage({ isMention: false, text: 'just chatting' }));
-
-        expect(isSoloBotConversation).toHaveBeenCalledWith('feishu:group:oc_citic_sentry');
+        expect(isSoloBotConversation).toHaveBeenCalledWith('discord:guild-1:channel-1:thread-1');
         expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
         expect(thread.post).not.toHaveBeenCalled();
-        expect(mockStateSetIfNotExists).not.toHaveBeenCalledWith(
-          expect.stringContaining('mention-required-announced'),
-          expect.anything(),
-          expect.anything(),
-        );
       });
 
       it('routes real Discord membership verdicts and preserves batched participants', async () => {
@@ -350,15 +316,9 @@ describe('BotMessageRouter', () => {
         withMembershipLookup(membership);
 
         const lists = new Map<string, string[]>();
-        const announcements = new Set<string>();
         mockGetList.mockImplementation(async (key: string) => lists.get(key) ?? []);
         mockAppendToList.mockImplementation(async (key: string, id: string) => {
           lists.set(key, [...(lists.get(key) ?? []), id]);
-        });
-        mockStateSetIfNotExists.mockImplementation(async (key: string) => {
-          if (announcements.has(key)) return false;
-          announcements.add(key);
-          return true;
         });
         const handler = await loadSubscribedHandler();
         const observations: Record<string, unknown> = {};
@@ -380,8 +340,8 @@ describe('BotMessageRouter', () => {
             repeatedPosts,
           };
           expect(firstDispatches).toBe(scenario === 'solo' ? 1 : 0);
-          expect(firstPosts).toBe(scenario === 'solo' ? 0 : 1);
-          expect(repeatedPosts).toBe(firstPosts);
+          expect(firstPosts).toBe(0);
+          expect(repeatedPosts).toBe(0);
           expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
         }
 
@@ -509,6 +469,31 @@ describe('BotMessageRouter', () => {
       await handler(thread, message);
 
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks a watch-keyword wake as a followup, which may end in silence', async () => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+
+      await handler(makeThread(), makeMessage({ text: 'I think we have a bug in checkout' }));
+
+      expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({ wakeKind: 'followup' });
+    });
+
+    it.each([
+      ['an @mention', { isMention: true, text: 'there is a bug, please look' }, false],
+      ['a DM', { isMention: false, text: 'hello there' }, true],
+    ])('keeps %s as a mention that is always answered', async (_name, overrides, isDM) => {
+      const handler = await loadSubscribedHandler({
+        dmPolicy: 'open',
+        watchKeywords: [{ keyword: 'bug' }],
+      });
+
+      await handler(makeThread({ isDM }), makeMessage(overrides));
+
+      expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({ wakeKind: 'mention' });
     });
 
     it('should drop a keyword wake when messageMonitoring access is not allowed', async () => {

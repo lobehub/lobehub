@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The user-memory base slice's server reads are `@lobechat/replica` resources:
+ * The user-memory base slice's server reads are `local-replica` resources:
  * the retrieve result map and one memory detail per `${layer}:${id}`. These
  * tests pin the local-first guarantees and the shape the existing consumers
  * keep reading (`memoryMap` / `memoryDetailMap`), plus the purge that drops the

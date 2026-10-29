@@ -672,6 +672,35 @@ describe('Skill Router Integration Tests', () => {
   });
 
   describe('convertDocumentToSkill', () => {
+    it('does not execute frontmatter when converting a document', async () => {
+      const executed = vi.fn();
+      vi.stubGlobal('__skillFrontmatterExecuted', executed);
+      try {
+        const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+        const agentId = await createTestAgent(serverDB, userId);
+        const doc = await agentDocumentModel.create(
+          agentId,
+          'untrusted-document',
+          `---js
+(() => { globalThis.__skillFrontmatterExecuted(); throw new Error('Executed frontmatter'); })()
+---
+Body`,
+        );
+        await expect(
+          caller.convertDocumentToSkill({
+            agentId,
+            description: 'Description',
+            name: 'untrusted-skill',
+            sourceAgentDocumentId: doc!.id,
+            title: 'Skill',
+          }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        expect(executed).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('should migrate an existing document into a managed skill in place', async () => {
       const caller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);

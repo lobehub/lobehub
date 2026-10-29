@@ -47,9 +47,9 @@ runs:
 
         rm -rf "$cloud_checkout"
 
-        git clone --depth 1 --no-checkout "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" "$cloud_checkout"
+        bash "$GITHUB_ACTION_PATH/../../scripts/gitWithRetry.sh" clone --depth 1 --no-checkout "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" "$cloud_checkout"
         if [ -n "$CLOUD_REF" ]; then
-          git -C "$cloud_checkout" fetch --depth 1 origin "$CLOUD_REF"
+          bash "$GITHUB_ACTION_PATH/../../scripts/gitWithRetry.sh" -C "$cloud_checkout" fetch --depth 1 origin "$CLOUD_REF"
           git -C "$cloud_checkout" checkout --detach FETCH_HEAD
         else
           git -C "$cloud_checkout" checkout --detach

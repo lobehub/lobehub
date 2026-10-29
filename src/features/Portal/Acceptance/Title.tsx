@@ -1,3 +1,4 @@
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +11,13 @@ const Title = memo(() => {
   const acceptanceId = useChatStore(chatPortalSelectors.acceptancePortalId);
   const { data } = useAcceptanceBundle(acceptanceId ?? null);
 
-  return data?.subject.title || t('acceptance.titleFallback');
+  // One line in the panel header: a long title ends in an ellipsis instead of
+  // pushing the header to two lines, and shows in full on hover.
+  return (
+    <Text ellipsis={{ tooltipWhenOverflow: true }} style={{ minWidth: 0 }}>
+      {data?.subject.title || t('acceptance.titleFallback')}
+    </Text>
+  );
 });
 
 export default Title;

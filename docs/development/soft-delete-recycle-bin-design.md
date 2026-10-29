@@ -173,7 +173,7 @@ delete stopped:
 
 | Root              | Stamped + registered as children                                                      | Stamped, not registered (restored by parent key)   | Hidden by parent only (no stamp)                                                                            |
 | ----------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `topic`           | — (phase 2: attachments only this topic references, when `removeFiles`)               | —                                                  | messages, threads, comments, topic\_documents                                                               |
+| `topic`           | — (phase 2: attachments only this topic references, when `removeFiles`)               | —                                                  | messages, threads, comments, topic_documents                                                                |
 | `agent`           | topics (via `agent_id` and via legacy `session_id`)                                   | —                                                  | everything under topics; the legacy `sessions` shell (hidden through the agent join, hard-deleted at purge) |
 | `message`         | tool-result companions of a trashed assistant turn                                    | —                                                  | plugins / tts / translate rows                                                                              |
 | `chatGroup`       | topics (group + owned virtual member agents)                                          | owned virtual member agents                        | —                                                                                                           |
@@ -214,9 +214,9 @@ session groups …) were given an `isDeleted` entry. Raw-SQL scopes (`TaskModel.
 Restore / purge internals pass `includeTrashed: true`. Each trash-aware model exposes a `scope()`
 (no filter) next to its `ownership()` (filter) so those internals are explicit and greppable.
 
-Consequence to keep in mind: a relational query that reuses another table's predicate
-(`db.query.sessionGroups.findMany({ where: sessionsPredicate })`) now fails loudly instead of
-silently rebinding — one such case in `SessionModel.queryWithGroups` was fixed.
+Relational queries must use predicates built for the table being queried. A `sessionGroups`
+query must use a predicate built from `sessionGroups`, rather than one built from `sessions`;
+cross-table predicate reuse now fails instead of silently rebinding.
 
 ### 2.5 Server architecture
 
@@ -232,7 +232,7 @@ packages/database/src/models/trash.ts          TrashModel — registry reads/wri
 - `TrashService.trashXxx` runs the handler's stamping and the registry insert **in one
   transaction**, so rows can never end up hidden but unlisted.
 - Every user-facing delete procedure in scope (phase 1: `topic.removeTopic`/`batchDelete*`/
-  `removeAllTopics`, `agent.removeAgent`, `session.removeSession`, `message.removeMessage(s)` via
+  `removeAllTopics`, `agent.removeAgent`, `message.removeMessage(s)` via
   `MessageService`; phase 2 adds `group.deleteGroup`, `document.deleteDocument(s)`,
   `notebook.deleteDocument`, `file.removeFile(s)`, `knowledgeBase.removeKnowledgeBase`,
   `project.delete`, `task.delete`/`deleteGoal`, `generationTopic.deleteTopic`) keeps its permission

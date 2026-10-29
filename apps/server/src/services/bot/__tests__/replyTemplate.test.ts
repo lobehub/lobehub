@@ -384,7 +384,7 @@ describe('replyTemplate', () => {
       },
     );
 
-    it('renders a known request error instead of the attribution fallback', () => {
+    it('renders a classified code without dedicated copy through its attribution fallback', () => {
       const output = renderAgentError(
         'RequestBodyTooLarge',
         'secret upstream payload',
@@ -392,10 +392,9 @@ describe('replyTemplate', () => {
         'en-US',
         'harness',
       );
-      expect(output).toContain('request is too large');
       expect(output).toContain('Error code: `E');
       expect(output).toContain('op-size');
-      expect(output).not.toContain('Something went wrong on our side');
+      expect(output).not.toContain('Agent Execution Failed');
       expect(output).not.toContain('secret upstream payload');
     });
 
@@ -688,7 +687,7 @@ describe('replyTemplate', () => {
         'en-US',
         'system',
       );
-      expect(en).toContain('session state was unavailable');
+      expect(en).toContain('A temporary system error occurred.');
       expect(en).not.toContain('model provider');
       expect(en).not.toMatch(/switch to a different model/i);
       expect(en).toContain('op-1');
@@ -700,7 +699,7 @@ describe('replyTemplate', () => {
         'zh-CN',
         'system',
       );
-      expect(zh).toContain('会话状态不可用');
+      expect(zh).toContain('发生了临时系统错误');
     });
 
     it('still gives ProviderNetworkError the provider-specific network copy', () => {

@@ -1,6 +1,6 @@
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { Button, Flexbox, Text } from '@lobehub/ui';
-import { CalendarClock, Forward, Play, RotateCcw } from 'lucide-react';
+import { CalendarClock, Forward, RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +21,7 @@ const RateLimitState = ({
   onDismiss,
   onOpenSystemTools,
   onRetry,
-  onTransfer,
+  onHandoff,
   schedule,
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
@@ -102,18 +102,18 @@ const RateLimitState = ({
   const scheduleActions = useMemo(() => {
     if (!schedule) return;
 
+    // Once scheduled, the quota is still exhausted until the reset, so an
+    // immediate retry would just hit the limit again. Retrying early stays
+    // available after cancelling, which restores the unscheduled actions.
     if (schedule.isScheduled) {
       return (
         <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
           <Button size="small" onClick={schedule.onCancel}>
             {t('cliRateLimitGuide.schedule.cancel')}
           </Button>
-          <Button icon={<Play size={14} />} size="small" onClick={schedule.onRunNow}>
-            {t('cliRateLimitGuide.schedule.runNow')}
-          </Button>
-          {onTransfer && (
-            <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onTransfer}>
-              {t('cliRateLimitGuide.actions.transfer')}
+          {onHandoff && (
+            <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onHandoff}>
+              {t('cliRateLimitGuide.actions.handoff')}
             </Button>
           )}
         </Flexbox>
@@ -132,14 +132,14 @@ const RateLimitState = ({
             ? t('cliRateLimitGuide.schedule.continueAfter', { duration: relativeDuration })
             : t('cliRateLimitGuide.schedule.continueAfterReset')}
         </Button>
-        {onTransfer && (
-          <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onTransfer}>
-            {t('cliRateLimitGuide.actions.transfer')}
+        {onHandoff && (
+          <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onHandoff}>
+            {t('cliRateLimitGuide.actions.handoff')}
           </Button>
         )}
       </Flexbox>
     );
-  }, [onRetry, onTransfer, relativeDuration, schedule, t]);
+  }, [onRetry, onHandoff, relativeDuration, schedule, t]);
 
   const isScheduled = Boolean(schedule?.isScheduled);
   const title = isScheduled

@@ -4,6 +4,7 @@ import {
   type PageAgentInvocationContext,
   type PageAgentRuntimeService,
 } from '@lobechat/builtin-tool-page-agent/executionRuntime';
+import { HTML_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { EditorRuntime, formatModifyNodesResult } from '@lobechat/editor-runtime';
 import { type HeadlessEditor } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
@@ -23,8 +24,13 @@ type EditorRuntimeEditorParam = Parameters<EditorRuntime['setEditor']>[0];
 interface DocumentSnapshot {
   content: string;
   editorData: Record<string, unknown> | null;
+  fileType: string;
   title: string;
 }
+
+const HTML_PAGE_UNSUPPORTED =
+  'This page is an HTML page: its body is one self-contained HTML document, not a node tree, ' +
+  'so the page tools cannot read or edit it.';
 
 interface InvocationEnv {
   getTitle: () => string;
@@ -123,6 +129,7 @@ const loadSnapshot = async (
   return {
     content: doc.content ?? '',
     editorData: (doc.editorData ?? null) as Record<string, unknown> | null,
+    fileType: doc.fileType,
     title: doc.title ?? 'Untitled',
   };
 };
@@ -207,6 +214,9 @@ const withEditor = async (
   // (persist: false) never write, so they skip the lock.
   const run = async (lockOwnerId?: string): Promise<HandlerOutput> => {
     const snapshot = await loadSnapshot(documentModel, documentId);
+    // Hydrating an HTML page as Markdown and writing the export back would
+    // replace the page with Markdown; node APIs never run on one.
+    if (snapshot.fileType === HTML_DOCUMENT_FILE_TYPE) throw new Error(HTML_PAGE_UNSUPPORTED);
     const env = buildEnv(snapshot, documentId);
 
     try {

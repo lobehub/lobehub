@@ -169,6 +169,9 @@ export default {
     'This model supports up to {{tokens}} tokens in a single session.',
   'ModelSelect.featureTag.video': 'This model supports video recognition',
   'ModelSelect.featureTag.vision': 'This model supports visual recognition.',
+  'ModelSelect.routing': 'Routing',
+  'ModelSelect.routingTooltip':
+    'A routing group: several providers serve this model, and each request goes to whichever answers.',
   'ModelSelect.removed':
     'The model is not in the list. It will be automatically removed if deselected.',
   'ModelSelect.staleModel.current': 'Current selection',

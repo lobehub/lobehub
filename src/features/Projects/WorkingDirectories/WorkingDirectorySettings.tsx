@@ -17,7 +17,9 @@ import {
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
-import { openProjectTopicModal } from './StartDirectoryModal';
+import { canStageDraftOn } from './startProjectTopicDraft';
+import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
+import { useStartProjectTopic } from './useStartProjectTopic';
 
 /**
  * A device row restored from the persisted list (`onlineUnknown`) has not been
@@ -40,6 +42,8 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const environmentId = params.get('environment') ?? '';
   useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const project = useCurrentProjectDetail(projectId);
+  const startTopic = useStartProjectTopic(projectId);
+  const fixedDeviceId = useAgentFixedDeviceId(project?.project.coordinatorAgentId);
   const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const environments = useProjectEnvironments(projectId);
@@ -148,12 +152,11 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
                           deviceId: directory.deviceId,
                           path: directory.path,
                         })
-                      : openProjectTopicModal({
-                          projectId,
-                          coordinatorAgentId: project!.project.coordinatorAgentId,
-                          directories,
-                          initialDirectoryId: directory.id,
-                          title: t('directories.start'),
+                      : void startTopic({
+                          agentId: project!.project.coordinatorAgentId,
+                          ...(canStageDraftOn(directory, fixedDeviceId)
+                            ? { directoryId: directory.id }
+                            : { bindDirectoryId: directory.id }),
                         })
                   }
                 >

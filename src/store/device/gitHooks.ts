@@ -1,20 +1,22 @@
 import { isDesktop } from '@lobechat/const';
-import type { ReplicaOptimisticToken } from '@lobechat/replica';
-import type { ReplicaSlice, ReplicaSyncSchedule } from '@lobechat/replica/zustand';
 import type {
   DeviceGitAheadBehind,
+  DeviceGitBranchListItem,
   DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestDetailResult,
   DeviceGitPullRequestMergeContext,
+  DeviceGitRemoteBranchListItem,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
+import type { ReplicaOptimisticToken } from 'local-replica';
+import type { ReplicaSlice, ReplicaSyncSchedule } from 'local-replica/zustand';
 import { useCallback, useMemo, useRef } from 'react';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { deviceKeys, localFileKeys } from '@/libs/swr/keys';
-import { type GitBranchSummary, type GitLinkedPRSummary, gitService } from '@/services/git';
+import type { GitBranchSummary, GitLinkedPRSummary } from '@/services/git';
 
 import {
   gitLinkedPRKey,
@@ -140,6 +142,8 @@ const useGitReviewReplica = <TParams, TStored>(
   toKey: (params: TParams) => string,
   params: TParams | null,
   schedule: GitReplicaSyncOptions<TStored>,
+  /** Params to sync; `null` pauses syncing while `params` still reads the stored row. */
+  syncParams: TParams | null = params,
 ) => {
   const key = params ? toKey(params) : undefined;
   const stored = useGitReviewStore((s) => (key ? selectMap(s)[key] : undefined));
@@ -149,12 +153,12 @@ const useGitReviewReplica = <TParams, TStored>(
   // unreachable device, missing `gh`) is not retried, like the SWR hooks these replaced.
   const { error, isHydrated, isValidating, revalidate } = pick(
     useGitReviewStore.getState().slices,
-  ).useSync(params, { ...schedule, shouldRetryOnError: false });
+  ).useSync(syncParams, { ...schedule, shouldRetryOnError: false });
 
   return {
     error,
     isConfirmed,
-    isLoading: !!params && stored === undefined && !error && (!isHydrated || isValidating),
+    isLoading: !!syncParams && stored === undefined && !error && (!isHydrated || isValidating),
     isValidating,
     mutate: revalidate,
     stored,
@@ -193,7 +197,7 @@ export const useReviewPatches = (
   deviceId?: string,
   active = true,
 ): GitReplicaReadResult<ReviewPatchesData> => {
-  const enabled = active && isEnabled(deviceId, dirPath);
+  const enabled = isEnabled(deviceId, dirPath);
   const params = useMemo(
     () => (enabled ? { baseRef, deviceId, mode, path: dirPath! } : null),
     [enabled, baseRef, deviceId, mode, dirPath],
@@ -211,6 +215,9 @@ export const useReviewPatches = (
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
     },
+    // Inactive callers (a collapsed Review panel) keep the last diff instead of
+    // dropping to undefined, so reopening does not re-render every file from empty.
+    active ? params : null,
   );
   return { ...rest, data: stored };
 };
@@ -254,10 +261,11 @@ const useGitStatusRead = <T>(
   deviceId: string | undefined,
   path: string | undefined,
   schedule: ReplicaSyncSchedule,
+  enabled = true,
 ): GitStatusReadResult<T> => {
   const params = useMemo(
-    () => (isEnabled(deviceId, path) ? { deviceId, path } : null),
-    [deviceId, path],
+    () => (enabled && isEnabled(deviceId, path) ? { deviceId, path } : null),
+    [enabled, deviceId, path],
   );
   const key = params ? gitStatusKey(params) : undefined;
   const stored = useGitStatusStore((s) => (key ? selectMap(s)[key] : undefined));
@@ -341,6 +349,8 @@ const useGitStatusRead = <T>(
 };
 
 const selectBranchMap = (s: GitStatusStore) => s.gitBranchMap;
+const selectBranchListMap = (s: GitStatusStore) => s.gitBranchListMap;
+const selectRemoteBranchListMap = (s: GitStatusStore) => s.gitRemoteBranchListMap;
 const selectAheadBehindMap = (s: GitStatusStore) => s.gitAheadBehindMap;
 const selectWorkingTreeStatusMap = (s: GitStatusStore) => s.gitWorkingTreeStatusMap;
 const selectWorktreesMap = (s: GitStatusStore) => s.gitWorktreesMap;
@@ -348,6 +358,8 @@ const selectWorktreesMap = (s: GitStatusStore) => s.gitWorktreesMap;
 const selectDiffStatsMap = (s: GitStatusStore) => s.gitDiffStatsMap;
 
 const selectBranchEntries = (s: GitStatusStore) => s.gitBranchReplica.entries;
+const selectBranchListEntries = (s: GitStatusStore) => s.gitBranchListReplica.entries;
+const selectRemoteBranchListEntries = (s: GitStatusStore) => s.gitRemoteBranchListReplica.entries;
 const selectAheadBehindEntries = (s: GitStatusStore) => s.gitAheadBehindReplica.entries;
 const selectDiffStatsEntries = (s: GitStatusStore) => s.gitDiffStatsReplica.entries;
 const selectWorkingTreeStatusEntries = (s: GitStatusStore) => s.gitWorkingTreeStatusReplica.entries;
@@ -588,22 +600,43 @@ export const useFetchGitPullRequestMergeContext = (
 };
 
 /**
- * Lazy-loaded list of remote branches under `refs/remotes/origin/*`.
- * Disabled until the Review base-ref picker opens.
+ * Local branches of a directory: the branch switcher's list and the names a new
+ * worktree branch must avoid. The persisted list paints the switcher the moment
+ * it opens; `isConfirmed` says whether this session's read has answered (a name
+ * drawn against a stale list could collide with a branch made since). The 10s
+ * dedupe lets the switcher and the worktree seed share one read; branch writes
+ * re-read through `refreshGitBranches`.
+ */
+export const useFetchGitBranches = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  enabled = true,
+) =>
+  useGitStatusRead<DeviceGitBranchListItem[]>(
+    useGitStatusStore.getState().slices.branches,
+    selectBranchListMap,
+    selectBranchListEntries,
+    deviceId,
+    path,
+    { dedupingInterval: 10 * 1000, revalidateOnFocus: false },
+    enabled,
+  );
+
+/**
+ * Remote branches under `refs/remotes/origin/*`, read once a base-ref picker
+ * opens. The persisted list paints the picker immediately; the read refreshes it.
  */
 export const useGitRemoteBranches = (
   dirPath: string | undefined,
   enabled: boolean,
   deviceId?: string,
-) => {
-  const key =
-    enabled && dirPath ? deviceKeys.gitRemoteBranches(deviceId ?? 'local', dirPath) : null;
-  return useClientDataSWR(
-    key,
-    () => gitService.listGitRemoteBranches({ deviceId, path: dirPath! }),
-    {
-      revalidateOnFocus: false,
-      shouldRetryOnError: false,
-    },
+) =>
+  useGitStatusRead<DeviceGitRemoteBranchListItem[]>(
+    useGitStatusStore.getState().slices.remoteBranches,
+    selectRemoteBranchListMap,
+    selectRemoteBranchListEntries,
+    deviceId,
+    dirPath,
+    { dedupingInterval: 10 * 1000, revalidateOnFocus: false },
+    enabled,
   );
-};

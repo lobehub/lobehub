@@ -11,6 +11,7 @@ import { log } from '../utils/logger';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
@@ -77,7 +78,12 @@ export function registerAgentCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.agent(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -125,7 +131,10 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result, fields);
+          outputJson(
+            withUrl(result, await resolveUrlBuilder(client), resourcePath.agent(agentId)),
+            fields,
+          );
           return;
         }
 
@@ -199,6 +208,7 @@ export function registerAgentCommand(program: Command) {
 
   agent
     .command('edit [agentId]')
+    .alias('update')
     .description('Update agent configuration')
     .option('--slug <slug>', 'Agent slug (e.g. inbox)')
     .option('-t, --title <title>', 'New title')
@@ -311,7 +321,14 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result?.agent ?? result, fields);
+          outputJson(
+            withUrl(
+              result?.agent ?? result,
+              await resolveUrlBuilder(client),
+              resourcePath.agent(agentId),
+            ),
+            fields,
+          );
           return;
         }
 

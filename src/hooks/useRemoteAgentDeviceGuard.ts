@@ -3,6 +3,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { deviceService } from '@/services/device';
+import {
+  deviceSelectors,
+  isDevicePresenceUnknown,
+  useDeviceList,
+  useDeviceStore,
+} from '@/store/device';
 
 export type RemoteAgentDeviceStatus =
   'checking' | 'device-offline' | 'no-device' | 'ok' | 'platform-unavailable';
@@ -43,71 +49,84 @@ export const useRemoteAgentDeviceGuard = ({
   const boundDeviceId = agencyConfig?.boundDeviceId;
   const providerType = agencyConfig?.heterogeneousProvider?.type;
 
-  const [status, setStatus] = useState<RemoteAgentDeviceStatus>('checking');
+  // The device list is the shared replica every device surface reads — one
+  // request per scope, revalidated on focus — not a request of this guard's own.
+  const { data: devices, error: deviceListError, mutate: refreshDevices } = useDeviceList();
+  const device = boundDeviceId ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
+  // A persisted copy painted before the server answered: its rows say nothing
+  // about presence, and a device missing from it may simply be newer than it.
+  const isListConfirmed = useDeviceStore(deviceSelectors.isDeviceListConfirmed);
+  // Notify-based platforms must also be available on the device.
+  const remoteType =
+    providerType && isRemoteHeterogeneousType(providerType) ? providerType : undefined;
 
-  const check = useCallback(async () => {
-    if (!enabled) return;
+  const listStatus = ((): RemoteAgentDeviceStatus | 'capability' => {
+    // Disabled, or the override hasn't loaded yet — `boundDeviceId` may still
+    // be the shared row's device. Stay in `checking` (non-blocking) rather than
+    // flash an offline banner for a device this member never picked.
+    if (!enabled || isPreferenceLoading) return 'checking';
+    if (!boundDeviceId) return 'no-device';
+    // The last list request failed: whatever presence the store still holds
+    // (stored copy or an earlier answer) may be stale. Allow sending rather
+    // than block the user on a network issue.
+    if (deviceListError) return 'ok';
+    if (!isListConfirmed || (device && isDevicePresenceUnknown(device))) return 'checking';
+    // A shared/legacy binding may point at the author's personal principal,
+    // which is intentionally absent from the caller-scoped device list. The
+    // server owns that routing decision; absence here is not proof of offline.
+    if (!device) return 'ok';
+    if (!device.online) return 'device-offline';
+    return remoteType ? 'capability' : 'ok';
+  })();
 
-    // The override hasn't loaded yet — `boundDeviceId` may still be the shared
-    // row's device. Stay in `checking` (non-blocking) rather than flash an
-    // offline banner for a device this member never picked; the load flips
-    // `isPreferenceLoading` and re-runs the check.
-    if (isPreferenceLoading) {
-      setStatus('checking');
-      return;
-    }
-
-    if (!boundDeviceId) {
-      setStatus('no-device');
-      return;
-    }
-
-    setStatus('checking');
-
-    try {
-      const devices = await deviceService.listDevices();
-      const device = devices.find((d) => d.deviceId === boundDeviceId);
-
-      // A shared/legacy binding may point at the author's personal principal,
-      // which is intentionally absent from the caller-scoped device list. The
-      // server owns that routing decision; absence here is not proof of offline.
-      if (!device) {
-        setStatus('ok');
-        return;
-      }
-
-      if (!device.online) {
-        setStatus('device-offline');
-        return;
-      }
-
-      if (providerType && isRemoteHeterogeneousType(providerType)) {
-        const capability = await deviceService.checkCapability({
-          deviceId: boundDeviceId,
-          platform: providerType,
-          scope: device.scope,
-        });
-        setStatus(capability.available ? 'ok' : 'platform-unavailable');
-      } else {
-        setStatus('ok');
-      }
-    } catch {
-      // On error, allow sending — don't block user on network issues
-      setStatus('ok');
-    }
-  }, [enabled, isPreferenceLoading, boundDeviceId, providerType]);
+  // Platform availability is a live probe of the device, so it stays a request
+  // of its own, re-run when the window regains focus.
+  const [capability, setCapability] = useState<{ available: boolean; key: string }>();
+  const [probeRound, setProbeRound] = useState(0);
+  const probe = listStatus === 'capability' ? device : undefined;
+  const probeDeviceId = probe?.deviceId;
+  const probeScope = probe?.scope;
+  const capabilityKey = probe ? `${probeDeviceId}:${probeScope}:${remoteType}` : '';
 
   useEffect(() => {
-    void check();
-  }, [check]);
+    if (!probeDeviceId || !remoteType) return;
+    let cancelled = false;
+    const key = `${probeDeviceId}:${probeScope}:${remoteType}`;
+    deviceService
+      .checkCapability({ deviceId: probeDeviceId, platform: remoteType, scope: probeScope })
+      .then(
+        (result) => !cancelled && setCapability({ available: result.available, key }),
+        // On error, allow sending — don't block the user on network issues.
+        () => !cancelled && setCapability({ available: true, key }),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [probeDeviceId, probeScope, remoteType, probeRound]);
+
+  const refresh = useCallback(() => {
+    void refreshDevices();
+    setProbeRound((round) => round + 1);
+  }, [refreshDevices]);
 
   // Re-check when window regains focus
   useEffect(() => {
     if (!enabled) return;
-    const handler = () => void check();
+    const handler = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [enabled, check]);
+  }, [enabled, refresh]);
 
-  return { refresh: () => void check(), status };
+  const status: RemoteAgentDeviceStatus =
+    listStatus !== 'capability'
+      ? listStatus
+      : capability?.key !== capabilityKey
+        ? 'checking'
+        : capability.available
+          ? 'ok'
+          : 'platform-unavailable';
+
+  return { refresh, status };
 };

@@ -1,22 +1,30 @@
 import { confirmModal, Icon, toast } from '@lobehub/ui';
-import { DownloadIcon } from 'lucide-react';
+import { DownloadIcon, Maximize2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { openRenameModal } from '@/components/RenameModal';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useChatStore } from '@/store/chat';
 
 import { usePortalDocumentTitleState } from './titleContext';
+import { useHtmlExport } from './useHtmlExport';
 import { useMarkdownExport } from './useMarkdownExport';
 import { TITLE_MAX_LENGTH, usePortalDocumentHeaderActions } from './usePortalDocumentHeader';
 
 export const useDocumentMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const { t } = useTranslation(['chat', 'common']);
   const { isLoading, metaLocked, savedTitle, saveTitle } = usePortalDocumentTitleState();
-  const { agentDocumentId, agentId, documentId, refresh, url } = usePortalDocumentHeaderActions();
+  const { agentDocumentId, agentId, documentId, path, refresh, url } =
+    usePortalDocumentHeaderActions();
   const closeDocument = useChatStore((s) => s.closeDocument);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
+  const navigate = useWorkspaceAwareNavigate();
   const exportMarkdown = useMarkdownExport(documentId);
+  // An HTML page downloads as the page itself; it has no Markdown to export.
+  const exportHtml = useHtmlExport(documentId);
+  const exportDocument = exportHtml ?? exportMarkdown;
 
   if (!documentId || isLoading) return;
 
@@ -62,16 +70,32 @@ export const useDocumentMoreMenu = (): PortalMoreMenuConfig | undefined => {
     copyId: documentId,
     copyLink: url,
     delete: agentDocumentId ? deleteDocument : undefined,
-    extraItems: exportMarkdown
-      ? [
-          {
-            icon: <Icon icon={DownloadIcon} />,
-            key: 'export',
-            label: t('agentDocument.portal.export', { ns: 'chat' }),
-            onClick: () => void exportMarkdown(),
-          },
-        ]
-      : undefined,
+    extraItems: [
+      // The header's expand icon in words: open the document as a full page.
+      ...(path
+        ? [
+            {
+              icon: <Icon icon={Maximize2Icon} />,
+              key: 'open-as-page',
+              label: t('agentDocument.openAsPage', { ns: 'chat' }),
+              onClick: () => {
+                navigate(path);
+                clearPortalStack();
+              },
+            },
+          ]
+        : []),
+      ...(exportDocument
+        ? [
+            {
+              icon: <Icon icon={DownloadIcon} />,
+              key: 'export',
+              label: t('agentDocument.portal.export', { ns: 'chat' }),
+              onClick: () => void exportDocument(),
+            },
+          ]
+        : []),
+    ],
     refresh,
     // A dialog, like every other portal's rename — flipping the header title
     // into an input from a menu reads as a stray focused text field.

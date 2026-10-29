@@ -26,7 +26,7 @@ vi.mock('@/features/WorkingDirectory', () => ({ openAddWorkingDirModal: vi.fn() 
 
 vi.mock('@/services/device', () => ({ deviceService: { statPath: vi.fn() } }));
 
-vi.mock('@/features/DeviceManager/useDeviceList', () => ({
+vi.mock('@/store/device/useDeviceList', () => ({
   useDeviceList: () => ({
     data: [
       {

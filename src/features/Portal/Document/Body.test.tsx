@@ -207,6 +207,23 @@ describe('DocumentBody', () => {
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 
+  it('renders an HTML page in a sandboxed frame without mounting either editor', () => {
+    mockDocumentMeta.current = {
+      content: '<!doctype html><html><body><h1>Goal report</h1></body></html>',
+      fileType: 'custom/html',
+      filename: 'Goal report',
+      title: 'Goal report',
+    };
+
+    const { container } = render(<DocumentBody />);
+
+    const frame = container.querySelector('iframe')!;
+    expect(frame.getAttribute('srcdoc')).toContain('<h1>Goal report</h1>');
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(screen.queryByTestId('editor-canvas')).toBeNull();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+  });
+
   it('renders EditorCanvas for notebook documents that have no filename', () => {
     mockDocumentMeta.current = {
       content: '# notes',

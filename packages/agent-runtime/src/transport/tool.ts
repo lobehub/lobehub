@@ -27,6 +27,12 @@ export interface ToolRunResult {
   stop?: boolean;
   success: boolean;
   /**
+   * The tool message the tool already created for this call (e.g. a background
+   * sub-agent's placeholder). Transports lift it onto
+   * {@link ToolRunExecution.toolMessageId} so the result lands in that row.
+   */
+  toolMessageId?: string;
+  /**
    * Work-registration intent produced by the tool execution (task / skill /
    * document identity). The executor forwards it to
    * {@link ToolTransport.registerWork} once cumulative cost is known.

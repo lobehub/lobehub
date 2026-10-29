@@ -937,7 +937,7 @@ describe('Group', () => {
       expect(screen.queryByTestId('process-fold')).not.toBeInTheDocument();
     });
 
-    it('folds each turn separately and keeps the steer bubble between the folds', () => {
+    it('folds each turn separately and keeps every turn’s final answer outside its fold', () => {
       mockOperations = [];
 
       const { container } = render(
@@ -967,13 +967,43 @@ describe('Group', () => {
         Array.from(root.querySelectorAll('[data-testid="answer-segment"]')).map(
           (node) => JSON.parse(node.getAttribute('data-block') || '{}').id,
         );
-      expect(idsIn(folds[0]!)).toEqual(['a1', 'a2']);
+      expect(idsIn(folds[0]!)).toEqual(['a1']);
       expect(idsIn(folds[1]!)).toEqual(['b1']);
 
-      const outside = Array.from(container.querySelectorAll('[data-testid="answer-segment"]'))
-        .filter((node) => !folds.some((fold) => fold.contains(node)))
-        .map((node) => JSON.parse(node.getAttribute('data-block') || '{}').id);
-      expect(outside).toEqual(['b2']);
+      // A queued follow-up is only sent after the turn it follows has finished,
+      // so that turn's answer is a real reply and must stay readable, sitting
+      // between its own fold and the steer bubble.
+      const sequence = Array.from(container.querySelectorAll('[data-testid]'))
+        .filter((node) => !folds.some((fold) => fold !== node && fold.contains(node)))
+        .map((node) =>
+          node.getAttribute('data-testid') === 'answer-segment'
+            ? JSON.parse(node.getAttribute('data-block') || '{}').id
+            : node.getAttribute('data-testid'),
+        );
+      expect(sequence).toEqual(['process-fold', 'a2', 'steer-message', 'process-fold', 'b2']);
+    });
+
+    it('folds the whole of an earlier turn that stopped on a tool call', () => {
+      mockOperations = [];
+
+      render(
+        <Group
+          enableProcessFold
+          isLatestItem
+          blocks={[chain1[0]!]}
+          continuations={[{ blocks: chain2, id: 'group-2', steerUserId: 'steer-1' }]}
+          id="group-1"
+          messageIndex={0}
+        />,
+      );
+
+      const folds = screen.getAllByTestId('process-fold');
+      expect(folds).toHaveLength(2);
+      expect(
+        Array.from(folds[0]!.querySelectorAll('[data-testid="answer-segment"]')).map(
+          (node) => JSON.parse(node.getAttribute('data-block') || '{}').id,
+        ),
+      ).toEqual(['a1']);
     });
 
     it('keeps the loading placeholder of a continuation that is still being created', () => {

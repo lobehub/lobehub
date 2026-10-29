@@ -25,13 +25,9 @@ describe('resolveInboxBlockState', () => {
     expect(resolveInboxBlockState({ ...failed, isMain: true })).toBeNull();
   });
 
-  it('drops both states in the rail once news is off, since the rail never shows needs-you', () => {
-    expect(
-      resolveInboxBlockState({ ...firstLoad, hiddenWidgets: ['news'], hideNeedsYou: true }),
-    ).toBeNull();
-    expect(
-      resolveInboxBlockState({ ...failed, hiddenWidgets: ['news'], hideNeedsYou: true }),
-    ).toBeNull();
+  it('never holds the rail, which shows no brief feed of its own', () => {
+    expect(resolveInboxBlockState({ ...firstLoad, hideNeedsYou: true })).toBeNull();
+    expect(resolveInboxBlockState({ ...failed, hideNeedsYou: true })).toBeNull();
   });
 
   it('keeps them where needs-you still renders, even with news off', () => {

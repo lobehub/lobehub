@@ -60,6 +60,10 @@ describe('HeterogeneousAgentCtr Codex lifecycle', () => {
     controls.codexAppServerConsumerCount.value = 0;
     controls.codexAppServerRunMock.mockReset();
     vi.stubEnv('LOBE_CODEX_APP_SERVER', '');
+    // A desktop launched from an agent shell inherits that run's identity;
+    // the assertions below are about what the app adds, not the host shell.
+    for (const key of ['LOBEHUB_PROCESS_TOPIC', 'AGENT_BROWSER_NAMESPACE'])
+      vi.stubEnv(key, undefined);
     vi.mocked(existsSync).mockReturnValue(true);
     // The fake desktop path is a directory for spawn preflight; ledger IO stays real.
     vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);

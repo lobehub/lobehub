@@ -47,6 +47,11 @@ import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
+  /**
+   * Narrow by creator: `self` keeps the caller's own documents, `others` keeps
+   * documents other workspace members created (still subject to visibility).
+   */
+  creator?: 'others' | 'self';
   current?: number;
   /**
    * Knowledge-base ids whose documents must be dropped from the listing —
@@ -56,8 +61,17 @@ export interface QueryDocumentParams {
   excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
+  /**
+   * Row order: `updatedAt` (default) and `createdAt` list the newest first,
+   * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
+   */
+  sortBy?: DocumentQuerySortBy;
   sourceTypes?: string[];
+  /** Keep only documents that live outside every knowledge base. */
+  standaloneOnly?: boolean;
 }
+
+export type DocumentQuerySortBy = 'createdAt' | 'title' | 'updatedAt';
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
   'Document subtree contains content created by other users';
@@ -149,21 +163,10 @@ export class DocumentModel {
   };
 
   create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
-    // Workspace-mode default for visibility:
-    //   - explicit visibility wins
-    //   - user-authored Pages (`sourceType: 'api'`) default to
-    //     `'private'` so workspace members start drafts in their own space and
-    //     publish when ready
-    //   - all other top-level rows (web crawls, file ingests, topic snapshots,
-    //     agent-signal artifacts, …): leave the schema default (`'public'`) so
-    //     existing behavior is preserved — these don't have a Pages-style
-    //     draft / publish lifecycle and were workspace-shared from day one
-    // Personal mode leaves it to the schema default; the filter ignores it.
-    let visibility = params.visibility;
-    if (!visibility && this.workspaceId && params.sourceType === 'api') {
-      visibility = 'private';
-    }
-
+    // Workspace documents default to the schema's `'public'`: a workspace is a
+    // collaborative space, so whatever a member (or an agent acting for them)
+    // writes there is shared unless the caller explicitly asks for `'private'`.
+    // Personal mode ignores the column.
     const result = (await this.db
       .insert(documents)
       .values(
@@ -172,7 +175,6 @@ export class DocumentModel {
           {
             ...params,
             metadata: this.scopeMetadata(params.metadata),
-            ...(visibility ? { visibility } : {}),
           },
         ),
       )
@@ -190,11 +192,14 @@ export class DocumentModel {
   };
 
   query = async ({
+    creator,
     current = 0,
     pageSize = 9999,
     excludeKnowledgeBaseIds,
     fileTypes,
+    sortBy = 'updatedAt',
     sourceTypes,
+    standaloneOnly,
   }: QueryDocumentParams = {}): Promise<{
     items: DocumentItem[];
     total: number;
@@ -204,6 +209,25 @@ export class DocumentModel {
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
+    }
+
+    if (creator === 'self') conditions.push(eq(documents.userId, this.userId));
+    if (creator === 'others') conditions.push(ne(documents.userId, this.userId));
+
+    if (standaloneOnly) {
+      conditions.push(
+        isNull(documents.knowledgeBaseId),
+        // Parsed files taken from a library keep `knowledgeBaseId` null, so the
+        // `knowledgeBaseId` check alone still lets them through. A document that
+        // is backed by a file living in a library is not standalone either.
+        or(
+          isNull(documents.fileId),
+          notInArray(
+            documents.fileId,
+            this.db.select({ fileId: knowledgeBaseFiles.fileId }).from(knowledgeBaseFiles),
+          ),
+        )!,
+      );
     }
 
     if (excludeKnowledgeBaseIds?.length) {
@@ -239,6 +263,13 @@ export class DocumentModel {
     }
 
     const whereCondition = and(...conditions);
+    const orderBy =
+      sortBy === 'title'
+        ? [asc(documents.title), desc(documents.updatedAt), asc(documents.id)]
+        : [
+            desc(sortBy === 'createdAt' ? documents.createdAt : documents.updatedAt),
+            asc(documents.id),
+          ];
 
     // Fetch items and total count in parallel
     // Optimize: Exclude large JSONB fields (content, pages, editorData) for better performance
@@ -271,7 +302,7 @@ export class DocumentModel {
         })
         .from(documents)
         .where(whereCondition)
-        .orderBy(desc(documents.updatedAt))
+        .orderBy(...orderBy)
         .limit(pageSize)
         .offset(offset),
       this.db
@@ -812,6 +843,7 @@ export class DocumentModel {
         if (seen.has(currentId)) continue;
         seen.add(currentId);
         const original = byId.get(currentId);
+        /* v8 ignore next -- unreachable: the queue only holds documentId (the subtree root collectSubtree fetched by that id) and ids pushed from subtree rows, so byId always has it */
         if (!original) continue;
 
         const newParentId =

@@ -48,6 +48,13 @@ describe('useMarkdownExport', () => {
     expect(result.current).toBeUndefined();
   });
 
+  it('is unavailable for an HTML page, whose content is not Markdown', () => {
+    mocks.documentMeta = { content: '<html></html>', fileType: 'custom/html', title: 'Report' };
+    const { result } = renderHook(() => useMarkdownExport('doc_1'));
+
+    expect(result.current).toBeUndefined();
+  });
+
   it('downloads the live editor buffer under the document title', async () => {
     mocks.storeContent = 'live edit';
     const createObjectURL = vi.fn((_blob: Blob) => 'blob:doc');

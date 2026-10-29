@@ -1,13 +1,9 @@
 import { useCallback } from 'react';
 
-import { useIsWorkspaceAdmin } from '@/business/client/hooks/useIsWorkspaceAdmin';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageableChecker } from '@/hooks/useResourceManageable';
 
 export type TaskArchiveDeniedKey =
-  | 'taskList.contextMenu.archiveBlocked'
-  | 'taskList.contextMenu.archiveDenied.noEditPermission'
-  | 'taskList.contextMenu.archiveDenied.notCreatorOrAdmin';
+  'taskList.contextMenu.archiveBlocked' | 'taskList.contextMenu.archiveDenied.noEditPermission';
 
 export interface TaskArchiveGate {
   allowed: boolean;
@@ -21,32 +17,21 @@ export interface TaskArchiveGateOptions {
 }
 
 /**
- * Archive follows the rule the server enforces: the task's creator, a
- * workspace owner, or a workspace admin, and never while work can still run.
- * The returned reason lets a disabled menu item say why instead of just
- * greying out.
+ * Archive follows the rule the server enforces: any member who can edit tasks,
+ * whoever created the task, and never while work can still run. The returned
+ * reason lets a disabled menu item say why instead of just greying out.
  */
-export const useTaskArchiveGate = (): ((
-  createdByUserId?: string | null,
-  options?: TaskArchiveGateOptions,
-) => TaskArchiveGate) => {
+export const useTaskArchiveGate = (): ((options?: TaskArchiveGateOptions) => TaskArchiveGate) => {
   const { allowed: canEditTask } = usePermission('create_content');
-  const isAdmin = useIsWorkspaceAdmin();
-  const checkManageable = useResourceManageableChecker();
 
   return useCallback(
-    (createdByUserId, options): TaskArchiveGate => {
+    (options): TaskArchiveGate => {
       if (!canEditTask)
         return { allowed: false, reasonKey: 'taskList.contextMenu.archiveDenied.noEditPermission' };
-      if (!isAdmin && !checkManageable(createdByUserId))
-        return {
-          allowed: false,
-          reasonKey: 'taskList.contextMenu.archiveDenied.notCreatorOrAdmin',
-        };
       if (options?.archiveBlocked)
         return { allowed: false, reasonKey: 'taskList.contextMenu.archiveBlocked' };
       return { allowed: true };
     },
-    [canEditTask, checkManageable, isAdmin],
+    [canEditTask],
   );
 };

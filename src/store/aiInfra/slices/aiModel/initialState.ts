@@ -7,6 +7,8 @@ import {
 
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 
+import type { AiModelReasoningConfigEntry } from './projection';
+
 export interface AIModelsState {
   /**
    * Replica view of the models of every visited provider
@@ -23,6 +25,8 @@ export interface AIModelsState {
    * `${providerId}/${modelId}` (personal scope, cross-workspace).
    */
   modelReasoningConfigMap: Record<string, AiModelReasoningConfig | undefined>;
+  /** Replica bookkeeping of `modelReasoningConfigMap`. */
+  modelReasoningConfigReplica: ReplicaState<AiModelReasoningConfigEntry>;
   /**
    * `${providerId}/${modelId}` keys with an in-flight reasoning-config save.
    */
@@ -36,6 +40,7 @@ export const initialAIModelState: AIModelsState = {
   aiModelLoadingIds: [],
   builtinAiModelList: [],
   modelReasoningConfigMap: {},
+  modelReasoningConfigReplica: createReplicaState(),
   modelReasoningConfigUpdatingKeys: [],
   modelSearchKeyword: '',
 };

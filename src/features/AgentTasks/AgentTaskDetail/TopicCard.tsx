@@ -25,8 +25,8 @@ import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
@@ -40,6 +40,7 @@ import RunVerifyTag from './RunVerifyTag';
 import { shouldShowRunFollowUp } from './shouldShowRunFollowUp';
 import TopicStatusIcon from './TopicStatusIcon';
 import { resolveRunAgentId, useRunFollowUp } from './useRunFollowUp';
+import { useRunAcceptanceWait } from './useTaskAcceptanceWait';
 
 // The run's last message (`content`) is the raw assistant output — markdown, and
 // often long. Render it as rich text, but keep it a bounded preview in the feed:
@@ -94,6 +95,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
   const { allowed: canEditTask } = usePermission('create_content');
   const [commenting, setCommenting] = useState(false);
   const isRunning = activity.status === 'running';
+  const acceptanceWait = useRunAcceptanceWait(activity);
   // A run cannot be answered while it is still going: the follow-up is a turn
   // in the same conversation, so it would land mid-run.
   const showRunFollowUp = shouldShowRunFollowUp(canFollowUp, isRunning);
@@ -254,14 +256,21 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
   // An agent that simply never set an avatar is still an agent — it gets the
   // same default face it wears everywhere else, not a placeholder dot. The dot
   // stays for rows with no author at all.
-  const avatarNode =
-    activity.author?.avatar || isAgent ? (
-      <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
-    ) : (
-      <div className={styles.activityAvatar}>
-        <CircleDot size={12} />
-      </div>
-    );
+  const avatarNode = isAgent ? (
+    <AgentAvatar
+      agentId={activity.author?.id}
+      avatar={activity.author?.avatar}
+      name={activity.author?.name}
+      shape={'circle'}
+      size={24}
+    />
+  ) : activity.author?.avatar ? (
+    <Avatar avatar={activity.author.avatar} size={24} />
+  ) : (
+    <div className={styles.activityAvatar}>
+      <CircleDot size={12} />
+    </div>
+  );
 
   return (
     // The primary result is not one card among many — it is the agent reporting
@@ -289,7 +298,12 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, prim
           ) : (
             avatarNode
           )}
-          <TopicStatusIcon size={16} status={activity.status} />
+          <TopicStatusIcon
+            size={16}
+            // The topic of a verify-bound run is `completed` while its task
+            // stays running until the acceptance round settles.
+            status={acceptanceWait ? 'awaiting_acceptance' : activity.status}
+          />
           {activity.sourceTaskIdentifier && (
             <Tag
               size={'small'}

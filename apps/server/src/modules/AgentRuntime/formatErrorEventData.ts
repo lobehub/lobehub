@@ -34,12 +34,17 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   const rawPayloadErrorType = payload?.errorType ?? payload?.type;
   const payloadErrorType = isErrorType(rawPayloadErrorType) ? rawPayloadErrorType : undefined;
   /**
-   * Runtime completion errors carry their provider/model diagnostics on the Error instance.
-   * Keep that body so the client can persist it and render provider-specific error UI;
-   * other Error instances keep the flat shape.
+   * Runtime completion errors and provider chat errors thrown as Error instances (e.g. a
+   * `StreamChunkError` raised while consuming the model stream) carry their provider,
+   * diagnostics, and trace id on the instance. Keep that body so the client can persist it
+   * and render provider-specific error UI; other Error instances keep the flat shape.
    */
   const isRuntimeCompletionError =
-    error instanceof ModelEmptyError || error instanceof ModelRefusalError;
+    error instanceof ModelEmptyError ||
+    error instanceof ModelRefusalError ||
+    (error instanceof Error &&
+      payloadErrorType !== undefined &&
+      pickNonEmptyString(payload?.provider) !== undefined);
   const structuredError = isRuntimeCompletionError
     ? formatErrorForState(error)
     : error instanceof Error || payloadErrorType === undefined

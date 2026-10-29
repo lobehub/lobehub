@@ -36,6 +36,30 @@ export const loadShareResources = async (lang?: string) => {
   return Object.fromEntries(entries) as ShareResources;
 };
 
+const translationOptions = {
+  interpolation: { escapeValue: false },
+  keySeparator: false,
+  showSupportNotice: false,
+} as const;
+
+// Loader-side copy: a bare instance, so react-i18next's global instance stays the one rendering.
+export const createShareT = (lang: string | undefined, resources: ShareResources) => {
+  const locale = normalizeLocale(lang);
+  const instance = i18next.createInstance();
+
+  void instance.init({
+    ...translationOptions,
+    initAsync: false,
+    lng: locale,
+    resources: { [locale]: resources },
+  });
+
+  return instance.getFixedT(locale, 'chat');
+};
+
+export const loadShareT = async (lang?: string) =>
+  createShareT(lang, await loadShareResources(lang));
+
 export const createShareI18n = (lang?: string, bundledResources?: ShareResources) => {
   const locale = normalizeLocale(lang);
   const resources = bundledResources ? { [locale]: bundledResources } : undefined;
@@ -48,11 +72,10 @@ export const createShareI18n = (lang?: string, bundledResources?: ShareResources
   return {
     init: (params: { initAsync?: boolean } = {}) =>
       instance.init({
+        ...translationOptions,
         defaultNS: 'chat',
         fallbackLng: DEFAULT_LANG,
         initAsync: params.initAsync ?? true,
-        interpolation: { escapeValue: false },
-        keySeparator: false,
         lng: locale,
         ns: [],
         partialBundledLanguages: true,
@@ -61,7 +84,6 @@ export const createShareI18n = (lang?: string, bundledResources?: ShareResources
           useSuspense: false,
         },
         resources,
-        showSupportNotice: false,
       }),
     instance,
   };

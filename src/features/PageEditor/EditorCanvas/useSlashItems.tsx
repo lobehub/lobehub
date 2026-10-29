@@ -1,7 +1,10 @@
 import { type SlashOptions } from '@lobehub/editor';
 import {
+  INSERT_ALERT_COMMAND,
+  INSERT_CHART_COMMAND,
   INSERT_CHECK_LIST_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
+  INSERT_FOOTNOTE_COMMAND,
   INSERT_HEADING_COMMAND,
   INSERT_HORIZONTAL_RULE_COMMAND,
   INSERT_IMAGE_COMMAND,
@@ -12,6 +15,7 @@ import {
 } from '@lobehub/editor';
 import { Text } from '@lobehub/ui';
 import {
+  ChartColumnIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
@@ -19,9 +23,11 @@ import {
   ListIcon,
   ListOrderedIcon,
   ListTodoIcon,
+  MessageSquareWarningIcon,
   MinusIcon,
   SigmaIcon,
   SquareDashedBottomCodeIcon,
+  SuperscriptIcon,
   Table2Icon,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -119,6 +125,22 @@ export const useSlashItems = (): SlashOptions['items'] => {
         },
       },
       {
+        icon: MessageSquareWarningIcon,
+        key: 'alert',
+        label: t('slash.alert'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_ALERT_COMMAND, undefined);
+        },
+      },
+      {
+        icon: ChartColumnIcon,
+        key: 'chart',
+        label: t('slash.chart'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_CHART_COMMAND, undefined);
+        },
+      },
+      {
         icon: SquareDashedBottomCodeIcon,
         key: 'codeblock',
         label: t('typobar.codeblock'),
@@ -138,6 +160,14 @@ export const useSlashItems = (): SlashOptions['items'] => {
           queueMicrotask(() => {
             editor.focus();
           });
+        },
+      },
+      {
+        icon: SuperscriptIcon,
+        key: 'footnote',
+        label: t('slash.footnote'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, undefined);
         },
       },
     ];

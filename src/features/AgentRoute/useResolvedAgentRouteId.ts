@@ -1,9 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import useSWR from 'swr';
 
-import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
 const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
@@ -13,7 +11,8 @@ const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
  * underscores). So the absence of one is what tells a slug route from an id
  * route — and a wrong guess only costs a lookup that resolves to null.
  */
-const looksLikeSlug = (routeAgentId?: string) => !!routeAgentId && !routeAgentId.includes('_');
+export const looksLikeSlug = (routeAgentId?: string) =>
+  !!routeAgentId && !routeAgentId.includes('_');
 
 /**
  * Keep the inbox route valid while its persisted agent ID is still loading.
@@ -32,16 +31,24 @@ export const useResolvedAgentRouteId = (routeAgentId?: string) => {
   // the store. Gated on the shape check so an ordinary `/agent/<id>` route never
   // pays for a request.
   const isCustomSlug = !isBuiltinSlug && looksLikeSlug(routeAgentId);
-  const { data: slugAgentId } = useSWR(
-    isCustomSlug ? ['agent-id-by-slug', routeAgentId] : null,
-    () => agentService.resolveAgentIdBySlug(routeAgentId!),
-    { revalidateOnFocus: false },
-  );
+  const customSlug = isCustomSlug ? routeAgentId : undefined;
+  const useResolveAgentSlug = useAgentStore((s) => s.useResolveAgentSlug);
+  useResolveAgentSlug(customSlug);
+  // The persisted `slug → id` paints the agent right away; the lookup confirms it.
+  const slugAgentId = useAgentStore(agentSelectors.getAgentIdBySlug(customSlug));
+  const isSlugConfirmed = useAgentStore(agentSelectors.isAgentSlugConfirmed(customSlug));
 
-  const resolvedAgentId = isBuiltinSlug ? builtinAgentId : (slugAgentId ?? undefined);
+  const agentId = (isBuiltinSlug ? builtinAgentId : slugAgentId) || routeAgentId;
+  // A slug can move to another agent between sessions, so a user-chosen slug is
+  // only swapped for its id (the URL redirect) once the server confirmed it.
+  const resolvedAgentId = isBuiltinSlug
+    ? builtinAgentId
+    : isSlugConfirmed
+      ? slugAgentId
+      : undefined;
 
   return {
-    agentId: resolvedAgentId || routeAgentId,
+    agentId,
     isBuiltinSlug,
     /** The route param is a slug (builtin or user-chosen), so it must be swapped for an id. */
     isSlugRoute: isBuiltinSlug || isCustomSlug,

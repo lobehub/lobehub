@@ -131,7 +131,7 @@ const TaskExecutionControlsInner = memo<
       {target.directoryKind === 'device' && target.deviceId ? (
         <TaskWorkingDirectoryChip
           deviceId={target.deviceId}
-          disabled={disabled}
+          disabled={disabled || target.isPending}
           value={value?.workingDirectoryConfig}
           onChange={handleDirectoryChange}
         />

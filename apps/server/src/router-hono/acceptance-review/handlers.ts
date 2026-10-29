@@ -56,6 +56,9 @@ export const getSession = async (c: ReviewContext) => {
     },
     can,
     expiresAt: new Date(c.get('expiresAt') * 1000).toISOString(),
+    project: c.get('project'),
+    role: c.get('role') ?? undefined,
+    site: c.get('site'),
     user: {
       avatar: profile?.avatar ?? undefined,
       id: userId,
@@ -133,7 +136,8 @@ export const decide = async (c: ReviewContext) => {
   if (body.error) return body.error;
   const { note, verdict } = body.data;
   const { acceptance, can } = c.get('access');
-  if (!can.decide) return reviewError(c, 403, 'FORBIDDEN', 'Not allowed to decide this acceptance');
+  if (!(verdict === 'accept' ? can.decide : can.reject))
+    return reviewError(c, 403, 'FORBIDDEN', 'Not allowed to decide this acceptance');
 
   const open = verdict === 'accept' ? ['delivered'] : ['delivered', 'errored'];
   if (!open.includes(acceptance.status))

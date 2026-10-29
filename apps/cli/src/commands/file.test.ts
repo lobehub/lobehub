@@ -50,6 +50,7 @@ describe('file command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -81,13 +82,22 @@ describe('file command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
-      const items = [{ id: 'f1', name: 'doc.pdf' }];
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
+      // A file's own `url` is its storage address, so the page link lands in `appUrl`.
+      const items = [{ id: 'f1', name: 'doc.pdf', url: 'https://s3.example.com/doc.pdf' }];
       mockTrpcClient.file.getFiles.query.mockResolvedValue(items);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'file', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(items, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...items[0], appUrl: 'https://app.lobehub.com/resource?file=f1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should show message when no files found', async () => {

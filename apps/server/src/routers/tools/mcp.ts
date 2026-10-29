@@ -1,9 +1,7 @@
-import { isDesktop } from '@lobechat/const';
 import {
   GetStreamableMcpServerManifestInputSchema,
   StreamableHTTPAuthSchema,
 } from '@lobechat/types';
-import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import {
@@ -40,15 +38,6 @@ const stdioParamsSchema = z.object({
 
 // Union schema for MCPClientParams
 const mcpClientParamsSchema = z.union([httpParamsSchema, stdioParamsSchema]);
-
-const checkStdioEnvironment = (params: z.infer<typeof mcpClientParamsSchema>) => {
-  if (params.type === 'stdio' && !isDesktop) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Stdio MCP type is not supported in web environment.',
-    });
-  }
-};
 
 // Schema for metadata that frontend needs to pass (fields that backend cannot determine)
 const metaSchema = z
@@ -98,9 +87,6 @@ export const mcpRouter = router({
   listTools: mcpProcedure
     .input(mcpClientParamsSchema) // Use the unified schema
     .query(async ({ input }) => {
-      // Stdio check can be done here or rely on the service/client layer
-      checkStdioEnvironment(input);
-
       // Pass the validated MCPClientParams to the service
       return await mcpService.listTools(input);
     }),
@@ -109,9 +95,6 @@ export const mcpRouter = router({
   listResources: mcpProcedure
     .input(mcpClientParamsSchema) // Use the unified schema
     .query(async ({ input }) => {
-      // Stdio check can be done here or rely on the service/client layer
-      checkStdioEnvironment(input);
-
       // Pass the validated MCPClientParams to the service
       return await mcpService.listResources(input);
     }),
@@ -120,9 +103,6 @@ export const mcpRouter = router({
   listPrompts: mcpProcedure
     .input(mcpClientParamsSchema) // Use the unified schema
     .query(async ({ input }) => {
-      // Stdio check can be done here or rely on the service/client layer
-      checkStdioEnvironment(input);
-
       // Pass the validated MCPClientParams to the service
       return await mcpService.listPrompts(input);
     }),
@@ -140,9 +120,6 @@ export const mcpRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // Stdio check can be done here or rely on the service/client layer
-      checkStdioEnvironment(input.params);
-
       // ── Connector tool permission gate ────────────────────────────────────
       // If the connector identifier matches a user_connectors entry, check whether
       // this specific tool has been disabled by the user. Disabled tools are still

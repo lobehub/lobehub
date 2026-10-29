@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Ten model obsługuje rozpoznawanie wideo",
   "ModelSelect.featureTag.vision": "Ten model obsługuje rozpoznawanie wizualne.",
   "ModelSelect.removed": "Model nie znajduje się na liście. Zostanie automatycznie usunięty po odznaczeniu.",
+  "ModelSelect.routing": "Routing",
+  "ModelSelect.routingTooltip": "Grupa routingu: kilku dostawców obsługuje ten model, a każde żądanie trafia do tego, który odpowie.",
   "ModelSelect.staleModel.current": "Obecny wybór",
   "ModelSelect.staleModel.notEnabled.action": "Włącz ten model",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Nie udało się włączyć modelu. Spróbuj ponownie.",

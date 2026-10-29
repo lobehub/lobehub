@@ -262,7 +262,7 @@ export const GroupManagementManifest: BuiltinToolManifest = {
     // },
     {
       description:
-        'Initiate a vote among agents on a specific question or decision. Each agent provides their choice and reasoning.',
+        'Initiate a vote among agents on a specific question or decision. Each agent provides their choice and reasoning. NOTE: voting is not yet implemented — calling this tool returns an error; use broadcast to collect opinions instead.',
       name: GroupManagementApiName.vote,
       parameters: {
         properties: {

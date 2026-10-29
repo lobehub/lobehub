@@ -1,0 +1,5 @@
+/* Gives the entry chunk a CSS asset. Production builds append the compiled StyleX
+   rules to it (plugins/vite/stylexEntryCss.ts); do not remove while it is empty. */
+:root {
+  --lh-stylex: 1;
+}

@@ -3,6 +3,8 @@ import debug from 'debug';
 
 import { type AgentExecutionParams, type AgentExecutionResult } from '../../types';
 import { STEP_LOCK_RETRY_MAX_ATTEMPTS } from '../constants';
+import { isShareRunRevoked } from '../shareRunGate';
+import { loadTerminalDurableStatus } from '../terminalStatus';
 import type { AgentRuntimeServiceContext } from '../types';
 import { stepLockRetryDelayMs } from '../utils';
 
@@ -74,31 +76,26 @@ export async function runLockFreeDelivery(
   // marked that operation interrupted. ACK it without touching the old
   // topic; otherwise the abandoned attempt can finish concurrently with its
   // replacement and submit a second Acceptance run.
-  try {
-    const durableOperation = await deps.agentOperationModel.findById(operationId);
-    if (
-      durableOperation &&
-      ['done', 'error', 'interrupted', 'abandoned'].includes(durableOperation.status)
-    ) {
-      log(
-        '[%s][%d] Skipping delivery for terminal durable operation (%s)',
-        operationId,
-        stepIndex,
-        durableOperation.status,
-      );
-      return {
-        nextStepScheduled: false,
-        state: {
-          status: durableOperation.status === 'abandoned' ? 'interrupted' : durableOperation.status,
-        },
-        stepResult: null,
-        success: true,
-      };
-    }
-  } catch (error) {
-    // Preserve runtime availability when the durable store has a transient
-    // read failure. The step lock and normal persistence path still apply.
-    log('[%s][%d] Durable operation status check failed: %O', operationId, stepIndex, error);
+  const durableTerminalStatus = await loadTerminalDurableStatus(
+    deps.agentOperationModel,
+    operationId,
+    stepIndex,
+  );
+  if (durableTerminalStatus) {
+    log(
+      '[%s][%d] Skipping delivery for terminal durable operation (%s)',
+      operationId,
+      stepIndex,
+      durableTerminalStatus,
+    );
+    return {
+      nextStepScheduled: false,
+      state: {
+        status: durableTerminalStatus === 'abandoned' ? 'interrupted' : durableTerminalStatus,
+      },
+      stepResult: null,
+      success: true,
+    };
   }
 
   // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
@@ -401,19 +398,7 @@ export async function skipUnrunnableStep(
       agentState.status,
     );
 
-    const reason = deps.determineCompletionReason(agentState);
-
-    await deps.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
-
-    // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
-    await deps.completionLifecycle.dispatchHooks(operationId, agentState, reason);
-
-    return {
-      nextStepScheduled: false,
-      state: agentState,
-      stepResult: null,
-      success: true,
-    };
+    return settleSkippedStep(deps, operationId, agentState);
   }
 
   // A run parked for a client moves only through its own resume: any other
@@ -439,27 +424,39 @@ export async function skipUnrunnableStep(
   // step boundary. See `AgentShareModel.isRunStillAuthorized`'s JSDoc for
   // why one query covers every revocation path (visibility flip — which
   // is what turning sharing off does — share delete, agent delete).
-  if (deps.delegate.verifyShareRunStillAuthorized) {
-    const shareMarker = agentState.principal?.actor?.shareVisitor as
-      { agentId?: string; shareId?: string } | undefined;
-    if (shareMarker?.agentId && shareMarker.shareId) {
-      let stillAuthorized = false;
-      try {
-        stillAuthorized = await deps.delegate.verifyShareRunStillAuthorized({
-          agentId: shareMarker.agentId,
-          shareId: shareMarker.shareId,
-        });
-      } catch (error) {
-        // Fail closed: a read failure must not be read as "still
-        // authorized". Falls through to the abort below with
-        // `stillAuthorized` left `false`.
-        log('[%s][%d] Share run authorization re-check failed: %O', operationId, stepIndex, error);
-      }
-      if (!stillAuthorized) {
-        return deps.buildShareAbortResult(operationId, agentState);
-      }
-    }
+  if (
+    await isShareRunRevoked(
+      deps.delegate.verifyShareRunStillAuthorized,
+      operationId,
+      stepIndex,
+      agentState,
+    )
+  ) {
+    return deps.buildShareAbortResult(operationId, agentState);
   }
 
   return undefined;
+}
+
+/**
+ * Settle a step that will not run because the operation is already terminal:
+ * emit the completion signals and dispatch the completion hooks so consumers
+ * (e.g. the bot local-mode promise) can finalize. Publishes no step event.
+ */
+export async function settleSkippedStep(
+  deps: Pick<StepGuardsDeps, 'completionLifecycle' | 'determineCompletionReason'>,
+  operationId: string,
+  agentState: AgentState,
+): Promise<AgentExecutionResult> {
+  const reason = deps.determineCompletionReason(agentState);
+
+  await deps.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
+  await deps.completionLifecycle.dispatchHooks(operationId, agentState, reason);
+
+  return {
+    nextStepScheduled: false,
+    state: agentState,
+    stepResult: null,
+    success: true,
+  };
 }

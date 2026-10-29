@@ -19,6 +19,7 @@ import { goalEvents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { reconcileGoalReport, validateGoalReport } from './report';
+import { writeGoalReportPage } from './reportPage';
 
 /**
  * How long a wrap-up run may go without submitting before the page stops
@@ -28,6 +29,8 @@ export const GOAL_REPORT_TIMEOUT_MS = 60 * 60 * 1000;
 
 export interface SubmitGoalReportInput {
   content: string;
+  /** The same report as one self-contained HTML page, stored as a `custom/html` document. */
+  html?: string;
   metadata: Omit<GoalReportMetadata, 'graphCursor'> & { graphCursor?: string };
 }
 
@@ -53,8 +56,8 @@ export class GoalReportStore {
 
   constructor(
     private readonly db: LobeChatDatabase,
-    userId: string,
-    workspaceId?: string,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
   ) {
     this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
       id: GOAL_COORDINATOR_ACTOR_ID,
@@ -181,11 +184,27 @@ export class GoalReportStore {
         message: `Invalid report references:\n${errors.join('\n')}`,
       });
 
+    // The page is written only once the report itself is valid, and reused
+    // across versions so a Goal keeps one report page.
+    const html = typeof input.html === 'string' ? input.html.trim() : '';
+    const pageDocumentId = html
+      ? await writeGoalReportPage(
+          { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+          {
+            html,
+            previousPageId: (await this.workModel.findLatestGoalReport(goalId))?.metadata
+              ?.goalReportPageId,
+            title: `${graph.goal.title} · Report`,
+          },
+        )
+      : undefined;
+
     const work = await this.workModel.registerGoalReport({
       agentId: caller?.agentId,
       content,
       goalId,
       metadata,
+      pageDocumentId,
       rootOperationId: caller?.operationId,
       title: `Goal report: ${graph.goal.title}`,
       toolCallId: caller?.toolCallId,
@@ -230,6 +249,7 @@ export class GoalReportStore {
             content: latestRow.content,
             createdAt: latestRow.createdAt,
             metadata: parsed.data,
+            pageDocumentId: latestRow.metadata?.goalReportPageId,
             version: latestRow.version,
             workId: latestRow.workId,
             workVersionId: latestRow.workVersionId,

@@ -53,12 +53,10 @@ export const RESOURCE_ACCESS_LEVELS_BY_TYPE = {
  * reads as a bug, not as a policy.
  *
  * Documents default to `edit` for the same reason. Privacy for a written page
- * is already carried by a separate channel: a page authored from the sidebar
- * starts at `visibility: 'private'` (`DocumentModel.create`), so publishing one
- * into the workspace is the creator *choosing* to collaborate, and grading that
- * published page down to read-only by default contradicts the act that put it
- * there. Documents that never had that draft phase (file ingests, crawls, topic
- * snapshots) are workspace-shared material from the moment they exist.
+ * is carried by a separate channel — its own `visibility` column, which a
+ * creator sets to `'private'` explicitly — so a page left in the workspace is
+ * material the creator chose to share, and grading it down to read-only by
+ * default would contradict that.
  *
  * Lowering a resource is one control away (the Permission page), and the
  * creator / workspace owners are unaffected either way.

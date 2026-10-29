@@ -132,7 +132,13 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
             width: 6,
           }}
         />
-        <span>{online ? t('devices.status.online') : t('devices.status.offline')}</span>
+        <span>
+          {summary.onlineUnknown
+            ? t('devices.status.checking')
+            : online
+              ? t('devices.status.online')
+              : t('devices.status.offline')}
+        </span>
       </InfoRow>
       {online && (
         <InfoRow icon={CableIcon} label={t('devices.detail.connections')}>

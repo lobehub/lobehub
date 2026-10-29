@@ -1,6 +1,6 @@
 import type { DeviceListItem } from '@lobechat/types';
 
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
+import { useDeviceList } from '@/store/device';
 
 /** Re-reads presence so a device that drops or reconnects shows it without a refocus. */
 export const PRESENCE_REFRESH_INTERVAL_MS = 30_000;
@@ -8,7 +8,7 @@ export const PRESENCE_REFRESH_INTERVAL_MS = 30_000;
 export type BoundDeviceState =
   | { status: 'loading' }
   | { retry: () => void; status: 'error' }
-  /** Loaded, and the device is not in the list: it was removed or never shared. */
+  /** The server's list lacks the device: it was removed or never shared. */
   | { status: 'absent' }
   | { device: DeviceListItem; status: 'ready' };
 
@@ -19,24 +19,26 @@ export type BoundDeviceState =
  *
  * A failed read is kept apart from a missing device, so the section can offer
  * a retry instead of silently disappearing. Cached data wins over a later
- * failed revalidation: the last known state beats an error row.
+ * failed revalidation: the last known state beats an error row. A stored copy
+ * that lacks the device proves nothing (it may be stale, or past the
+ * persisted-row cap), so "absent" waits for the server's list.
  */
 export const useBoundDevice = (deviceId: string, active: boolean): BoundDeviceState => {
   const {
     data: devices,
     error,
+    isConfirmed,
     isLoading,
     mutate,
   } = useDeviceList({
     refreshInterval: active ? PRESENCE_REFRESH_INTERVAL_MS : 0,
   });
 
-  if (devices) {
-    const device = devices.find((item) => item.deviceId === deviceId);
-    return device ? { device, status: 'ready' } : { status: 'absent' };
-  }
+  const device = devices?.find((item) => item.deviceId === deviceId);
+  if (device) return { device, status: 'ready' };
+  if (devices && isConfirmed) return { status: 'absent' };
   if (error) return { retry: () => void mutate(), status: 'error' };
-  if (isLoading) return { status: 'loading' };
+  if (isLoading || devices) return { status: 'loading' };
 
   return { status: 'absent' };
 };

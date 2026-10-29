@@ -8,6 +8,14 @@ interface WorkspaceRowCtx {
 
 export type WorkspaceBulkDeleteScope = 'own' | 'workspace';
 
+export interface WorkspaceRowManageOptions {
+  /**
+   * Also let workspace admins manage rows other members created. Opt-in per
+   * call site so widening a resource's rule is a deliberate, local decision.
+   */
+  allowAdmin?: boolean;
+}
+
 /**
  * Row-level creator check for workspace-shared resources (connectors, skills,
  * installed plugins). `buildWorkspaceWhere` makes these rows visible/writable
@@ -19,15 +27,14 @@ export type WorkspaceBulkDeleteScope = 'own' | 'workspace';
  * - Personal mode (no `workspaceId`): pass through — the model's ownership
  *   filter already scopes rows to the caller.
  * - Workspace owner: pass through — owners manage all workspace resources.
- * - Workspace admin: pass through only when `allowAdmin` is set, for actions
- *   admins may take on any member's row (e.g. archiving a task).
+ * - Workspace admin with `allowAdmin`: pass through for that call site.
  * - Otherwise the row's creator must be the caller.
  */
 export function assertWorkspaceRowManageable(
   ctx: WorkspaceRowCtx,
   rowUserId: string | null | undefined,
   resource: string,
-  options: { allowAdmin?: boolean } = {},
+  options: WorkspaceRowManageOptions = {},
 ): void {
   if (!ctx.workspaceId) return;
   if (ctx.workspaceRole === 'owner') return;

@@ -7,13 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/conversation/topic-1' }));
+const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/topic/topic-1' }));
 const removeMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/DeleteTopicConfirm', () => ({ confirmRemoveTopic: confirmDeleteMock }));
 vi.mock('@/hooks/useActiveLocation', () => ({ useActiveLocation: () => locationFixture }));
 
-const scopeFixture = vi.hoisted(() => ({ enabled: false }));
+const scopeFixture = vi.hoisted(() => ({
+  enabled: false,
+  providerType: null as string | null,
+}));
 const refreshProjectMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const autoRenameMock = vi.hoisted(() => vi.fn());
@@ -22,7 +25,13 @@ const completeMock = vi.hoisted(() => vi.fn());
 const cloneMock = vi.hoisted(() => vi.fn());
 vi.mock('../../useScopedTopics', () => ({
   useScopedTopic: () =>
-    scopeFixture.enabled ? { id: 'topic-1', agentId: 'agent-other' } : undefined,
+    scopeFixture.enabled
+      ? {
+          agentHeterogeneousProviderType: scopeFixture.providerType,
+          agentId: 'agent-other',
+          id: 'topic-1',
+        }
+      : undefined,
   useScopedTopics: () => ({
     scope: scopeFixture.enabled ? { projectId: 'project-1' } : null,
     refresh: refreshProjectMock,
@@ -35,7 +44,10 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 const versionMock = vi.hoisted(() => ({ isDesktop: false }));
-const workspaceMock = vi.hoisted(() => ({ id: null as string | null }));
+const workspaceMock = vi.hoisted(() => ({
+  id: null as string | null,
+  slug: null as string | null,
+}));
 
 vi.mock('antd', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -53,6 +65,27 @@ vi.mock('antd', async (importOriginal) => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspaceMock.id,
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => workspaceMock.slug,
+}));
+
+const labState = vi.hoisted(() => ({ enableTopicBugReport: false }));
+const bugReportTargetMock = vi.hoisted(() => vi.fn());
+vi.mock('@/business/client/hooks/useTopicBugReportMenuItem', () => ({
+  useTopicBugReportMenuItem: (target: unknown) => {
+    bugReportTargetMock(target);
+    return { key: 'reportProblem', label: 'actions.reportProblem' };
+  },
+}));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: typeof labState) => unknown) => selector(labState),
+}));
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicBugReport: (state: typeof labState) => state.enableTopicBugReport,
+  },
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -90,9 +123,10 @@ vi.mock('@/hooks/usePermission', () => ({
   }),
 }));
 
+const agentMapFixture = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ activeAgentId: 'agent-1' }),
+    selector({ activeAgentId: 'agent-1', agentMap: agentMapFixture.value }),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -126,11 +160,15 @@ const getMenuItem = (
 describe('useTopicItemDropdownMenu', () => {
   beforeEach(() => {
     scopeFixture.enabled = false;
+    scopeFixture.providerType = null;
     vi.clearAllMocks();
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     versionMock.isDesktop = false;
     workspaceMock.id = null;
+    workspaceMock.slug = null;
+    labState.enableTopicBugReport = false;
+    agentMapFixture.value = {};
   });
 
   afterEach(() => {
@@ -182,8 +220,8 @@ describe('useTopicItemDropdownMenu', () => {
   });
 
   it.each([
-    ['/team/project/project-1/conversation/topic-1', true],
-    ['/project/project-1/conversation/topic-other', false],
+    ['/team/project/project-1/topic/topic-1', true],
+    ['/project/project-1/topic/topic-other', false],
     ['/project/project-1/settings', false],
   ])(
     'after deleting a Project row at %s, navigates home only for the current Topic',
@@ -204,6 +242,62 @@ describe('useTopicItemDropdownMenu', () => {
     },
   );
 
+  it.each([
+    ['/project/project-1/topic/topic-1', true],
+    ['/project/project-1/topic/topic-other', false],
+  ])(
+    'after archiving a Project row at %s, navigates home only for the current Topic',
+    async (pathname, shouldNavigate) => {
+      scopeFixture.enabled = true;
+      locationFixture.pathname = pathname;
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+      );
+
+      await result.current.toggleCompleted();
+
+      expect(completeMock).toHaveBeenCalledWith('topic-1');
+      expect(refreshProjectMock).toHaveBeenCalledOnce();
+      if (shouldNavigate) expect(navigateMock).toHaveBeenCalledWith('/project/project-1');
+      else expect(navigateMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('stays on the Topic the user opened while the archive was in flight', async () => {
+    scopeFixture.enabled = true;
+    locationFixture.pathname = '/project/project-1/topic/topic-1';
+    let finishArchive!: () => void;
+    completeMock.mockReturnValueOnce(new Promise<void>((resolve) => (finishArchive = resolve)));
+    const { rerender, result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    );
+
+    const archiving = result.current.toggleCompleted();
+    locationFixture.pathname = '/project/project-1/topic/topic-other';
+    rerender();
+    finishArchive();
+    await archiving;
+
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate once the user left the Project while the archive was in flight', async () => {
+    scopeFixture.enabled = true;
+    locationFixture.pathname = '/project/project-1/topic/topic-1';
+    let finishArchive!: () => void;
+    completeMock.mockReturnValueOnce(new Promise<void>((resolve) => (finishArchive = resolve)));
+    const { result, unmount } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    );
+
+    const archiving = result.current.toggleCompleted();
+    unmount();
+    finishArchive();
+    await archiving;
+
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it('copies the row Agent link even when another Agent is active', async () => {
     scopeFixture.enabled = true;
     const writeText = vi.fn();
@@ -215,6 +309,19 @@ describe('useTopicItemDropdownMenu', () => {
     if (!item || !('onClick' in item)) throw new Error('Missing copy link');
     await item.onClick?.({} as never);
     expect(writeText).toHaveBeenCalledWith('https://example.com/agent/agent-other/topic-1');
+  });
+
+  it('keeps the active workspace prefix in the copied link', async () => {
+    workspaceMock.slug = 'lobehub';
+    const writeText = vi.fn();
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard);
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const item = getMenuItem(result.current.dropdownMenu(), 'copyLink');
+    if (!item || !('onClick' in item)) throw new Error('Missing copy link');
+    await item.onClick?.({} as never);
+    expect(writeText).toHaveBeenCalledWith('https://example.com/lobehub/agent/agent-1/topic-1');
   });
 
   it.each(['favorite', 'markCompleted'])(
@@ -254,7 +361,7 @@ describe('useTopicItemDropdownMenu', () => {
     await item.onClick?.({} as never);
     expect(cloneMock).toHaveBeenCalled();
     expect(refreshProjectMock).toHaveBeenCalledOnce();
-    expect(navigateMock).toHaveBeenCalledWith('/project/project-1/conversation/topic-copy');
+    expect(navigateMock).toHaveBeenCalledWith('/project/project-1/topic/topic-copy');
   });
 
   it('keeps project association out of the individual topic menu', () => {
@@ -278,7 +385,6 @@ describe('useTopicItemDropdownMenu', () => {
       'divider',
       'autoRename',
       'rename',
-      'diagnose',
       'divider',
       'openInNewTab',
       'openOnRight',
@@ -289,14 +395,29 @@ describe('useTopicItemDropdownMenu', () => {
       'copyTopicPrompt',
       'divider',
       'duplicate',
+      'share',
       'forwardToAgent',
       'moveToAgent',
       'divider',
-      'share',
+      'diagnose',
       'divider',
       'delete',
     ]);
     expect(getMenuItem(items, 'share')).toMatchObject({ label: 'shareModal.title' });
+  });
+
+  it('puts Report Bug next to the message chain check when the lab is on', () => {
+    labState.enableTopicBugReport = true;
+
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const keys = result.current
+      .dropdownMenu()
+      .map((item) => (item && 'key' in item ? item.key : 'divider'));
+
+    expect(keys.slice(-5)).toEqual(['divider', 'diagnose', 'reportProblem', 'divider', 'delete']);
+    expect(bugReportTargetMock).toHaveBeenCalledWith({ agentId: 'agent-1', topicId: 'topic-1' });
   });
 
   it('disables topic management actions for workspace viewers', () => {
@@ -324,5 +445,63 @@ describe('useTopicItemDropdownMenu', () => {
     expect(getMenuItem(items, 'copySessionId')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'copyLink')).not.toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'copyTopicPrompt')).not.toMatchObject({ disabled: true });
+  });
+
+  describe('inline archive', () => {
+    const heterogeneousAgent = {
+      agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+    };
+
+    it('is offered for heterogeneous agent topics and archives on toggle', async () => {
+      agentMapFixture.value = { 'agent-1': heterogeneousAgent };
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+      );
+
+      expect(result.current.canInlineArchive).toBe(true);
+      expect(result.current.isCompleted).toBe(false);
+      await result.current.toggleCompleted();
+
+      expect(completeMock).toHaveBeenCalledWith('topic-1');
+    });
+
+    it('resolves the row Agent rather than the active one', () => {
+      scopeFixture.enabled = true;
+      agentMapFixture.value = { 'agent-other': heterogeneousAgent };
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+      );
+
+      expect(result.current.canInlineArchive).toBe(true);
+    });
+
+    it('is offered for a project row whose agent config was never loaded', () => {
+      scopeFixture.enabled = true;
+      scopeFixture.providerType = 'claude-code';
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+      );
+
+      expect(result.current.canInlineArchive).toBe(true);
+    });
+
+    it('is not offered for regular agents', () => {
+      agentMapFixture.value = { 'agent-1': { agencyConfig: {} } };
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+      );
+
+      expect(result.current.canInlineArchive).toBe(false);
+    });
+
+    it('is not offered to viewers without edit permission', () => {
+      agentMapFixture.value = { 'agent-1': heterogeneousAgent };
+      permissionMock.edit_own_content = false;
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+      );
+
+      expect(result.current.canInlineArchive).toBe(false);
+    });
   });
 });

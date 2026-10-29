@@ -26,6 +26,8 @@ export class HeteroOperationPrincipalError extends Error {
 export interface ActiveHeteroOperationPrincipal {
   agentType?: ServerDefaultHeterogeneousAgentType;
   operationId: string;
+  /** The conversation the operation answers in, when it has one. */
+  topicId?: string;
   userId: string;
   workspaceId?: string;
 }
@@ -66,6 +68,7 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
       model: agentOperations.model,
       provider: agentOperations.provider,
       status: agentOperations.status,
+      topicId: agentOperations.topicId,
       userId: agentOperations.userId,
       workspaceId: agentOperations.workspaceId,
     })
@@ -116,5 +119,11 @@ export const resolveActiveHeteroOperationPrincipal = async (params: {
     throw new HeteroOperationPrincipalError('Model invocation is no longer permitted', 403);
   }
 
-  return { agentType, operationId, userId: claims.sub, workspaceId };
+  return {
+    agentType,
+    operationId,
+    topicId: operation.topicId ?? undefined,
+    userId: claims.sub,
+    workspaceId,
+  };
 };

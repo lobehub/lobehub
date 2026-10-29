@@ -30,11 +30,10 @@ interface ConversationProps {
   initialMessage?: string;
   onCollapse: () => void;
   onInitialMessageConsumed?: () => void;
-  onSelectTopic?: (topicId: string) => void;
 }
 
 const Conversation = memo<ConversationProps>(
-  ({ initialMessage, onCollapse, onInitialMessageConsumed, onSelectTopic }) => {
+  ({ initialMessage, onCollapse, onInitialMessageConsumed }) => {
     const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
     const currentAgentId = useConversationStore(conversationSelectors.agentId);
 
@@ -49,7 +48,7 @@ const Conversation = memo<ConversationProps>(
     return (
       <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
         <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-          <Toolbar onCollapse={onCollapse} onSelectTopic={onSelectTopic} />
+          <Toolbar onCollapse={onCollapse} />
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <ChatList welcome={<Welcome />} />
           </Flexbox>
@@ -73,8 +72,6 @@ interface GoalChatProps {
   initialTopicId?: string;
   onCollapse: () => void;
   onInitialMessageConsumed?: () => void;
-  /** Open a topic picked from history. @default switch the panel to it in place */
-  onSelectTopic?: (topicId: string) => void;
 }
 
 /**
@@ -83,21 +80,12 @@ interface GoalChatProps {
  * with the current goal overview injected — "how is this going?" just works.
  */
 const GoalChat = memo<GoalChatProps>(
-  ({
-    agentId,
-    goalId,
-    initialMessage,
-    initialTopicId,
-    onCollapse,
-    onInitialMessageConsumed,
-    onSelectTopic,
-  }) => (
+  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse, onInitialMessageConsumed }) => (
     <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
       <Conversation
         initialMessage={initialMessage}
         onCollapse={onCollapse}
         onInitialMessageConsumed={onInitialMessageConsumed}
-        onSelectTopic={onSelectTopic}
       />
     </GoalChatProvider>
   ),

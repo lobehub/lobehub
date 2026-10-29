@@ -152,7 +152,9 @@ describe('TaskListSliceAction', () => {
           taskGroupListMap: {
             [result.current.queryKey!]: {
               groupBy: 'status',
-              groups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
+              groups: [
+                { key: 'backlog', tasks: [{ id: 'T-1', identifier: 'T-1' }], total: 1 },
+              ] as any,
             },
           },
         });

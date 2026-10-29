@@ -45,6 +45,7 @@ import QueueTray from './QueueTray';
 import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
+import { useRestoreServerQueue } from './useRestoreServerQueue';
 import {
   getContextWindowMessages,
   getConversationSendButtonProps,
@@ -205,6 +206,7 @@ const ChatInput = memo<ChatInputProps>(
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+    useRestoreServerQueue(context, !disableQueue);
     const canRecordVoiceMessage = useCanSendVoiceMessage(context);
     // The composer's controls must resolve their topic from THIS conversation,
     // not the global `activeTopicId`: a page copilot embedded next to another

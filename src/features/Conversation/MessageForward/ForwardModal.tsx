@@ -18,7 +18,7 @@ import { t as translate } from 'i18next';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { getForwardedMessageText } from '@/store/chat/slices/forward/helpers';
 import { useHomeStore } from '@/store/home';
@@ -183,7 +183,13 @@ const ForwardModalContent = memo(() => {
                   onClick={() => toggle(agent.id)}
                 >
                   <SelectCircle checked={checked} />
-                  <AgentAvatar avatar={avatarOf(agent.avatar)} />
+                  <AgentAvatar
+                    agentId={agent.id}
+                    avatar={avatarOf(agent.avatar)}
+                    background={agent.backgroundColor || undefined}
+                    name={agentDisplayName(agent, t('untitledAgent'))}
+                    size={22}
+                  />
                   <Text ellipsis style={{ flex: 1 }}>
                     {agentDisplayName(agent, t('untitledAgent'))}
                   </Text>

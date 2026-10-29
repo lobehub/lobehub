@@ -133,6 +133,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
+        agentId={agentId ?? null}
         avatar={avatar}
         belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}

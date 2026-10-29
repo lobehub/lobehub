@@ -23,10 +23,12 @@ import {
   useLastWorkspaceSlugSync,
   useWindowUrlMirror,
 } from '@/features/Electron/shell';
+import LinkHoverStatus from '@/features/Electron/system/LinkHoverStatus';
 import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
+import WorkspaceMentionNotifier from '@/features/Electron/WorkspaceMentionNotifier';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
@@ -72,6 +74,7 @@ const Layout: FC = () => {
           {showCloudPromotion && <CloudBanner />}
         </Suspense>
         <ZoomHUD />
+        <LinkHoverStatus />
 
         <Suspense fallback={null}>
           <TitleBar />
@@ -99,6 +102,7 @@ const Layout: FC = () => {
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />
+          <WorkspaceMentionNotifier />
         </Suspense>
       </WorkspaceContextSlot>
     </HotkeysProvider>

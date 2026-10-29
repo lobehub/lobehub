@@ -12,6 +12,7 @@ import { getDocumentRenderMode } from '@/utils/documentRenderMode';
  * document has loaded, and for a file-backed document: its data lives behind
  * `fileId` with an empty markdown `content`, so the export would download an
  * empty file (the standalone page menu hides export on the same condition).
+ * An HTML page's content is not Markdown, so it has no Markdown export either.
  */
 export const useMarkdownExport = (documentId: string | undefined) => {
   const { t } = useTranslation('file');
@@ -26,7 +27,8 @@ export const useMarkdownExport = (documentId: string | undefined) => {
   const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
   const { data: documentMeta } = useFetchDocumentDetail(documentId);
 
-  if (!documentMeta || getDocumentRenderMode(documentMeta).mode === 'file') return;
+  const mode = documentMeta && getDocumentRenderMode(documentMeta).mode;
+  if (!documentMeta || mode === 'file' || mode === 'html') return;
 
   return async () => {
     const content = storeContent ?? documentMeta.content ?? '';

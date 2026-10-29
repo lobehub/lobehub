@@ -144,6 +144,12 @@ export interface MuxHeartbeatAckMessage {
   type: 'heartbeat_ack';
 }
 
+/** Public-view invalidation only. Re-fetch through the membership-authorized Channel API. */
+export interface MuxChannelChangedMessage {
+  channelId: string;
+  type: 'channel_changed';
+}
+
 export interface MuxErrorMessage {
   code: string;
   message: string;
@@ -153,6 +159,7 @@ export interface MuxErrorMessage {
 
 export type MuxServerMessage =
   | MuxAgentEventMessage
+  | MuxChannelChangedMessage
   | MuxErrorMessage
   | MuxHeartbeatAckMessage
   | MuxInputRequestMessage
@@ -203,6 +210,7 @@ export interface GatewayMuxClientOptions {
 export type GatewayMuxStatus = 'connected' | 'connecting' | 'disconnected';
 
 export interface GatewayMuxClientEvents {
+  channel_changed: (event: MuxChannelChangedMessage) => void;
   connected: () => void;
   disconnected: () => void;
   error: (error: Error) => void;

@@ -7,6 +7,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ProjectModel } from '@/database/models/project';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
+import { resolveDocumentWrite } from '@/server/services/document/editorData';
 import { FileService } from '@/server/services/file';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 
@@ -14,7 +15,7 @@ import { type ServerRuntimeRegistration } from './types';
 
 export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { userId, serverDB, agentId, agentVisibility, taskId, workspaceId } = context;
+    const { userId, serverDB, agentId, agentVisibility, projectId, taskId, workspaceId } = context;
     if (!userId || !serverDB) {
       throw new Error('userId and serverDB are required for Knowledge Base execution');
     }
@@ -40,9 +41,16 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
         const knowledge = await agentModel.getAgentAssignedKnowledge(agentId);
         return knowledge.knowledgeBases.filter((k) => k.enabled && k.id).map((k) => k.id as string);
       };
+      // Every agent working inside a project — its coordinator, or a member
+      // running one of its tasks — searches the project's knowledge too.
+      const projectKnowledgeBaseIds = () => {
+        if (projectId) return projectModel.getEnabledKnowledgeBaseIds(projectId);
+        if (taskId) return projectModel.getEnabledKnowledgeBaseIdsForTask(taskId);
+        return Promise.resolve([]);
+      };
       const [agentIds, projectIds] = await Promise.all([
         agentKnowledgeBaseIds(),
-        taskId ? projectModel.getEnabledKnowledgeBaseIdsForTask(taskId) : Promise.resolve([]),
+        projectKnowledgeBaseIds(),
       ]);
       return [...new Set([...agentIds, ...projectIds])];
     };
@@ -148,9 +156,12 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       },
       {
         createDocument: async ({ content, fileType, knowledgeBaseId, parentId, title }) => {
+          // Same Markdown write as `lh doc create`: real editor state, and no
+          // body heading that repeats the title.
+          const write = await resolveDocumentWrite({ content, fileType, title });
           const doc = await documentService.createDocument({
-            content,
-            editorData: {},
+            content: write.content,
+            editorData: write.editorData,
             fileType,
             knowledgeBaseId,
             parentId,

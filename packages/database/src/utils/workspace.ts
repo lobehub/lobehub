@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { notTrashed } from './softDelete';
@@ -21,6 +21,8 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
   'agent_cron_jobs',
   'agent_skills',
   'agents',
+  'channel_threads',
+  'channels',
   'chat_groups',
   'dashboards',
   'documents',
@@ -164,11 +166,12 @@ function buildScopeWhere(
 
   // Workspace + visibility-aware mode: every member sees public rows; private
   // rows are scoped to their creator. NULL visibility is treated as public for
-  // backwards compatibility with rows that pre-date the column.
+  // backwards compatibility with rows that pre-date the column. `owner` (an
+  // acceptance or verify run kept to its creator) is creator-scoped too.
   const visibilityFilter = or(
     isNull(cols.visibility),
     eq(cols.visibility, 'public'),
-    and(eq(cols.visibility, 'private'), eq(cols.userId, ctx.userId)),
+    and(inArray(cols.visibility, ['private', 'owner']), eq(cols.userId, ctx.userId)),
   ) as SQL;
 
   return and(workspaceMatch, visibilityFilter) as SQL;

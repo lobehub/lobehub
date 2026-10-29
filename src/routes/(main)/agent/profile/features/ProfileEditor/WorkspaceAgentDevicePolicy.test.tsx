@@ -19,6 +19,11 @@ const testState = vi.hoisted(() => ({
     },
     updateAgentConfigById: vi.fn(),
   },
+  deviceList: {
+    data: undefined as unknown[] | undefined,
+    isConfirmed: false,
+    isLoading: true,
+  },
   mutateDevices: vi.fn(),
 }));
 
@@ -36,11 +41,10 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   };
 });
 
-vi.mock('@/features/DeviceManager/useDeviceList', () => ({
+vi.mock('@/store/device/useDeviceList', () => ({
   useDeviceList: () => ({
-    data: undefined,
+    ...testState.deviceList,
     error: undefined,
-    isLoading: true,
     mutate: testState.mutateDevices,
   }),
 }));
@@ -56,6 +60,7 @@ describe('WorkspaceAgentDevicePolicy', () => {
     testState.agent.updateAgentConfigById.mockReset();
     testState.mutateDevices.mockReset();
     selectPropsSpy.mockClear();
+    testState.deviceList = { data: undefined, isConfirmed: false, isLoading: true };
   });
 
   it('renders the environment picker without a member-switch control', () => {
@@ -92,5 +97,58 @@ describe('WorkspaceAgentDevicePolicy', () => {
     expect(selectProps.loading).toBeFalsy();
 
     await act(async () => finishSave?.());
+  });
+});
+
+describe('WorkspaceAgentDevicePolicy over an unconfirmed device list', () => {
+  const workspaceDevice = {
+    channels: [],
+    deviceId: 'ws-device',
+    friendlyName: 'Build Server',
+    online: false,
+    onlineUnknown: true,
+    scope: 'workspace',
+    visibility: 'public',
+  };
+
+  const workspaceGroup = () => {
+    const options = (selectPropsSpy.mock.lastCall?.[0] as { options: unknown[] }).options as {
+      options?: { disabled?: boolean; value: string }[];
+    }[];
+    return options.find((option) => option.options)?.options ?? [];
+  };
+
+  beforeEach(() => {
+    selectPropsSpy.mockClear();
+  });
+
+  it('shows stored workspace devices but does not let them be bound yet', () => {
+    testState.deviceList = { data: [workspaceDevice], isConfirmed: false, isLoading: false };
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    const [option] = workspaceGroup();
+    expect(option.value).toContain('ws-device');
+    expect(option.disabled).toBe(true);
+  });
+
+  it('reads a stored copy without workspace devices as loading, not empty', () => {
+    testState.deviceList = { data: [], isConfirmed: false, isLoading: false };
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    expect(workspaceGroup().map((option) => option.value)).toEqual(['status:loading']);
+  });
+
+  it('lets a confirmed device be bound', () => {
+    testState.deviceList = {
+      data: [{ ...workspaceDevice, onlineUnknown: undefined }],
+      isConfirmed: true,
+      isLoading: false,
+    };
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    expect(workspaceGroup()[0].disabled).toBeFalsy();
   });
 });

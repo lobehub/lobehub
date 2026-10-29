@@ -96,6 +96,27 @@ export class ScmControlService {
     return outcome;
   };
 
+  /**
+   * A change request just got its acceptance from a hand link, outside any
+   * provider event. Catch it up on what it missed: a PR already merged
+   * accepts now, an open one gets its tracking comment.
+   */
+  onAcceptanceLinked = async (row: ScmChangeRequestItem): Promise<ScmControlOutcome> => {
+    if (!(await this.ownerCanStillWrite(row))) {
+      return { detail: 'owner can no longer write to this workspace', outcome: 'skipped' };
+    }
+    if (row.state === 'merged') {
+      if (!(await this.isEnabled(row, 'acceptOnMerge'))) {
+        return { detail: 'acceptOnMerge is off', outcome: 'skipped' };
+      }
+      const outcome = await this.onMerged(row);
+      await this.refreshComment(row.id);
+      return outcome;
+    }
+    if (row.state === 'open') return this.syncComment(row);
+    return { detail: `${row.state} needs no action`, outcome: 'skipped' };
+  };
+
   private route = async ({ event, kind, row }: ScmControlEvent): Promise<ScmControlOutcome> => {
     switch (kind) {
       case 'opened':
@@ -381,7 +402,21 @@ export class ScmControlService {
       };
     }
 
-    const service = new AcceptanceService(this.db, row.userId, row.workspaceId ?? undefined);
+    // Bound to the acceptance's owner, not the row's: a hand link joins a PR
+    // to a teammate's delivery, and a private one is invisible to a service
+    // bound to the PR author. The author is still who the merge is credited to.
+    const [acceptance] = await this.db
+      .select({ userId: acceptances.userId, workspaceId: acceptances.workspaceId })
+      .from(acceptances)
+      .where(eq(acceptances.id, row.acceptanceId));
+    if (!acceptance) return { detail: 'acceptance no longer exists', outcome: 'skipped' };
+
+    const service = new AcceptanceService(
+      this.db,
+      acceptance.userId,
+      acceptance.workspaceId ?? undefined,
+      { actorUserId: row.userId },
+    );
     const accepted = await service.acceptFromScmMerge(row.acceptanceId, {
       mergedByExternalId: row.mergedByExternalId ?? undefined,
       number: row.number,
@@ -462,7 +497,6 @@ export class ScmControlService {
     if (!topic?.agentId) return { detail: 'conversation has no agent', outcome: 'skipped' };
 
     const prompt = await this.buildPrompt(row, reason, trigger);
-    const running = Boolean(topic.metadata?.runningOperation);
 
     // Take the slot before starting anything: the check above read a row
     // snapshot, and on a Redis-less deployment there is no debounce to stop
@@ -474,8 +508,9 @@ export class ScmControlService {
     }
 
     // A busy topic: execAgent's reservation retries briefly for the running
-    // turn to hand back (queued-steer semantics); if it does not, the wake is
-    // dropped and the next event tries again.
+    // turn to hand back; if it does not, the wake is dropped and the next
+    // event tries again. The wake starts a turn of its own after the hand-back,
+    // so it is not a steer of the run it waited behind.
     let operationId: string;
     try {
       const result = await new AiAgentService(this.db, row.userId, {
@@ -492,7 +527,6 @@ export class ScmControlService {
           url: row.url,
         },
         prompt,
-        steer: running,
         trigger: RequestTrigger.Scm,
         userInterventionConfig: { approvalMode: 'headless' },
       });

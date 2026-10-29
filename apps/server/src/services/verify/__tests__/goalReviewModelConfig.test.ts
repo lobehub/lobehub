@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   init: vi.fn(),
   models: vi.fn(),
   goal: vi.fn(),
+  serviceModel: vi.fn(),
 }));
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
@@ -34,6 +35,9 @@ vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: mocks.
 vi.mock('@/server/services/goal/modelConfig', () => ({ resolveGoalModelConfig: mocks.goal }));
 vi.mock('../modelConfig', () => ({
   REVIEW_PREDICT_MODEL_CONFIG: { model: 'gemini', provider: 'google' },
+  // Same unavailable provider as the pinned reviewer, so the task fallbacks stay reachable.
+  VERIFY_FALLBACK_MODEL_CONFIG: { model: 'gemini-floor', provider: 'google' },
+  resolveVerifyServiceModel: mocks.serviceModel,
   isHeterogeneousVerifyProvider: (provider: string) => provider === 'codex',
 }));
 const db = {} as LobeChatDatabase;
@@ -44,6 +48,7 @@ const resolve = (requiresVision = false, verifierAgentId?: string) =>
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.agent.mockResolvedValue(null);
+  mocks.serviceModel.mockResolvedValue(undefined);
   mocks.task.mockResolvedValue({ config: configured });
   mocks.goal.mockResolvedValue({ model: 'unavailable', provider: 'google' });
   mocks.models.mockResolvedValue([{ id: 'gpt-4o', abilities: { vision: true } }]);
@@ -58,6 +63,15 @@ describe('Goal review model selection', () => {
     mocks.agent.mockResolvedValue(configured);
     expect(await resolve(true, 'verifier')).toEqual(configured);
     expect(mocks.init).toHaveBeenCalledExactlyOnceWith(db, 'u1', 'openai', 'w1');
+  });
+  it('prefers the verify service model over the pinned reviewer', async () => {
+    mocks.serviceModel.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+    mocks.init.mockResolvedValue({});
+    expect(await resolve(true)).toEqual(configured);
+  });
+  it('skips a text-only verify service model for screenshot evidence', async () => {
+    mocks.serviceModel.mockResolvedValue({ model: 'text-only', provider: 'openai' });
+    expect(await resolve(true)).toEqual(configured);
   });
   it('keeps the pinned reviewer when the deployment can initialize it', async () => {
     mocks.init.mockResolvedValue({});

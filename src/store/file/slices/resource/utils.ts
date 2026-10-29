@@ -1,3 +1,5 @@
+import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+
 import { type ResourceItem, type ResourceQueryParams } from '@/types/resource';
 
 import { type ResourceListParams, type ResourceListValue } from './projection';
@@ -121,6 +123,16 @@ export const listsMovedRowUnfiltered = (
   if (!params.libraryId && !params.showFilesInKnowledgeBase && resource.knowledgeBaseId) {
     return false;
   }
+  // The drive lists uploaded files and the folders that hold them; a page row is
+  // never part of it.
+  if (
+    params.filesOnly &&
+    resource.sourceType === 'document' &&
+    resource.fileType !== CUSTOM_FOLDER_FILE_TYPE
+  ) {
+    return false;
+  }
+
   return true;
 };
 

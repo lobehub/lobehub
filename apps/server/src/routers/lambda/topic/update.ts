@@ -7,13 +7,16 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
+import { GoalTopicHandoffService } from '@/server/services/goal/topicHandoff';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
   assertCanUseConversationTargets,
   assertCanUseTopicTargets,
 } from '../_helpers/conversationResourceGuard';
+import { isOperationOwnedByAnotherUser } from '../_helpers/operationReadGuard';
 import { resolveContext } from '../_helpers/resolveContext';
 import { assertCreatorTopicTargets } from '../_helpers/shareVisitorTargetGuard';
 import { guardCtx, topicProcedure } from './procedures';
@@ -48,22 +51,34 @@ export const updateRouter = router({
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
-      const { agentId, ...restValue } = input.value;
-      if (agentId) await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId }]);
-
-      // If agentId is provided, resolve to sessionId
-      let resolvedSessionId = restValue.sessionId;
-      if (agentId && !resolvedSessionId) {
-        const resolved = await resolveContext(
-          { agentId },
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId ?? undefined,
-        );
-        resolvedSessionId = resolved.sessionId ?? undefined;
-      }
-
-      return ctx.topicModel.update(input.id, { ...restValue, sessionId: resolvedSessionId });
+      const { agentId, sessionId, ...restValue } = input.value;
+      if (!agentId && !sessionId) return ctx.topicModel.update(input.id, restValue);
+      const resolved = await resolveContext(
+        { agentId, sessionId },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+      return ctx.topicModel.update(input.id, {
+        ...restValue,
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
+      });
+    }),
+  /**
+   * Clear the unread mark only while the topic is still unread — see
+   * `TopicModel.markRead`. Returns the cleared row, or `null` when the status
+   * had already moved on. Same co-editing rules as `updateTopic`.
+   */
+  markTopicRead: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      const [cleared] = await ctx.topicModel.markRead(input.id);
+      return cleared ?? null;
     }),
   /**
    * Switch the topic's pinned model and its effort pin atomically — see
@@ -114,8 +129,10 @@ export const updateRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const rows = await ctx.topicModel.findOwnersByIds(input.topicIds);
+      // Admins may re-home teammates' topics (e.g. consolidating a team's
+      // topics under one agent); everything else stays creator/owner-only.
       for (const userId of new Set(rows.map((row) => row.userId))) {
-        assertWorkspaceRowManageable(ctx, userId, 'topic');
+        assertWorkspaceRowManageable(ctx, userId, 'topic', { allowAdmin: true });
       }
       // Moving needs `use` on both the source conversations and the target agent.
       await assertCanUseTopicTargets(guardCtx(ctx), input.topicIds);
@@ -125,8 +142,23 @@ export const updateRouter = router({
       // `assertCreatorTopicTargets` for why this guard sits at the RPC
       // boundary rather than in the model defaults.
       await assertCreatorTopicTargets(guardCtx(ctx), input.topicIds);
-
-      return ctx.topicRepo.batchMoveToAgent(input.topicIds, input.targetAgentId);
+      // A goal supervised from a moved topic follows it to the target agent;
+      // left on the previous agent it would keep dispatching there. The move
+      // and every handoff commit together, so a failed handoff never leaves a
+      // topic moved without its goal. Moving first locks the topic rows, and
+      // the goals bound to them are locked and checked after it.
+      const workspaceId = ctx.workspaceId ?? undefined;
+      return ctx.serverDB.transaction(async (tx) => {
+        await new TopicRepository(tx, ctx.userId, workspaceId).batchMoveToAgent(
+          input.topicIds,
+          input.targetAgentId,
+        );
+        const goalHandoff = new GoalTopicHandoffService(tx, ctx.userId, workspaceId);
+        const goals = await goalHandoff.lockFollowing(input.topicIds, input.targetAgentId);
+        for (const goal of goals)
+          assertWorkspaceRowManageable(ctx, goal.userId, 'goal', { allowAdmin: true });
+        return { movedGoalIds: await goalHandoff.handOver(goals, input.targetAgentId) };
+      });
     }),
   cancelRateLimitContinuation: topicProcedure
     .use(withScopedPermission('topic:update'))
@@ -156,6 +188,21 @@ export const updateRouter = router({
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       // Same visitor guard as `batchMoveTopics`/`cloneTopic` above.
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+
+      // Only the member who started the run may report its end. A teammate's
+      // tab watching the same workspace topic has no stream to learn the end
+      // from (the gateway refuses it), so any terminal it reports is a guess;
+      // the in-flight check below does not cover `idle` / `waiting_for_human`,
+      // where such a guess would drop a live run's marker.
+      if (
+        await isOperationOwnedByAnotherUser({
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        })
+      ) {
+        return { activeOperationId: input.operationId, status: 'not_owner' as const };
+      }
 
       // Client-reported end: never clear the marker of a run the server is still
       // driving (an early / mirrored terminal event would otherwise drop the

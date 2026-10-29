@@ -6,6 +6,8 @@ import { creationRouter } from './creation';
 import { lifecycleRouter } from './lifecycle';
 import { planningRouter } from './planning';
 import { readRouter } from './reads';
+import { subscriptionRouter } from './subscriptions';
+import { transferRouter } from './transfer';
 
 export const goalRouter = mergeRouters(
   lifecycleRouter,
@@ -13,6 +15,8 @@ export const goalRouter = mergeRouters(
   creationRouter,
   configurationRouter,
   readRouter,
+  subscriptionRouter,
+  transferRouter,
   router({
     ...goalGraphEditProcedures,
   }),

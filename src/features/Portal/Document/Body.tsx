@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import CodeEditorPane from '@/components/CodeEditorPane';
+import { HtmlDocumentFrame } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import FileNotFound from '@/features/FileNotFound';
 import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
@@ -259,6 +260,11 @@ const DocumentBody = memo(() => {
       )}
       {renderMode.mode === 'file' ? (
         <FileDocumentPreview fileId={documentMeta?.fileId} />
+      ) : renderMode.mode === 'html' ? (
+        <HtmlDocumentFrame
+          content={documentMeta?.content ?? ''}
+          title={documentMeta?.title ?? undefined}
+        />
       ) : renderMode.mode === 'highlight' && documentId ? (
         <HighlightEditor
           content={documentMeta?.content ?? ''}

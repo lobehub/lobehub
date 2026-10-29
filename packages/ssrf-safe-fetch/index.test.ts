@@ -226,18 +226,17 @@ describe('ssrfSafeFetch', () => {
 
   describe('response conversion', () => {
     it('should convert node-fetch Response to standard Response', async () => {
-      const mockArrayBuffer = new ArrayBuffer(10);
       const mockHeaders = new Map([
         ['content-type', 'application/json'],
         ['content-length', '10'],
       ]);
 
-      const mockResponse = createMockResponse({
-        arrayBuffer: mockArrayBuffer,
-        headers: mockHeaders,
-        status: 201,
-        statusText: 'Created',
-      });
+      const mockResponse = {
+        ...createMockResponse({ headers: mockHeaders, status: 201, statusText: 'Created' }),
+        body: (async function* () {
+          yield Buffer.from('{"ok":true}');
+        })(),
+      };
 
       mockFetch.mockResolvedValue(mockResponse);
 
@@ -248,7 +247,9 @@ describe('ssrfSafeFetch', () => {
       expect(response.statusText).toBe('Created');
       expect(response.headers.get('content-type')).toBe('application/json');
       expect(response.headers.get('content-length')).toBe('10');
-      expect(mockResponse.arrayBuffer).toHaveBeenCalled();
+      // The body streams through instead of being buffered before resolving.
+      expect(mockResponse.arrayBuffer).not.toHaveBeenCalled();
+      expect(await response.json()).toEqual({ ok: true });
     });
 
     it('should handle response with different status codes', async () => {
@@ -282,10 +283,9 @@ describe('ssrfSafeFetch', () => {
 
   describe('maxContentLength (response body cap)', () => {
     const buildBodyResponse = (chunks: Buffer[]) => ({
-      // arrayBuffer should NOT be called when maxContentLength is set;
-      // make it throw so the test fails loudly if the cap path falls through.
+      // The body must stream; make arrayBuffer throw so a buffering regression fails loudly.
       arrayBuffer: vi.fn().mockImplementation(async () => {
-        throw new Error('arrayBuffer should not be called when maxContentLength is set');
+        throw new Error('arrayBuffer should not be called; the body must stream');
       }),
       body: (async function* () {
         for (const chunk of chunks) yield chunk;
@@ -332,16 +332,12 @@ describe('ssrfSafeFetch', () => {
       expect(await response.text()).toBe('');
     });
 
-    it('falls back to arrayBuffer when maxContentLength is not set', async () => {
-      const mockResponse = createMockResponse({
-        arrayBuffer: new TextEncoder().encode('legacy path').buffer as ArrayBuffer,
-      });
-      mockFetch.mockResolvedValue(mockResponse);
+    it('streams the whole body without buffering when maxContentLength is not set', async () => {
+      mockFetch.mockResolvedValue(buildBodyResponse([Buffer.from('no '), Buffer.from('cap')]));
 
       const response = await ssrfSafeFetch('https://example.com');
 
-      expect(mockResponse.arrayBuffer).toHaveBeenCalledTimes(1);
-      expect(await response.text()).toBe('legacy path');
+      expect(await response.text()).toBe('no cap');
     });
   });
 

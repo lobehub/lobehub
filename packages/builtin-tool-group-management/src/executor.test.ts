@@ -425,4 +425,24 @@ describe('GroupManagementExecutor', () => {
       expect(result.content).toBe('Failed to interrupt task: Task not found');
     });
   });
+
+  describe('vote', () => {
+    it('should return an explicit failure instead of a success-shaped stub', async () => {
+      const ctx = createMockContext();
+
+      const result = await groupManagementExecutor.vote(
+        {
+          options: [
+            { id: 'a', label: 'Option A' },
+            { id: 'b', label: 'Option B' },
+          ],
+          question: 'Which design should we pick?',
+        },
+        ctx,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('broadcast');
+    });
+  });
 });

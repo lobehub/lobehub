@@ -35,6 +35,7 @@ import {
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { attachmentsExecutor } from './lobe-attachments';
+import { canvasExecutor } from './lobe-canvas';
 import { messageExecutor } from './lobe-message';
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
@@ -67,6 +68,7 @@ export const builtinToolExecutors = [
   attachmentsExecutor,
   auvExecutor,
   calculatorExecutor,
+  canvasExecutor,
   cloudSandboxExecutor,
   credsExecutor,
   groupAgentBuilderExecutor,

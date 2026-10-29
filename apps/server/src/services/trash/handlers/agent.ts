@@ -1,3 +1,5 @@
+import { agentDisplayName } from '@lobechat/types';
+
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
@@ -26,7 +28,9 @@ export const agentEntry = (agent: AgentItem, childCount: number) => ({
   projectId: null,
   resourceId: agent.id,
   resourceType: 'agent' as const,
-  title: agent.title,
+  // Label the entry the way the sidebar does: `name` first, `title` (the
+  // agent's role) only when it has no name.
+  title: agentDisplayName(agent) ?? null,
 });
 
 /**

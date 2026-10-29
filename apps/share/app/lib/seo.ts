@@ -1,4 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
+import type { TFunction } from 'i18next';
 import type { MetaDescriptor } from 'react-router';
 
 // Shared with landing-rr: share pages ship behind the lobehub.com gateway, so
@@ -15,14 +16,13 @@ const FALLBACK_DESCRIPTION: Record<DescriptionKey, string> = {
   topicDescription: `A conversation shared from ${BRANDING_NAME}.`,
 };
 
-export const shareMetaDescription = (resources: unknown, key: DescriptionKey): string => {
-  const chat = (resources as Record<string, Record<string, unknown>> | undefined)?.chat;
-  const text = chat?.[`sharePage.meta.${key}`];
-
-  return typeof text === 'string'
-    ? text.replaceAll('{{appName}}', BRANDING_NAME)
+export const shareMetaDescription = (
+  t: TFunction<'chat'> | undefined,
+  key: DescriptionKey,
+): string =>
+  t
+    ? t(`sharePage.meta.${key}`, { appName: BRANDING_NAME, defaultValue: FALLBACK_DESCRIPTION[key] })
     : FALLBACK_DESCRIPTION[key];
-};
 
 export const truncateDescription = (text: string | null | undefined, max = 200) => {
   if (!text) return undefined;

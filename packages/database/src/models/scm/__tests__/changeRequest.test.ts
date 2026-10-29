@@ -641,6 +641,53 @@ describe('ScmChangeRequestModel', () => {
     await serverDB.delete(users).where(eq(users.id, otherUser));
   });
 
+  it('claims a hand-linked acceptance only while the hand link is still there', async () => {
+    const [linked, unlinked] = await serverDB
+      .insert(acceptances)
+      .values([
+        {
+          metadata: {
+            pullRequests: [{ number: 7, provider: 'github', repoFullName: 'lobehub/lobehub' }],
+          },
+          subjectId: 'linked',
+          subjectType: 'standalone',
+          userId,
+        },
+        { subjectId: 'unlinked', subjectType: 'standalone', userId },
+      ])
+      .returning();
+
+    // The resolver read the link while it stood; nothing unlinked it here.
+    const bound = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: linked.id, acceptanceSource: 'hand-link' },
+    });
+    expect(bound.acceptanceId).toBe(linked.id);
+
+    // This delivery read the link before the unlink committed. Applying the
+    // snapshot would put the removed binding back, and the merge after it
+    // would accept a delivery the pull request no longer leads to.
+    const raced = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: unlinked.id, acceptanceSource: 'hand-link' },
+      number: 8,
+      url: 'https://github.com/lobehub/lobehub/pull/8',
+    });
+    expect(raced.acceptanceId).toBeNull();
+  });
+
+  it('never lets a row-binding echo revive a binding the row has lost', async () => {
+    // The resolver read the row before this transaction opened, so it echoed
+    // the acceptance the row carried then. The row here — as locked inside
+    // the write — no longer carries it: an unlink committed in between.
+    const echoed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: '11111111-2222-4333-8444-555555555555', acceptanceSource: 'row-binding' },
+    });
+
+    expect(echoed.acceptanceId).toBeNull();
+  });
+
   it('replays the loser of a first-insert race under the lock instead of overwriting', async () => {
     const otherUser = 'scm-model-user-race';
     await serverDB.insert(users).values({ id: otherUser });

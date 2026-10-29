@@ -4,8 +4,20 @@ import { findDeviceTopicDirectory, resolveDeviceGroupName } from './resolveDevic
 
 const directories = [
   { deviceId: 'dev-a', id: 'dir-a-plain' },
-  { deviceId: 'dev-a', id: 'dir-a-instance', instanceId: 'ins-1' },
-  { deviceId: 'dev-b', id: 'dir-b-instance', instanceId: 'ins-2' },
+  {
+    deviceId: 'dev-a',
+    id: 'dir-a-instance',
+    environmentId: 'env-1',
+    instanceId: 'ins-1',
+    permission: 'readWrite',
+  },
+  {
+    deviceId: 'dev-b',
+    id: 'dir-b-instance',
+    environmentId: 'env-1',
+    instanceId: 'ins-2',
+    permission: 'readWrite',
+  },
 ];
 
 describe('findDeviceTopicDirectory', () => {
@@ -18,6 +30,23 @@ describe('findDeviceTopicDirectory', () => {
     expect(findDeviceTopicDirectory([{ deviceId: 'dev-c', id: 'dir-c-plain' }], 'dev-c')).toBe(
       undefined,
     );
+  });
+
+  /** @example Review: a read-only or unlinked directory was staged, so the first send was refused. */
+  it('skips a directory that cannot run — read-only or without a linked environment', () => {
+    const runnable = { deviceId: 'dev-d', environmentId: 'env-1', permission: 'readWrite' };
+    const rows = [
+      { ...runnable, id: 'dir-d-readonly', instanceId: 'ins-3', permission: 'read' },
+      { ...runnable, environmentId: null, id: 'dir-d-unlinked', instanceId: 'ins-4' },
+      { ...runnable, id: 'dir-d-ok', instanceId: 'ins-5' },
+    ];
+
+    expect(findDeviceTopicDirectory(rows, 'dev-d')?.id).toBe('dir-d-ok');
+  });
+
+  it('offers nothing on a device other than the one the agent is fixed to', () => {
+    expect(findDeviceTopicDirectory(directories, 'dev-a', 'dev-b')).toBeUndefined();
+    expect(findDeviceTopicDirectory(directories, 'dev-b', 'dev-b')?.id).toBe('dir-b-instance');
   });
 
   it('returns undefined for groups without a device (favorites, unknown bucket)', () => {

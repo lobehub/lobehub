@@ -125,6 +125,24 @@ describe('document detail replica', () => {
     expect(editor.setDocument).not.toHaveBeenCalled();
   });
 
+  it('adopts a fetched HTML page as HTML, keeping the editor and its saves out of it', async () => {
+    const html = '<!doctype html><html><body>Report</body></html>';
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(
+      documentRow({ content: html, editorData: null, fileType: 'custom/html' }) as any,
+    );
+    const editor = createEditor();
+    renderDocument('doc-1', editor);
+
+    await waitFor(() =>
+      expect(useDocumentStore.getState().documents['doc-1']?.contentFormat).toBe('html'),
+    );
+    act(() => useDocumentStore.getState().handleContentChange());
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: html,
+      isDirty: false,
+    });
+  });
+
   it('adopts a newer server body over a dirty draft when the sync revalidates', async () => {
     vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
     const editor = createEditor();
@@ -179,6 +197,88 @@ describe('document detail replica', () => {
       isDirty: true,
       lastSavedContent: '# Server',
       lastUpdatedTime: new Date('2026-01-05T00:00:00.000Z'),
+    });
+  });
+
+  it('keeps edits typed during an in-flight save when a focus revalidation lands', async () => {
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    let settleSave!: () => void;
+    vi.mocked(documentService.updateDocument).mockReturnValue(
+      new Promise((resolve) => {
+        settleSave = () =>
+          resolve({ historyAppended: false, id: 'doc-1', updatedAt: '2026-01-03T00:00:00.000Z' });
+      }) as any,
+    );
+    const editor = createEditor();
+    const { result } = renderDocument('doc-1', editor);
+
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    act(() => useDocumentStore.getState().handleContentChange());
+    const save = useDocumentStore.getState().performSave('doc-1');
+    await waitFor(() => expect(documentService.updateDocument).toHaveBeenCalled());
+
+    // The server already committed the save, but its response has not arrived:
+    // the read returns that row, which lacks what was typed since.
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(
+      documentRow({
+        content: '# Draft without the latest edits',
+        updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+      }) as any,
+    );
+    await act(async () => {
+      await result.current.mutate();
+    });
+
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: '# Draft',
+      isDirty: true,
+    });
+
+    await act(async () => {
+      settleSave();
+      await save;
+    });
+  });
+
+  it('adopts a newer writer read during an in-flight save once the save settles', async () => {
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    let settleSave!: () => void;
+    vi.mocked(documentService.updateDocument).mockReturnValue(
+      new Promise((resolve) => {
+        settleSave = () =>
+          resolve({ historyAppended: false, id: 'doc-1', updatedAt: '2026-01-03T00:00:00.000Z' });
+      }) as any,
+    );
+    const editor = createEditor();
+    const { result } = renderDocument('doc-1', editor);
+
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    act(() => useDocumentStore.getState().handleContentChange());
+    const save = useDocumentStore.getState().performSave('doc-1');
+    await waitFor(() => expect(documentService.updateDocument).toHaveBeenCalled());
+
+    // Another writer committed after this save; its row arrives first.
+    const newer = new Date('2026-01-04T00:00:00.000Z');
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(
+      documentRow({ content: '# Other writer', updatedAt: newer }) as any,
+    );
+    await act(async () => {
+      await result.current.mutate();
+    });
+    expect(useDocumentStore.getState().documents['doc-1'].content).toBe('# Draft');
+
+    await act(async () => {
+      settleSave();
+      await save;
+    });
+
+    expect(useDocumentStore.getState().documents['doc-1']).toMatchObject({
+      content: '# Other writer',
+      lastUpdatedTime: newer,
+    });
+    expect(useDocumentStore.getState().documentDetailMap['doc-1']?.document).toMatchObject({
+      content: '# Other writer',
+      updatedAt: newer,
     });
   });
 

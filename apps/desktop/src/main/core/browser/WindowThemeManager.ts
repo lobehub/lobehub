@@ -177,6 +177,18 @@ export class WindowThemeManager {
     return this.resolveIsDarkMode() ? BACKGROUND_DARK : BACKGROUND_LIGHT;
   }
 
+  /**
+   * Electron does not re-evaluate the macOS NSVisualEffectView when the theme changes at
+   * runtime, so the vibrancy keeps the previous appearance (dark sidebar over a light UI)
+   * until the window is recreated. Toggling it forces AppKit to rebuild the effect view.
+   */
+  private refreshMacVibrancy(): void {
+    if (!this.browserWindow) return;
+
+    this.browserWindow.setVibrancy(null);
+    this.browserWindow.setVibrancy(MACOS_VIBRANCY);
+  }
+
   private applyMacFullscreenChrome(isFullScreen: boolean): void {
     if (!this.browserWindow) return;
 
@@ -217,8 +229,14 @@ export class WindowThemeManager {
         this.applyWindowsVisualEffects(isDarkMode);
       } else if (isLinux) {
         this.applyLinuxVisualEffects();
-      } else if (isMac && this.browserWindow.isFullScreen()) {
-        this.applyMacFullscreenChrome(true);
+      } else if (isMac) {
+        // macOS keeps the native vibrancy (and the traffic-light/title bar area) on the
+        // appearance it was created with, so it has to be rebuilt on every theme change.
+        if (this.browserWindow.isFullScreen()) {
+          this.applyMacFullscreenChrome(true);
+        } else {
+          this.refreshMacVibrancy();
+        }
       }
     } catch (error) {
       logger.error(`[${this.identifier}] Failed to apply visual effects:`, error);

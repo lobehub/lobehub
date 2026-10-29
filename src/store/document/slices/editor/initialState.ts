@@ -7,7 +7,11 @@ import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
  * Document source type - determines which service to use for persistence
  */
 export type DocumentSourceType = 'notebook' | 'page';
-export type DocumentContentFormat = 'markdown' | 'skillMarkdown';
+/**
+ * - `html`: a self-contained HTML page. It is rendered in a sandboxed frame and
+ *   never loaded into, read from or saved through the rich-text editor.
+ */
+export type DocumentContentFormat = 'html' | 'markdown' | 'skillMarkdown';
 
 /**
  * Editor content state for a single document
@@ -48,6 +52,14 @@ export interface EditorContentState {
    * Last updated time
    */
   lastUpdatedTime: Date | null;
+  /**
+   * The body as the editor serialized it right after loading it. Loading is not
+   * byte-stable (fresh node ids, the editor's own markdown export), so a body
+   * equal to this is unedited even when it differs from `lastSaved*`. Only the
+   * dirty check reads it; `lastSaved*` stays the server's body, which conflict
+   * reconciliation compares remote rows against. Cleared once a save lands.
+   */
+  loadedBody?: { content: string; editorData: unknown };
   /**
    * Edit-session id that currently owns this document's collaborative lock.
    * Used by workspace page saves to prove the client still holds the lease.

@@ -1,10 +1,13 @@
-import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
+import { DraggablePanel, type DraggablePanelProps, Drawer } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui';
 import { memo, Suspense, useState } from 'react';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
+
+import { useMobilePanelExpand } from './useMobilePanelExpand';
 
 export interface Size {
   height?: string | number;
@@ -22,6 +25,13 @@ interface RightPanelProps extends Omit<
    * surface (Page editor, Task layout, etc.) own an independent visibility state.
    */
   expand?: boolean;
+  /**
+   * `expand` mirrors a selection made on this page (e.g. the picked record), not
+   * a saved open/closed preference. Mobile closes a panel that mounts open,
+   * since a saved desktop preference would otherwise cover the phone page; a
+   * fresh selection must stay open.
+   */
+  expandFollowsSelection?: boolean;
   onExpandChange?: (expand: boolean) => void;
   onSizeChange?: (size?: Size) => void;
   /**
@@ -39,6 +49,7 @@ const RightPanel = memo<RightPanelProps>(
     children,
     defaultWidth = 360,
     expand: expandProp,
+    expandFollowsSelection,
     onExpandChange,
     onSizeChange,
     width: widthProp,
@@ -54,6 +65,29 @@ const RightPanel = memo<RightPanelProps>(
 
     const [internalWidth, setInternalWidth] = useState<string | number>(defaultWidth);
     const width = widthProp ?? internalWidth;
+    const mobile = isMobileSurface();
+
+    useMobilePanelExpand({
+      expand: !!expand,
+      expandFollowsSelection,
+      mobile,
+      onExpandChange: handleExpandChange,
+    });
+
+    if (mobile)
+      return (
+        <Drawer
+          open={expand}
+          placement={'right'}
+          styles={{ bodyContent: { padding: 0 } }}
+          width={'100%'}
+          onClose={() => handleExpandChange(false)}
+        >
+          <Suspense fallback={<SurfaceSkeleton header={false} variant={'list'} />}>
+            {children}
+          </Suspense>
+        </Drawer>
+      );
 
     return (
       <DraggablePanel

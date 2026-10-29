@@ -51,8 +51,8 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
+import TaskAcceptanceWaitNotice from '../TaskAcceptanceWaitNotice';
 import FeedbackInput from './FeedbackInput';
-import { TopicRuntimeConfig } from './TopicRuntimeConfig';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
 const DEFAULT_PANEL_HEIGHT = 'min(640px, calc(100dvh - 16px))';
@@ -72,8 +72,6 @@ export interface TopicChatDrawerBodyProps {
       drawer is opened with conversational intent (e.g. the brief's "Continue
       chat"). */
   inputFocusRequest?: number;
-  /** Latest operation for this Topic, retained after its running marker clears. */
-  operationId?: string | null;
   /**
    * The run to resume streaming from. Hosts that embed the body outside the
    * drawer pass it themselves; the drawer falls back to its own topic's run.
@@ -84,7 +82,7 @@ export interface TopicChatDrawerBodyProps {
 }
 
 /**
- * Renders a Task run conversation with its latest runtime receipt and follow-up composer.
+ * Renders a Task run conversation with its follow-up composer.
  *
  * Use when:
  * - Hosting the floating Task drawer or an embedded run conversation.
@@ -101,7 +99,6 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     defaultInputExpanded,
     disableInputCollapse,
     inputFocusRequest,
-    operationId,
     runningOperation,
     topicId,
   }) => {
@@ -127,11 +124,6 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
       return activity?.id === topicId ? activity : undefined;
     });
     const currentRunningOperation = runningOperation ?? drawerActivity?.runningOperation;
-    const currentOperationId =
-      operationId ??
-      runningOperation?.operationId ??
-      drawerActivity?.runningOperation?.operationId ??
-      drawerActivity?.operationId;
     // Pass this drawer's agent explicitly — the run drawer also mounts on the
     // home surface, where the chat store's `activeAgentId` is unset.
     useGatewayReconnect(topicId, currentRunningOperation, agentId);
@@ -145,17 +137,16 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
       <ConversationProvider context={context} operationState={operationState}>
         <TaskCardScopeProvider value={true}>
           <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
-            <Flexbox align={'flex-start'} paddingInline={12}>
-              <TopicRuntimeConfig
-                agentId={agentId}
-                operationId={currentOperationId}
-                topicId={topicId}
-              />
-            </Flexbox>
             <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
               <ChatList disableActionsBar itemContent={itemContent} />
             </Flexbox>
-            <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+            <Flexbox gap={8} paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+              {/* A run whose agent stopped but whose acceptance round has not
+                  settled still reads as running; say what it waits on. */}
+              <TaskAcceptanceWaitNotice
+                activity={drawerActivity}
+                runningOperation={currentRunningOperation}
+              />
               <FeedbackInput
                 defaultExpanded={defaultInputExpanded}
                 disableCollapse={disableInputCollapse}
@@ -428,7 +419,6 @@ const TopicChatDrawer = memo(() => {
             <TopicChatDrawerBody
               agentId={agentId!}
               inputFocusRequest={inputFocusRequest}
-              operationId={activity?.runningOperation?.operationId ?? activity?.operationId}
               runningOperation={activity?.runningOperation}
               topicId={topicId!}
             />

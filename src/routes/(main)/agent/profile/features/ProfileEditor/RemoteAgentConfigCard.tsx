@@ -25,9 +25,12 @@ import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lu
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
+import AsyncError from '@/components/AsyncError';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
+import { isDevicePresenceUnknown, useDeviceList } from '@/store/device';
+
+import { getBoundDevicePresence, getDeviceSelectState } from './boundDevicePresence';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -110,10 +113,25 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
       setCanDismissByClickOutside(!saving);
     }, [saving, setCanDismissByClickOutside]);
 
-    // Workspace-keyed SWR fetch (see useDeviceList) — the raw lambdaQuery key
-    // has no workspace dimension, so the list went stale across workspace
-    // switches.
-    const { data: devices, isLoading: loadingDevices } = useDeviceList();
+    // The shared device replica (see useDeviceList), partitioned by workspace.
+    const {
+      data: devices,
+      error: deviceListError,
+      isConfirmed,
+      isLoading: loadingDevices,
+      isValidating: validatingDevices,
+      mutate: refreshDevices,
+    } = useDeviceList();
+    // Only online devices are offered, and neither a stored row's presence nor
+    // a stored copy's missing rows are known until the server confirms the list
+    // — keep the picker loading until then.
+    const selectState = getDeviceSelectState({
+      error: deviceListError,
+      hasUnknownPresence: (devices ?? []).some(isDevicePresenceUnknown),
+      isConfirmed,
+      isLoading: loadingDevices,
+      isValidating: validatingDevices,
+    });
 
     const onlineDevices = (devices ?? []).filter(
       (d) =>
@@ -165,7 +183,7 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
       <Flexbox gap={16}>
         <Flexbox gap={12} paddingBlock={'12px 4px'}>
           <Select
-            loading={loadingDevices}
+            loading={selectState === 'loading'}
             placeholder={t('platformAgentConfig.selectDevice')}
             style={{ width: '100%' }}
             value={selectedDeviceId}
@@ -183,6 +201,13 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
             }))}
             onChange={handleDeviceSelect}
           />
+          {selectState === 'error' && (
+            <AsyncError
+              error={deviceListError}
+              variant={'inline'}
+              onRetry={() => void refreshDevices()}
+            />
+          )}
           {checkingCapability && (
             <Tag style={{ marginInlineEnd: 0 }}>
               {t('platformAgentConfig.availability.checking')}
@@ -276,10 +301,12 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
 
     const platformName = HETEROGENEOUS_TYPE_LABELS[provider.type] ?? provider.type;
 
-    // Workspace-keyed SWR fetch — see the comment on the sibling call above.
-    const { data: devices } = useDeviceList();
+    // The shared device replica — see the comment on the sibling call above.
+    const { data: devices, isConfirmed } = useDeviceList();
 
     const boundDevice = devices?.find((d) => d.deviceId === boundDeviceId);
+    const boundPresence = getBoundDevicePresence(boundDeviceId, boundDevice, isConfirmed);
+    const boundPresenceUnknown = boundPresence === 'checking';
 
     const checkCapability = useCallback(
       async (deviceId: string) => {
@@ -321,6 +348,11 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
       if (!boundDeviceId) {
         return (
           <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.availability.noDevice')}</Tag>
+        );
+      }
+      if (boundPresenceUnknown) {
+        return (
+          <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.availability.checking')}</Tag>
         );
       }
       if (!boundDevice?.online) {
@@ -395,13 +427,19 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
                     color={boundDevice.online ? 'success' : 'default'}
                     style={{ marginInlineEnd: 0 }}
                   >
-                    {boundDevice.online
-                      ? t('platformAgentConfig.device.online')
-                      : t('platformAgentConfig.device.offline')}
+                    {boundPresenceUnknown
+                      ? t('devices.status.checking')
+                      : boundDevice.online
+                        ? t('platformAgentConfig.device.online')
+                        : t('platformAgentConfig.device.offline')}
                   </Tag>
                 </Flexbox>
               ) : (
-                <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.device.none')}</Tag>
+                <Tag style={{ marginInlineEnd: 0 }}>
+                  {boundPresenceUnknown
+                    ? t('devices.status.checking')
+                    : t('platformAgentConfig.device.none')}
+                </Tag>
               )}
             </div>
           </div>

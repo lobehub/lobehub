@@ -2,6 +2,7 @@ import { toNextJsHandler } from 'better-auth/next-js';
 import type { NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
+import { stripEmptyUntypedBody } from '@/libs/better-auth/request-body';
 
 const jsonContentTypeRegex = /^application\/(?:[a-z0-9.+-]*\+)?json/i;
 
@@ -32,5 +33,5 @@ export const POST = async (request: NextRequest) => {
   const invalidJsonResponse = await validateJsonBody(request);
   if (invalidJsonResponse) return invalidJsonResponse;
 
-  return handler.POST(request);
+  return handler.POST(await stripEmptyUntypedBody(request));
 };

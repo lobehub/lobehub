@@ -73,6 +73,10 @@ describe('workspace command', () => {
     scopedTo(undefined);
     mockResolveIdentityFingerprint.mockReturnValue('user:u1');
     mockGetTrpcClient.mockResolvedValue(mockClient);
+    mockClient.workspace.list.query.mockResolvedValue([
+      { id: 'ws_1', name: 'Acme', role: 'owner', slug: 'acme' },
+      { id: 'ws_9', name: 'Ops', role: 'member', slug: 'ops' },
+    ]);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit');
@@ -213,6 +217,23 @@ describe('workspace command', () => {
       expect(consoleSpy).toHaveBeenCalledWith('No members found.');
     });
 
+    it('resolves a --workspace slug to its id', async () => {
+      mockClient.workspaceMember.list.query.mockResolvedValue([]);
+
+      await run('workspace', 'members', '-w', 'ops');
+
+      expect(mockGetTrpcClient).toHaveBeenLastCalledWith('ws_9');
+    });
+
+    // Passing an unknown value through would hit a server that quietly falls
+    // back to personal scope, so it has to fail before any scoped read.
+    it('rejects a --workspace the account does not belong to', async () => {
+      await expect(run('workspace', 'members', '-w', 'nope')).rejects.toThrow('process.exit');
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('nope'));
+      expect(mockClient.workspaceMember.list.query).not.toHaveBeenCalled();
+    });
+
     it('lists members of the active workspace', async () => {
       scopedTo('ws_1');
       mockClient.workspaceMember.list.query.mockResolvedValue([
@@ -245,8 +266,24 @@ describe('workspace command', () => {
 
       expect(mockGetTrpcClient).toHaveBeenCalledWith('ws_1');
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify({ id: 'ws_1', name: 'Acme', slug: 'acme' }, null, 2),
+        JSON.stringify(
+          { id: 'ws_1', name: 'Acme', slug: 'acme', url: 'https://app.lobehub.com/acme' },
+          null,
+          2,
+        ),
       );
+    });
+
+    it('accepts a slug as the argument', async () => {
+      mockClient.workspace.getById.query.mockResolvedValue({
+        id: 'ws_1',
+        name: 'Acme',
+        slug: 'acme',
+      });
+
+      await run('workspace', 'view', 'acme');
+
+      expect(mockGetTrpcClient).toHaveBeenLastCalledWith('ws_1');
     });
 
     it('exits when the workspace is gone', async () => {

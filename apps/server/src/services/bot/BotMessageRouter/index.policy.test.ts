@@ -144,6 +144,33 @@ describe('BotMessageRouter', () => {
       const opts = mockHandleMention.mock.calls[0][2];
       expect(opts.botContext.senderExternalUserId).toBe('random-user-id');
       expect(opts.botContext.isOwner).toBe(false);
+      expect(opts.botContext.isDeviceTrusted).toBeUndefined();
+    });
+
+    it('should mark a sender on the device list as device-trusted on botContext', async () => {
+      const handler = await loadMentionHandler({
+        deviceAllowFrom: [{ id: 'friend-id', name: 'Ada' }],
+        devicePolicy: 'allowlist',
+        dmPolicy: 'open',
+        userId: 'owner-platform-id',
+      });
+      const thread = {
+        id: 'telegram:group-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+      };
+      const message = {
+        author: { isBot: false, userId: 'friend-id', userName: 'ada' },
+        isMention: true,
+        text: '@bot check my build',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleMention).toHaveBeenCalledTimes(1);
+      const opts = mockHandleMention.mock.calls[0][2];
+      expect(opts.botContext.isOwner).toBe(false);
+      expect(opts.botContext.isDeviceTrusted).toBe(true);
     });
 
     it('should fall back to isOwner=false when settings.userId is missing (fail-closed)', async () => {

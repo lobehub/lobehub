@@ -10,6 +10,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentSignalSelfReviewBriefService } from '@/server/services/agentSignal/services/briefs/selfReview';
 import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/selfIteration/review/brief';
 import { BriefService } from '@/server/services/brief';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
 
 import { applyGoalBriefAction } from './_helpers/goalBriefAction';
 
@@ -71,14 +72,15 @@ export const briefRouter = router({
       // Resolve taskId if it's an identifier
       if (createData.taskId) {
         const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const task = await taskModel.resolve(createData.taskId);
-        if (task) createData.taskId = task.id;
+        const task = await resolveTaskOrThrow(taskModel, createData.taskId);
+        createData.taskId = task.id;
       }
 
       const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
       const brief = await model.create(createData);
       return { data: brief, message: 'Brief created', success: true };
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
       console.error('[brief:create]', error);
       throw new TRPCError({
         cause: error,
@@ -127,9 +129,12 @@ export const briefRouter = router({
     .query(async ({ input, ctx }) => {
       try {
         const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const items = await model.findByTaskId(input.taskId);
+        const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const task = await resolveTaskOrThrow(taskModel, input.taskId);
+        const items = await model.findByTaskId(task.id);
         return { data: items, success: true };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         console.error('[brief:findByTaskId]', error);
         throw new TRPCError({
           cause: error,

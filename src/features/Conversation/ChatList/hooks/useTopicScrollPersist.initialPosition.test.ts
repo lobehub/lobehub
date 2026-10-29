@@ -20,6 +20,8 @@ const createHandle = (scrollSize: number) => {
     },
   } as unknown as HTMLElement;
   const handle = {
+    findItemIndex: (offset: number) => Math.floor(offset / 200),
+    getItemOffset: (index: number) => index * 200,
     scrollOffset: 0,
     scrollSize,
     scrollTo: vi.fn(),
@@ -54,7 +56,7 @@ describe('useTopicScrollPersist initialPosition', () => {
     renderHook(() =>
       useTopicScrollPersist({
         contextKey: 'main_agt_1_tpc_share',
-        dataSourceLength: 50,
+        dataSource: Array.from({ length: 50 }, (_, index) => `m${index}`),
         getScroller: () => scroller,
         initialPosition: 'top',
         virtuaRef: ref,
@@ -77,7 +79,7 @@ describe('useTopicScrollPersist initialPosition', () => {
     renderHook(() =>
       useTopicScrollPersist({
         contextKey: 'main_agt_1_tpc_share',
-        dataSourceLength: 50,
+        dataSource: Array.from({ length: 50 }, (_, index) => `m${index}`),
         getScroller: () => scroller,
         initialPosition: 'top',
         virtuaRef: ref,
@@ -94,7 +96,7 @@ describe('useTopicScrollPersist initialPosition', () => {
     renderHook(() =>
       useTopicScrollPersist({
         contextKey: 'main_agt_1_tpc_share',
-        dataSourceLength: 50,
+        dataSource: Array.from({ length: 50 }, (_, index) => `m${index}`),
         getScroller: () => scroller,
         initialPosition: 'top',
         messageDeepLink: {

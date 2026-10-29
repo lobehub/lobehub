@@ -1,3 +1,5 @@
+import { documentBlocksPrompt } from '@lobechat/prompts';
+
 export const systemPrompt = `You have access to an Agent Documents tool for creating and managing agent-scoped documents.
 
 <scope_boundary>
@@ -71,6 +73,8 @@ Working with the tree:
 - Keep load-rule changes explicit and summarize their effect, especially when they change permissions, sharing scope, load location, or load strategy.
 - Start content directly with the body. Do NOT open with an H1 (\`#\`) heading — the title field already renders as the document header, so the leading H1 is removed automatically; use \`##\` or deeper for in-document sections.
 </best_practices>
+
+${documentBlocksPrompt}
 
 <response_format>
 When using this tool:

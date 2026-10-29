@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/i18n-extractor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static extraction of the translation keys reachable from TypeScript entry points",
+  "exports": {
+    ".": "./src/index.ts",
+    "./marker": "./src/marker.ts"
+  },
+  "main": "./src/index.ts",
+  "bin": {
+    "i18n-extract": "./src/bin.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "vitest": "5.0.0"
+  }
+}

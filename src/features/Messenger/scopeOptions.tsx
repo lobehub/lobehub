@@ -1,5 +1,7 @@
 import { Avatar, createStaticStyles, Flexbox, Tag, Text } from '@lobehub/ui';
 
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
+
 export const PERSONAL_SCOPE = 'personal';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -68,7 +70,11 @@ const renderScopeOption = ({
   personalTagLabel?: string;
 }) => (
   <Flexbox horizontal align="center" className={styles.scopeOption} gap={8}>
-    <Avatar avatar={avatar || label} shape="square" size={20} />
+    {isPersonal ? (
+      <Avatar avatar={avatar || label} shape="square" size={20} />
+    ) : (
+      <WorkspaceAvatar avatar={avatar} name={label} size={20} />
+    )}
     <Flexbox horizontal align="center" className={styles.scopeTitle} gap={6}>
       <Text ellipsis className={styles.scopeName}>
         {label}

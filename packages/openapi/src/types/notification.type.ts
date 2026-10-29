@@ -1,3 +1,4 @@
+import { NotificationSettingsSchema } from '@lobechat/types';
 import { z } from 'zod';
 
 export const NotificationIdParamSchema = z.object({
@@ -25,3 +26,20 @@ export const MarkNotificationsReadRequestSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });
 export type MarkNotificationsReadRequest = z.infer<typeof MarkNotificationsReadRequestSchema>;
+
+/**
+ * Which notification settings a call reads or patches. `personal` is the
+ * account-wide bag (channel switches, IM platforms, body detail); `workspace`
+ * is the caller's per-member gate for the request's workspace and needs an
+ * `X-Workspace-Id`.
+ */
+export const NotificationSettingsQuerySchema = z.object({
+  scope: z.enum(['personal', 'workspace']).default('personal'),
+});
+export type NotificationSettingsQuery = z.infer<typeof NotificationSettingsQuerySchema>;
+export type NotificationSettingsScope = NotificationSettingsQuery['scope'];
+
+export const UpdateNotificationSettingsRequestSchema = NotificationSettingsSchema;
+export type UpdateNotificationSettingsRequest = z.infer<
+  typeof UpdateNotificationSettingsRequestSchema
+>;

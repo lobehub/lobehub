@@ -300,11 +300,15 @@ describe('AgentRuntimeService', () => {
         }),
       );
 
-      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith('test-operation-1', {
-        agentConfig: mockParams.agentConfig,
-        modelRuntimeConfig: mockParams.modelRuntimeConfig,
-        userId: mockParams.userId,
-      });
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        {
+          agentConfig: mockParams.agentConfig,
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          userId: mockParams.userId,
+        },
+        expect.any(Object),
+      );
 
       expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith({
         operationId: 'test-operation-1',
@@ -314,6 +318,37 @@ describe('AgentRuntimeService', () => {
         priority: 'high',
         delay: 50,
       });
+    });
+
+    // Other clients of the user learn which conversation a run belongs to only
+    // from the gateway hub's `op_lifecycle`, which carries the init meta.
+    it('sends the run routing facts with the gateway init', async () => {
+      await service.createOperation({
+        ...mockParams,
+        appContext: {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          scope: 'main',
+          taskId: 'task_1',
+          threadId: 'thd_1',
+          topicId: 'tpc_1',
+        },
+        parentOperationId: 'op_parent',
+      } as any);
+
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.any(Object),
+        {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          parentOperationId: 'op_parent',
+          scope: 'main',
+          taskId: 'task_1',
+          threadId: 'thd_1',
+          topicId: 'tpc_1',
+        },
+      );
     });
 
     it('freezes the builder editing target on the run origin', async () => {
@@ -401,6 +436,39 @@ describe('AgentRuntimeService', () => {
           ],
         }),
       ).rejects.toThrow('Failed to durably persist afterToolCall');
+    });
+
+    it('does not execute a reservation that could not be durably started', async () => {
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('Reservation already retired'),
+      );
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          appContext: { ...mockParams.appContext, trigger: 'channel' },
+          reservedOperation: true,
+        }),
+      ).rejects.toThrow('Failed to durably start the reserved operation');
+    });
+
+    // A Native sub-Agent inherits trigger='channel' from its Channel parent but owns no
+    // reservation; the trigger is provenance, not a start protocol.
+    it('starts a Channel-triggered run without a reservation as an ordinary operation', async () => {
+      const recordStart = vi
+        .spyOn(AgentOperationModel.prototype, 'recordStart')
+        .mockResolvedValue(undefined);
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          appContext: { ...mockParams.appContext, trigger: 'channel' },
+          parentOperationId: 'op-channel-parent',
+        }),
+      ).resolves.toMatchObject({ success: true });
+      expect(recordStart.mock.calls[0][0]).toMatchObject({
+        requireReservation: undefined,
+        trigger: 'channel',
+      });
     });
 
     // Codex P1 on #20093: the member bridge lived only in the 2h runtime
@@ -493,6 +561,7 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({ modelRuntimeConfig: { model: 'gpt-4' } }),
+        expect.any(Object),
       );
     });
 

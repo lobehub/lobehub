@@ -101,6 +101,44 @@ export const queryBoundToDevice = async (
 };
 
 /**
+ * The stored routing config of the given agents, for resolving where each runs
+ * for the caller in ONE read (a sidebar decorating many agents) instead of one
+ * config fetch per agent. Same visibility gate and row shape as
+ * {@link queryBoundToDevice}: an id the caller cannot see is dropped, never
+ * leaked.
+ */
+export const queryAgencyRoutingByIds = async (
+  ctx: AgentModelContext,
+  agentIds: string[],
+): Promise<DeviceBindingCandidate[]> => {
+  if (agentIds.length === 0) return [];
+
+  const rows = await ctx.db
+    .select({
+      agencyConfig: agents.agencyConfig,
+      avatar: agents.avatar,
+      backgroundColor: agents.backgroundColor,
+      id: agents.id,
+      name: agents.name,
+      slug: agents.slug,
+      title: agents.title,
+      userId: agents.userId,
+      visibility: agents.visibility,
+      workspaceId: agents.workspaceId,
+    })
+    .from(agents)
+    .where(
+      and(
+        ctx.ownership(),
+        or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true)),
+        inArray(agents.id, agentIds),
+      ),
+    );
+
+  return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
+};
+
+/**
  * Build the where condition shared by queryAgents / countAgents: the current
  * user's agents, with optional keyword filter.
  *
@@ -221,9 +259,8 @@ export const queryAgents = async (
  * virtual rows always excluded — so the count stays a faithful total for
  * paginated callers and for the assistants stats.
  * Used to report real totals (and pagination) when queryAgents is limited.
- * Accepts the same date filters as SessionModel.count so callers can compare
- * current vs. prior-period totals without falling back to the legacy
- * sessions table.
+ * Accepts date filters so callers can compare current vs. prior-period totals
+ * directly from the agents table.
  */
 export const countAgents = async (
   ctx: AgentModelContext,
@@ -253,6 +290,7 @@ export const countAgents = async (
       ]),
     );
 
+  /* v8 ignore next -- unreachable: count() without GROUP BY always returns exactly one non-null row */
   return result[0]?.count ?? 0;
 };
 

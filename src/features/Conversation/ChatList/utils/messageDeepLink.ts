@@ -33,6 +33,8 @@ function messageContainsMessage(message: UIChatMessage, messageId: string): bool
       true ||
     message.compressedMessages?.some((child) => messageContainsMessage(child, messageId)) ===
       true ||
+    // Compression members the read path did not hydrate still belong to the group row.
+    message.compressedOmittedIds?.includes(messageId) === true ||
     message.members?.some((member) => messageContainsMessage(member, messageId)) === true ||
     message.tasks?.some((task) => messageContainsMessage(task, messageId)) === true ||
     message.pinnedMessages?.some((pinned) => pinned.id === messageId) === true ||

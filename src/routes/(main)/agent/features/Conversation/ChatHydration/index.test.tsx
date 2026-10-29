@@ -163,6 +163,33 @@ describe('ChatHydration', () => {
     });
   });
 
+  /** @example ⌘K Ask AI: reloading the topic it created sent the question a second time. */
+  it('drops a consumed message param when the send moves to its new topic', async () => {
+    useParamsMock.mockReturnValue({ aid: 'agt_test' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/agent/agt_test',
+      search: '?message=hello&thread=thd_456',
+    });
+    useSearchParamsMock.mockReturnValue([
+      new URLSearchParams('message=hello&thread=thd_456'),
+      setSearchParamsMock,
+    ]);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: 'tpc_new' }, false);
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_new?thread=thd_456', {
+        replace: true,
+      });
+    });
+  });
+
   /** @example Edit changes topic and clears an already-absent thread without reverting the URL. */
   it('does not rewrite the old URL when an edited topic clears an absent thread', async () => {
     // ROOT CAUSE:
@@ -187,15 +214,15 @@ describe('ChatHydration', () => {
     useParamsMock.mockReturnValue({ projectId: 'prj_1' });
     useLocationMock.mockReturnValue({
       hash: '',
-      pathname: '/project/prj_1/conversation',
+      pathname: '/project/prj_1/topic',
       search: '',
     });
     useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
 
     render(
       <ChatHydration
-        getConversationPath={() => '/project/prj_1/conversation'}
-        getTopicPath={(_agentId, topicId) => `/project/prj_1/conversation/${topicId}`}
+        getConversationPath={() => '/project/prj_1/topic'}
+        getTopicPath={(_agentId, topicId) => `/project/prj_1/topic/${topicId}`}
       />,
     );
 
@@ -204,7 +231,7 @@ describe('ChatHydration', () => {
     });
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith('/project/prj_1/conversation/tpc_project', {
+      expect(navigateMock).toHaveBeenCalledWith('/project/prj_1/topic/tpc_project', {
         replace: true,
       });
     });

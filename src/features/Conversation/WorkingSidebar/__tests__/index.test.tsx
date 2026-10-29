@@ -332,6 +332,34 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     expect(screen.queryByText('/Users/me/project')).not.toBeInTheDocument();
     expect(filesProps.current).toBeUndefined();
   });
+
+  it('shows Review on web for a topic worktree the remote device does not list', () => {
+    platform.isDesktop = false;
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { boundDeviceId: 'remote-device', executionTarget: 'device' };
+    // The device's workingDirs track a different worktree, so the lookup misses.
+    reviewState.repoType = undefined;
+    reviewState.workingDirectory = '/repo-feature';
+    chatStore.activeTopicId = 'topic-wt';
+    chatStore.topicDetailMap = {
+      'topic-wt': {
+        id: 'topic-wt',
+        metadata: {
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo-feature', branch: 'feature', isWorktree: true },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+    globalStore.status.workingSidebarTab = 'works';
+    localStorageState.openTabsByContext = { 'topic:topic-wt': ['works', 'review'] };
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
+  });
 });
 
 describe('Pull request Markdown', () => {
@@ -694,6 +722,50 @@ describe('AgentWorkingSidebar — tab strip', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'settingModel.params.panel.tab' }));
     expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+  });
+
+  it('keeps the active Review mounted while the panel is collapsed', () => {
+    agentStore.activeAgentId = 'agent';
+    reviewState.repoType = 'git';
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+    globalStore.status.workingSidebarTab = 'review';
+
+    // A new `availableWidth` on each rerender gets past the sidebar's `memo`.
+    const { rerender } = render(<AgentWorkingSidebar availableWidth={1600} />);
+    const review = screen.getByTestId('review');
+    expect(renderedReview.current?.active).toBe(true);
+
+    globalStore.status.showRightPanel = false;
+    rerender(<AgentWorkingSidebar availableWidth={1601} />);
+    expect(review).toBeInTheDocument();
+
+    globalStore.status.showRightPanel = true;
+    rerender(<AgentWorkingSidebar availableWidth={1602} />);
+    expect(screen.getByTestId('review')).toBe(review);
+    expect(renderedReview.current?.active).toBe(true);
+  });
+
+  it('releases Review once the panel stays collapsed', () => {
+    vi.useFakeTimers();
+    try {
+      agentStore.activeAgentId = 'agent';
+      reviewState.repoType = 'git';
+      reviewState.workingDirectory = '/repo';
+      localStorageState.openTabsByContext = { 'draft:agent:/repo': ['review'] };
+      globalStore.status.workingSidebarTab = 'review';
+
+      const { rerender } = render(<AgentWorkingSidebar availableWidth={1600} />);
+      globalStore.status.showRightPanel = false;
+      rerender(<AgentWorkingSidebar availableWidth={1601} />);
+      act(() => vi.advanceTimersByTime(29_000));
+      expect(screen.getByTestId('review')).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.queryByTestId('review')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('opens Skills and Documents by default for a new workspace context', () => {

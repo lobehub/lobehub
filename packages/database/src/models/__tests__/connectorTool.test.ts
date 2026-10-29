@@ -395,4 +395,30 @@ describe('ConnectorToolModel', () => {
       expect(personalRows.map((r) => r.toolName)).toEqual(['personal']);
     });
   });
+
+  describe('findById', () => {
+    it('resolves a tool by id inside the owner scope', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [
+        tool({ description: 'Create an issue', toolName: 'create_issue' }),
+      ]);
+
+      const [stored] = await model.queryByConnector(connectorId);
+      const found = await model.findById(stored.id);
+
+      expect(found?.id).toBe(stored.id);
+      expect(found?.toolName).toBe('create_issue');
+    });
+
+    it('returns undefined for an unknown id and for another user tool', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'secret' })]);
+      const [stored] = await model.queryByConnector(connectorId);
+
+      expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+
+      const otherModel = new ConnectorToolModel(serverDB, otherUserId);
+      expect(await otherModel.findById(stored.id)).toBeUndefined();
+    });
+  });
 });

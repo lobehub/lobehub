@@ -6,6 +6,7 @@ import { PassThrough } from 'node:stream';
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { createAdapter, HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
+import type * as HeteroRpc from '@lobechat/heterogeneous-agents/rpc';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,10 +46,9 @@ vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
   resolveHeteroSpawnCommand: mockResolveHeteroSpawnCommand,
 }));
 
-vi.mock('@lobechat/heterogeneous-agents/rpc', () => ({
+vi.mock('@lobechat/heterogeneous-agents/rpc', async (importOriginal) => ({
+  ...(await importOriginal<typeof HeteroRpc>()),
   createPiRpcAgentHandle: mockCreatePiRpcAgentHandle,
-  toPiRpcPrompt: (input: unknown) =>
-    Promise.resolve({ text: typeof input === 'string' ? input : JSON.stringify(input) }),
 }));
 
 vi.mock('../api/client', () => ({

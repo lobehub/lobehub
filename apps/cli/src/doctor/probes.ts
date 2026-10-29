@@ -4,6 +4,7 @@ import { getUserIdFromApiKey } from '../auth/apiKey';
 import { describeTokenLookup, getValidToken } from '../auth/refresh';
 import type { AuthSourceKind } from '../auth/source';
 import { parseJwtPayload, pickAuthSource } from '../auth/source';
+import { resolveCliDeviceGateway } from '../device/gatewayEndpoint';
 import { resolveServerUrl } from '../settings';
 import type { DoctorContext } from './types';
 
@@ -172,4 +173,13 @@ export async function probeProviders(ctx: DoctorContext): Promise<any[]> {
     const providers = await client.aiProvider.getAiProviderList.query();
     return Array.isArray(providers) ? providers : [];
   });
+}
+
+/**
+ * The device gateway for `serverUrl`, resolved exactly as `lh connect` does —
+ * same lookup, same precedence — so the handshake check probes the gateway a
+ * real connection would use.
+ */
+export async function probeDeviceGateway(ctx: DoctorContext, serverUrl: string) {
+  return ctx.probe(`device:gateway:${serverUrl}`, () => resolveCliDeviceGateway({ serverUrl }));
 }

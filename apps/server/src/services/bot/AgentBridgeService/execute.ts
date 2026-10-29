@@ -1,6 +1,6 @@
 import { MessageApiName } from '@lobechat/builtin-tool-message';
 import type { BotPlatformContext } from '@lobechat/context-engine';
-import type { ChatTopicBotContext } from '@lobechat/types';
+import type { BotWakeKind, ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import debug from 'debug';
 
@@ -21,7 +21,12 @@ import { renderStart } from '../replyTemplate';
 import { resolveFiles } from './inbound';
 import { executeWithHooksLocalMode } from './localMode';
 import { executeWithHooksQueueMode } from './queueMode';
-import type { BridgeExecutionDeps, DiscordChannelContext, ThreadState } from './types';
+import type {
+  BridgeExecutionDeps,
+  BridgeExecutionResult,
+  DiscordChannelContext,
+  ThreadState,
+} from './types';
 import { resolveCurrentChannel, safeSideEffect } from './utils';
 
 const log = debug('lobe-server:bot:agent-bridge');
@@ -50,16 +55,34 @@ export async function executeWithCallback(
   opts: {
     agentId: string;
     botContext?: ChatTopicBotContext;
+    /** The bot's settings; local mode records the bot-wake outcome with them. */
+    botSettings?: Record<string, unknown>;
     channelContext?: DiscordChannelContext;
     charLimit?: number;
     client?: PlatformClient;
     displayToolCalls?: boolean;
+    /** The message falls within the bot's duties; told to the agent with a `followup`. */
+    duty?: { matched?: string };
+    /** The bot woke in its follow-up window; told to the agent with a `followup`. */
+    followup?: BotPlatformContext['followup'];
+    /** The bot woke only because its name is in the text; told to the agent with a `followup`. */
+    named?: boolean;
+    /** Emoji the owner lets the bot use in this conversation. */
+    replyEmojis?: { emoji: string; usage?: string }[];
+    /** How the bot talks in this conversation, as the owner wrote it. */
+    replyStyle?: string;
+    /** Acknowledgement posted before the run; the agent is told not to repeat it. */
+    openingReply?: string;
     reactionMode?: BotReactionMode;
     replyLocale: BotReplyLocale;
+    /** The agent may step back from this conversation; documented in its prompt. */
+    standDown?: boolean;
     topicId?: string;
     trigger?: string;
+    /** `followup` holds visible feedback back until the agent starts acting. Default `mention`. */
+    wakeKind?: BotWakeKind;
   },
-): Promise<{ reply: string; topicId: string }> {
+): Promise<BridgeExecutionResult> {
   // Resolve bot platform context from platform registry. Messenger-only
   // platforms (Linq) have no bot-channel definition and carry the same reply
   // traits on their messenger definition instead.
@@ -112,7 +135,9 @@ export async function executeWithCallback(
     replyLocale,
     topicId,
     trigger,
+    wakeKind = 'mention',
   } = opts;
+  const deferFeedback = wakeKind === 'followup';
 
   // For platforms that can't read history at runtime, surface a compact
   // cross-session summary of this channel (recent topics, each with its last
@@ -182,84 +207,115 @@ export async function executeWithCallback(
       : true;
   const useGatewayTyping = gwClient.isEnabled && platformSupportsTyping;
 
-  let progressMessage: SentMessage | undefined;
-  let gatewayConnectionId: string | undefined;
-  if (useGatewayTyping) {
-    log('executeWithWebhooks: using gateway typing, skipping ack message');
+  /**
+   * Everything the user can see while the agent works: platform typing, the gateway's typing
+   * alarm, and the "working on it" placeholder. A `mention` runs it before the agent starts; a
+   * `followup` hands it to the execution mode to run once the agent starts acting, so a silent
+   * run leaves no trace.
+   */
+  const showFeedback = async (): Promise<{
+    gatewayConnectionId?: string;
+    progressMessage?: SentMessage;
+  }> => {
+    let progressMessage: SentMessage | undefined;
+    let gatewayConnectionId: string | undefined;
+    if (useGatewayTyping) {
+      log('executeWithWebhooks: using gateway typing, skipping ack message');
 
-    // Platform typing (best-effort, must not block AI generation)
-    await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      // Platform typing (best-effort, must not block AI generation)
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
 
-    // Start gateway typing immediately so the alarm keeps it alive through
-    // the entire AI generation (platform typing expires after ~10s).
-    if (botContext?.platformThreadId && botContext?.applicationId) {
-      const platform = platformFromThreadId(botContext.platformThreadId);
-      try {
-        if (botContext.messengerInstallationKey) {
-          // Messenger run: shard typing by `(platform, lobeUserId)` so each
-          // user gets their own DO. Solves both the cross-conversation
-          // TypingState overwrite bug (single shared DO) and the 200K-MAU
-          // single-DO hot-spot. The connectionId is registered lazily and
-          // cached per-process — see GatewayService.ensureUserMessengerConnected.
-          const gateway = new GatewayService();
-          const connectionId = await gateway.ensureUserMessengerConnected({
-            installationKey: botContext.messengerInstallationKey,
-            platform: platform as MessengerPlatform,
-            userId: deps.userId,
-          });
-          if (connectionId) {
-            gatewayConnectionId = connectionId;
-            gwClient.startTyping(connectionId, botContext.platformThreadId!).catch((err) => {
-              log('executeWithWebhooks: messenger gateway startTyping failed: %O', err);
+      // Start gateway typing immediately so the alarm keeps it alive through
+      // the entire AI generation (platform typing expires after ~10s).
+      if (botContext?.platformThreadId && botContext?.applicationId) {
+        const platform = platformFromThreadId(botContext.platformThreadId);
+        try {
+          if (botContext.messengerInstallationKey) {
+            // Messenger run: shard typing by `(platform, lobeUserId)` so each
+            // user gets their own DO. Solves both the cross-conversation
+            // TypingState overwrite bug (single shared DO) and the 200K-MAU
+            // single-DO hot-spot. The connectionId is registered lazily and
+            // cached per-process — see GatewayService.ensureUserMessengerConnected.
+            const gateway = new GatewayService();
+            const connectionId = await gateway.ensureUserMessengerConnected({
+              installationKey: botContext.messengerInstallationKey,
+              platform: platform as MessengerPlatform,
+              userId: deps.userId,
             });
+            if (connectionId) {
+              gatewayConnectionId = connectionId;
+              gwClient.startTyping(connectionId, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: messenger gateway startTyping failed: %O', err);
+              });
+            }
+          } else {
+            // Per-agent bot provider: typing keyed by the provider row id —
+            // legacy path for `agent_bot_providers`-backed bots.
+            const row = await AgentBotProviderModel.findByPlatformAndAppId(
+              deps.db,
+              platform,
+              botContext.applicationId,
+            );
+            if (row?.id) {
+              gatewayConnectionId = row.id;
+              gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: gateway startTyping failed: %O', err);
+              });
+            }
           }
-        } else {
-          // Per-agent bot provider: typing keyed by the provider row id —
-          // legacy path for `agent_bot_providers`-backed bots.
-          const row = await AgentBotProviderModel.findByPlatformAndAppId(
-            deps.db,
-            platform,
-            botContext.applicationId,
-          );
-          if (row?.id) {
-            gatewayConnectionId = row.id;
-            gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
-              log('executeWithWebhooks: gateway startTyping failed: %O', err);
-            });
-          }
+        } catch (err) {
+          log('executeWithWebhooks: gateway provider lookup failed: %O', err);
         }
-      } catch (err) {
-        log('executeWithWebhooks: gateway provider lookup failed: %O', err);
+      }
+    } else if (!supportsMessageEdit) {
+      // Edit-incapable platform (QQ today): the user still wants immediate
+      // feedback that we received their message, but every "edit" the
+      // adapter performs surfaces as a NEW message. So fire-and-forget the
+      // ack here without tracking it as `progressMessage` — afterStep/onComplete
+      // will see `progressMessage === undefined` and correctly post the final
+      // reply as its own message instead of editing.
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      await safeSideEffect(
+        () => thread.post(renderStart(userMessage.text, { lng: replyLocale, timezone })),
+        'post ack (no-edit platform)',
+      );
+    } else {
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      try {
+        progressMessage = await thread.post(
+          renderStart(userMessage.text, { lng: replyLocale, timezone }),
+        );
+      } catch (error) {
+        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
       }
     }
-  } else if (!supportsMessageEdit) {
-    // Edit-incapable platform (QQ today): the user still wants immediate
-    // feedback that we received their message, but every "edit" the
-    // adapter performs surfaces as a NEW message. So fire-and-forget the
-    // ack here without tracking it as `progressMessage` — afterStep/onComplete
-    // will see `progressMessage === undefined` and correctly post the final
-    // reply as its own message instead of editing.
-    await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
-    await safeSideEffect(
-      () => thread.post(renderStart(userMessage.text, { lng: replyLocale, timezone })),
-      'post ack (no-edit platform)',
-    );
-  } else {
-    await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
-    try {
-      progressMessage = await thread.post(
-        renderStart(userMessage.text, { lng: replyLocale, timezone }),
-      );
-    } catch (error) {
-      log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
-    }
-  }
+
+    return { gatewayConnectionId, progressMessage };
+  };
+
+  let progressMessage: SentMessage | undefined;
+  let gatewayConnectionId: string | undefined;
+  if (!deferFeedback) ({ gatewayConnectionId, progressMessage } = await showFeedback());
 
   const { files, warnings: fileWarnings } = await resolveFiles(userMessage, client);
   const prompt = formatPrompt(userMessage, client);
   const botSender = botContext?.platform
     ? buildBotSender(userMessage as any, botContext.platform)
     : undefined;
+
+  // Tell the agent it may stay silent; see `formatBotPlatformContext`.
+  if (deferFeedback && botPlatformContext) {
+    botPlatformContext.wakeKind = wakeKind;
+    if (opts.duty) botPlatformContext.duty = opts.duty;
+    if (opts.followup) botPlatformContext.followup = opts.followup;
+    if (opts.named) botPlatformContext.named = true;
+  }
+  if (opts.openingReply && botPlatformContext) botPlatformContext.openingReply = opts.openingReply;
+  if (botPlatformContext) {
+    if (opts.replyStyle) botPlatformContext.replyStyle = opts.replyStyle;
+    if (opts.replyEmojis?.length) botPlatformContext.replyEmojis = opts.replyEmojis;
+  }
+  if (opts.standDown && botPlatformContext) botPlatformContext.standDown = true;
 
   // Attach file warnings to botPlatformContext for injection via context engine
   if (fileWarnings?.length && botPlatformContext) {
@@ -292,6 +348,9 @@ export async function executeWithCallback(
     // alarm timeout instead of stopping at completion.
     userId: deps.userId,
     userMessageId: userMessage.id,
+    // The completion callback runs in another process (queue mode) and needs this to decide
+    // whether an empty / `NO_REPLY` finish is silence or a fault, and to defer feedback.
+    wakeKind,
     workspaceId: deps.workspaceId,
   };
 
@@ -330,6 +389,7 @@ export async function executeWithCallback(
     botContext,
     botPlatformContext,
     botSender,
+    botSettings: opts.botSettings,
     callbackUrl,
     charLimit,
     channelContext,
@@ -341,10 +401,12 @@ export async function executeWithCallback(
     prompt,
     reactionMode,
     replyLocale,
+    showFeedback: deferFeedback ? showFeedback : undefined,
     toolModeOverride,
     topicId,
     trigger,
     userMessage,
+    wakeKind,
     webhookBody,
   });
 }

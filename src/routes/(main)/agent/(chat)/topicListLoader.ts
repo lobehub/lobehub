@@ -1,28 +1,32 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { LoaderFunctionArgs } from 'react-router';
 
+import { looksLikeSlug } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import { getSidebarTopicListParams } from '@/hooks/chatTopicListQuery';
 import { PRE_PAINT_HYDRATE_TIMEOUT, settleWithin } from '@/libs/replica/prePaint';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useDeviceStore } from '@/store/device';
+import { useUserStore } from '@/store/user';
 import { useVerifyStore } from '@/store/verify';
 
 const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
 /**
  * Builtin slugs (`inbox`, …) resolve from the store; an id passes through. A
- * user-chosen slug needs a server lookup, so it resolves only after the route
- * redirects to the real id and the loader runs again — hydrating under the slug
- * key is a harmless miss.
+ * user-chosen slug resolves from its persisted `slug → id` (seeded by the
+ * loader); with none, hydrating under the slug key is a harmless miss and the
+ * route resolves it once the lookup answers.
  */
 const resolveRouteAgentId = (routeAgentId?: string): string | undefined => {
   if (!routeAgentId) return undefined;
-  if (!builtinAgentSlugs.has(routeAgentId)) return routeAgentId;
+  const state = useAgentStore.getState();
+  if (builtinAgentSlugs.has(routeAgentId))
+    return builtinAgentSelectors.getBuiltinAgentId(routeAgentId)(state);
 
-  return builtinAgentSelectors.getBuiltinAgentId(routeAgentId)(useAgentStore.getState());
+  return agentSelectors.getAgentIdBySlug(routeAgentId)(state) ?? routeAgentId;
 };
 
 /**
@@ -35,6 +39,23 @@ const resolveRouteAgentId = (routeAgentId?: string): string | undefined => {
 export const preHydrateTopicListForRoute = async (routeAgentId?: string): Promise<void> => {
   const agentId = resolveRouteAgentId(routeAgentId);
   if (!agentId) return;
+
+  // The workspace "only mine" filter is part of the list identity; read it
+  // before deriving the params, or the seeded page is the unfiltered one.
+  let preferenceKnown = false;
+  await settleWithin(
+    useUserStore
+      .getState()
+      .preHydrateWorkspaceUserPreference()
+      .then((known) => {
+        preferenceKnown = known;
+      }),
+    PRE_PAINT_HYDRATE_TIMEOUT,
+  );
+  // Still unknown (no local copy yet, e.g. set on another device): any page
+  // seeded now could be the unfiltered one, so leave the list to the mounted,
+  // preference-gated fetch.
+  if (!preferenceKnown) return;
 
   const params = getSidebarTopicListParams({ agentId });
   if (!params) return;
@@ -80,6 +101,16 @@ export const preHydrateMessagesForRoute = async (
 };
 
 /**
+ * Seed the persisted sub-thread list of a route's topic, so the topic's thread
+ * rows and the thread portal header paint from local data on the first frame.
+ */
+export const preHydrateThreadsForRoute = async (topicId?: string): Promise<void> => {
+  if (!topicId) return;
+
+  await settleWithin(useChatStore.getState().preHydrateThreads(topicId), PRE_PAINT_HYDRATE_TIMEOUT);
+};
+
+/**
  * Seed the persisted device list, so the input bar names the bound device and
  * resolves its cwd on the first frame instead of after the mount-time hydrate.
  */
@@ -99,11 +130,19 @@ export const agentChatTopicListLoader = async ({ params }: LoaderFunctionArgs): 
       useAgentStore.getState().preHydrateBuiltinAgent(params.aid),
       PRE_PAINT_HYDRATE_TIMEOUT,
     );
+  } else if (looksLikeSlug(params.aid)) {
+    // A user-chosen slug: seed its persisted `slug → id` the same way, so the
+    // agent (and its topics / transcript below) paints before the lookup answers.
+    await settleWithin(
+      useAgentStore.getState().preHydrateAgentSlug(params.aid!),
+      PRE_PAINT_HYDRATE_TIMEOUT,
+    );
   }
 
   await Promise.all([
     preHydrateTopicListForRoute(params.aid),
     preHydrateMessagesForRoute(params.aid, params.topicId),
+    preHydrateThreadsForRoute(params.topicId),
     preHydrateDeviceListForRoute(),
   ]);
 

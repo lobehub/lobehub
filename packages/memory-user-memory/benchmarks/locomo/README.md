@@ -108,12 +108,26 @@ DELETE FROM user_memories USING target_users u WHERE user_memories.user_id = u.u
 
 ## 3. Run the ingest
 
-Set the required envs and execute:
+The memory webhooks are privileged server-to-server endpoints for trusted operators and benchmark tooling. They require configured authentication headers; a browser login session does not authenticate these requests.
+
+Before starting the LobeHub server, set the following in its environment. Replace `YOUR_RANDOM_SHARED_SECRET` with a randomly generated secret (for example, the output of `openssl rand -hex 32`):
+
+```bash
+export MEMORY_USER_MEMORY_WEBHOOK_HEADERS="x-memory-secret=YOUR_RANDOM_SHARED_SECRET"
+```
+
+Restart the server after changing its environment. Then set the same header value for the ingestor, together with the service URL and dataset path:
 
 ```bash
 MEMORY_USER_MEMORY_LOBEHUB_BASE_URL="http://localhost:3000" \
 MEMORY_USER_MEMORY_BENCHMARKS_LOCOMO_DATASETS="path/to/locomo/dataset/data/locomo10.json" \
+MEMORY_USER_MEMORY_WEBHOOK_HEADERS="x-memory-secret=YOUR_RANDOM_SHARED_SECRET" \
 bun run tsx lobehub/packages/memory-user-memory/benchmarks/locomo/run.ts
 ```
+
+`MEMORY_USER_MEMORY_WEBHOOK_HEADERS` accepts comma-separated `header=value` pairs. The ingestor sends these headers with each request, and every header configured on the server must match. Setting this variable only on the ingestor does not configure the server.
+
+- **HTTP 503:** server-side authentication headers are unset, empty, or parse to no valid pairs. Configure them on the LobeHub server.
+- **HTTP 403:** a required request header is missing or incorrect. Check that the ingestor and server use matching values.
 
 Only samples whose IDs pass the filter in `run.ts` (currently `conv-26`) will ingest; adjust the filter if you need more samples.

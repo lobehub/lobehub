@@ -36,18 +36,19 @@ import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AsyncError from '@/components/AsyncError';
 import CommandLine from '@/components/CommandLine';
 import { DOWNLOAD_URL } from '@/const/url';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { heteroAgentDefaultName } from '@/store/agent/utils/heteroAgentDefaultName';
+import { isDevicePresenceUnknown, useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
 
-import { getDeviceListState } from './deviceListState';
+import { getDeviceListState, isListableDevice } from './deviceListState';
 import type { ConnectableProvider, ConnectAgentProfile } from './providers';
 import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
 import type { ScanTarget } from './useAgentScan';
@@ -380,12 +381,14 @@ const AgentScanRow = memo<{
 
 interface ConnectAgentContentProps {
   groupId?: string;
+  initialDevice?: DeviceListItem;
   onTitleChange: (title: string) => void;
+  showOpenChat?: boolean;
   visibility?: 'private' | 'public';
 }
 
 const ConnectAgentContent = memo<ConnectAgentContentProps>(
-  ({ groupId, onTitleChange, visibility }) => {
+  ({ groupId, initialDevice, onTitleChange, showOpenChat = true, visibility }) => {
     const { t } = useTranslation('chat');
     const { close, setCanDismissByClickOutside } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
@@ -398,8 +401,15 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const activeWorkspaceId = useActiveWorkspaceId();
     const restrictToWorkspaceDevices = Boolean(activeWorkspaceId);
 
-    const [step, setStep] = useState(0);
-    const [target, setTarget] = useState<ScanTarget | null>(null);
+    // A preselected device the picker would not list starts at the picker instead.
+    const preselected =
+      initialDevice && isListableDevice(initialDevice, restrictToWorkspaceDevices)
+        ? initialDevice
+        : undefined;
+    const [step, setStep] = useState(preselected ? 1 : 0);
+    const [target, setTarget] = useState<ScanTarget | null>(() =>
+      preselected ? { device: preselected, kind: 'device' } : null,
+    );
     const [selectedTypes, setSelectedTypes] = useState<HeterogeneousAgentType[]>([]);
     const [profiles, setProfiles] = useState<
       Partial<Record<RemoteHeterogeneousAgentType, ConnectAgentProfile>>
@@ -410,7 +420,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const [createError, setCreateError] = useState<string | undefined>();
     const [done, setDone] = useState<CreatedAgent[] | null>(null);
 
-    const { scan, state: scanState } = useAgentScan();
+    const { rescan: rescanTarget, state: scanState } = useAgentScan(target);
 
     useEffect(() => {
       setCanDismissByClickOutside(!creating);
@@ -418,16 +428,21 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
 
     const {
       data: devices,
+      error: deviceListError,
+      isConfirmed: isDeviceListConfirmed,
       isLoading: loadingDevices,
       isValidating: fetchingDevices,
       mutate: refetchDevices,
     } = useDeviceList();
 
     const listedDevices = useMemo(
-      () => (devices ?? []).filter((d) => !restrictToWorkspaceDevices || d.scope === 'workspace'),
+      () => (devices ?? []).filter((d) => isListableDevice(d, restrictToWorkspaceDevices)),
       [devices, restrictToWorkspaceDevices],
     );
     const onlineDevices = listedDevices.filter((d) => d.online);
+    // Rows painted from the persisted list until the server confirms presence:
+    // none of them is offline yet, so "no devices" would be a guess.
+    const presencePending = !isDeviceListConfirmed || listedDevices.some(isDevicePresenceUnknown);
 
     const deviceLabel = useCallback(
       (device: DeviceListItem) => device.friendlyName || device.hostname || device.deviceId,
@@ -455,22 +470,17 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     const single = selectedProviders.length === 1 ? selectedProviders[0] : null;
     const singleVersion = single ? scanState.agents?.[single.type]?.version : undefined;
 
-    const pickTarget = useCallback(
-      (next: ScanTarget) => {
-        setTarget(next);
-        setSelectedTypes([]);
-        setProfiles({});
-        setStep(1);
-        void scan(next);
-      },
-      [scan],
-    );
+    const pickTarget = useCallback((next: ScanTarget) => {
+      setTarget(next);
+      setSelectedTypes([]);
+      setProfiles({});
+      setStep(1);
+    }, []);
 
     const rescan = useCallback(() => {
-      if (!target) return;
       setSelectedTypes([]);
-      void scan(target);
-    }, [scan, target]);
+      rescanTarget();
+    }, [rescanTarget]);
 
     const toggleType = useCallback(
       (provider: ConnectableProvider) => {
@@ -601,7 +611,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     if (done) {
       return (
         <Flexbox gap={8} paddingBlock={'16px 8px'}>
-          <SectionLabel>{t('connectAgent.create.doneHint')}</SectionLabel>
+          {showOpenChat && <SectionLabel>{t('connectAgent.create.doneHint')}</SectionLabel>}
           <div className={styles.groupList}>
             {done.map((agent) => (
               <div className={`${styles.row} ${styles.rowStatic}`} key={agent.agentId}>
@@ -616,9 +626,11 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                   </Text>
                 </Flexbox>
                 <div className={styles.dot} />
-                <Button size={'small'} onClick={() => openChat(agent.agentId)}>
-                  {t('connectAgent.create.openChat')}
-                </Button>
+                {showOpenChat && (
+                  <Button size={'small'} onClick={() => openChat(agent.agentId)}>
+                    {t('connectAgent.create.openChat')}
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -635,10 +647,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
     if (step === 0) {
       const isRefreshing = loadingDevices || fetchingDevices;
       const deviceListState = getDeviceListState({
+        error: deviceListError,
         hasDevices: listedDevices.length > 0,
+        isConfirmed: isDeviceListConfirmed,
         isFetching: isRefreshing,
       });
-      const showEmpty = !isDesktop && !isRefreshing && onlineDevices.length === 0;
+      const showEmpty =
+        !isDesktop && !isRefreshing && !presencePending && onlineDevices.length === 0;
 
       return (
         <Flexbox gap={16} paddingBlock={'16px 8px'}>
@@ -737,25 +752,35 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     </Button>
                   </Flexbox>
                   <div className={styles.groupList}>
-                    {deviceListState === 'loading'
-                      ? [96, 140, 112].map((width) => (
-                          <SkeletonRow squareIcon key={width} width={width} />
-                        ))
-                      : listedDevices.map((device) => (
-                          <DeviceRow
-                            icon={getDeviceIcon(device.platform, 18)}
-                            key={device.deviceId}
-                            offline={!device.online}
-                            subtitle={device.hostname || device.deviceId}
-                            title={deviceLabel(device)}
-                            statusText={
-                              device.online
+                    {deviceListState === 'error' ? (
+                      <AsyncError
+                        error={deviceListError}
+                        variant={'inline'}
+                        onRetry={() => void refetchDevices()}
+                      />
+                    ) : deviceListState === 'loading' ? (
+                      [96, 140, 112].map((width) => (
+                        <SkeletonRow squareIcon key={width} width={width} />
+                      ))
+                    ) : (
+                      listedDevices.map((device) => (
+                        <DeviceRow
+                          icon={getDeviceIcon(device.platform, 18)}
+                          key={device.deviceId}
+                          offline={!device.online}
+                          subtitle={device.hostname || device.deviceId}
+                          title={deviceLabel(device)}
+                          statusText={
+                            isDevicePresenceUnknown(device)
+                              ? t('heteroAgent.executionTarget.presenceChecking')
+                              : device.online
                                 ? t('connectAgent.create.online')
                                 : t('connectAgent.create.offline')
-                            }
-                            onClick={() => pickTarget({ device, kind: 'device' })}
-                          />
-                        ))}
+                          }
+                          onClick={() => pickTarget({ device, kind: 'device' })}
+                        />
+                      ))
+                    )}
                   </div>
                 </Flexbox>
               )}
@@ -985,6 +1010,10 @@ ConnectAgentContent.displayName = 'ConnectAgentContent';
 
 export interface OpenConnectAgentModalOptions {
   groupId?: string;
+  /** Skip the machine picker and scan this device's agents right away. */
+  initialDevice?: DeviceListItem;
+  /** Offer "open chat" on the done view; off for hosts that must not navigate away. */
+  showOpenChat?: boolean;
   visibility?: 'private' | 'public';
 }
 
@@ -997,6 +1026,8 @@ export const openConnectAgentModal = (options?: OpenConnectAgentModalOptions): M
     content: (
       <ConnectAgentContent
         groupId={options?.groupId}
+        initialDevice={options?.initialDevice}
+        showOpenChat={options?.showOpenChat}
         visibility={options?.visibility}
         onTitleChange={(title) => holder.instance?.update({ title })}
       />

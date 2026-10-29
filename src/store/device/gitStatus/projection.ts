@@ -1,5 +1,7 @@
 import type {
   DeviceGitAheadBehind,
+  DeviceGitBranchListItem,
+  DeviceGitRemoteBranchListItem,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
@@ -90,6 +92,33 @@ export const gitWorktreesResource = defineReplica<
 >({
   key: gitStatusKey,
   name: 'deviceGitWorktrees',
+  persist,
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * Local branches of a directory — the branch switcher's list and the names a
+ * new worktree branch must avoid. Names + flags only.
+ */
+export const gitBranchListResource = defineReplica<
+  GitStatusParams,
+  GitStatusRead<DeviceGitBranchListItem[]>
+>({
+  key: gitStatusKey,
+  name: 'deviceGitBranchList',
+  persist,
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** `refs/remotes/origin/*` of a directory, for the Review / PR base-ref pickers. */
+export const gitRemoteBranchListResource = defineReplica<
+  GitStatusParams,
+  GitStatusRead<DeviceGitRemoteBranchListItem[]>
+>({
+  key: gitStatusKey,
+  name: 'deviceGitRemoteBranchList',
   persist,
   storage: 'indexedDB',
   version: 1,

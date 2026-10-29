@@ -11,6 +11,7 @@ import {
   executeDeviceRpc,
   pushMetrics,
 } from '@lobechat/device-control';
+import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
 import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type {
   AgentRunRequestMessage,
@@ -24,6 +25,7 @@ import {
   createRuntimeProbeCache,
   type RuntimeProbeCache,
 } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
+import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
 import type { Command } from 'commander';
 
 import { createLambdaClient } from '../api/client';
@@ -31,7 +33,6 @@ import { scheduleProactiveRefresh } from '../auth/proactiveRefresh';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { CLI_CONNECT_SERVICE_NAME, CLI_DISPLAY_NAME, CLI_PRIMARY_BIN } from '../constants/identity';
-import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import { CliMaintenance } from '../daemon/maintenance';
 import {
   appendLog,
@@ -48,6 +49,12 @@ import {
 } from '../daemon/manager';
 import { listTasks } from '../daemon/taskRegistry';
 import { spawnHeteroAgentRun } from '../device/agentRun';
+import {
+  describeDeviceGateway,
+  describeDeviceGatewayFailure,
+  rememberGatewayOverride,
+  resolveCliDeviceGateway,
+} from '../device/gatewayEndpoint';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -70,14 +77,12 @@ import {
 import {
   addWorkspaceEnrollment,
   loadOrCreateConnectionId,
-  loadSettings,
   loadWorkspaceEnrollments,
-  normalizeUrl,
   removeWorkspaceEnrollment,
   resolveDeviceMetricsBacklogPath,
-  saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
+import { closeBrowserSessions, executeBrowserCall, resolveBrowserDevice } from '../tools/browser';
 import { executeComputerUseCall, resolveComputerUseDevice } from '../tools/computerUse';
 import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -88,6 +93,8 @@ const SHUTDOWN_METRICS_FLUSH_MS = 3000;
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
 interface ConnectOptions {
+  /** `agent-browser` binary for the browser tool; see `resolveBrowserDevice`. */
+  agentBrowser?: string;
   /** `auv` binary that runs Computer Use on this device; see `resolveComputerUseDevice`. */
   auv?: string;
   daemon?: boolean;
@@ -116,6 +123,10 @@ export function registerConnectCommand(program: Command) {
       'With --workspace: enroll into the shared pool visible to every member (default: private, visible only to you)',
     )
     .option('--auv <binary>', 'Offer Computer Use by running this AUV binary (`auv invoke`)')
+    .option(
+      '--agent-browser <binary>',
+      'Run the browser tool with this agent-browser binary (default: agent-browser on PATH)',
+    )
     .option('-v, --verbose', 'Enable verbose logging')
     .option('-d, --daemon', 'Run as a background daemon process')
     .option('--daemon-child', 'Internal: runs as the daemon child process')
@@ -163,7 +174,7 @@ export function registerConnectCommand(program: Command) {
       if (status) {
         log.info(`  Started at       : ${status.startedAt}`);
         log.info(`  Connection       : ${status.connectionStatus}`);
-        log.info(`  Gateway          : ${status.gatewayUrl}`);
+        log.info(`  Gateway          : ${formatStatusGateway(status)}`);
         const uptime = formatUptime(new Date(status.startedAt));
         log.info(`  Uptime           : ${uptime}`);
       }
@@ -202,6 +213,10 @@ export function registerConnectCommand(program: Command) {
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
     .option('--auv <binary>', 'Offer Computer Use by running this AUV binary (`auv invoke`)')
+    .option(
+      '--agent-browser <binary>',
+      'Run the browser tool with this agent-browser binary (default: agent-browser on PATH)',
+    )
     .option('-v, --verbose', 'Enable verbose logging')
     .action(async (options: ConnectOptions) => {
       const wasStopped = stopDaemon();
@@ -292,7 +307,7 @@ export function registerConnectCommand(program: Command) {
       }
       if (status) {
         log.info(`  Connection       : ${status.connectionStatus}`);
-        log.info(`  Gateway          : ${status.gatewayUrl}`);
+        log.info(`  Gateway          : ${formatStatusGateway(status)}`);
         const uptime = formatUptime(new Date(status.startedAt));
         log.info(`  Uptime           : ${uptime}`);
       }
@@ -348,6 +363,7 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
   if (options.workspace) args.push('--workspace', options.workspace);
   if (options.public) args.push('--public');
   if (options.auv) args.push('--auv', path.resolve(options.auv));
+  if (options.agentBrowser) args.push('--agent-browser', path.resolve(options.agentBrowser));
   if (options.verbose) args.push('--verbose');
 
   return args;
@@ -356,22 +372,35 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const unavailableExitCode = options.workspace ? CONNECT_RETRYABLE_EXIT_CODE : undefined;
   let auth = await resolveToken({ ...options, unavailableExitCode });
-  const settings = loadSettings();
-  const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
 
-  if (!gatewayUrl && settings?.serverUrl) {
-    log.error(
-      `Current login uses custom --server ${settings?.serverUrl}. Please also provide '--gateway <url>' for the device gateway.`,
+  const info = (msg: string) => {
+    if (isDaemonChild) appendLog(msg);
+    else log.info(msg);
+  };
+
+  const error = (msg: string) => {
+    if (isDaemonChild) appendLog(`[ERROR] ${msg}`);
+    else log.error(msg);
+  };
+
+  // Resolved once per process, against the server the token belongs to. The
+  // client's own reconnects and every workspace share connection reuse it.
+  const gateway = await resolveCliDeviceGateway({
+    override: options.gateway,
+    serverUrl: auth.serverUrl,
+  });
+  if (!gateway.ok) {
+    const { detail, fix } = describeDeviceGatewayFailure(gateway, auth.serverUrl);
+    // Thrown, so a daemon parent reports it as the startup error too.
+    throw new Error(`${detail} ${fix}`);
+  }
+  const resolvedGatewayUrl = gateway.endpoint.url;
+  const gatewayDescription = describeDeviceGateway(gateway.endpoint);
+  if (rememberGatewayOverride(auth.serverUrl, gateway.endpoint)) {
+    info(
+      `Saved ${resolvedGatewayUrl} as the device gateway for ${auth.serverUrl}; later runs use it ahead of the server's own address.`,
     );
-    process.exit(1);
-    throw new Error('process.exit');
   }
-
-  if (options.gateway && gatewayUrl) {
-    saveSettings({ ...settings, gatewayUrl });
-  }
-
-  const resolvedGatewayUrl = gatewayUrl || OFFICIAL_GATEWAY_URL;
 
   // Fail before connecting rather than advertise a tool this device cannot run.
   const computerUse = await resolveComputerUseDevice(options.auv).catch((err: Error) => {
@@ -379,6 +408,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     process.exit(1);
     throw err;
   });
+  const browser = await resolveBrowserDevice(options.agentBrowser).catch((err: Error) => {
+    log.error(err.message);
+    process.exit(1);
+    throw err;
+  });
+  if (browser) info(`Browser tool enabled via ${browser.binaryPath}`);
 
   // Workspace enrollment: the device joins a workspace pool (reachable by all
   // members) instead of the personal pool. It authenticates with a minted
@@ -441,22 +476,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     workspaceId,
   });
 
-  const info = (msg: string) => {
-    if (isDaemonChild) appendLog(msg);
-    else log.info(msg);
-  };
-
-  const error = (msg: string) => {
-    if (isDaemonChild) appendLog(`[ERROR] ${msg}`);
-    else log.error(msg);
-  };
-
   // Print device info
   info(`─── ${CLI_DISPLAY_NAME} ───`);
   info(`  Device ID : ${client.currentDeviceId}`);
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
-  info(`  Gateway   : ${resolvedGatewayUrl}`);
+  info(`  Gateway   : ${gatewayDescription}`);
   info(`  Auth      : ${auth.tokenType}`);
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
@@ -469,6 +494,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     writeStatus({
       connectionStatus,
       deviceId: client.currentDeviceId,
+      gatewaySource: gateway.endpoint.source,
       gatewayUrl: resolvedGatewayUrl,
       lastRequestAt,
       pid: process.pid,
@@ -541,6 +567,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const nativeRuntimes = createRuntimeProbeCache(probeNativeRuntimes);
 
   const handlerContext: GatewayHandlerContext = {
+    browser,
     computerUse,
     deps: deviceControlDeps,
     error,
@@ -911,7 +938,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // (bounded) before the socket closes, so the device page doesn't show the
   // final minutes as "not running".
   const shutdown = async () => {
-    await metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS });
+    await Promise.all([
+      metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS }),
+      closeBrowserSessions(browser),
+    ]);
     cleanup();
     process.exit(0);
   };
@@ -967,6 +997,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
 /** Everything a gateway connection's request handlers need from the host process. */
 interface GatewayHandlerContext {
+  /** Present when an `agent-browser` binary enabled the browser tool on this device. */
+  browser?: Awaited<ReturnType<typeof resolveBrowserDevice>>;
   /** Present when `--auv` enabled Computer Use on this device. */
   computerUse?: Awaited<ReturnType<typeof resolveComputerUseDevice>>;
   deps: DeviceControlDeps;
@@ -992,13 +1024,22 @@ function bindGatewayClientHandlers(
   ctx: GatewayHandlerContext,
   connectionWorkspaceId?: string,
 ) {
-  const { computerUse, deps, error, getAuth, info, isDaemonChild, maintenance, recordRequest } =
-    ctx;
+  const {
+    browser,
+    computerUse,
+    deps,
+    error,
+    getAuth,
+    info,
+    isDaemonChild,
+    maintenance,
+    recordRequest,
+  } = ctx;
 
   // Handle system info requests
   client.on('system_info_request', async (request: SystemInfoRequestMessage) => {
     info(`Received system_info_request: requestId=${request.requestId}`);
-    const systemInfo = await collectSystemInfo(ctx.nativeRuntimes, computerUse);
+    const systemInfo = await collectSystemInfo(ctx.nativeRuntimes, computerUse, browser);
     client.sendSystemInfoResponse({
       requestId: request.requestId,
       result: { success: true, systemInfo },
@@ -1021,19 +1062,22 @@ function bindGatewayClientHandlers(
     // round trip, so reporting this back is what separates a slow tool from
     // slow transport.
     const startedAt = performance.now();
-    const result = await maintenance
-      .run(() =>
-        // Computer Use's `runCommand` shares its apiName with the shell tool.
+    const result = await executeDeviceOperation({ apiName: toolCall.apiName, operationId }, () =>
+      maintenance.run(() =>
+        // Computer Use's `runCommand` shares its apiName with the shell tool, and
+        // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
         toolCall.identifier === COMPUTER_USE_IDENTIFIER
           ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
-          : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getAuth()),
-      )
-      .catch((err: Error) => ({
-        content: '',
-        error: err.message,
-        state: undefined,
-        success: false,
-      }));
+          : toolCall.identifier === BROWSER_IDENTIFIER
+            ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
+            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getAuth()),
+      ),
+    ).catch((err: Error) => ({
+      content: '',
+      error: err.message,
+      state: undefined,
+      success: false,
+    }));
     const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
@@ -1096,6 +1140,7 @@ function bindGatewayClientHandlers(
             agentType: request.agentType,
             assistantMessageId: request.assistantMessageId,
             args: request.args,
+            claudeAccountRouting: request.claudeAccountRouting,
             cwd: request.cwd,
             imageList: request.imageList,
             jwt: request.jwt,
@@ -1127,6 +1172,12 @@ function createDaemonLogger() {
     info: (msg: string) => appendLog(`[INFO] ${msg}`),
     warn: (msg: string) => appendLog(`[WARN] ${msg}`),
   };
+}
+
+function formatStatusGateway(status: { gatewaySource?: string; gatewayUrl: string }): string {
+  return status.gatewaySource
+    ? `${status.gatewayUrl} (${status.gatewaySource})`
+    : status.gatewayUrl;
 }
 
 function formatUptime(startedAt: Date): string {

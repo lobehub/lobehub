@@ -12,6 +12,7 @@ import { downloadFile } from '@/utils/client/downloadFile';
 import FilePreview from './FilePreview';
 import PagePreview from './PagePreview';
 import { useDetailPanelFile } from './useDetailPanelFile';
+import { DETAIL_PANEL_MIN_WIDTH, useDetailPanelWidth } from './useDetailPanelWidth';
 
 /**
  * In-context right dock for the explorer list: single click on a file row
@@ -26,21 +27,24 @@ const FileDetailPanel = memo(() => {
   const detailPanelIsPage = useResourceManagerStore((s) => s.detailPanelIsPage);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
   const [showProperties, setShowProperties] = useState(false);
+  const { handleSizeChange, width } = useDetailPanelWidth();
 
   const fileDetail = useDetailPanelFile(detailPanelId);
 
   return (
     <DraggablePanel
+      showHandleWideArea
       backgroundColor={cssVar.colorBgContainer}
       expand={!!detailPanelId}
       expandable={false}
-      minWidth={320}
+      minWidth={DETAIL_PANEL_MIN_WIDTH}
       placement={'right'}
-      size={{ height: '100%', width: 480 }}
+      size={{ height: '100%', width }}
       style={{
         borderInlineStart: `1px solid ${cssVar.colorBorderSecondary}`,
         boxShadow: theme.boxShadowTertiary,
       }}
+      onSizeChange={handleSizeChange}
     >
       {fileDetail && (
         <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>

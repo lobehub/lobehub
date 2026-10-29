@@ -9,15 +9,13 @@ import { PRE_PAINT_HYDRATE_TIMEOUT, settleWithin } from '@/libs/replica/prePaint
 import { workActions } from '@/store/work';
 
 /**
- * The Work gallery filter a resource URL paints: the dashboard's recent works
- * (`/resource`) and the gallery (`/resource/works?works=<key>`). Other
- * categories show no Works.
+ * The Work gallery filter a resource URL paints: the gallery
+ * (`/resource/works?works=<key>`). Other Docs routes show no Works.
  */
 export const galleryKeyOfUrl = (url: URL): WorkGalleryKey | null => {
   const segment = url.pathname.match(/\/resource(?:\/([^/]+))?\/?$/);
-  if (!segment) return null;
-  if (!segment[1]) return 'all';
-  if (segment[1] !== 'works') return null;
+  // Only the Works gallery shows Works; the Docs home lists pages and files.
+  if (segment?.[1] !== 'works') return null;
   return parseWorkGalleryKey(url.searchParams.get('works')) ?? 'all';
 };
 

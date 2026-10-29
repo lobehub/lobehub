@@ -13,7 +13,6 @@ import { gatewayEnv } from '@/envs/gateway';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
-import { sandboxEnv } from '@/envs/sandbox';
 import { toolsEnv } from '@/envs/tools';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
@@ -83,6 +82,9 @@ const getAiProviderSpecificConfig = () => {
     lmstudio: {
       fetchOnClient: getServerFetchOnClientOverride('lmstudio'),
     },
+    magpie: {
+      fetchOnClient: getServerFetchOnClientOverride('magpie'),
+    },
     ollama: {
       enabled: isDesktop ? true : undefined,
       fetchOnClient: getServerFetchOnClientOverride('ollama'),
@@ -151,6 +153,7 @@ export const getServerGlobalConfig = async () => {
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
     },
+    deviceGatewayConfigured: !!gatewayEnv.DEVICE_GATEWAY_URL,
     // Never fall back to the server-internal DEVICE_GATEWAY_URL.
     ...(gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL
       ? { deviceGatewayUrl: gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL }
@@ -205,10 +208,6 @@ export const getServerGlobalConfig = async () => {
     // resolver's own function so both sides read the raw value identically —
     // unset/invalid stays `undefined`, i.e. the resolver's default 64.
     toolNameMaxLength: parseToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH),
-    // Lets the widget publish review match the sandbox's real egress contract:
-    // unless the Worker enforces per-host allowlists, declared hosts are
-    // advisory and the review must say any host is reachable.
-    widgetSandboxNetworkFormat: sandboxEnv.WIDGET_SANDBOX_NETWORK_FORMAT,
   };
 
   return config;

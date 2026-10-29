@@ -1,11 +1,12 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
+import { type FC, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import { recordLibraryVisit } from '@/features/ResourceHome/recentLibraries';
 import RegisterHotkeys from '@/features/ResourceLibrary/RegisterHotkeys';
 import { useKnowledgeBaseItem } from '@/features/ResourceManager/hooks/useKnowledgeItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -20,6 +21,11 @@ const LibraryLayout: FC = () => {
   const navigate = useWorkspaceAwareNavigate();
   // Same SWR key as the page content's fetch, so this costs no extra request.
   const { error } = useKnowledgeBaseItem(id || '');
+
+  // Orders the Docs sidebar's "Recent libraries" shortcut list.
+  useEffect(() => {
+    if (id && !error) recordLibraryVisit(id);
+  }, [id, error]);
 
   // A restricted KB (resource-permission `use` level) 403s for members. Catch
   // it at the layout so the route shows one error page in the content area

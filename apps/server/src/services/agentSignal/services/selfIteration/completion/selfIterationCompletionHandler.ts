@@ -5,7 +5,6 @@ import type { CompletionCallbackParams } from '../../../policies/completionPolic
 import { type AgentSignalReceiptStore, persistAgentSignalReceipts } from '../../receiptService';
 import type { SelfReviewBriefProjection } from '../review/brief';
 import { createBriefSelfReviewService } from '../review/brief';
-import type { SelfReviewBriefTextTranslator } from '../review/briefText';
 import type { SelfReviewIdea } from '../review/proposal';
 import type { Idea } from '../types';
 import { ReviewRunStatus, Risk } from '../types';
@@ -20,8 +19,6 @@ const log = debug('lobe-server:completion-lifecycle');
 
 /** Daily Brief deps for nightly reviews that only recorded ideas. */
 export interface SelfIterationIdeasBriefOptions {
-  /** Resolves the brief owner's `home` translator; omitted → English resources. */
-  resolveTranslator?: () => Promise<SelfReviewBriefTextTranslator | undefined>;
   /** Writer that persists (and dedupes) nightly self-review Daily Briefs. */
   writer: { writeDailyBrief: (brief: SelfReviewBriefProjection) => Promise<unknown> };
 }
@@ -101,7 +98,6 @@ const writeNightlyIdeasBrief = async ({
     },
     reviewWindowEnd,
     reviewWindowStart,
-    t: await ideasBrief.resolveTranslator?.(),
     timezone: 'UTC',
     userId,
   });

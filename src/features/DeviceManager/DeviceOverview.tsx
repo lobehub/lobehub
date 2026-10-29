@@ -3,7 +3,6 @@
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
 import {
   ActionIcon,
-  Avatar,
   confirmModal,
   createStaticStyles,
   cssVar,
@@ -39,6 +38,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import UserAvatar from '@/components/UserAvatar';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import { formatSize } from '@/utils/format';
 
@@ -244,6 +244,8 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
 
   const channels = device.channels ?? [];
   const online = channels.length > 0;
+  // The persisted copy carries no channels: presence is unknown, not offline.
+  const presenceUnknown = !!device.onlineUnknown;
 
   const newest = data?.points.at(-1);
   const cores = data?.cpuCount ?? null;
@@ -302,7 +304,11 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
                   width: 6,
                 }}
               />
-              {online ? t('devices.status.online') : t('devices.status.offline')}
+              {presenceUnknown
+                ? t('devices.status.checking')
+                : online
+                  ? t('devices.status.online')
+                  : t('devices.status.offline')}
             </span>
           </InfoRow>
           <InfoRow icon={MonitorIcon} label={t('devices.detail.os')}>
@@ -325,7 +331,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           </InfoRow>
           {device.scope === 'workspace' && device.enroller && (
             <InfoRow icon={UserIcon} label={t('workspaceSetting.devices.enrolledByLabel')}>
-              <Avatar avatar={device.enroller.avatar ?? undefined} size={20} />
+              <UserAvatar avatar={device.enroller.avatar} name={enrollerName} size={20} />
               <Text ellipsis>{enrollerName}</Text>
             </InfoRow>
           )}

@@ -420,7 +420,7 @@ describe('LobeMinimaxAI - handlePayload', () => {
     expect(result.max_tokens).toBeUndefined();
     expect(result.reasoning_split).toBe(true);
     expect(result.preserveThinking).toBeUndefined();
-    expect(result.temperature).toBe(0);
+    expect(result.temperature).toBeUndefined();
     expect(result.thinking).toEqual({ type: 'adaptive' });
     expect(result.top_p).toBe(1);
   });
@@ -433,6 +433,22 @@ describe('LobeMinimaxAI - handlePayload', () => {
     } as any);
 
     expect(result.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('sends reasoning_effort and never disabled thinking or temperature for MiniMax-M3.1-Flash', () => {
+    const result = handlePayload({
+      max_tokens: 4096,
+      messages: [{ content: 'hi', role: 'user' }],
+      model: 'MiniMax-M3.1-Flash',
+      reasoning_effort: 'max',
+      temperature: 1,
+      thinking: { budget_tokens: 0, type: 'disabled' },
+    } as any);
+
+    expect(result.max_completion_tokens).toBe(4096);
+    expect(result.reasoning_effort).toBe('max');
+    expect(result.temperature).toBeUndefined();
+    expect(result.thinking).toBeUndefined();
   });
 
   it('passes through MiniMax-M3 multimodal user content', () => {
@@ -512,8 +528,25 @@ describe('LobeMinimaxAnthropicAI - handlePayload', () => {
       {} as any,
     );
 
-    expect(result.temperature).toBe(0.8);
+    expect(result.temperature).toBeUndefined();
     expect(result.top_p).toBe(0.9);
+  });
+
+  it('maps reasoning_effort to output_config.effort for MiniMax-M3.1-Flash', async () => {
+    const result = await handleAnthropicPayload(
+      {
+        max_tokens: 4096,
+        messages: [{ content: 'hi', role: 'user' }],
+        model: 'MiniMax-M3.1-Flash',
+        reasoning_effort: 'xhigh',
+        temperature: 1,
+      } as any,
+      {} as any,
+    );
+
+    expect((result as any).output_config).toEqual({ effort: 'xhigh' });
+    expect(result.temperature).toBeUndefined();
+    expect(result.thinking).toBeUndefined();
   });
 
   it('converts assistant reasoning history to Anthropic thinking blocks', async () => {

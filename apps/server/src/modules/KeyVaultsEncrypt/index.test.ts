@@ -1,22 +1,28 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { KeyVaultsGateKeeper } from './index';
+import { isKeyVaultsSecretBearerToken, KeyVaultsGateKeeper } from './index';
 
 describe('KeyVaultsGateKeeper', () => {
   let gateKeeper: KeyVaultsGateKeeper;
+  let originalFallbackSecret: string | undefined;
   let originalSecret: string | undefined;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
+    originalFallbackSecret = process.env.KEY_VAULTS_FALLBACK_SECRET;
     originalSecret = process.env.KEY_VAULTS_SECRET;
+    delete process.env.KEY_VAULTS_FALLBACK_SECRET;
     process.env.KEY_VAULTS_SECRET = 'Q10pwdq00KXUu9R+c8A8p4PSlIRWi7KwgUophBtkHVk=';
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   });
 
   afterEach(() => {
-    process.env.KEY_VAULTS_SECRET = originalSecret;
+    if (originalFallbackSecret === undefined) delete process.env.KEY_VAULTS_FALLBACK_SECRET;
+    else process.env.KEY_VAULTS_FALLBACK_SECRET = originalFallbackSecret;
+    if (originalSecret === undefined) delete process.env.KEY_VAULTS_SECRET;
+    else process.env.KEY_VAULTS_SECRET = originalSecret;
     consoleErrorSpy.mockRestore();
   });
 
@@ -27,6 +33,49 @@ describe('KeyVaultsGateKeeper', () => {
 
     expect(decryptionResult.plaintext).toBe(originalData);
     expect(decryptionResult.wasAuthentic).toBe(true);
+  });
+
+  it('decrypts fallback ciphertext while new writes use the active secret', async () => {
+    const fallbackGateKeeper = gateKeeper;
+    process.env.KEY_VAULTS_FALLBACK_SECRET = process.env.KEY_VAULTS_SECRET;
+    process.env.KEY_VAULTS_SECRET = 'ofQiJCXLF8mYemwfMWLOHoHimlPu91YmLfU7YZ4lreQ=';
+    const rotatingGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+    const fallbackCiphertext = await fallbackGateKeeper.encrypt('fallback-data');
+    await expect(rotatingGateKeeper.decrypt(fallbackCiphertext)).resolves.toEqual({
+      plaintext: 'fallback-data',
+      wasAuthentic: true,
+    });
+
+    const activeCiphertext = await rotatingGateKeeper.encrypt('active-data');
+    await expect(fallbackGateKeeper.decrypt(activeCiphertext)).resolves.toEqual({
+      plaintext: '',
+      wasAuthentic: false,
+    });
+  });
+
+  it('rejects an invalid fallback secret before processing ciphertext', async () => {
+    process.env.KEY_VAULTS_FALLBACK_SECRET = Buffer.from('short').toString('base64');
+
+    await expect(KeyVaultsGateKeeper.initWithEnvKey()).rejects.toThrow(
+      '`KEY_VAULTS_FALLBACK_SECRET` must be 16, 24, or 32 bytes',
+    );
+  });
+
+  it('rejects fallback bearer tokens when the active secret is missing', () => {
+    const fallbackSecret = process.env.KEY_VAULTS_SECRET!;
+    process.env.KEY_VAULTS_FALLBACK_SECRET = fallbackSecret;
+    delete process.env.KEY_VAULTS_SECRET;
+
+    expect(isKeyVaultsSecretBearerToken(`Bearer ${fallbackSecret}`)).toBe(false);
+  });
+
+  it('rejects fallback bearer tokens when the active secret is blank', () => {
+    const fallbackSecret = process.env.KEY_VAULTS_SECRET!;
+    process.env.KEY_VAULTS_FALLBACK_SECRET = fallbackSecret;
+    process.env.KEY_VAULTS_SECRET = '   ';
+
+    expect(isKeyVaultsSecretBearerToken(`Bearer ${fallbackSecret}`)).toBe(false);
   });
 
   it('should return empty plaintext and false authenticity for invalid encrypted data', async () => {

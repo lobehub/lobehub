@@ -40,7 +40,7 @@ import { AiProviderSourceEnum } from '@/types/aiProvider';
 import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { initialAIModelState, seedModelReasoningConfigMap } from '../aiModel/initialState';
+import { initialAIModelState } from '../aiModel/initialState';
 import {
   AI_PROVIDER_LIST_KEY,
   aiProviderDetailResource,
@@ -508,11 +508,13 @@ const aiProviderListLens: ReplicaLens<AiInfraStore, AiProviderListItem[]> = {
  * Projects a confirmed runtime-state value onto the flat fields the many
  * existing selectors read. `enabled*` stays derived here rather than becoming a
  * selector over the entry map, so no reader has to change.
+ *
+ * The saved reasoning configs are the one field not written here: they belong to
+ * the aiModel replica, which seeds them through `seedModelReasoningConfigs` (see
+ * the `runtimeState` effects) so a storage hydration cannot repaint an older row
+ * over this server snapshot.
  */
-const projectRuntimeState = (
-  state: AiInfraStore,
-  data: AiProviderRuntimeStateView,
-): Partial<AiInfraStore> => ({
+const projectRuntimeState = (data: AiProviderRuntimeStateView): Partial<AiInfraStore> => ({
   aiProviderRuntimeConfig: data.runtimeConfig,
   builtinAiModelList: data.builtinAiModelList,
   enabledAiModels: data.enabledAiModels,
@@ -525,14 +527,6 @@ const projectRuntimeState = (
   hiddenBuiltinModels: data.hiddenBuiltinModels,
   isInitAiProviderRuntimeState: true,
   modelRedirects: data.modelRedirects,
-  ...(data.modelReasoningConfigs && {
-    modelReasoningConfigMap: seedModelReasoningConfigMap(
-      state.modelReasoningConfigMap,
-      data.modelReasoningConfigs,
-      data.enabledAiModels,
-      state.modelReasoningConfigUpdatingKeys,
-    ),
-  }),
   providerBindingAgentTypes: data.providerBindingAgentTypes ?? {},
 });
 
@@ -586,7 +580,7 @@ const aiProviderRuntimeStateLens: ReplicaLens<AiInfraStore, AiProviderRuntimeSta
       aiProviderRuntimeStateMap: next,
       ...(data.isDisplaySnapshot
         ? projectRuntimeStateDisplay(state, data)
-        : projectRuntimeState(state, data)),
+        : projectRuntimeState(data)),
     };
   },
 };
@@ -624,6 +618,17 @@ export class AiProviderActionImpl {
     });
     this.#runtimeState = createReplicaSlice(aiProviderRuntimeStateResource, {
       actionPrefix: n('runtimeState'),
+      // The runtime state carries the complete saved reasoning-config snapshot.
+      // Seeding it through the aiModel replica keeps those values *confirmed*
+      // entries, so a storage hydration that resolves after this response can no
+      // longer repaint an older persisted row over the server's value.
+      effects: {
+        onApplied: (data) => {
+          if (data.isDisplaySnapshot || !data.modelReasoningConfigs) return;
+
+          get().seedModelReasoningConfigs(data.modelReasoningConfigs, data.enabledAiModels);
+        },
+      },
       fetcher: (params) => fetchAiProviderRuntimeState(params.isLogin),
       get,
       set,

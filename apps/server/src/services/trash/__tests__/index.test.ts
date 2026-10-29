@@ -169,6 +169,16 @@ describe('TrashService', () => {
   });
 
   describe('agents', () => {
+    it('labels the entry with the agent name the sidebar shows, falling back to its title', async () => {
+      const nameOnly = await agentModel.create({ name: 'Alice' });
+      const named = await agentModel.create({ name: 'Bob', title: 'Health Assistant' });
+      const unnamed = await agentModel.create({ title: 'Bot' });
+
+      expect((await service.trashAgent(nameOnly.id))?.title).toBe('Alice');
+      expect((await service.trashAgent(named.id))?.title).toBe('Bob');
+      expect((await service.trashAgent(unnamed.id))?.title).toBe('Bot');
+    });
+
     it('cascades to topics (incl. legacy session-scoped ones), hides the session shell, and restores the whole unit', async () => {
       const session = await sessionModel.create({ config: { title: 'Legacy' }, type: 'agent' });
       const agent = (await sessionModel.findByIdOrSlug(session.id))!.agent;
@@ -618,7 +628,7 @@ describe('TrashService', () => {
       const widget = await widgetModel.create({ title: 'Open PRs' });
       await widgetModel.trash(widget.id);
 
-      expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 1 });
+      expect(await service.emptyTrash()).toEqual({ blocked: 0, hasMore: false, purged: 1 });
       expect(await serverDB.select().from(widgets)).toHaveLength(0);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
@@ -648,7 +658,7 @@ describe('TrashService', () => {
       const board = await dashboardModel.create({ title: 'Ops' });
       await dashboardModel.trash(board.id);
 
-      expect(await service.emptyTrash()).toEqual({ hasMore: false, purged: 1 });
+      expect(await service.emptyTrash()).toEqual({ blocked: 0, hasMore: false, purged: 1 });
       expect(await serverDB.select().from(dashboards)).toHaveLength(0);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
     });
@@ -708,11 +718,11 @@ describe('TrashService', () => {
       await service.trashTopics(created.map((t) => t.id));
 
       const first = await service.emptyTrash();
-      expect(first).toEqual({ hasMore: true, purged: TRASH_EMPTY_BATCH_SIZE });
+      expect(first).toEqual({ blocked: 0, hasMore: true, purged: TRASH_EMPTY_BATCH_SIZE });
       expect((await service.countByType()).topic).toBe(3);
 
       const second = await service.emptyTrash();
-      expect(second).toEqual({ hasMore: false, purged: 3 });
+      expect(second).toEqual({ blocked: 0, hasMore: false, purged: 3 });
       expect(await serverDB.select().from(topics)).toHaveLength(0);
     });
 

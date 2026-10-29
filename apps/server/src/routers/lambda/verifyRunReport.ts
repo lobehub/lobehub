@@ -1,3 +1,4 @@
+import { isWorkspaceReadableVisibility } from '@lobechat/const/verify';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { asc, eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -13,7 +14,7 @@ import {
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { createEvidenceFileResolver } from '@/server/services/verify';
+import { createEvidenceFileResolver, resolveEvidenceFiles } from '@/server/services/verify';
 
 const publicVerifyReportProcedure = publicProcedure.use(serverDatabase);
 
@@ -25,7 +26,7 @@ const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
 /**
  * Load a run through the read capability its id grants: a `public` run is
  * readable by anyone holding the id; a `private` one only by its owner and (for
- * workspace scope) members of that workspace. Missing, malformed and denied all
+ * workspace scope) members of that workspace; an `owner` one by its owner alone. Missing, malformed and denied all
  * read as `null` — existence must not leak.
  */
 const findReadableVerifyRun = async (
@@ -43,7 +44,7 @@ const findReadableVerifyRun = async (
 
   const isOwner = Boolean(ctx.userId) && ctx.userId === run.userId;
   let canRead = isOwner || run.visibility === 'public';
-  if (!canRead && ctx.userId && run.workspaceId) {
+  if (!canRead && ctx.userId && run.workspaceId && isWorkspaceReadableVisibility(run.visibility)) {
     const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
       run.workspaceId,
       ctx.userId,
@@ -106,11 +107,9 @@ export const verifyRunReportProcedures = {
             .orderBy(asc(verifyEvidence.createdAt));
           return {
             ...r,
-            evidence: await pMap(
-              evidence,
-              async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId)) }),
-              { concurrency: EVIDENCE_LOAD_CONCURRENCY },
-            ),
+            evidence: await pMap(evidence, (e) => resolveEvidenceFiles(resolveFileMeta, e), {
+              concurrency: EVIDENCE_LOAD_CONCURRENCY,
+            }),
           };
         },
         { concurrency: EVIDENCE_LOAD_CONCURRENCY },

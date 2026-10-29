@@ -11,7 +11,7 @@ import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/Exe
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskPickerOption from './TaskPickerOption';
-import { deviceLabel, useTaskRunTarget } from './useTaskRunTarget';
+import { deviceLabel, getTaskDeviceLockReason, useTaskRunTarget } from './useTaskRunTarget';
 
 interface TaskDeviceChipProps {
   /** The assignee whose execution environment is inherited when nothing is pinned. */
@@ -55,12 +55,21 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
 
-    const { canSelect, devices, inheritedLabel, inheritedTarget, isPending, pinnedDeviceId } =
-      useTaskRunTarget(agentId, value);
+    const {
+      canSelect,
+      devices,
+      devicesFailed,
+      inheritedLabel,
+      inheritedTarget,
+      isPending,
+      pinnedDeviceId,
+      retryDevices,
+    } = useTaskRunTarget(agentId, value);
 
     // The agent's policy is author-controlled: the server's resolver would drop
     // this pin, so the control must not pretend it can set one.
-    const isLocked = disabled || isPending || !canSelect;
+    const lockReason = getTaskDeviceLockReason({ canSelect, disabled, isPending });
+    const isLocked = !!lockReason;
 
     // Read the EFFECTIVE pin, never the raw prop: an author-fixed policy makes
     // the run side drop a requested device, and showing the stored one would
@@ -108,6 +117,8 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
                 offlineLabel={t('heteroAgent.executionTarget.offline')}
                 online={device.online}
                 onlineLabel={t('heteroAgent.executionTarget.online')}
+                unknown={device.onlineUnknown}
+                unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
               />
             </div>
           </Flexbox>
@@ -142,10 +153,18 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
         {isPending && (
           <div className={styles.sectionTitle}>{t('heteroAgent.executionTarget.loading')}</div>
         )}
-        {!isPending && devices && devices.length > 0 && (
+        {devicesFailed && (
+          <div className={styles.emptyHint}>
+            {t('heteroAgent.executionTarget.loadFailed')}{' '}
+            <a role="button" onClick={retryDevices}>
+              {t('retry', { ns: 'common' })}
+            </a>
+          </div>
+        )}
+        {!isPending && !devicesFailed && devices && devices.length > 0 && (
           <div className={styles.scroll}>{devices.map(renderDeviceRow)}</div>
         )}
-        {!isPending && devices?.length === 0 && (
+        {!isPending && !devicesFailed && devices?.length === 0 && (
           <div className={styles.emptyHint}>{t('heteroAgent.executionTarget.noDevices')}</div>
         )}
 
@@ -191,7 +210,9 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
         <Tooltip
           title={formatLockedControlTooltip(
             t('taskExecution.runLocation'),
-            t('taskExecution.fixedTip'),
+            lockReason === 'pending'
+              ? t('heteroAgent.executionTarget.presenceChecking')
+              : t('taskExecution.fixedTip'),
           )}
         >
           {chip}

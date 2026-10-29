@@ -77,6 +77,7 @@ import type {
   collectAcceptances,
   collectAssignees,
   collectDeliveredAt,
+  collectQuotaWaits,
   collectRunHeartbeats,
   graph,
   listEvents,
@@ -193,6 +194,7 @@ export interface GoalServiceContext {
   collectAcceptances: Bound<typeof collectAcceptances>;
   collectAssignees: Bound<typeof collectAssignees>;
   collectDeliveredAt: Bound<typeof collectDeliveredAt>;
+  collectQuotaWaits: Bound<typeof collectQuotaWaits>;
   collectRolloutGate: Bound<typeof collectRolloutGate>;
   collectRunHeartbeats: Bound<typeof collectRunHeartbeats>;
   consumeCompletedTask: Bound<typeof consumeCompletedTask>;

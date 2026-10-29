@@ -124,3 +124,56 @@ it('without an authoring agent, the reject dialog copies the prompt instead of p
 
   await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('补一段录屏'));
 });
+
+describe('a teammate who cannot decide', () => {
+  // Regression (T-945): a member's decision bar returned null, so the delivery
+  // read as one nobody could decide. The pair stays in view, disabled, with why.
+  it('sees Reject and Accept disabled, with the reason beside them', () => {
+    const onAccept = vi.fn();
+    const onRejectComment = vi.fn();
+    render(
+      createElement(DecisionBar, {
+        ...props,
+        feedbackCount: 0,
+        needsFixCount: 0,
+        onAccept,
+        onRejectComment,
+        readOnlyReason: 'acceptance.bar.readOnlyReason',
+      }),
+    );
+
+    const reject = screen.getByRole('button', { name: 'acceptance.bar.rejectComment' });
+    const accept = screen.getByRole('button', { name: 'acceptance.actions.accept' });
+    expect(reject).toBeDisabled();
+    expect(accept).toBeDisabled();
+    expect(screen.getByText('acceptance.bar.readOnlyReason')).toBeVisible();
+
+    fireEvent.click(reject);
+    fireEvent.click(accept);
+    expect(onRejectComment).not.toHaveBeenCalled();
+    expect(onAccept).not.toHaveBeenCalled();
+  });
+
+  it('is not handed the repair handoff a decider gets once feedback is queued', () => {
+    render(createElement(DecisionBar, { ...props, readOnlyReason: 'reason' }));
+
+    expect(screen.queryByRole('button', { name: 'acceptance.bar.copyReview' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'acceptance.bar.addComment' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'acceptance.actions.accept' })).toBeDisabled();
+  });
+
+  it('keeps the reason without actions while a round is still running', () => {
+    render(createElement(DecisionBar, { ...props, readOnlyReason: 'reason', state: 'live' }));
+
+    expect(screen.getByText('reason')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'acceptance.actions.accept' })).toBeNull();
+  });
+});
+
+it('a decider keeps live Reject and Accept without a reason line', () => {
+  render(createElement(DecisionBar, { ...props, feedbackCount: 0, needsFixCount: 0 }));
+
+  expect(screen.getByRole('button', { name: 'acceptance.bar.rejectComment' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'acceptance.actions.accept' })).toBeEnabled();
+  expect(screen.queryByTestId('acceptance-decision-reason')).toBeNull();
+});
