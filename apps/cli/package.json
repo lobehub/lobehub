@@ -66,7 +66,7 @@
     "typescript": "^6.0.3",
     "url-join": "^5.0.0",
     "vitest": "5.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "engines": {
     "node": ">=22.15"
