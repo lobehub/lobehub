@@ -672,7 +672,13 @@ export const tokenizeWords = (raw: string): string[] => {
     // Decode the payload here so matching sees the real argv.
     if (char === '$' && raw[i + 1] === "'") {
       const { end, value } = decodeAnsiCQuoted(raw, i + 2);
-      word += value;
+      // ANSI-C quoting is still QUOTING: `$'$(rm -rf ~)'` only prints, because
+      // the decoded sigils never expand. Mark them literal like the
+      // single-quote case; appending the decoded text as-is made the predicate
+      // read the payload as a running substitution and block a harmless `echo`.
+      word += value
+        .replaceAll('$', LITERAL_EXPANSION_MARKER + '$')
+        .replaceAll('`', LITERAL_EXPANSION_MARKER + '`');
       hasWord = true;
       i = end;
       continue;
