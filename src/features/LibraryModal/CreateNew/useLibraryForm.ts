@@ -37,10 +37,9 @@ export const useLibraryForm = ({
   const { t } = useTranslation('knowledgeBase');
   const navigate = useWorkspaceAwareNavigate();
   const workspaceId = useActiveWorkspaceId() ?? undefined;
-  const [listVisibility, setListVisibility] = useResourceManagerStore((s) => [
-    s.listVisibility,
-    s.setListVisibility,
-  ]);
+  const [listVisibility, listVisibilityWorkspaceId, setListVisibility] = useResourceManagerStore(
+    (s) => [s.listVisibility, s.listVisibilityWorkspaceId, s.setListVisibility],
+  );
   const createNewKnowledgeBase = useKnowledgeBaseStore((s) => s.createNewKnowledgeBase);
   const updateKnowledgeBase = useKnowledgeBaseStore((s) => s.updateKnowledgeBase);
   const updateKnowledgeBaseCover = useKnowledgeBaseStore((s) => s.updateKnowledgeBaseCover);
@@ -58,15 +57,17 @@ export const useLibraryForm = ({
   // cover identical to the one it is created with.
   const [draftSeed] = useState(() => id ?? `draft-${Math.random().toString(36).slice(2)}`);
   const [cover, setCover] = useState<string | null>(initialValues?.cover ?? null);
-  // Read the persisted space instead of the store's `listVisibility`: the store
-  // is only hydrated under /resource, so a ⌘K create from a chat page would see
-  // the 'workspace' default and silently share a library the user meant to
-  // keep private.
+  // Prefer the space the user is in right now; persistence is best-effort and
+  // a failed write would leave a stale value behind. Fall back to the persisted
+  // space only when the store was never hydrated for this workspace (e.g. a ⌘K
+  // create from a chat page sees the 'workspace' default), so a library the
+  // user meant to keep private is not silently shared.
   const [visibility, setVisibility] = useState<ResourceListVisibilityFilter>(
     () =>
       initialVisibility ??
-      readPersistedResourceMode(workspaceId) ??
-      DEFAULT_WORKSPACE_LIST_VISIBILITY,
+      (workspaceId && listVisibilityWorkspaceId === workspaceId
+        ? listVisibility
+        : (readPersistedResourceMode(workspaceId) ?? DEFAULT_WORKSPACE_LIST_VISIBILITY)),
   );
 
   const trimmedName = name.trim();

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 let workspaceId: string | null = null;
 let listVisibility: 'private' | 'workspace' = 'workspace';
+let listVisibilityWorkspaceId: string | undefined;
 
 vi.mock('@lobehub/ui', () => ({ toast: { error: mocks.toastError } }));
 
@@ -27,7 +28,11 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 
 vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: any) => unknown) =>
-    selector({ listVisibility, setListVisibility: mocks.setListVisibility }),
+    selector({
+      listVisibility,
+      listVisibilityWorkspaceId,
+      setListVisibility: mocks.setListVisibility,
+    }),
 }));
 
 vi.mock('@/store/library', () => ({
@@ -45,6 +50,7 @@ describe('useLibraryForm', () => {
     window.localStorage.clear();
     workspaceId = null;
     listVisibility = 'workspace';
+    listVisibilityWorkspaceId = undefined;
     mocks.createNewKnowledgeBase.mockResolvedValue('kb-1');
   });
 
@@ -74,6 +80,29 @@ describe('useLibraryForm', () => {
     expect(onSuccess).toHaveBeenCalledWith('kb-1');
     // The sidebar follows the library into its space so it does not look lost.
     expect(mocks.setListVisibility).toHaveBeenCalledWith('private', 'ws-1');
+  });
+
+  it('keeps the active private space when its persisted record is missing or stale', async () => {
+    // The toggle updates the store before a best-effort localStorage write; if
+    // that write failed, the sidebar + entry must still default to Private.
+    workspaceId = 'ws-1';
+    listVisibility = 'private';
+    listVisibilityWorkspaceId = 'ws-1';
+    window.localStorage.setItem('lobehub:resource-mode:ws-1', 'workspace');
+
+    const { result } = renderHook(() => useLibraryForm({ onSuccess: vi.fn() }));
+
+    expect(result.current.visibility).toBe('private');
+  });
+
+  it('ignores a store space hydrated for another workspace', () => {
+    workspaceId = 'ws-2';
+    listVisibility = 'private';
+    listVisibilityWorkspaceId = 'ws-1';
+
+    const { result } = renderHook(() => useLibraryForm({}));
+
+    expect(result.current.visibility).toBe('workspace');
   });
 
   it('creates a workspace library when the user picks the workspace space', async () => {
