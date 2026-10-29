@@ -475,6 +475,8 @@ export default {
   'channel.botWakeScopeBotThreads': 'Only where it already spoke',
   'channel.botWakeScopeBotThreadsHint':
     'A channel or thread where the bot posted within the follow-up window. Discord counts a channel and its threads as one place.',
+  'channel.botWakeScopeBotThreadsHintLark':
+    'A group chat where the bot posted within the follow-up window.',
   'channel.botWakeScopeNone': 'Nowhere',
   'channel.botWakeScopeNoneHint': 'The bot never joins unprompted.',
   'channel.botWakeAllowChannels': 'Allowed channels',
@@ -489,6 +491,8 @@ export default {
   'channel.botWakeDenyChannelsEmpty': 'No channels blocked.',
   'channel.botWakeChannelIdLabel': 'Channel ID',
   'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
+  'channel.botWakeChannelIdPlaceholderLark':
+    'Group chat ID, e.g. oc_a0553eda9014c201e6969b478895c230',
   'channel.channelListLimit': 'Lists hold at most {{max}} entries — remove one first.',
   'channel.botWakePace': 'How often it joins',
   'channel.botWakePaceHint':
@@ -650,6 +654,9 @@ export default {
   'channel.tab.wake': 'Wake policy',
   'channel.wake.intro':
     'Lets the bot speak up when nobody @-mentioned it: when a message calls it by name, when someone follows up soon after it spoke, or when a watch keyword matches. It judges each message first, and may choose to stay silent.',
+  'channel.wake.feishuScope.title': 'Group messages need an extra permission',
+  'channel.wake.feishuScope.desc':
+    'To hear group messages that do not @-mention the bot, the app needs the im:message.group_msg scope. If other bots share the group, also add im:message.group_msg.include_bot:read so the bot sees what they say when it decides whether to step in. Add scopes under Permissions & Scopes in the developer console, then create and publish a new version. Apps made with one-click setup already have the first one.',
   'channel.wake.section.keywords': 'Keywords',
   'channel.wake.section.channels': 'Channels',
   'channel.wake.section.channelsDesc':
@@ -667,6 +674,8 @@ export default {
   'channel.group.connection': 'Connection options',
   'channel.reply.instant':
     'Changes here take effect as soon as you make them. There is nothing to save.',
+  'channel.reply.section.display': 'How replies look',
+  'channel.reply.section.style': 'Style and emoji',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',

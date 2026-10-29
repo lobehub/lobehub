@@ -16,6 +16,7 @@ import {
   platformCredentialBodyMap,
   platformCredentialExtrasMap,
   platformSettingsFieldExtrasMap,
+  platformWakeNoticeMap,
 } from '../platform/registry';
 import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
@@ -30,6 +31,7 @@ import { ApplicationIdField, SchemaField } from './SchemaField';
 import {
   getSchemaFields,
   groupAccessFields,
+  groupReplyFields,
   groupSettingsFields,
   groupWakeFields,
   WAKE_KEY_PREFIX,
@@ -123,6 +125,7 @@ const Body = memo<BodyProps>(
 
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
+    const WakeNotice = platformWakeNoticeMap[platformDef.id];
 
     // Fields behind a rollout flag stay hidden until the user's flag is on (and
     // while the flags have not loaded yet).
@@ -372,11 +375,7 @@ const Body = memo<BodyProps>(
                     {t('channel.wake.intro')}
                   </Text>
                 )}
-              {group.key === 'reply' && hasConfig && (
-                <Text fontSize={12} type={'secondary'}>
-                  {t('channel.reply.instant')}
-                </Text>
-              )}
+              {group.key === 'wake' && WakeNotice && <WakeNotice />}
               {group.key === 'access' ? (
                 // Who the owner is, who may talk to the bot and who may use the owner's devices are
                 // three separate decisions, so each gets a block (and a Save) of its own.
@@ -403,6 +402,27 @@ const Body = memo<BodyProps>(
                       userIdExtras={renderExtras(section.fields.find((f) => f.key === 'userId'))}
                       onValuesChange={onValuesChange}
                     />
+                  </Form.Group>
+                ))
+              ) : group.key === 'reply' ? (
+                // How a reply looks saves itself as it changes; how the bot talks is long text, so
+                // it is a block of its own with a Save.
+                groupReplyFields(group.fields).map((section) => (
+                  <Form.Group
+                    className={styles.moduleGroup}
+                    collapsible={false}
+                    extra={section.key === 'style' ? moduleExtra('reply-style') : undefined}
+                    key={section.key}
+                    keyValue={`settings-reply-${section.key}-${platformDef.id}`}
+                    title={t(`channel.reply.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      section.key === 'display' && hasConfig
+                        ? t('channel.reply.instant')
+                        : undefined
+                    }
+                  >
+                    {renderSettingsFields(section.fields)}
                   </Form.Group>
                 ))
               ) : group.key === 'wake' ? (

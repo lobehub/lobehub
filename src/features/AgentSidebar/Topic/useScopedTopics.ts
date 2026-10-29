@@ -78,7 +78,7 @@ export const useScopedTopic = (id?: string) =>
   useScopedTopics().topics?.find((topic) => topic.id === id);
 
 /**
- * Project topics arrive in full, so the workspace "only mine" filter applies on
+ * Project topics arrive in full, so the project's "only mine" filter applies on
  * the client: keep only the caller's rows when it is on.
  */
 export const useOnlyMineTopics = <T extends { userId?: string | null }>(topics: T[]): T[] => {

@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
+import { sharedSchema as feishuSchema } from '@/server/services/bot/platforms/feishu/definitions/schema';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
 import agentZh from '../../../../locales/zh-CN/agent.json';
@@ -74,21 +75,30 @@ const platformDef = {
   schema: discordSchema,
 } as unknown as SerializedPlatformDefinition;
 
+const feishuDef = {
+  documentation: {},
+  id: 'feishu',
+  name: 'Feishu',
+  schema: feishuSchema,
+} as unknown as SerializedPlatformDefinition;
+
 /** Mounts the form the way the channel page does: a saved bot, its settings merged with the defaults. */
 const Harness = ({
   activeTab = 'wake',
+  def = platformDef,
   moduleControls,
   settings,
 }: {
   activeTab?: 'reply' | 'wake';
+  def?: SerializedPlatformDefinition;
   moduleControls?: ModuleControls;
   settings?: Record<string, unknown>;
 }) => {
   const form = useForm<ChannelFormValues>();
   // The page switches the master on for a user the options are released to.
   const saved = withWakeMasterOn(
-    mergeSettingsWithDefaults(discordSchema, settings ?? {}),
-    isWakeMasterReleased(discordSchema, state.featureFlags),
+    mergeSettingsWithDefaults(def.schema, settings ?? {}),
+    isWakeMasterReleased(def.schema, state.featureFlags),
   );
 
   useEffect(() => {
@@ -105,7 +115,7 @@ const Harness = ({
       currentConfig={{ applicationId: '1', credentials: {}, settings: saved }}
       form={form}
       moduleControls={moduleControls}
-      platformDef={platformDef}
+      platformDef={def}
     />
   );
 };
@@ -188,6 +198,26 @@ describe('channel settings form: bot-wake options', () => {
     render(<Harness />);
 
     expect(screen.getByText(en['channel.wake.intro'])).toBeInTheDocument();
+  });
+
+  it('offers them on Feishu too, naming the scope that lets the bot hear group messages', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness def={feishuDef} />);
+
+    expect(screen.getByText(en['channel.wake.intro'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.wake.feishuScope.desc'])).toBeInTheDocument();
+  });
+
+  it('names no Feishu scope on Discord', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness />);
+
+    expect(screen.queryByText(en['channel.wake.feishuScope.desc'])).not.toBeInTheDocument();
   });
 
   it('opens straight onto the options for a bot that already has them on', () => {

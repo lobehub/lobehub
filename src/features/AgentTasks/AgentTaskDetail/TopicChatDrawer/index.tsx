@@ -51,6 +51,7 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
+import TaskAcceptanceWaitNotice from '../TaskAcceptanceWaitNotice';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
@@ -139,7 +140,13 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
             <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
               <ChatList disableActionsBar itemContent={itemContent} />
             </Flexbox>
-            <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+            <Flexbox gap={8} paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+              {/* A run whose agent stopped but whose acceptance round has not
+                  settled still reads as running; say what it waits on. */}
+              <TaskAcceptanceWaitNotice
+                activity={drawerActivity}
+                runningOperation={currentRunningOperation}
+              />
               <FeedbackInput
                 defaultExpanded={defaultInputExpanded}
                 disableCollapse={disableInputCollapse}

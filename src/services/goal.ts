@@ -111,6 +111,13 @@ class GoalService {
     observation: { key: string; observedAt?: Date; title?: string; unit?: string; value: number },
   ) => lambdaClient.goal.recordObservation.mutate({ id, ...observation });
 
+  /**
+   * Copy the goal's definition into personal (`null`) or a workspace as a new
+   * draft; its graph progress and Tasks stay behind.
+   */
+  copyGoalToWorkspace = async (id: string, targetWorkspaceId: string | null) =>
+    lambdaClient.goal.copyGoalToWorkspace.mutate({ id, targetWorkspaceId });
+
   /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
   delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });
 

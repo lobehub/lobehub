@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Incierto",
   "acceptance.roundStatus.verifying": "En progreso",
   "acceptance.share.copyFailed": "No se pudo copiar el enlace. Cópialo desde la barra de direcciones.",
-  "acceptance.share.makePrivate": "Restringir acceso",
-  "acceptance.share.makePublic": "Permitir acceso con el enlace",
   "acceptance.share.privateHint": "Solo el creador y los miembros del espacio de trabajo podrán leer esta aceptación y sus rondas. Las copias ya descargadas no se pueden recuperar.",
   "acceptance.share.publicHint": "Cualquiera con el enlace podrá leer esta aceptación, todas sus rondas, evidencias y comentarios. Los visitantes registrados también pueden comentar y anotar. Revisa el contenido antes de hacerlo público.",
   "acceptance.share.saved": "Permisos de compartición actualizados",

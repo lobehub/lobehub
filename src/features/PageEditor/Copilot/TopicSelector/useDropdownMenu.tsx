@@ -11,8 +11,9 @@ import {
   LucideCopy,
   PanelTop,
   PencilLine,
+  Pin,
+  PinOff,
   Share2,
-  Star,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -109,15 +110,13 @@ export const useDropdownMenu = ({
         },
         {
           disabled: !canEditTopic,
-          icon: <Icon icon={Star} />,
+          icon: <Icon icon={fav ? PinOff : Pin} />,
           key: 'favorite',
-          label: fav
-            ? t('actions.unfavorite', { ns: 'topic' })
-            : t('actions.favorite', { ns: 'topic' }),
+          label: fav ? t('actions.unpin', { ns: 'topic' }) : t('actions.pin', { ns: 'topic' }),
           onClick: () => {
             favoriteTopic(topicId, !fav);
           },
-          sfSymbol: fav ? 'star.slash' : 'star',
+          sfSymbol: fav ? 'pin.slash' : 'pin',
         },
         {
           type: 'divider' as const,

@@ -332,6 +332,34 @@ describe('AgentWorkingSidebar — controlled panel width', () => {
     expect(screen.queryByText('/Users/me/project')).not.toBeInTheDocument();
     expect(filesProps.current).toBeUndefined();
   });
+
+  it('shows Review on web for a topic worktree the remote device does not list', () => {
+    platform.isDesktop = false;
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { boundDeviceId: 'remote-device', executionTarget: 'device' };
+    // The device's workingDirs track a different worktree, so the lookup misses.
+    reviewState.repoType = undefined;
+    reviewState.workingDirectory = '/repo-feature';
+    chatStore.activeTopicId = 'topic-wt';
+    chatStore.topicDetailMap = {
+      'topic-wt': {
+        id: 'topic-wt',
+        metadata: {
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo-feature', branch: 'feature', isWorktree: true },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+    globalStore.status.workingSidebarTab = 'works';
+    localStorageState.openTabsByContext = { 'topic:topic-wt': ['works', 'review'] };
+
+    render(<AgentWorkingSidebar />);
+
+    expect(screen.getByRole('button', { name: 'workingPanel.review.title' })).toBeInTheDocument();
+  });
 });
 
 describe('Pull request Markdown', () => {
@@ -764,6 +792,45 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(tabs.map((tab) => tab.dataset.tabKey)).toEqual(['files', 'skills', 'documents']);
     expect(tabs[0]).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('opens Claude Code memory by default once a project folder is selected', () => {
+    agentStore.activeAgentId = 'agent';
+    agentStore.heterogeneousType = 'claude-code';
+    agentStore.isHeterogeneous = true;
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'claudeMemory';
+
+    render(<AgentWorkingSidebar />);
+
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-tab-key]'));
+    expect(tabs.map((tab) => tab.dataset.tabKey)).toEqual(['files', 'skills', 'claudeMemory']);
+    expect(screen.getByTestId('memory-pane')).toHaveTextContent('/repo');
+  });
+
+  it.each([
+    ['another heterogeneous agent', 'codex', '/repo', false],
+    ['a Claude Code agent without a project folder', 'claude-code', undefined, false],
+    ['a Claude Code agent on the home fallback only', 'claude-code', '/home/me', true],
+  ])(
+    'offers no memory tab for %s',
+    (_case, heterogeneousType, workingDirectory, isHomeFallback) => {
+      agentStore.activeAgentId = 'agent';
+      agentStore.heterogeneousType = heterogeneousType;
+      agentStore.isHeterogeneous = true;
+      effectiveConfig.agencyConfig = { executionTarget: 'local' };
+      reviewState.workingDirectory = workingDirectory;
+      reviewState.isHomeFallback = isHomeFallback;
+      localStorageState.openTabsByContext = {};
+
+      render(<AgentWorkingSidebar />);
+
+      const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-tab-key]'));
+      expect(tabs.map((tab) => tab.dataset.tabKey)).not.toContain('claudeMemory');
+      expect(screen.queryByTestId('memory-pane')).toBeNull();
+    },
+  );
 
   it('creates an independent browser tab every time Browser is chosen', async () => {
     localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };

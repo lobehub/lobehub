@@ -28,11 +28,9 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { ComposerRecipients } from './ComposerRecipients';
 import { MemberAvatar } from './MemberAvatar';
-import { isCurrentUserMember, memberAvatar, memberName } from './memberName';
+import { isCurrentUserMember, memberName } from './memberName';
 import { $insertChannelMentionBoundary, channelMentionIds } from './mentions';
-import { composerRecipients } from './recipients';
 import { createChannelSendRequest } from './sendRequest';
 import { styles } from './styles';
 import { useAttachments } from './useAttachments';
@@ -42,26 +40,16 @@ const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, Rea
 
 export function Composer({
   activity,
-  defaultRecipientIds,
   draftKey,
-  inThread = false,
   members,
   onSend,
-  stoppable,
-  onStop,
   placeholder,
 }: {
   /** Who is replying right now; shown on the line above the input. */
   activity?: ReactNode;
-  /** Agents eligible when the message mentions nobody. */
-  defaultRecipientIds: string[];
   /** Where unsent input is kept; see {@link useComposerDraft}. */
   draftKey: string;
-  inThread?: boolean;
   members: ChannelPublicMember[];
-  /** A reply here that the caller may stop is running; an empty input then offers Stop. */
-  stoppable?: boolean;
-  onStop?: () => void;
   placeholder?: string;
   onSend: (
     content: string,
@@ -75,13 +63,7 @@ export function Composer({
   const draft = useComposerDraft(editor, draftKey);
   const shouldSendOnEnter = useEnterToSend();
   const userId = useUserStore(userProfileSelectors.userId);
-  const decisionEnabled = useUserStore(
-    (s) =>
-      (s.settings.systemAgent?.channelRouting?.enabled ??
-        s.defaultSettings.systemAgent.channelRouting.enabled) !== false,
-  );
   const [content, setContent] = useState('');
-  const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
   const previousDocument = useRef('');
@@ -122,7 +104,6 @@ export function Composer({
       draft.clear(sentRevision);
       attachments.clear();
       setContent('');
-      setMentionIds([]);
     } catch (cause) {
       console.error('Failed to send Channel message', cause);
       setError(t('sendFailed'));
@@ -159,23 +140,6 @@ export function Composer({
           <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
             {activity}
           </Flexbox>
-          {hasDraft && (
-            <ComposerRecipients
-              recipients={composerRecipients({
-                defaultRecipientIds,
-                decisionEnabled,
-                inThread,
-                members: members.map((member) => ({
-                  actorType: member.actorType,
-                  agentId: member.agentId,
-                  avatar: memberAvatar(member),
-                  id: member.id,
-                  name: memberName(member, t('deletedMember')),
-                })),
-                mentionIds,
-              })}
-            />
-          )}
         </div>
         <ChatInput
           header={preview || undefined}
@@ -242,7 +206,6 @@ export function Composer({
                   if (document !== previousDocument.current) {
                     previousDocument.current = document;
                     setContent(String(editor.getDocument('markdown') || ''));
-                    setMentionIds(channelMentionIds(json, memberIds));
                     draft.save();
                   }
                 }}
@@ -256,13 +219,12 @@ export function Composer({
                 }}
               />
             </div>
+            {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
             <SendButton
-              aria-label={t(stoppable && !hasDraft ? 'stopReply' : 'send')}
+              aria-label={t('send')}
               disabled={busy || !hasDraft || attachments.blocked}
-              generating={stoppable && !hasDraft}
               loading={busy}
               onSend={() => void send()}
-              onStop={onStop}
             />
           </div>
         </ChatInput>

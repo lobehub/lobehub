@@ -170,9 +170,6 @@ export const MemberSelection = ({
           </Flexbox>
         </div>
       </AsyncBoundary>
-      <Text fontSize={12} type="secondary">
-        {t('environment.defaultsHint')}
-      </Text>
     </Flexbox>
   );
 };

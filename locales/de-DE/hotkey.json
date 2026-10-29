@@ -43,6 +43,8 @@
   "switchAgent.title": "Schnellwechsel-Agent",
   "switchTab.desc": "Springen Sie zu einer bestimmten Registerkarte anhand ihrer Position (1–9) in der Registerkartenleiste der Desktop-App",
   "switchTab.title": "Zu Registerkarte nach Nummer wechseln",
+  "toggleFavorite.desc": "Fügen Sie die geöffnete Seite dem Bereich Favoriten in der Seitenleiste hinzu oder entfernen Sie sie",
+  "toggleFavorite.title": "Zu Favoriten hinzufügen / aus Favoriten entfernen",
   "toggleLeftPanel.desc": "Linkes Panel ein- oder ausblenden",
   "toggleLeftPanel.title": "Linkes Panel umschalten",
   "toggleRightPanel.desc": "Rechtes Panel ein- oder ausblenden",

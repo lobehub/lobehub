@@ -1,6 +1,6 @@
 'use client';
 
-import { agentDisplayName, type StoreApiWithSelector } from '@lobechat/types';
+import { type StoreApiWithSelector } from '@lobechat/types';
 import {
   Button,
   createModal,
@@ -15,7 +15,7 @@ import {
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
-import { memo, useMemo, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
@@ -32,7 +32,8 @@ import {
   useConversationStore,
 } from '../store';
 import SelectCircle from './SelectCircle';
-import { type ForwardTarget, useForwardMessages } from './useForwardMessages';
+import { useForwardMessages } from './useForwardMessages';
+import { useForwardTargets } from './useForwardTargets';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -105,11 +106,13 @@ const styles = createStaticStyles(({ css }) => ({
 const ForwardModalContent = memo(() => {
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
-  const [keyword, setKeyword] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const currentAgentId = useConversationStore(contextSelectors.agentId);
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const { candidates, keyword, selectedIds, setKeyword, targets, toggle } = useForwardTargets(
+    agents,
+    currentAgentId,
+  );
   const forwardMessages = useForwardMessages();
 
   // What's being forwarded — count + a few role-labelled snippets for the panel.
@@ -126,28 +129,7 @@ const ForwardModalContent = memo(() => {
 
   useFetchAgentList();
 
-  const candidates = useMemo(() => {
-    const trimmed = keyword.trim().toLowerCase();
-    return agents
-      .filter((agent) => agent.type === 'agent' && agent.id !== currentAgentId)
-      .filter(
-        (agent) => !trimmed || (agentDisplayName(agent) ?? '').toLowerCase().includes(trimmed),
-      );
-  }, [agents, currentAgentId, keyword]);
-
-  const selectedAgents = useMemo(
-    () =>
-      selectedIds
-        .map((id) => agents.find((a) => a.id === id))
-        .filter((a): a is NonNullable<typeof a> => !!a),
-    [selectedIds, agents],
-  );
-
-  const toggle = (id: string) =>
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
   const handleForward = () => {
-    const targets: ForwardTarget[] = selectedAgents.map((a) => ({ id: a.id, title: a.title }));
     if (targets.length === 0) return;
     forwardMessages(targets, note);
     close();
@@ -187,11 +169,11 @@ const ForwardModalContent = memo(() => {
                     agentId={agent.id}
                     avatar={avatarOf(agent.avatar)}
                     background={agent.backgroundColor || undefined}
-                    name={agentDisplayName(agent, t('untitledAgent'))}
+                    name={agent.label || t('untitledAgent')}
                     size={22}
                   />
                   <Text ellipsis style={{ flex: 1 }}>
-                    {agentDisplayName(agent, t('untitledAgent'))}
+                    {agent.label || t('untitledAgent')}
                   </Text>
                 </Flexbox>
               );

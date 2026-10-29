@@ -43,6 +43,8 @@
   "switchAgent.title": "Changer rapidement d'agent",
   "switchTab.desc": "Accéder à un onglet spécifique par sa position (1–9) dans la barre d'onglets de l'application de bureau",
   "switchTab.title": "Passer à l'onglet par numéro",
+  "toggleFavorite.desc": "Ajoutez la page ouverte à la section Favoris de la barre latérale, ou supprimez-la",
+  "toggleFavorite.title": "Ajouter aux Favoris / Supprimer des Favoris",
   "toggleLeftPanel.desc": "Afficher ou masquer le panneau de gauche",
   "toggleLeftPanel.title": "Afficher/Masquer le panneau gauche",
   "toggleRightPanel.desc": "Afficher ou masquer le panneau de droite",

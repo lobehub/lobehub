@@ -9,8 +9,6 @@ on:
     paths:
       - .github/workflows/preview-cli.yml
       - apps/cli/**
-      - apps/workbench/**
-      - packages/**
   workflow_dispatch: {}
 
 concurrency:

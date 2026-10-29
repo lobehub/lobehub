@@ -60,6 +60,7 @@ const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as c
 
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
+const TOPIC_ARCHIVED_STATUSES: ChatTopicStatus[] = ['completed', 'archived'];
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 
 // A shared feed answers "what is the workspace working on", so a conversation
@@ -106,8 +107,13 @@ export class RecentModel {
      * where every row is the owner's already.
      */
     sharedOnly?: boolean,
+    // "Archive" in the UI writes `status: 'completed'`; off by default so Home keeps listing them.
+    excludeArchived?: boolean,
   ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
+    const excludedTopicStatuses = excludeArchived
+      ? [...TOPIC_INBOX_STATUSES, ...TOPIC_ARCHIVED_STATUSES]
+      : TOPIC_INBOX_STATUSES;
     const requestedTypes = types ? new Set(types) : undefined;
 
     // `tasks` uses `createdByUserId` instead of `userId`, so apply the
@@ -169,7 +175,7 @@ export class RecentModel {
                 ),
               ),
               or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
-              or(isNull(topics.status), not(inArray(topics.status, TOPIC_INBOX_STATUSES))),
+              or(isNull(topics.status), not(inArray(topics.status, excludedTopicStatuses))),
             ),
       );
 

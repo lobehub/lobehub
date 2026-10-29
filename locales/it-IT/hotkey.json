@@ -43,6 +43,8 @@
   "switchAgent.title": "Cambio Rapido Agente",
   "switchTab.desc": "Vai a un tab specifico in base alla sua posizione (1–9) nella barra dei tab dell'app Desktop",
   "switchTab.title": "Passa al Tab per Numero",
+  "toggleFavorite.desc": "Aggiungi la pagina aperta alla sezione Preferiti della barra laterale o rimuovila",
+  "toggleFavorite.title": "Aggiungi a / Rimuovi da Preferiti",
   "toggleLeftPanel.desc": "Mostra o nascondi il pannello sinistro",
   "toggleLeftPanel.title": "Attiva/Disattiva Pannello Sinistro",
   "toggleRightPanel.desc": "Mostra o nascondi il pannello destro",

@@ -481,9 +481,19 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         agentType: sessionErrorBody.agentType,
         autoRetry,
         error: sessionErrorBody,
-        onDismiss: () => void updateMessageError(data.id, null),
+        // A quota card owns its local collapse action. Clearing its error would
+        // also remove recovery controls while a scheduled continuation survives.
+        onDismiss:
+          sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit
+            ? undefined
+            : () => void updateMessageError(data.id, null),
         onHandoff:
-          isRateLimitError && conversationAgentId && conversationTopicId
+          // Waiting is an explicit choice. Cancelling it restores this entry
+          // from the topic state; opening or closing the picker consumes nothing.
+          isRateLimitError &&
+          !conversationTopicScheduled &&
+          conversationAgentId &&
+          conversationTopicId
             ? () =>
                 createTopicForwardModal({
                   cancelSourceContinuation: true,

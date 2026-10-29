@@ -21,7 +21,7 @@ const CUSTOM_PACE = [ENABLED, { field: KEY.pace, value: 'custom' }];
 /** Visible lines of the custom-instructions and duties text areas. */
 const CUSTOM_INSTRUCTIONS_ROWS = 10;
 
-const channelList = (key: string, label: string): FieldSchema => ({
+const channelList = (key: string, label: string, idPlaceholder: string): FieldSchema => ({
   key,
   default: [],
   description: `${label}Hint`,
@@ -40,7 +40,7 @@ const channelList = (key: string, label: string): FieldSchema => ({
       {
         key: 'id',
         label: 'channel.botWakeChannelIdLabel',
-        placeholder: 'channel.botWakeChannelIdPlaceholder',
+        placeholder: idPlaceholder,
         required: true,
         type: 'string',
       },
@@ -58,7 +58,15 @@ const channelList = (key: string, label: string): FieldSchema => ({
  * timings until it is set to `enforce`, and the whole group until the `bot_wake` rollout reaches
  * the signed-in user.
  */
-export const botWakeFields: FieldSchema[] = [
+export const makeBotWakeFields = ({
+  channelIdPlaceholder = 'channel.botWakeChannelIdPlaceholder',
+  scopeBotThreadsHint = 'channel.botWakeScopeBotThreadsHint',
+}: {
+  /** How the platform's conversation ids look, shown in the channel lists. */
+  channelIdPlaceholder?: string;
+  /** What "where it already spoke" covers on the platform. */
+  scopeBotThreadsHint?: string;
+} = {}): FieldSchema[] => [
   {
     key: KEY.enabled,
     default: false,
@@ -80,7 +88,7 @@ export const botWakeFields: FieldSchema[] = [
     enum: ['all', 'bot-threads', 'none'],
     enumDescriptions: [
       'channel.botWakeScopeAllHint',
-      'channel.botWakeScopeBotThreadsHint',
+      scopeBotThreadsHint,
       'channel.botWakeScopeNoneHint',
     ],
     enumLabels: [
@@ -89,8 +97,8 @@ export const botWakeFields: FieldSchema[] = [
       'channel.botWakeScopeNone',
     ],
   },
-  channelList(KEY.allowChannels, 'channel.botWakeAllowChannels'),
-  channelList(KEY.denyChannels, 'channel.botWakeDenyChannels'),
+  channelList(KEY.allowChannels, 'channel.botWakeAllowChannels', channelIdPlaceholder),
+  channelList(KEY.denyChannels, 'channel.botWakeDenyChannels', channelIdPlaceholder),
   {
     key: KEY.pace,
     default: 'balanced',
@@ -241,3 +249,11 @@ export const botWakeFields: FieldSchema[] = [
     visibleWhen: [...CUSTOM_PACE, { field: KEY.schedulerMode, value: 'enforce' }],
   },
 ];
+
+export const botWakeFields: FieldSchema[] = makeBotWakeFields();
+
+/** Feishu / Lark: a conversation is a group chat, and the lists take its id (`oc_…`). */
+export const larkBotWakeFields: FieldSchema[] = makeBotWakeFields({
+  channelIdPlaceholder: 'channel.botWakeChannelIdPlaceholderLark',
+  scopeBotThreadsHint: 'channel.botWakeScopeBotThreadsHintLark',
+});

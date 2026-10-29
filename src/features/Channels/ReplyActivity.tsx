@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 
+import { activityLabel } from './activityLabel';
 import { channelJobStatus, memberCurrentJob, replyActivityJobs } from './jobStatus';
 import { replyEntries, ReplyList } from './MessageReceipts';
 import { activityStyles, styles } from './styles';
@@ -38,7 +39,7 @@ export function ReplyActivity({
     return receiving ? (
       <span role="status" {...stylex.props(activityStyles.line, styles.muted)}>
         <TypingDots />
-        {t('routing.receiving')}
+        {activityLabel(t('routing.receiving'))}
       </span>
     ) : null;
 
@@ -84,7 +85,7 @@ export function ReplyActivity({
           ))}
         </span>
         <span role="status" {...stylex.props(activityStyles.label)}>
-          {label}
+          {activityLabel(label)}
         </span>
         <TypingDots />
       </Button>

@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
-import { Archive, FolderInput, Star, Trash2, X } from 'lucide-react';
+import { Archive, FolderInput, Pin, Trash2, X } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -96,9 +96,9 @@ const BulkActionBar = memo(() => {
           {t('management.bulk.selectedCount', { count: selectedIds.length })}
         </Text>
         <ActionIcon
-          icon={Star}
+          icon={Pin}
           size={'small'}
-          title={t('management.bulk.favorite')}
+          title={t('management.bulk.pin')}
           onClick={handleBatchFavorite}
         />
         <ActionIcon

@@ -1,7 +1,7 @@
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import { CalendarClock, Forward, RotateCcw } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
@@ -18,7 +18,6 @@ const extractTimezoneLabel = (value?: string) => {
 const RateLimitState = ({
   config,
   error,
-  onDismiss,
   onOpenSystemTools,
   onRetry,
   onHandoff,
@@ -26,6 +25,7 @@ const RateLimitState = ({
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t, i18n } = useTranslation('chat');
+  const [collapsed, setCollapsed] = useState(false);
   const quotaContext = readHeterogeneousErrorContext({ type: 'AgentRuntimeError', body: error });
   const rawErrorDetails = error?.stderr || error?.message;
   const dateLocale = i18n.resolvedLanguage || i18n.language || undefined;
@@ -150,25 +150,36 @@ const RateLimitState = ({
         })
       : t('cliRateLimitGuide.schedule.titleAfterReset', { name: config.title })
     : t('cliRateLimitGuide.title', { name: config.title });
+  const recoveryActions = scheduleActions ?? (
+    <GuideActions
+      openSystemToolsLabel={onRetry ? undefined : t('cliRateLimitGuide.actions.openSystemTools')}
+      retryLabel={t('cliRateLimitGuide.actions.retry')}
+      onOpenSystemTools={onRetry ? undefined : onOpenSystemTools}
+      onRetry={onRetry}
+    />
+  );
 
   return (
     <GuideShell
+      compact={collapsed}
+      dismissLabel={t('cliRateLimitGuide.actions.collapse')}
       icon={<config.icon size={24} />}
       title={title}
       variant={variant}
       actions={
-        scheduleActions ?? (
-          <GuideActions
-            retryLabel={t('cliRateLimitGuide.actions.retry')}
-            openSystemToolsLabel={
-              onRetry ? undefined : t('cliRateLimitGuide.actions.openSystemTools')
-            }
-            onOpenSystemTools={onRetry ? undefined : onOpenSystemTools}
-            onRetry={onRetry}
-          />
+        collapsed ? (
+          <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
+            {recoveryActions}
+            <Button size="small" type="text" onClick={() => setCollapsed(false)}>
+              {t('cliRateLimitGuide.actions.showDetails')}
+            </Button>
+          </Flexbox>
+        ) : (
+          recoveryActions
         )
       }
       headerDescription={
+        !collapsed &&
         !isScheduled && (
           <Text type="secondary">
             {t(
@@ -185,38 +196,40 @@ const RateLimitState = ({
           </Text>
         )
       }
-      onDismiss={onDismiss}
+      onDismiss={collapsed ? undefined : () => setCollapsed(true)}
     >
-      <Flexbox gap={8}>
-        {formattedResetAt && (
-          <Flexbox horizontal gap={8} style={{ alignItems: 'baseline' }}>
-            <Text strong style={{ fontSize: 12 }}>
-              {t('cliRateLimitGuide.resetAt')}
-            </Text>
-            <Flexbox
-              horizontal
-              gap={8}
-              style={{ alignItems: 'baseline', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
-            >
-              <Text>{`${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`}</Text>
-              {relativeResetText && (
-                <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="secondary">
-                  {relativeResetText}
-                </Text>
-              )}
+      {!collapsed && (
+        <Flexbox gap={8}>
+          {formattedResetAt && (
+            <Flexbox horizontal gap={8} style={{ alignItems: 'baseline' }}>
+              <Text strong style={{ fontSize: 12 }}>
+                {t('cliRateLimitGuide.resetAt')}
+              </Text>
+              <Flexbox
+                horizontal
+                gap={8}
+                style={{ alignItems: 'baseline', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
+              >
+                <Text>{`${formattedResetAt}${timezoneLabel ? ` (${timezoneLabel})` : ''}`}</Text>
+                {relativeResetText && (
+                  <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }} type="secondary">
+                    {relativeResetText}
+                  </Text>
+                )}
+              </Flexbox>
             </Flexbox>
-          </Flexbox>
-        )}
+          )}
 
-        {rateLimitTypeLabel && (
-          <Flexbox horizontal align="center" gap={8}>
-            <Text strong style={{ fontSize: 12 }}>
-              {t('cliRateLimitGuide.limitType')}
-            </Text>
-            <Text>{rateLimitTypeLabel}</Text>
-          </Flexbox>
-        )}
-      </Flexbox>
+          {rateLimitTypeLabel && (
+            <Flexbox horizontal align="center" gap={8}>
+              <Text strong style={{ fontSize: 12 }}>
+                {t('cliRateLimitGuide.limitType')}
+              </Text>
+              <Text>{rateLimitTypeLabel}</Text>
+            </Flexbox>
+          )}
+        </Flexbox>
+      )}
     </GuideShell>
   );
 };

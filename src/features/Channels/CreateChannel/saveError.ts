@@ -13,6 +13,15 @@ export const getChannelSaveErrorKey = (error: unknown) => {
     case 'Choose an accessible device shared with this workspace': {
       return 'environment.deviceUnavailable';
     }
+    case 'Could not reach the device to verify the working directory': {
+      return 'environment.deviceUnreachable';
+    }
+    case 'The working directory does not exist or is not a directory': {
+      return 'environment.directoryInvalid';
+    }
+    case 'The device connector must be upgraded to verify the working directory': {
+      return 'environment.connectorUpgradeRequired';
+    }
     case 'The device must be online and support directory verification': {
       return 'environment.directoryUnavailable';
     }

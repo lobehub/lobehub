@@ -599,6 +599,7 @@ const decodeCursor = (cursor?: string | null): { deletedAt: Date; id: string } |
     if (!Number.isFinite(ms) || !id) return null;
     return { deletedAt: new Date(ms), id };
   } catch {
+    /* v8 ignore next -- unreachable: Buffer.from(string, 'base64url') and Number() never throw */
     return null;
   }
 };

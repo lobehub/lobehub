@@ -1798,8 +1798,8 @@ export class ConversationLifecycleActionImpl {
           messageContext: operationContext,
           fileIds: fileIdList,
           message,
-          // The server persists the user row on this path, so a queued
-          // follow-up's steer mark must travel with the request.
+          // The server persists the user row on this path, so the steer mark
+          // of a directly-steered send ("send now") must travel with the request.
           metadata: (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
             ? { ...requestMetadata, steer: true }
             : requestMetadata,

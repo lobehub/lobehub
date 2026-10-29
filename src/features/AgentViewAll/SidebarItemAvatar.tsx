@@ -8,11 +8,13 @@ import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 
 interface SidebarItemAvatarProps {
   item: SidebarAgentItem;
+  /** Single-agent avatar shape; group avatars keep their stacked layout. */
+  shape?: 'circle' | 'square';
   size: number;
 }
 
 /** Agent avatar that renders the stacked group variant for group chats. */
-const SidebarItemAvatar = memo<SidebarItemAvatarProps>(({ item, size }) => {
+const SidebarItemAvatar = memo<SidebarItemAvatarProps>(({ item, shape, size }) => {
   const { avatar, backgroundColor, id, type } = item;
 
   return type === 'group' ? (
@@ -28,6 +30,7 @@ const SidebarItemAvatar = memo<SidebarItemAvatarProps>(({ item, size }) => {
       avatar={typeof avatar === 'string' ? avatar : undefined}
       background={backgroundColor || undefined}
       name={agentDisplayName(item)}
+      shape={shape}
       size={size}
     />
   );
