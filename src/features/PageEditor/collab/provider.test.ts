@@ -65,6 +65,23 @@ describe('PageCollabProvider', () => {
     expect(onSync).toHaveBeenCalledWith(true);
   });
 
+  it('holds its awareness until the room answered the subscribe', () => {
+    const { deliver, mux, ready, sent } = createMux();
+    const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any);
+
+    provider.connect();
+    ready();
+    provider.awareness.setLocalState({ user: { name: 'A' } });
+
+    expect(sent.filter((m) => m.type === 'doc_awareness')).toEqual([]);
+
+    deliver(synced());
+
+    expect(sent.filter((m) => m.type === 'doc_awareness')).toMatchObject([
+      { state: { user: { name: 'A' } }, type: 'doc_awareness' },
+    ]);
+  });
+
   it('asks the editor to bootstrap when it holds the claim', async () => {
     const { deliver, mux, ready } = createMux();
     const onBootstrap = vi.fn();

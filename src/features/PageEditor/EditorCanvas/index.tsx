@@ -33,7 +33,9 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
   const documentId = usePageEditorStore((s) => s.documentId);
   const onCollabReset = usePageEditorStore((s) => s.onCollabReset);
   const collabPlugin = usePageCollab(documentId, onCollabReset);
-  const collabConnecting = usePageEditorStore((s) => s.collab?.status === 'connecting');
+  const collabBodyShown = usePageEditorStore(
+    (s) => !!s.collab?.bodyReady || s.collab?.status === 'error',
+  );
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
@@ -53,7 +55,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
     [basePlugins, collabPlugin],
   );
   const resolvedPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
-  const showStoredBody = !!collabPlugin && collabConnecting && !!documentId;
+  const showStoredBody = !!collabPlugin && !collabBodyShown && !!documentId;
   const pendingBody = useMemo(
     () =>
       showStoredBody ? (

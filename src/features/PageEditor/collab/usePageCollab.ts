@@ -16,6 +16,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { usePageEditorStore, useStoreApi } from '../store';
 import { PageCollabProvider } from './provider';
+import { whenBodyFilled } from './whenBodyFilled';
 
 const PAGE_META_KEY = 'meta';
 
@@ -24,6 +25,8 @@ const offlineSnapshots = new Map<string, unknown>();
 // The page list reads the DB row, which the room projects ~2s after a change.
 // ponytail: fixed delay, push the projected title over resource events if it lags.
 const PAGE_LIST_REFRESH_DELAY_MS = 3000;
+
+const BODY_FILL_TIMEOUT_MS = 500;
 
 // Deployment-static config, read once like the gateway transport does. Rooms
 // exist only where the server enables page collaboration (LobeHub Cloud).
@@ -61,6 +64,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     if (!enabled || !gatewayUrl) return undefined;
 
     const doc = new Y.Doc();
+    let stopBodyWait: (() => void) | undefined;
     const setCollab = (
       next: Partial<NonNullable<ReturnType<typeof storeApi.getState>['collab']>>,
     ) =>
@@ -101,16 +105,25 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         ) {
           setCollab({ status });
         }
+        if (status === 'synced' && !stopBodyWait) {
+          stopBodyWait = whenBodyFilled(
+            storeApi.getState().editor?.getLexicalEditor(),
+            BODY_FILL_TIMEOUT_MS,
+            () => setCollab({ bodyReady: true }),
+          );
+        }
       },
     });
-    setCollab({ retry: () => provider.retry(), status: 'connecting' });
+    // The previous page's session state is still in the store at this point.
+    setCollab({ bodyReady: false, retry: () => provider.retry(), status: 'connecting' });
 
-    return { doc, provider };
+    return { doc, provider, stopBodyWait: () => stopBodyWait?.() };
   }, [enabled, gatewayUrl, documentId, storeApi, onReset]);
 
   useEffect(() => {
     if (!session) return;
     return () => {
+      session.stopBodyWait();
       session.provider.destroy();
       storeApi.setState({ collab: undefined });
     };
