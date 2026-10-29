@@ -6,7 +6,7 @@ import type {
   ModifyNodesArgs,
   ReplaceTextArgs,
 } from '@lobechat/editor-runtime';
-import { formatModifyNodesResult } from '@lobechat/editor-runtime';
+import { formatModifyNodesResult, PENDING_REVIEW_NOTE } from '@lobechat/editor-runtime';
 import type { BuiltinToolResult, ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
@@ -323,9 +323,17 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
     try {
       const result = await this.runtime.modifyNodes(params);
 
-      const content = formatModifyNodesResult(result);
+      // The live editor keeps block-level AI edits as review diffs until the user
+      // accepts them, while list/table edits are written straight to the page.
+      // `formatModifyNodesResult` reads the per-operation flag, so the message
+      // only claims "not live" for the operations that really are diffs.
+      const content = formatModifyNodesResult(result, { pendingReview: true });
+      // A split operation can leave a review diff behind while reporting failure,
+      // so count any operation that landed as a diff, not only the successful ones.
+      const pendingReview = result.results.some((operation) => operation.pendingReview);
 
       const state: ModifyNodesState = {
+        pendingReview,
         results: result.results,
         successCount: result.successCount,
         totalCount: result.totalCount,
@@ -379,11 +387,12 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
 
       const content =
         result.replacementCount > 0
-          ? `Successfully replaced ${result.replacementCount} occurrence(s) of "${params.searchText}" with "${params.newText}" ${scopeDescription}. Modified ${result.modifiedNodeIds.length} node(s).`
+          ? `Successfully replaced ${result.replacementCount} occurrence(s) of "${params.searchText}" with "${params.newText}" ${scopeDescription}. Modified ${result.modifiedNodeIds.length} node(s).\n${PENDING_REVIEW_NOTE}`
           : `No occurrences of "${params.searchText}" found ${scopeDescription}.`;
 
       const state: ReplaceTextState = {
         modifiedNodeIds: result.modifiedNodeIds,
+        pendingReview: result.replacementCount > 0,
         replacementCount: result.replacementCount,
       };
 

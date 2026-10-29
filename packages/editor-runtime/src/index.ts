@@ -1,5 +1,9 @@
 export { EditorRuntime, type LiteXMLBatchOperation } from './EditorRuntime';
-export { formatModifyNodesResult } from './formatModifyNodesResult';
+export {
+  type FormatModifyNodesOptions,
+  formatModifyNodesResult,
+  PENDING_REVIEW_NOTE,
+} from './formatModifyNodesResult';
 export * from './liteXMLEditPlan';
 export * from './liteXMLWellFormed';
 export * from './types';

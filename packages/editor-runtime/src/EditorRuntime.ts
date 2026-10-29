@@ -492,8 +492,13 @@ export class EditorRuntime {
         if (problem)
           throw new Error(`${describeLiteXMLEditStep(step, operations.length)}: ${problem}`);
 
-        log('Dispatching LiteXML operation:', operation);
-        this.dispatchLiteXMLOperation(editor, operation, !touchesList(operation, document));
+        // Whether this step lands as a pending review diff or is written
+        // straight to the page; the tool message has to say which, otherwise
+        // the model reports list edits as "not live" (or vice versa).
+        const asReviewDiff = !touchesList(operation, document);
+
+        log('Dispatching LiteXML operation:', operation, { asReviewDiff });
+        this.dispatchLiteXMLOperation(editor, operation, asReviewDiff);
         await nextMicrotask();
 
         if (readLiteXML() === before) {
@@ -503,7 +508,8 @@ export class EditorRuntime {
         }
 
         for (const index of step.indexes) {
-          if (!results[index].error) results[index] = { ...results[index], success: true };
+          if (!results[index].error)
+            results[index] = { ...results[index], pendingReview: asReviewDiff, success: true };
         }
       } catch (error) {
         const err = error as Error;

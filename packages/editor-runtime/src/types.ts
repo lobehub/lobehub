@@ -68,6 +68,13 @@ export interface ModifyOperationResult {
    * (a `modify` split into several steps), so it is neither applied nor untouched.
    */
   partiallyApplied?: boolean;
+  /**
+   * The operation was applied as a pending review diff, so the page keeps
+   * showing the old content until the user accepts it. Edits that cannot
+   * survive as a diff (list, table, nested) are written directly and leave
+   * this false.
+   */
+  pendingReview?: boolean;
   success: boolean;
 }
 
