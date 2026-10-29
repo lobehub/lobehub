@@ -30,8 +30,8 @@ sleep 2 # let the result settle
 screencapture -l "$(osascript -e "tell application \"System Events\" to tell process \"$APP\" to get id of window 1")" "$REPORT_DIR/assets/native-result.png"
 ```
 
-Save it into the round's `assets/` and cite it from the case once you have
-looked at it:
+Save it into the round's `assets/` and cite it from the case after its assigned
+inspector has opened it and recorded the observed state:
 
 ```jsonc
 "evidence": [
