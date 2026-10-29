@@ -40,6 +40,16 @@ const opensSignalTurn = (event: AgentStreamEvent): boolean =>
 const isMainStreamStart = (event: AgentStreamEvent): boolean =>
   event.type === 'stream_start' && getEventScope(event).kind === 'main';
 
+/** `parentToolCallId`s of the subagent runs a batch writes to. */
+const subagentParentsOf = (events: AgentStreamEvent[]): Set<string> => {
+  const parents = new Set<string>();
+  for (const event of events) {
+    const scope = getEventScope(event);
+    if (scope.kind === 'subagent') parents.add(scope.ctx.parentToolCallId);
+  }
+  return parents;
+};
+
 /** The raw text a CLI would have echoed into the answer for this failure. */
 const errorEchoText = (error: { body?: Record<string, unknown>; message?: string }): string => {
   const body = error.body ?? {};
@@ -123,9 +133,11 @@ export class HeterogeneousPersistenceHandler {
       await syncAssistantPointerForAdvancedStep(this.deps, state);
     }
 
+    const subagentParents = subagentParentsOf(params.events);
+
     await refreshToolMessageIndex(this.deps, state);
     await refreshMainStateFromDb(this.deps, state);
-    await refreshSubagentRunsFromDb(this.deps, state);
+    await refreshSubagentRunsFromDb(this.deps, state, subagentParents);
     // Only a batch that opens a signal turn needs the tool anchor; skip the
     // lookup for the rest.
     if (params.events.some(opensSignalTurn)) {
@@ -155,6 +167,7 @@ export class HeterogeneousPersistenceHandler {
     // picking up this operation always sees the latest content in the DB,
     // even if it never processes a step boundary or terminal event.
     await this.flushBatchContent(state);
+    await this.flushSubagentContent(state, subagentParents);
   }
 
   /**
@@ -426,5 +439,21 @@ export class HeterogeneousPersistenceHandler {
       operationId: state.operationId,
     };
     await this.deps.messageModel.update(state.main.currentAssistantId, update);
+  }
+
+  /**
+   * Subagent counterpart of {@link flushBatchContent}, limited to the runs this
+   * batch wrote to. Without it, a turn whose text spans replicas loses the part
+   * the earlier replica only held in memory.
+   */
+  private async flushSubagentContent(state: OperationState, parents: Set<string>): Promise<void> {
+    for (const parentToolCallId of parents) {
+      const run = state.main.subagents.runs.get(parentToolCallId);
+      if (!run || (!run.accContent && !run.accReasoning)) continue;
+      const update: Record<string, any> = {};
+      if (run.accContent) update.content = run.accContent;
+      if (run.accReasoning) update.reasoning = { content: run.accReasoning };
+      await this.deps.messageModel.update(run.currentAssistantId, update);
+    }
   }
 }
