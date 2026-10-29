@@ -46,6 +46,7 @@ const input = {
   history: [{ author: 'user', content: 'We are fixing the parser' }],
   message: 'Please implement the fix',
   messageId: 'message',
+  status: 'claimed',
   userId: 'sender',
   workspaceId: 'workspace',
 };
@@ -241,6 +242,17 @@ describe('routing worker', () => {
     expect(mocks.resolve).not.toHaveBeenCalled();
   });
 
+  it('wakes blocked jobs when claiming settles a message without a model call', async () => {
+    mocks.claim.mockResolvedValue({ status: 'settled' });
+    await run();
+    expect(mocks.decide).not.toHaveBeenCalled();
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.wake).toHaveBeenCalledWith('channel');
+    expect(mocks.wake.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      mocks.claim.mock.invocationCallOrder[0],
+    );
+  });
+
   it('does not hot-loop when a full batch is already leased', async () => {
     mocks.pending.mockResolvedValue(Array.from({ length: 10 }, (_, i) => ({ id: String(i) })));
     mocks.claim.mockResolvedValue(null);
@@ -255,6 +267,61 @@ describe('routing worker', () => {
     expect(mocks.wake.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
       mocks.resolve.mock.invocationCallOrder[0],
     );
+  });
+
+  it.each([
+    { name: 'assigned', decision: response(0.95, 0.05) },
+    { name: 'skipped', decision: response(0.05, 0.05) },
+    { name: 'unassigned', decision: { model: 'jev', answers: {} } },
+  ])(
+    'wakes execution after an $name decision without waiting for a slow sibling',
+    async ({ decision }) => {
+      const slow = Promise.withResolvers<ReturnType<typeof response>>();
+      mocks.pending.mockResolvedValue([{ id: 'fast' }, { id: 'slow' }]);
+      mocks.claim.mockImplementation(async (_channelId: string, messageId: string) => ({
+        ...input,
+        messageId,
+      }));
+      mocks.decide.mockImplementation((_params, options) =>
+        options.metadata.messageId === 'slow' ? slow.promise : Promise.resolve(decision),
+      );
+      const advancing = run();
+      try {
+        await vi.waitFor(() => expect(mocks.resolve).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(mocks.wake).toHaveBeenCalledWith('channel'));
+        expect(mocks.resolve.mock.calls[0][1]).toBe('fast');
+      } finally {
+        slow.resolve(response(0.95, 0.05));
+        await advancing;
+      }
+      expect(mocks.resolve).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('drains other routing attempts before reporting a wakeup failure', async () => {
+    const slow = Promise.withResolvers<ReturnType<typeof response>>();
+    mocks.pending.mockResolvedValue([{ id: 'fast' }, { id: 'slow' }]);
+    mocks.claim.mockImplementation(async (_channelId: string, messageId: string) => ({
+      ...input,
+      messageId,
+    }));
+    mocks.decide.mockImplementation((_params, options) =>
+      options.metadata.messageId === 'slow' ? slow.promise : Promise.resolve(response(0.95, 0.05)),
+    );
+    mocks.wake.mockImplementation(async (_channelId: string, delay?: number) => {
+      if (!delay) throw new Error('Queue unavailable');
+    });
+    const settled = vi.fn();
+    const advancing = run().then(settled, settled);
+    try {
+      await vi.waitFor(() => expect(mocks.wake).toHaveBeenCalledWith('channel'));
+      expect(settled).not.toHaveBeenCalled();
+    } finally {
+      slow.resolve(response(0.95, 0.05));
+      await advancing;
+    }
+    expect(mocks.resolve).toHaveBeenCalledTimes(2);
+    expect(settled).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it('retains fallback delivery for a reply deferred until its root was routed', async () => {
@@ -308,6 +375,7 @@ describe('routing worker', () => {
     await run();
     expect(mocks.resolve).toHaveBeenCalledTimes(1);
     expect(mocks.decide).toHaveBeenCalledTimes(1);
+    expect(mocks.wake).not.toHaveBeenCalledWith('channel');
   });
 
   it('settles pending messages without broadcasting when routing was disabled', async () => {

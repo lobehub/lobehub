@@ -33,6 +33,7 @@ export class ChannelRoutingRepository {
       .orderBy(asc(channelMessages.sequence))
       .limit(CHANNEL_ROUTING_BATCH_SIZE);
 
+  /** Null means no progress; a settled claim committed a decision and must wake blocked work. */
   claim = (channelId: string, messageId: string) =>
     withChannelLock(this.db, channelId, async (tx, channel) => {
       const [message] = await tx
@@ -53,7 +54,7 @@ export class ChannelRoutingRepository {
           reason: 'The thread is archived',
           status: 'unassigned',
         });
-        return null;
+        return { status: 'settled' as const };
       }
       if (thread) {
         const [root] = await tx
@@ -67,7 +68,7 @@ export class ChannelRoutingRepository {
             reason: 'The root message has no assigned responders',
             status: 'unassigned',
           });
-          return null;
+          return { status: 'settled' as const };
         }
       }
 
@@ -125,7 +126,7 @@ export class ChannelRoutingRepository {
           reason: 'The message sender is no longer available',
           status: 'unassigned',
         });
-        return null;
+        return { status: 'settled' as const };
       }
 
       const candidateQuery = tx
@@ -199,6 +200,7 @@ export class ChannelRoutingRepository {
         history: history.reverse(),
         message: message.content,
         messageId,
+        status: 'claimed' as const,
         userId: message.userId,
         workspaceId: channel.workspaceId,
       };
