@@ -26,9 +26,14 @@ const FILE_PROXY_PATH_REGEX = /^\/f\/([^/?#]+)\/?$/;
 const DOCS_FILE_PATH_REGEX = /^\/resource\/file\/([^/?#]+)\/?$/;
 const DOCS_FILE_QUERY_PATH_REGEX = /^\/resource(?:\/library\/[^/?#]+)?\/?$/;
 
-// `?file=` also opens pages (`docs_*`), which are not files; only an uploaded
-// file id previews in the file panel.
-const UPLOADED_FILE_ID_PREFIX = 'file_';
+// Docs addresses also open pages (`docs_*`), which are not files: the legacy
+// `?file=docs_x` redirects to `/resource/file/docs_x`. Only an uploaded file
+// previews in the file panel; older uploads carry bare UUID ids, so pages are
+// excluded by prefix rather than files matched by one.
+const PAGE_ID_PREFIX = 'docs_';
+
+const asUploadedFileId = (id: string | null | undefined): string | null =>
+  id && !id.startsWith(PAGE_ID_PREFIX) ? id : null;
 
 export interface ParsedFileLink {
   fileId: string;
@@ -59,12 +64,9 @@ const safeDecode = (value: string): string | null => {
 /** The file id a Docs path names, or null. `pathname` has no workspace prefix. */
 const matchDocsFile = (pathname: string, searchParams: URLSearchParams): string | null => {
   const pathMatch = pathname.match(DOCS_FILE_PATH_REGEX);
-  if (pathMatch) return safeDecode(pathMatch[1]);
+  if (pathMatch) return asUploadedFileId(safeDecode(pathMatch[1]));
 
-  if (DOCS_FILE_QUERY_PATH_REGEX.test(pathname)) {
-    const fileId = searchParams.get('file');
-    if (fileId?.startsWith(UPLOADED_FILE_ID_PREFIX)) return fileId;
-  }
+  if (DOCS_FILE_QUERY_PATH_REGEX.test(pathname)) return asUploadedFileId(searchParams.get('file'));
 
   return null;
 };
@@ -145,7 +147,7 @@ export type FileLinkOpenAction =
 /**
  * What a file link click opens.
  *
- * The agent-share visitor does not own the creator's files, so the portal's
+ * A share visitor (agent or topic share) does not own the creator's files, so the portal's
  * owner-scoped fetch by id finds nothing and shows "file unavailable"; the
  * `/f/:id` link itself is public by id, so the visitor previews straight from
  * it. That preview only knows the file through the link label (the FileViewer
@@ -155,17 +157,17 @@ export type FileLinkOpenAction =
  */
 export const getFileLinkOpenAction = ({
   fileId,
-  isAgentShareVisitor,
+  isShareVisitor,
   label,
   proxyHref,
 }: {
   fileId: string;
-  isAgentShareVisitor: boolean;
+  isShareVisitor: boolean;
   label: string;
   /** The public `/f/:id` address; see {@link ParsedFileLink.proxyHref}. */
   proxyHref?: string;
 }): FileLinkOpenAction => {
-  if (!isAgentShareVisitor || !proxyHref) return { kind: 'preview', params: { fileId } };
+  if (!isShareVisitor || !proxyHref) return { kind: 'preview', params: { fileId } };
 
   if (!FILE_NAME_WITH_EXTENSION_REGEX.test(label.trim())) {
     return { kind: 'newTab', url: proxyHref };

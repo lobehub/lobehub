@@ -8,11 +8,18 @@ import { useTranslation } from 'react-i18next';
 import NotFound from '@/components/404';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
-interface ShareErrorViewProps {
-  error: unknown;
+export interface ShareNotFoundCopy {
+  desc: string;
+  title: string;
 }
 
-const ShareErrorView = memo<ShareErrorViewProps>(({ error }) => {
+interface ShareErrorViewProps {
+  error: unknown;
+  /** What a missing share is called on this page; defaults to the topic copy. */
+  notFound?: ShareNotFoundCopy;
+}
+
+const ShareErrorView = memo<ShareErrorViewProps>(({ error, notFound }) => {
   const { t } = useTranslation('chat');
 
   const trpcError = error instanceof TRPCClientError ? error : null;
@@ -63,8 +70,8 @@ const ShareErrorView = memo<ShareErrorViewProps>(({ error }) => {
   return (
     <Center height={'100%'} padding={48}>
       <NotFound
-        desc={t('sharePage.error.notFound.subtitle')}
-        title={t('sharePage.error.notFound.title')}
+        desc={notFound?.desc ?? t('sharePage.error.notFound.subtitle')}
+        title={notFound?.title ?? t('sharePage.error.notFound.title')}
       />
     </Center>
   );

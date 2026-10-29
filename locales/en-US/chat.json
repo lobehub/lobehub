@@ -2258,6 +2258,8 @@
   "sharePage.app.help": "Trouble opening the app?",
   "sharePage.app.helpDescription": "If this browser prevents opening the app, use its menu to open this page in your system browser. You can also keep reading here.",
   "sharePage.app.open": "Open app",
+  "sharePage.error.fileNotFound.subtitle": "This file does not exist, has been removed, or is no longer shared.",
+  "sharePage.error.fileNotFound.title": "File Not Found",
   "sharePage.error.forbidden.subtitle": "This share is private and not accessible.",
   "sharePage.error.forbidden.title": "Access Denied",
   "sharePage.error.notFound.subtitle": "This topic does not exist or has been removed.",

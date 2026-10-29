@@ -52,6 +52,10 @@ const SharedFileView = memo(() => {
           />
         )
       }
+      notFound={{
+        desc: t('sharePage.error.fileNotFound.subtitle'),
+        title: t('sharePage.error.fileNotFound.title'),
+      }}
     >
       {data && <SharedFileBody data={data} />}
     </ShareLayout>

@@ -103,6 +103,18 @@ describe('parseFileLinkHref Docs file links', () => {
     expect(parseFileLinkHref('/resource/page/abc', ORIGIN)).toBeNull();
   });
 
+  // The legacy `?file=docs_x` redirects to `/resource/file/docs_x`, which
+  // Docs opens as a page, so that address must not open the file panel.
+  it('leaves a page addressed through the file path to Docs', () => {
+    expect(parseFileLinkHref('/resource/file/docs_abc', ORIGIN)).toBeNull();
+  });
+
+  it('matches an older upload whose id is a bare UUID', () => {
+    const id = '14639096-839f-43f3-92c6-ed4f839c0796';
+    expect(parseFileLinkHref(`/resource/file/${id}`, ORIGIN)?.fileId).toBe(id);
+    expect(parseFileLinkHref(`/resource?file=${id}`, ORIGIN)?.fileId).toBe(id);
+  });
+
   it('matches a link prefixed with the active workspace only', () => {
     const href = `${ORIGIN}/acme/resource/file/file_ynz`;
 
@@ -123,7 +135,7 @@ describe('getFileLinkOpenAction', () => {
   const link = { fileId: 'file_1', label: 'report.md', proxyHref: `${ORIGIN}/f/file_1` };
 
   it('opens the owner-scoped preview by id for the file owner', () => {
-    expect(getFileLinkOpenAction({ ...link, isAgentShareVisitor: false })).toEqual({
+    expect(getFileLinkOpenAction({ ...link, isShareVisitor: false })).toEqual({
       kind: 'preview',
       params: { fileId: 'file_1' },
     });
@@ -132,7 +144,7 @@ describe('getFileLinkOpenAction', () => {
   // Regression: the visitor does not own the creator's file, so the
   // id-only preview fetched nothing and showed "file unavailable".
   it('previews from the public /f/:id link on the agent-share visitor page', () => {
-    expect(getFileLinkOpenAction({ ...link, isAgentShareVisitor: true })).toEqual({
+    expect(getFileLinkOpenAction({ ...link, isShareVisitor: true })).toEqual({
       kind: 'preview',
       params: { fileId: 'file_1', source: { name: 'report.md', url: `${ORIGIN}/f/file_1` } },
     });
@@ -140,7 +152,7 @@ describe('getFileLinkOpenAction', () => {
 
   it('opens the public link in a new tab when the visitor label names no file type', () => {
     expect(
-      getFileLinkOpenAction({ ...link, isAgentShareVisitor: true, label: 'Download the deck' }),
+      getFileLinkOpenAction({ ...link, isShareVisitor: true, label: 'Download the deck' }),
     ).toEqual({ kind: 'newTab', url: `${ORIGIN}/f/file_1` });
   });
 });

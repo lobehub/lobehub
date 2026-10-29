@@ -2258,6 +2258,8 @@
   "sharePage.app.help": "打开 App 遇到问题？",
   "sharePage.app.helpDescription": "如果当前浏览器阻止打开 App，可以通过浏览器菜单在系统浏览器中打开此页面。你也可以继续在这里阅读。",
   "sharePage.app.open": "打开 App",
+  "sharePage.error.fileNotFound.subtitle": "该文件不存在、已被删除或已取消分享。",
+  "sharePage.error.fileNotFound.title": "文件不存在",
   "sharePage.error.forbidden.subtitle": "此分享为私密状态，无法访问。",
   "sharePage.error.forbidden.title": "无权访问",
   "sharePage.error.notFound.subtitle": "该话题不存在或已被删除。",

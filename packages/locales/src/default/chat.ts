@@ -1870,6 +1870,9 @@ export default {
   'sharePage.explain.prompt':
     'Take a look at this conversation. Briefly tell me what it is about and what is worth noticing:\n{{url}}',
   'sharePage.actions.tryItYourself': 'Try it yourself',
+  'sharePage.error.fileNotFound.subtitle':
+    'This file does not exist, has been removed, or is no longer shared.',
+  'sharePage.error.fileNotFound.title': 'File Not Found',
   'sharePage.error.forbidden.subtitle': 'This share is private and not accessible.',
   'sharePage.error.forbidden.title': 'Access Denied',
   'sharePage.error.notFound.subtitle': 'This topic does not exist or has been removed.',

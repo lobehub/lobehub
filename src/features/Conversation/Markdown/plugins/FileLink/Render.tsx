@@ -92,9 +92,9 @@ OwnedFileLabel.displayName = 'FileLinkOwnedFileLabel';
 const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
   const { fileId, linkHref, linkLabel, proxyHref } = node?.properties || {};
   const openFilePreview = useChatStore((s) => s.openFilePreview);
-  const isAgentShareVisitor = useConversationStore((s) => !!s.context.agentShareId);
-  // Share pages read the creator's transcript; the visitor's file store holds
-  // none of those files (and is an empty stub during share SSR).
+  // Share pages (agent and topic shares) read the creator's transcript; the
+  // visitor's file store holds none of those files (and is an empty stub during
+  // share SSR), so they preview from the public proxy instead.
   const isShareVisitor = useConversationStore(
     (s) => !!s.context.agentShareId || !!s.context.topicShareId,
   );
@@ -110,14 +110,14 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
       event.preventDefault();
-      const action = getFileLinkOpenAction({ fileId, isAgentShareVisitor, label, proxyHref });
+      const action = getFileLinkOpenAction({ fileId, isShareVisitor, label, proxyHref });
       if (action.kind === 'newTab') {
         window.open(action.url, '_blank', 'noopener,noreferrer');
         return;
       }
       openFilePreview(action.params);
     },
-    [fileId, isAgentShareVisitor, label, openFilePreview, proxyHref],
+    [fileId, isShareVisitor, label, openFilePreview, proxyHref],
   );
 
   return (
