@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, not } from 'drizzle-orm';
 
 import { messages } from '../../schemas';
 import type { Transaction } from '../../type';
+import { nonNull } from '../utils/rows';
 import { MessageScope } from './scope';
 
 interface ActiveBranchSnapshot {
@@ -69,11 +70,11 @@ export class MessageBranchSnapshots extends MessageScope {
     const branchIdsByParent = new Map<string, string[]>();
 
     for (const branch of branchRows) {
-      /* v8 ignore next -- unreachable: `inArray(messages.parentId, …)` already excludes NULL parents */
-      if (!branch.parentId) continue;
-      const branchIds = branchIdsByParent.get(branch.parentId) ?? [];
+      // `inArray(messages.parentId, …)` already excludes NULL parents.
+      const parentId = nonNull(branch.parentId, 'messages.parent_id');
+      const branchIds = branchIdsByParent.get(parentId) ?? [];
       branchIds.push(branch.id);
-      branchIdsByParent.set(branch.parentId, branchIds);
+      branchIdsByParent.set(parentId, branchIds);
     }
 
     return branchIdsByParent;

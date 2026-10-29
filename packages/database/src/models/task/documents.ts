@@ -94,8 +94,7 @@ export const getDocumentsPinnedSince = async (
 
   return rows.map((row) => ({
     id: row.id,
-    /* v8 ignore next -- unreachable: documents.file_type is NOT NULL and the inner join always yields a document row */
-    kind: row.fileType ?? null,
+    kind: row.fileType,
     title: row.title ?? null,
   }));
 };

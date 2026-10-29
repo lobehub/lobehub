@@ -7,6 +7,7 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { searchableMessage } from '../../utils/searchableMessage';
 import { notChannelTopic } from '../../utils/topicVisibility';
+import { nonNull } from '../utils/rows';
 import type { MessageLookupQueries } from './lookup';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
@@ -245,8 +246,8 @@ export class MessageKeywordSearchQueries extends MessageScope {
       truncated,
       hasMore: rows.length > pageSize,
       items: rows.slice(0, pageSize).map(({ content, summary, ...row }) => {
-        /* v8 ignore next -- unreachable: `searchableMessage()` requires searchable text in `content` or `summary` */
-        const body = content || summary || '';
+        // `searchableMessage()` requires searchable text in `content` or `summary`.
+        const body = nonNull(content || summary, 'messages.content or messages.summary');
         return {
           ...row,
           contentLength: body.length,

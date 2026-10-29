@@ -16,6 +16,7 @@ import { and, asc, count, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 
 import { messagePlugins, messages } from '../../schemas';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
+import { nonNull } from '../utils/rows';
 import { resolveCursorPageWindow } from './cursorWindow';
 import type { MessageLookupQueries } from './lookup';
 import type { MessagePageQueries } from './queryWithWhere';
@@ -83,9 +84,9 @@ export class MessageConversationQueries extends MessageScope {
 
     const result = new Map<string, string>();
     for (const row of rows) {
-      /* v8 ignore next -- unreachable: `content` and `topicId` are never null: the WHERE clause filters both */
-      const content = (row.content ?? '').trim();
-      if (row.topicId && content) result.set(row.topicId, content);
+      // The WHERE clause filters both `content` and `topicId` to non-NULL.
+      const content = nonNull(row.content, 'messages.content').trim();
+      if (content) result.set(nonNull(row.topicId, 'messages.topic_id'), content);
     }
     return result;
   };
