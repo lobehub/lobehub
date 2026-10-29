@@ -52,19 +52,33 @@ describe('useGoalNodeSelect', () => {
     portal.openTaskResult.mockClear();
   });
 
-  // Regression: a settled or running Task opened its result surface, but a
-  // Task link is read as "show me the Task" — the original Task detail.
-  it('opens the original Task detail for a settled or running Task', () => {
+  // Regression: a resolved Task opened the original Task detail, which leads
+  // with the instruction contract and buries the delivery under the acceptance
+  // and the activity feed. A finished Task is read for its result.
+  it('opens the result surface for a Task that has delivered', () => {
     const graph = graphOf([
       node('done', { resolvedAt: T0, status: 'resolved', taskId: 'task-done' }),
-      node('running', { status: 'active', taskId: 'task-running', updatedAt: new Date() }),
     ]);
     const { result } = renderHook(() => useGoalNodeSelect('goal-1', graph));
 
     result.current('done');
+
+    expect(portal.openTaskResult.mock.calls).toEqual([['task-done']]);
+    expect(portal.openTaskDetail).not.toHaveBeenCalled();
+    expect(portal.openGoalNode).not.toHaveBeenCalled();
+  });
+
+  it('opens the original Task detail for a Task still waiting or running', () => {
+    const graph = graphOf([
+      node('waiting', { status: 'proposed', taskId: 'task-waiting' }),
+      node('running', { status: 'active', taskId: 'task-running', updatedAt: new Date() }),
+    ]);
+    const { result } = renderHook(() => useGoalNodeSelect('goal-1', graph));
+
+    result.current('waiting');
     result.current('running');
 
-    expect(portal.openTaskDetail.mock.calls).toEqual([['task-done'], ['task-running']]);
+    expect(portal.openTaskDetail.mock.calls).toEqual([['task-waiting'], ['task-running']]);
     expect(portal.openTaskResult).not.toHaveBeenCalled();
     expect(portal.openGoalNode).not.toHaveBeenCalled();
   });
