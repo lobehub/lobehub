@@ -647,6 +647,18 @@ export const tokenizeWords = (raw: string): string[] => {
       continue;
     }
 
+    // Locale-translation quoting `$"…"` is a QUOTED word too: bash removes the
+    // `$`, translates the string, then passes it as double-quoted text, so
+    // `rm $"-rf" ~` hands `-rf` and the expanded home directory to rm. Reading
+    // the `$` as a literal character produced `$-rf`, which no flag check
+    // recognises, and the home predicate returned false.
+    if (char === '$' && raw[i + 1] === '"') {
+      quote = '"';
+      hasWord = true;
+      i += 2;
+      continue;
+    }
+
     if (char === '"' || char === "'") {
       quote = char;
       hasWord = true;

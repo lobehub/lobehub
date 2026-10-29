@@ -1178,4 +1178,28 @@ describe('matchSemanticShellPredicate', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
     });
   });
+  describe('twenty-second-round review: locale-translation quoting in argv', () => {
+    // `$"…"` is a QUOTED word at parse time: bash removes the `$`, translates
+    // the string, then passes it as double-quoted text. Keeping the `$` inside
+    // argv produced `$-rf`, which no flag check recognises, while the shell
+    // still handed `-rf` to rm.
+    it.each([
+      ['rmRecursiveHomeTarget', 'rm $"-rf" ~'],
+      ['rmRecursiveHomeTarget', 'LC_ALL=C rm $"-rf" ~'],
+      ['rmRecursiveRootTarget', 'rm -rf $"/"'],
+      ['rmRecursiveHomeTarget', 'rm "-rf" $"~"'],
+      ['rmRecursiveHomeTarget', 'rm $"-rf" "${HOME}"'],
+    ] as const)('reads the flag behind $"…" (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each([
+      'echo $"-rf" ~',
+      'rm $"-f" /tmp/cache',
+      'echo $"rm -rf ~"',
+      'rm -rf $"/tmp/cache"',
+    ])('leaves a harmless locale-quoted word alone: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+    });
+  });
 });
