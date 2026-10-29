@@ -65,11 +65,12 @@ describe('createMiniMaxSpeech', () => {
         audio_setting: { format: 'mp3' },
         model: 'speech-2.8-hd',
         output_format: 'hex',
+        stream: false,
         text: 'hello world',
         voice_setting: { voice_id: 'test-voice' },
       }),
       headers: {
-        'Authorization': 'Bearer test-api-key',
+        Authorization: 'Bearer test-api-key',
         'Content-Type': 'application/json',
       },
       method: 'POST',
@@ -93,6 +94,41 @@ describe('createMiniMaxSpeech', () => {
 
     expect(body.audio_setting).toEqual({ format: 'flac' });
     expect(body.voice_setting).toEqual({ speed: 1.5, voice_id: 'test-voice' });
+  });
+
+  it('forwards MiniMax speech controls while keeping the response non-streaming hex', async () => {
+    mockJsonResponse({
+      base_resp: { status_code: 0, status_msg: 'success' },
+      data: { audio: audioHex, status: 2 },
+    });
+
+    await createMiniMaxSpeech(
+      {
+        ...payload,
+        audio_setting: { bitrate: 128_000, format: 'wav', sample_rate: 32_000 },
+        language_boost: 'English',
+        pronunciation_dict: { tone: ['MiniMax/mInimaks/'] },
+        subtitle_enable: true,
+        voice_modify: { pitch: 1, timbre: 2 },
+        voice_setting: { emotion: 'happy', vol: 1.2 },
+      } as TextToSpeechPayload,
+      mockOptions,
+    );
+
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+
+    expect(body).toEqual({
+      audio_setting: { bitrate: 128_000, format: 'wav', sample_rate: 32_000 },
+      language_boost: 'English',
+      model: 'speech-2.8-hd',
+      output_format: 'hex',
+      pronunciation_dict: { tone: ['MiniMax/mInimaks/'] },
+      stream: false,
+      subtitle_enable: true,
+      text: 'hello world',
+      voice_modify: { pitch: 1, timbre: 2 },
+      voice_setting: { emotion: 'happy', vol: 1.2, voice_id: 'test-voice' },
+    });
   });
 
   it('ignores an audio format the speech endpoint does not support', async () => {
@@ -164,6 +200,17 @@ describe('createMiniMaxSpeech', () => {
 
     await expect(createMiniMaxSpeech(payload, mockOptions)).rejects.toThrow(
       'MiniMax API error: authentication failed',
+    );
+  });
+
+  it('throws when the response has not completed synthesis', async () => {
+    mockJsonResponse({
+      base_resp: { status_code: 0, status_msg: 'success' },
+      data: { audio: audioHex, status: 1 },
+    });
+
+    await expect(createMiniMaxSpeech(payload, mockOptions)).rejects.toThrow(
+      'MiniMax text to audio response is not complete (status 1)',
     );
   });
 

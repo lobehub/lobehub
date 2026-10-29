@@ -38,8 +38,14 @@ const DEFAULT_AUDIO_FORMAT: MiniMaxAudioFormat = 'mp3';
  * them defensively instead of widening the shared type.
  */
 type MiniMaxSpeechPayload = TextToSpeechPayload & {
+  audio_setting?: Record<string, unknown> & { format?: string };
+  language_boost?: string;
+  pronunciation_dict?: Record<string, unknown>;
   response_format?: string;
   speed?: number;
+  subtitle_enable?: boolean;
+  voice_modify?: Record<string, unknown>;
+  voice_setting?: Record<string, unknown>;
 };
 
 interface MiniMaxSpeechResponse {
@@ -88,24 +94,42 @@ export async function createMiniMaxSpeech(
   requestOptions?: TextToSpeechOptions,
 ): Promise<ArrayBuffer> {
   const { apiKey, baseURL } = options;
-  const { input, voice, response_format, speed } = payload as MiniMaxSpeechPayload;
+  const {
+    audio_setting,
+    input,
+    language_boost,
+    pronunciation_dict,
+    response_format,
+    speed,
+    subtitle_enable,
+    voice,
+    voice_modify,
+    voice_setting,
+  } = payload as MiniMaxSpeechPayload;
   const model = resolveMappedModelId(payload.model, options);
   const endpoint = resolveMiniMaxSpeechEndpoint(baseURL);
 
-  const format = isSupportedAudioFormat(response_format) ? response_format : DEFAULT_AUDIO_FORMAT;
+  const requestedFormat = response_format || audio_setting?.format;
+  const format = isSupportedAudioFormat(requestedFormat) ? requestedFormat : DEFAULT_AUDIO_FORMAT;
   const voiceSetting = {
+    ...voice_setting,
     ...(voice ? { voice_id: voice } : {}),
     ...(typeof speed === 'number' ? { speed } : {}),
   };
 
   const requestBody: Record<string, unknown> = {
-    audio_setting: { format },
+    audio_setting: { ...audio_setting, format },
+    ...(language_boost !== undefined ? { language_boost } : {}),
     model,
     // Hex is the only non-streaming output that keeps the audio in the response
     // body; a URL would expire and require a second round-trip.
     output_format: 'hex',
+    ...(pronunciation_dict !== undefined ? { pronunciation_dict } : {}),
+    stream: false,
+    ...(subtitle_enable !== undefined ? { subtitle_enable } : {}),
     text: input,
     ...(Object.keys(voiceSetting).length > 0 ? { voice_setting: voiceSetting } : {}),
+    ...(voice_modify !== undefined ? { voice_modify } : {}),
   };
 
   log('Text to audio request: endpoint=%s model=%s format=%s', endpoint, model, format);
@@ -113,7 +137,7 @@ export async function createMiniMaxSpeech(
   const response = await fetch(endpoint, {
     body: JSON.stringify(requestBody),
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       ...requestOptions?.headers,
     },
@@ -136,6 +160,10 @@ export async function createMiniMaxSpeech(
 
   if (data.base_resp && data.base_resp.status_code !== 0) {
     throw new Error(`MiniMax API error: ${data.base_resp.status_msg}`);
+  }
+
+  if (data.data?.status !== undefined && data.data.status !== 2) {
+    throw new Error(`MiniMax text to audio response is not complete (status ${data.data.status})`);
   }
 
   const audio = data.data?.audio;
