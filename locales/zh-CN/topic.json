@@ -180,6 +180,7 @@
   "management.bulk.pin": "置顶",
   "management.bulk.selectedCount_one": "已选 {{count}} 项",
   "management.bulk.selectedCount_other": "已选 {{count}} 项",
+  "management.bulk.unarchive": "取消归档",
   "management.card.noPreview": "暂无预览内容",
   "management.columns.project": "项目",
   "management.columns.status": "状态",
