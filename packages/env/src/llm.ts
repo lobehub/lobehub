@@ -245,6 +245,9 @@ export const getLLMConfig = () => {
       ENABLED_STRAICO: z.boolean(),
       STRAICO_API_KEY: z.string().optional(),
 
+      ENABLED_TOKENLAB: z.boolean(),
+      TOKENLAB_API_KEY: z.string().optional(),
+
       ENABLED_LOBEHUB: z.boolean(),
 
       ENABLED_OPENCODEZEN: z.boolean(),
@@ -507,6 +510,9 @@ export const getLLMConfig = () => {
 
       ENABLED_STRAICO: !!process.env.STRAICO_API_KEY,
       STRAICO_API_KEY: process.env.STRAICO_API_KEY,
+
+      ENABLED_TOKENLAB: !!process.env.TOKENLAB_API_KEY,
+      TOKENLAB_API_KEY: process.env.TOKENLAB_API_KEY,
 
       ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
 

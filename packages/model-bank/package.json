@@ -84,6 +84,7 @@
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
+    "./tokenlab": "./src/aiModels/tokenlab.ts",
     "./typesafe": "./src/aiModels/typesafe.ts",
     "./unsloth": "./src/aiModels/unsloth.ts",
     "./upstage": "./src/aiModels/upstage.ts",

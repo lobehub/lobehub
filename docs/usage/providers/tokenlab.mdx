@@ -1,0 +1,34 @@
+---
+title: Using TokenLab in LobeHub
+description: Create a TokenLab API key and use TokenLab's OpenAI-compatible gateway in LobeHub.
+tags:
+  - LobeHub
+  - TokenLab
+  - API Key
+  - Model gateway
+---
+
+# Using TokenLab in LobeHub
+
+[TokenLab](https://tokenlab.sh/?utm_source=lobehub) is an OpenAI-compatible API gateway. One key reaches models from OpenAI, Anthropic, Google, DeepSeek, Moonshot and other vendors, billed per token.
+
+<Steps>
+  ### Step 1: Create an API key
+
+  - Sign up at [TokenLab](https://tokenlab.sh/?utm_source=lobehub).
+  - Open the dashboard and create an API key.
+
+  ### Step 2: Configure LobeHub
+
+  - Open **App Settings → AI Providers** and select **TokenLab**.
+  - Paste the API key and turn the provider on.
+  - Click **Fetch models**. LobeHub reads TokenLab's `GET /v1/models` and keeps the chat models, each with its own context window and output limit.
+
+  ### Step 3: Start a conversation
+
+  - Pick a TokenLab model in the model selector and send a message.
+</Steps>
+
+Self-hosted deployments can set `TOKENLAB_API_KEY` instead. See [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#tokenlab).
+
+Prices are listed on the [TokenLab pricing page](https://tokenlab.sh/en/pricing?utm_source=lobehub).
