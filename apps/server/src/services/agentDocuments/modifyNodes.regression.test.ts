@@ -247,7 +247,9 @@ describe('agent document markdown writes regressions', () => {
       xml.match(new RegExp(`<span id="(\\w+)"[^>]*>${text}</span>`))![1];
     const rowId = (xml: string, text: string) =>
       xml.match(
-        new RegExp(`<tr id="(\\w+)">\\s*<td id="\\w+">\\s*<span id="\\w+">${text}</span>`),
+        new RegExp(
+          `<tr id="(\\w+)">\\s*<td id="\\w+">\\s*(?:<p id="\\w+">\\s*)?<span id="\\w+">${text}</span>`,
+        ),
       )![1];
     const parentId = (xml: string, tag: string, text: string) =>
       xml.match(new RegExp(`<${tag} id="(\\w+)">(?:(?!</${tag}>)[\\s\\S])*>${text}</span>`))![1];

@@ -65,8 +65,7 @@ allowBuilds:
 overrides:
   '@lobehub/ui': ^6.9.0
   '@lobehub/icons': ^6.0.0
-  # 7.0.3 moves to lexical 0.53 while the root still pins lexical 0.42; lift both together.
-  '@lobehub/editor': 7.0.2
+  '@lobehub/editor': ^7.0.3
   '@lobehub/charts': ^6.0.0
   '@lobehub/fluent-emoji': ^5.0.0
   # Stay on the latest 1.9.x: @opentelemetry/*@2.x peers reject 1.10.0, and mixing both splits drizzle-orm into duplicate peer variants.
@@ -79,7 +78,7 @@ overrides:
   baseline-browser-mapping: 2.10.31
   drizzle-orm: ^0.45.2
   fast-xml-parser: 5.4.2
-  lexical: 0.42.0
+  lexical: 0.53.0
   # Keep the coupled core/autolink patches applied without a root lockfile.
   micromark: 4.0.3
   micromark-extension-gfm-autolink-literal: 2.1.0

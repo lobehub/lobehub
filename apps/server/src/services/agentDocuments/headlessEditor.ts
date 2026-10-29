@@ -9,7 +9,7 @@ import {
 } from '@lobechat/editor-runtime';
 import type { HeadlessEditorOptions, HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
 import { createHeadlessEditor, DEFAULT_HEADLESS_EDITOR_PLUGINS } from '@lobehub/editor/headless';
-import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
+import type { SerializedEditorState } from 'lexical';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
@@ -139,7 +139,7 @@ const exportSnapshot = (
 
   return {
     content: snapshot.markdown,
-    editorData: snapshot.editorData as SerializedEditorState<SerializedLexicalNode>,
+    editorData: snapshot.editorData as SerializedEditorState,
     litexml: snapshot.litexml,
   };
 };
@@ -150,10 +150,7 @@ const hydrateMarkdownOrEmptyState = (
   options?: { keepId?: boolean },
 ) => {
   if (content.trim().length === 0) {
-    editor.hydrateEditorData(
-      EMPTY_EDITOR_STATE as unknown as SerializedEditorState<SerializedLexicalNode>,
-      options,
-    );
+    editor.hydrateEditorData(EMPTY_EDITOR_STATE as unknown as SerializedEditorState, options);
     return;
   }
 
@@ -168,12 +165,9 @@ const createEditorWithState = (
 
   if (isValidEditorData(editorData)) {
     try {
-      editor.hydrateEditorData(
-        editorData as unknown as SerializedEditorState<SerializedLexicalNode>,
-        {
-          keepId: true,
-        },
-      );
+      editor.hydrateEditorData(editorData as unknown as SerializedEditorState, {
+        keepId: true,
+      });
 
       const hydratedContent = editor.export().markdown;
       if (fallbackContent.trim().length === 0 || hydratedContent.trim().length > 0) {
