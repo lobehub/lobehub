@@ -153,8 +153,33 @@ export const splitIntoRawSegments = (command: string): string[] => {
   let heredocPending = false; // operator seen on this line, delimiter not yet extracted
   let heredocDelimiter: string | null = null; // quote-stripped delimiter, body not yet started
   let heredocStripTabs = false; // `<<-`: the terminator line may be tab-indented
+  let heredocQuoted = false; // delimiter was quoted/escaped: the body never expands
   let inHeredocBody = false; // body lines are being collected
   let heredocBody = '';
+
+  /**
+   * Emit an accumulated heredoc body as the single quoted word downstream
+   * consumers analyze.
+   *
+   * A QUOTED delimiter (`<<'EOF'`, `<<"EOF"`, `<<\EOF`) disables expansion:
+   * Bash copies the body verbatim, so `$(rm -rf ~)` inside it is literal text
+   * that never runs. Re-attaching every body as a live double-quoted word lost
+   * that distinction — the substitution was read as executable and a harmless
+   * `cat <<'EOF'` blocked the command. For quoted delimiters the substitution
+   * sigils are marked with LITERAL_EXPANSION_MARKER, so the predicate
+   * machinery skips them exactly as it skips `'\$(…)'`; unquoted delimiters
+   * keep expanding and stay fully analyzed. Bodies that really ARE executable
+   * input (`bash <<'EOF'` + `rm -rf /`) contain no sigils, so marking changes
+   * nothing for them.
+   */
+  const heredocBodyWord = (body: string): string => {
+    const text = heredocQuoted
+      ? body
+          .replaceAll('$', (sigil) => LITERAL_EXPANSION_MARKER + sigil)
+          .replaceAll('`', (sigil) => LITERAL_EXPANSION_MARKER + sigil)
+      : body;
+    return ` "${text.replaceAll('"', '\\"')}"`;
+  };
 
   // Finalize a pending heredoc operator: everything after the last `<<` in
   // the segment text is the delimiter word. The operator marker and the
@@ -179,6 +204,7 @@ export const splitIntoRawSegments = (command: string): string[] => {
     let rest = current.slice(marker + 2);
     // `<<-` allows the body and terminator to be tab-indented.
     heredocStripTabs = false;
+    heredocQuoted = false;
     if (rest.trimStart().startsWith('-')) {
       heredocStripTabs = true;
       rest = rest.trimStart().slice(1);
@@ -225,6 +251,7 @@ export const splitIntoRawSegments = (command: string): string[] => {
       // `$EOF`, the real terminator line never matched, and the `rm -rf ~` below
       // the heredoc was read as `cat` stdin data.
       if (ch === '$' && rest[k + 1] === '"') {
+        heredocQuoted = true;
         wordQuote = '"';
         k += 2;
         continue;
@@ -235,17 +262,20 @@ export const splitIntoRawSegments = (command: string): string[] => {
       // the delimiter `$EOF`, the real terminator line never matched, and the
       // `rm -rf ~` below the heredoc was read as `cat` stdin data.
       if (ch === '$' && rest[k + 1] === "'") {
+        heredocQuoted = true;
         const decoded = decodeAnsiCQuoted(rest, k + 2);
         word += decoded.value;
         k = decoded.end;
         continue;
       }
       if (ch === '"' || ch === "'") {
+        heredocQuoted = true;
         wordQuote = ch;
         k++;
         continue;
       }
       if (ch === '\\' && k + 1 < rest.length) {
+        heredocQuoted = true;
         word += rest[k + 1];
         k += 2;
         continue;
@@ -282,9 +312,10 @@ export const splitIntoRawSegments = (command: string): string[] => {
         // just BEFORE this line's newline so the loop re-processes it as a
         // command separator — text after the heredoc (`EOF\nls`) starts a
         // new segment.
-        current += ` "${heredocBody.replaceAll('"', '\\"')}"`;
+        current += heredocBodyWord(heredocBody);
         heredocBody = '';
         heredocDelimiter = null;
+        heredocQuoted = false;
         inHeredocBody = false;
         i = lineEnd === -1 ? PREPARED.length : lineEnd - 1;
         continue;
@@ -511,7 +542,7 @@ export const splitIntoRawSegments = (command: string): string[] => {
   // pending operator (no body yet) is just stripped.
   finalizeHeredocOperator();
   if (inHeredocBody && heredocDelimiter !== null) {
-    current += ` "${heredocBody.replaceAll('"', '\\"')}"`;
+    current += heredocBodyWord(heredocBody);
   }
   parts.push(current);
   return parts.map((part) => part.trim()).filter((part) => part.length > 0);

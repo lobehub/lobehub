@@ -311,6 +311,13 @@ const substitutionPayloads = (word: string): string[] => {
  *  - reparsing `eval 'rm -rf' ~` argument by argument split the command from
  *    its target, so neither half looked dangerous on its own.
  */
+/**
+ * Long interpreter options that take their value as the NEXT word
+ * (`bash --rcfile FILE`, `bash --init-file FILE`). Long options written as
+ * `--opt=value` carry the operand inline and are skipped as a single word.
+ */
+const INTERPRETER_LONG_OPTIONS_WITH_VALUE = new Set(['--init-file', '--rcfile']);
+
 const interpreterPayloadWords = (segment: ShellSegment): string[] => {
   const words = segment.words;
   const payloads: string[] = [];
@@ -331,7 +338,11 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
       const option = words[cursor];
       if (option === '--' || !option.startsWith('-')) break;
       if (option.startsWith('--')) {
-        cursor++;
+        // Value-taking long options (`bash --rcfile FILE -c …`) keep their
+        // operand in the NEXT word. Skipping only the flag made the operand
+        // look like the end of the option list (`FILE` does not start with
+        // `-`), so the walk broke before `-c` and the payload stayed invisible.
+        cursor += INTERPRETER_LONG_OPTIONS_WITH_VALUE.has(option) ? 2 : 1;
         continue;
       }
       if (option.endsWith('c')) {
@@ -344,6 +355,17 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
         // Glued form `-c<source>`.
         payloads.push(option.slice(2));
         break;
+      }
+      // Value-taking short options: `-o option` (`bash --help`: `-o option`)
+      // and `-O shopt_option`, plus their combined spellings (`-eo pipefail`).
+      // The operand is an option NAME, not the next flag, so the walk must
+      // consume it — otherwise it stops at `posix` in
+      // `bash -o posix -c 'echo $(rm -rf ~)' rm; echo ~`, `-c` is never
+      // reached, and all three predicates return false although Bash runs the
+      // substitution in the child shell.
+      if (/o$/i.test(option)) {
+        cursor += 2;
+        continue;
       }
       cursor++;
     }

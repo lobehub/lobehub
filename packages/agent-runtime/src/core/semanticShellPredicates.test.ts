@@ -1202,4 +1202,50 @@ describe('matchSemanticShellPredicate', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
     });
   });
+
+  describe('twenty-third-round review: interpreter option operands and quoted heredocs', () => {
+    // `-o option` / `-O shopt` take their value from the NEXT word. Walking
+    // them as bare flags stopped at the operand (`posix`), so the `-c` payload
+    // was never reached even though Bash runs it in the child shell.
+    it.each([
+      ['rmRecursiveHomeTarget', "bash -o posix -c 'echo $(rm -rf ~)' rm; echo ~"],
+      ['rmRecursiveHomeTarget', "bash -o pipefail -ec 'echo $(rm -rf ~)'"],
+      ['rmRecursiveHomeTarget', "bash -O extglob -c 'echo $(rm -rf ~)'"],
+      ['rmRecursiveRootTarget', "bash -o posix -c 'echo $(rm -rf /)'"],
+      ['rmRecursiveHomeTarget', "bash --rcfile /tmp/rc -c 'echo $(rm -rf ~)'"],
+      ['rmRecursiveHomeTarget', "bash --init-file /tmp/rc -c 'echo $(rm -rf ~)'"],
+    ] as const)('consumes the option operand before -c (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each([
+      "bash -o posix -c 'echo hi'",
+      "bash -O extglob -c 'rm -rf /tmp/cache'",
+      "bash --rcfile /tmp/rc -c 'echo hi'",
+    ])('keeps a harmless payload behind an option operand inert: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+    });
+
+    // A QUOTED heredoc delimiter disables expansion, so the substitution in
+    // the body is literal stdin data and never runs.
+    it.each([
+      ["cat <<'EOF'\n$(rm -rf ~)\nEOF", 'rmRecursiveHomeTarget'],
+      ['cat <<"EOF"\n$(rm -rf ~)\nEOF', 'rmRecursiveHomeTarget'],
+      ['cat <<\\EOF\n$(rm -rf ~)\nEOF', 'rmRecursiveHomeTarget'],
+      ["cat <<'EOF'\n$(rm -rf /)\nEOF", 'rmRecursiveRootTarget'],
+      ["cat <<'EOF'\n`rm -rf ~`\nEOF", 'rmRecursiveHomeTarget'],
+    ] as const)('leaves an unexpanded heredoc body literal (%s): %s', (command, predicate) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(false);
+    });
+
+    it.each([
+      // Unquoted delimiter: the substitution still expands in the calling shell.
+      ['rmRecursiveHomeTarget', 'cat <<EOF\n$(rm -rf ~)\nEOF'],
+      // Quoted delimiter, but the body IS the child shell source.
+      ['rmRecursiveRootTarget', "bash <<'EOF'\nrm -rf /\nEOF"],
+      ['rmRecursiveHomeTarget', "sh <<'EOF'\nrm -rf ~\nEOF"],
+    ] as const)('still blocks executable heredoc input (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+  });
 });
