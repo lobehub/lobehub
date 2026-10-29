@@ -1881,6 +1881,8 @@ export default {
   'sharePage.error.unauthorized.subtitle': 'Please sign in to view this shared topic.',
   'sharePage.error.unauthorized.title': 'Sign In Required',
   'sharePage.file.download': 'Download',
+  'sharePage.file.noPreview.desc': 'Download it to open it on your device.',
+  'sharePage.file.noPreview.title': "This file can't be previewed here",
   'sharePage.menu.copyLink': 'Copy Link',
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',

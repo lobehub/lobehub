@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getFileLinkOpenAction, parseFileLinkHref } from './parse';
+import {
+  getFileLinkCopyHref,
+  getFileLinkOpenAction,
+  isShareVisitorContext,
+  parseFileLinkHref,
+} from './parse';
 
 const ORIGIN = 'https://app.lobehub.com';
 
@@ -165,5 +170,40 @@ describe('getFileLinkOpenAction', () => {
     expect(
       getFileLinkOpenAction({ ...link, isShareVisitor: true, label: 'Download the deck' }),
     ).toEqual({ kind: 'newTab', url: `${ORIGIN}/f/file_1` });
+  });
+});
+
+describe('isShareVisitorContext', () => {
+  it('treats the owner conversation as the owner', () => {
+    expect(isShareVisitorContext({})).toBe(false);
+  });
+
+  // Regression: a topic-share reader got the owner-scoped preview, which reads
+  // the visitor's empty file store and showed the file as unavailable.
+  it('treats agent-share and topic-share readers as visitors', () => {
+    expect(isShareVisitorContext({ agentShareId: 'share_1' })).toBe(true);
+    expect(isShareVisitorContext({ topicShareId: 'share_1' })).toBe(true);
+  });
+});
+
+describe('getFileLinkCopyHref', () => {
+  const link = {
+    linkHref: '/resource/file/file_1',
+    origin: ORIGIN,
+    proxyHref: '/f/file_1',
+  };
+
+  it('copies the link as written for the owner, made absolute', () => {
+    expect(getFileLinkCopyHref({ ...link, isShareVisitor: false })).toBe(
+      `${ORIGIN}/resource/file/file_1`,
+    );
+  });
+
+  it('copies the public proxy for a share visitor', () => {
+    expect(getFileLinkCopyHref({ ...link, isShareVisitor: true })).toBe(`${ORIGIN}/f/file_1`);
+  });
+
+  it('copies nothing without an address', () => {
+    expect(getFileLinkCopyHref({ isShareVisitor: false, origin: ORIGIN })).toBeUndefined();
   });
 });

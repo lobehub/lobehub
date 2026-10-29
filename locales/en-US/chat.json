@@ -2272,6 +2272,8 @@
   "sharePage.explain.failed": "Could not copy the prompt. Please try again.",
   "sharePage.explain.prompt": "Take a look at this conversation. Briefly tell me what it is about and what is worth noticing:\n{{url}}",
   "sharePage.file.download": "Download",
+  "sharePage.file.noPreview.desc": "Download it to open it on your device.",
+  "sharePage.file.noPreview.title": "This file can't be previewed here",
   "sharePage.menu.copyLink": "Copy Link",
   "sharePage.menu.goToLobeHub": "Go to LobeHub",
   "sharePage.menu.more": "More",

@@ -185,3 +185,39 @@ export const getFileLinkOpenAction = ({
 
   return { kind: 'preview', params: { fileId, source: { name: label.trim(), url: proxyHref } } };
 };
+
+/**
+ * Whether the conversation is read through a share page (agent or topic
+ * share). Its reader does not own the creator's files: the owner-scoped file
+ * store holds none of them (and is an empty stub during share SSR).
+ */
+export const isShareVisitorContext = (context: {
+  agentShareId?: string | null;
+  topicShareId?: string | null;
+}): boolean => !!context.agentShareId || !!context.topicShareId;
+
+/**
+ * The address the copy button hands out: the link as written for the owner,
+ * the public proxy for a share visitor (the Docs page is the owner's scope).
+ * Root-relative addresses resolve against `origin`.
+ */
+export const getFileLinkCopyHref = ({
+  isShareVisitor,
+  linkHref,
+  origin,
+  proxyHref,
+}: {
+  isShareVisitor: boolean;
+  linkHref?: string;
+  origin: string;
+  proxyHref?: string;
+}): string | undefined => {
+  const href = isShareVisitor ? (proxyHref ?? linkHref) : linkHref;
+  if (!href) return undefined;
+
+  try {
+    return new URL(href, origin).toString();
+  } catch {
+    return undefined;
+  }
+};

@@ -2272,6 +2272,8 @@
   "sharePage.explain.failed": "复制失败，请重试",
   "sharePage.explain.prompt": "帮我看看这段对话，简单说说它在聊什么，有哪些值得注意的内容：\n{{url}}",
   "sharePage.file.download": "下载",
+  "sharePage.file.noPreview.desc": "下载后在你的设备上打开。",
+  "sharePage.file.noPreview.title": "此文件无法在线预览",
   "sharePage.menu.copyLink": "复制链接",
   "sharePage.menu.goToLobeHub": "前往 LobeHub",
   "sharePage.menu.more": "更多",
