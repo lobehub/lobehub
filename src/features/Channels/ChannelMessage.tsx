@@ -71,7 +71,6 @@ export const ChannelMessage = ({
       <ChatItem
         showAvatar
         showTitle
-        agentId={message.author.type === 'agent' ? message.author.id : undefined}
         avatarProps={{ size: 36 }}
         belowMessage={isRequest ? <MessageRoutingStatus message={message} /> : undefined}
         gap={4}
@@ -91,6 +90,9 @@ export const ChannelMessage = ({
               {t('openThread')}
             </Button>
           ) : undefined
+        }
+        agentId={
+          message.author.type === 'agent' && !message.author.deleted ? message.author.id : undefined
         }
         avatar={{
           avatar: authorAvatar(message.author),
@@ -112,7 +114,11 @@ export const ChannelMessage = ({
           </CollapsibleContent>
         }
         titleAddon={
-          isRequest ? <MessageFailureMark detail={detail} message={message} /> : undefined
+          isRequest ? (
+            <MessageFailureMark detail={detail} message={message} />
+          ) : message.author.deleted ? (
+            <span {...stylex.props(styles.muted)}>{t('members.agentDeleted')}</span>
+          ) : undefined
         }
       />
       {canBranch && (

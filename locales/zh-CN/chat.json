@@ -230,7 +230,7 @@
   "confirmRemoveChatGroupItemAlert": "确认删除该群组吗？群组专有助理将会被同样删除，外部助理不受影响",
   "confirmRemoveGroupItemAlert": "确认删除该分类吗？分类内的助理会移回默认列表",
   "confirmRemoveGroupSuccess": "群组已删除",
-  "confirmRemoveSessionItemAlert": "即将删除此助手及其话题。它们会移入回收站，30 天内可以恢复。",
+  "confirmRemoveSessionItemAlert": "此 Agent 及其话题将移入回收站，30 天内可恢复。它在频道中的成员资格会停用，未完成的回复任务会停止，频道历史消息会保留。恢复 Agent 后，需要重新邀请它加入频道。",
   "confirmRemoveSessionSuccess": "助理已删除",
   "connectAgent.create.back": "上一步",
   "connectAgent.create.connect": "接入",

@@ -1,7 +1,7 @@
 import type { ChannelPublicMember } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { getVisibleStatusMembers } from './visibleMembers';
+import { getFormerAgentMembers, getVisibleStatusMembers } from './visibleMembers';
 
 const member = (
   id: string,
@@ -47,5 +47,19 @@ describe('Channel header member visibility', () => {
   it('handles an empty member list in either scope', () => {
     expect(getVisibleStatusMembers([], null)).toEqual([]);
     expect(getVisibleStatusMembers([], 'workspace-1')).toEqual([]);
+  });
+
+  it('does not count a deleted Agent even in a stale active membership projection', () => {
+    expect(getVisibleStatusMembers([{ ...agent, agentDeleted: true }], 'workspace-1')).toEqual([]);
+  });
+
+  it('keeps deleted identities in the former roster and removes duplicate rows when re-invited', () => {
+    const deleted = { ...agent, agentDeleted: true, status: 'removed' as const };
+    expect(getFormerAgentMembers([owner, deleted])).toEqual([deleted]);
+    expect(getFormerAgentMembers([deleted, { ...agent, id: 'rejoined' }])).toEqual([]);
+    const deletedAgain = { ...deleted, id: 'rejoined' };
+    expect(getFormerAgentMembers([deleted, deletedAgain])).toEqual([deletedAgain]);
+    const purged = { ...deleted, agentId: null };
+    expect(getFormerAgentMembers([purged])).toEqual([purged]);
   });
 });

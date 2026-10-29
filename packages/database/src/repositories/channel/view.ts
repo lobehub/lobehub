@@ -1,3 +1,4 @@
+import type { ChannelMemberStatus } from '@lobechat/types';
 import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import {
@@ -19,8 +20,10 @@ import { ChannelError } from './error';
 const publicMessageColumns = {
   ...getTableColumns(channelMessages),
   senderAgentAvatar: agents.avatar,
+  senderAgentDeleted: agents.isDeleted,
   senderAgentName: agents.name,
   senderAgentTitle: agents.title,
+  senderMemberName: channelMembers.name,
   senderUserAvatar: users.avatar,
   senderUserName: users.fullName,
   senderUsername: users.username,
@@ -28,8 +31,10 @@ const publicMessageColumns = {
 
 type MessageRow = typeof channelMessages.$inferSelect & {
   senderAgentAvatar: string | null;
+  senderAgentDeleted: boolean | null;
   senderAgentName: string | null;
   senderAgentTitle: string | null;
+  senderMemberName: string | null;
   senderUserAvatar: string | null;
   senderUserName: string | null;
   senderUsername: string | null;
@@ -38,8 +43,10 @@ type MessageRow = typeof channelMessages.$inferSelect & {
 const publicMessage = (row: MessageRow, fileIds: string[]) => {
   const {
     senderAgentAvatar,
+    senderAgentDeleted,
     senderAgentName,
     senderAgentTitle,
+    senderMemberName,
     senderUserAvatar,
     senderUserName,
     senderUsername,
@@ -51,8 +58,11 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
     fileIds,
     author: {
       avatar: isAgent ? senderAgentAvatar : senderUserAvatar,
+      deleted: isAgent && (!!senderAgentDeleted || !message.agentId),
       id: isAgent ? message.agentId : message.userId,
-      name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
+      name: isAgent
+        ? senderAgentName || senderAgentTitle || senderMemberName
+        : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
   };
@@ -69,13 +79,16 @@ export const readChannelView = async (
     tx
       .select({
         actorType: channelMembers.actorType,
+        agentDeleted: sql<boolean>`${channelMembers.actorType} = 'agent' AND (${agents.id} IS NULL OR ${agents.isDeleted} IS TRUE)`,
         agentId: channelMembers.agentId,
         avatar: agents.avatar,
         description: channelMembers.description,
         id: channelMembers.id,
         name: channelMembers.name,
         role: channelMembers.role,
-        status: channelMembers.status,
+        status: sql<ChannelMemberStatus>`CASE WHEN ${channelMembers.actorType} = 'agent'
+          AND (${agents.id} IS NULL OR ${agents.isDeleted} IS TRUE)
+          THEN 'removed' ELSE ${channelMembers.status} END`,
         userId: channelMembers.userId,
         userName: users.fullName,
         username: users.username,
@@ -93,6 +106,8 @@ export const readChannelView = async (
       .from(channelMessages)
       .leftJoin(users, eq(users.id, channelMessages.userId))
       .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+      .leftJoin(channelJobs, eq(channelJobs.publishedMessageId, channelMessages.id))
+      .leftJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
       .where(
         and(
           eq(channelMessages.channelId, channelId),
@@ -148,6 +163,8 @@ export const readChannelView = async (
         .from(channelMessages)
         .leftJoin(users, eq(users.id, channelMessages.userId))
         .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+        .leftJoin(channelJobs, eq(channelJobs.publishedMessageId, channelMessages.id))
+        .leftJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
         .where(
           and(
             eq(channelMessages.channelId, channelId),
@@ -216,11 +233,13 @@ export const createChannelThread = async (
       ? await tx
           .select({ id: channelMembers.id })
           .from(channelMembers)
+          .innerJoin(agents, eq(agents.id, channelMembers.agentId))
           .where(
             and(
               eq(channelMembers.channelId, channelId),
               eq(channelMembers.status, 'active'),
               inArray(channelMembers.id, root.recipientMemberIds),
+              notTrashed(agents.isDeleted),
             ),
           )
       : [];
@@ -230,12 +249,14 @@ export const createChannelThread = async (
     ? await tx
         .select({ id: channelMembers.id })
         .from(channelMembers)
+        .innerJoin(agents, eq(agents.id, channelMembers.agentId))
         .where(
           and(
             eq(channelMembers.channelId, channelId),
             eq(channelMembers.agentId, root.agentId),
             eq(channelMembers.actorType, 'agent'),
             eq(channelMembers.status, 'active'),
+            notTrashed(agents.isDeleted),
           ),
         )
     : [];

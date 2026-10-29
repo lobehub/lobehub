@@ -18,8 +18,8 @@ export function $insertChannelMentionBoundary(event: KeyboardEvent): boolean {
 }
 
 /** Only editor-created member chips select recipients; plain text and code never do. */
-export function channelMentionIds(document: unknown, memberIds: string[]): string[] {
-  const allowed = new Set(memberIds);
+export function channelMentionIds(document: unknown, memberIds?: string[]): string[] {
+  const allowed = memberIds && new Set(memberIds);
   const result = new Set<string>();
   const visit = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -34,7 +34,7 @@ export function channelMentionIds(document: unknown, memberIds: string[]): strin
       node.type === 'mention' &&
       metadata?.type === 'channel-member' &&
       typeof metadata.id === 'string' &&
-      allowed.has(metadata.id)
+      (!allowed || allowed.has(metadata.id))
     )
       result.add(metadata.id);
     if (node.root) visit(node.root);

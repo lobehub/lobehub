@@ -14,6 +14,7 @@ import {
   channelMessages,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
 import { claimJob } from './claim';
 import { appendMessage } from './delivery';
@@ -297,7 +298,7 @@ export class ChannelExecutionRepository {
       const [sender] = await tx
         .select({ id: agents.id })
         .from(agents)
-        .where(eq(agents.id, job.manifest!.self.agentId))
+        .where(and(eq(agents.id, job.manifest!.self.agentId), notTrashed(agents.isDeleted)))
         .for('share');
       if (!sender) throw new ChannelError('CONFLICT', 'The replying Agent was deleted');
 

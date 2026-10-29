@@ -226,6 +226,8 @@ export interface ChannelListItem {
 
 export interface ChannelPublicMember {
   actorType: ChannelMemberActorType;
+  /** Retained historical identity; never selectable or navigable as a live Agent. */
+  agentDeleted?: boolean;
   agentId: string | null;
   avatar: string | null;
   description: string | null;
@@ -244,6 +246,7 @@ export interface ChannelPublicMessage {
   agentId: string | null;
   author: {
     avatar: string | null;
+    deleted?: boolean;
     id: string | null;
     name: string | null;
     type: ChannelMemberActorType;

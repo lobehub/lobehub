@@ -43,6 +43,7 @@ import type {
   RuntimeEnvConfig,
 } from '@/types/agent';
 import { merge } from '@/utils/merge';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import type { AgentStore } from '../../store';
 import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
@@ -186,8 +187,16 @@ export class AgentSliceActionImpl {
     this.#get = get;
     this.#config = createReplicaSlice(agentConfigResource, {
       actionPrefix: 'agentConfig',
-      fetcher: async ({ agentId }) =>
-        (await agentService.getAgentConfigById(agentId)) as LobeAgentConfig | null,
+      fetcher: async ({ agentId }) => {
+        try {
+          return (await agentService.getAgentConfigById(agentId)) as LobeAgentConfig | null;
+        } catch (error) {
+          // Identity resolution returns NOT_FOUND before the config endpoint can
+          // return null. Both are terminal absence, not a retryable loading error.
+          if (isTrpcErrorCode(error, 'NOT_FOUND')) return null;
+          throw error;
+        }
+      },
       get,
       // A successful fetch that resolves to null means the agent doesn't
       // exist or the caller lost access (e.g. a workspace agent switched back
@@ -707,6 +716,9 @@ export class AgentSliceActionImpl {
     // before must not repaint the agent next to the 404 content area.
     this.#config.remove(agentId);
   };
+
+  /** Evict a confirmed deletion before another route can paint the cached chat composer. */
+  markAgentDeleted = (agentId: string) => this.#markAgentNotFound(agentId);
 
   #clearAgentNotFound = (agentId: string) => {
     if (!this.#get().agentNotFoundMap[agentId]) return;

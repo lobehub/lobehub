@@ -129,6 +129,9 @@ export class AgentListActionImpl {
     await this.#agentList.fetch(LIST_PARAMS, { fresh: true });
   };
 
+  /** Apply a confirmed deletion to every sidebar bucket before refreshing. */
+  removeAgentFromList = (id: string): void => this.#agents.remove(id);
+
   /** Rename / re-avatar an agent: the sidebar row changes now, rolls back on failure. */
   updateAgentMeta = async (id: string, patch: SidebarAgentMetaPatch): Promise<void> => {
     await this.#agents.optimistic(

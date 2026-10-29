@@ -8,6 +8,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { ChannelStatus } from './ChannelStatus';
+import { FormerMembers } from './FormerMembers';
 import type { ChannelStatusTone } from './jobStatus';
 import { channelJobStatus, channelJobTone, memberCurrentJob } from './jobStatus';
 import { MemberAvatar } from './MemberAvatar';
@@ -101,6 +102,7 @@ export function MemberList({ detail, onAction }: { detail: ChannelDetail; onActi
           )}
         </Flexbox>
       ))}
+      <FormerMembers detail={detail} onAction={onAction} />
     </Flexbox>
   );
 }

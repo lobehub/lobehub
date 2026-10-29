@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, or, sql } from 'drizzle-orm';
 
 import type {
   ChannelMemberItem,
@@ -7,6 +7,7 @@ import type {
   NewChannelMessage,
 } from '../../schemas';
 import {
+  agents,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -56,13 +57,18 @@ export const activeMembers = async (
   if (!unique.length) return [];
 
   const members = await tx
-    .select()
+    .select(getTableColumns(channelMembers))
     .from(channelMembers)
+    .leftJoin(agents, eq(agents.id, channelMembers.agentId))
     .where(
       and(
         eq(channelMembers.channelId, channelId),
         eq(channelMembers.status, 'active'),
         inArray(channelMembers.id, unique),
+        or(
+          eq(channelMembers.actorType, 'user'),
+          and(sql`${agents.id} IS NOT NULL`, notTrashed(agents.isDeleted)),
+        ),
       ),
     );
   if (members.length !== unique.length)
@@ -80,18 +86,20 @@ export const candidateAgents = async (
   channelId: string,
   thread: ChannelThreadItem | null,
 ): Promise<ChannelMemberItem[]> => {
-  const agents = await tx
-    .select()
+  const members = await tx
+    .select(getTableColumns(channelMembers))
     .from(channelMembers)
+    .innerJoin(agents, eq(agents.id, channelMembers.agentId))
     .where(
       and(
         eq(channelMembers.channelId, channelId),
         eq(channelMembers.actorType, 'agent'),
         eq(channelMembers.status, 'active'),
+        notTrashed(agents.isDeleted),
       ),
     );
 
-  return thread ? agents.filter((agent) => thread.followerMemberIds.includes(agent.id)) : agents;
+  return thread ? members.filter((agent) => thread.followerMemberIds.includes(agent.id)) : members;
 };
 
 /**

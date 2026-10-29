@@ -6,6 +6,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { SessionModel } from '@/database/models/session';
 import { TopicModel } from '@/database/models/topic';
 import { TrashModel } from '@/database/models/trash';
+import { AgentDeletionRepository } from '@/database/repositories/agentDeletion';
 import type { AgentItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
@@ -44,7 +45,7 @@ export const softDeleteAgent = async (
   ctx: TrashHandlerContext,
   agentId: string,
   options: SoftDeleteOptions,
-): Promise<TrashCascade | null> => {
+): Promise<(TrashCascade & { channelIds: string[] }) | null> => {
   const agentModel = new AgentModel(ctx.db, ctx.userId, ctx.workspaceId);
   const topicModel = new TopicModel(ctx.db, ctx.userId, ctx.workspaceId);
 
@@ -54,6 +55,12 @@ export const softDeleteAgent = async (
 
   const [agent] = await agentModel.softDelete([agentId], options);
   if (!agent) return null;
+
+  const channelIds = await new AgentDeletionRepository(
+    ctx.db,
+    ctx.userId,
+    ctx.workspaceId,
+  ).retireChannelMemberships(agentId);
 
   // Legacy session shells are not stamped (the agent is the restorable unit
   // and the list hides them through the agent join); their topics are.
@@ -72,6 +79,7 @@ export const softDeleteAgent = async (
   ).softDeleteTopicless({ agentIds: [agentId], sessionIds }, { deletedAt: options.deletedAt });
 
   return {
+    channelIds,
     children: [
       ...topics.map((topic) => topicEntry(topic)),
       ...topiclessMessages.map((message) => ({

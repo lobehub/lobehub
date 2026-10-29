@@ -1,5 +1,5 @@
 import type { ChannelDetail } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Popover, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
@@ -11,6 +11,7 @@ import { openInviteMembers } from './CreateChannel';
 import { FailureIndicator } from './FailureIndicator';
 import { MemberList, StatusAvatar, useMemberEntries } from './MemberList';
 import { statusStyles, styles } from './styles';
+import { isActiveChannelMember } from './visibleMembers';
 
 /** Header avatars before the rest fold into a count; the list shows everyone. */
 const MAX_VISIBLE = 5;
@@ -71,6 +72,7 @@ export function MemberStatus({
             type="text"
             {...stylex.props(statusStyles.memberButton)}
           >
+            {entries.length === 0 && <Icon icon={Users} size={16} />}
             {entries.slice(0, MAX_VISIBLE).map((entry) => (
               <StatusAvatar entry={entry} key={entry.member.id} size={24} />
             ))}
@@ -87,7 +89,7 @@ export function MemberStatus({
           onClick={() =>
             openInviteMembers({
               agentIds: allMembers.flatMap((member) =>
-                member.status === 'active' && member.agentId ? [member.agentId] : [],
+                isActiveChannelMember(member) && member.agentId ? [member.agentId] : [],
               ),
               id: channel.id,
               workspaceId: channel.workspaceId,

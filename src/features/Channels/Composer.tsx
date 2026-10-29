@@ -88,11 +88,15 @@ export function Composer({
     const value = String(editor.getDocument('markdown') || '').trim();
     const fileIds = attachments.readyFileIds();
     if (sending.current || !fileIds || (!value && !fileIds.length)) return;
+    const mentions = channelMentionIds(editor.getDocument('json'));
+    if (mentions.some((id) => !memberIds.includes(id))) {
+      setError(t('recipientUnavailable'));
+      return;
+    }
     sending.current = true;
     setBusy(true);
     setError('');
     const sentRevision = draft.snapshot();
-    const mentions = channelMentionIds(editor.getDocument('json'), memberIds);
     const requestKey = requests.get(`${cacheScope.get()}:${draftKey}`, {
       content: value,
       fileIds,

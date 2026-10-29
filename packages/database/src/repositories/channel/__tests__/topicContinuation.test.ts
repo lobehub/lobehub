@@ -175,13 +175,14 @@ describe('Channel topic continuation', () => {
     expect(await state.input(next.job.id)).toEqual(['Request 2']);
   });
 
-  it('blocks a deleted Agent reference while retaining the public request', async () => {
+  it('cancels a deleted Agent reference while retaining the public request', async () => {
     const state = await setup();
     const job = await state.send();
     await db.delete(agents).where(eq(agents.id, state.agent.agentId!));
     expect(await state.claim(job.id)).toBeNull();
     expect((await jobsOf(db, job.messageId))[0]).toMatchObject({
-      blockedCode: 'unavailable',
+      blockedCode: null,
+      status: 'cancelled',
       topicId: null,
     });
   });
