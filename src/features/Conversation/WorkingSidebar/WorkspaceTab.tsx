@@ -10,13 +10,18 @@ import { PinIcon, XIcon } from 'lucide-react';
 import { memo, type MouseEvent, type ReactNode } from 'react';
 
 /**
- * Room the trailing close button / pin badge needs at the tab's end. Pinned tabs
- * always reserve it for the badge; the active tab instead overlays its close
- * button there and truncates the label under it, browser-style, so selecting a
- * tab never changes its width and unselected tabs carry no empty gap.
+ * Room the trailing pin badge needs at the tab's end. Pinned tabs always reserve
+ * it; the active tab instead overlays its close button on the label's tail and
+ * fades the text out under it, browser-style, so selecting a tab never changes
+ * its width and unselected tabs carry no empty gap.
  */
 const TRAILING_SLOT = 24;
 const TAB_PADDING = 8;
+const CLOSE_INSET = 4;
+const CLOSE_SIZE = 16;
+/** Label tail covered by the close button, measured from the label's end edge. */
+const LABEL_UNDER_CLOSE = CLOSE_INSET + CLOSE_SIZE - TAB_PADDING;
+const LABEL_FADE = 8;
 
 const fadeIn = keyframes`
   from {
@@ -34,14 +39,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-end: 4px;
+    inset-inline-end: ${CLOSE_INSET}px;
     transform: translateY(-50%);
 
     display: grid;
     place-items: center;
 
-    width: 16px;
-    height: 16px;
+    width: ${CLOSE_SIZE}px;
+    height: ${CLOSE_SIZE}px;
     padding: 0;
     border: none;
     border-radius: 4px;
@@ -100,40 +105,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
   `,
   label: css`
-    /* a hidden copy of the label (data-label) shares the grid cell with the
-       visible text: the cell keeps the full label's width, and only the visible
-       copy shrinks under the close button */
-    display: grid;
-
-    &[data-label]::before {
-      content: attr(data-label);
-
-      overflow: hidden;
-      grid-area: 1 / 1;
-
-      min-width: 24px;
-      max-width: 160px;
-
-      visibility: hidden;
-    }
-
-    /* the visible copy contributes no width of its own, so the cell is sized by
-       the hidden one; non-string labels have no hidden copy and size normally */
-    &[data-label] > * {
-      contain: inline-size;
-    }
-  `,
-  labelText: css`
     overflow: hidden;
-    grid-area: 1 / 1;
-
-    min-width: 0;
+    min-width: 24px;
     max-width: 160px;
-
     text-overflow: ellipsis;
   `,
-  labelTextBehindClose: css`
-    padding-inline-end: ${TRAILING_SLOT - TAB_PADDING}px;
+  labelUnderClose: css`
+    /* no ellipsis: the text runs on under the close button and fades out
+       before it, so the glyph never collides with a trailing "…" */
+    text-overflow: clip;
+
+    mask-image: linear-gradient(
+      to left,
+      transparent ${LABEL_UNDER_CLOSE}px,
+      black ${LABEL_UNDER_CLOSE + LABEL_FADE}px
+    );
+
+    &:dir(rtl) {
+      mask-image: linear-gradient(
+        to right,
+        transparent ${LABEL_UNDER_CLOSE}px,
+        black ${LABEL_UNDER_CLOSE + LABEL_FADE}px
+      );
+    }
   `,
   tab: css`
     cursor: pointer;
@@ -231,15 +225,8 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
         >
           <span className={styles.trigger}>
             <span className={styles.icon}>{iconNode ?? <Icon icon={icon} size={14} />}</span>
-            <span
-              className={styles.label}
-              data-label={typeof label === 'string' ? label : undefined}
-            >
-              <span
-                className={`${styles.labelText} ${showClose ? styles.labelTextBehindClose : ''}`}
-              >
-                {label}
-              </span>
+            <span className={`${styles.label} ${showClose ? styles.labelUnderClose : ''}`}>
+              {label}
             </span>
           </span>
         </button>
