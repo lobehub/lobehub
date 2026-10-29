@@ -1,37 +1,72 @@
-import { type ContextMenuItem, ContextMenuTrigger, Icon, type IconProps } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  type ContextMenuItem,
+  ContextMenuTrigger,
+  createStaticStyles,
+  Icon,
+  type IconProps,
+  keyframes,
+} from '@lobehub/ui';
 import { PinIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type MouseEvent, type ReactNode } from 'react';
+
+/**
+ * Every tab has the same fixed width so hovering or selecting one never shifts
+ * its neighbours. Sized to fit the longest built-in CJK label (three characters,
+ * e.g. 浏览器); longer labels — English ones, browser page titles — fall back to
+ * an ellipsis with the full text in `title`.
+ */
+const TAB_WIDTH = 88;
+/**
+ * Trailing slot reserved on every tab, whatever its state. The close button
+ * (active tab only) and the pin badge are absolutely positioned inside it, so
+ * the label never moves or shrinks when they appear.
+ */
+const TRAILING_SLOT = 24;
+
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+`;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   close: css`
-    pointer-events: none;
     cursor: pointer;
 
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-start: 7px;
+    inset-inline-end: 4px;
     transform: translateY(-50%);
 
     display: grid;
     place-items: center;
 
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     padding: 0;
     border: none;
     border-radius: 4px;
 
     color: ${cssVar.colorTextTertiary};
 
-    opacity: 0;
     background: transparent;
 
-    transition: opacity 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
+    animation: ${fadeIn} 0.15s ease-out;
 
     &:hover {
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
     }
   `,
   container: css`
@@ -41,37 +76,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
     align-items: center;
 
+    width: ${TAB_WIDTH}px;
     border-radius: 6px;
 
     transition: background 0.15s;
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
-    }
-
-    /* the close button takes over the leading icon's slot instead of reserving
-       its own trailing space; while hidden it must not swallow taps on the icon */
-    &:hover [data-tab-close],
-    & [data-tab-close]:focus-visible {
-      pointer-events: auto;
-      opacity: 1;
-    }
-
-    /* keyboard focus on the select button keeps the icon, so the visible glyph
-       always matches the action Enter/Space would run */
-    &:hover [data-tab-icon],
-    &:has([data-tab-close]:focus-visible) [data-tab-icon] {
-      opacity: 0;
-    }
-
-    /* keyboard focus on the select button outranks hover */
-    &:has([data-tab-key]:focus-visible) [data-tab-icon] {
-      opacity: 1;
-    }
-
-    &:has([data-tab-key]:focus-visible) [data-tab-close] {
-      pointer-events: none;
-      opacity: 0;
     }
   `,
   containerActive: css`
@@ -82,7 +93,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-end: 8px;
+    inset-inline-end: 6px;
     transform: translateY(-50%);
 
     display: grid;
@@ -92,18 +103,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   icon: css`
     display: flex;
-    transition: opacity 0.15s;
+    flex-shrink: 0;
   `,
   label: css`
     overflow: hidden;
-    max-width: 160px;
+    min-width: 0;
     text-overflow: ellipsis;
   `,
   tab: css`
     cursor: pointer;
 
+    width: 100%;
+    min-width: 0;
     padding-block: 4px;
-    padding-inline: 10px;
+    padding-inline: 8px ${TRAILING_SLOT}px;
     border: none;
     border-radius: 6px;
 
@@ -125,13 +138,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
     }
   `,
-  tabPinned: css`
-    padding-inline-end: 30px;
-  `,
   trigger: css`
     display: flex;
     gap: 4px;
     align-items: center;
+    min-width: 0;
   `,
 }));
 
@@ -163,22 +174,37 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
     pinnedLabel,
     tabKey,
   }) => {
+    const closable = !pinned && !!onClose;
+
+    // Middle click closes any closable tab — a shortcut on top of the active
+    // tab's close button and the context menu, never the only way to close.
+    const handleMouseDown = (e: MouseEvent) => {
+      // keep the browser from entering autoscroll mode on middle press
+      if (closable && e.button === 1) e.preventDefault();
+    };
+    const handleAuxClick = (e: MouseEvent) => {
+      if (!closable || e.button !== 1) return;
+      e.preventDefault();
+      onClose?.();
+    };
+
     const content = (
       <div
         className={`${styles.container} ${active ? styles.containerActive : ''}`}
         data-pinned={pinned ? 'true' : undefined}
+        onAuxClick={handleAuxClick}
+        onMouseDown={handleMouseDown}
       >
         <button
           aria-pressed={active}
-          className={`${styles.tab} ${pinned ? styles.tabPinned : ''}`}
+          className={styles.tab}
           data-tab-key={tabKey}
+          title={typeof label === 'string' ? label : undefined}
           type="button"
           onClick={onSelect}
         >
           <span className={styles.trigger}>
-            <span className={styles.icon} data-tab-icon={onClose && !pinned ? '' : undefined}>
-              {iconNode ?? <Icon icon={icon} size={14} />}
-            </span>
+            <span className={styles.icon}>{iconNode ?? <Icon icon={icon} size={14} />}</span>
             <span className={styles.label}>{label}</span>
           </span>
         </button>
@@ -186,7 +212,9 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
           <span aria-label={pinnedLabel} className={styles.pinned} role="img">
             <Icon icon={PinIcon} size={12} />
           </span>
-        ) : onClose ? (
+        ) : closable && active ? (
+          // Only the selected tab exposes a close button, so dense strips of
+          // short labels never fill up with close targets.
           <button
             data-tab-close
             aria-label={closeLabel}
