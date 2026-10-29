@@ -9,7 +9,8 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Alert, Button, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { CircleAlert } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -92,7 +93,11 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
   return (
     <Flexbox gap={8}>
-      {form.submissionFailed && <Alert title={t('askUserQuestion.submitFailed')} type="error" />}
+      {form.submissionFailed && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
+      )}
       {(form.submissionFailed || resolving || submissionPhase === 'uncertain') && (
         <Flexbox gap={8}>
           <Text role="status">{t('askUserQuestion.uncertain')}</Text>

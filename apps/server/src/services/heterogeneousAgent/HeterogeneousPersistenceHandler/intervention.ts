@@ -206,7 +206,8 @@ export async function applyToolIntervention(
         `Unsafe heterogeneous intervention review payload toolCallId=${intent.toolCallId}`,
       );
     }
-    const assistantMessageId = state.main.currentAssistantId;
+    const toolMessage = await deps.messageModel.findById(toolMsgId);
+    const assistantMessageId = toolMessage?.parentId ?? state.main.currentAssistantId;
     if (!assistantMessageId) {
       throw new Error(
         `Missing assistant owner for heterogeneous intervention toolCallId=${intent.toolCallId}`,
@@ -249,6 +250,7 @@ export async function applyToolIntervention(
         agentId: state.agentId ?? undefined,
         assistantMessageId,
         operationId: state.operationId,
+        ...(toolMessage?.threadId && { scope: 'thread' as const, threadId: toolMessage.threadId }),
         topicId: state.topicId,
         workspaceId: deps.workspaceId,
       },

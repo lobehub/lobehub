@@ -311,6 +311,7 @@ export class HeterogeneousPersistenceHandler {
     return {
       agentId: state.agentId,
       newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
+      toolMessageIds: state.toolMsgIdByCallId,
       topicId: state.topicId,
     };
   }

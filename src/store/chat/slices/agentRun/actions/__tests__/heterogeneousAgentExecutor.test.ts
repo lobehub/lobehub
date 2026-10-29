@@ -1092,97 +1092,97 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
     });
 
-    it('materializes an early question and closes it when the upstream tool returns', async () => {
-      const optimisticUpdateMessagePlugin = vi.fn(async () => {});
-      const updateTopicStatus = vi.fn(async () => {});
-      const store = createMockStore({
-        optimisticUpdateMessagePlugin,
-        updateTopicStatus,
-      });
-      const get = vi.fn(() => store);
-
-      let resolveSendPrompt!: () => void;
-      mockSendPrompt.mockReturnValue(
-        new Promise<void>((resolve) => {
-          resolveSendPrompt = resolve;
-        }),
-      );
-
-      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
-      await flush();
-
-      ipc.emitRawLine('ipc-sess-1', ccInit());
-      ipc.emitStreamEvent('ipc-sess-1', {
-        data: {
-          apiName: 'askUserQuestion',
-          arguments: JSON.stringify({
-            questions: [
-              {
-                header: 'Scope',
-                options: [
-                  { description: 'Keep it narrow', label: 'Small' },
-                  { description: 'Do all of it', label: 'All' },
-                ],
-                question: 'How much should I do?',
-              },
-            ],
+    it.each([false, true])(
+      'keeps question ownership and closes its upstream tool (subagent=%s)',
+      async (subagent) => {
+        const optimisticUpdateMessagePlugin = vi.fn(async () => {});
+        const store = createMockStore({
+          optimisticUpdateMessagePlugin,
+          updateTopicStatus: vi.fn(),
+        });
+        let resolveSendPrompt!: () => void;
+        mockSendPrompt.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolveSendPrompt = resolve;
           }),
-          deadline: Date.now() + 300_000,
-          identifier: 'claude-code',
-          toolCallId: 'toolu_ask',
-        },
-        type: 'agent_intervention_request',
-      });
-      await flush();
-
-      expect(optimisticUpdateMessagePlugin).toHaveBeenCalled();
-
-      ipc.emitRawLine(
-        'ipc-sess-1',
-        ccToolUse('msg_ask', 'toolu_ask', 'mcp__lobe_cc__ask_user_question', {
+        );
+        const executorPromise = executeHeterogeneousAgent(() => store, defaultParams);
+        await flush();
+        ipc.emitRawLine('ipc-sess-1', ccInit());
+        const args = {
           questions: [
             {
               header: 'Scope',
-              options: [
-                { description: 'Keep it narrow', label: 'Small' },
-                { description: 'Do all of it', label: 'All' },
-              ],
+              options: [{ label: 'Small' }, { label: 'All' }],
               question: 'How much should I do?',
             },
           ],
-        }),
-      );
-      await flush();
-
-      const toolCreateIndex = mockCreateMessage.mock.calls.findIndex(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'toolu_ask',
-      );
-      expect(toolCreateIndex).toBeGreaterThanOrEqual(0);
-      expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        mockCreateMessage.mock.calls[toolCreateIndex][0].id,
-        { intervention: { status: 'pending' } },
-        { operationId: 'op-1' },
-      );
-      expect(mockCreateMessage.mock.invocationCallOrder[toolCreateIndex]).toBeLessThan(
-        optimisticUpdateMessagePlugin.mock.invocationCallOrder[0],
-      );
-      expect(updateTopicStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
-      );
-
-      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
-      await flush();
-      expect(optimisticUpdateMessagePlugin).toHaveBeenLastCalledWith(
-        expect.any(String),
-        { intervention: expect.objectContaining({ status: 'aborted' }) },
-        { operationId: 'op-1' },
-      );
-      ipc.emitRawLine('ipc-sess-1', ccResult());
-      ipc.emitComplete('ipc-sess-1');
-      await flush();
-      resolveSendPrompt();
-      await executorPromise;
-    });
+        };
+        const child = { parentToolCallId: 'task-parent', subagentMessageId: 'child-turn' };
+        if (subagent) {
+          ipc.emitStreamEvent('ipc-sess-1', {
+            data: {
+              chunkType: 'tools_calling',
+              subagent: child,
+              toolsCalling: [
+                {
+                  apiName: 'askUserQuestion',
+                  arguments: JSON.stringify(args),
+                  id: 'toolu_ask',
+                  identifier: 'claude-code',
+                  type: 'default',
+                },
+              ],
+            },
+            type: 'stream_chunk',
+          });
+          await flush();
+        }
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: {
+            apiName: 'askUserQuestion',
+            arguments: JSON.stringify(args),
+            deadline: Date.now() + 300_000,
+            identifier: 'claude-code',
+            toolCallId: 'toolu_ask',
+          },
+          type: 'agent_intervention_request',
+        });
+        await flush();
+        const tools = mockCreateMessage.mock.calls.filter(
+          ([m]: any) => m.role === 'tool' && m.tool_call_id === 'toolu_ask',
+        );
+        expect(tools).toHaveLength(1);
+        const toolRow = tools[0][0];
+        const expectedContext = subagent
+          ? {
+              context: { ...defaultContext, scope: 'thread', threadId: toolRow.threadId },
+              operationId: 'op-1',
+            }
+          : { operationId: 'op-1' };
+        expect(subagent ? toolRow.threadId : !toolRow.threadId).toBeTruthy();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+          toolRow.id,
+          { intervention: { status: 'pending' } },
+          expectedContext,
+        );
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: { content: 'done', ...(subagent && { subagent: child }), toolCallId: 'toolu_ask' },
+          type: 'tool_result',
+        });
+        await flush();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenLastCalledWith(
+          toolRow.id,
+          { intervention: expect.objectContaining({ status: 'aborted' }) },
+          expectedContext,
+        );
+        ipc.emitRawLine('ipc-sess-1', ccResult());
+        ipc.emitComplete('ipc-sess-1');
+        await flush();
+        resolveSendPrompt();
+        await executorPromise;
+      },
+    );
   });
 
   // ────────────────────────────────────────────────────

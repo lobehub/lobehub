@@ -356,7 +356,10 @@ const reduceInterventionRequest = (
   // can arrive before tools_calling. The request already carries the complete
   // canonical tool payload; materialize it here instead of dropping pending
   // state or relying on process affinity for a later replay.
-  if (!state.toolState.toolMsgIdByCallId.has(request.toolCallId)) {
+  if (
+    !state.toolState.toolMsgIdByCallId.has(request.toolCallId) &&
+    !ctx.toolMessageIds?.has(request.toolCallId)
+  ) {
     return reduceToolsChunk(
       preparedState,
       [
@@ -378,7 +381,11 @@ const reduceInterventionRequest = (
   };
 };
 
-const reduceInterventionResponse = (state: MainAgentRunState, data: any): ReduceResult => {
+const reduceInterventionResponse = (
+  state: MainAgentRunState,
+  data: any,
+  ctx: MainAgentReduceCtx,
+): ReduceResult => {
   if (typeof data?.toolCallId !== 'string' || data.toolCallId.length === 0) {
     return { intents: [], state };
   }
@@ -409,7 +416,10 @@ const reduceInterventionResponse = (state: MainAgentRunState, data: any): Reduce
   const next = copyState(state);
   next.interventionsByCallId.set(data.toolCallId, intervention);
 
-  if (!state.toolState.toolMsgIdByCallId.has(data.toolCallId)) {
+  if (
+    !state.toolState.toolMsgIdByCallId.has(data.toolCallId) &&
+    !ctx.toolMessageIds?.has(data.toolCallId)
+  ) {
     return { intents: [], state: next };
   }
 
@@ -505,7 +515,10 @@ const reduceToolResult = (
     pluginState: data.pluginState,
     toolCallId,
   };
-  const ended = endInterventions(state, [toolCallId]);
+  const ended = endInterventions(state, [
+    toolCallId,
+    ...(state.subagents.runs.get(toolCallId)?.lifetimeToolCallIds ?? []),
+  ]);
   const delegated = delegateSubagent(ended.state, event, ctx);
   return { intents: [main, ...ended.intents, ...delegated.intents], state: delegated.state };
 };
@@ -607,7 +620,16 @@ export const reduce = (
   ctx: MainAgentReduceCtx,
 ): ReduceResult => {
   // Subagent-tagged chunks / turn_metadata belong wholly to the coordinator.
-  if (getEventScope(event).kind === 'subagent') return delegateSubagent(state, event, ctx);
+  if (getEventScope(event).kind === 'subagent') {
+    const ended =
+      event.type === 'tool_result' &&
+      typeof event.data?.toolCallId === 'string' &&
+      event.data.toolCallId
+        ? endInterventions(state, [event.data?.toolCallId])
+        : { intents: [], state };
+    const delegated = delegateSubagent(ended.state, event, ctx);
+    return { intents: [...ended.intents, ...delegated.intents], state: delegated.state };
+  }
 
   const data = event.data ?? {};
   switch (event.type) {
@@ -634,7 +656,7 @@ export const reduce = (
       return reduceInterventionRequest(state, data, ctx);
     }
     case 'agent_intervention_response': {
-      return reduceInterventionResponse(state, data);
+      return reduceInterventionResponse(state, data, ctx);
     }
     case 'step_complete': {
       if (data?.phase === 'turn_metadata') return reduceTurnMetadata(state, data);

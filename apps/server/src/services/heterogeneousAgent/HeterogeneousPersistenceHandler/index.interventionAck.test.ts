@@ -23,6 +23,83 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
   afterEach(() => __resetOperationStatesForTesting());
 
   describe('agent_intervention producer ACK', () => {
+    it.each(['answer', 'tool_result'])(
+      'keeps subagent question ownership through a cold request and %s',
+      async (outcome) => {
+        const h = createHarness({ topicAgentId: 'agent-test' });
+        const args = JSON.stringify({
+          questions: [
+            { header: 'Scope', question: 'Proceed?', options: [{ label: 'Yes' }, { label: 'No' }] },
+          ],
+        });
+        const child = { parentToolCallId: 'task-parent', subagentMessageId: 'child-turn' };
+        await ingest(h, [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'tools_calling',
+            subagent: child,
+            toolsCalling: [
+              {
+                apiName: 'askUserQuestion',
+                arguments: args,
+                id: 'child-question',
+                identifier: 'claude-code',
+                type: 'default',
+              },
+            ],
+          }),
+        ]);
+        const toolRow = [...h.messages.values()].find((m) => m.tool_call_id === 'child-question')!;
+        expect(toolRow.threadId).toBeTruthy();
+        h.messageModel.listMessagePluginsByTopic.mockImplementation(
+          async () =>
+            [...h.messages.values()]
+              .filter((m) => m.role === 'tool')
+              .map((m) => ({
+                ...m.plugin,
+                id: m.id,
+                state: m.pluginState,
+                toolCallId: m.tool_call_id,
+              })) as never[],
+        );
+        __resetOperationStatesForTesting();
+        await ingest(h, [
+          buildEvent('agent_intervention_request', 1, {
+            apiName: 'askUserQuestion',
+            arguments: args,
+            deadline: 1_900_000_000_000,
+            identifier: 'claude-code',
+            interactionKind: 'question',
+            provider: 'claude-code',
+            toolCallId: 'child-question',
+          }),
+        ]);
+        expect(
+          [...h.messages.values()].filter((m) => m.tool_call_id === 'child-question'),
+        ).toHaveLength(1);
+        expect(notifyAgentInterventionRequired).toHaveBeenCalledWith(
+          expect.objectContaining({
+            context: expect.objectContaining({
+              assistantMessageId: toolRow.parentId,
+              scope: 'thread',
+              threadId: toolRow.threadId,
+            }),
+          }),
+        );
+        await ingest(h, [
+          buildEvent(outcome === 'answer' ? 'agent_intervention_response' : 'tool_result', 2, {
+            ...(outcome === 'answer'
+              ? { producerAck: true, result: { 'Proceed?': 'Yes' } }
+              : { content: 'done', subagent: child }),
+            toolCallId: 'child-question',
+          }),
+        ]);
+        expect(h.messages.get(toolRow.id)?.plugin?.intervention.status).toBe(
+          outcome === 'answer' ? 'approved' : 'aborted',
+        );
+        expect(h.messages.get(toolRow.id)?.threadId).toBe(toolRow.threadId);
+      },
+    );
+
     const materializeAskUserTool = async (
       h: ReturnType<typeof createHarness>,
       toolCallId: string,

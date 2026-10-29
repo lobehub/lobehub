@@ -692,16 +692,10 @@ export const executeHeterogeneousAgent = async (
     return out;
   };
 
-  /**
-   * Global `tool_use.id → tool message DB id` lookup, shared across the
-   * main agent and every subagent run. `tool_result` events identify
-   * the target row by `toolCallId` alone (no scope context needed), so
-   * one flat map keeps the lookup trivial. Interpreter-owned (NOT reducer
-   * state — it maps to DB row ids the reducer pre-allocates): populated when
-   * `applyMainIntent` / `applySubagentIntent` create tool messages, read by
-   * `persistToolResult` and the intervention handlers.
-   */
+  // Run-global persisted tools retain their message and thread ownership after
+  // a subagent finalizes, so unscoped bridge requests cannot create main copies.
   const toolMsgIdByCallId: Map<string, string> = new Map();
+  const toolThreadIdByCallId = new Map<string, string>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const mainToolCallIds = new Set<string>();
   /** Terminal results reject later state until a new tool_start reopens the call id. */
@@ -815,9 +809,9 @@ export const executeHeterogeneousAgent = async (
    */
   let sawStreamedEvent = false;
 
-  const getCurrentFrontendMessages = () =>
-    (get().dbMessagesMap?.[messageMapKey(context)] ??
-      get().messagesMap?.[messageMapKey(context)] ??
+  const getCurrentFrontendMessages = (messageContext = context) =>
+    (get().dbMessagesMap?.[messageMapKey(messageContext)] ??
+      get().messagesMap?.[messageMapKey(messageContext)] ??
       []) as UIChatMessage[];
 
   const attachInitialAssistantSeed = (event: AgentStreamEvent): void => {
@@ -1155,6 +1149,7 @@ export const executeHeterogeneousAgent = async (
         );
         for (const message of toolRows) {
           toolMsgIdByCallId.set(message.tool_call_id!, message.id);
+          toolThreadIdByCallId.set(message.tool_call_id!, thread.id);
         }
         const subagentMessageId = (currentAssistant.metadata as Record<string, unknown> | null)
           ?.subagentMessageId;
@@ -1385,6 +1380,7 @@ export const executeHeterogeneousAgent = async (
 
         for (const { message, toolCallId } of persistedToolMessages) {
           toolMsgIdByCallId.set(toolCallId, message.id);
+          toolThreadIdByCallId.set(toolCallId, intent.threadId);
           t?.stream.create(message);
         }
 
@@ -1493,22 +1489,21 @@ export const executeHeterogeneousAgent = async (
 
   // ─── Main-agent run coordinator (shared reducer) interpreter ─────────────
 
-  /**
-   * Apply ONE main-scoped coordinator intent against the renderer's write-behind
-   * DB queue plus the local raw-message bucket. Best-effort (errors logged,
-   * never thrown) — mirroring the prior inline persist helpers, so the run state
-   * always advances regardless of a transient DB failure (the next event /
-   * terminal flush re-persists). Token-level text/reasoning still streams via the
-   * gateway handler; tool rows and result links are local SoT here so tool_end
-   * reconciliation does not need a DB fetch.
-   */
+  // Interpret main coordinator intents, including bridge transitions for tools
+  // already owned by a subagent thread. Ownership comes from the persisted row.
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
       case 'setToolIntervention': {
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (!toolMsgId) throw new Error(`Missing intervention tool: ${intent.toolCallId}`);
         await messageWriteBatcher.flush('before-intervention');
-        const previous = getCurrentFrontendMessages().find((msg) => msg.id === toolMsgId);
+        const threadId = toolThreadIdByCallId.get(intent.toolCallId);
+        const interventionContext = threadId
+          ? { ...context, scope: 'thread' as MessageMapScope, threadId }
+          : context;
+        const previous = getCurrentFrontendMessages(interventionContext).find(
+          (msg) => msg.id === toolMsgId,
+        );
         await get().optimisticUpdateMessagePlugin(
           toolMsgId,
           {
@@ -1517,7 +1512,7 @@ export const executeHeterogeneousAgent = async (
               previous?.pluginIntervention,
             ),
           },
-          { operationId },
+          threadId ? { context: interventionContext, operationId } : { operationId },
         );
         if (intent.transition === 'pending') {
           writeTopicStatus('waitingForHuman');
@@ -1834,6 +1829,7 @@ export const executeHeterogeneousAgent = async (
     const ctx: MainAgentReduceCtx = {
       agentId: context.agentId,
       newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
+      toolMessageIds: toolMsgIdByCallId,
       topicId: context.topicId ?? null,
     };
     const { intents, state: next } = reduceMainAgent(mainState, event, ctx);
