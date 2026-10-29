@@ -583,8 +583,11 @@ export class ResourceManagerStoreActionImpl {
   ): void => {
     // Skip the write path when the mode didn't actually change — clicking the
     // already-active tab shouldn't invalidate the list.
+    // Still record and persist it: the in-memory value may be an unhydrated
+    // default that differs from the stored preference.
     if (this.#get().listVisibility === listVisibility) {
       if (workspaceId) this.#set({ listVisibilityWorkspaceId: workspaceId });
+      writePersistedResourceMode(workspaceId, listVisibility);
       return;
     }
 

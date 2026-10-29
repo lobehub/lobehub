@@ -116,9 +116,9 @@ export const useLibraryForm = ({
 
       // Follow the new library into its space, otherwise the sidebar list keeps
       // filtering the other space and the library looks like it was never made.
-      if (workspaceId && visibility !== listVisibility) {
-        setListVisibility(visibility, workspaceId);
-      }
+      // Record it even when it equals an unhydrated store default: the next
+      // /resource hydrate would otherwise restore a stale persisted space.
+      if (workspaceId) setListVisibility(visibility, workspaceId);
 
       onClose?.();
       if (onSuccess) onSuccess(newId);

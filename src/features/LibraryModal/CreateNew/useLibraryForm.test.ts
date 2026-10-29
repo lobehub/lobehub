@@ -216,4 +216,20 @@ describe('useLibraryForm', () => {
 
     expect(mocks.updateKnowledgeBaseCover).toHaveBeenCalledWith('kb-1', 'preset:ocean');
   });
+
+  it('records an explicit workspace pick even when it matches the unhydrated store default', async () => {
+    workspaceId = 'ws-1';
+    listVisibility = 'workspace';
+    window.localStorage.setItem('lobehub:resource-mode:ws-1', 'private');
+
+    const { result } = renderHook(() => useLibraryForm({ onSuccess: vi.fn() }));
+
+    act(() => {
+      result.current.setVisibility('workspace');
+      result.current.setName('Team');
+    });
+    await act(() => result.current.submit());
+
+    expect(mocks.setListVisibility).toHaveBeenCalledWith('workspace', 'ws-1');
+  });
 });
