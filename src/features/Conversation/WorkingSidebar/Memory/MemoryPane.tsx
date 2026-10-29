@@ -129,7 +129,7 @@ export const MemoryPane = memo<MemoryPaneProps>(({ agentId, deviceId, workingDir
         <AsyncError
           title={t('workingPanel.claudeMemory.upgrade.title')}
           action={
-            <Button loading={isValidating} size={'small'} onClick={refresh}>
+            <Button loading={isValidating} onClick={refresh}>
               {t('workingPanel.claudeMemory.upgrade.reload')}
             </Button>
           }
