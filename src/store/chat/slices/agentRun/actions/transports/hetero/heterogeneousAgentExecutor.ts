@@ -2001,11 +2001,11 @@ export const executeHeterogeneousAgent = async (
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
-      agentType: isLocalHeterogeneousType(adapterType) ? adapterType : undefined,
+      agentType: adapterType,
       args: spawnArgs,
       command:
         adapterType === 'deepseek-harness'
-          ? ''
+          ? heterogeneousProvider.command?.trim() || ''
           : resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
       cwd: workingDirectory,
       env: sessionEnv,

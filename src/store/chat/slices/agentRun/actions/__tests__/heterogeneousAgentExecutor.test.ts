@@ -159,13 +159,7 @@ function setupIpcCapture() {
     },
   };
 
-  /**
-   * Per-IPC-session adapter — mimics the desktop main pipeline:
-   *   raw stdout JSON → adapter.adapt() → AgentStreamEvent → broadcast.
-   * Test fixtures still feed raw CC/Codex events, so the existing ~2.8k lines
-   * of stream-shape tests stay intact while the renderer's input boundary
-   * becomes the new `heteroAgentEvent` channel.
-   */
+  /** Mirror main's raw-output → adapter → event pipeline. */
   const adapters = new Map<string, AgentEventAdapter>();
   /**
    * IPC-session → agent type. Defaults to `claude-code` so tests that don't
@@ -531,9 +525,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockGetNotificationSoundFile.mockResolvedValue(undefined);
     mockPlayCompletionSound.mockResolvedValue(undefined);
     ipc = setupIpcCapture();
-    // Register the IPC session's agent type from the params the executor
-    // hands to startSession, so the helper picks the right adapter when the
-    // test starts emitting raw events.
+    // The producer adapter follows the runtime selected by the executor.
     mockStartSession.mockImplementation(async (params: any) => {
       ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
       return {
@@ -544,13 +536,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
     mockCancelSession.mockResolvedValue(undefined);
-    // Mirror the desktop main: `getSessionInfo` returns whatever the producer
-    // pipeline's adapter has extracted from the JSONL stream so far. Tests
-    // that never emit an init / thread.started event get `agentSessionId:
-    // undefined`, matching pre-Phase-0 behavior where the renderer-side
-    // adapter never observed one either. The renderer service hands the raw
-    // sessionId string straight to the mock — it's the underlying IPC handler
-    // that wraps `{ sessionId }`, and that's stubbed here.
+    // Return only the native session id observed by the producer adapter.
     mockGetSessionInfo.mockImplementation(async (sessionId: string) => ({
       agentSessionId: ipc.getAdapterSessionId(sessionId),
     }));
@@ -675,6 +661,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   it.each([
     { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: '/custom/dsh', type: 'deepseek-harness' },
+      expectedOperations: ['op-1', 'op-2'],
+    },
     { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
     {
       provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
@@ -703,14 +693,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         );
       }
 
-      const environments = mockStartSession.mock.calls.map(([params]) => params.env);
-      expect(environments).toEqual(
-        expectedOperations.map((operationId) => ({
-          LOBEHUB_AGENT_ID: 'agent-1',
-          ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
-          LOBEHUB_TOPIC_ID: 'topic-1',
-          LOBEHUB_WORKSPACE_ID: 'ws-1', // the caller's captured workspace, not live navigation
-        })),
+      const launches = mockStartSession.mock.calls.map(([params]) => params);
+      expect(launches).toEqual(
+        expectedOperations.map((operationId) =>
+          expect.objectContaining({
+            agentType: provider.type,
+            command: provider.command,
+            env: {
+              LOBEHUB_AGENT_ID: 'agent-1',
+              ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+              LOBEHUB_TOPIC_ID: 'topic-1',
+              LOBEHUB_WORKSPACE_ID: 'ws-1',
+            }, // captured workspace, not live navigation
+          }),
+        ),
       );
       const sent = mockSendPrompt.mock.calls.map(([p]) => [p.operationId, p.workspaceId]);
       expect(sent.flat()).toEqual(['op-1', 'ws-1', 'op-2', 'ws-1']);
