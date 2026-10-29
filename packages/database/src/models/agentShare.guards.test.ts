@@ -39,6 +39,8 @@ describe('AgentShareModel.create slug seed guard', () => {
       .select()
       .from(agentShares)
       .where(eq(agentShares.agentId, agentId));
+    // The seed UPDATE really ran (the stored row carries the slug); only its returned row was lost.
+    expect(stored.shareConfig?.slug).toBe('guarded-agent');
     // Creation still succeeds with the inserted row, just without the seeded slug.
     expect(share).toMatchObject({ agentId, id: stored.id, visibility: 'private' });
     expect(share.shareConfig.slug).toBeUndefined();

@@ -36,17 +36,22 @@ const pendingDecision = async () => {
 /**
  * A graph model whose "is this decision still pending" read keeps returning `decisionId`
  * after the row was settled — the view a writer that skipped the goal lock would leave
- * between that read and the guarded UPDATE. The UPDATE itself runs against the real row.
+ * between that read and the guarded UPDATE. The UPDATE itself runs against the real row;
+ * `writes` records it, so a test can tell the guard after it from an earlier return.
  */
-const graphSeeingPending = (decisionId: string) =>
-  new GoalGraphModel(
-    createProxyTestDB(serverDB, (query, result) =>
-      query.startsWith('select "goal_node_decisions"."id" from "goal_node_decisions"')
+const graphSeeingPending = (decisionId: string) => {
+  const writes: string[] = [];
+  const graph = new GoalGraphModel(
+    createProxyTestDB(serverDB, (query, result) => {
+      if (query.startsWith('update "goal_node_decisions"')) writes.push(query);
+      return query.startsWith('select "goal_node_decisions"."id" from "goal_node_decisions"')
         ? [[decisionId]]
-        : result.rows,
-    ),
+        : result.rows;
+    }),
     userId,
   );
+  return { graph, writes };
+};
 
 const decisionEvents = async (goalId: string, decisionId: string) =>
   serverDB
@@ -71,14 +76,12 @@ describe('GoalGraphModel decision guards', () => {
       .set({ resolvedAt: new Date(), resolvedOptionId: 'hold', status: 'resolved' })
       .where(eq(goalNodeDecisions.id, decision.id));
 
-    const result = await graphSeeingPending(decision.id).resolveDecision(
-      goal.id,
-      decision.id,
-      'ship',
-      'late answer',
-    );
+    const seeing = graphSeeingPending(decision.id);
+    const result = await seeing.graph.resolveDecision(goal.id, decision.id, 'ship', 'late answer');
 
     expect(result).toBeUndefined();
+    // The guarded UPDATE was issued and matched nothing.
+    expect(seeing.writes).toHaveLength(1);
     const [stored] = await serverDB
       .select()
       .from(goalNodeDecisions)
@@ -103,13 +106,12 @@ describe('GoalGraphModel decision guards', () => {
       .set({ resolvedAt: new Date(), resolvedOptionId: 'ship', status: 'resolved' })
       .where(eq(goalNodeDecisions.id, decision.id));
 
-    const result = await graphSeeingPending(decision.id).cancelDecision(
-      goal.id,
-      decision.id,
-      'question went away',
-    );
+    const seeing = graphSeeingPending(decision.id);
+    const result = await seeing.graph.cancelDecision(goal.id, decision.id, 'question went away');
 
     expect(result).toBeUndefined();
+    // The guarded UPDATE was issued and matched nothing.
+    expect(seeing.writes).toHaveLength(1);
     const [stored] = await serverDB
       .select()
       .from(goalNodeDecisions)

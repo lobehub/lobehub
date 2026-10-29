@@ -91,11 +91,14 @@ const readLedger = async (resolutionRequestId: string) => {
 /**
  * A model whose locked read of the resolution row returns `patch` applied to the real row —
  * the shape a relaxed CHECK constraint or a write between the read and the UPDATE would leave.
- * Every statement, the UPDATE included, still runs against the real row.
+ * Every statement, the UPDATE included, still runs against the real row; `writes` records the
+ * UPDATEs issued so a test can tell a guard after the write from an earlier return.
  */
-const modelSeeing = (patch: Record<string, unknown>) =>
-  new AgentInterventionModel(
+const modelSeeing = (patch: Record<string, unknown>) => {
+  const writes: string[] = [];
+  const seeing = new AgentInterventionModel(
     createProxyTestDB(serverDB, (query, result: ArrayQueryResult) => {
+      if (query.startsWith('update "agent_intervention_resolutions"')) writes.push(query);
       if (!query.includes('from "agent_intervention_resolutions"') || !query.includes('for update'))
         return result.rows;
       return result.rows.map((row) => {
@@ -107,6 +110,8 @@ const modelSeeing = (patch: Record<string, unknown>) =>
     ownerId,
     workspaceId,
   );
+  return { model: seeing, writes };
+};
 
 beforeEach(async () => {
   await serverDB.insert(users).values([{ id: ownerId }, { id: actorId }]);
@@ -143,26 +148,26 @@ describe('claimCustomExecution guards', () => {
     const before = await readLedger(resolution.resolutionRequestId);
 
     // Without the token the lease cannot be fenced; the same read with the token is `in_progress`.
-    const result = await modelSeeing({ custom_execution_lease_token: null }).claimCustomExecution(
-      params,
-      new Date(now.getTime() + 1000),
-    );
+    const seeing = modelSeeing({ custom_execution_lease_token: null });
+    const result = await seeing.model.claimCustomExecution(params, new Date(now.getTime() + 1000));
 
     expect(result).toEqual({ outcome: 'conflict' });
+    expect(seeing.writes).toEqual([]);
     expect(await readLedger(resolution.resolutionRequestId)).toEqual(before);
   });
 
   it('refuses a ledger state the CHECK constraint does not know instead of claiming it', async () => {
     const resolution = await createCustomResolution();
 
-    const result = await modelSeeing({
-      custom_execution_state: 'abandoned',
-    }).claimCustomExecution(
+    const seeing = modelSeeing({ custom_execution_state: 'abandoned' });
+    const result = await seeing.model.claimCustomExecution(
       { inputHash, leaseDurationMs, resolutionRequestId: resolution.resolutionRequestId },
       now,
     );
 
     expect(result).toEqual({ outcome: 'conflict' });
+    // Refused before the claim UPDATE, which would otherwise mint a lease for an unknown state.
+    expect(seeing.writes).toEqual([]);
     expect(await readLedger(resolution.resolutionRequestId)).toMatchObject({
       customExecutionAttempt: 0,
       customExecutionLeaseToken: null,
@@ -177,12 +182,15 @@ describe('claimCustomExecution guards', () => {
     );
 
     // The locked read still sees `resolving`; the UPDATE's own status filter sees the rollback.
-    const result = await modelSeeing({ status: 'resolving' }).claimCustomExecution(
+    const seeing = modelSeeing({ status: 'resolving' });
+    const result = await seeing.model.claimCustomExecution(
       { inputHash, leaseDurationMs, resolutionRequestId: resolution.resolutionRequestId },
       now,
     );
 
     expect(result).toEqual({ outcome: 'conflict' });
+    // The claim UPDATE was issued and matched nothing; the conflict comes from its empty result.
+    expect(seeing.writes).toHaveLength(1);
     expect(result).not.toHaveProperty('leaseToken');
     expect(await readLedger(resolution.resolutionRequestId)).toMatchObject({
       customExecutionAttempt: 0,
@@ -207,16 +215,17 @@ describe('completeCustomExecution guards', () => {
       .where(eq(agentInterventionResolutions.id, resolution.id));
 
     // The locked read still shows the stale token; the UPDATE filters on the current one.
-    const result = await modelSeeing({
-      custom_execution_lease_token: claimed.leaseToken,
-    }).completeCustomExecution({
+    const seeing = modelSeeing({ custom_execution_lease_token: claimed.leaseToken });
+    const result = await seeing.model.completeCustomExecution({
       inputHash,
       leaseToken: claimed.leaseToken,
       resolutionRequestId: resolution.resolutionRequestId,
-      result: { content: 'Installed' },
+      result: { content: 'Installed', pluginState: { agentIds: ['agent-a'] } },
     });
 
     expect(result).toEqual({ outcome: 'conflict' });
+    // The completion UPDATE was issued and matched nothing; the conflict comes from its empty result.
+    expect(seeing.writes).toHaveLength(1);
     expect(await readLedger(resolution.resolutionRequestId)).toMatchObject({
       customExecutionLeaseToken: takeover,
       customExecutionResult: null,

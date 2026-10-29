@@ -30,17 +30,18 @@ afterEach(async () => {
 
 describe('queryRecent updatedAt guard', () => {
   it('turns a non-Date activity time from the decoder back into a Date', async () => {
-    // `mapWith(topics.updatedAt)` decodes through the column; here it hands back the ISO
-    // string, as a driver or drizzle upgrade that stops parsing timestamptz would.
+    // `mapWith(topics.updatedAt)` decodes through the column; here the decoder passes the
+    // driver's timestamptz text through undecoded, as a drizzle upgrade that stopped parsing it
+    // would (a Date from the driver is handed back as its ISO text).
     const decode = vi
       .spyOn(topics.updatedAt, 'mapFromDriverValue')
-      .mockImplementation((value) =>
-        value instanceof Date ? (value.toISOString() as unknown as Date) : new Date(value),
+      .mockImplementation(
+        (value) => (value instanceof Date ? value.toISOString() : value) as unknown as Date,
       );
 
     const [item] = await new TopicModel(serverDB, userId).queryRecent();
 
-    expect(decode).toHaveBeenCalled();
+    expect(decode.mock.results.map((result) => typeof result.value)).toContain('string');
     expect(item).toMatchObject({ id: topicId, title: 'Guarded', type: 'agent' });
     expect(item.updatedAt).toBeInstanceOf(Date);
     expect(item.updatedAt.getTime()).toBe(updatedAt.getTime());

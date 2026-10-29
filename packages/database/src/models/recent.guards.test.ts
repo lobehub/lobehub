@@ -63,15 +63,18 @@ describe('RecentModel preview guard', () => {
 describe('RecentModel updatedAt guard', () => {
   it('turns a non-Date updatedAt from the decoder back into a Date', async () => {
     const [topic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
-    // The column decoder hands back the ISO string instead of a Date, as a driver or drizzle
-    // upgrade that stops parsing timestamptz would.
-    vi.spyOn(topics.updatedAt, 'mapFromDriverValue').mockImplementation((value) =>
-      value instanceof Date ? (value.toISOString() as unknown as Date) : new Date(value),
-    );
+    // The column decoder passes the driver's timestamptz text through undecoded, as a drizzle
+    // upgrade that stopped parsing it would (a Date from the driver is handed back as ISO text).
+    const decode = vi
+      .spyOn(topics.updatedAt, 'mapFromDriverValue')
+      .mockImplementation(
+        (value) => (value instanceof Date ? value.toISOString() : value) as unknown as Date,
+      );
 
     const [row] = await recentModel.queryRecent(1, ['topic']);
 
     expect(row.id).toBe(topicId);
+    expect(decode.mock.results.map((result) => typeof result.value)).toContain('string');
     expect(row.updatedAt).toBeInstanceOf(Date);
     expect(row.updatedAt.getTime()).toBe(topic.updatedAt.getTime());
   });

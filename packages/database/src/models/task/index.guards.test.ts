@@ -53,10 +53,12 @@ describe('TaskModel.updateWithLog write guard', () => {
     const task = await model.create({ instruction: 'locked task', priority: 1 });
     // The scoped write inside the transaction reports no row, as if the locked row had
     // left the caller's scope between the lock and the write.
-    vi.spyOn(TaskModel.prototype, 'update').mockResolvedValue(null);
+    const write = vi.spyOn(TaskModel.prototype, 'update').mockResolvedValue(null);
 
     const result = await model.updateWithLog(task.id, { priority: 3 }, { userId });
 
+    // The locked path ran: the write inside the transaction was attempted with the new value.
+    expect(write).toHaveBeenCalledWith(task.id, { priority: 3 });
     expect(result).toBeNull();
     vi.restoreAllMocks();
     expect((await model.findById(task.id))?.priority).toBe(1);
