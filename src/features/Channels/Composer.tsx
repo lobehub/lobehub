@@ -30,6 +30,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
+import { getMentionGroups } from './mentionGroups';
 import { $insertChannelMentionBoundary, channelMentionIds } from './mentions';
 import { createChannelSendRequest } from './sendRequest';
 import { styles } from './styles';
@@ -176,13 +177,22 @@ export function Composer({
                 type="text"
                 variant="chat"
                 mentionOption={{
-                  items: mentionable.map((member) => ({
-                    icon: <MemberAvatar member={member} size={24} />,
-                    key: member.id,
-                    label: memberName(member, t('deletedMember')),
-                    metadata: { type: 'channel-member', id: member.id },
-                  })),
-                  searchKeys: ['label'],
+                  items: async (search) =>
+                    getMentionGroups(
+                      mentionable,
+                      search?.matchingString || '',
+                      t('deletedMember'),
+                    ).map((group) => ({
+                      type: 'section',
+                      key: group.actorType,
+                      label: t(group.actorType === 'user' ? 'membersTitle' : 'agents'),
+                      items: group.members.map((member) => ({
+                        icon: <MemberAvatar member={member} size={24} />,
+                        key: member.id,
+                        label: memberName(member, t('deletedMember')),
+                        metadata: { type: 'channel-member', id: member.id },
+                      })),
+                    })),
                   markdownWriter: (node) => `@${node.label}`,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
