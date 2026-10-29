@@ -72,8 +72,9 @@ export class ChannelService {
         );
       // An Agent without its own directory on this device runs in the device's home folder,
       // the same fallback an ordinary conversation uses.
+      const chosenDirectory = input.workingDirectory?.trim();
       const workingDirectory =
-        input.workingDirectory?.trim() ||
+        chosenDirectory ||
         (await deviceGateway.queryDeviceSystemInfo(this.userId, input.deviceId, this.workspaceId))
           ?.homePath;
       if (!workingDirectory)
@@ -102,6 +103,7 @@ export class ChannelService {
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
       config.workingDirectory = path.canonicalPath;
+      if (!chosenDirectory) config.implicitWorkingDirectory = true;
     } else if (runtime !== 'native' || input.workingDirectory) {
       throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
     }

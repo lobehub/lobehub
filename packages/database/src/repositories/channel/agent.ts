@@ -18,6 +18,7 @@ export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelM
   cleanObject({
     deviceId: config?.deviceId,
     deviceOwnerId: config?.deviceOwnerId,
+    implicitWorkingDirectory: config?.implicitWorkingDirectory,
     workingDirectory: config?.workingDirectory,
   });
 

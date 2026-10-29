@@ -425,7 +425,10 @@ export const channelJobs = pgTable(
     executionConfig: jsonb('execution_config').$type<ChannelExecutionConfig>(),
     /** Device of a device-hosted run; with `workingDirectory` it forms the directory lock. */
     deviceId: varchar('device_id', { length: 64 }),
-    /** Canonical working directory acknowledged by the device. */
+    /**
+     * Canonical working directory acknowledged by the device, when the run locks it. NULL for a
+     * home-folder fallback, which takes no lock; `executionConfig` still records where it ran.
+     */
     workingDirectory: text('working_directory'),
     /** When the runtime confirmed it took the input. An unknown delivery never gets one. */
     acceptedAt: timestamptz('accepted_at'),

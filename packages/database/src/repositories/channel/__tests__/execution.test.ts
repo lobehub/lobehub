@@ -289,6 +289,33 @@ describe('ChannelExecutionRepository', () => {
     expect(await jobById(job.id)).toMatchObject({ blockedCode: null, status: 'running' });
   });
 
+  it('lets Agents without a chosen directory share the device home folder', async () => {
+    const home = { ...deviceConfig('/Users/me'), implicitWorkingDirectory: true };
+    const first = await mentionAgent(home);
+    expect(await execution.claim(first.channel.id, first.job.id, lease)).not.toBeNull();
+
+    const other = await fixture.createTeamChannel('Other');
+    const otherAgent = await fixture.addAgent(other.channel.id, 'Coder', home);
+    const message = await other.asMember.send(other.channel.id, {
+      content: 'Quick question',
+      mentions: [otherAgent.id],
+      requestKey: 'req-1',
+      routing: 'decision',
+    });
+    const [job] = await jobsOf(db, message.id);
+
+    const claim = await execution.claim(other.channel.id, job.id, lease);
+    expect(claim?.job).toMatchObject({
+      blockedCode: null,
+      deviceId: 'device-1',
+      status: 'running',
+      workingDirectory: null,
+      writerHeld: true,
+    });
+    // The run still executes in the home folder; only the lock is skipped.
+    expect(claim?.job.executionConfig).toMatchObject({ workingDirectory: '/Users/me' });
+  });
+
   it.skipIf(!isServerDB)(
     'blocks the loser of a concurrent claim on the same directory',
     async () => {

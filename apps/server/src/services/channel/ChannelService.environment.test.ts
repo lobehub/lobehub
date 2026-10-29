@@ -142,7 +142,12 @@ describe('changing an Agent member’s channel environment', () => {
       agents: [
         {
           agentId: 'agent-1',
-          config: { deviceId: 'mac', deviceOwnerId: 'owner', workingDirectory: '/Users/me' },
+          config: {
+            deviceId: 'mac',
+            deviceOwnerId: 'owner',
+            implicitWorkingDirectory: true,
+            workingDirectory: '/Users/me',
+          },
         },
       ],
       projectId: undefined,
