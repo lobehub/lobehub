@@ -3303,6 +3303,7 @@ describe('ConversationControl actions', () => {
         const resolvingIntervention = {
           ...toolMessage.pluginIntervention,
           resolving: true,
+          skipped: actionType === 'skip',
           status: 'pending',
         };
         expect(dispatchSpy).toHaveBeenCalledWith(
@@ -3916,12 +3917,9 @@ describe('ConversationControl actions', () => {
         ).resolves.toBeUndefined();
       });
 
-      // Remote publish is only transport acceptance: keep the form pending,
-      // mark it resolving in this card’s context even after the op is gone.
-      // The hint is dispatched locally onto both projections the UI reads and
-      // deliberately never persisted — a refresh must recover an actionable
-      // card rather than a permanently disabled one.
-      const resolvingIntervention = { resolving: true, status: 'pending' };
+      // Remote delivery waits for the ACK in the card's context, even after op GC.
+      // Both projections receive this local-only hint; Cancel clears skip intent.
+      const resolvingIntervention = { resolving: true, skipped: false, status: 'pending' };
       expect(dispatchSpy).toHaveBeenCalledWith(
         {
           id: 'tool-msg-1',

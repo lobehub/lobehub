@@ -1777,7 +1777,7 @@ export class ConversationControlActionImpl {
         const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
         this.#interventions.dispatch(
           toolMessageId,
-          { resolving: true, status: 'pending' },
+          { resolving: true, skipped: actionType === 'skip', status: 'pending' },
           sourceOptimisticContext,
         );
         if (actionType === 'submit') {
@@ -1829,7 +1829,7 @@ export class ConversationControlActionImpl {
     // does not prove that an already-ended bridge consumed the answer.
     this.#interventions.dispatch(
       toolMessageId,
-      { resolving: true, status: 'pending' },
+      { resolving: true, skipped: actionType === 'skip', status: 'pending' },
       optimisticContext,
     );
     if (actionType === 'submit') {
@@ -1897,7 +1897,7 @@ export class ConversationControlActionImpl {
       // back to the server could overwrite a producer result racing this error.
       this.#interventions.dispatch(
         toolMessageId,
-        { resolving: false, status: 'pending' },
+        { resolving: false, skipped: originalIntervention?.skipped ?? false, status: 'pending' },
         optimisticContext,
       );
       if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {

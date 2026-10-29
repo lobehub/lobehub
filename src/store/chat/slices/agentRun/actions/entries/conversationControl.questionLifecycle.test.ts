@@ -1,14 +1,17 @@
 import { toast } from '@lobehub/ui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveRejectedCopyKey } from '@/features/Conversation/Messages/AssistantGroup/Tool/Detail/resolveRejectedCopyKey';
 import { lambdaClient } from '@/libs/trpc/client';
 import { aiAgentService } from '@/services/aiAgent';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { messagesReducer } from '@/store/chat/slices/message/reducer';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { createMockMessage } from '../__tests__/fixtures';
+import { preserveSkippedIntervention } from '../transports/hetero/interventionAck';
 import { ConversationControlActionImpl } from './conversationControl';
 
 vi.mock('@/services/aiAgent', () => ({
@@ -16,6 +19,9 @@ vi.mock('@/services/aiAgent', () => ({
 }));
 vi.mock('@/services/message', () => ({
   messageService: { getMessages: vi.fn(), updateMessagePluginState: vi.fn() },
+}));
+vi.mock('@/services/electron/heterogeneousAgent', () => ({
+  heterogeneousAgentService: { submitIntervention: vi.fn() },
 }));
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: { aiAgent: { submitHeteroIntervention: { mutate: vi.fn() } } },
@@ -55,9 +61,86 @@ const makeState = (ended: boolean) => {
   return { state, control };
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => vi.resetAllMocks());
 
 describe('question actions racing tool completion', () => {
+  it.each(['desktop', 'remote', 'source'] as const)(
+    'preserves skip intent until the %s ACK and clears it for a later cancel',
+    async (transport) => {
+      const { control, state } = makeState(false);
+      if (transport === 'source') {
+        state.internal_confirmQuestionSubmission = vi.fn();
+        vi.mocked(aiAgentService.resolveAgentInterventionBySource)
+          .mockResolvedValueOnce({ handled: true, state: 'claimed' })
+          .mockResolvedValueOnce({ handled: true, state: 'claimed' });
+      } else {
+        state.dbMessagesMap[key][0].pluginIntervention = { status: 'pending' };
+        state.messageOperationMap = { assistant: 'operation' };
+        state.operations = {
+          operation: {
+            type: transport === 'desktop' ? 'execHeterogeneousAgent' : 'execServerAgentRuntime',
+            context,
+          },
+        } as ChatStore['operations'];
+        state.internal_getConversationContext = () => context;
+        vi.mocked(heterogeneousAgentService.submitIntervention).mockResolvedValue(undefined);
+        vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate).mockResolvedValue(
+          undefined,
+        );
+      }
+
+      await control.submitHeteroIntervention('question', 'skip', undefined, context);
+      const pending = state.dbMessagesMap[key][0].pluginIntervention;
+      expect(pending).toMatchObject({ status: 'pending', resolving: true, skipped: true });
+      const ack = { status: 'rejected' as const, rejectedReason: 'user_cancelled' };
+      const skipped = preserveSkippedIntervention(ack, pending);
+      expect(
+        resolveRejectedCopyKey({
+          ...skipped,
+          apiName: 'askUserQuestion',
+          reason: ack.rejectedReason,
+        }),
+      ).toBe('tool.intervention.questionSkipped');
+
+      // A retry using Cancel must not inherit an earlier unconfirmed skip.
+      await control.submitHeteroIntervention('question', 'cancel', undefined, context);
+      const cancelled = preserveSkippedIntervention(
+        ack,
+        state.dbMessagesMap[key][0].pluginIntervention,
+      );
+      expect(cancelled.skipped).not.toBe(true);
+      expect(
+        resolveRejectedCopyKey({
+          ...cancelled,
+          apiName: 'askUserQuestion',
+          reason: ack.rejectedReason,
+        }),
+      ).toBe('tool.intervention.rejectedWithReason');
+    },
+  );
+
+  it('restores the skip marker when desktop delivery fails without an ACK', async () => {
+    const { control, state } = makeState(false);
+    state.dbMessagesMap[key][0].pluginIntervention = { status: 'pending' };
+    state.messageOperationMap = { assistant: 'operation' };
+    state.operations = {
+      operation: { type: 'execHeterogeneousAgent', context },
+    } as ChatStore['operations'];
+    state.internal_getConversationContext = () => context;
+    state.checkQuestionSubmission = vi.fn().mockResolvedValue(false);
+    vi.mocked(heterogeneousAgentService.submitIntervention).mockRejectedValueOnce(
+      new Error('IPC delivery failed'),
+    );
+    await expect(
+      control.submitHeteroIntervention('question', 'skip', undefined, context),
+    ).rejects.toThrow('IPC delivery failed');
+    expect(state.dbMessagesMap[key][0].pluginIntervention).toMatchObject({
+      status: 'pending',
+      resolving: false,
+    });
+    expect(state.dbMessagesMap[key][0].pluginIntervention?.skipped).not.toBe(true);
+  });
+
   it.each(['submit', 'skip', 'cancel'] as const)(
     'notifies on a late %s without delivering or reopening an ended question',
     async (type) => {
