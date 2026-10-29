@@ -147,6 +147,16 @@ describe('analyzeShellCommand', () => {
       expect(segment.words).toEqual(['rm', '-rf', '${D:-a,b}']);
     });
 
+    it('keeps the recursive flag when a flag expansion overflows its budget', () => {
+      // 11 `{f,}` groups on the flag word exceed the variant cap, so the
+      // literal `-r{f,}…` survives. The command slot is still a confident
+      // `rm`, so the flag must be classified from the surviving text.
+      const [segment] = analyzeShellCommand('rm -r{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,} ~');
+      expect(segment.resolvedCommand).toBe('rm');
+      expect(segment.hasFlag('r')).toBe(true);
+      expect(segment.words).toContain('~');
+    });
+
     it('refuses to resolve a command word whose expansion budget was exhausted', () => {
       // Six nested groups exceed the depth budget, so the literal group
       // survives — it must not be trusted as the executable name.

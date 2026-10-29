@@ -175,6 +175,21 @@ export const collectFlagLettersAndNames = (
   const names = new Set<string>();
   for (const flag of flags) {
     for (const variant of expandBraceAlternatives(flag)) {
+      // A dash word whose brace group SURVIVED expansion (depth or variant
+      // budget exhausted) still becomes real flags before exec:
+      // `rm -r{f,}{f,}…{f,} ~` is 2048 words, and every one of them is
+      // recursive. The exact letters are unknowable at parse time, so a regex
+      // that requires a brace-free `-rf` would drop the flag and report no
+      // recursion at all. Register every candidate letter instead — over
+      // detection only routes the segment to the conservative fallback.
+      if (isDashWord(variant) && hasUnresolvedBraceAlternation(variant)) {
+        for (const letter of variant.replaceAll(/[{}]/g, '')) {
+          if (!/[a-z\d]/i.test(letter)) continue;
+          letters.add(letter);
+          letters.add(letter.toLowerCase());
+        }
+        continue;
+      }
       // Long flag: --name or --name=value → register both the name and, for
       // security conservatism, its first letter (rm -R / -r alias semantic).
       const longMatch = /^--([^=]+)(?:=.*)?$/.exec(variant);

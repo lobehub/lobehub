@@ -1009,6 +1009,19 @@ describe('matchSemanticShellPredicate', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
     });
 
+    it('keeps the recursive flag when a FLAG brace expansion overflows', () => {
+      // 11 `{f,}` groups on the flag word → 2048 variants past the cap, so the
+      // literal `-r{f,}…` survives with its braces. The executable is a
+      // confident `rm`, so the command-slot fallback cannot cover this path.
+      const command = 'rm -r{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,} ~';
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it('allows an over-budget flag expansion without any recursive letter', () => {
+      const command = 'rm -f{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,}{f,} ~';
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+    });
+
     it('still allows an over-budget group with no recursive delete', () => {
       expect(
         matchSemanticShellPredicate(
