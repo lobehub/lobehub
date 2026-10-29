@@ -3552,6 +3552,12 @@ export default {
   'workingPanel.claudeMemory.location': 'Saved in {{path}}',
   'workingPanel.claudeMemory.refresh': 'Refresh',
   'workingPanel.claudeMemory.title': 'Claude Memory',
+  'workingPanel.claudeMemory.upgrade.desktopDescription':
+    'Update LobeHub Desktop to the latest version and restart it to view Claude memory.',
+  'workingPanel.claudeMemory.upgrade.deviceDescription':
+    'Update LobeHub Desktop or the CLI on your execution device to the latest version, then reconnect the device to view Claude memory.',
+  'workingPanel.claudeMemory.upgrade.reload': 'Reload after upgrading',
+  'workingPanel.claudeMemory.upgrade.title': 'Update required to view Claude memory',
   'workingPanel.openMenu.configuration': 'Configuration',
   'workingPanel.openMenu.terminal': 'Terminal',
   'workingPanel.openMenu.title': 'Open workspace panel',
