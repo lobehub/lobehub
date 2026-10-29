@@ -11,6 +11,12 @@ const FILE_PROXY_PATH = /^\/f\/[\w-]+$/;
 export const toSameOriginFileProxyUrl = (url: string): string => {
   if (typeof window === 'undefined') return url;
 
+  // Only an http(s) page can inherit the proxy. The desktop renderer runs at
+  // `app://renderer`, where `/f` is not one of the backend-proxied prefixes
+  // (`apps/desktop/src/main/const/protocol.ts`), so rewriting into that origin
+  // would fall through to the static renderer and serve the app HTML instead.
+  if (!['http:', 'https:'].includes(window.location.protocol)) return url;
+
   try {
     const parsed = new URL(url, window.location.href);
     if (parsed.origin === window.location.origin) return url;

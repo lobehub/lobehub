@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { toSameOriginFileProxyUrl } from './fileProxyUrl';
 
@@ -29,4 +29,22 @@ describe('toSameOriginFileProxyUrl', () => {
       'blob:https://example.com/123',
     );
   });
+
+  it('keeps a remote proxy URL untouched when the page itself is not http(s)', () => {
+    // The desktop renderer runs at `app://renderer`, where `/f` is not proxied to the backend.
+    vi.stubGlobal('window', {
+      location: { href: 'app://renderer/', origin: 'app://renderer', protocol: 'app:' },
+    });
+
+    try {
+      const remote = 'https://app.lobehub.com/f/file_k9D0pniGzVIW';
+      expect(toSameOriginFileProxyUrl(remote)).toBe(remote);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
