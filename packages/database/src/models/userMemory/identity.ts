@@ -120,11 +120,7 @@ export class UserMemoryIdentityModel {
         : undefined,
     ];
 
-    const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
-    const whereClause =
-      filters.length > 0
-        ? and(...filters)
-        : /* v8 ignore next -- unreachable: eq()/inArray() always yield SQL, so filters is never empty */ undefined;
+    const whereClause = and(...conditions);
 
     // Build ORDER BY
     const applyOrder = order === 'asc' ? asc : desc;
