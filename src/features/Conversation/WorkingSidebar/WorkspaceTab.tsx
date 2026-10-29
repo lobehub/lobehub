@@ -10,18 +10,13 @@ import { PinIcon, XIcon } from 'lucide-react';
 import { memo, type MouseEvent, type ReactNode } from 'react';
 
 /**
- * Every tab has the same fixed width so hovering or selecting one never shifts
- * its neighbours. Sized to fit the longest built-in CJK label (three characters,
- * e.g. 浏览器); longer labels — English ones, browser page titles — fall back to
- * an ellipsis with the full text in `title`.
- */
-const TAB_WIDTH = 88;
-/**
- * Trailing slot reserved on every tab, whatever its state. The close button
- * (active tab only) and the pin badge are absolutely positioned inside it, so
- * the label never moves or shrinks when they appear.
+ * Room the trailing close button / pin badge needs at the tab's end. Pinned tabs
+ * always reserve it for the badge; the active tab instead overlays its close
+ * button there and truncates the label under it, browser-style, so selecting a
+ * tab never changes its width and unselected tabs carry no empty gap.
  */
 const TRAILING_SLOT = 24;
+const TAB_PADDING = 8;
 
 const fadeIn = keyframes`
   from {
@@ -76,7 +71,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
     align-items: center;
 
-    width: ${TAB_WIDTH}px;
     border-radius: 6px;
 
     transition: background 0.15s;
@@ -106,17 +100,46 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
   `,
   label: css`
+    /* a hidden copy of the label (data-label) shares the grid cell with the
+       visible text: the cell keeps the full label's width, and only the visible
+       copy shrinks under the close button */
+    display: grid;
+
+    &[data-label]::before {
+      content: attr(data-label);
+
+      overflow: hidden;
+      grid-area: 1 / 1;
+
+      min-width: 24px;
+      max-width: 160px;
+
+      visibility: hidden;
+    }
+
+    /* the visible copy contributes no width of its own, so the cell is sized by
+       the hidden one; non-string labels have no hidden copy and size normally */
+    &[data-label] > * {
+      contain: inline-size;
+    }
+  `,
+  labelText: css`
     overflow: hidden;
+    grid-area: 1 / 1;
+
     min-width: 0;
+    max-width: 160px;
+
     text-overflow: ellipsis;
+  `,
+  labelTextBehindClose: css`
+    padding-inline-end: ${TRAILING_SLOT - TAB_PADDING}px;
   `,
   tab: css`
     cursor: pointer;
 
-    width: 100%;
-    min-width: 0;
     padding-block: 4px;
-    padding-inline: 8px ${TRAILING_SLOT}px;
+    padding-inline: ${TAB_PADDING}px;
     border: none;
     border-radius: 6px;
 
@@ -138,11 +161,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  tabPinned: css`
+    padding-inline-end: ${TRAILING_SLOT}px;
+  `,
   trigger: css`
     display: flex;
     gap: 4px;
     align-items: center;
-    min-width: 0;
   `,
 }));
 
@@ -175,6 +200,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
     tabKey,
   }) => {
     const closable = !pinned && !!onClose;
+    const showClose = closable && active;
 
     // Middle click closes any closable tab — a shortcut on top of the active
     // tab's close button and the context menu, never the only way to close.
@@ -197,7 +223,7 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
       >
         <button
           aria-pressed={active}
-          className={styles.tab}
+          className={`${styles.tab} ${pinned ? styles.tabPinned : ''}`}
           data-tab-key={tabKey}
           title={typeof label === 'string' ? label : undefined}
           type="button"
@@ -205,14 +231,23 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
         >
           <span className={styles.trigger}>
             <span className={styles.icon}>{iconNode ?? <Icon icon={icon} size={14} />}</span>
-            <span className={styles.label}>{label}</span>
+            <span
+              className={styles.label}
+              data-label={typeof label === 'string' ? label : undefined}
+            >
+              <span
+                className={`${styles.labelText} ${showClose ? styles.labelTextBehindClose : ''}`}
+              >
+                {label}
+              </span>
+            </span>
           </span>
         </button>
         {pinned ? (
           <span aria-label={pinnedLabel} className={styles.pinned} role="img">
             <Icon icon={PinIcon} size={12} />
           </span>
-        ) : closable && active ? (
+        ) : showClose ? (
           // Only the selected tab exposes a close button, so dense strips of
           // short labels never fill up with close targets.
           <button
