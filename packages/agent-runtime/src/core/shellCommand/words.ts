@@ -168,6 +168,21 @@ export const expandBraceAlternatives = (word: string, depth = 0): string[] => {
  * `-r` before exec, so the recursive flag must be classified here rather than
  * left inside the literal `{…}` token.
  */
+/**
+ * Register every candidate flag letter of a dash word this analyzer cannot
+ * expand: brace groups are transparent (`-r{f,}` may be `-rf`), and letters of
+ * a substituted segment are unknown, so anything alphanumeric counts. Reading
+ * a letter that is not really a flag is harmless — the predicates only look at
+ * `r` / `R` / `f` and the long-flag names — while missing one hides a delete.
+ */
+const collectCandidateLetters = (word: string, letters: Set<string>): void => {
+  for (const letter of word.replaceAll(/[{}]/g, '')) {
+    if (!/[a-z\d]/i.test(letter)) continue;
+    letters.add(letter);
+    letters.add(letter.toLowerCase());
+  }
+};
+
 export const collectFlagLettersAndNames = (
   flags: string[],
 ): { letters: Set<string>; names: Set<string> } => {
@@ -183,11 +198,19 @@ export const collectFlagLettersAndNames = (
       // recursion at all. Register every candidate letter instead — over
       // detection only routes the segment to the conservative fallback.
       if (isDashWord(variant) && hasUnresolvedBraceAlternation(variant)) {
-        for (const letter of variant.replaceAll(/[{}]/g, '')) {
-          if (!/[a-z\d]/i.test(letter)) continue;
-          letters.add(letter);
-          letters.add(letter.toLowerCase());
-        }
+        collectCandidateLetters(variant, letters);
+        continue;
+      }
+      // A SHORT flag word carrying a substitution is flagless to a `-letters`
+      // regex, but not to Bash: `unset X; rm -rf${X} ~` invokes `rm -rf ~`, and
+      // `${FLAGS}` can supply the recursive flag on its own. The substituted
+      // text is unknowable here, so assume the recursive and force letters
+      // rather than reporting a command with no recursive delete. Long flags
+      // are excluded: `--exclude=$X` names its flag before the substitution.
+      if (isDashWord(variant) && !variant.startsWith('--') && /[$`]/.test(variant)) {
+        collectCandidateLetters(variant, letters);
+        letters.add('f');
+        letters.add('r');
         continue;
       }
       // Long flag: --name or --name=value → register both the name and, for

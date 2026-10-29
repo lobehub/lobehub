@@ -1022,6 +1022,27 @@ describe('matchSemanticShellPredicate', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
     });
 
+    it.each([
+      // The substituted part of a short flag word is unknowable here; Bash
+      // still runs `rm -rf ~`, so the flag must be read conservatively.
+      'unset X; rm -rf${X} ~',
+      'unset X; rm -rf${X} /',
+      'unset X; rm -r${X} -f ~',
+    ])('keeps a recursive flag that carries a substitution: %s', (command) => {
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', command) ||
+          matchSemanticShellPredicate('rmRecursiveRootTarget', command),
+      ).toBe(true);
+    });
+
+    it('leaves a long flag with a substituted value alone', () => {
+      // `--exclude=$X` names its flag before the substitution: no recursion.
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm -r --exclude=$X ~'),
+      ).toBe(true);
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'rm --exclude=$X ~')).toBe(false);
+    });
+
     it('still allows an over-budget group with no recursive delete', () => {
       expect(
         matchSemanticShellPredicate(
