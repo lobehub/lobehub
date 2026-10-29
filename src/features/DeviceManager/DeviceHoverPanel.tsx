@@ -11,8 +11,8 @@ import {
   LayersIcon,
   type LucideIcon,
   MemoryStickIcon,
+  MessagesSquareIcon,
   MonitorIcon,
-  PlayIcon,
   PowerIcon,
   ServerIcon,
   UserIcon,
@@ -151,6 +151,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         {dayjs(summary.lastConnectedAt).fromNow()}
       </InfoRow>
       {online && (
+        <InfoRow icon={MessagesSquareIcon} label={t('devices.card.runningTopics')}>
+          <DeviceRunningSummaryValue deviceId={device.deviceId} />
+        </InfoRow>
+      )}
+      {online && (
         <div className={styles.usage}>
           {usage.loading ? (
             <UsageMeterGroup loading>
@@ -167,11 +172,6 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
             </UsageMeterGroup>
           )}
         </div>
-      )}
-      {online && (
-        <InfoRow icon={PlayIcon} label={t('devices.card.runningTopics')}>
-          <DeviceRunningSummaryValue deviceId={device.deviceId} />
-        </InfoRow>
       )}
 
       <Section color={cssVar.colorInfo} title={t('devices.detail.specs')} />
