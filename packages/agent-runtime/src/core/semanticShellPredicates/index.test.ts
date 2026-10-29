@@ -989,6 +989,42 @@ describe('matchSemanticShellPredicate', () => {
     );
   });
 
+  // Past the nesting depth budget the literal `{rm,echo}` group survived into
+  // argv and was trusted as a confident executable name, so the delete ran
+  // while every predicate returned false.
+  describe('brace expansion budget exhausted', () => {
+    it.each([
+      '{{{{{{rm,echo},echo},echo},echo},echo},echo} -rf ~',
+      '{{{{{{rm,echo},echo},echo},echo},echo},echo} -rf /',
+    ])('stays conservative when the depth budget is exhausted: %s', (command) => {
+      expect(
+        matchSemanticShellPredicate('rmRecursiveHomeTarget', command) ||
+          matchSemanticShellPredicate('rmRecursiveRootTarget', command),
+      ).toBe(true);
+    });
+
+    it('stays conservative when the variant-count budget is exhausted', () => {
+      // 2^6 = 64 variants exceed the per-word cap of 32.
+      const command = '{a,b}{c,d}{e,f}{g,h}{i,j}{k,l} -rf ~';
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it('still allows an over-budget group with no recursive delete', () => {
+      expect(
+        matchSemanticShellPredicate(
+          'rmRecursiveHomeTarget',
+          '{{{{{{echo,printf},echo},echo},echo},echo},echo} hi',
+        ),
+      ).toBe(false);
+    });
+
+    it('treats an unbalanced brace group as literal, not as an expansion', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', 'echo {rm,echo -rf ~')).toBe(
+        false,
+      );
+    });
+  });
+
   // `{fd}>file` is a named-descriptor redirection: the `{name}` prefix belongs
   // to the redirection, but it survived into argv and took the command slot, so
   // the real `rm` after the redirection was never resolved.

@@ -30,7 +30,45 @@ export const commandBasename = (word: string): string => {
  * resolve it to null so the ambiguity fallback stays conservative.
  */
 export const isUnresolvableCommandWord = (word: string): boolean =>
-  word.includes('$') || word.includes('`');
+  word.includes('$') || word.includes('`') || hasUnresolvedBraceAlternation(word);
+
+/**
+ * A comma-bearing brace group (a real Bash expansion, not the literal `{fd}`
+ * named-descriptor prefix) that SURVIVED brace expansion. That happens only
+ * when `expandBraceAlternatives` hit its depth or variant budget, or when the
+ * group is unbalanced — and an unbalanced `{a,b` is literal in Bash, so it is
+ * excluded here.
+ *
+ * A surviving group means the executable this word becomes is unknowable at
+ * parse time: `{{{{{{rm,echo},echo},echo},echo},echo},echo} -rf ~` runs `rm`
+ * with `-rf` on the home directory, but the depth cap returns the literal
+ * text, which command resolution then trusts as an unrelated executable name.
+ * Treat it like a substitution — resolve to null and let the ambiguity
+ * fallback stay conservative — instead of as a confident command name.
+ */
+export const hasUnresolvedBraceAlternation = (word: string): boolean => {
+  for (let i = 0; i < word.length; i++) {
+    if (word[i] !== '{') continue;
+    let level = 0;
+    let hasComma = false;
+    let close = -1;
+    for (let j = i; j < word.length; j++) {
+      const char = word[j];
+      if (char === '{') level++;
+      else if (char === '}') {
+        level--;
+        if (level === 0) {
+          close = j;
+          break;
+        }
+      } else if (char === ',' && level === 1) hasComma = true;
+    }
+    if (close < 0) continue;
+    if (hasComma) return true;
+    i = close;
+  }
+  return false;
+};
 
 /**
  * The value a `${NAME<op>WORD}` expansion can produce from its WORD operand:
@@ -56,8 +94,10 @@ export const isDashWord = (word: string): boolean => word.startsWith('-') && wor
  * (`${A:-x,y}`) are not brace-expanded at all.
  *
  * Bounded on both axes (nesting depth and total variants) and falls back to
- * the unexpanded word when a shape exceeds them — an unexpanded token only
- * costs detection, never correctness of the parser.
+ * the unexpanded word when a shape exceeds them. That leftover literal is NOT
+ * a safe argv word: it still contains a group Bash would have expanded, so
+ * `hasUnresolvedBraceAlternation` marks it unresolvable and command
+ * resolution refuses to name an executable from it.
  */
 export const expandBraceAlternatives = (word: string, depth = 0): string[] => {
   if (depth > 4 || !word.includes('{')) return [word];

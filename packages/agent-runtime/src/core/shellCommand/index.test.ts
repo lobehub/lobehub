@@ -146,6 +146,19 @@ describe('analyzeShellCommand', () => {
       const [segment] = analyzeShellCommand('rm -rf ${D:-a,b}');
       expect(segment.words).toEqual(['rm', '-rf', '${D:-a,b}']);
     });
+
+    it('refuses to resolve a command word whose expansion budget was exhausted', () => {
+      // Six nested groups exceed the depth budget, so the literal group
+      // survives — it must not be trusted as the executable name.
+      const [segment] = analyzeShellCommand(
+        '{{{{{{rm,echo},echo},echo},echo},echo},echo} -rf ~',
+      );
+      expect(segment.resolvedCommand).toBeNull();
+      // Flag attribution falls back to the whole-segment view, which is what
+      // the ambiguity fallback reads when the command slot is unresolvable.
+      expect(segment.hasFlag('r')).toBe(true);
+      expect(segment.words).toContain('~');
+    });
   });
 
   describe('wrapper unwrapping', () => {
