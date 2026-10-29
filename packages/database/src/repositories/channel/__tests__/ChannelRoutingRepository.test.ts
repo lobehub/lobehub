@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
@@ -49,6 +49,7 @@ describe('Channel routing input and lease', () => {
   it('leases each attempt once and applies its result exactly once', async () => {
     const { channel, coder, message } = await prepare();
     const input = await routing.claim(channel.id, message.id);
+    assert(input?.status === 'claimed');
     expect(input).toMatchObject({
       attempt: 1,
       userId: fixture.memberId,
@@ -89,7 +90,7 @@ describe('Channel routing input and lease', () => {
       .update(channelThreads)
       .set({ status: 'archived' })
       .where(eq(channelThreads.id, thread.id));
-    expect(await routing.claim(channel.id, reply.id)).toBeNull();
+    expect(await routing.claim(channel.id, reply.id)).toEqual({ status: 'settled' });
     const [settled] = await db
       .select()
       .from(channelMessages)
@@ -154,7 +155,9 @@ describe('Channel routing input and lease', () => {
       .update(channelMembers)
       .set({ status: 'left' })
       .where(eq(channelMembers.id, inactive.id));
-    expect((await routing.claim(channel.id, message.id))?.candidates).toEqual([]);
+    const input = await routing.claim(channel.id, message.id);
+    assert(input?.status === 'claimed');
+    expect(input.candidates).toEqual([]);
   });
 
   it.each(['channel', 'workspace'])(
@@ -176,7 +179,7 @@ describe('Channel routing input and lease', () => {
               eq(workspaceMembers.userId, fixture.memberId),
             ),
           );
-      expect(await routing.claim(channel.id, message.id)).toBeNull();
+      expect(await routing.claim(channel.id, message.id)).toEqual({ status: 'settled' });
       const [current] = await db
         .select()
         .from(channelMessages)
@@ -234,7 +237,8 @@ describe('Channel routing input and lease', () => {
       threadId: thread.id,
     });
     const input = await routing.claim(channel.id, request.id);
-    expect(input?.candidates.map((candidate) => candidate.memberId)).toEqual([coder.id]);
+    assert(input?.status === 'claimed');
+    expect(input.candidates.map((candidate) => candidate.memberId)).toEqual([coder.id]);
     expect(input?.history.map((item) => item.content)).toEqual(['Implement a parser']);
   });
 
@@ -256,7 +260,8 @@ describe('Channel routing input and lease', () => {
       routing: 'jev',
     });
     const input = await routing.claim(channel.id, message.id);
-    expect(input?.history).toHaveLength(20);
+    assert(input?.status === 'claimed');
+    expect(input.history).toHaveLength(20);
     expect(input?.history.every((item) => item.content.length <= 1500)).toBe(true);
     expect(input?.candidates.find((item) => item.memberId === coder.id)?.description).toBe(
       'Owns parsers',

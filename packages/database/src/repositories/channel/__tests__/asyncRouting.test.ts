@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { channelMessages, channelThreads, workspaceMembers } from '../../../schemas';
@@ -96,6 +96,27 @@ describe('asynchronous Channel routing', () => {
       expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
     },
   );
+
+  it('reports claim-time settlement so a blocked job can be retried immediately', async () => {
+    const { agent, asOwner, channel, root } = await setup();
+    const next = await asOwner.send(channel.id, {
+      content: 'Independent request',
+      mentions: [agent.id],
+      requestKey: 'owner-follow-up',
+      routing: 'jev',
+    });
+    const [job] = await jobsOf(db, next.id);
+    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+
+    await db
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, fixture.memberId));
+    expect(await routing.claim(channel.id, root.id)).toEqual({ status: 'settled' });
+    expect(await messageById(root.id)).toMatchObject({ routingStatus: 'unassigned' });
+    expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
+    expect(await routing.claim(channel.id, root.id)).toBeNull();
+  });
 
   it('does not block an Agent on a pending branch belonging only to another Agent', async () => {
     const { agent, asMember, channel, other, root } = await setup();
@@ -193,7 +214,8 @@ describe('asynchronous Channel routing', () => {
         .where(eq(channelThreads.id, reply.threadId!));
       expect(thread.followerMemberIds.sort()).toEqual([agent.id, other.id].sort());
       const input = await routing.claim(channel.id, reply.id);
-      expect(input?.candidates.map((candidate) => candidate.memberId).sort()).toEqual(
+      assert(input?.status === 'claimed');
+      expect(input.candidates.map((candidate) => candidate.memberId).sort()).toEqual(
         [agent.id, other.id].sort(),
       );
       expect(input?.fallback).toBe(mode === 'fallback');
@@ -250,7 +272,7 @@ describe('asynchronous Channel routing', () => {
       reason: 'Provider unavailable',
       status: 'unassigned',
     });
-    expect(await routing.claim(channel.id, reply.id)).toBeNull();
+    expect(await routing.claim(channel.id, reply.id)).toEqual({ status: 'settled' });
     expect((await messageById(reply.id)).routingStatus).toBe('unassigned');
     expect(await jobsOf(db, reply.id)).toEqual([]);
   });
@@ -292,7 +314,8 @@ describe('asynchronous Channel routing', () => {
       status: 'assigned',
     });
     const input = await routing.claim(channel.id, reply.id);
-    expect(input?.candidates.map(({ memberId }) => memberId).sort()).toEqual(recipients.sort());
+    assert(input?.status === 'claimed');
+    expect(input.candidates.map(({ memberId }) => memberId).sort()).toEqual(recipients.sort());
     await execution.resolveRouting(channel.id, reply.id, input!.attempt, {
       memberIds: input!.candidates.map(({ memberId }) => memberId),
       reason: 'Fallback',
