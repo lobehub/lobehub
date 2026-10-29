@@ -63,6 +63,17 @@ describe('AgentEvalExperimentModel coverage', () => {
       expect(error).toBeInstanceOf(Error);
       expect((error as { cause?: { code?: string } }).cause?.code).toBe('23505');
     });
+
+    it('rethrows an insert failure that is not a unique violation', async () => {
+      // No users row for this owner, so the insert fails its foreign key (23503), not a race.
+      const orphan = new AgentEvalExperimentModel(serverDB, 'experiment-coverage-missing-user');
+
+      const error = await orphan
+        .create({ benchmarkIds: [], id: 'experiment-cov-orphan', name: 'orphan' })
+        .catch((e) => e);
+
+      expect((error as { cause?: { code?: string } }).cause?.code).toBe('23503');
+    });
   });
 
   it('findById skips the dataset lookup for an experiment without benchmarks', async () => {
