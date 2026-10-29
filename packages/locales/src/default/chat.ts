@@ -2267,6 +2267,11 @@ export default {
   'createTask.member': 'Assignee',
   'createTask.collapse': 'Hide input',
   'createTask.createFailed': 'Failed to create task',
+  'createTask.discardConfirm.cancel': 'Keep editing',
+  'createTask.discardConfirm.content':
+    'The title, instruction and attachments you added will be lost.',
+  'createTask.discardConfirm.ok': 'Discard',
+  'createTask.discardConfirm.title': 'Discard this task?',
   'createTask.expandToInline': 'Dock to page',
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',
