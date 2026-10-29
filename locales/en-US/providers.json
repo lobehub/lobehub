@@ -32,6 +32,7 @@
   "hunyuan.description": "A Tencent-developed LLM with strong Chinese writing, solid reasoning in complex contexts, and reliable task execution.",
   "infiniai.description": "Provides app developers with high-performance, easy-to-use, secure LLM services across the full workflow from model development to production deployment.",
   "internlm.description": "An open-source organization focused on large-model research and tooling, providing an efficient, easy-to-use platform that makes cutting-edge models and algorithms accessible.",
+  "jalapenocloud.description": "Jalapeno Cloud 50%off is an enterprise-grade AI inference platform with an OpenAI-compatible API, offering models from DeepSeek, Zhipu, MiniMax, Kimi, Qwen, and more.",
   "jina.description": "Founded in 2020, Jina AI is a leading search AI company. Its search stack includes vector models, rerankers, and small language models to build reliable, high-quality generative and multimodal search apps.",
   "kimicodingplan.description": "Kimi Code from Moonshot AI provides access to Kimi models including K2.5 for coding tasks.",
   "lmstudio.description": "LM Studio is a desktop app for developing and experimenting with LLMs on your computer.",
