@@ -2,33 +2,12 @@ import type { AIChatModelCard, AIEmbeddingModelCard } from '../types/aiModel';
 
 // https://flex.ai/models
 // Catalogue metadata (context window, pricing, display name) mirrors
-// GET https://api.flex.ai/v1/models as of 2026-10-22.
+// GET https://api.flex.ai/v1/models as of 2026-10-29.
 // Abilities are probed against the live endpoint rather than read from that
 // response, which under-reports image input on three models and over-reports
 // it on one (see the PR description for the per-model results).
 
 const flexaiChatModels: AIChatModelCard[] = [
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576,
-    displayName: 'DeepSeek V4.1 Flash',
-    family: 'deepseek',
-    generation: 'deepseek-v4.1',
-    id: 'DeepSeek-V4.1-Flash',
-    organization: 'DeepSeek',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.103, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.715, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0154, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
   {
     abilities: {
       functionCall: true,
@@ -53,6 +32,7 @@ const flexaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 1_048_576,
     displayName: 'DeepSeek V4 Flash 0731',
@@ -102,9 +82,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Zhipu',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.966, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3.036, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.1449, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.105, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -264,25 +244,6 @@ const flexaiChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 40_960,
-    displayName: 'Qwen 3 8B',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'Qwen3-8B-FP8',
-    organization: 'Qwen',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.117, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.455, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0175, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
