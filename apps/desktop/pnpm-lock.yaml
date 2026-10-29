@@ -840,6 +840,9 @@ importers:
       '@lobechat/local-file-shell':
         specifier: workspace:*
         version: link:../../packages/local-file-shell
+      '@lobechat/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
       '@lobechat/tool-runtime':
         specifier: workspace:*
         version: link:../../packages/tool-runtime
