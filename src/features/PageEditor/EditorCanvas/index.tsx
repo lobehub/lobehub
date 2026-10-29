@@ -32,6 +32,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
   const documentId = usePageEditorStore((s) => s.documentId);
   const onCollabReset = usePageEditorStore((s) => s.onCollabReset);
   const collabPlugin = usePageCollab(documentId, onCollabReset);
+  const collabConnecting = usePageEditorStore((s) => s.collab?.status === 'connecting');
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
@@ -54,6 +55,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
   return (
     <SharedEditorCanvas
       allowContentBleed
+      bodyPending={!!collabPlugin && collabConnecting}
       className={mentionPlainClassName}
       collab={!!collabPlugin}
       documentId={documentId}

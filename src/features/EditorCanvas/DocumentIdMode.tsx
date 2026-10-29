@@ -40,6 +40,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     editor,
     documentId,
     autoSave = true,
+    bodyPending = false,
     collab = false,
     sourceType = 'page',
     topicId,
@@ -283,15 +284,19 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
             }}
           />
         )}
-        <InternalEditor
-          contentChangeLockRef={contentChangeLockRef}
-          editor={editor}
-          placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
-          style={style}
-          onContentChange={handleChange}
-          onInit={handleEditorInit}
-          {...editorProps}
-        />
+        {bodyPending && <EditorSkeleton />}
+        {/* A room binds to the mounted editor, so it stays mounted while the skeleton shows. */}
+        <div style={{ display: bodyPending ? 'none' : 'contents' }}>
+          <InternalEditor
+            contentChangeLockRef={contentChangeLockRef}
+            editor={editor}
+            placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
+            style={style}
+            onContentChange={handleChange}
+            onInit={handleEditorInit}
+            {...editorProps}
+          />
+        </div>
       </>
     );
   },

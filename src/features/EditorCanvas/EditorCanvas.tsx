@@ -57,6 +57,12 @@ export interface EditorCanvasProps {
   blockImageCaretGuard?: boolean;
 
   /**
+   * The body is not in the editor yet (a room still syncing): the skeleton stays
+   * over the mounted editor (documentId mode only).
+   */
+  bodyPending?: boolean;
+
+  /**
    * Class name applied to the editor wrapper, e.g. to restyle inline chips.
    */
   className?: string;
