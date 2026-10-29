@@ -491,4 +491,53 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
       expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
     });
   });
+
+  // The two review findings below are about PROVENANCE of parsing state: a
+  // substitution body owns its quoting, and a wrapper switch of unknown arity
+  // must not be able to hide the command it runs.
+  describe('twenty-fourth-round review: substitution quoting and wrapper option arity', () => {
+    it('does not let an inner quote close the caller double-quoted region', () => {
+      const command = `echo "$(echo '";')"; rm -rf ~`;
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      // Without the trailing deletion the same line is plain echo work.
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', `echo "$(echo '";')"`)).toBe(
+        false,
+      );
+    });
+
+    it.each([
+      ['rmRecursiveHomeTarget', `echo "$(echo ")")"; rm -rf ~`],
+      ['rmRecursiveHomeTarget', `echo $(echo ')'); rm -rf ~`],
+    ] as const)(
+      'keeps a quoted paren inside the substitution body (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
+
+    // `exec -c` and `setsid -f/--fork` take no value word, so the command that
+    // follows them is the real executable — the unlisted switches used to eat
+    // `rm` and leave `~` as a confidently unrelated executable.
+    it.each([
+      ['rmRecursiveHomeTarget', 'exec -c rm -rf /tmp/cache ~'],
+      ['rmRecursiveHomeTarget', 'setsid -f rm -rf /tmp/cache ~'],
+      ['rmRecursiveHomeTarget', 'setsid --fork rm -rf /tmp/cache ~'],
+      ['rmRecursiveHomeTarget', 'exec -c -l rm -rf ~'],
+      ['rmRecursiveRootTarget', 'exec -c rm -rf /'],
+    ] as const)(
+      'still blocks the wrapped command behind value-free wrapper switches (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
+
+    // A switch whose arity is unknown stays ambiguous, which routes the
+    // segment through the fallback instead of trusting a guessed executable.
+    it.each(['exec -Z rm -rf ~', 'setsid -Z rm -rf ~', 'nohup -Z rm -rf ~'])(
+      'still blocks through the ambiguity fallback when the switch arity is unknown: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      },
+    );
+  });
 });

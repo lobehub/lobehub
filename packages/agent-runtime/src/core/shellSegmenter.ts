@@ -126,10 +126,15 @@ export const splitIntoRawSegments = (command: string): string[] => {
   // `$'…'` (ANSI-C) quoting: escapes are live, so the quote is only closed by
   // an UNESCAPED apostrophe. Plain `'…'` keeps every backslash literal.
   let inAnsiCQuote = false;
-  // Tracks positions of unquoted command substitutions: we DO split on
-  // separators outside quotes; substitution content retains its separators
-  // because $( and backtick regions are tracked below.
+  // Tracks positions of command substitutions: we DO split on separators
+  // outside quotes; substitution content retains its separators because $( and
+  // backtick regions are tracked below.
   let inSubstitution = 0; // depth for $( )
+  // A `$(…)` body is parsed on its own, so its quoting never leaks into the
+  // shell that opened it: `subQuote` is the substitution's OWN quote state and
+  // `resumeQuote` the quote state to restore when the body closes.
+  let subQuote: '"' | "'" | null = null;
+  let resumeQuote: '"' | "'" | null = null;
   let inBacktick = false;
   // Heredoc state: once an unquoted `<<`/`<<-` operator (optionally fd-
   // prefixed, e.g. `2<<`) is seen, the delimiter word follows on the SAME
@@ -325,6 +330,61 @@ export const splitIntoRawSegments = (command: string): string[] => {
       continue;
     }
 
+    // A `$(…)` body is parsed with its OWN quoting, independent of any
+    // enclosing double quote: in `echo "$(echo '";')"; rm -rf ~` the inner `"`
+    // belongs to the substitution's single-quoted string and does NOT close the
+    // outer quote. Reading it as the closing quote split the segment at the
+    // inner `;`, left the trailing `')"` as a phantom quoted region that
+    // swallowed the real command, and every predicate returned false while
+    // bash deleted the home directory.
+    if (inSubstitution > 0) {
+      if (subQuote) {
+        // Inside the substitution's own quotes: `"` keeps live escapes, `'`
+        // is fully literal.
+        if (subQuote === '"' && char === '\\' && i + 1 < PREPARED.length) {
+          current += char + PREPARED[i + 1];
+          i++;
+          continue;
+        }
+        if (char === subQuote) subQuote = null;
+        current += char;
+        continue;
+      }
+      if (char === '\\' && i + 1 < PREPARED.length) {
+        current += char + PREPARED[i + 1];
+        i++;
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        subQuote = char;
+        current += char;
+        continue;
+      }
+      if (char === '(') inSubstitution++;
+      if (char === ')' && --inSubstitution === 0) {
+        // The body closed: resume the quoting of the shell that opened it, so
+        // a `$(…)` inside `"…"` returns to the double-quoted region.
+        quote = resumeQuote;
+        resumeQuote = null;
+        current += char;
+        continue;
+      }
+      current += char;
+      continue;
+    }
+
+    // `$(…)` is executable wherever it appears, including inside DOUBLE quotes
+    // (inside `'…'` and `$'…'` it is literal text and must stay untouched).
+    if (!inBacktick && quote !== "'" && char === '$' && PREPARED[i + 1] === '(') {
+      resumeQuote = quote;
+      quote = null;
+      subQuote = null;
+      inSubstitution = 1;
+      current += '$(';
+      i++;
+      continue;
+    }
+
     if (quote) {
       current += char;
       // ANSI-C quoting keeps backslash escapes live: `\'` is a literal
@@ -412,20 +472,6 @@ export const splitIntoRawSegments = (command: string): string[] => {
 
     if (char === '`') {
       inBacktick = !inBacktick;
-      current += char;
-      continue;
-    }
-
-    if (!inSubstitution && !inBacktick && char === '$' && PREPARED[i + 1] === '(') {
-      inSubstitution = 1;
-      current += '$(';
-      i++;
-      continue;
-    }
-
-    if (inSubstitution) {
-      if (char === '(') inSubstitution++;
-      if (char === ')') inSubstitution--;
       current += char;
       continue;
     }

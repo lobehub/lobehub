@@ -739,4 +739,55 @@ rm -rf ~`);
       expect(piped.some((seg) => seg.resolvedCommand === 'rm')).toBe(true);
     });
   });
+
+  describe('twenty-fourth-round review: substitution quoting and wrapper option arity', () => {
+    it('parses a $(…) body with its own quoting instead of the caller double quotes', () => {
+      // The inner `"` belongs to the substitution's single-quoted string, so it
+      // must NOT close the outer double quote. Reading it as the closing quote
+      // split the segment at the inner `;` and left `')"` as a phantom quoted
+      // region that swallowed the real command.
+      const segments = analyzeShellCommand(`echo "$(echo '";')"; rm -rf ~`);
+      expect(segments).toHaveLength(2);
+      expect(segments[0].resolvedCommand).toBe('echo');
+      expect(segments[1].resolvedCommand).toBe('rm');
+      expect(segments[1].homeTargets).toContain('~');
+    });
+
+    it('keeps a quoted paren inside a substitution body from closing it', () => {
+      // The `)` sits inside the substitution's own quotes, so the body ends at
+      // the LAST paren and the separator after it still starts a new segment.
+      const doubleQuoted = analyzeShellCommand(`echo "$(echo ")")"; rm -rf ~`);
+      expect(doubleQuoted.at(-1)?.resolvedCommand).toBe('rm');
+
+      const bare = analyzeShellCommand(`echo $(echo ')'); rm -rf ~`);
+      expect(bare.at(-1)?.resolvedCommand).toBe('rm');
+      expect(bare.at(-1)?.homeTargets).toContain('~');
+    });
+
+    it('resolves the wrapped command behind value-free exec/setsid switches', () => {
+      // `help exec`: `exec [-cl] [-a name] [command …]`; `setsid --help`:
+      // `-c/--ctty`, `-f/--fork`, `-w/--wait`. Unlisted, these switches were
+      // treated as value-taking: they ate `rm`, then `/tmp/cache` became the
+      // value of `-rf`, and `~` resolved as a confidently unrelated executable.
+      for (const command of [
+        'exec -c rm -rf /tmp/cache ~',
+        'exec -c -l rm -rf ~',
+        'setsid -f rm -rf /tmp/cache ~',
+        'setsid --fork rm -rf /tmp/cache ~',
+      ]) {
+        const seg = analyzeShellCommand(command)[0];
+        expect(seg.resolvedCommand).toBe('rm');
+        expect(seg.homeTargets).toContain('~');
+      }
+    });
+
+    it('reports ambiguity for a wrapper switch whose arity is unknown', () => {
+      // Neither guess is safe: "value-free" resolves the option's value as the
+      // command, "value-taking" eats the wrapped command and trusts whatever
+      // follows. Unknown arity must stay ambiguous for the fallback to judge.
+      for (const command of ['exec -Z rm -rf ~', 'setsid -Z rm -rf ~', 'nohup -Z rm -rf ~']) {
+        expect(analyzeShellCommand(command)[0].resolvedCommand).toBeNull();
+      }
+    });
+  });
 });

@@ -286,6 +286,18 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
   // wrapped command and left `~` as a confidently unrelated executable, so
   // `time -p rm -rf /tmp/cache ~` passed every predicate.
   time: new Set(['p']),
+  // bash `exec` builtin (`help exec`: `exec [-cl] [-a name] [command …]`):
+  // `-c` executes the command with an empty environment and `-l` makes it a
+  // login shell — neither takes a word (`-a NAME` does, see
+  // WRAPPER_VALUE_SHORT_FLAGS). Unlisted, `-c` defaulted to value-taking, ate
+  // `rm`, then `/tmp/cache` became the value of `-rf` and `~` resolved as a
+  // confidently unrelated executable, so `exec -c rm -rf /tmp/cache ~` passed
+  // every predicate while bash ran the deletion.
+  exec: new Set(['c', 'l']),
+  // util-linux `setsid` (`setsid --help`: `-c, --ctty`, `-f, --fork`,
+  // `-w, --wait`) — all switches, none takes a value word. Same failure shape
+  // as `exec -c`: `setsid -f rm -rf /tmp/cache ~` resolved `~` as the command.
+  setsid: new Set(['c', 'f', 'w']),
 };
 
 /**
@@ -298,6 +310,9 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
 const WRAPPER_VALUE_SHORT_FLAGS: Record<string, ReadonlySet<string>> = {
   env: new Set(['u', 'C', 'S']),
   sudo: new Set(['p', 'u', 'g', 'C', 'R', 'r', 't', 'T', 'D']),
+  // bash `exec -a NAME` (argv[0] override) is the builtin's only value-taking
+  // short option.
+  exec: new Set(['a']),
   xargs: new Set(['a', 'E', 'I', 'L', 'n', 'P', 's', 'd']),
   runuser: new Set(['u', 'g', 'c']),
   timeout: new Set(['k', 's']),
@@ -375,6 +390,8 @@ const WRAPPER_VALUE_FREE_LONG_FLAGS: Record<string, ReadonlySet<string>> = {
   ]),
   // GNU time long switches (the `-p` above is the bash keyword form).
   time: new Set(['--portability', '--verbose', '--quiet']),
+  // util-linux `setsid` long forms mirror the short switches above.
+  setsid: new Set(['--ctty', '--fork', '--wait']),
 };
 
 /**
@@ -615,15 +632,20 @@ const resolveCommandWord = (words: string[]): { index: number; name: string } | 
           index++;
           continue;
         }
+        // Unknown short-option arity: this wrapper's tables say nothing about
+        // the letter, so "consume the next word" is a GUESS that can hide the
+        // real command — `exec -c rm -rf /tmp/cache ~` ate `rm`, made
+        // `/tmp/cache` the value of `-rf`, and resolved `~` as a confidently
+        // unrelated executable, so every predicate returned false while bash
+        // ran the deletion. Report ambiguity and let the segment-level fallback
+        // judge the raw words instead of trusting a command found after
+        // presumed operands.
+        if (valueTakingShortFlags?.has(lettersOfFlag[valueAt]) !== true) return null;
         // The head was value-free, so a later value-taking letter decides:
         // last position takes the NEXT word (`-nu ROOT`), an earlier one can
         // carry an ATTACHED value (`-nuROOT`) — but only for a letter this
-        // wrapper is known to give a value to. A foreign cluster like `-rf`
-        // (left over after a swallowed command) keeps the security-first
-        // default and consumes the next word.
-        const takesAttachedValue =
-          valueAt !== lettersOfFlag.length - 1 &&
-          valueTakingShortFlags?.has(lettersOfFlag[valueAt]) === true;
+        // wrapper is known to give a value to.
+        const takesAttachedValue = valueAt !== lettersOfFlag.length - 1;
         index += takesAttachedValue ? 1 : 2;
         continue;
       }
