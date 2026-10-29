@@ -286,8 +286,8 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
       if (isDesktop && activeAgentId && !pathname.startsWith('/popup')) {
         items.push({
           icon: <Icon icon={ExternalLink} />,
-          key: 'openInPopupWindow',
-          label: t('inPopup.title', { ns: 'topic' }),
+          key: 'openInNewWindow',
+          label: t('actions.openInNewWindow', { ns: 'topic' }),
           onClick: () => {
             openTopicInNewWindow(activeAgentId, topicId);
           },
