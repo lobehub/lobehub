@@ -21,6 +21,15 @@ const withExpansionOperand =
 const hasGlobMeta = (component: string): boolean => /[*?[]/.test(component);
 
 /**
+ * Collapse repeated trailing separators to at most one. `/home/alice//` and
+ * `~//` name the same directories as their single-slash counterparts, so the
+ * family tests must compare the normalized form — otherwise the exact-string
+ * home comparisons and the `/?$` suffix reject a real deletion.
+ */
+const collapseTrailingSlashes = (operand: string): string =>
+  operand.length > 1 ? operand.replace(/\/{2,}$/, '/') : operand;
+
+/**
  * A glob component directly under root that expands to essentially the whole
  * top level: `*`, `**`, `?`, `?*`, `[a-z]*`, `.*`. Narrowing the expansion
  * with a literal name (`*.log`, `tmp*`) keeps it a subset delete and out of
@@ -90,9 +99,11 @@ export const isRootFamilyTarget = withExpansionOperand(isRootFamilyTargetLiteral
 /** Home-directory targets: ~, $HOME, /Users/<name>, /home/<name> (optional
  * trailing slash). Shared by the precise predicate and the scoped fallback.
  * Grouping parens are stripped first: `(rm -rf ~)` leaves the operand as `~)`,
- * and only the root family used to normalize that operator away. */
+ * and only the root family used to normalize that operator away. Repeated
+ * trailing separators (`rm -rf ~//`, `$HOME//`) name the same directory, so
+ * they collapse to at most one before the comparison. */
 export const isHomeTarget = withExpansionOperand((word: string): boolean => {
-  const operand = stripGroupingParens(word);
+  const operand = collapseTrailingSlashes(stripGroupingParens(word));
   return (
     operand === '~' ||
     operand === '$HOME' ||

@@ -27,6 +27,24 @@ export const withoutLiteralMarkers = (word: string): string =>
   word.includes(LITERAL_EXPANSION_MARKER) ? word.split(LITERAL_EXPANSION_MARKER).join('') : word;
 
 /**
+ * Long options whose VALUE is a shell command handed to another shell
+ * (`su --command='rm -rf ~'`). Quote stripping leaves them glued to the option
+ * name in one word, so the payload only becomes visible after the `=` split.
+ * Only the inline `--opt=value` form is handled here; the spaced form arrives
+ * as its own argv word and is re-parsed by the caller like any other word.
+ */
+const COMMAND_VALUED_LONG_OPTIONS = new Set(['--command', '--session-command']);
+
+export const inlineCommandOptionPayload = (word: string): string | undefined => {
+  if (!word.startsWith('--')) return undefined;
+  const separator = word.indexOf('=');
+  if (separator <= 2) return undefined;
+  if (!COMMAND_VALUED_LONG_OPTIONS.has(word.slice(0, separator))) return undefined;
+  const payload = word.slice(separator + 1);
+  return payload.trim() ? payload : undefined;
+};
+
+/**
  * Command substitutions execute BEFORE the surrounding command, so a confident
  * outer command says nothing about them: `echo $(rm -rf ~)` deletes the home
  * directory and then echoes the empty result. The outer words themselves are
@@ -69,9 +87,29 @@ export const substitutionPayloads = (word: string): string[] => {
     if (word[index] === '`') {
       // Same provenance rule: `'\` … \`'` inside single quotes is literal text.
       if (isLiteralExpansionAt(word, index)) continue;
-      const end = word.indexOf('`', index + 1);
+      // The real closing delimiter is the first UNMARKED backtick. A marked
+      // one is a backslash-escaped backtick belonging to the INNER level: in
+      // `` `echo \`rm -rf ~\`` `` the tokenizer marks the escaped pair, and
+      // taking the marked backtick as the end truncated the payload before
+      // `rm` — while Bash unescapes the pair and the inner substitution
+      // deletes the directory.
+      let end = -1;
+      for (let cursor = index + 1; cursor < word.length; cursor++) {
+        if (word[cursor] === '`' && !isLiteralExpansionAt(word, cursor)) {
+          end = cursor;
+          break;
+        }
+      }
       if (end < 0) continue;
-      payloads.push(word.slice(index + 1, end));
+      // The payload is a fresh shell level, so the escaped backticks it
+      // carries become real delimiters there — drop their markers before the
+      // re-parse reads them as nesting.
+      payloads.push(
+        word
+          .slice(index + 1, end)
+          .split(LITERAL_EXPANSION_MARKER + '`')
+          .join('`'),
+      );
       index = end;
     }
   }

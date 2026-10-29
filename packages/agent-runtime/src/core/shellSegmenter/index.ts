@@ -36,6 +36,12 @@ const isEscapedAt = (text: string, index: number): boolean => {
 const EXECUTABLE_EXPANSION = /\$\(|`/;
 
 /**
+ * A Bash named-descriptor prefix: `{fd}>file` opens descriptor `fd` as part of
+ * the REDIRECTION, so the `{name}` word must not survive into argv.
+ */
+const NAMED_DESCRIPTOR_PREFIX = /^\{\w+\}$/;
+
+/**
  * Marker for an expansion sigil that does NOT expand because single quotes (or
  * a backslash) suppress it. `'$(rm -rf ~)'` is literal text: without the marker
  * the quote-stripped word looks exactly like a real substitution and the
@@ -839,6 +845,14 @@ export const tokenizeWords = (raw: string): string[] => {
     }
 
     if (isRedirectAt(i)) {
+      // Bash named-descriptor redirection: `{fd}>/dev/null rm -rf ~` opens the
+      // descriptor `fd` and the `{name}` prefix belongs to the REDIRECTION, not
+      // to argv. Kept as a word it became the command word, so resolution
+      // confidently picked `{fd}` and every predicate skipped the real `rm`.
+      if (hasWord && NAMED_DESCRIPTOR_PREFIX.test(word)) {
+        word = '';
+        hasWord = false;
+      }
       // Skip the redirection operator (and any fd digits before it).
       flush();
       let j = i;

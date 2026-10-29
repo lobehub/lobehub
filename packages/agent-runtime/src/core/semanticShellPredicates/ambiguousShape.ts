@@ -8,6 +8,7 @@ import {
   parameterExpansionOperand,
 } from '../shellCommand';
 import {
+  inlineCommandOptionPayload,
   interpreterPayloadWords,
   isShellInterpreterWord,
   substitutionPayloads,
@@ -56,6 +57,11 @@ const payloadIsDangerous = (
   // A glued short-flag+value token (`-Srm -rf /` from `env -S'rm -rf /'`)
   // buries the payload after the flag letter; also try the un-glued tail.
   const candidates = word.startsWith('-') && word.length > 2 ? [word, word.slice(2)] : [word];
+  // `su --command='rm -rf ~'` keeps the command glued to the option name, so
+  // the word itself parses as the flag `--command=rm` and the payload is only
+  // reachable through the `=` split.
+  const inlinePayload = inlineCommandOptionPayload(word);
+  if (inlinePayload !== undefined) candidates.push(inlinePayload);
   // `${X:-rm -rf /}` in the command slot word-splits its operand into the
   // executed argv: re-parse the operand as a payload too.
   const operand = parameterExpansionOperand(word);
@@ -116,6 +122,12 @@ const AMBIGUOUS_COMMAND_HINTS = new Set([
   // the unwrap loop before the command word), so the ambiguity fallback must
   // cover its segments.
   'runuser',
+  // `su` is a privilege switch, not an exec prefix: `su -c 'rm -rf ~'` resolves
+  // confidently to `su` while the delete runs in the target user's shell, so
+  // the `-c/--command` value has to be re-parsed here. The `-s` shell path and
+  // the optional trailing user keep the unwrap loop from ever reaching the
+  // payload, which is why this set — not the resolver — owns the shape.
+  'su',
 ]);
 
 /**

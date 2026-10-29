@@ -105,9 +105,16 @@ export const expandBraceAlternatives = (word: string, depth = 0): string[] => {
 
   const expanded: string[] = [];
   for (const member of members) {
-    for (const tail of tails) {
-      expanded.push(`${prefix}${member}${tail}`);
-      if (expanded.length > 32) return [word];
+    // A member can be a brace group of its own (`{{rm,echo},true}`): Bash
+    // expands the inner group before exec, so keeping `{rm,echo}` literal let
+    // the resolver treat it as an unrelated executable and miss the `rm`
+    // deletion. Expand each member recursively; the depth/budget caps below
+    // still bound the work.
+    for (const variant of expandBraceAlternatives(member, depth + 1)) {
+      for (const tail of tails) {
+        expanded.push(`${prefix}${variant}${tail}`);
+        if (expanded.length > 32) return [word];
+      }
     }
   }
   return expanded;

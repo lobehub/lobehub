@@ -908,4 +908,168 @@ describe('matchSemanticShellPredicate', () => {
       expect(matchSemanticShellPredicate('rmRecursiveRootTarget', 'cat <<< "hello"')).toBe(false);
     });
   });
+
+  // `su` is not a shell interpreter and not a plain exec-prefix wrapper: its
+  // `-c/--command` value is handled to the target user's shell, so the segment
+  // resolves confidently to `su` while the delete runs in the child shell.
+  describe('nineteenth-round review: su command payloads', () => {
+    it.each([
+      "su -m -s /bin/bash -c 'rm -rf ~' root",
+      "su -c 'rm -rf ~'",
+      "su --command='rm -rf ~' root",
+      "su - root -c 'rm -rf ~'",
+      "su -c 'cd / && rm -rf ~'",
+    ])('blocks a delete handed to su -c: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it.each(["su -c 'rm -rf /' root", 'su -lc "rm -rf /"'])(
+      'blocks a root delete handed to su -c: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(true);
+      },
+    );
+
+    it.each([
+      "su -c 'ls -la' root",
+      'su alice',
+      "su -c 'echo rm -rf ~'",
+      "su -c 'rm -rf /tmp/build-cache'",
+      'su -l alice -c whoami',
+    ])('keeps a harmless su invocation allowed: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+    });
+  });
+
+  // Both spellings name an already-covered target, but the exact-string home
+  // comparisons rejected the doubled separator, so the delete went through.
+  describe('repeated trailing separators in home targets', () => {
+    it.each(['rm -rf ~//', 'rm -rf $HOME//', 'rm -rf ${HOME}//', 'rm -rf /home/alice//'])(
+      'reads a doubled trailing slash as the same home target: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      },
+    );
+
+    it.each(['rm -rf /Users/alice//', 'rm -rf ~///'])(
+      'reads deeper trailing separators as the same home target: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      },
+    );
+
+    it.each(['rm -rf /tmp//', 'rm -rf ~/notes//', 'echo ~//'])(
+      'keeps a non-home operand with a doubled slash allowed: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      },
+    );
+  });
+
+  // A member of a brace group can itself be a group: Bash expands the inner
+  // one before exec, so leaving it literal hid the `rm` in the command slot.
+  describe('nested brace alternatives in the command slot', () => {
+    it.each(['{{rm,echo},true} -rf ~', '{{rm,echo},true} -rf /', '{{{rm,true},echo},false} -rf ~'])(
+      'expands an inner brace group before resolving the command: %s',
+      (command) => {
+        expect(
+          matchSemanticShellPredicate('rmRecursiveHomeTarget', command) ||
+            matchSemanticShellPredicate('rmRecursiveRootTarget', command),
+        ).toBe(true);
+      },
+    );
+
+    it.each(['{{echo,printf},true} -rf ~', '{rm,echo} -rf /tmp/build-cache'])(
+      'keeps a nested brace command without a dangerous target allowed: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+        expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+      },
+    );
+  });
+
+  // `{fd}>file` is a named-descriptor redirection: the `{name}` prefix belongs
+  // to the redirection, but it survived into argv and took the command slot, so
+  // the real `rm` after the redirection was never resolved.
+  describe('named descriptor redirections', () => {
+    it.each([
+      '{fd}>/dev/null rm -rf ~',
+      '{out}>>/tmp/log rm -rf ~',
+      'exec {fd}>/dev/null rm -rf ~',
+    ])('keeps the named descriptor out of argv: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it('blocks a root delete behind a named descriptor', () => {
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', '{fd}>/dev/null rm -rf /')).toBe(
+        true,
+      );
+    });
+
+    it.each(['{fd}>/dev/null echo hi', 'echo {fd}', '{fd}'])(
+      'keeps a harmless named descriptor allowed: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+        expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+      },
+    );
+  });
+
+  // A function body that names its own target deletes it on every call, so the
+  // invocation has to be judged on the body — the definition segment resolves
+  // to `f(){` and the call to `f`, so nothing else reads the target.
+  describe('invoked function bodies with explicit targets', () => {
+    it.each([
+      'f(){ rm -rf ~; }; f; echo ~',
+      'f() { rm -rf ~; }; f',
+      'function f { rm -rf ~; }; f',
+      'zap(){ cd /tmp; rm -rf ~; }; zap',
+    ])('blocks a delete named inside an invoked body: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+    });
+
+    it('blocks a root delete named inside an invoked body', () => {
+      expect(
+        matchSemanticShellPredicate('rmRecursiveRootTarget', 'f(){ rm -rf /; }; f; echo /'),
+      ).toBe(true);
+    });
+
+    it.each([
+      'f(){ rm -rf /tmp/build-cache; }; f',
+      'f(){ rm -f ~; }; f',
+      'f(){ echo rm -rf ~; }; f',
+      'f(){ rm -rf ~; }; echo f',
+    ])('keeps an undefined or harmless body allowed: %s', (command) => {
+      expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+    });
+  });
+
+  // A backslash-escaped backtick pair inside a substitution belongs to the
+  // INNER shell level: Bash unescapes it and runs the nested substitution.
+  // Reading the escaped backtick as the outer closing delimiter cut the payload
+  // off before `rm`.
+  describe('nested backtick substitutions', () => {
+    it.each(['echo `echo \\`rm -rf ~\\``; echo ~', 'echo `echo \\`rm -rf ~\\``'])(
+      'blocks a delete in a nested backtick substitution: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(true);
+      },
+    );
+
+    it('blocks a root delete in a nested backtick substitution', () => {
+      expect(
+        matchSemanticShellPredicate('rmRecursiveRootTarget', 'echo `echo \\`rm -rf /\\``'),
+      ).toBe(true);
+    });
+
+    it.each(['echo `echo \\`ls -la\\``', 'echo \\`rm -rf ~\\`', "echo '`rm -rf ~`'"])(
+      'keeps a literal or harmless backtick word allowed: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+        expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+      },
+    );
+  });
 });
