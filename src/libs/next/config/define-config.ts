@@ -14,17 +14,6 @@ interface CustomNextConfig {
   turbopack?: NextConfig['turbopack'];
 }
 
-// pageCollab's `loadEditorYjs` imports @lobehub/editor's Yjs plugin by file URL,
-// which the server trace cannot follow; without these files every room
-// projection fails in serverless and standalone builds.
-export const EDITOR_YJS_TRACE_INCLUDES = [
-  '_virtual/**/*.js',
-  'editor-kernel/**/*.js',
-  'plugins/common/node/**/*.js',
-  'plugins/yjs/plugin/**/*.js',
-  'plugins/yjs/service/**/*.js',
-].map((file) => `node_modules/.pnpm/@lobehub+editor@*/node_modules/@lobehub/editor/es/${file}`);
-
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
@@ -43,7 +32,6 @@ export function defineConfig(config: CustomNextConfig) {
       '*': [
         'public/**/*',
         '.next/static/**/*',
-        ...EDITOR_YJS_TRACE_INCLUDES,
 
         // Only needed for Docker standalone builds.
         // On Vercel (serverless), including native bindings can easily exceed function size limits.
@@ -286,14 +274,9 @@ export function defineConfig(config: CustomNextConfig) {
     ...(config.outputFileTracingExcludes && {
       outputFileTracingExcludes: config.outputFileTracingExcludes,
     }),
-    ...(config.outputFileTracingIncludes
-      ? {
-          outputFileTracingIncludes: {
-            ...config.outputFileTracingIncludes,
-            '*': [...EDITOR_YJS_TRACE_INCLUDES, ...(config.outputFileTracingIncludes['*'] ?? [])],
-          },
-        }
-      : !isStandaloneMode && { outputFileTracingIncludes: { '*': EDITOR_YJS_TRACE_INCLUDES } }),
+    ...(config.outputFileTracingIncludes && {
+      outputFileTracingIncludes: config.outputFileTracingIncludes,
+    }),
     reactStrictMode: true,
     // Old clients keep their image URLs; App routes take precedence over this fallback.
     rewrites: async () => ({
@@ -387,7 +370,6 @@ export function defineConfig(config: CustomNextConfig) {
       '@lobehub/editor',
       // Must share one instance with @lobehub/editor's own Yjs binding.
       'yjs',
-      '@lexical/yjs',
       'discord.js',
       'ffmpeg-static',
       'pdfjs-dist',

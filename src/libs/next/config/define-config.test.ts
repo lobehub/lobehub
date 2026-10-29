@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,7 +8,7 @@ import {
 } from 'next/experimental/testing/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { defineConfig, EDITOR_YJS_TRACE_INCLUDES } from './define-config';
+import { defineConfig } from './define-config';
 
 describe('defineConfig', () => {
   const originalAssetBaseUrl = process.env.ASSET_BASE_URL;
@@ -125,54 +124,6 @@ describe('defineConfig', () => {
       process.env.NEXT_PUBLIC_ASSET_PREFIX = 'https://legacy.example.com';
 
       expect(defineConfig({}).assetPrefix).toBe('https://assets.example.com');
-    });
-  });
-
-  describe('page collaboration server trace', () => {
-    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-
-    const editorYjsFiles = () => {
-      const require = createRequire(path.join(repoRoot, 'package.json'));
-      const esDir = path.join(
-        path.dirname(realpathSync(require.resolve('@lobehub/editor/package.json'))),
-        'es',
-      );
-      const seen = new Set<string>();
-      const queue = ['plugins/yjs/plugin/index.js', 'plugins/yjs/service/index.js'].map((file) =>
-        path.join(esDir, file),
-      );
-      while (queue.length > 0) {
-        const file = queue.pop()!;
-        if (seen.has(file) || !existsSync(file)) continue;
-        seen.add(file);
-        for (const [, specifier] of readFileSync(file, 'utf8').matchAll(
-          /(?:from|import)\s*["'](\.[^"']+)["']/g,
-        )) {
-          queue.push(path.resolve(path.dirname(file), specifier));
-        }
-      }
-      return [...seen].map((file) => path.relative(repoRoot, file));
-    };
-
-    it('includes every file the Yjs plugin loader reaches, in every build mode', () => {
-      const files = editorYjsFiles();
-      expect(files.length).toBeGreaterThan(5);
-      const uncovered = files.filter(
-        (file) => !EDITOR_YJS_TRACE_INCLUDES.some((glob) => path.matchesGlob(file, glob)),
-      );
-      expect(uncovered).toEqual([]);
-
-      expect(defineConfig({}).outputFileTracingIncludes?.['*']).toEqual(
-        expect.arrayContaining(EDITOR_YJS_TRACE_INCLUDES),
-      );
-      expect(
-        defineConfig({ outputFileTracingIncludes: { '*': ['extra/**'] } })
-          .outputFileTracingIncludes?.['*'],
-      ).toEqual([...EDITOR_YJS_TRACE_INCLUDES, 'extra/**']);
-    });
-
-    it('keeps @lexical/yjs external so it is traced from the app root', () => {
-      expect(defineConfig({}).serverExternalPackages).toContain('@lexical/yjs');
     });
   });
 });

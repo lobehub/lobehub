@@ -1,36 +1,13 @@
-// The plugin loaded below resolves @lexical/yjs from the app root in a traced
-// server build; importing it here is what puts it in that trace.
-import '@lexical/yjs';
+import type { HeadlessEditorOptions } from '@lobehub/editor/headless';
 
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+type HeadlessPluginConstructor = Extract<
+  NonNullable<HeadlessEditorOptions['additionalPlugins']>[number],
+  abstract new (...args: any[]) => unknown
+>;
 
-interface EditorYjsModules {
-  IYjsService: any;
-  YjsPlugin: any;
-}
-
-let modules: Promise<EditorYjsModules> | undefined;
-
-const EDITOR_PACKAGE = ['@lobehub', 'editor', 'package.json'].join('/');
-
-// @lobehub/editor exposes the Yjs plugin only from its browser entry, which
-// imports JSON without import attributes and fails under Node ESM; the plugin
-// modules themselves are Node-safe, so load them by file URL. The specifier is
-// built at runtime so the server bundler does not rewrite it into an external id.
-export const loadEditorYjs = () =>
-  (modules ??= (async () => {
-    const require = createRequire(path.join(process.cwd(), 'package.json'));
-    const root = path.dirname(require.resolve(EDITOR_PACKAGE));
-    const load = (file: string) =>
-      import(
-        /* webpackIgnore: true */ /* turbopackIgnore: true */ pathToFileURL(path.join(root, file))
-          .href
-      );
-    const [plugin, service] = await Promise.all([
-      load('es/plugins/yjs/plugin/index.js'),
-      load('es/plugins/yjs/service/index.js'),
-    ]);
-    return { IYjsService: service.IYjsService, YjsPlugin: plugin.YjsPlugin };
-  })());
+// `./headless` ships its own bundled copy of the kernel types, so the plugin
+// class from `./yjs` is the same constructor at runtime but a distinct type.
+export const loadEditorYjs = async () => {
+  const { IYjsService, YjsPlugin } = await import('@lobehub/editor/yjs');
+  return { IYjsService, YjsPlugin: YjsPlugin as unknown as HeadlessPluginConstructor };
+};
