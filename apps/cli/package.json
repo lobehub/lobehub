@@ -43,6 +43,7 @@
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/html-artifact": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",

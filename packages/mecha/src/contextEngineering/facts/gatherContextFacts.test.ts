@@ -279,6 +279,30 @@ describe('gatherContextFacts', () => {
       expect(ctx.availablePlugins).toBeUndefined();
     });
 
+    it.each([{ enabledToolIds: [] }, { enabledToolIds: ['lobe-agent-management'] }])(
+      'omits unsolicited recent agents without disabling self-management or explicit mentions ($enabledToolIds)',
+      async ({ enabledToolIds }) => {
+        const listRecentAgents = vi.fn(async () => recent);
+        const mentionedAgents = [{ id: 'agt_9', name: 'Nine' }];
+        const facts = await gatherContextFacts(
+          request({ enabledToolIds, includeRecentAgents: false, mentionedAgents }),
+          {
+            listEnabledProviders: async () => [{ id: 'openai', models: [], name: 'OpenAI' }],
+            listRecentAgents,
+          },
+        );
+
+        const ctx = facts.step.agentManagementContext!;
+        expect(listRecentAgents).not.toHaveBeenCalled();
+        expect(ctx.availableAgents).toBeUndefined();
+        expect(ctx.availableAgentsHasMore).toBeUndefined();
+        expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
+        expect(ctx.mentionedAgents).toEqual(mentionedAgents);
+        if (enabledToolIds.length)
+          expect(ctx.availableProviders).toEqual([{ id: 'openai', models: [], name: 'OpenAI' }]);
+      },
+    );
+
     it('carries each agent’s name beside its title, for itself and the others', async () => {
       const facts = await gatherContextFacts(
         request({ agent: { name: 'Nasa', title: 'Shadow Arvin' } }),

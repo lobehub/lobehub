@@ -1,9 +1,17 @@
 import type { ChannelContextMessage, ChannelInputManifest } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildChannelPrompt } from './channel';
+import { buildChannelPrompt, CHANNEL_INSTRUCTIONS, CHANNEL_REPLY_GUIDELINES } from './channel';
 
 describe('Channel request prompt', () => {
+  it('includes the public-reply policy with the technical-detail exception', () => {
+    expect(CHANNEL_INSTRUCTIONS).toContain(CHANNEL_REPLY_GUIDELINES);
+    expect(CHANNEL_REPLY_GUIDELINES).toContain('display names');
+    expect(CHANNEL_REPLY_GUIDELINES).toContain('never by internal sequence numbers as citations');
+    expect(CHANNEL_REPLY_GUIDELINES).toContain('user explicitly asks');
+    expect(CHANNEL_REPLY_GUIDELINES).toContain('earlier participants');
+  });
+
   it('carries only the current request with attribution, never injected public history', () => {
     const manifest: ChannelInputManifest = {
       cutoffSequence: 2,
@@ -38,8 +46,10 @@ describe('Channel request prompt', () => {
         content: messages[1].content,
         fileIds: ['file'],
         id: 'current',
-        sequence: 2,
       },
     ]);
+    expect(JSON.parse(prompt).self).toEqual({ agentId: 'agent', name: 'Agent' });
+    expect(JSON.parse(prompt)).not.toHaveProperty('conversation');
+    expect(JSON.parse(prompt).currentRequestId).toBe('current');
   });
 });
