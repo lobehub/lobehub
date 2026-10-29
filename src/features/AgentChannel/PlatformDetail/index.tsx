@@ -16,6 +16,7 @@ import { useForm, useWatch } from '@lobehub/ui/form';
 import { ExternalLink, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -247,9 +248,23 @@ const PlatformDetail = memo<PlatformDetailProps>(
       onValuesChange: () => valuesChangedRef.current?.(),
     });
 
-    // Which tab is open. `undefined` means nobody picked one, so the page picks:
-    // connecting for a new channel, the first settings tab once it is saved.
-    const [pickedTab, setPickedTab] = useState<ChannelTab>();
+    // Which tab is open, kept in `?tab=` so a reload or a shared link lands on it. No value
+    // means nobody picked one, so the page picks: connecting for a new channel, the first
+    // settings tab once it is saved. Switching platforms changes the path and drops the query.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const pickedTab = (searchParams.get('tab') ?? undefined) as ChannelTab | undefined;
+    const setPickedTab = useCallback(
+      (tab: ChannelTab) =>
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', tab);
+            return next;
+          },
+          { replace: true },
+        ),
+      [setSearchParams],
+    );
     const tabs = useMemo(
       () =>
         resolveTabs(
@@ -431,7 +446,6 @@ const PlatformDetail = memo<PlatformDetailProps>(
     // runtimeStatus — otherwise background status refreshes would wipe
     // in-progress form edits and cancel the connect-status polling loop.
     useEffect(() => {
-      setPickedTab(undefined);
       setSaveResult(undefined);
       setConnectNotice(undefined);
       setRuntimeHidden(false);
@@ -655,6 +669,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       updateBotProvider,
       connectCurrentBot,
       saveCoordinator,
+      setPickedTab,
       tabs,
       writeDisabled,
       t,
@@ -1073,7 +1088,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                 <aside className={styles.quickView}>
                   <div className={styles.quickViewSticky}>
                     <QuickView
-                      botAvatar={{ avatar: agentAvatar, background: agentBackground }}
+                      botAvatar={{ agentId, avatar: agentAvatar, background: agentBackground }}
                       botName={agentName}
                       form={form}
                       platformDef={platformDef}
@@ -1099,7 +1114,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             >
               <QuickView
                 hideTitle
-                botAvatar={{ avatar: agentAvatar, background: agentBackground }}
+                botAvatar={{ agentId, avatar: agentAvatar, background: agentBackground }}
                 botName={agentName}
                 form={form}
                 platformDef={platformDef}

@@ -33,6 +33,7 @@ const channel: ChannelListItem = {
   canDelete: true,
   createdAt: new Date(),
   id: 'chn_abcdefghijkl',
+  projectId: null,
   sequence: 0,
   status: 'active',
   title: 'Important channel',
@@ -73,6 +74,16 @@ describe('Channel deletion confirmation', () => {
     expect(channelActions.remove).toHaveBeenCalledWith(channel.id);
     expect(navigate).toHaveBeenCalledWith('/', { replace: true });
     expect(success).toHaveBeenCalledWith('moveToTrashSuccess');
+  });
+
+  it('returns to the project after deleting the open project Channel', async () => {
+    location.pathname = `/project/pro_1/channels/${channel.id}`;
+    const hook = renderHook(useRemoveChannel);
+    act(() => {
+      hook.result.current({ ...channel, projectId: 'pro_1' });
+    });
+    await (confirm.mock.calls[0][0].onOk as () => Promise<void>)();
+    expect(navigate).toHaveBeenCalledWith('/project/pro_1', { replace: true });
   });
 
   it('does not redirect if the user navigated elsewhere while confirmation was open', async () => {

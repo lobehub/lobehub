@@ -14,12 +14,15 @@ import type { LobeChatDatabase } from '@/database/type';
 import { recordSignalDecision } from '@/server/services/agentSignal/persistence/recordDecision';
 import { aggregateWakeVerdictsAsync } from '@/server/services/agentSignal/scenarios/botWake/aggregator';
 import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import type { WakeParticipant } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
   CONVERSATION_PROMPT_LINES,
+  conversationParticipants,
   discordMessageTime,
   toConversationLine,
 } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
+  hasConversationLog,
   judgeExplicitMention,
   resolveChannelKeys,
   resolveConversationLogKey,
@@ -28,13 +31,14 @@ import {
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
 import type {
   WakeClassify,
-  WakeProactiveJudge,
+  WakeDutyJudge,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import {
   CLASSIFIER_POLICY_ID,
-  createClassifierPolicy,
-  createProactivePolicy,
+  createDutyPolicy,
   createWakePolicySet,
+  DUTY_POLICY_ID,
+  OWNER_RULES_POLICY_ID,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
 import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type {
@@ -56,7 +60,14 @@ import { buildWakeSignal, type WakeMessageLike } from '../wake/signal';
 const log = debug('lobe-server:bot:wake-decision');
 
 /** Revision of the bot-wake pipeline recorded on every decision. Bump when the judgement changes. */
-export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@1';
+export const BOT_WAKE_PIPELINE_VERSION = 'bot-wake@3';
+
+/** What sets an edit's signal id apart from its first send's: `:edit:<edited at, ms>`. */
+const editSuffix = (message: WakeMessageLike) => {
+  const editedAt = message.metadata?.editedAt?.getTime();
+
+  return message.metadata?.edited ? `:edit:${editedAt ?? 0}` : '';
+};
 
 /** Policy id the router's own, pre-existing wake judgement is recorded under. */
 export const LEGACY_ROUTER_POLICY_ID = 'legacy-router';
@@ -73,20 +84,22 @@ export type BotWakeEntryPoint = 'catchAll' | 'onNewMention' | 'onSubscribedMessa
 /**
  * Why the router woke the bot, or why it did not. Mirrors the branches the handlers already take;
  * recording them adds no new branch.
+ *
+ * Stored as a plain string (`finalReason`), so rows written for a reason that no longer exists
+ * (`classifier-confident`, `proactive-help`) stay readable; this build only stops writing them.
  */
 export type BotWakeReason =
   | 'access-gate-rejected'
   | 'addressed'
-  | 'classifier-confident'
   | 'command'
   | 'direct-message'
   | 'explicit-mention'
   | 'followup-window'
+  | 'in-duty'
   | 'monitoring-not-allowed'
   | 'named-in-text'
   | 'not-addressed'
   | 'policy-denied'
-  | 'proactive-help'
   | 'scheduled'
   | 'solo-conversation'
   | 'watch-keyword';
@@ -94,7 +107,7 @@ export type BotWakeReason =
 /**
  * Whether a wake may end in silence, for every reason the router records. Only a wake nobody asked
  * for with an @ — a watch keyword in a thread the bot was not addressed in, its name in the text,
- * or a message inside the follow-up window — is `followup`. A DM, @mention, command, or a 1:1 that
+ * a message inside the follow-up window, or one within its duties — is `followup`. A DM, @mention, command, or a 1:1 that
  * reads as private is a direct address and keeps the always-answer behaviour.
  *
  * A table, not a list of the followups: a new reason does not compile until it says which it is.
@@ -102,16 +115,15 @@ export type BotWakeReason =
 const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
   'access-gate-rejected': 'mention',
   'addressed': 'mention',
-  'classifier-confident': 'followup',
   'command': 'mention',
   'direct-message': 'mention',
   'explicit-mention': 'mention',
   'followup-window': 'followup',
+  'in-duty': 'followup',
   'monitoring-not-allowed': 'mention',
   'named-in-text': 'followup',
   'not-addressed': 'mention',
   'policy-denied': 'mention',
-  'proactive-help': 'followup',
   'scheduled': 'mention',
   'solo-conversation': 'mention',
   'watch-keyword': 'followup',
@@ -122,16 +134,15 @@ export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind => KIND_BY_RE
 const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'access-gate-rejected': 'blocked',
   'addressed': 'addressed',
-  'classifier-confident': 'confident',
   'command': 'command',
   'direct-message': 'dm',
   'explicit-mention': 'mention',
   'followup-window': 'followup',
+  'in-duty': 'duty',
   'monitoring-not-allowed': 'blocked',
   'named-in-text': 'named',
   'not-addressed': 'ignored',
   'policy-denied': 'blocked',
-  'proactive-help': 'proactive',
   'scheduled': 'scheduled',
   'solo-conversation': 'solo',
   'watch-keyword': 'keyword',
@@ -139,6 +150,8 @@ const TAG_BY_REASON: Record<BotWakeReason, string> = {
 
 export interface BotWakeObservation {
   entryPoint: BotWakeEntryPoint;
+  /** Verdicts of steps after the wake decision itself, such as how the reply was opened. */
+  extraVerdicts?: SignalDecisionVerdict[];
   /** The message as the handler saw it (merged text when the bot was woken). */
   message: WakeMessageLike;
   outcome: 'defer' | 'skip' | 'wake';
@@ -151,6 +164,8 @@ export interface BotWakeObservation {
 /** The channel state the recorder reads and writes; Redis in production, a fake in tests. */
 export interface WakeStatePort {
   countClassifierCall: (applicationId: string, utcHour: string) => Promise<number | undefined>;
+  /** Remembers that the bot answered these messages, so an edit of one does not wake it again. */
+  markEditWakeEngaged?: (applicationId: string, messageIds: readonly string[]) => Promise<void>;
   readChannel: (keys: readonly string[]) => Promise<BotWakeChannelFields | undefined>;
   /** The wake `rememberInitiation` stored for a message; `undefined` when none or unreadable. */
   readInitiation?: (applicationId: string, messageId: string) => Promise<string | undefined>;
@@ -161,6 +176,8 @@ export interface WakeStatePort {
     excludeId?: string,
   ) => Promise<WakeConversationLine[] | undefined>;
   recordOwnerSpoke: (keys: readonly string[], at: number) => Promise<void>;
+  /** Remembers whose message woke the bot, on the conversation's own key. */
+  recordWakeAuthor?: (key: string, authorId: string) => Promise<void>;
   /** Keeps the wake decided for a message until its replay. */
   rememberInitiation?: (applicationId: string, messageId: string, value: string) => Promise<void>;
   /** Adds messages to the shared log of every key given. */
@@ -176,7 +193,7 @@ const CONVERSATION_READ_LINES = 50;
 /** The reasons `initiate` can wake the bot for. */
 export type BotWakeInitiationReason = Extract<
   BotWakeReason,
-  'classifier-confident' | 'followup-window' | 'named-in-text' | 'proactive-help'
+  'followup-window' | 'in-duty' | 'named-in-text'
 >;
 
 /**
@@ -191,24 +208,44 @@ export type BotWakeInitiationReason = Extract<
  * remember to list it.
  */
 const INITIATION_TRAITS: Record<BotWakeInitiationReason, { addressed: boolean }> = {
-  // The classifier is sure enough on its own that the message is for the bot: answered at once,
-  // like its name. It may still end in silence.
-  'classifier-confident': { addressed: true },
   'followup-window': { addressed: false },
-  'named-in-text': { addressed: true },
   // Nobody asked: it waits in the scheduler like any other unaddressed wake, and may end in silence.
-  'proactive-help': { addressed: false },
+  'in-duty': { addressed: false },
+  'named-in-text': { addressed: true },
 };
+
+/**
+ * `followup-window` only: what the woken agent is told about a follow-up nobody addressed to it,
+ * so it can tell a message for it from one for someone else in a busy thread.
+ */
+export interface BotWakeFollowupContext {
+  /** Who else took part in the conversation lately, newest first; names only. */
+  participants: WakeParticipant[];
+  /** 0..1: how sure the addressed classifier was that the message is for the bot. */
+  score?: number;
+}
 
 /** A wake the recorder started on its own: the rule that started it, and what that implies. */
 export interface BotWakeInitiation {
   /** See {@link INITIATION_TRAITS}. */
   addressed: boolean;
+  /** `in-duty` only: the duty the message falls within, when the judge named one. */
+  duty?: string;
+  /** `followup-window` only. See {@link BotWakeFollowupContext}. */
+  followup?: BotWakeFollowupContext;
   reason: BotWakeInitiationReason;
 }
 
-const initiationFor = (reason: BotWakeInitiationReason): BotWakeInitiation => ({
+/** What a wake carries for the agent besides its reason. */
+type InitiationDetails = Pick<BotWakeInitiation, 'duty' | 'followup'>;
+
+const initiationFor = (
+  reason: BotWakeInitiationReason,
+  { duty, followup }: InitiationDetails = {},
+): BotWakeInitiation => ({
   ...INITIATION_TRAITS[reason],
+  ...(duty && { duty }),
+  ...(followup && { followup }),
   reason,
 });
 
@@ -216,15 +253,22 @@ export interface BotWakeRecorderOptions {
   agentId: string;
   applicationId: string;
   /**
-   * What people call this bot (its display names), so a message that says one is read as
-   * addressed to it. Called lazily and only when a message needs judging.
+   * What people call this bot in a conversation (its display names, and its nickname in that
+   * server), so a message that says one is read as addressed to it. Called lazily and only when a
+   * message needs judging.
    */
-  botNames?: () => Promise<readonly string[]>;
+  botNames?: (platformThreadId: string) => Promise<readonly string[]>;
   /** Bot-side config that gates the scenario's shadow policies. */
   botWakeConfig?: BotWakeConfig | null;
   /** Model call for the classifier policy; without it the classifier is not evaluated. */
   classify?: WakeClassify;
   db: LobeChatDatabase;
+  /**
+   * Model call for the duty policy (a message nobody addressed to the bot that falls within its
+   * duties); without it, without duties, or with `botWake.duties.mode` off, the bot never steps in
+   * on its own.
+   */
+  dutyJudge?: WakeDutyJudge;
   /**
    * Who the bot's agent is and what the owner is called, so the classifier can tell the assistant
    * from the person who set it up. Called lazily; the loader is expected to cache.
@@ -234,14 +278,14 @@ export interface BotWakeRecorderOptions {
     agentTitle?: string;
     ownerNames?: readonly string[];
   }>;
+  /**
+   * Watch keywords the owner marked as names the bot answers to (`asName`: "canis", "倏昱"). Read
+   * as names wherever `botNames` are, and kept when the platform lookup fails.
+   */
+  nameKeywords?: readonly string[];
   /** The bot owner's user id on this platform (`settings.userId`). */
   operatorUserId?: string;
   platform: string;
-  /**
-   * Model call for the proactive policy (offering the owner help nobody asked for); without it, or
-   * with `botWake.proactive.mode` off, the bot never steps in on its own.
-   */
-  proactiveJudge?: WakeProactiveJudge;
   /**
    * Whether the `bot_wake` rollout flag is on for this bot's owner. Defaults to the runtime
    * feature flag; injectable for tests. Off means the recorder does nothing at all.
@@ -262,18 +306,24 @@ export interface BotWakeRecorderOptions {
  */
 export interface BotWakeRecorder {
   /**
+   * The conversation as a judgement sees it: the bot's names, its agent and owner, and the recent
+   * lines of the shared log. Never throws; `undefined` when nothing is known.
+   */
+  conversation: (observation: BotWakeObservation) => Promise<WakeConversation | undefined>;
+  /**
    * Decides whether to wake the bot for a message nobody addressed to it. The internal and owner
-   * rules start a wake only when the owner switched them to `enforce`; the proactive judge only
-   * when its own mode is `enforce` (it scores in `shadow`, and is not built when `off`).
+   * rules start a wake only when the owner switched them to `enforce`; the duty judge only when
+   * the bot has duties and its own mode is `enforce` (it scores in `shadow`, and is not built when
+   * `off` or without duties).
    *
    * Returns:
    * - `{ reason: 'named-in-text', addressed: true }` when the text calls the bot by name (no model
    *   call)
    * - `{ reason: 'followup-window', addressed: false }` when the bot spoke lately and an enforcing
    *   classifier agrees (a shadow or absent classifier does not stand in the way)
-   * - `{ reason: 'proactive-help', addressed: false }` when the owner raised something the bot can
-   *   help with: no rule had an opinion, and the enforcing proactive judge scored it over its
-   *   threshold
+   * - `{ reason: 'in-duty', addressed: false, duty }` when the message, whoever wrote it, falls
+   *   within the bot's duties: no rule had an opinion, and the enforcing duty judge scored it over
+   *   its threshold. `duty` is the duty it named
    * - `undefined` for everything else, including a degraded classifier and any failure
    *
    * The evaluation is remembered, so the `record()` that follows does not judge the message again.
@@ -301,6 +351,11 @@ export interface BotWakeRecorder {
    * while the rollout or bot-wake is off.
    */
   remember: (observation: BotWakeObservation) => Promise<void>;
+  /**
+   * Remembers that the bot is answering these messages (platform ids), whatever the rollout: an
+   * edit that later @-mentions the bot on one of them must not wake it a second time. Never throws.
+   */
+  rememberEngaged: (messageIds: readonly string[]) => Promise<void>;
 }
 
 const asShadow = (policy: WakePolicy): WakePolicy => ({ ...policy, mode: 'shadow' });
@@ -376,9 +431,11 @@ const buildSnapshot = (
 const toChannelState = (fields: BotWakeChannelFields | undefined): WakeChannelState | undefined =>
   fields && {
     botLastSpokeAt: fields.botLastSpokeAt,
+    followupAuthorId: fields.followupAuthorId,
     followupUntil: fields.followupUntil,
     ownerLastSpokeAt: fields.ownerLastSpokeAt,
     silentWakes: fields.silentWakes,
+    standDownUntil: fields.standDownUntil,
   };
 
 /**
@@ -393,7 +450,7 @@ const summarizeConversation = (conversation?: WakeConversation) =>
   };
 
 /** The wake decided for a parked message, as kept for its replay. */
-interface RememberedInitiation {
+interface RememberedInitiation extends InitiationDetails {
   reason: BotWakeInitiationReason;
   verdicts: SignalDecisionVerdict[];
 }
@@ -401,14 +458,30 @@ interface RememberedInitiation {
 const isInitiationReason = (value: unknown): value is BotWakeInitiationReason =>
   typeof value === 'string' && value in INITIATION_TRAITS;
 
-/** A stored decision, or `undefined` for none, a malformed one, or a reason this build lacks. */
+/**
+ * A stored decision, or `undefined` for none, a malformed one, or a reason this build lacks (one
+ * kept by an earlier build, such as `proactive-help`: the replay is judged again).
+ */
 const parseRemembered = (raw: string | undefined): RememberedInitiation | undefined => {
   if (!raw) return;
   try {
     const value = JSON.parse(raw) as Partial<RememberedInitiation>;
     if (!isInitiationReason(value.reason)) return;
 
-    return { reason: value.reason, verdicts: Array.isArray(value.verdicts) ? value.verdicts : [] };
+    const followup = value.followup;
+
+    return {
+      duty: typeof value.duty === 'string' ? value.duty : undefined,
+      followup:
+        followup && Array.isArray(followup.participants)
+          ? {
+              participants: followup.participants,
+              score: typeof followup.score === 'number' ? followup.score : undefined,
+            }
+          : undefined,
+      reason: value.reason,
+      verdicts: Array.isArray(value.verdicts) ? value.verdicts : [],
+    };
   } catch {
     return;
   }
@@ -436,7 +509,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   const enabled = isBotWakeEnabled(options.botWakeConfig ?? parsed.config);
 
   // Spend bound: a busy channel must not turn every message into a model call. The addressed
-  // classifier and the proactive judge share one hourly budget.
+  // classifier and the duty judge share one hourly budget.
   const budgeted =
     <TInput, TOutput>(call: (input: TInput, abortSignal: AbortSignal) => Promise<TOutput>) =>
     async (input: TInput, abortSignal: AbortSignal): Promise<TOutput> => {
@@ -465,28 +538,10 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
   const classify: WakeClassify | undefined = options.classify && budgeted(options.classify);
 
-  // Outside the follow-up window the classifier may start a wake on its own, but only past a
-  // stricter bar than the one it uses to confirm a follow-up. Only while it enforces.
-  const { initiateEnabled, initiateThreshold } = parsed.rules.classifier;
-  const confidentClassifierPolicy =
-    classify &&
-    parsed.rules.classifier.mode === 'enforce' &&
-    initiateEnabled &&
-    initiateThreshold > 0
-      ? createClassifierPolicy(
-          'enforce',
-          {
-            ...parsed.rules,
-            classifier: { ...parsed.rules.classifier, threshold: initiateThreshold },
-          },
-          classify,
-        )
-      : undefined;
-
-  // Only the owner's switch turns it on; `initiate` is the one place it runs.
-  const proactivePolicy =
-    options.proactiveJudge && parsed.rules.proactive.mode !== 'off'
-      ? createProactivePolicy(parsed.rules, budgeted(options.proactiveJudge))
+  // Only duties the owner wrote turn it on; `initiate` is the one place it runs.
+  const dutyPolicy =
+    options.dutyJudge && parsed.rules.duties.text && parsed.rules.duties.mode !== 'off'
+      ? createDutyPolicy(parsed.rules, budgeted(options.dutyJudge))
       : undefined;
 
   const rolledOut = options.rollout ?? createBotWakeRolloutProbe(userId);
@@ -509,22 +564,23 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   const readState = async (signal: WakeSignal) =>
     toChannelState(await state.readChannel(wakeStateKeys(signal.channelKeys!)));
 
-  // Direct messages are private: only guild channels keep a shared log.
+  // Direct messages are private: only group conversations keep a shared log.
   const logKeyFor = (observation: BotWakeObservation): string | undefined =>
-    platform === 'discord' && observation.threadId.split(':')[1] !== '@me'
+    hasConversationLog(platform, observation.threadId)
       ? resolveConversationLogKey(platform, observation.threadId)
       : undefined;
 
   // No cache here: the platform client owns the names and refreshes them on its own schedule, so
   // a renamed bot answers to the new name and stops answering to the old one. A failed lookup is
   // retried on the next message.
-  const resolveBotNames = async (): Promise<readonly string[]> => {
+  const nameKeywords = options.nameKeywords ?? [];
+  const resolveBotNames = async (platformThreadId: string): Promise<readonly string[]> => {
     try {
-      return (await options.botNames?.()) ?? [];
+      return [...((await options.botNames?.(platformThreadId)) ?? []), ...nameKeywords];
     } catch (error) {
       log('bot name lookup failed: %O', error);
 
-      return [];
+      return nameKeywords;
     }
   };
 
@@ -544,7 +600,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   ): Promise<WakeConversation | undefined> => {
     const logKey = logKeyFor(observation);
     const [botNames, identity, lines] = await Promise.all([
-      resolveBotNames(),
+      resolveBotNames(observation.threadId),
       resolveIdentity(),
       logKey && state.readRecentMessages
         ? state.readRecentMessages(logKey, CONVERSATION_READ_LINES, observation.message.id)
@@ -621,18 +677,45 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     observation: BotWakeObservation,
     reason: BotWakeInitiationReason,
     evaluation: Evaluation,
+    details: InitiationDetails = {},
   ): Promise<BotWakeInitiation> => {
     keepEvaluation(observation, evaluation);
     await state.rememberInitiation?.(
       applicationId,
       getOriginMessageId(observation.message),
       JSON.stringify({
+        ...details,
         reason,
         verdicts: evaluation.verdicts ?? [],
       } satisfies RememberedInitiation),
     );
 
-    return initiationFor(reason);
+    return initiationFor(reason, details);
+  };
+
+  /**
+   * Asks the duty judge, after everything else declined: does the message, whoever wrote it, fall
+   * within the bot's duties ("要是导出能保留文件夹结构就好了" for a bot that assesses feature
+   * requests)? Adds its verdict to `evaluation` and keeps it for `record()`.
+   */
+  const judgeDuty = async (
+    observation: BotWakeObservation,
+    signal: WakeSignal,
+    snapshot: WakeStateSnapshot,
+    evaluation: Evaluation & { verdicts: SignalDecisionVerdict[] },
+  ): Promise<BotWakeInitiation | undefined> => {
+    if (!dutyPolicy) return;
+
+    const judged = await aggregateWakeVerdictsAsync([dutyPolicy], signal, snapshot);
+    evaluation.verdicts.push(...ruleVerdicts(judged));
+
+    // A shadow judge only scores; a degraded one abstains, so it never lands here.
+    if (dutyPolicy.mode === 'enforce' && judged.verdict === 'allow') {
+      const record = judged.records.find((entry) => entry.policyId === DUTY_POLICY_ID);
+      return initiated(observation, 'in-duty', evaluation, { duty: record?.matched });
+    }
+
+    keepEvaluation(observation, evaluation);
   };
 
   const persist = async (observation: BotWakeObservation, observedAt: number) => {
@@ -645,6 +728,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
     if (enabled && signal.author?.isOwner) {
       await state.recordOwnerSpoke(wakeStateKeys(signal.channelKeys!), signal.timestamp);
+    }
+
+    // Who the bot is about to answer: its reply opens the follow-up window on the same key (the
+    // Discord thread it replies in), and only this person's next words follow up on it.
+    if (enabled && observation.outcome === 'wake' && signal.author?.id) {
+      const conversationKey = wakeStateKeys(signal.channelKeys!).at(-1);
+      if (conversationKey) await state.recordWakeAuthor?.(conversationKey, signal.author.id);
     }
 
     // `initiate` may have read the state and run the policies already; do neither twice.
@@ -661,18 +751,23 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       ...snapshot,
       // Who wrote it, so a decision can be read without the purged payload: an id, not a name.
       author: signal.author && { id: signal.author.id, isOwner: signal.author.isOwner },
+      // Whom a reply answered, so a wake on a reply to someone else can be found and audited.
+      ...(signal.replyToAuthorId ? { replyToAuthorId: signal.replyToAuthorId } : {}),
       conversation: summarizeConversation(conversation),
     };
 
-    const verdicts = await buildWakeVerdicts(
-      observation,
-      { ...signal, message: text },
-      policies,
-      enabled,
-      channel,
-      conversation,
-      evaluated?.verdicts,
-    );
+    const verdicts = [
+      ...(await buildWakeVerdicts(
+        observation,
+        { ...signal, message: text },
+        policies,
+        enabled,
+        channel,
+        conversation,
+        evaluated?.verdicts,
+      )),
+      ...(observation.extraVerdicts ?? []),
+    ];
 
     const recorded = await recordSignalDecision(db, {
       agentId,
@@ -687,7 +782,8 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       scopeKey,
       signal: {
         // Telegram-style message ids repeat across chats, so the key carries the whole address.
-        externalId: `${applicationId}:${observation.threadId}:${observation.message.id}`,
+        // An edit is judged again, so it gets its own row next to the one made when it was sent.
+        externalId: `${applicationId}:${observation.threadId}:${observation.message.id}${editSuffix(observation.message)}`,
         // Where the event was addressed and which handler saw it are not content: they stay on the
         // row after the retention sweep blanks the payload.
         metadata: {
@@ -698,6 +794,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
             platformThreadId: observation.threadId,
           },
           entryPoint: observation.entryPoint,
+          ...(observation.message.metadata?.edited && { trigger: 'edit' }),
         },
         payload: { text: text.slice(0, MAX_PAYLOAD_TEXT_LENGTH) },
         source: `bot:${platform}`,
@@ -728,6 +825,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   };
 
   return {
+    conversation: async (observation) => {
+      try {
+        return await readConversation(observation);
+      } catch (error) {
+        log('conversation read failed: entry=%s %O', observation.entryPoint, error);
+      }
+    },
     isRolledOut: rolledOut,
     judge: async (observation) => {
       const observedAt = Date.now();
@@ -764,7 +868,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
 
         const rulePolicies = policies.filter((policy) => policy.id !== CLASSIFIER_POLICY_ID);
         const rulesEnforce = rulePolicies.some((policy) => policy.mode === 'enforce');
-        if (!rulesEnforce && !proactivePolicy) return;
+        if (!rulesEnforce && !dutyPolicy) return;
 
         const signal = signalFor(observation, observedAt);
         const [channel, conversation] = await Promise.all([
@@ -782,7 +886,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
           if (remembered) {
             keepEvaluation(observation, { channel, conversation, verdicts: remembered.verdicts });
 
-            return initiationFor(remembered.reason);
+            return initiationFor(remembered.reason, remembered);
           }
         }
 
@@ -790,11 +894,21 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         if (!rulesEnforce || ruleDecision.verdict !== 'allow' || ruleDecision.fastPath) {
           // Nothing addressed the bot and no rule allowed it: not named, outside the follow-up
           // window. Only when no rule had an opinion either way, whatever the rules' mode: a deny
-          // (a channel list, the silent-wake budget) still keeps the bot out.
+          // (a channel list, the silent-wake budget) still keeps the bot out. Owner presence is
+          // the exception: it keeps the bot out of chatter the owner can answer, not off its
+          // duties. Logging a feature request does not wait for the owner to go quiet.
+          const onlyOwnerPresent =
+            ruleDecision.verdict === 'deny' &&
+            ruleDecision.decidedBy === OWNER_RULES_POLICY_ID &&
+            ruleDecision.reason === 'owner-present' &&
+            ruleDecision.records.every(
+              (record) => record.policyId === OWNER_RULES_POLICY_ID || record.verdict === 'abstain',
+            );
           const undecided =
             !ruleDecision.fastPath &&
-            ruleDecision.records.every((record) => record.verdict === 'abstain');
-          if (!undecided || (!confidentClassifierPolicy && !proactivePolicy)) {
+            (onlyOwnerPresent ||
+              ruleDecision.records.every((record) => record.verdict === 'abstain'));
+          if (!undecided || !dutyPolicy) {
             // An enforcing deny is what kept the bot quiet: keep its verdicts, so the row names the
             // rule that stopped the wake instead of replaying every policy as if it only watched.
             keepEvaluation(observation, {
@@ -805,36 +919,11 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
             return;
           }
 
-          const verdicts = ruleVerdicts(ruleDecision);
-          const evaluation = { channel, conversation, verdicts };
-
-          // The message reads as meant for the bot although nobody called it ("我想知道明天杭州天
-          // 气" in a channel people use it in). Only with the rules enforcing, past the stricter bar.
-          if (rulesEnforce && confidentClassifierPolicy) {
-            const classified = await aggregateWakeVerdictsAsync(
-              [confidentClassifierPolicy],
-              signal,
-              snapshot,
-            );
-            verdicts.push(...ruleVerdicts(classified));
-            const degraded = classified.records.some((record) => record.tags.includes('degraded'));
-            if (classified.verdict === 'allow' && !degraded) {
-              return initiated(observation, 'classifier-confident', evaluation);
-            }
-          }
-
-          if (proactivePolicy) {
-            const proactive = await aggregateWakeVerdictsAsync([proactivePolicy], signal, snapshot);
-            verdicts.push(...ruleVerdicts(proactive));
-
-            // A shadow judge only scores; a degraded one abstains, so it never lands here.
-            if (proactivePolicy.mode === 'enforce' && proactive.verdict === 'allow') {
-              return initiated(observation, 'proactive-help', evaluation);
-            }
-          }
-
-          keepEvaluation(observation, evaluation);
-          return;
+          return await judgeDuty(observation, signal, snapshot, {
+            channel,
+            conversation,
+            verdicts: ruleVerdicts(ruleDecision),
+          });
         }
 
         const verdicts = ruleVerdicts(ruleDecision);
@@ -848,18 +937,28 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         // Only the window is open. A classifier the owner enforces must confirm; one that only
         // watches is scored for the record and does not stand in the way.
         const classifier = policies.find((policy) => policy.id === CLASSIFIER_POLICY_ID);
+        let score: number | undefined;
         if (classifier) {
           const classified = await aggregateWakeVerdictsAsync([classifier], signal, snapshot);
           verdicts.push(...ruleVerdicts(classified));
           keepEvaluation(observation, evaluation);
 
           // A classifier that failed or ran out of budget passes in `degraded`: when the owner
-          // relies on it, no answer is not a yes.
+          // relies on it, no answer is not a yes. Not a follow-up to the bot, the message may still
+          // fall within its duties.
           const degraded = classified.records.some((record) => record.tags.includes('degraded'));
-          if (classifier.mode === 'enforce' && (classified.verdict !== 'allow' || degraded)) return;
+          if (classifier.mode === 'enforce' && (classified.verdict !== 'allow' || degraded)) {
+            return dutyPolicy
+              ? await judgeDuty(observation, signal, snapshot, evaluation)
+              : undefined;
+          }
+          if (!degraded) score = classified.records[0]?.confidence;
         }
 
-        return initiated(observation, 'followup-window', evaluation);
+        // The agent is told why it woke: how sure the classifier was, and who else is talking.
+        return initiated(observation, 'followup-window', evaluation, {
+          followup: { participants: conversationParticipants(conversation, applicationId), score },
+        });
       } catch (error) {
         botWakeFailureCounter.add(1, { stage: 'initiate' });
         log('initiate failed: entry=%s %O', observation.entryPoint, error);
@@ -873,8 +972,10 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         if (!enabled || !(await rolledOut())) return;
 
         const line = toConversationLine({
-          // A Discord id carries its send time, so two bots write the identical line.
-          at: discordMessageTime(message.id) ?? Date.now(),
+          // The send time comes from the message (a Discord id carries it), so two bots in one
+          // channel write the identical line.
+          at:
+            discordMessageTime(message.id) ?? message.metadata?.dateSent?.getTime() ?? Date.now(),
           authorId: message.author?.userId,
           authorName: message.author?.userName ?? message.author?.fullName,
           hasAttachments: (message.attachments?.length ?? 0) > 0,
@@ -888,6 +989,13 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       } catch (error) {
         botWakeFailureCounter.add(1, { stage: 'remember' });
         log('remember failed: entry=%s %O', observation.entryPoint, error);
+      }
+    },
+    rememberEngaged: async (messageIds) => {
+      try {
+        await state.markEditWakeEngaged?.(applicationId, messageIds);
+      } catch (error) {
+        log('rememberEngaged failed: %O', error);
       }
     },
     record: (observation) => {

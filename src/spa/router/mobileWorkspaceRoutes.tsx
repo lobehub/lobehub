@@ -82,6 +82,12 @@ const projectRoutes: RouteObject[] = [
       {
         ...projectWorkspaceRoute,
         children: overlayRoutes(projectWorkspaceRoute.children ?? [], {
+          // Like `/channels/*` below: Channels have no mobile layout yet.
+          'channels/:channelId': (route) => ({
+            ...route,
+            element: redirectElement('..'),
+            handle: undefined,
+          }),
           'index': withHandle({
             mobileShellHeader: true,
             mobileShellTitle: ProjectMobileShellTitle,

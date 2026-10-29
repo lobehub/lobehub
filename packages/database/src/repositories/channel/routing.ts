@@ -25,7 +25,7 @@ const findMessage = async (tx: Transaction, channelId: string, messageId: string
 };
 
 /**
- * Writes back a Jev decision. Applies only while the message is still `pending` at the same
+ * Writes back a routing decision. Applies only while the message is still `pending` at the same
  * attempt, so a late answer can never overwrite a retry or a stop. Chosen members that are
  * no longer candidates are dropped. Returns false when the result was stale.
  */
@@ -73,7 +73,7 @@ export const resolveRouting = async (
           : requester
             ? 'Chosen Agents are no longer available'
             : 'The message sender is no longer available',
-      routingSource: message.routingSource === 'fallback' ? 'fallback' : 'jev',
+      routingSource: message.routingSource === 'fallback' ? 'fallback' : 'decision',
       routingStatus: status,
     })
     .where(eq(channelMessages.id, messageId));
@@ -107,7 +107,7 @@ export const resolveRouting = async (
   return true;
 };
 
-/** Sends an `unassigned` message back to Jev under a new attempt number. */
+/** Sends an `unassigned` message back to the decision model under a new attempt number. */
 export const retryRouting = async (
   tx: Transaction,
   channelId: string,

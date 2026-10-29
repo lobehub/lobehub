@@ -32,7 +32,7 @@ const request = async (
     content: key,
     mentions: [agentId],
     requestKey: key,
-    routing: 'jev',
+    routing: 'decision',
   });
   const [job] = await jobsOf(db, message.id);
   return { job, message };
@@ -130,7 +130,7 @@ describe('claim guards', () => {
     const unmentioned = await asMember.send(channel.id, {
       content: 'Who can help?',
       requestKey: 'unmentioned',
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(channel.id, unmentioned.id, 1, {
       reason: 'Decision unavailable',

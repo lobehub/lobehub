@@ -6,8 +6,8 @@ import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
@@ -62,7 +62,13 @@ const MainAgentField = memo<MainAgentFieldProps>(({ agentId, disabled, onChange 
       onChange={(id) => id && onChange(id)}
     >
       <div {...stylex.props(styles.trigger)}>
-        <AgentAvatar avatar={avatar ?? undefined} title={name} />
+        <AgentAvatar
+          agentId={agentId}
+          avatar={avatar ?? undefined}
+          name={name}
+          size={22}
+          title={name}
+        />
         <Text ellipsis style={{ flex: 1 }}>
           {name ?? t('create.mainAgentPlaceholder')}
         </Text>

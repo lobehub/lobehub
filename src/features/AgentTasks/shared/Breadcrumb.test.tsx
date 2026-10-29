@@ -47,18 +47,25 @@ describe('Breadcrumb', () => {
   beforeEach(() => {
     mocks.taskState = createState({
       'T-child': {
+        id: 'T-child',
         identifier: 'T-child',
         instruction: 'Child instruction',
         name: 'Child task',
-        parent: { agentId: 'agt_parent', identifier: 'T-parent', name: 'Parent task' },
+        parent: {
+          agentId: 'agt_parent',
+          id: 'T-parent',
+          identifier: 'T-parent',
+          name: 'Parent task',
+        },
         status: 'running',
       },
       'T-parent': {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         name: 'Parent task',
-        parent: { agentId: null, identifier: 'T-root', name: 'Root task' },
+        parent: { agentId: null, id: 'T-root', identifier: 'T-root', name: 'Root task' },
         status: 'running',
       },
     });
@@ -99,10 +106,11 @@ describe('Breadcrumb', () => {
   it('falls back to the global route when an ancestor owner is unknown', () => {
     mocks.taskState = createState({
       'T-child': {
+        id: 'T-child',
         identifier: 'T-child',
         instruction: 'Child instruction',
         name: 'Child task',
-        parent: { identifier: 'T-parent', name: 'Parent task' },
+        parent: { id: 'T-parent', identifier: 'T-parent', name: 'Parent task' },
         status: 'running',
       },
     });

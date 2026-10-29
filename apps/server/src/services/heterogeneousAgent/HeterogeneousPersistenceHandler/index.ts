@@ -243,7 +243,7 @@ export class HeterogeneousPersistenceHandler {
     // after the publish) races the refetch and the error card doesn't render
     // live. Bootstrap from topic.metadata.runningOperation like ingest does;
     // a stale/mismatched operation stays a no-op.
-    if (!state && params.result === 'error' && params.error && params.topicId) {
+    if (!state && params.topicId) {
       try {
         state = await loadOrCreateState(
           this.deps,
@@ -265,6 +265,20 @@ export class HeterogeneousPersistenceHandler {
     if (!state) return;
 
     try {
+      // A producer may finish without ingesting its final stream event. Close
+      // its pending questions before the caller publishes runtime_end. Refresh
+      // only the intervention projection: finish must not flush stale text.
+      await refreshToolMessageIndex(this.deps, state);
+      const terminal = reduceMainAgent(
+        state.main,
+        { type: 'agent_runtime_end' },
+        this.mainReduceCtx(state),
+      );
+      for (const intent of terminal.intents) {
+        if (intent.kind === 'setToolIntervention') {
+          await applyMainIntent(this.deps, state, intent, state.lastStepIndex);
+        }
+      }
       if (params.error) await this.persistFinishError(state, params.error);
     } finally {
       operationStates.delete(params.operationId);
@@ -297,6 +311,7 @@ export class HeterogeneousPersistenceHandler {
     return {
       agentId: state.agentId,
       newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
+      toolMessageIds: state.toolMsgIdByCallId,
       topicId: state.topicId,
     };
   }

@@ -117,6 +117,14 @@ export const RedisKeys = {
     initiation: (applicationId: string, messageId: string): string =>
       `initiation:v1:${applicationId}:${messageId}`,
     /**
+     * Set once a message has engaged a bot: it @-mentioned the bot when sent, the bot replied to
+     * it, or an edit already woke the bot on it. An edit that newly @-mentions the bot wakes it only
+     * while this key is absent, so one message never wakes the same bot twice.
+     * Full key: bot-wake:edit_wake:v1:{applicationId}:{messageId}
+     */
+    editWake: (applicationId: string, messageId: string): string =>
+      `edit_wake:v1:${applicationId}:${messageId}`,
+    /**
      * The last messages said in one channel or thread, shared by every bot listening there, so it
      * carries no application id.
      * Full key: bot-wake:conversation_log:v1:{key}

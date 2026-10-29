@@ -1,11 +1,41 @@
 import { describe, expect, it } from 'vitest';
 
 import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { botWakeFields } from '@/server/services/bot/platforms/botWakeFields';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
-import { getSchemaFields, groupSettingsFields, groupWakeFields } from './settingsGroups';
+import {
+  getSchemaFields,
+  groupAccessFields,
+  groupReplyFields,
+  groupSettingsFields,
+  groupWakeFields,
+} from './settingsGroups';
 
 const field = (key: string): FieldSchema => ({ key, label: key, type: 'string' });
+
+describe('groupAccessFields', () => {
+  it('splits access into owner identity, conversation and device blocks, in page order', () => {
+    const sections = groupAccessFields(
+      ['deviceAllowFrom', 'groupPolicy', 'userId', 'devicePolicy', 'dmPolicy', 'serverId'].map(
+        field,
+      ),
+    );
+
+    expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
+      ['identity', ['userId', 'serverId']],
+      ['conversation', ['dmPolicy', 'groupPolicy']],
+      ['device', ['devicePolicy', 'deviceAllowFrom']],
+    ]);
+  });
+
+  it('drops a block the platform has no fields for', () => {
+    expect(groupAccessFields(['userId', 'devicePolicy'].map(field)).map((s) => s.key)).toEqual([
+      'identity',
+      'device',
+    ]);
+  });
+});
 
 describe('groupSettingsFields', () => {
   it('sorts fields into connect, access, reply and advanced, ordered by how a person decides them', () => {
@@ -78,6 +108,19 @@ describe('groupSettingsFields', () => {
     ]);
   });
 
+  it('puts the reply style and emoji with the replies, not in advanced', () => {
+    const groups = groupSettingsFields(
+      ['charLimit', 'replyStyle', 'displayToolCalls', 'channelReplyStyles', 'replyEmojis'].map(
+        field,
+      ),
+    );
+
+    expect(groups.map((g) => [g.key, g.fields.map((f) => f.key)])).toEqual([
+      ['reply', ['displayToolCalls', 'replyStyle', 'channelReplyStyles', 'replyEmojis']],
+      ['advanced', ['charLimit']],
+    ]);
+  });
+
   it('drops sections a platform has no fields for', () => {
     const groups = groupSettingsFields(['displayToolCalls', 'reactionMode'].map(field));
 
@@ -119,7 +162,7 @@ describe('groupWakeFields', () => {
   const keysOf = (fields: FieldSchema[]) =>
     groupWakeFields(fields).map((section) => [section.key, section.fields.map((f) => f.key)]);
 
-  it('splits the wake options into keywords, channels, pace and judgement, in that order', () => {
+  it('splits the wake options into judgement, keywords, channels and pace, in that order', () => {
     // Deliberately shuffled: the sections decide the order, not the schema.
     const fields = [
       K.customInstructions,
@@ -137,6 +180,7 @@ describe('groupWakeFields', () => {
     ].map(field);
 
     expect(keysOf(fields)).toEqual([
+      ['judgement', [K.customInstructions]],
       ['keywords', ['watchKeywords']],
       ['channels', [K.scope, K.allowChannels, K.denyChannels]],
       [
@@ -151,30 +195,34 @@ describe('groupWakeFields', () => {
           K.cooldownSeconds,
         ],
       ],
-      ['judgement', [K.customInstructions]],
     ]);
   });
 
-  it('orders initiative as for me, for others, then the instructions, each switch above its dial', () => {
+  it('opens with the duties and their dial, then the instructions, each switch above its text', () => {
     const section = groupWakeFields(
-      [
-        K.customInstructions,
-        K.classifierInitiateThreshold,
-        K.proactiveThreshold,
-        K.customInstructionsEnabled,
-        K.classifierInitiateEnabled,
-        K.proactiveEnabled,
-      ].map(field),
+      [K.customInstructions, K.dutiesThreshold, K.customInstructionsEnabled, K.duties].map(field),
     ).find((s) => s.key === 'judgement')!;
 
     expect(section.fields.map((f) => f.key)).toEqual([
-      K.proactiveEnabled,
-      K.proactiveThreshold,
-      K.classifierInitiateEnabled,
-      K.classifierInitiateThreshold,
+      K.duties,
+      K.dutiesThreshold,
       K.customInstructionsEnabled,
       K.customInstructions,
     ]);
+  });
+
+  it('shows the shipped schema the duties first, and nothing of help-me or help-others', () => {
+    const sections = groupWakeFields(botWakeFields);
+    const keys = sections.flatMap((section) => section.fields.map((f) => f.key));
+
+    expect(sections.map((section) => section.key)).toEqual(['judgement', 'channels', 'pace']);
+    expect(sections[0].fields.map((f) => f.key)).toEqual([
+      K.duties,
+      K.dutiesThreshold,
+      K.customInstructionsEnabled,
+      K.customInstructions,
+    ]);
+    expect(keys.filter((key) => /Proactive|Initiate/.test(key))).toEqual([]);
   });
 
   it('shows only the keywords until the rollout reaches the user', () => {
@@ -198,5 +246,24 @@ describe('groupWakeFields', () => {
         .filter((key) => key !== K.enabled)
         .sort(),
     );
+  });
+});
+
+describe('groupReplyFields', () => {
+  it('splits the replies into how they look, then how the bot talks', () => {
+    const sections = groupReplyFields(
+      ['replyEmojis', 'reactionMode', 'replyStyle', 'displayToolCalls', 'channelReplyStyles'].map(
+        field,
+      ),
+    );
+
+    expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
+      ['display', ['displayToolCalls', 'reactionMode']],
+      ['style', ['replyStyle', 'channelReplyStyles', 'replyEmojis']],
+    ]);
+  });
+
+  it('drops a block the platform has no fields for', () => {
+    expect(groupReplyFields(['replyStyle'].map(field)).map((s) => s.key)).toEqual(['style']);
   });
 });

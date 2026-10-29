@@ -116,7 +116,7 @@ describe('project command', () => {
     mockResolveWorkspaceId.mockReturnValue('ws-1');
     mockClient.workspace.getById.query.mockResolvedValue({ id: 'ws-1', slug: 'lobehub' });
     mockClient.task.create.mutate.mockResolvedValue({
-      data: { identifier: 'T-1' },
+      data: { id: 'task_1', identifier: 'T-1' },
     });
     await createProgram().parseAsync([
       'node',

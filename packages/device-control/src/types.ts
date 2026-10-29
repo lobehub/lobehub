@@ -60,6 +60,49 @@ export interface ListProjectSkillsResult {
   source: ProjectSkillSource | null;
 }
 
+/** The run env keys that move where Claude Code keeps auto memory. */
+export interface ClaudeCodeMemoryRunEnv {
+  CLAUDE_CODE_PROJECT_DIR_NAME?: string;
+  CLAUDE_CONFIG_DIR?: string;
+}
+
+export interface ListClaudeCodeMemoryParams {
+  /**
+   * The agent's own values for these keys (`heterogeneousProvider.env`). A run
+   * spreads that env over the device's, so a set value wins here too.
+   */
+  env?: ClaudeCodeMemoryRunEnv;
+  /** Working directory of the Claude Code project. */
+  scope: string;
+}
+
+export interface ClaudeCodeMemoryFile {
+  description?: string;
+  /** The `MEMORY.md` index Claude Code loads into every session. */
+  isIndex: boolean;
+  /** Frontmatter `name`; the file name when absent. */
+  name: string;
+  /** Absolute path to the memory file. */
+  path: string;
+  /** Path within the memory directory, `/`-separated. */
+  relativePath: string;
+  size: number;
+  /** Frontmatter `metadata.type` (or top-level `type`): user / feedback / project / reference. */
+  type?: string;
+  /** Last modification time, epoch ms. */
+  updatedAt: number;
+}
+
+export interface ListClaudeCodeMemoryResult {
+  files: ClaudeCodeMemoryFile[];
+  /**
+   * Claude Code's auto-memory directory for this project
+   * (`~/.claude/projects/<sanitized project root>/memory`). Reported even when
+   * it does not exist yet, so the UI can say where memory will land.
+   */
+  memoryDir: string;
+}
+
 export interface StatPathResult {
   /** Device-resolved path; aliases and symlinks share one execution-directory lock. */
   canonicalPath?: string;

@@ -22,7 +22,7 @@ export interface FollowupGateDeps {
     threadSubscribed?: boolean,
   ) => void;
   platform: string;
-  recorder: Pick<BotWakeRecorder, 'isRolledOut' | 'judge'>;
+  recorder: Pick<BotWakeRecorder, 'isRolledOut' | 'judge' | 'rememberEngaged'>;
   scheduler?: WakeScheduler;
 }
 
@@ -88,16 +88,18 @@ export const createFollowupGate = (deps: FollowupGateDeps) => {
     if (!deps.scheduler || immediate) return 'proceed';
 
     const { channelKey } = resolveChannelKeys(deps.platform, deps.applicationId, thread.id);
+    // A replayed batch carries a fresh id; the scheduler parked the platform ids, so match on those.
+    const parkedIds = parked.map((message) => getOriginMessageId(message));
     const verdict = await deps.scheduler.submit({
       channelKey,
-      // A replayed batch carries a fresh id; the scheduler parked the platform ids, so match on those.
-      messages: parked.map((message) => ({
-        id: getOriginMessageId(message),
-        threadId: thread.id,
-      })),
+      messages: parkedIds.map((id) => ({ id, threadId: thread.id })),
     });
     botWakeSchedulerCounter.add(1, { verdict });
     if (verdict !== 'hold') return 'proceed';
+
+    // The scheduler will replay these and answer them. An edit that @-mentions the bot on one
+    // meanwhile must not answer it first and leave the replay to answer it again.
+    await deps.recorder.rememberEngaged(parkedIds);
 
     // The scheduler owns the message now; if it cannot be parked, run it rather than lose it.
     const stored = await deferBotMessages(deps.applicationId, thread.id, parked);

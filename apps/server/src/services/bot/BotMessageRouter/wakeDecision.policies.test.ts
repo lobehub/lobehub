@@ -288,6 +288,23 @@ describe('bot-wake recorder policy set', () => {
     );
   });
 
+  it('remembers who woke the bot on the conversation it will reply in, and nobody it skipped', async () => {
+    const state = { ...fakeState(), recordWakeAuthor: vi.fn(async () => {}) };
+    const recorder = make({ botWake: { enabled: true } }, state);
+
+    recorder.record(
+      observation(
+        { outcome: 'wake', reason: 'explicit-mention', threadId: 'discord:g1:c1:t9' },
+        { isMention: true, text: '<@555> hi' },
+      ),
+    );
+    recorder.record(observation({ threadId: 'discord:g1:c1:t9' }, { id: 'm2' }));
+    await flush();
+
+    expect(state.recordWakeAuthor).toHaveBeenCalledOnce();
+    expect(state.recordWakeAuthor).toHaveBeenCalledWith('discord:app:g1:c1:t9', 'alice-id');
+  });
+
   it('stamps the message with the time it was seen, not when a slow flag read finished', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
@@ -384,5 +401,48 @@ describe('bot-wake recorder judge (enforcement)', () => {
     expect(
       await make({ botWake: { enabled: true, mode: 'enforce' } }, state).judge(observation()),
     ).toBeUndefined();
+  });
+
+  describe('edits', () => {
+    const signals = () => mockRecordSignalDecision.mock.calls.map(([, params]) => params.signal);
+
+    it('records the wake an edit started apart from the decision made when it was sent', async () => {
+      const recorder = make({});
+      recorder.record(observation());
+      recorder.record(
+        observation(
+          { entryPoint: 'onNewMention', outcome: 'wake', reason: 'explicit-mention' },
+          { metadata: { edited: true, editedAt: new Date(1_700_000_000_000) } },
+        ),
+      );
+      await flush();
+
+      expect(signals().map((signal) => signal.externalId)).toEqual([
+        'app:discord:g1:c1:m1',
+        'app:discord:g1:c1:m1:edit:1700000000000',
+      ]);
+      expect(signals()[0].metadata.trigger).toBeUndefined();
+      expect(signals()[1].metadata.trigger).toBe('edit');
+    });
+
+    it('remembers the messages the bot answers even while the rollout is off', async () => {
+      const state = { ...fakeState(), markEditWakeEngaged: vi.fn(async () => {}) };
+      const recorder = make({}, state, { rollout: async () => false });
+
+      await recorder.rememberEngaged(['m1', 'm2']);
+
+      expect(state.markEditWakeEngaged).toHaveBeenCalledWith('app', ['m1', 'm2']);
+    });
+
+    it('never throws when remembering fails', async () => {
+      const state = {
+        ...fakeState(),
+        markEditWakeEngaged: vi.fn(async () => {
+          throw new Error('redis down');
+        }),
+      };
+
+      await expect(make({}, state).rememberEngaged(['m1'])).resolves.toBeUndefined();
+    });
   });
 });

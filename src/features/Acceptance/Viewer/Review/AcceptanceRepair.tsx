@@ -145,7 +145,7 @@ export const AcceptanceRepair = () => {
           )}
           <Flexbox horizontal gap={16} style={{ flexWrap: 'wrap' }}>
             {repair.taskId && (
-              <WorkspaceLink to={taskDetailPath(repair.taskId)}>
+              <WorkspaceLink to={taskDetailPath(repair.taskIdentifier ?? repair.taskId)}>
                 {t('acceptance.repair.openTask')}
               </WorkspaceLink>
             )}

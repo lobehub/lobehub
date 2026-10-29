@@ -12,7 +12,7 @@ import {
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
-import { preferenceSelectors, workspaceUserSettingsSelectors } from '@/store/user/selectors';
+import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode } from '@/types/topic';
 
 const EXCLUDE_STATUSES_COMPLETED = ['completed'];
@@ -90,17 +90,20 @@ export const getSidebarTopicListParams = (session: {
   const agentState = useAgentStore.getState();
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
   const userState = useUserStore.getState();
+  const globalState = useGlobalStore.getState();
 
   return normalizeTopicListParams({
     ...deriveSidebarTopicListQuery({
       includeCompleted: preferenceSelectors.topicIncludeCompleted(userState),
       isGroupSession: !!groupId,
-      onlyMine: workspaceUserSettingsSelectors.topicOnlyMine(getActiveWorkspaceId())(userState),
+      onlyMine:
+        !!getActiveWorkspaceId() &&
+        systemStatusSelectors.topicOnlyMine(groupId ?? agentId)(globalState),
       topicGroupMode: getTopicGroupModeForAgent(agentId),
     }),
     agentId,
     groupId,
     isInbox: !groupId && !!inboxAgentId && inboxAgentId === agentId,
-    pageSize: systemStatusSelectors.topicPageSize(useGlobalStore.getState()),
+    pageSize: systemStatusSelectors.topicPageSize(globalState),
   });
 };

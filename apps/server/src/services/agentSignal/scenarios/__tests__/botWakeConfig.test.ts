@@ -5,6 +5,7 @@ import {
   flattenBotWakeSettings,
   hasPassiveListeningRule,
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
+  MAX_DUTIES_LENGTH,
   parseBotWakeSettings,
 } from '../botWake/config';
 
@@ -14,7 +15,11 @@ describe('parseBotWakeSettings', () => {
     (settings) => {
       const parsed = parseBotWakeSettings(settings as never);
 
-      expect(parsed.rules).toEqual({ ...DEFAULT_WAKE_RULES, customInstructions: undefined });
+      expect(parsed.rules).toEqual({
+        ...DEFAULT_WAKE_RULES,
+        customInstructions: undefined,
+        duties: { ...DEFAULT_WAKE_RULES.duties, text: undefined },
+      });
       expect(parsed.ruleMode).toBe('enforce');
       expect(parsed.scheduler).toEqual({ collectMs: 20_000, cooldownMs: 60_000, mode: 'off' });
       expect(parsed.config.enabled).toBeUndefined();
@@ -26,20 +31,82 @@ describe('parseBotWakeSettings', () => {
 
     expect(parsed.ruleMode).toBe('enforce');
     expect(parsed.rules.classifier.mode).toBe('enforce');
+    // A follow-up must be clearly for the bot: 0.5-0.75 is mostly someone talking to someone else.
+    expect(parsed.rules.classifier.threshold).toBe(0.75);
     expect(
       parseBotWakeSettings({ botWake: { classifier: { threshold: 0.8 } } }).rules.classifier,
-    ).toEqual({ initiateEnabled: true, initiateThreshold: 0.65, mode: 'enforce', threshold: 0.8 });
+    ).toEqual({ mode: 'enforce', threshold: 0.8 });
   });
 
-  it('lets the owner switch helping others off, keeping the threshold', () => {
+  it('has no duties until the owner writes them: the duty judge is off by default', () => {
     const K = BOT_WAKE_SETTING_KEYS;
-    const { classifier } = parseBotWakeSettings({
-      [K.classifierInitiateEnabled]: false,
-      [K.classifierInitiateThreshold]: 0.8,
-      [K.enabled]: true,
-    }).rules;
 
-    expect(classifier).toMatchObject({ initiateEnabled: false, initiateThreshold: 0.8 });
+    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.duties).toEqual({
+      mode: 'enforce',
+      text: undefined,
+      threshold: 0.65,
+    });
+    expect(
+      parseBotWakeSettings({ [K.duties]: '   ', [K.enabled]: true }).rules.duties.text,
+    ).toBeUndefined();
+  });
+
+  it('reads the duties and their threshold, trimmed, capped and defensively', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+
+    expect(
+      parseBotWakeSettings({
+        [K.duties]: '  评估需求\n通知提需求的人  ',
+        [K.dutiesThreshold]: 0.6,
+        [K.enabled]: true,
+      }).rules.duties,
+    ).toEqual({ mode: 'enforce', text: '评估需求\n通知提需求的人', threshold: 0.6 });
+    expect(
+      parseBotWakeSettings({ [K.duties]: 'x'.repeat(MAX_DUTIES_LENGTH + 10) }).rules.duties.text,
+    ).toHaveLength(MAX_DUTIES_LENGTH);
+    // A malformed value falls back to its default, keeping the rest.
+    expect(
+      parseBotWakeSettings({ [K.duties]: 42, [K.dutiesThreshold]: 3, [K.windowSeconds]: 60 }).rules,
+    ).toMatchObject({ duties: { text: undefined, threshold: 0.65 }, windowSeconds: 60 });
+    // A hand-written nested config spells them as an object.
+    expect(
+      parseBotWakeSettings({ botWake: { duties: { text: 'Triage bugs.', threshold: 0.9 } } }).rules
+        .duties,
+    ).toEqual({ mode: 'enforce', text: 'Triage bugs.', threshold: 0.9 });
+  });
+
+  // Saved by the forms of "help others" and "help me", which the duties replaced.
+  it('ignores the retired help-others and help-me keys, and the form drops them', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+    const old = {
+      botWakeClassifierInitiateEnabled: true,
+      botWakeClassifierInitiateThreshold: 0.8,
+      botWakeProactiveEnabled: true,
+      botWakeProactiveThreshold: 0.6,
+      [K.enabled]: true,
+      [K.windowSeconds]: 60,
+    };
+    const { rules } = parseBotWakeSettings(old);
+
+    expect(rules.classifier).toEqual(DEFAULT_WAKE_RULES.classifier);
+    expect(rules.duties.text).toBeUndefined();
+    expect(rules.windowSeconds).toBe(60);
+    expect(rules).not.toHaveProperty('proactive');
+    expect(flattenBotWakeSettings(old)).toEqual({
+      [K.enabled]: true,
+      [K.pace]: 'custom',
+      [K.windowSeconds]: 60,
+    });
+    // A hand-written nested config with the retired options parses the same way.
+    expect(
+      parseBotWakeSettings({
+        botWake: {
+          classifier: { initiateEnabled: true, initiateThreshold: 0.9 },
+          enabled: true,
+          proactive: { enabled: true, threshold: 0.5 },
+        },
+      }).rules,
+    ).toMatchObject({ classifier: DEFAULT_WAKE_RULES.classifier, duties: { text: undefined } });
   });
 
   it('hands the instructions to the classifier only while their switch is on, or was never set', () => {
@@ -74,22 +141,6 @@ describe('parseBotWakeSettings', () => {
     expect(
       flattenBotWakeSettings({ [K.enabled]: true })?.[K.customInstructionsEnabled],
     ).toBeUndefined();
-  });
-
-  it('lets a confident classifier start a wake outside the window from 0.65, and 0 turns it off', () => {
-    const K = BOT_WAKE_SETTING_KEYS;
-
-    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.classifier.initiateThreshold).toBe(
-      0.65,
-    );
-    expect(
-      parseBotWakeSettings({ [K.enabled]: true, [K.classifierInitiateThreshold]: 0 }).rules
-        .classifier.initiateThreshold,
-    ).toBe(0);
-    expect(
-      parseBotWakeSettings({ [K.classifierInitiateThreshold]: 2 }).rules.classifier
-        .initiateThreshold,
-    ).toBe(0.65);
   });
 
   it('ignores a mode an earlier form saved: the settings page no longer offers one', () => {
@@ -238,20 +289,18 @@ describe('parseBotWakeSettings from the settings form', () => {
     // These strings are persisted in every saved provider; renaming one orphans the stored value.
     expect(BOT_WAKE_SETTING_KEYS).toEqual({
       allowChannels: 'botWakeAllowChannels',
-      classifierInitiateEnabled: 'botWakeClassifierInitiateEnabled',
-      classifierInitiateThreshold: 'botWakeClassifierInitiateThreshold',
       classifierThreshold: 'botWakeClassifierThreshold',
       collectSeconds: 'botWakeCollectSeconds',
       cooldownSeconds: 'botWakeCooldownSeconds',
       customInstructions: 'botWakeCustomInstructions',
       customInstructionsEnabled: 'botWakeCustomInstructionsEnabled',
       denyChannels: 'botWakeDenyChannels',
+      duties: 'botWakeDuties',
+      dutiesThreshold: 'botWakeDutiesThreshold',
       enabled: 'botWakeEnabled',
       maxSilentWakes: 'botWakeMaxSilentWakes',
       ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
       pace: 'botWakePace',
-      proactiveEnabled: 'botWakeProactiveEnabled',
-      proactiveThreshold: 'botWakeProactiveThreshold',
       schedulerMode: 'botWakeSchedulerMode',
       scope: 'botWakeScope',
       windowSeconds: 'botWakeWindowSeconds',
@@ -266,11 +315,11 @@ describe('parseBotWakeSettings from the settings form', () => {
       [K.cooldownSeconds]: 90,
       [K.customInstructions]: '  Only billing questions.  ',
       [K.denyChannels]: [{ id: 'c9' }],
+      [K.duties]: 'Triage bug reports.',
+      [K.dutiesThreshold]: 0.7,
       [K.enabled]: true,
       [K.maxSilentWakes]: 1,
       [K.ownerPresenceSeconds]: 15,
-      [K.proactiveEnabled]: true,
-      [K.proactiveThreshold]: 0.8,
       [K.schedulerMode]: 'enforce',
       [K.scope]: 'bot-threads',
       [K.windowSeconds]: 60,
@@ -280,51 +329,48 @@ describe('parseBotWakeSettings from the settings form', () => {
     expect(ruleMode).toBe('enforce');
     expect(rules).toEqual({
       allowChannels: ['c1', '22'],
-      classifier: {
-        initiateEnabled: true,
-        initiateThreshold: 0.65,
-        mode: 'enforce',
-        threshold: 0.7,
-      },
+      classifier: { mode: 'enforce', threshold: 0.7 },
       customInstructions: 'Only billing questions.',
       denyChannels: ['c9'],
+      duties: { mode: 'enforce', text: 'Triage bug reports.', threshold: 0.7 },
       maxSilentWakes: 1,
       ownerPresenceSeconds: 15,
-      proactive: { mode: 'enforce', threshold: 0.8 },
       scope: 'bot-threads',
       windowSeconds: 60,
     });
     expect(scheduler).toEqual({ collectMs: 40_000, cooldownMs: 90_000, mode: 'enforce' });
   });
 
-  it('offers the owner help by default, until they switch it off', () => {
-    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.proactive).toEqual({
-      mode: 'enforce',
-      threshold: 0.7,
-    });
-    expect(
-      parseBotWakeSettings({ [K.enabled]: true, [K.proactiveEnabled]: false }).rules.proactive,
-    ).toEqual({ mode: 'off', threshold: 0.7 });
-    expect(
-      parseBotWakeSettings({ [K.proactiveEnabled]: 'yes', [K.proactiveThreshold]: 3 }).rules
-        .proactive,
-    ).toEqual({ mode: 'enforce', threshold: 0.7 });
-  });
-
-  it('lets an operator only score offering help, beside the form options', () => {
+  it('lets an operator only score the duties, beside the form options', () => {
     const settings = {
+      [K.duties]: 'Triage bug reports.',
+      [K.dutiesThreshold]: 0.6,
       [K.enabled]: true,
-      [K.proactiveEnabled]: true,
-      [K.proactiveThreshold]: 0.6,
-      botWake: { proactive: { mode: 'shadow' } },
+      botWake: { duties: { mode: 'shadow' } },
     };
 
-    expect(parseBotWakeSettings(settings).rules.proactive).toEqual({
+    expect(parseBotWakeSettings(settings).rules.duties).toEqual({
       mode: 'shadow',
+      text: 'Triage bug reports.',
       threshold: 0.6,
     });
     // The override has no flat key, so the form's projection keeps it nested.
-    expect(flattenBotWakeSettings(settings)?.botWake).toEqual({ proactive: { mode: 'shadow' } });
+    expect(flattenBotWakeSettings(settings)?.botWake).toEqual({ duties: { mode: 'shadow' } });
+  });
+
+  // A bot that saved the retired "help me" override beside its form options must keep them live.
+  it('keeps reading the form options beside a retired help-me override, and drops it', () => {
+    const settings = {
+      [K.enabled]: true,
+      [K.windowSeconds]: 60,
+      botWake: { proactive: { mode: 'shadow' } },
+    };
+
+    expect(parseBotWakeSettings(settings)).toMatchObject({
+      config: { enabled: true },
+      rules: { windowSeconds: 60 },
+    });
+    expect(flattenBotWakeSettings(settings)).not.toHaveProperty('botWake');
   });
 
   it('treats an untouched form field as no choice, not as zero or empty', () => {
@@ -446,6 +492,14 @@ describe('flattenBotWakeSettings', () => {
       flattenBotWakeSettings({ [K.enabled]: true, [K.schedulerMode]: 'enforce' })?.[K.pace],
     ).toBe('custom');
     expect(flattenBotWakeSettings({ [K.pace]: 'calm' })?.[K.pace]).toBe('calm');
+    // The threshold the form used to save by default is untouched; a tuned one is custom, or the
+    // next save would let the preset replace it.
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.5 })?.[K.pace],
+    ).toBe('balanced');
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.9 })?.[K.pace],
+    ).toBe('custom');
   });
 
   it('runs a preset pace on its own numbers, and a custom or absent one on the saved numbers', () => {
@@ -466,6 +520,23 @@ describe('flattenBotWakeSettings', () => {
       expect(parsed.rules.windowSeconds).toBe(90);
       expect(parsed.scheduler.mode).toBe('enforce');
     }
+  });
+
+  // A balanced bot saved when the default was 0.5 woke on "yep" and "我试试" in the follow-up
+  // window: the form saves the threshold, so a preset pace has to override it.
+  it('runs a preset pace on its own classifier threshold, and a custom one on the saved one', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+    const saved = { [K.enabled]: true, [K.classifierThreshold]: 0.5 };
+
+    for (const pace of ['calm', 'balanced', 'active']) {
+      expect(parseBotWakeSettings({ ...saved, [K.pace]: pace }).rules.classifier.threshold).toBe(
+        0.75,
+      );
+    }
+    expect(parseBotWakeSettings({ ...saved, [K.pace]: 'custom' }).rules.classifier.threshold).toBe(
+      0.5,
+    );
+    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.classifier.threshold).toBe(0.75);
   });
 
   it('keeps the migrated row reading the same as the nested one', () => {

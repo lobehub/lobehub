@@ -1,13 +1,17 @@
 import { spawn } from 'node:child_process';
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { toRecord } from '@lobechat/utils/object';
 import {
-  getDefaultEnvironment,
-  StdioClientTransport,
-} from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { type Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { type Progress } from '@modelcontextprotocol/sdk/types.js';
+  Client,
+  InsufficientScopeError,
+  SdkError,
+  SdkErrorCode,
+  SdkHttpError,
+  StreamableHTTPClientTransport,
+  UnauthorizedError,
+} from '@modelcontextprotocol/client';
+import { type Progress, type Transport } from '@modelcontextprotocol/client';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
 import {
@@ -168,7 +172,16 @@ export class MCPClient {
 
   constructor(params: MCPClientParams) {
     this.params = params;
-    this.mcp = new Client({ name: 'lobehub-mcp-client', version: '1.0.0' });
+    this.mcp = new Client(
+      { name: 'lobehub-mcp-client', version: '1.0.0' },
+      {
+        // Stdio stays legacy: auto would spawn a sibling probe process and can
+        // wait the entire probe timeout on servers that ignore unknown requests.
+        versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
+        // No elicitation/sampling/roots handlers are registered by this host.
+        inputRequired: { autoFulfill: false },
+      },
+    );
 
     switch (params.type) {
       case 'http': {
@@ -253,9 +266,28 @@ export class MCPClient {
       console.error('MCP connection failed:', getMCPErrorLogMetadata(e));
 
       if (this.params.type === 'http') {
-        // StreamableHTTPError carries the status in code, not necessarily in its message.
-        const error = e as Error & { code?: number };
-        if (error.code === 401) throw createMCPError('AUTHORIZATION_ERROR', error.message);
+        if (
+          (SdkHttpError.isInstance(e) && (e.status === 401 || e.status === 403)) ||
+          UnauthorizedError.isInstance(e) ||
+          InsufficientScopeError.isInstance(e)
+        )
+          throw createMCPError(
+            'AUTHORIZATION_ERROR',
+            'MCP server authorization failed. Reconnect this MCP in your connector settings and try again.',
+            { originalError: e.message },
+          );
+
+        if (SdkError.isInstance(e) && e.code === SdkErrorCode.RequestTimeout)
+          throw createMCPError(
+            'INITIALIZATION_TIMEOUT',
+            'MCP server version negotiation timed out. Check the server connection and try again.',
+          );
+
+        if (SdkError.isInstance(e) && e.code === SdkErrorCode.EraNegotiationFailed)
+          throw createMCPError(
+            'CONNECTION_FAILED',
+            `Could not negotiate the MCP server protocol: ${e.message}`,
+          );
 
         throw e;
       }
@@ -280,7 +312,7 @@ export class MCPClient {
       }
 
       // For other connection types or when pre-check doesn't provide more information
-      if ((e as any).code === -32_000) {
+      if (SdkError.isInstance(e) && e.code === SdkErrorCode.ConnectionClosed) {
         throw createMCPError(
           'CONNECTION_FAILED',
           'Failed to connect to MCP server, please check your configuration',
@@ -310,31 +342,28 @@ export class MCPClient {
   }
 
   async disconnect() {
-    log('Disconnecting MCP connection...');
-    // Assuming the mcp client has a disconnect method
-    if (this.mcp && typeof (this.mcp as any).disconnect === 'function') {
-      await (this.mcp as any).disconnect();
-      log('MCP connection disconnected.');
-    } else {
-      log('MCP client does not have a disconnect method or is not initialized.');
-      // Depending on the transport, we might need specific cleanup
-      if (this.transport && typeof (this.transport as any).close === 'function') {
-        (this.transport as any).close();
-        log('Transport closed.');
-      }
-    }
+    await this.mcp.close();
+    log('MCP connection disconnected.');
+  }
+
+  getProtocolEra() {
+    return this.mcp.getProtocolEra();
   }
 
   /**
    * Detect the StreamableHTTP "session expired" error.
    *
    * Happens when the remote MCP server restarts: the cached client still sends
-   * the old session id and the server rejects it with `-32000 / No valid
-   * session ID provided`. Callers (e.g. MCPService) surface this as a dedicated
+   * the old session id and the server rejects it with HTTP 404. The legacy
+   * example-server message is also recognized. Callers (e.g. MCPService) surface this as a dedicated
    * `NoValidSessionId` error and retry with a freshly-initialized session.
    */
-  private static isNoValidSessionError(e: unknown): boolean {
-    return e instanceof Error && e.message.includes('No valid session ID provided');
+  private isNoValidSessionError(e: unknown): boolean {
+    return (
+      this.getProtocolEra() !== 'modern' &&
+      ((SdkHttpError.isInstance(e) && e.status === 404) ||
+        (e instanceof Error && e.message.includes('No valid session ID provided')))
+    );
   }
 
   async listTools() {
@@ -346,7 +375,7 @@ export class MCPClient {
     } catch (e) {
       console.error('Failed to list MCP tools:', getMCPErrorLogMetadata(e));
 
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
@@ -363,7 +392,7 @@ export class MCPClient {
     } catch (e) {
       console.error('Failed to list MCP resources:', getMCPErrorLogMetadata(e));
 
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
@@ -380,7 +409,7 @@ export class MCPClient {
     } catch (e) {
       console.error('Failed to list MCP prompts:', getMCPErrorLogMetadata(e));
 
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
@@ -417,9 +446,12 @@ export class MCPClient {
   async callTool(toolName: string, args: any): Promise<ToolCallResult> {
     log('Calling MCP tool: %O', { timeout: MCP_TOOL_TIMEOUT, toolName });
     try {
-      const result = await this.mcp.callTool({ arguments: args, name: toolName }, undefined, {
-        timeout: MCP_TOOL_TIMEOUT,
-      });
+      const result = await this.mcp.callTool(
+        { arguments: args, name: toolName },
+        {
+          timeout: MCP_TOOL_TIMEOUT,
+        },
+      );
       log('MCP tool call completed: %O', {
         contentBlockCount: Array.isArray(result.content) ? result.content.length : 0,
         isError: result.isError === true,
@@ -429,8 +461,23 @@ export class MCPClient {
     } catch (e) {
       // The server rejects the request before executing the tool, so retrying
       // with a fresh session is safe (no double side effects).
-      if (MCPClient.isNoValidSessionError(e)) {
+      if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
+      }
+      if (
+        SdkError.isInstance(e) &&
+        e.code === SdkErrorCode.UnsupportedResultType &&
+        toRecord(e.data)?.resultType === 'input_required'
+      ) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'This MCP tool requires user input that LobeHub does not support yet. Use a tool that does not require additional input.',
+            },
+          ],
+          isError: true,
+        };
       }
       throw e;
     }

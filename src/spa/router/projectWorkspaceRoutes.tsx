@@ -2,6 +2,7 @@ import { Navigate, type RouteObject, useLocation, useParams } from 'react-router
 
 import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { channelRouteMeta } from '@/features/Channels/routeMeta';
 import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import {
   projectConversationRouteMeta,
@@ -22,7 +23,7 @@ const LegacyProjectConversationRedirect = () => {
 };
 
 /**
- * One project's workspace under `/project/:projectId`: its home, topics, tasks,
+ * One project's workspace under `/project/:projectId`: its home, channels, topics, tasks,
  * settings, goals, dashboards and acceptance. Mounted under the workspace
  * layout in `desktopRouter.shared.tsx`.
  */
@@ -47,6 +48,15 @@ export const projectWorkspaceRoute: RouteObject = {
       path: 'topic/:topicId?',
     },
     { element: <LegacyProjectConversationRedirect />, path: 'conversation/:topicId?' },
+    {
+      element: dynamicElement(
+        () => import('@/routes/(main)/project/[projectId]/channels/[channelId]'),
+        'Desktop > Project Channel',
+        { preloadId: 'channels' },
+      ),
+      handle: { meta: channelRouteMeta },
+      path: 'channels/:channelId',
+    },
     {
       element: dynamicElement(
         () => import('@/routes/(main)/project/[projectId]/tasks'),

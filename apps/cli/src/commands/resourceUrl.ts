@@ -53,8 +53,8 @@ export const resourcePath = {
   },
   project: (id: Id) => (id ? `/project/${seg(id)}` : undefined),
   provider: (id: Id) => (id ? `/settings/provider/${seg(id)}` : undefined),
-  task: (task: { identifier?: Id; name?: Id }) =>
-    task.identifier ? taskPath(task.identifier, task.name) : undefined,
+  task: (task: { id?: Id; identifier?: Id; name?: Id }) =>
+    task.identifier || task.id ? taskPath((task.identifier ?? task.id)!, task.name) : undefined,
   topic: (topic: { agentId?: Id; groupId?: Id; id?: Id }) => {
     if (!topic.id) return undefined;
     if (topic.groupId) return `/group/${seg(topic.groupId)}/${seg(topic.id)}`;
@@ -88,7 +88,7 @@ export const searchResultPath = (item: Record<string, any>): string | undefined 
       return resourcePath.knowledgeBase(item.id);
     }
     case 'task': {
-      return resourcePath.task({ identifier: item.identifier, name: item.title });
+      return resourcePath.task({ id: item.id, identifier: item.identifier, name: item.title });
     }
     case 'mcp':
     case 'plugin': {

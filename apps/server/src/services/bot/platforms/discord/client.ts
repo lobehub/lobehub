@@ -14,10 +14,12 @@ import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
+  type ChatPatchOptions,
   ClientFactory,
   messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
+  type ReplyTargets,
   type UsageStats,
   type ValidationResult,
 } from '../types';
@@ -30,10 +32,23 @@ import {
   resolveDiscordMentions,
   sanitizeDiscordUserInput,
 } from './mentions';
-import { patchDiscordForwardedInteractions } from './patch';
+import {
+  patchDiscordForwardedInteractions,
+  patchDiscordMentionThreads,
+  patchDiscordMessageEdits,
+} from './patch';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
+
+/** `discord:<guild>:<channel>` with a real guild: not a DM, not already inside a thread. */
+const isTopLevelGuildChannel = (threadId: string): boolean => {
+  const [platform, guildId, channelId, discordThreadId] = threadId.split(':');
+
+  return (
+    platform === 'discord' && !!guildId && guildId !== '@me' && !!channelId && !discordThreadId
+  );
+};
 
 const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -73,6 +88,7 @@ class DiscordGatewayClient implements PlatformClient {
   private abort = new AbortController();
   private bot: ChatBot<any> | null = null;
   private botNames?: { expiresAt: number; names: string[] };
+  private guildNicknames = new Map<string, { expiresAt: number; nickname?: string }>();
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private discord: DiscordApi;
@@ -217,8 +233,12 @@ class DiscordGatewayClient implements PlatformClient {
 
   // --- Runtime Operations ---
 
-  applyChatPatches(chatBot: ChatBot<any>): void {
+  applyChatPatches(chatBot: ChatBot<any>, options?: ChatPatchOptions): void {
     patchDiscordForwardedInteractions(chatBot);
+    patchDiscordMessageEdits(chatBot);
+    if (options?.deferMentionThread) {
+      patchDiscordMentionThreads(chatBot, options.deferMentionThread);
+    }
   }
 
   createAdapter(): Record<string, any> {
@@ -471,7 +491,7 @@ class DiscordGatewayClient implements PlatformClient {
   }
 
   resolveMentions(text: string, message?: unknown): string {
-    return resolveDiscordMentions(text, collectDiscordMentionNames(message));
+    return resolveDiscordMentions(text, collectDiscordMentionNames(message), this.applicationId);
   }
 
   sanitizeUserInput(text: string, message?: unknown): string {
@@ -489,11 +509,22 @@ class DiscordGatewayClient implements PlatformClient {
   }
 
   /**
-   * The bot account's names, read once an hour: renaming a bot is rare, and each read is a REST
-   * call. A failed refresh keeps serving the last known names and waits a minute before asking
-   * again, so an outage costs one request a minute rather than one per message.
+   * What people call the bot: its account names and, for a guild conversation, its nickname in
+   * that server ("Nasa" for an account named "Shadow Arvin"). The account names are read once an
+   * hour: renaming a bot is rare, and each read is a REST call. A failed refresh keeps serving the
+   * last known names and waits a minute before asking again, so an outage costs one request a
+   * minute rather than one per message.
    */
-  getBotNames = async (): Promise<string[]> => {
+  getBotNames = async (platformThreadId?: string): Promise<string[]> => {
+    const [names, nickname] = await Promise.all([
+      this.getAccountNames(),
+      this.getGuildNickname(platformThreadId?.split(':')[1]),
+    ]);
+
+    return nickname && !names.includes(nickname) ? [...names, nickname] : names;
+  };
+
+  private getAccountNames = async (): Promise<string[]> => {
     const now = Date.now();
     if (this.botNames && this.botNames.expiresAt > now) return this.botNames.names;
 
@@ -510,6 +541,51 @@ class DiscordGatewayClient implements PlatformClient {
       return this.botNames.names;
     }
   };
+
+  /**
+   * The bot's nickname in one server, read once an hour per server like the account names. A server
+   * nickname is optional, so a failed read only loses it: it keeps the last known value and waits
+   * a minute before asking again.
+   */
+  private getGuildNickname = async (guildId: string | undefined): Promise<string | undefined> => {
+    if (!guildId || guildId === '@me') return undefined;
+
+    const now = Date.now();
+    const cached = this.guildNicknames.get(guildId);
+    if (cached && cached.expiresAt > now) return cached.nickname;
+
+    try {
+      const nickname = await this.discord.getGuildNickname(guildId, this.applicationId);
+      this.guildNicknames.set(guildId, { expiresAt: now + BOT_NAMES_TTL_MS, nickname });
+
+      return nickname;
+    } catch (error) {
+      log('getGuildNickname failed for guild %s: %O', guildId, error);
+      this.guildNicknames.set(guildId, {
+        expiresAt: now + BOT_NAMES_RETRY_MS,
+        nickname: cached?.nickname,
+      });
+
+      return cached?.nickname;
+    }
+  };
+
+  /**
+   * A message at the top level of a guild channel can be answered in the channel, or in a thread
+   * spawned off it and named after its subject. DMs and messages inside a thread have no choice.
+   */
+  getReplyTargets(
+    threadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+
+    return {
+      channel: threadId,
+      namesThread: true,
+      openThread: (name) => this.openThreadForChannelWake(threadId, message.raw, name),
+    };
+  }
 
   /**
    * Spawn a Discord thread off the triggering message when the bot wakes
@@ -535,19 +611,19 @@ class DiscordGatewayClient implements PlatformClient {
   async openThreadForChannelWake(
     threadId: string,
     messageRaw: unknown,
+    name?: string,
   ): Promise<string | undefined> {
-    const parts = threadId.split(':');
-    if (parts.length !== 3 || parts[0] !== 'discord' || parts[1] === '@me') return undefined;
-    const [, guildId, channelId] = parts;
-    if (!channelId) return undefined;
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+    const [, guildId, channelId] = threadId.split(':');
     const raw = messageRaw as Record<string, unknown> | undefined;
     const messageId = typeof raw?.id === 'string' ? raw.id : undefined;
     if (!messageId) return undefined;
 
-    // Mirror chat-sdk's @-mention auto-thread name format (see
-    // chat-adapter discord/createDiscordThread) so operators see a
-    // consistent thread title regardless of which path opened it.
-    const threadName = `Thread ${new Date().toLocaleString()}`;
+    // Without a name, mirror chat-sdk's @-mention auto-thread name format
+    // (see chat-adapter discord/createDiscordThread) so operators see a
+    // consistent thread title regardless of which path opened it; the
+    // callback later renames it after the topic title.
+    const threadName = name?.trim() || `Thread ${new Date().toLocaleString()}`;
     try {
       const result = await this.discord.startThreadFromMessage(channelId, messageId, threadName);
       const newThreadId = `discord:${guildId}:${channelId}:${result.id}`;

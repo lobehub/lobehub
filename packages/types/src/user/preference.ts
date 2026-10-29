@@ -121,8 +121,11 @@ export interface WorkspaceUserPreference {
    */
   sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
   /**
-   * Topic sidebars list only the topics this member created, hiding the other
-   * members' topics under the same agent / group.
+   * Topic sidebars list only the topics this member created.
+   *
+   * @deprecated The filter is a device-local, per-agent choice now
+   *   (`systemStatus.topicOnlyMineByAgent`). Existing values are ignored;
+   *   nothing reads or writes this key.
    */
   topicOnlyMine?: boolean;
 }

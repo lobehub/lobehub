@@ -55,7 +55,7 @@ const mentionAgent = async (config = deviceConfig()) => {
     content: 'Fix it',
     mentions: [agent.id],
     requestKey: 'req-1',
-    routing: 'jev',
+    routing: 'decision',
   });
   const [job] = await jobsOf(db, message.id);
 
@@ -153,7 +153,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Again',
       mentions: [agent.id],
       requestKey: 'req-2',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
     const second = (await execution.claim(channel.id, nextJob.id, lease))!;
@@ -169,7 +169,7 @@ describe('ChannelExecutionRepository', () => {
     const mainAgent = await fixture.addAgent(channel.id, 'Main', nativeConfig);
     const threadAgent = await fixture.addAgent(channel.id, 'Thread', nativeConfig);
     const send = (requestKey: string, input: Partial<ChannelSendInput> = {}) =>
-      asMember.send(channel.id, { content: requestKey, requestKey, routing: 'jev', ...input });
+      asMember.send(channel.id, { content: requestKey, requestKey, routing: 'decision', ...input });
     const root = await send('root', { mentions: [member.id] });
     const [thread] = await db
       .insert(channelThreads)
@@ -218,7 +218,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Second',
       mentions: [agent.id],
       requestKey: 'req-2',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
 
@@ -243,7 +243,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Together',
       mentions: [first.id, second.id, native.id],
       requestKey: 'parallel',
-      routing: 'jev',
+      routing: 'decision',
     });
     const jobs = await jobsOf(db, message.id);
     const claims = await Promise.all(jobs.map((job) => execution.claim(channel.id, job.id, lease)));
@@ -267,7 +267,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Same repo',
       mentions: [otherAgent.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [job] = await jobsOf(db, message.id);
 
@@ -299,7 +299,7 @@ describe('ChannelExecutionRepository', () => {
         content: 'Same repo',
         mentions: [otherAgent.id],
         requestKey: 'req-1',
-        routing: 'jev',
+        routing: 'decision',
       });
       const [job] = await jobsOf(db, message.id);
 
@@ -445,7 +445,7 @@ describe('ChannelExecutionRepository', () => {
       content: 'Next',
       mentions: [agent.id],
       requestKey: 'req-2',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
     expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();

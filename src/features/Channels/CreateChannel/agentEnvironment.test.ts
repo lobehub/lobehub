@@ -219,6 +219,32 @@ describe('Channel Agent submission guard', () => {
     }
   });
 
+  it('accepts an inherited device without a directory, but not a missing or offline device', () => {
+    const inherited = { directoryOptional: true };
+    const draft = reconcileChannelAgentDraft(
+      { agentId: 'native', initialized: false },
+      environment({ agencyConfig: { boundDeviceId: 'bound', executionTarget: 'device' } }),
+      undefined,
+      inherited,
+    );
+    expect(draft).toMatchObject({ deviceId: 'bound', initialized: true, issue: undefined });
+    expect(canSubmitChannelAgents([draft])).toBe(true);
+    expect(
+      getChannelAgentIssue(
+        { agentId: 'codex' },
+        environment({ agencyConfig: undefined, model: 'codex' }),
+        inherited,
+      ),
+    ).toBe('deviceRequired');
+    expect(
+      getChannelAgentIssue(
+        { agentId: 'pi', deviceId: 'bound' },
+        environment({ devices: [device('bound', { online: false })] }),
+        inherited,
+      ),
+    ).toBe('deviceOffline');
+  });
+
   it.each([
     [{ devicesConfirmed: false }, 'devicesLoading'],
     [{ devicesError: new Error('refresh failed') }, 'devicesFailed'],

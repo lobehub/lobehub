@@ -397,7 +397,9 @@ export class VerifyRunModel {
           plan,
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,
+          /* v8 ignore start -- unreachable: verify_runs.source is NOT NULL */
           source: source.source ?? target.source,
+          /* v8 ignore stop */
           // The survivor takes over the source's identity, so it takes over its
           // pipeline status too. An ingested round carries none and the report
           // settles it, which is what nulls the draft's own `planned` here. A LIVE

@@ -74,6 +74,7 @@ export {
   HETERO_ERROR_SPECS,
   isUserSideHeteroError,
 } from './errors';
+export { heteroAgentSupportsImageInput } from './imageInput';
 export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,

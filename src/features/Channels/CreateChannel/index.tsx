@@ -28,6 +28,8 @@ interface CreateChannelProps {
   /** Set when inviting members into a Channel that already exists. */
   existing?: ExistingChannel;
   onCreated?: (id: string) => void;
+  /** A new Channel created from a project's sidebar is grouped under that project. */
+  projectId?: string;
 }
 
 const openMemberDialog = (props: CreateChannelProps) =>
@@ -38,8 +40,8 @@ const openMemberDialog = (props: CreateChannelProps) =>
     width: 'min(90vw, 800px)',
   });
 
-export const openCreateChannel = (onCreated?: (id: string) => void) =>
-  openMemberDialog({ onCreated });
+export const openCreateChannel = (onCreated?: (id: string) => void, projectId?: string) =>
+  openMemberDialog({ onCreated, projectId });
 
 /** The single entry for adding people and Agents to an existing Channel. */
 export const openInviteMembers = (existing: ExistingChannel) => openMemberDialog({ existing });
@@ -49,7 +51,7 @@ export const openInviteMembers = (existing: ExistingChannel) => openMemberDialog
  * members' names; the sidebar renames it later. Inviting into an existing Channel uses the
  * same picker without a name, and also lists workspace members in workspace Channels.
  */
-function CreateChannel({ existing, onCreated }: CreateChannelProps) {
+function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const { t } = useTranslation('channel');
   const { close, setCanDismissByClickOutside } = useModalContext();
   const [title, setTitle] = useState('');
@@ -95,6 +97,7 @@ function CreateChannel({ existing, onCreated }: CreateChannelProps) {
       } else {
         const id = await channelActions.create({
           agents: selections,
+          projectId,
           title: title.trim() || autoTitle,
         });
         close();
@@ -111,7 +114,6 @@ function CreateChannel({ existing, onCreated }: CreateChannelProps) {
   return (
     <Flexbox gap={16}>
       <Flexbox gap={8} inert={busy}>
-        {!existing && <Text weight={500}>{t('agents')}</Text>}
         <MemberSelection
           exclude={existing?.agentIds}
           options={options}
@@ -146,7 +148,7 @@ function CreateChannel({ existing, onCreated }: CreateChannelProps) {
       <Flexbox horizontal align="center" gap={8} justify="flex-end">
         {agents.length > 0 && !canSubmit && (
           <Text fontSize={12} type="secondary">
-            {t('environment.completeRequired')}
+            {t('environment.resolveRequired')}
           </Text>
         )}
         <Button disabled={busy} onClick={close}>

@@ -212,8 +212,10 @@ export async function findContextByAgent(
       policyLoad: settings.policyLoad as PolicyLoad,
       policyLoadFormat:
         (settings.policyLoadFormat as DocumentLoadFormat | null) ??
+        /* v8 ignore start -- unreachable: agent_documents.policy_load_format is NOT NULL */
         policy?.context?.policyLoadFormat ??
         DocumentLoadFormat.RAW,
+      /* v8 ignore stop */
       policyLoadPosition: settings.policyLoadPosition,
       policyLoadRule: settings.policyLoadRule,
       sourceType: doc.sourceType,

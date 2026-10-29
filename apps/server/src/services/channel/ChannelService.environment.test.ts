@@ -3,21 +3,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelService } from './ChannelService';
 
-const { agentEnvironment, getAgent, findDevice, notify, statPath, update, wake } = vi.hoisted(
-  () => ({
-    agentEnvironment: vi.fn(),
-    findDevice: vi.fn(),
-    getAgent: vi.fn(),
-    notify: vi.fn(),
-    statPath: vi.fn(),
-    update: vi.fn(),
-    wake: vi.fn(),
-  }),
-);
+const {
+  agentEnvironment,
+  create,
+  getAgent,
+  findDevice,
+  notify,
+  querySystemInfo,
+  statPath,
+  update,
+  wake,
+} = vi.hoisted(() => ({
+  agentEnvironment: vi.fn(),
+  create: vi.fn(),
+  findDevice: vi.fn(),
+  getAgent: vi.fn(),
+  notify: vi.fn(),
+  querySystemInfo: vi.fn(),
+  statPath: vi.fn(),
+  update: vi.fn(),
+  wake: vi.fn(),
+}));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
     agentEnvironment = agentEnvironment;
+    create = create;
     updateAgentEnvironment = update;
   },
 }));
@@ -31,7 +42,9 @@ vi.mock('@/server/services/agent', () => ({
     getAgentConfigById = getAgent;
   },
 }));
-vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: { statPath } }));
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: { queryDeviceSystemInfo: querySystemInfo, statPath },
+}));
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
 vi.mock('./notify', () => ({ notifyChannel: notify }));
@@ -51,6 +64,45 @@ describe('changing an Agent member’s channel environment', () => {
     update.mockResolvedValue({ id: 'member-1' });
   });
   const service = () => new ChannelService({} as never, 'owner');
+
+  describe.each(['create', 'update'] as const)('%s directory validation', (action) => {
+    it.each([
+      {
+        message: 'Could not reach the device to verify the working directory',
+        name: 'unreachable device',
+        result: undefined,
+      },
+      {
+        message: 'The working directory does not exist or is not a directory',
+        name: 'missing directory',
+        result: { exists: false, isDirectory: false },
+      },
+      {
+        message: 'The working directory does not exist or is not a directory',
+        name: 'file instead of a directory',
+        result: { exists: true, isDirectory: false },
+      },
+      {
+        message: 'The device connector must be upgraded to verify the working directory',
+        name: 'legacy connector with an existing directory',
+        result: { exists: true, isDirectory: true, repoType: 'github' },
+      },
+    ])('reports $name without saving the environment', async ({ message, result }) => {
+      statPath.mockResolvedValue(result);
+      const input = { agentId: 'agent-1', deviceId: 'mac', workingDirectory: '/b' };
+
+      const save =
+        action === 'create'
+          ? service().create({ agents: [input], title: 'c' })
+          : service().updateAgentEnvironment('channel', 'member-1', input);
+
+      await expect(save).rejects.toMatchObject({ code: 'BAD_REQUEST', message });
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+      expect(wake).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
+    });
+  });
 
   it('validates the new directory on the device and stores its canonical path', async () => {
     await service().updateAgentEnvironment('channel', 'member-1', {
@@ -76,5 +128,34 @@ describe('changing an Agent member’s channel environment', () => {
     expect(update).not.toHaveBeenCalled();
     expect(wake).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('creates a member in the device home folder when the Agent has no directory there', async () => {
+    querySystemInfo.mockResolvedValue({ homePath: '/Users/me' });
+    statPath.mockResolvedValue({ canonicalPath: '/Users/me', isDirectory: true });
+
+    await service().create({ agents: [{ agentId: 'agent-1', deviceId: 'mac' }], title: 'c' });
+
+    expect(querySystemInfo).toHaveBeenCalledWith('owner', 'mac', undefined);
+    expect(statPath).toHaveBeenCalledWith(expect.objectContaining({ path: '/Users/me' }));
+    expect(create).toHaveBeenCalledWith({
+      agents: [
+        {
+          agentId: 'agent-1',
+          config: { deviceId: 'mac', deviceOwnerId: 'owner', workingDirectory: '/Users/me' },
+        },
+      ],
+      projectId: undefined,
+      title: 'c',
+    });
+  });
+
+  it('still asks for a directory when the device cannot report its home folder', async () => {
+    querySystemInfo.mockResolvedValue(undefined);
+
+    await expect(
+      service().create({ agents: [{ agentId: 'agent-1', deviceId: 'mac' }], title: 'c' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(create).not.toHaveBeenCalled();
   });
 });

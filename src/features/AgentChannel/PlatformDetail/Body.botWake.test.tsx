@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
+import { sharedSchema as feishuSchema } from '@/server/services/bot/platforms/feishu/definitions/schema';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
 import agentZh from '../../../../locales/zh-CN/agent.json';
@@ -57,6 +58,16 @@ vi.mock('@/services/agentBotProvider', () => ({
 
 vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://example.test' }));
 
+/** The custom-instructions and duties text areas, told apart by their placeholders. */
+const textAreaWith = (container: HTMLElement, placeholderKey: string) =>
+  container.querySelector<HTMLTextAreaElement>(
+    `textarea[placeholder="${CSS.escape(agentEn[placeholderKey as keyof typeof agentEn] as string)}"]`,
+  );
+const instructionsArea = (container: HTMLElement) =>
+  textAreaWith(container, 'channel.botWakeCustomInstructionsPlaceholder');
+const dutiesArea = (container: HTMLElement) =>
+  textAreaWith(container, 'channel.botWakeDutiesPlaceholder');
+
 const platformDef = {
   documentation: {},
   id: 'discord',
@@ -64,21 +75,30 @@ const platformDef = {
   schema: discordSchema,
 } as unknown as SerializedPlatformDefinition;
 
+const feishuDef = {
+  documentation: {},
+  id: 'feishu',
+  name: 'Feishu',
+  schema: feishuSchema,
+} as unknown as SerializedPlatformDefinition;
+
 /** Mounts the form the way the channel page does: a saved bot, its settings merged with the defaults. */
 const Harness = ({
   activeTab = 'wake',
+  def = platformDef,
   moduleControls,
   settings,
 }: {
   activeTab?: 'reply' | 'wake';
+  def?: SerializedPlatformDefinition;
   moduleControls?: ModuleControls;
   settings?: Record<string, unknown>;
 }) => {
   const form = useForm<ChannelFormValues>();
   // The page switches the master on for a user the options are released to.
   const saved = withWakeMasterOn(
-    mergeSettingsWithDefaults(discordSchema, settings ?? {}),
-    isWakeMasterReleased(discordSchema, state.featureFlags),
+    mergeSettingsWithDefaults(def.schema, settings ?? {}),
+    isWakeMasterReleased(def.schema, state.featureFlags),
   );
 
   useEffect(() => {
@@ -95,7 +115,7 @@ const Harness = ({
       currentConfig={{ applicationId: '1', credentials: {}, settings: saved }}
       form={form}
       moduleControls={moduleControls}
-      platformDef={platformDef}
+      platformDef={def}
     />
   );
 };
@@ -180,6 +200,26 @@ describe('channel settings form: bot-wake options', () => {
     expect(screen.getByText(en['channel.wake.intro'])).toBeInTheDocument();
   });
 
+  it('offers them on Feishu too, naming the scope that lets the bot hear group messages', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness def={feishuDef} />);
+
+    expect(screen.getByText(en['channel.wake.intro'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.wake.feishuScope.desc'])).toBeInTheDocument();
+  });
+
+  it('names no Feishu scope on Discord', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness />);
+
+    expect(screen.queryByText(en['channel.wake.feishuScope.desc'])).not.toBeInTheDocument();
+  });
+
   it('opens straight onto the options for a bot that already has them on', () => {
     state.copy = en;
     state.featureFlags = { enableBotWake: true };
@@ -221,13 +261,13 @@ describe('channel settings form: bot-wake options', () => {
     expect(screen.queryByText('Record only')).not.toBeInTheDocument();
   });
 
-  it('groups the options into keywords, channels, pace and judgement, each under its own title', () => {
+  it('groups the options into judgement, keywords, channels and pace, each under its own title', () => {
     state.copy = en;
     state.featureFlags = { enableBotWake: true };
 
     render(<Harness settings={{ botWakeEnabled: true }} />);
 
-    const titles = ['keywords', 'channels', 'pace', 'judgement'].map((key) =>
+    const titles = ['judgement', 'keywords', 'channels', 'pace'].map((key) =>
       screen.getByText(en[`channel.wake.section.${key}`]),
     );
     // Titles come in page order.
@@ -257,12 +297,29 @@ describe('channel settings form: bot-wake options', () => {
       <Harness settings={{ botWakeCustomInstructionsEnabled: true, botWakeEnabled: true }} />,
     );
 
-    const area = container.querySelector('textarea')!;
+    const area = instructionsArea(container)!;
     expect(area).toBeInTheDocument();
     expect(Number(area.getAttribute('rows'))).toBeGreaterThanOrEqual(8);
     expect(Number(area.getAttribute('maxlength'))).toBeGreaterThanOrEqual(2000);
-    // The only multi-line field: the others stay single-line.
-    expect(container.querySelectorAll('textarea')).toHaveLength(1);
+    // Multi-line next to the duties and the reply style only: the others stay single-line.
+    expect(container.querySelectorAll('textarea')).toHaveLength(3);
+  });
+
+  it('opens the wake options with the duties: a text area, empty by default, and its dial', () => {
+    state.copy = en;
+    state.featureFlags = { enableBotWake: true };
+
+    const { container } = render(<Harness settings={{ botWakeEnabled: true }} />);
+
+    const title = screen.getByText(en['channel.wake.section.judgement']);
+    const label = screen.getByText(en['channel.botWakeDuties']);
+    expect(title).toHaveTextContent('Duties');
+    expect(title.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dutiesArea(container)).toHaveValue('');
+    expect(screen.getByText(en['channel.botWakeDutiesThreshold'])).toBeInTheDocument();
+    // The retired options are gone from the page.
+    expect(screen.queryByText('Help me')).not.toBeInTheDocument();
+    expect(screen.queryByText('Help others')).not.toBeInTheDocument();
   });
 
   it('keeps the text area folded until its switch is on', () => {
@@ -272,7 +329,7 @@ describe('channel settings form: bot-wake options', () => {
     const { container } = render(<Harness settings={{ botWakeEnabled: true }} />);
 
     expect(screen.getByText(en['channel.botWakeCustomInstructionsEnabled'])).toBeInTheDocument();
-    expect(container.querySelector('textarea')).not.toBeInTheDocument();
+    expect(instructionsArea(container)).not.toBeInTheDocument();
   });
 
   it('shows instructions saved before the switch existed, switched on', () => {
@@ -289,9 +346,7 @@ describe('channel settings form: bot-wake options', () => {
       />,
     );
 
-    expect(container.querySelector('textarea')).toHaveValue(
-      'Only answer billing questions.\nNever joke.',
-    );
+    expect(instructionsArea(container)).toHaveValue('Only answer billing questions.\nNever joke.');
   });
 
   describe('a Save in the corner of each block', () => {
@@ -332,8 +387,8 @@ describe('channel settings form: bot-wake options', () => {
       expect(enabled).toHaveLength(1);
       fireEvent.click(enabled[0]);
       expect(onSave).toHaveBeenCalledWith('wake-pace');
-      // It sits in the Pace block, between the channels and the judgement.
-      expect(saveButtons().indexOf(enabled[0])).toBe(2);
+      // It sits in the Pace block, the last one, after the judgement, keywords and channels.
+      expect(saveButtons().indexOf(enabled[0])).toBe(3);
     });
 
     it('discards one block’s changes by id', () => {
@@ -369,5 +424,33 @@ describe('channel settings form: bot-wake options', () => {
 
       expect(screen.queryByRole('button', { name: en['channel.module.save'] })).toBeNull();
     });
+  });
+});
+
+describe('channel settings form: reply placement', () => {
+  it('lists where to reply as choices that each say what they do, like who may DM it', () => {
+    state.copy = zh;
+    state.featureFlags = { enableBotWake: true };
+
+    render(<Harness activeTab="reply" />);
+
+    const placement = screen.getByRole('radiogroup', { name: zh['channel.replyPlacement'] });
+    // Both consequences are readable without opening a dropdown.
+    expect(placement).toHaveTextContent(zh['channel.replyPlacementAgentHint']);
+    expect(placement).toHaveTextContent(zh['channel.replyPlacementThreadHint']);
+    expect(placement).toHaveTextContent(zh['channel.access.recommended']);
+    expect(screen.queryByRole('combobox', { name: zh['channel.replyPlacement'] })).toBeNull();
+
+    const agent = screen.getByRole('radio', {
+      name: new RegExp(zh['channel.replyPlacementAgent']),
+    });
+    const thread = screen.getByRole('radio', {
+      name: new RegExp(zh['channel.replyPlacementThread']),
+    });
+    expect(agent).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(thread);
+    expect(thread).toHaveAttribute('aria-checked', 'true');
+    expect(agent).toHaveAttribute('aria-checked', 'false');
   });
 });

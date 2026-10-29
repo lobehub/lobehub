@@ -206,7 +206,7 @@ describe('MCPClient', () => {
         url: 'https://example.com/mcp',
       });
       // Replace the underlying SDK client with a stub that simulates an expired session
-      (client as any).mcp = mcp;
+      (client as any).mcp = { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp };
       return client;
     };
 
@@ -283,7 +283,7 @@ describe('MCPClient', () => {
 
     const buildClient = (mcp: Record<string, unknown>) => {
       const client = new MCPClient(sensitiveConnection);
-      (client as any).mcp = mcp;
+      (client as any).mcp = { getProtocolEra: vi.fn().mockReturnValue('legacy'), ...mcp };
       return client;
     };
 

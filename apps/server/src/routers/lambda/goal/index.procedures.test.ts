@@ -33,6 +33,7 @@ function expected(): Array<
     ['bindSubscription', 'mutation', 13],
     ['bindTopic', 'mutation', 13],
     ['close', 'mutation', 13],
+    ['copyGoalToWorkspace', 'mutation', 13],
     ['create', 'mutation', 13],
     ['createConversationGoal', 'mutation', 8],
     ['decide', 'mutation', 13],

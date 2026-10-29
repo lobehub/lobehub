@@ -203,7 +203,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'task': {
-          openTaskDetail(openTarget.identifier);
+          openTaskDetail(openTarget.taskId);
         }
       }
     };

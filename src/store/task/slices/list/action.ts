@@ -210,15 +210,15 @@ export class TaskListSliceActionImpl {
   });
 
   /** The task (by identifier) as any loaded list or board holds it. */
-  internal_findCollectionTask = (identifier: string): CollectionTask | undefined => {
+  internal_findCollectionTask = (taskId: string): CollectionTask | undefined => {
     const { taskGroupListMap, taskListMap } = this.#get();
     for (const value of Object.values(taskListMap)) {
-      const task = value.items.find((item) => item.identifier === identifier);
+      const task = value.items.find((item) => item.id === taskId);
       if (task) return task;
     }
     for (const value of Object.values(taskGroupListMap)) {
       for (const group of value.groups) {
-        const task = group.tasks.find((item) => item.identifier === identifier);
+        const task = group.tasks.find((item) => item.id === taskId);
         if (task) return task;
       }
     }
@@ -233,18 +233,18 @@ export class TaskListSliceActionImpl {
    * every loaded collection exactly, card order included.
    */
   internal_beginCollectionTaskOptimistic = (
-    identifier: string,
+    taskId: string,
     fn: <T extends CollectionTask>(task: T) => T,
   ) => {
     const tokens = [
-      ...this.#taskList.beginEntityOptimistic<CollectionTask>(identifier, fn),
-      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+      ...this.#taskList.beginEntityOptimistic<CollectionTask>(taskId, fn),
+      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(taskId, fn),
     ];
     return {
       commit: () => {
         tokens.forEach((token) => token.commit());
-        void this.#taskList.patchStoredEntity<CollectionTask>(identifier, fn);
-        void this.#taskGroupList.patchStoredEntity<CollectionTask>(identifier, fn);
+        void this.#taskList.patchStoredEntity<CollectionTask>(taskId, fn);
+        void this.#taskGroupList.patchStoredEntity<CollectionTask>(taskId, fn);
       },
       rollback: () => tokens.forEach((token) => token.rollback()),
     };

@@ -49,6 +49,7 @@ const statusIcon = (s: string): string => {
 };
 
 export interface TaskSummary {
+  id?: string;
   identifier: string;
   name?: string | null;
   priority?: number | null;
@@ -110,14 +111,22 @@ export const formatPropertyValue = (field: string | undefined, value: unknown): 
   return String(value);
 };
 
-export const taskDetailHref = (identifier: string, baseUrl?: string): string => {
-  const path = `/task/${identifier}`;
+export const taskDetailHref = (taskRef: string, baseUrl?: string): string => {
+  const path = `/task/${taskRef}`;
   return baseUrl ? `${baseUrl.replace(/\/$/, '')}${path}` : path;
 };
 
-/** Markdown-link form of a task identifier, e.g. `[T-198](https://app.lobehub.com/task/T-198)`. */
-export const taskRef = (identifier: string, baseUrl?: string): string =>
-  `[${identifier}](${taskDetailHref(identifier, baseUrl)})`;
+/** Public links use the display alias; stable identity stays in explicit metadata. */
+export const taskRef = (
+  task: string | { id?: string; identifier: string },
+  baseUrl?: string,
+): string => {
+  const { id, identifier } = typeof task === 'string' ? { id: undefined, identifier: task } : task;
+  return `[${identifier}](${taskDetailHref(identifier, baseUrl)})${id ? ` (id: ${id})` : ''}`;
+};
+
+export const taskIdentity = (task: { id?: string | null; identifier: string }) =>
+  `${task.identifier}${task.id ? ` (id: ${task.id})` : ''}`;
 
 // Re-export shared types from @lobechat/types for backward compatibility
 export type {
@@ -131,7 +140,7 @@ export type {
  * Format a single task as a one-line summary
  */
 export const formatTaskLine = (t: TaskSummary): string =>
-  `${t.identifier} ${statusIcon(t.status)} ${t.status}  ${t.name || '(unnamed)'}  [${priorityLabel(t.priority)}]`;
+  `${taskIdentity(t)} ${statusIcon(t.status)} ${t.status}  ${t.name || '(unnamed)'}  [${priorityLabel(t.priority)}]`;
 
 /**
  * Format createTask response
@@ -143,15 +152,19 @@ export const formatTaskCreated = (
     baseUrl?: string;
     instruction: string;
     parentLabel?: string;
+    parentTaskId?: string;
   },
 ): string => {
   const lines = [
-    `Task created: ${taskRef(t.identifier, t.baseUrl)} "${t.name}"`,
+    `Task created: ${taskRef(t, t.baseUrl)} "${t.name}"`,
     `  Status: ${statusIcon(t.status)} ${t.status}`,
     `  Priority: ${priorityLabel(t.priority)}`,
   ];
   if (t.assigneeLabel) lines.push(`  Assignee: ${t.assigneeLabel}`);
-  if (t.parentLabel) lines.push(`  Parent: ${taskRef(t.parentLabel, t.baseUrl)}`);
+  if (t.parentLabel)
+    lines.push(
+      `  Parent: ${taskRef({ id: t.parentTaskId, identifier: t.parentLabel }, t.baseUrl)}`,
+    );
   lines.push(`  Instruction: ${t.instruction}`);
   return lines.join('\n');
 };
@@ -161,6 +174,7 @@ export interface TaskCreatedItem {
   identifier?: string;
   name: string;
   success: boolean;
+  taskId?: string;
 }
 
 /**
@@ -174,7 +188,9 @@ export interface TaskCreatedItem {
 export const formatTasksCreated = (results: TaskCreatedItem[], baseUrl?: string): string => {
   const lines = results.map((r, index) => {
     if (r.success) {
-      const ref = r.identifier ? taskRef(r.identifier, baseUrl) : '(unknown id)';
+      const ref = r.identifier
+        ? taskRef({ id: r.taskId, identifier: r.identifier }, baseUrl)
+        : '(unknown id)';
       return `${index + 1}. ${ref} "${r.name}" — created`;
     }
     return `${index + 1}. "${r.name}" — failed: ${r.error ?? 'Unknown error'}`;
@@ -241,7 +257,7 @@ export const formatTaskList = (tasks: TaskSummary[], filters: TaskListFilters): 
  */
 export const formatTaskDetail = (t: TaskDetailData): string => {
   const lines = [
-    `${t.identifier} ${t.name || '(unnamed)'}`,
+    `${taskIdentity(t)} ${t.name || '(unnamed)'}`,
     `Status: ${statusIcon(t.status)} ${t.status}     Priority: ${priorityLabel(t.priority)}`,
     `Instruction: ${t.instruction}`,
   ];
@@ -249,13 +265,13 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   if (t.agentId) lines.push(`Agent: ${t.agentId}`);
   // `userId` on the detail payload is the human assignee (workspace member).
   if (t.userId) lines.push(`Assignee (member): ${t.userId}`);
-  if (t.parent) lines.push(`Parent: ${t.parent.identifier}`);
+  if (t.parent) lines.push(`Parent: ${taskIdentity(t.parent)}`);
   if (t.topicCount) lines.push(`Topics: ${t.topicCount}`);
   if (t.createdAt) lines.push(`Created: ${t.createdAt}`);
 
   if (t.dependencies && t.dependencies.length > 0) {
     lines.push(
-      `Dependencies: ${t.dependencies.map((d) => `${d.type}: ${d.dependsOn}`).join(', ')}`,
+      `Dependencies: ${t.dependencies.map((d) => `${d.type}: ${taskIdentity({ id: d.dependsOnId, identifier: d.dependsOn })}`).join(', ')}`,
     );
   }
 
@@ -265,9 +281,11 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
     lines.push('Subtasks:');
     const renderSubtasks = (nodes: NonNullable<typeof t.subtasks>, indent: string) => {
       for (const s of nodes) {
-        const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
+        const dep = s.blockedBy
+          ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+          : '';
         lines.push(
-          `${indent}${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
+          `${indent}${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
         );
         if (s.children && s.children.length > 0) {
           renderSubtasks(s.children, indent + '  ');
@@ -569,16 +587,17 @@ export interface TaskRunPromptInput {
   goalLoop?: TaskRunPromptGoalLoop;
   /** Parent task context (when current task is a subtask) */
   parentTask?: {
+    id?: string;
     identifier: string;
     instruction: string;
     name?: string | null;
-    subtasks?: Array<TaskSummary & { blockedBy?: string }>;
+    subtasks?: Array<TaskSummary & { blockedBy?: string; blockedById?: string }>;
   };
   /** Task data */
   task: {
     assigneeAgentId?: string | null;
     automationMode?: 'heartbeat' | 'schedule' | null;
-    dependencies?: Array<{ dependsOn: string; type: string }>;
+    dependencies?: Array<{ dependsOn: string; dependsOnId?: string; type: string }>;
     description?: string | null;
     /** Lightweight metadata of files attached to the task instruction. Actual
      * content is forwarded to the agent runtime via `fileIds` on execAgent. */
@@ -589,6 +608,7 @@ export interface TaskRunPromptInput {
     instruction: string;
     name?: string | null;
     parentIdentifier?: string | null;
+    parentTaskId?: string | null;
     priority?: number | null;
     review?: {
       enabled?: boolean;
@@ -598,7 +618,7 @@ export interface TaskRunPromptInput {
     schedulePattern?: string | null;
     scheduleTimezone?: string | null;
     status: string;
-    subtasks?: Array<TaskSummary & { blockedBy?: string }>;
+    subtasks?: Array<TaskSummary & { blockedBy?: string; blockedById?: string }>;
     /** Delivery-acceptance criteria the builder must self-evidence while working. */
     verify?: {
       criteria?: Array<{
@@ -698,7 +718,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   const taskLines = [
     `<task>`,
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,
-    `${task.identifier} ${task.name || task.identifier}`,
+    `${taskIdentity(task)} ${task.name || task.identifier}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
   ];
   if (task.automationMode) {
@@ -721,14 +741,17 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     }
   }
   if (task.assigneeAgentId) taskLines.push(`Agent: ${task.assigneeAgentId}`);
-  if (task.parentIdentifier) taskLines.push(`Parent: ${task.parentIdentifier}`);
+  if (task.parentIdentifier)
+    taskLines.push(
+      `Parent: ${taskIdentity({ id: task.parentTaskId, identifier: task.parentIdentifier })}`,
+    );
 
   const topicCount = activities?.topics?.length ?? 0;
   if (topicCount > 0) taskLines.push(`Topics: ${topicCount}`);
 
   if (task.dependencies && task.dependencies.length > 0) {
     taskLines.push(
-      `Dependencies: ${task.dependencies.map((d) => `${d.type}: ${d.dependsOn}`).join(', ')}`,
+      `Dependencies: ${task.dependencies.map((d) => `${d.type}: ${taskIdentity({ id: d.dependsOnId, identifier: d.dependsOn })}`).join(', ')}`,
     );
   }
 
@@ -737,9 +760,11 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     taskLines.push('');
     taskLines.push('Subtasks:');
     for (const s of task.subtasks) {
-      const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
+      const dep = s.blockedBy
+        ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+        : '';
       taskLines.push(
-        `  ${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
+        `  ${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
       );
     }
   }
@@ -965,16 +990,20 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   if (parentTask) {
     taskLines.push('');
     taskLines.push(
-      `<parentTask identifier="${parentTask.identifier}" name="${parentTask.name || parentTask.identifier}">`,
+      `<parentTask${parentTask.id ? ` id="${parentTask.id}"` : ''} identifier="${parentTask.identifier}" name="${parentTask.name || parentTask.identifier}">`,
     );
     taskLines.push(`  Instruction: ${parentTask.instruction}`);
     if (parentTask.subtasks && parentTask.subtasks.length > 0) {
       taskLines.push(`  Subtasks (${parentTask.subtasks.length}):`);
       for (const s of parentTask.subtasks) {
-        const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
-        const marker = s.identifier === task.identifier ? ' ◀ current' : '';
+        const dep = s.blockedBy
+          ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+          : '';
+        const marker = (s.id ? s.id === task.id : s.identifier === task.identifier)
+          ? ' ◀ current'
+          : '';
         taskLines.push(
-          `    ${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}${marker}`,
+          `    ${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}${marker}`,
         );
       }
     }

@@ -24,8 +24,8 @@ export const listSchema = z.object({
   offset: z.number().min(0).default(0),
   // Which timestamp orders the page, newest first. Defaults to creation time.
   orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
-  parentIdentifier: z.string().optional(),
-  parentTaskId: z.string().nullish(),
+  parentIdentifier: z.string().trim().min(1).optional(),
+  parentTaskId: z.string().trim().min(1).nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   projectId: z.string().optional(),
   // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
@@ -59,7 +59,8 @@ export const groupListSchema = z
       .max(10)
       .optional(),
     includeArchived: z.boolean().optional(),
-    parentTaskId: z.string().nullish(),
+    parentIdentifier: z.string().trim().min(1).optional(),
+    parentTaskId: z.string().trim().min(1).nullish(),
     projectId: z.string().optional(),
     // Same "My tasks" narrowing as `listSchema.scope`, so the board renders the
     // exact set its list view does. Always resolved against `ctx.userId`.

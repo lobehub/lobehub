@@ -60,7 +60,9 @@ export class GoalModel {
 
   /** Visibility-aware task scope for recursive raw-SQL carrier aggregation. */
   private taskOwnershipSql = (alias?: string) => {
-    const prefix = alias ? sql.raw(`${alias}.`) : sql.raw('');
+    const prefix = alias
+      ? sql.raw(`${alias}.`)
+      : /* v8 ignore next -- unreachable: every caller passes an alias */ sql.raw('');
     return this.workspaceId
       ? sql`${prefix}workspace_id = ${this.workspaceId}
             AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`

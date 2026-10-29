@@ -362,7 +362,7 @@ describe('DiscordGatewayClient', () => {
     it('names every mention and only strips the leading self mention', () => {
       const client = createNumericClient();
       expect(client.sanitizeUserInput!('<@111> 我搞了个 <@2000> 来抢你的活', { raw } as any)).toBe(
-        '@Shadow Arvin 我搞了个 @Lobo 来抢你的活',
+        '@Shadow Arvin (<@111>) 我搞了个 @Lobo 来抢你的活',
       );
       expect(client.sanitizeUserInput!('<@2000> /new', { raw } as any)).toBe('/new');
     });
@@ -370,7 +370,7 @@ describe('DiscordGatewayClient', () => {
     it('resolveMentions keeps the self mention as a name', () => {
       const client = createNumericClient();
       expect(client.resolveMentions!('<@2000> hi <@111>', { raw } as any)).toBe(
-        '@Lobo hi @Shadow Arvin',
+        '@Lobo hi @Shadow Arvin (<@111>)',
       );
     });
   });
@@ -470,6 +470,106 @@ describe('DiscordGatewayClient', () => {
       const client = withApi(vi.fn().mockRejectedValue(new Error('down')));
 
       await expect(client.getBotNames()).rejects.toThrow('down');
+    });
+  });
+  describe('getBotNames in a server', () => {
+    const withApi = (api: Record<string, ReturnType<typeof vi.fn>>) => {
+      const client = createClient() as any;
+      client.discord = api;
+
+      return client as { getBotNames: (threadId?: string) => Promise<string[]> };
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('adds the nickname the bot goes by in that server', async () => {
+      const getGuildNickname = vi.fn().mockResolvedValue('Nasa');
+      const client = withApi({
+        getBotNames: vi.fn().mockResolvedValue(['Shadow Arvin']),
+        getGuildNickname,
+      });
+
+      await expect(client.getBotNames('discord:guild-1:chan-1:thread-1')).resolves.toEqual([
+        'Shadow Arvin',
+        'Nasa',
+      ]);
+      await client.getBotNames('discord:guild-1:chan-2');
+
+      expect(getGuildNickname).toHaveBeenCalledTimes(1);
+      expect(getGuildNickname).toHaveBeenCalledWith('guild-1', expect.any(String));
+    });
+
+    it('asks nothing about a server for a DM or without a conversation', async () => {
+      const getGuildNickname = vi.fn();
+      const client = withApi({
+        getBotNames: vi.fn().mockResolvedValue(['Shadow Arvin']),
+        getGuildNickname,
+      });
+
+      await expect(client.getBotNames('discord:@me:dm-1')).resolves.toEqual(['Shadow Arvin']);
+      await expect(client.getBotNames()).resolves.toEqual(['Shadow Arvin']);
+      expect(getGuildNickname).not.toHaveBeenCalled();
+    });
+
+    it('keeps the account names when the nickname cannot be read, and waits before asking again', async () => {
+      vi.useFakeTimers();
+      const getGuildNickname = vi.fn().mockRejectedValue(new Error('403'));
+      const client = withApi({
+        getBotNames: vi.fn().mockResolvedValue(['Shadow Arvin']),
+        getGuildNickname,
+      });
+
+      await expect(client.getBotNames('discord:guild-1:chan-1')).resolves.toEqual(['Shadow Arvin']);
+      await client.getBotNames('discord:guild-1:chan-1');
+      expect(getGuildNickname).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(60 * 1000 + 1);
+      await client.getBotNames('discord:guild-1:chan-1');
+      expect(getGuildNickname).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('reply threads chosen by the bot', () => {
+    it('offers the channel or a thread only at the top level of a server channel', () => {
+      const client = createClient() as any;
+      const message = { id: 'msg-1', raw: { id: 'msg-1' } };
+
+      expect(client.getReplyTargets('discord:guild-1:chan-1', message)).toEqual({
+        channel: 'discord:guild-1:chan-1',
+        namesThread: true,
+        openThread: expect.any(Function),
+      });
+      expect(client.getReplyTargets('discord:guild-1:chan-1:thread-1', message)).toBeUndefined();
+      expect(client.getReplyTargets('discord:@me:dm-1', message)).toBeUndefined();
+      expect(client.getReplyTargets('telegram:chat-1', message)).toBeUndefined();
+    });
+
+    it('names the thread it opens after the subject', async () => {
+      const client = createClient() as any;
+      const startThreadFromMessage = vi.fn().mockResolvedValue({ id: 'thread-9' });
+      client.discord = { ...client.discord, startThreadFromMessage };
+
+      const result = await client
+        .getReplyTargets('discord:guild-1:chan-1', { id: 'msg-1', raw: { id: 'msg-1' } })
+        .openThread('  昨天部署失败排查 ');
+
+      expect(startThreadFromMessage).toHaveBeenCalledWith('chan-1', 'msg-1', '昨天部署失败排查');
+      expect(result).toBe('discord:guild-1:chan-1:thread-9');
+    });
+
+    it('installs the mention-thread patch only when the router asks for it', () => {
+      const createDiscordThread = vi.fn();
+      const adapter = { createDiscordThread };
+      const chatBot = { adapters: new Map([['discord', adapter]]) } as any;
+      const client = createClient() as any;
+
+      client.applyChatPatches(chatBot);
+      expect(adapter.createDiscordThread).toBe(createDiscordThread);
+
+      client.applyChatPatches(chatBot, { deferMentionThread: async () => true });
+      expect(adapter.createDiscordThread).not.toBe(createDiscordThread);
     });
   });
 });

@@ -7,6 +7,7 @@
  */
 import { vi } from 'vitest';
 
+import type * as ReplyStyle from '../platforms/replyStyle';
 import type * as PlatformUtils from '../platforms/utils';
 
 // ==================== Hoisted mocks ====================
@@ -178,7 +179,9 @@ export const mockEnsureThreadMember = vi.fn().mockResolvedValue(undefined);
 
 /** Factory for `vi.mock('../AgentBridgeService')`. */
 export const agentBridgeServiceModule = () => ({
-  AgentBridgeService: mockAgentBridgeServiceCtor,
+  AgentBridgeService: Object.assign(mockAgentBridgeServiceCtor, {
+    isThreadActive: () => false,
+  }),
 });
 
 // Mock platform entries
@@ -242,6 +245,21 @@ export const mockGetPlatform = vi.fn().mockImplementation(function (platform: st
         },
         ensureThreadMember: mockEnsureThreadMember,
         getBotNames: mockGetBotNames,
+        // Discord's: a top-level guild channel can move its reply into a thread. Threadless
+        // platforms (Telegram, WeChat, QQ) offer no reply targets.
+        ...(platform === 'discord' && {
+          getReplyTargets: (threadId: string, message: { raw?: unknown }) => {
+            const [, guildId, channelId, subThreadId] = threadId.split(':');
+            if (!guildId || guildId === '@me' || !channelId || subThreadId) return undefined;
+
+            return {
+              channel: threadId,
+              namesThread: true,
+              openThread: (name?: string) =>
+                mockOpenThreadForChannelWake(threadId, message.raw, name),
+            };
+          },
+        }),
         getMessenger: () => ({
           createMessage: vi.fn(),
           editMessage: vi.fn(),
@@ -249,7 +267,6 @@ export const mockGetPlatform = vi.fn().mockImplementation(function (platform: st
           triggerTyping: vi.fn(),
         }),
         id: platform,
-        openThreadForChannelWake: mockOpenThreadForChannelWake,
         parseMessageId: (id: string) => id,
         start: vi.fn(),
         stop: vi.fn(),
@@ -295,12 +312,18 @@ export const platformsModule = async () => ({
   // mocked because it instantiates every platform definition, `utils` does not.
   resolveBotConcurrency: (await vi.importActual<typeof PlatformUtils>('../platforms/utils'))
     .resolveBotConcurrency,
+  // Pure parsers, safe to import for real like `utils`.
+  extractReplyEmojis: (await vi.importActual<typeof ReplyStyle>('../platforms/replyStyle'))
+    .extractReplyEmojis,
+  resolveReplyStyle: (await vi.importActual<typeof ReplyStyle>('../platforms/replyStyle'))
+    .resolveReplyStyle,
   getBotReplyLocale: (platform: string | undefined): string => {
     if (platform === 'feishu' || platform === 'qq' || platform === 'wechat') return 'zh-CN';
     return 'en-US';
   },
   normalizeBotReactionMode: (value: unknown) =>
     value === 'full' || value === 'none' ? value : 'minimal',
+  normalizeBotReplyPlacementMode: (value: unknown) => (value === 'thread' ? 'thread' : 'agent'),
   normalizeBotReplyLocale: (raw: string | undefined | null): string | undefined => {
     if (!raw) return undefined;
     const parts = raw.replaceAll('_', '-').split('-');
@@ -392,16 +415,19 @@ export const platformsModule = async () => ({
   // gate and the instruction-injection branch.
   extractWatchKeywordEntries: (
     settings: Record<string, unknown> | null | undefined,
-  ): Array<{ instruction?: string; keyword: string }> => {
+  ): Array<{ asName?: boolean; instruction?: string; keyword: string }> => {
     const raw = settings?.watchKeywords;
-    const byKeyword = new Map<string, { instruction?: string; keyword: string }>();
+    const byKeyword = new Map<
+      string,
+      { asName?: boolean; instruction?: string; keyword: string }
+    >();
     if (Array.isArray(raw)) {
       for (const entry of raw) {
         if (typeof entry === 'string') {
           const k = entry.trim().toLowerCase();
           if (k && !byKeyword.has(k)) byKeyword.set(k, { keyword: k });
         } else if (entry && typeof entry === 'object' && 'keyword' in entry) {
-          const obj = entry as { instruction?: unknown; keyword?: unknown };
+          const obj = entry as { asName?: unknown; instruction?: unknown; keyword?: unknown };
           if (typeof obj.keyword !== 'string') continue;
           const k = obj.keyword.trim().toLowerCase();
           if (!k) continue;
@@ -410,7 +436,12 @@ export const platformsModule = async () => ({
               ? obj.instruction.trim()
               : undefined;
           const existing = byKeyword.get(k);
-          if (!existing) byKeyword.set(k, { instruction, keyword: k });
+          if (!existing)
+            byKeyword.set(k, {
+              instruction,
+              keyword: k,
+              ...(obj.asName === true && { asName: true }),
+            });
           else if (!existing.instruction && instruction) existing.instruction = instruction;
         }
       }

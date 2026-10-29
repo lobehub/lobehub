@@ -248,6 +248,52 @@ describe('RecentModel', () => {
         expect(result.map((r) => r.id)).toEqual(['topic-chat']);
       });
 
+      it('keeps archived topics unless excludeArchived is set', async () => {
+        await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
+        await serverDB.insert(topics).values([
+          {
+            agentId: 'agent-inbox',
+            id: 'topic-active',
+            status: 'active',
+            updatedAt: minutesAgo(1),
+            userId,
+          },
+          { agentId: 'agent-inbox', id: 'topic-null', updatedAt: minutesAgo(2), userId },
+          {
+            agentId: 'agent-inbox',
+            id: 'topic-completed',
+            status: 'completed',
+            updatedAt: minutesAgo(3),
+            userId,
+          },
+          {
+            agentId: 'agent-inbox',
+            id: 'topic-archived',
+            status: 'archived',
+            updatedAt: minutesAgo(4),
+            userId,
+          },
+          {
+            agentId: 'agent-inbox',
+            id: 'topic-unread',
+            status: 'unread',
+            updatedAt: minutesAgo(5),
+            userId,
+          },
+        ]);
+
+        const all = await recentModel.queryRecent(10, ['topic']);
+        expect(all.map((r) => r.id)).toEqual([
+          'topic-active',
+          'topic-null',
+          'topic-completed',
+          'topic-archived',
+        ]);
+
+        const unarchived = await recentModel.queryRecent(10, ['topic'], false, false, false, true);
+        expect(unarchived.map((r) => r.id)).toEqual(['topic-active', 'topic-null']);
+      });
+
       it('falls back to "Untitled Topic" when title is null', async () => {
         await serverDB.insert(agents).values({ id: 'agent-inbox', userId, slug: 'inbox' });
         await serverDB.insert(topics).values({
@@ -439,6 +485,7 @@ describe('RecentModel', () => {
         expect(result).toHaveLength(1);
         expect(result[0]).toMatchObject({
           id: 'task-active',
+          taskIdentifier: 'T-1',
           type: 'task',
           title: 'Active Task',
           routeId: 'agent-assignee',

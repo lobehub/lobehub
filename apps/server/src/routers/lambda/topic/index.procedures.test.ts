@@ -45,6 +45,7 @@ function expected(): Array<
     ['getTopicContext', 'query', 12],
     ['getTopicDetail', 'query', 12],
     ['getTopicTranscript', 'query', 12],
+    ['getTopicTranscriptOperation', 'query', 9],
     ['getTopics', 'query', 12],
     ['hasTopicFiles', 'query', 13],
     ['hasTopics', 'query', 11],

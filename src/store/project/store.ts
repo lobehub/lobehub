@@ -95,6 +95,24 @@ const LIST_PARAMS = {} as Record<string, never>;
 
 const devtools = createDevtools('project');
 
+/**
+ * A favorited project keeps a title and icon snapshot in the sidebar. Renames
+ * and logo changes come from Project Settings, where no favorites row is
+ * mounted to refresh it, so every save pushes the new values.
+ */
+const syncProjectFavorite = (project: Pick<ProjectListItem, 'avatar' | 'id' | 'name'>): void => {
+  // Loaded on demand: a static import would pull the home store, and through
+  // it the chat store, into every chunk that touches projects.
+  void import('@/store/home')
+    .then(({ useHomeStore }) =>
+      useHomeStore.getState().syncFavoriteSnapshot('project', project.id, {
+        icon: project.avatar ?? null,
+        title: project.name,
+      }),
+    )
+    .catch((error) => console.error('[project] failed to sync the favorite snapshot', error));
+};
+
 export const useProjectStore = createWithEqualityFn<ProjectStore>()(
   devtools((set, get) => {
     const list = createReplicaSlice(projectListResource, {
@@ -300,6 +318,7 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
         // Server-owned fields (updatedAt, slug normalisation) land in every copy.
         projectEntity.update(id, (project) => ({ ...project, ...response.data }));
         void refreshList();
+        if ('name' in input || 'avatar' in input) syncProjectFavorite(response.data);
         return response.data;
       },
       useFetchProjectDetail: (idOrSlug) => detail.useSync(idOrSlug || null),
@@ -325,3 +344,43 @@ export const useLoadedProjectList = () =>
 
 export const useCurrentProjectDetail = (idOrSlug?: string) =>
   useProjectStore((state) => (idOrSlug ? state.projectDetailMap[idOrSlug] : undefined));
+
+/**
+ * The project a route param (id or slug) points at: its loaded page, else its
+ * row in the project list. The list is light and persisted, so a project page
+ * can resolve the project without waiting for the much heavier detail request.
+ */
+export const projectByRefSelector =
+  (idOrSlug?: string) =>
+  (state: ProjectStoreState): ProjectListItem | undefined => {
+    if (!idOrSlug) return undefined;
+    const detail = state.projectDetailMap[idOrSlug];
+    if (detail) return detail.project;
+
+    // An exact id wins over a slug, as on the server (`findByReference`): one
+    // project's slug may equal another's id.
+    const list = state.projectListMap[PROJECT_LIST_KEY];
+    return (
+      list?.find((project) => project.id === idOrSlug) ??
+      list?.find((project) => project.slug === idOrSlug)
+    );
+  };
+
+export const useProjectByRef = (idOrSlug?: string) =>
+  useProjectStore(projectByRefSelector(idOrSlug));
+
+const PROJECT_ID_PREFIX = 'prj_';
+
+/**
+ * The project id behind a route param, for requests keyed by id (topics,
+ * directories). `confirmed` is false while the id is only guessed from a
+ * `prj_`-shaped param: a slug may take that shape too, so callers must not
+ * treat an empty answer for a guessed id as final.
+ */
+export const useProjectIdByRef = (idOrSlug?: string) => {
+  const project = useProjectByRef(idOrSlug);
+  if (project) return { confirmed: true, id: project.id };
+  if (idOrSlug?.startsWith(PROJECT_ID_PREFIX)) return { confirmed: false, id: idOrSlug };
+
+  return { confirmed: false, id: undefined };
+};

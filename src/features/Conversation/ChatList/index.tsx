@@ -3,7 +3,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
@@ -11,11 +11,12 @@ import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
 import { getMessageListCacheIdentity, isMessageListServerVerified } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   hasPendingInterventions,
   INTERVENTION_REFRESH_INTERVAL,
 } from '@/store/chat/utils/interventionSync';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 import { authSelectors, labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
@@ -32,6 +33,9 @@ import {
   useConversationStoreApi,
 } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import PreviewTail from './components/PreviewTail';
+import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
+import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
@@ -332,6 +336,32 @@ const ChatList = memo<ChatListProps>(
       messagesInit,
     });
 
+    const activeTopic = useChatStore((s) =>
+      context.topicId ? topicSelectors.getTopicById(context.topicId)(s) : undefined,
+    );
+    const topicPreview = useMemo(
+      () =>
+        feedback.showSkeleton
+          ? resolveTopicPreview({
+              contextKey: messageMapKey(context),
+              running:
+                isStreaming ||
+                activeTopic?.status === 'running' ||
+                activeTopic?.status === 'waitingForHuman',
+              topicId: context.topicId,
+              topicUpdatedAt: activeTopic?.updatedAt,
+            })
+          : undefined,
+      [activeTopic, context, feedback.showSkeleton, isStreaming],
+    );
+    const listRef = useRef<HTMLDivElement>(null);
+    const handoffPreview = usePreviewHandoff({
+      contextKey: messageMapKey(context),
+      listMounted: !topicPreview && !feedback.showSkeleton && !feedback.showFirstLoadError,
+      listRef,
+      preview: topicPreview,
+    });
+
     // The hint renders inside the latest assistant row, which subscribes to the
     // store itself (virtua would not repaint a cached row from a prop change).
     // Resolved against the rows actually rendered: folded steer chains in the
@@ -357,6 +387,12 @@ const ChatList = memo<ChatListProps>(
           variant={'page'}
           onRetry={refreshError.retry}
         />
+      );
+    }
+
+    if (topicPreview) {
+      return (
+        <PreviewTail headerSlot={headerSlot} overlayHeight={overlayHeight} preview={topicPreview} />
       );
     }
 
@@ -405,7 +441,7 @@ const ChatList = memo<ChatListProps>(
       );
 
     return (
-      <Flexbox style={{ height: '100%', minHeight: 0 }}>
+      <Flexbox style={{ height: '100%', minHeight: 0, position: 'relative' }}>
         {messageAuthorAgentIds.map((agentId) => (
           <MessageAuthorConfigLoader
             agentId={agentId}
@@ -413,9 +449,22 @@ const ChatList = memo<ChatListProps>(
             key={agentId}
           />
         ))}
-        <Flexbox flex={1} style={{ minHeight: 0 }}>
+        <Flexbox
+          flex={1}
+          ref={listRef}
+          style={{ minHeight: 0, visibility: handoffPreview ? 'hidden' : undefined }}
+        >
           {content}
         </Flexbox>
+        {handoffPreview && (
+          <div style={{ inset: 0, position: 'absolute' }}>
+            <PreviewTail
+              headerSlot={headerSlot}
+              overlayHeight={overlayHeight}
+              preview={handoffPreview}
+            />
+          </div>
+        )}
         {feedback.showBackgroundError && (
           <RefreshError
             error={refreshError.error}

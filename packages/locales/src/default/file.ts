@@ -2,6 +2,25 @@ export default {
   'addFolder': 'Create Folder',
   'addLibrary': 'Add',
   'addPage': 'Create Page',
+  'canvasStorage.delete.content':
+    'This deletes every version and file of “{{title}}” and frees {{size}}. This can’t be undone.',
+  'canvasStorage.delete.contentNoSize':
+    'This deletes every version and file of “{{title}}”. This can’t be undone.',
+  'canvasStorage.delete.published': 'Its public link will stop working.',
+  'canvasStorage.delete.success': 'Canvas deleted. {{size}} freed.',
+  'canvasStorage.delete.successNoSize': 'Canvas deleted',
+  'canvasStorage.delete.title': 'Delete this canvas?',
+  'canvasStorage.menu.copyLink': 'Copy public link',
+  'canvasStorage.menu.delete': 'Delete canvas',
+  'canvasStorage.orphan.clean': 'Clean up',
+  'canvasStorage.orphan.confirm':
+    'This deletes {{size}} of files left by canvases that no longer exist. This can’t be undone.',
+  'canvasStorage.orphan.desc':
+    '{{size}} of files left by deleted canvases still count toward storage',
+  'canvasStorage.orphan.success': 'Leftover files cleaned up. {{size}} freed.',
+  'canvasStorage.orphan.title': 'Clean up leftover canvas files?',
+  'canvasStorage.summary_one': 'Your {{count}} canvas uses {{size}} of file storage',
+  'canvasStorage.summary_other': 'Your {{count}} canvases use {{size}} of file storage',
   'detail.basic.createdAt': 'Creation Time',
   'detail.basic.filename': 'File Name',
   'detail.basic.size': 'File Size',
@@ -89,6 +108,7 @@ export default {
   'docs.shared.title': 'Shared docs',
   'docs.viewAllPages': 'View all',
   'docs.works.all': 'All',
+  'docs.works.canvas': 'Canvas',
   'docs.works.document': 'Documents',
   'docs.works.task': 'Tasks',
   'empty': 'No files or folders have been uploaded yet.',

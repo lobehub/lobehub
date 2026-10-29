@@ -160,7 +160,7 @@ describe('Channel dispatch reservation', () => {
       content: 'Waits for a device',
       mentions: [offline.id],
       requestKey: 'blocked',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [first] = await jobsOf(db, blocked.id);
     await db.insert(channelJobs).values(
@@ -175,7 +175,7 @@ describe('Channel dispatch reservation', () => {
       content: 'Answer me',
       mentions: [healthy.id],
       requestKey: 'fresh',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [freshJob] = await jobsOf(db, fresh.id);
 

@@ -42,7 +42,6 @@ export default {
   'topics.group.agent': 'By agent',
   'topics.all': 'All topics',
   'topics.executionContext': 'Work location',
-  'topics.conversationOnly': 'Conversation only, without a working directory',
   'topics.chooseTopic': 'Choose a topic in the sidebar, or create one to start working',
   'topics.notFound': 'This topic does not belong to this project, or you do not have access',
   'topics.viewProject': 'View project',
@@ -274,8 +273,12 @@ export default {
   'review.origin.path': 'Use the origin only, without a path, query or hash.',
   'review.origin.sharedHostWildcard':
     'This is a shared host where anyone can deploy, so * isn’t allowed. Add the exact address instead.',
+  'review.sites.activation': 'Activation link',
+  'review.sites.activationHint':
+    'The script alone does not show the toolbar: a page activates it only when its URL carries the {{param}} parameter. Open this link, or append the parameter to any page on the site.',
   'review.sites.add': 'Add site',
   'review.sites.addOrigin': 'Add origin',
+  'review.sites.copyActivation': 'Copy activation link',
   'review.sites.copySnippet': 'Copy script',
   'review.sites.create': 'Create site',
   'review.sites.delete': 'Delete',

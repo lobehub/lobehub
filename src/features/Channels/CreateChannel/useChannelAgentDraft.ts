@@ -11,6 +11,7 @@ import type {
   ChannelAgentDraft,
   ChannelAgentEnvironment,
   ChannelAgentIssue,
+  ChannelAgentIssueOptions,
 } from './agentEnvironment';
 import {
   changeChannelAgentDevice,
@@ -22,6 +23,7 @@ export const useChannelAgentDraft = (
   draft: ChannelAgentDraft,
   devices: DeviceListResult,
   setDrafts: Dispatch<SetStateAction<ChannelAgentDraft[]>>,
+  options?: ChannelAgentIssueOptions,
 ) => {
   const { agentId } = draft;
   const sync = useAgentStore((s) => s.useHydrateAgentConfig)(true, agentId);
@@ -51,7 +53,7 @@ export const useChannelAgentDraft = (
       : !confirmed || !agent || isPreferenceLoading
         ? 'configurationLoading'
         : undefined;
-  const resolved = reconcileChannelAgentDraft(draft, environment, sourceIssue);
+  const resolved = reconcileChannelAgentDraft(draft, environment, sourceIssue, options);
 
   // This is a form snapshot, not another fetch/cache. Removing and re-adding an
   // Agent creates a new draft; an effect from its previous mount cannot overwrite it.
@@ -68,7 +70,7 @@ export const useChannelAgentDraft = (
           'deviceId' in patch
             ? { ...item, ...changeChannelAgentDevice(item, patch.deviceId, environment) }
             : { ...item, ...patch };
-        return { ...next, issue: getChannelAgentIssue(next, environment) };
+        return { ...next, issue: getChannelAgentIssue(next, environment, options) };
       }),
     );
   };

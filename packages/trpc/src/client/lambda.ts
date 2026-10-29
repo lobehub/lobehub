@@ -225,7 +225,14 @@ const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalCon
 // so every sibling procedure in the batch (e.g. `agent.getAgentConfigById`) fails
 // its `JSON.parse` with `Unexpected token '<'`. Split it out so a slow message
 // read only slows itself.
-const slowProcedures = new Set(['market.getAssistantList', 'message.getMessages']);
+// `project.detail` joins topic agents and reads members, tasks, works and
+// reviews; batched, it held the project's topic list sent beside it and a
+// project topic opened on a blank pane until the detail answered.
+const slowProcedures = new Set([
+  'market.getAssistantList',
+  'message.getMessages',
+  'project.detail',
+]);
 // Procedures whose latency is felt directly as "the UI is stuck". The gateway
 // token refresh gates every reconnect: until it answers, the client cannot
 // register the local operation that drives the status tray, the sidebar elapsed

@@ -38,7 +38,7 @@ describe('ChannelRepository.send', () => {
       content: 'Fix the bug',
       mentions: [coder.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(message).toMatchObject({
@@ -67,14 +67,14 @@ describe('ChannelRepository.send', () => {
       content: 'Can you review this?',
       mentions: [owner.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(message).toMatchObject({ recipientMemberIds: [], routingStatus: 'directed' });
     expect(await jobsOf(db, message.id)).toEqual([]);
   });
 
-  it('leaves an unmentioned message to Jev, or to every Agent without a decision model', async () => {
+  it('leaves an unmentioned message to the decision model, or to every Agent without a decision model', async () => {
     const { asMember, channel } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');
     const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
@@ -82,7 +82,7 @@ describe('ChannelRepository.send', () => {
     const routed = await asMember.send(channel.id, {
       content: 'Anyone?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     expect(routed).toMatchObject({ routingAttempt: 1, routingStatus: 'pending' });
     expect(await jobsOf(db, routed.id)).toEqual([]);
@@ -103,7 +103,7 @@ describe('ChannelRepository.send', () => {
     const message = await asMember.send(channel.id, {
       content: 'Hello',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(message.routingStatus).toBe('skipped');
@@ -117,7 +117,7 @@ describe('ChannelRepository.send', () => {
       content: 'Root',
       mentions: [coder.id],
       requestKey: 'root',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [thread] = await db
       .insert(channelThreads)
@@ -141,7 +141,7 @@ describe('ChannelRepository.send', () => {
       content: 'Join us',
       mentions: [reviewer.id.toUpperCase(), reviewer.id],
       requestKey: 'join',
-      routing: 'jev',
+      routing: 'decision',
       threadId: thread.id,
     });
     const [joined] = await db.select().from(channelThreads).where(eq(channelThreads.id, thread.id));
@@ -163,7 +163,7 @@ describe('ChannelRepository.send', () => {
       content: 'Once',
       mentions: [coder.id.toUpperCase(), coder.id],
       requestKey: 'req-1',
-      routing: 'jev' as const,
+      routing: 'decision' as const,
     };
 
     const first = await asMember.send(channel.id, input);
@@ -179,7 +179,7 @@ describe('ChannelRepository.send', () => {
 
   it('rejects empty or oversized content, unknown mentions and foreign files', async () => {
     const { asMember, channel } = await fixture.createTeamChannel();
-    const base = { requestKey: 'req-1', routing: 'jev' as const };
+    const base = { requestKey: 'req-1', routing: 'decision' as const };
 
     await expect(asMember.send(channel.id, { ...base, content: '  ' })).rejects.toMatchObject({
       code: 'BAD_REQUEST',

@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { toConnectorActionError } from './connectorActionError';
 
 describe('toConnectorActionError', () => {
+  it('keeps the structured business reason instead of the generic tRPC code', () => {
+    const error = Object.assign(new Error('Internal diagnostic'), {
+      data: {
+        code: 'BAD_REQUEST',
+        errorData: { code: 'StdioDesktopOnly' },
+        httpStatus: 400,
+      },
+    });
+
+    expect(toConnectorActionError('connect', error).code).toBe('StdioDesktopOnly');
+  });
+
   it('keeps the tRPC code of a server rejection', () => {
     const error = Object.assign(new Error('Only the creator or a workspace owner can modify'), {
       data: { code: 'FORBIDDEN', httpStatus: 403 },

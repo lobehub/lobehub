@@ -16,6 +16,7 @@ const mockTopicFindById = vi.hoisted(() => vi.fn());
 const mockIsRunningOperationAlive = vi.hoisted(() => vi.fn());
 const mockDeferBotMessages = vi.hoisted(() => vi.fn());
 const mockRecordNoReplyLabel = vi.hoisted(() => vi.fn());
+const mockRecordWakeRunOutcome = vi.hoisted(() => vi.fn());
 
 vi.mock('../BotMessageRouter', () => ({
   getBotMessageRouter: () => ({ replayDeferredMessages: vi.fn() }),
@@ -62,6 +63,9 @@ vi.mock('@/server/services/bot/deferredMessages', () => ({
 }));
 vi.mock('@/server/services/bot/noReplyLabel', () => ({
   recordNoReplyLabel: mockRecordNoReplyLabel,
+}));
+vi.mock('@/server/services/bot/wake/scheduler', () => ({
+  recordWakeRunOutcome: mockRecordWakeRunOutcome,
 }));
 vi.mock('@/server/services/bot/platforms', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -137,6 +141,16 @@ const subscribed = async (
   userMessage = message(),
 ) =>
   new AgentBridgeService(FAKE_DB, USER_ID).handleSubscribedMessage(thread, userMessage, {
+    agentId: 'agent-1',
+    botContext,
+    client,
+    replyLocale: 'en-US',
+    ...extra,
+  });
+
+/** A wake that opens a new topic: a channel wake, or a subscribed thread whose topic is gone. */
+const fresh = async (thread: any, client: any, extra: Record<string, unknown> = {}) =>
+  new AgentBridgeService(FAKE_DB, USER_ID).handleMention(thread, message(), {
     agentId: 'agent-1',
     botContext,
     client,
@@ -302,6 +316,37 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
       expect(posted(thread).at(-1).markdown).toContain('no response content');
     });
 
+    it('followup that opens a new topic still holds feedback back and may end in silence', async () => {
+      runHooks({
+        onComplete: { lastAssistantContent: 'NO_REPLY', operationId: 'op-1', reason: 'done' },
+      });
+      const { thread } = createThread();
+      const { client, replaceReaction } = createClient();
+
+      await fresh(thread, client, { wakeKind: 'followup' });
+
+      expect(replaceReaction).not.toHaveBeenCalled();
+      expect(thread.startTyping).not.toHaveBeenCalled();
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(execParams().botPlatformContext.wakeKind).toBe('followup');
+      expect(mockRecordNoReplyLabel).toHaveBeenCalledWith(
+        FAKE_DB,
+        expect.objectContaining({ noReply: { reason: 'unspecified' } }),
+      );
+    });
+
+    it('tells the agent the acknowledgement already posted before the run', async () => {
+      runHooks({ onComplete: { lastAssistantContent: 'found it', reason: 'done' } });
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await fresh(thread, client, { openingReply: "Got it, I'll check the logs first." });
+
+      expect(execParams().botPlatformContext.openingReply).toBe(
+        "Got it, I'll check the logs first.",
+      );
+    });
+
     it('tells a followup agent it may stay silent', async () => {
       runHooks({ onComplete: { lastAssistantContent: 'NO_REPLY', reason: 'done' } });
       const { thread } = createThread();
@@ -312,17 +357,45 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
       expect(execParams().botPlatformContext.wakeKind).toBe('followup');
     });
 
-    it('tells a followup agent woken to offer help why, and only a followup', async () => {
+    it('tells a followup agent woken by its duties which duty, and only a followup', async () => {
       runHooks({ onComplete: { lastAssistantContent: 'NO_REPLY', reason: 'done' } });
       const { client } = createClient();
+      const duty = { matched: '评估需求' };
 
-      await subscribed(createThread().thread, client, { proactive: true, wakeKind: 'followup' });
-      expect(execParams().botPlatformContext.proactive).toBe(true);
+      await subscribed(createThread().thread, client, { duty, wakeKind: 'followup' });
+      expect(execParams().botPlatformContext.duty).toEqual(duty);
 
       mockExecAgent.mockClear();
       AgentBridgeService.clearActiveThread(THREAD_ID);
-      await subscribed(createThread().thread, client, { proactive: true });
-      expect(execParams().botPlatformContext.proactive).toBeUndefined();
+      await subscribed(createThread().thread, client, { duty });
+      expect(execParams().botPlatformContext.duty).toBeUndefined();
+    });
+
+    it('tells a followup agent woken by its name why, and only a followup', async () => {
+      runHooks({ onComplete: { lastAssistantContent: 'NO_REPLY', reason: 'done' } });
+      const { client } = createClient();
+
+      await subscribed(createThread().thread, client, { named: true, wakeKind: 'followup' });
+      expect(execParams().botPlatformContext.named).toBe(true);
+
+      mockExecAgent.mockClear();
+      AgentBridgeService.clearActiveThread(THREAD_ID);
+      await subscribed(createThread().thread, client, { named: true });
+      expect(execParams().botPlatformContext.named).toBeUndefined();
+    });
+
+    it('tells a followup agent woken in its window how sure the check was and who else is here', async () => {
+      runHooks({ onComplete: { lastAssistantContent: 'NO_REPLY', reason: 'done' } });
+      const { client } = createClient();
+      const followup = { participants: [{ isBot: true, name: 'Dario' }], score: 0.56 };
+
+      await subscribed(createThread().thread, client, { followup, wakeKind: 'followup' });
+      expect(execParams().botPlatformContext.followup).toEqual(followup);
+
+      mockExecAgent.mockClear();
+      AgentBridgeService.clearActiveThread(THREAD_ID);
+      await subscribed(createThread().thread, client, { followup });
+      expect(execParams().botPlatformContext.followup).toBeUndefined();
     });
 
     it('a catch-all wake the bot started itself shows nothing until the agent acts', async () => {
@@ -344,6 +417,78 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
       expect(thread.startTyping).not.toHaveBeenCalled();
       expect(thread.post).not.toHaveBeenCalled();
       expect(execParams().botPlatformContext.wakeKind).toBe('followup');
+    });
+
+    // Local mode has no completion webhook, so the bridge records the wake outcome itself.
+    it('records a stand-down after the reply, and posts the reply without the marker', async () => {
+      runHooks({
+        onComplete: {
+          lastAssistantContent: 'Sorry, I will stay out.\nSTAND_DOWN',
+          operationId: 'op-1',
+          reason: 'done',
+        },
+      });
+      const { progress, thread } = createThread();
+      const { client } = createClient();
+      const botSettings = { botWake: { enabled: true } };
+
+      await subscribed(thread, client, { botSettings, standDown: true });
+
+      // A mention edits its placeholder into the final reply.
+      expect(progress.edit).toHaveBeenLastCalledWith({
+        markdown: renderFinalReply('Sorry, I will stay out.'),
+      });
+      expect(mockRecordWakeRunOutcome).toHaveBeenCalledWith({
+        applicationId: 'app-1',
+        platform: 'discord',
+        platformThreadId: THREAD_ID,
+        settings: botSettings,
+        spoke: true,
+        spoken: { id: 'op-1', text: 'Sorry, I will stay out.' },
+        standDown: true,
+        wakeKind: 'mention',
+      });
+    });
+
+    it('records a silent stand-down (NO_REPLY:stand_down) on a followup', async () => {
+      runHooks({
+        onComplete: {
+          lastAssistantContent: 'NO_REPLY:stand_down',
+          operationId: 'op-1',
+          reason: 'done',
+        },
+      });
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await subscribed(thread, client, { standDown: true, wakeKind: 'followup' });
+
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(mockRecordWakeRunOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({ spoke: false, standDown: true, wakeKind: 'followup' }),
+      );
+    });
+
+    it('records an ordinary reply as spoken, without a stand-down', async () => {
+      runHooks({ onComplete: { lastAssistantContent: 'here is the fix', reason: 'done' } });
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await subscribed(thread, client, { wakeKind: 'followup' });
+
+      expect(mockRecordWakeRunOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({ spoke: true, standDown: false }),
+      );
+    });
+
+    it('records nothing for a failed run', async () => {
+      runHooks({ onComplete: { errorMessage: 'boom', operationId: 'op-1', reason: 'error' } });
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await subscribed(thread, client, { standDown: true });
+
+      expect(mockRecordWakeRunOutcome).not.toHaveBeenCalled();
     });
   });
 

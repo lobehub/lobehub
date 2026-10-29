@@ -2,10 +2,11 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
 import { failStuckTasks } from '@/server/services/taskLifecycle/failStuckTasks';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
-import { idInput, resolveOrThrow, taskProcedure, taskProcedureWrite } from './procedures';
+import { idInput, taskProcedure, taskProcedureWrite } from './procedures';
 
 /** Internal repair dispatch binds its durable operation pointer before a Task can execute. */
 export const createTaskExecutionRouter = (
@@ -24,7 +25,7 @@ export const createTaskExecutionRouter = (
       )
       .mutation(async ({ input, ctx }) => {
         try {
-          const task = await resolveOrThrow(ctx.taskModel, input.id);
+          const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
 
           const runner = new TaskRunnerService(
             ctx.serverDB,
@@ -51,9 +52,13 @@ export const createTaskExecutionRouter = (
     heartbeat: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.id);
+        const task = await resolveTaskOrThrow(model, input.id);
         await model.updateHeartbeat(task.id);
-        return { message: 'Heartbeat updated', success: true };
+        return {
+          data: { id: task.id, identifier: task.identifier },
+          message: 'Heartbeat updated',
+          success: true,
+        };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('[task:heartbeat]', error);
@@ -120,7 +125,9 @@ export const createTaskExecutionRouter = (
       }),
     previewSubtaskLayers: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
       try {
-        const plan = await ctx.taskService.previewSubtaskLayers(input.id);
+        const plan = await ctx.taskService.previewSubtaskLayers(
+          (await resolveTaskOrThrow(ctx.taskModel, input.id)).id,
+        );
         return { data: plan, success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -134,7 +141,9 @@ export const createTaskExecutionRouter = (
     }),
     runReadySubtasks: taskProcedureWrite.input(idInput).mutation(async ({ input, ctx }) => {
       try {
-        const result = await ctx.taskService.runReadySubtasks(input.id);
+        const result = await ctx.taskService.runReadySubtasks(
+          (await resolveTaskOrThrow(ctx.taskModel, input.id)).id,
+        );
         return { data: result, success: result.failed.length === 0 };
       } catch (error) {
         if (error instanceof TRPCError) throw error;

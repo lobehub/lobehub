@@ -19,8 +19,8 @@ const mocks = vi.hoisted(() => ({
   submit: vi.fn(),
   channel: { current: undefined as Record<string, unknown> | undefined },
   classify: vi.fn(),
+  duty: vi.fn(),
   logs: new Map<string, any[]>(),
-  proactive: vi.fn(),
   record: vi.fn(),
 }));
 
@@ -48,7 +48,9 @@ vi.mock('../wake/scheduler', () => ({
 }));
 vi.mock('../wake/classify', () => ({
   createWakeClassify: () => mocks.classify,
-  createWakeProactiveJudge: () => mocks.proactive,
+}));
+vi.mock('../wake/dutyJudge', () => ({
+  createWakeDutyJudge: () => mocks.duty,
 }));
 vi.mock('../wake/identity', () => ({
   createWakeIdentityLoader: () => async () => ({
@@ -145,7 +147,7 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     mocks.defer.mockResolvedValue(true);
     mocks.submit.mockResolvedValue('hold');
     mocks.classify.mockResolvedValue({ addressedToBot: 0.02, kind: 'chitchat', reason: 'x' });
-    mocks.proactive.mockResolvedValue({ helpful: 0.1, reason: 'p=0.10' });
+    mocks.duty.mockResolvedValue({ duty: '评估需求', inDuty: 0.1, reason: 'p=0.10' });
   });
 
   const enforcing = { enabled: true, mode: 'enforce' };
@@ -159,16 +161,38 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     await flush();
 
     expect(mockHandleMention).toHaveBeenCalledTimes(1);
-    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ wakeKind: 'followup' });
+    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ named: true, wakeKind: 'followup' });
     expect(decisions().map((d) => [d.outcome, d.finalReason, d.toTag])).toEqual([
       ['wake', 'named-in-text', 'named'],
     ]);
     expect(mocks.classify).not.toHaveBeenCalled();
   });
 
-  it('steps in to help its owner when they raise something it can act on, without its name', async () => {
-    mocks.proactive.mockResolvedValue({ helpful: 0.9, reason: 'p=0.90' });
-    await boot({ ...enforcing, proactive: { mode: 'enforce' } });
+  it('steps in for a message within its duties, from anyone, and tells the agent which duty', async () => {
+    mocks.duty.mockResolvedValue({ duty: '评估需求', inDuty: 0.9, reason: 'p=0.90' });
+    await boot({ ...enforcing, duties: { text: '群里有人描述需求时评估一下' } });
+
+    await catchAll()(
+      thread(),
+      message({
+        author: { isBot: false, userId: 'bob-id', userName: 'bob' },
+        text: '要是导出能保留文件夹结构就好了',
+      }),
+    );
+    await flush();
+
+    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+      duty: { matched: '评估需求' },
+      wakeKind: 'followup',
+    });
+    expect(decisions().map((d) => [d.outcome, d.finalReason, d.toTag])).toEqual([
+      ['wake', 'in-duty', 'duty'],
+    ]);
+  });
+
+  it('stays out of an owner remark it could help with when it has no duties, without asking', async () => {
+    await boot(enforcing);
 
     await catchAll()(
       thread(),
@@ -176,30 +200,8 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     );
     await flush();
 
-    expect(mockHandleMention).toHaveBeenCalledTimes(1);
-    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
-      proactive: true,
-      wakeKind: 'followup',
-    });
-    expect(decisions().map((d) => [d.outcome, d.finalReason, d.toTag])).toEqual([
-      ['wake', 'proactive-help', 'proactive'],
-    ]);
-  });
-
-  it('stays out of the same remark from someone else, without asking the model', async () => {
-    await boot({ ...enforcing, proactive: { mode: 'enforce' } });
-
-    await catchAll()(
-      thread(),
-      message({
-        author: { isBot: false, userId: 'bob-id', userName: 'bob' },
-        text: '这个 UI 一眼看上去还是太 vibe 了，得想想怎么refine',
-      }),
-    );
-    await flush();
-
     expect(mockHandleMention).not.toHaveBeenCalled();
-    expect(mocks.proactive).not.toHaveBeenCalled();
+    expect(mocks.duty).not.toHaveBeenCalled();
   });
 
   describe('with the scheduler enforcing', () => {
@@ -272,6 +274,91 @@ describe('BotMessageRouter: a message that only names the bot', () => {
 
     expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
     expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({ wakeKind: 'followup' });
+  });
+
+  it('tells the agent woken in its follow-up window how sure the check was and who else is here', async () => {
+    mocks.channel.current = { botLastSpokeAt: Date.now() - 60_000, silentWakes: 0 };
+    mocks.classify.mockResolvedValue({ addressedToBot: 0.8, kind: 'request', reason: 'x' });
+    mocks.logs.set(CHANNEL, [
+      { at: 1, authorId: 'bob-id', authorName: 'bob', id: 'a', isBot: false, text: 'hmm' },
+    ]);
+    await boot(enforcing);
+
+    await catchAll()(thread(), message({ text: '那现在呢?' }));
+    await flush();
+
+    expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+      followup: { participants: [{ isBot: false, isOwner: false, name: 'bob' }], score: 0.8 },
+      wakeKind: 'followup',
+    });
+  });
+
+  // "nasa 就在这瞎捣乱" → it stood down, then "…其他 agent 为啥不能来看和学习呢？nasa" woke it again.
+  describe('after the bot stood down', () => {
+    beforeEach(() => {
+      mocks.channel.current = {
+        botLastSpokeAt: Date.now() - 60_000,
+        silentWakes: 0,
+        standDownUntil: Date.now() + 20 * 60_000,
+      };
+    });
+
+    it('is not woken by its name in passing, and the decision says why', async () => {
+      await boot(enforcing);
+
+      await catchAll()(
+        thread(),
+        message({ text: '其他 agent 为啥不能来看和学习呢？Shadow Arvin' }),
+      );
+      await flush();
+
+      expect(mockHandleMention).not.toHaveBeenCalled();
+      const [decision] = decisions();
+      expect([decision.outcome, decision.finalReason]).toEqual(['skip', 'not-addressed']);
+      expect(decision.verdicts.map((v: any) => [v.policyId, v.verdict, v.reason])).toContainEqual([
+        'bot-wake:owner-rules',
+        'deny',
+        'stood-down',
+      ]);
+    });
+
+    it('is not woken in its follow-up window either', async () => {
+      mocks.classify.mockResolvedValue({ addressedToBot: 0.95, kind: 'request', reason: 'x' });
+      await boot(enforcing);
+
+      await subscribed()(thread(`${CHANNEL}:thread-1`), message({ text: '那现在呢?' }));
+      await flush();
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mocks.classify).not.toHaveBeenCalled();
+    });
+
+    it('still answers an explicit @-mention, and may stand down again', async () => {
+      await boot(enforcing);
+
+      await subscribed()(thread(`${CHANNEL}:thread-1`), message({ isMention: true, text: 'hi' }));
+      await flush();
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+      expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({
+        standDown: true,
+        wakeKind: 'mention',
+      });
+    });
+  });
+
+  it('offers the agent a stand-down only where it takes effect: enforcing rules, not a DM', async () => {
+    await boot({ enabled: true, mode: 'shadow' });
+    await subscribed()(thread(`${CHANNEL}:thread-1`), message({ isMention: true, text: 'hi' }));
+    expect(mockHandleSubscribedMessage.mock.calls.at(-1)![2].standDown).toBe(false);
+
+    await boot(enforcing);
+    await subscribed()(
+      { ...thread('discord:@me:dm-1'), isDM: true },
+      message({ isMention: true, text: 'hi' }),
+    );
+    expect(mockHandleSubscribedMessage.mock.calls.at(-1)![2].standDown).toBe(false);
   });
 
   it('never wakes for another bot, even one that names it', async () => {

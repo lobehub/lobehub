@@ -8,35 +8,21 @@ import AsyncError from '@/components/AsyncError';
 import { openPickWorkingDirModal } from '@/features/WorkingDirectory';
 import type { DeviceListResult } from '@/store/device/useDeviceList';
 
-import type { ChannelAgentDraft, ChannelAgentIssue } from './agentEnvironment';
+import type { ChannelAgentIssue } from './agentEnvironment';
 import type { useChannelAgentDraft } from './useChannelAgentDraft';
 
 const styles = stylex.create({
   directory: { maxWidth: '100%', overflow: 'hidden' },
 });
 
-/** Issues the user resolves by choosing a device or directory, not by waiting. */
-const INPUT_ISSUES = new Set<ChannelAgentIssue>([
-  'deviceOffline',
-  'deviceRequired',
-  'deviceUnavailable',
-  'directoryRequired',
-]);
+/** Device issues of an inherited environment are fixed in the Agent's settings, not here. */
+const INHERITED_ISSUES = ['deviceOffline', 'deviceRequired', 'deviceUnavailable'] as const;
 
-export const needsEnvironmentInput = (issue?: ChannelAgentIssue) =>
-  !!issue && INPUT_ISSUES.has(issue);
+const isInheritedIssue = (issue: ChannelAgentIssue): issue is (typeof INHERITED_ISSUES)[number] =>
+  (INHERITED_ISSUES as readonly ChannelAgentIssue[]).includes(issue);
 
 export const deviceLabel = (device: DeviceListItem) =>
   device.friendlyName || device.hostname || device.deviceId;
-
-/** Where an Agent runs, in one line: `device · directory`. */
-export const environmentSummary = (draft: ChannelAgentDraft, devices: DeviceListResult) => {
-  if (!draft.deviceId) return;
-  const device = devices.data?.find((item) => item.deviceId === draft.deviceId);
-  return [device ? deviceLabel(device) : draft.deviceId, draft.workingDirectory]
-    .filter(Boolean)
-    .join(' · ');
-};
 
 type DraftControls = ReturnType<typeof useChannelAgentDraft>;
 
@@ -115,8 +101,11 @@ export const EnvironmentFields = ({
 /** Why an Agent cannot be saved yet, or that its settings are still loading. */
 export const EnvironmentIssue = ({
   controls: { draft, retry, sync },
+  inherited,
 }: {
   controls: DraftControls;
+  /** The Agent's own device and directory apply; there is nothing to pick here. */
+  inherited?: boolean;
 }) => {
   const { t } = useTranslation('channel');
   if (draft.issue === 'configurationFailed')
@@ -138,7 +127,9 @@ export const EnvironmentIssue = ({
       role="status"
       type={checking ? 'secondary' : 'danger'}
     >
-      {t(`environment.${draft.issue}`)}
+      {inherited && isInheritedIssue(draft.issue)
+        ? t(`environment.inherited.${draft.issue}`)
+        : t(`environment.${draft.issue}`)}
     </Text>
   );
 };

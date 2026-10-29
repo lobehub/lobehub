@@ -2,6 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
@@ -90,7 +91,9 @@ describe('PlatformDetail saving', () => {
   });
 
   it('saves a reply setting by itself a moment after it changes, and writes nothing else', async () => {
-    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />);
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
 
     openTab(en['channel.tab.reply']);
     fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }));
@@ -116,6 +119,7 @@ describe('PlatformDetail saving', () => {
           settings: { ...config.settings, botWake: override, botWakeEnabled: true },
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     openTab(en['channel.tab.reply']);
@@ -127,18 +131,55 @@ describe('PlatformDetail saving', () => {
     expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWake).toEqual(override);
   });
 
-  it('shows a Save in each wake block and none on the replies', () => {
-    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />);
+  it('shows a Save in each wake block, and on the replies only for how the bot talks', () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
 
     openTab(en['channel.tab.wake']);
     expect(screen.getAllByRole('button', { name: en['channel.module.save'] })).toHaveLength(4);
 
     openTab(en['channel.tab.reply']);
-    expect(screen.queryByRole('button', { name: en['channel.module.save'] })).toBeNull();
+    const style = screen
+      .getByText(en['channel.reply.section.style'])
+      .closest('div[class*="header"]')!.parentElement!;
+    expect(screen.getAllByRole('button', { name: en['channel.module.save'] })).toEqual([
+      within(style).getByRole('button', { name: en['channel.module.save'] }),
+    ]);
+  });
+
+  it('keeps the reply style off the advanced tab and saves it only with its own Save', async () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.advanced']);
+    expect(screen.queryByText(en['channel.replyStyle'])).not.toBeVisible();
+
+    openTab(en['channel.tab.reply']);
+    const area = screen.getByPlaceholderText(en['channel.replyStylePlaceholder']);
+    expect(area).toBeVisible();
+    fireEvent.change(area, { target: { value: 'Short and casual.' } });
+    fireEvent.blur(area);
+
+    await waitFor(() => expect(screen.getByText(en['channel.module.unsaved'])).toBeVisible());
+    // Typed text is not an instant reply setting: nothing is written until Save.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(mocks.updateBotProvider).not.toHaveBeenCalled();
+
+    const style = screen
+      .getByText(en['channel.reply.section.style'])
+      .closest('div[class*="header"]')!.parentElement!;
+    fireEvent.click(within(style).getByRole('button', { name: en['channel.module.save'] }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
+    expect(mocks.updateBotProvider.mock.calls[0][2].settings.replyStyle).toBe('Short and casual.');
   });
 
   it('leaves the bottom bar to Remove and Test connection for a saved bot', () => {
-    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />);
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
 
     expect(
       screen.getByRole('button', { name: new RegExp(en['channel.removeChannel']) }),
@@ -148,17 +189,19 @@ describe('PlatformDetail saving', () => {
   });
 
   it('saves only the block that was changed, and keeps another block’s unsaved edit', async () => {
-    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />);
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
     openTab(en['channel.tab.wake']);
 
-    // Edit the silent-wake limit (Pace) and the help-others sensitivity (Initiative).
+    // Edit the silent-wake limit (Pace) and the duty sensitivity (Duties).
     const limit = screen.getByRole('textbox', {
       name: new RegExp(en['channel.botWakeMaxSilentWakes']),
     });
     fireEvent.change(limit, { target: { value: '5' } });
     fireEvent.blur(limit);
     const sensitivity = screen.getByRole('textbox', {
-      name: new RegExp(en['channel.botWakeClassifierInitiateThreshold']),
+      name: new RegExp(en['channel.botWakeDutiesThreshold']),
     });
     fireEvent.change(sensitivity, { target: { value: '0.9' } });
     fireEvent.blur(sensitivity);
@@ -175,11 +218,11 @@ describe('PlatformDetail saving', () => {
     const [, , patch] = mocks.updateBotProvider.mock.calls[0];
     expect(patch.settings.botWakeMaxSilentWakes).toBe(5);
     // The sensitivity is edited but not saved: the write carries the stored value.
-    expect(patch.settings.botWakeClassifierInitiateThreshold).toBe(0.65);
+    expect(patch.settings.botWakeDutiesThreshold).toBe(0.65);
     expect(patch).not.toHaveProperty('credentials');
     expect(mocks.connectBot).not.toHaveBeenCalled();
 
-    // Initiative still has its unsaved edit.
+    // Duties still has its unsaved edit.
     await waitFor(() => expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(1));
     expect(sensitivity).toHaveValue('0.9');
   });

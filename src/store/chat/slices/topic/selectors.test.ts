@@ -512,7 +512,7 @@ describe('topicSelectors', () => {
       // Check favorite group
       expect(grouped[0]).toEqual({
         id: 'favorite',
-        title: 'favorite', // This matches the mocked t function return
+        title: 'pinned', // This matches the mocked t function return
         children: topics.filter((t) => t.favorite),
       });
 

@@ -1,4 +1,4 @@
-import { isDesktop, OFFICIAL_URL } from '@lobechat/const';
+import { ACCEPTANCE_REVIEW_ACTIVATION_PARAM, isDesktop, OFFICIAL_URL } from '@lobechat/const';
 import {
   ActionIcon,
   Block,
@@ -47,7 +47,7 @@ const reviewServer = () => (isDesktop ? OFFICIAL_URL : window.location.origin);
 export function SiteCard({ onChanged, site }: { onChanged: () => void; site: ProjectSiteItem }) {
   const { t } = useTranslation('project');
   const [deleting, setDeleting] = useState(false);
-  const link = reviewLink(site.origins);
+  const link = reviewLink(site.origins, site.acceptanceId);
   const snippet = siteSnippet(site.id, reviewServer());
 
   const remove = () =>
@@ -127,6 +127,20 @@ export function SiteCard({ onChanged, site }: { onChanged: () => void; site: Pro
         <code {...stylex.props(styles.snippet)}>{snippet}</code>
         <CopyButton content={snippet} size="small" title={t('review.sites.copySnippet')} />
       </Block>
+      {link ? (
+        <Flexbox gap={6}>
+          <Text fontSize={12} weight={500}>
+            {t('review.sites.activation')}
+          </Text>
+          <Text fontSize={12} type="secondary">
+            {t('review.sites.activationHint', { param: ACCEPTANCE_REVIEW_ACTIVATION_PARAM })}
+          </Text>
+          <Block horizontal align="flex-start" gap={10} padding={12} variant="filled">
+            <code {...stylex.props(styles.snippet)}>{link}</code>
+            <CopyButton content={link} size="small" title={t('review.sites.copyActivation')} />
+          </Block>
+        </Flexbox>
+      ) : null}
       {site.acceptanceId ? (
         <Flexbox horizontal justify="flex-end">
           <WorkspaceLink to={`/acceptance/${site.acceptanceId}`}>

@@ -94,6 +94,7 @@ export const channelRouter = router({
     .input(
       z.object({
         agents: z.array(agentSelection).min(1).max(20),
+        projectId: z.string().min(1).optional(),
         title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
       }),
     )

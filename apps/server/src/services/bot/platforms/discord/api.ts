@@ -109,6 +109,19 @@ export class DiscordApi {
     return [...new Set([me.global_name, me.username].filter((name): name is string => !!name))];
   }
 
+  /**
+   * The bot's nickname in one server, which is what people there see and call it. Reading a single
+   * member needs no privileged intent.
+   */
+  async getGuildNickname(guildId: string, botUserId: string): Promise<string | undefined> {
+    log('getGuildNickname: guild=%s', guildId);
+    const member = (await this.rest.get(Routes.guildMember(guildId, botUserId))) as {
+      nick?: string | null;
+    };
+
+    return member.nick?.trim() || undefined;
+  }
+
   // ==================== Existing Methods ====================
 
   async editMessage(channelId: string, messageId: string, content: string): Promise<void> {

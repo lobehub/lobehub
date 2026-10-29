@@ -6,10 +6,9 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import { useDeviceList } from '@/store/device/useDeviceList';
 
@@ -106,9 +105,12 @@ export const MemberSelection = ({
                         checked={value.some((item) => item.agentId === agent.id)}
                         onChange={() => toggle(agent.id)}
                       />
-                      <Avatar
-                        avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+                      <AgentAvatar
+                        agentId={agent.id}
+                        avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
                         background={agent.backgroundColor ?? undefined}
+                        name={agentDisplayName(agent, t('unnamedAgent'))}
+                        shape={'circle'}
                         size={28}
                       />
                       <AgentLabel agent={agent} fallback={t('unnamedAgent')} />
@@ -168,9 +170,6 @@ export const MemberSelection = ({
           </Flexbox>
         </div>
       </AsyncBoundary>
-      <Text fontSize={12} type="secondary">
-        {t('environment.defaultsHint')}
-      </Text>
     </Flexbox>
   );
 };

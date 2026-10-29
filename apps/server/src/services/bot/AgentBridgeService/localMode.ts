@@ -10,7 +10,7 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from '../createBotCompletionHook';
-import { detectNoReply } from '../noReply';
+import { detectNoReply, extractStandDown } from '../noReply';
 import { recordNoReplyLabel } from '../noReplyLabel';
 import type { BotReactionMode, BotReplyLocale, PlatformClient } from '../platforms';
 import {
@@ -28,6 +28,7 @@ import {
   renderStopped,
   splitMessage,
 } from '../replyTemplate';
+import { recordWakeRunOutcome } from '../wake/scheduler';
 import type {
   BridgeExecutionDeps,
   BridgeExecutionResult,
@@ -52,6 +53,8 @@ export async function executeWithHooksLocalMode(
     botContext?: ChatTopicBotContext;
     botPlatformContext?: BotPlatformContext;
     botSender?: BotSenderMetadata;
+    /** The bot's settings, for the bot-wake bookkeeping done at completion. */
+    botSettings?: Record<string, unknown>;
     callbackUrl: string;
     charLimit?: number;
     channelContext?: DiscordChannelContext;
@@ -84,6 +87,7 @@ export async function executeWithHooksLocalMode(
     botContext,
     botPlatformContext,
     botSender,
+    botSettings,
     callbackUrl,
     charLimit,
     channelContext,
@@ -294,6 +298,32 @@ export async function executeWithHooksLocalMode(
                   hasAttachments: !!(event.attachments as unknown[] | undefined)?.length,
                   wakeKind,
                 });
+                // Bot-wake bookkeeping (follow-up window, silent-wake budget, stand-down), as the
+                // queue-mode callback does: best-effort and a no-op unless bot-wake is enabled.
+                if (botContext?.applicationId && botContext.platformThreadId) {
+                  try {
+                    await recordWakeRunOutcome({
+                      applicationId: botContext.applicationId,
+                      platform: botContext.platform,
+                      platformThreadId: botContext.platformThreadId,
+                      settings: botSettings,
+                      spoke: !noReply,
+                      // What was posted: without the stand-down marker, which is for the runtime.
+                      spoken: {
+                        id: event.operationId,
+                        text: extractStandDown(lastAssistantContent).content,
+                      },
+                      // A `STAND_DOWN` line after the reply, or `NO_REPLY:stand_down`.
+                      standDown:
+                        noReply?.reason === 'stand_down' ||
+                        extractStandDown(lastAssistantContent).standDown,
+                      wakeKind,
+                    });
+                  } catch (error) {
+                    log('executeWithCallback[local]: recordWakeRunOutcome failed: %O', error);
+                  }
+                }
+
                 if (noReply) {
                   log(
                     'onComplete: no_reply reason=%s operationId=%s',
@@ -335,13 +365,15 @@ export async function executeWithHooksLocalMode(
                   const lastChunkAttachments = hookEventAttachmentsToChatSdk(
                     event.attachments as any,
                   );
-                  const hasText = !!lastAssistantContent;
+                  // The stand-down marker is for the runtime, not the channel.
+                  const replyText = extractStandDown(lastAssistantContent).content;
+                  const hasText = !!replyText;
                   const hasAttachments = !!lastChunkAttachments?.length;
 
                   if (hasText || hasAttachments) {
                     let chunks: string[];
                     if (hasText) {
-                      const replyBody = renderFinalReply(lastAssistantContent!);
+                      const replyBody = renderFinalReply(replyText!);
                       const replyStats = {
                         elapsedMs: event.duration ?? getElapsedMs(),
                         llmCalls: event.llmCalls ?? 0,
@@ -392,7 +424,7 @@ export async function executeWithHooksLocalMode(
                       chunks.length,
                       lastChunkAttachments?.length ?? 0,
                     );
-                    resolve({ reply: lastAssistantContent ?? '', topicId: resolvedTopicId });
+                    resolve({ reply: replyText ?? '', topicId: resolvedTopicId });
 
                     // Fire-and-forget: summarize topic title in DB. Only when
                     // we have text to summarize on — image-only replies skip
