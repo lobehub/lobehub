@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import {
   Button,
   createStaticStyles,
@@ -93,14 +94,14 @@ export const TopicForwardContent = ({
     const query = keyword.trim().toLowerCase();
     return agents
       .filter((agent) => agent.type === 'agent' && agent.id !== sourceAgentId)
-      .filter((agent) => !query || (agent.title || '').toLowerCase().includes(query));
+      .filter((agent) => !query || (agentDisplayName(agent) ?? '').toLowerCase().includes(query));
   }, [agents, keyword, sourceAgentId]);
 
   const handleForward = () => {
     const targets: ForwardTarget[] = selectedIds
       .map((id) => agents.find((agent) => agent.id === id))
       .filter((agent): agent is NonNullable<typeof agent> => !!agent)
-      .map((agent) => ({ id: agent.id, title: agent.title }));
+      .map((agent) => ({ id: agent.id, title: agentDisplayName(agent) }));
     if (targets.length === 0) return;
 
     forwardTopic(targets, note);
@@ -141,11 +142,11 @@ export const TopicForwardContent = ({
                     agentId={agent.id}
                     avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
                     background={agent.backgroundColor || undefined}
-                    name={agent.title || undefined}
+                    name={agentDisplayName(agent, t('untitledAgent'))}
                     size={22}
                   />
                   <Text ellipsis style={{ flex: 1 }}>
-                    {agent.title || t('untitledAgent')}
+                    {agentDisplayName(agent, t('untitledAgent'))}
                   </Text>
                   <SelectCircle checked={selected} />
                 </Flexbox>

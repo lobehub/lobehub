@@ -147,7 +147,10 @@ const ForwardModalContent = memo(() => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const handleForward = () => {
-    const targets: ForwardTarget[] = selectedAgents.map((a) => ({ id: a.id, title: a.title }));
+    const targets: ForwardTarget[] = selectedAgents.map((a) => ({
+      id: a.id,
+      title: agentDisplayName(a),
+    }));
     if (targets.length === 0) return;
     forwardMessages(targets, note);
     close();
