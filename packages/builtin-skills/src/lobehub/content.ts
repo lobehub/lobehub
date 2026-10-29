@@ -68,7 +68,7 @@ run commands.
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |
-| \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh migrate\` | Account, usage, settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
+| \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh notification\` / \`lh migrate\` | Account, usage, settings, notification settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
 
 Covered by their own skills, so activate the skill instead of reading a reference here:
 \`lh task\` inside a task run (\`task\` skill) and

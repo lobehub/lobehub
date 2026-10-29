@@ -22,7 +22,6 @@ import ProjectAgentSelect from './ProjectAgentSelect';
 import { projectComposerAgents } from './projectComposerAgents';
 import {
   AttachmentsNotReadyError,
-  MessageNotAcceptedError,
   type ProjectComposerMode,
   useProjectComposer,
 } from './useProjectComposer';
@@ -80,10 +79,6 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail }) => {
     } catch (error) {
       if (error instanceof AttachmentsNotReadyError) {
         toast.error(tHome('dashboard.task.attachmentsNotReady'));
-        return;
-      }
-      if (error instanceof MessageNotAcceptedError) {
-        toast.error(t('overview.messageNotSent'));
         return;
       }
       console.error('Failed to send from the project home', error);

@@ -63,8 +63,9 @@ const degraded = (reason: string): WakePolicyResult => ({
  *
  * Use when:
  * - Nothing else woke the bot: it was not named, not @-mentioned, outside the follow-up window,
- *   and no rule denied the message. The recorder's `initiate` runs it last; it is not part of the
- *   policy set the other paths evaluate.
+ *   and no rule denied the message but owner presence, which keeps the bot out of chatter, not
+ *   off its duties. The recorder's `initiate` runs it last; it is not part of the policy set the
+ *   other paths evaluate.
  *
  * Expects:
  * - `rules.duties.text` is set; without duties the recorder does not build this policy
@@ -72,8 +73,8 @@ const degraded = (reason: string): WakePolicyResult => ({
  * Returns:
  * - `abstain` without a model call for a message too short to act on, and for a reply to someone
  *   else: the author is answering that person, and the model, which only sees the text, reads the
- *   "你" in it as the assistant. The same for a message right after another person spoke
- *   (`answering-other`): a conversation between people, reply or not
+ *   "你" in it as the assistant. The same for a message right after another participant spoke
+ *   (`answering-other`): a person or another bot, anyone but this bot and the author, reply or not
  * - `abstain` tagged `degraded` when the model errors or answers late: no answer is not a yes
  * - Otherwise `allow` when the score reaches `rules.duties.threshold`, else `deny`; `confidence` is
  *   the score and `matched` the duty the model named
@@ -95,10 +96,13 @@ export const createDutyPolicy = (
     ) {
       return abstain('reply-to-other');
     }
+    // Another bot counts: in a thread with several agents the owner is often answering one of
+    // them. Only this bot's own lines (logged under its application id) do not.
     const previous = state.conversation?.recent.at(-1);
+    const isOwnLine = previous?.isBot === true && previous.authorId === signal.applicationId;
     if (
       previous &&
-      !previous.isBot &&
+      !isOwnLine &&
       previous.authorId !== undefined &&
       previous.authorId !== authorId &&
       signal.timestamp - previous.at < ANSWERING_OTHER_MS
@@ -157,5 +161,5 @@ export const createDutyPolicy = (
   id: DUTY_POLICY_ID,
   mode: rules.duties.mode,
   requires: ['channel', 'conversation'],
-  version: 1,
+  version: 2,
 });

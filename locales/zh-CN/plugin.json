@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "等 {{count}} 个参数",
   "arguments.title": "参数列表",
+  "builtins.builtin-goal.apiName.createGoal": "启动目标",
   "builtins.claude-code.apiName.Agent": "运行子代理",
   "builtins.claude-code.apiName.Bash": "执行命令",
   "builtins.claude-code.apiName.Edit": "编辑文件",
@@ -351,7 +352,6 @@
   "builtins.lobe-goal-supervisor.apiName.inspectTask": "检查中断任务",
   "builtins.lobe-goal-supervisor.apiName.readArtifact": "读取目标产物",
   "builtins.lobe-goal-supervisor.apiName.resolveInterruption": "选择恢复动作",
-  "builtins.lobe-goal.apiName.createGoal": "启动目标",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "批量创建 Agent",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "创建助理",
   "builtins.lobe-group-agent-builder.apiName.createGroup": "创建群组",

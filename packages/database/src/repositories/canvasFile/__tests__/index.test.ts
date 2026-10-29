@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { CanvasFileModel } from '../../../models/canvasFile';
 import { FileModel } from '../../../models/file';
-import { users, workspaceMembers, workspaces } from '../../../schemas';
+import { users, works, workspaceMembers, workspaces } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { CanvasFileRepository } from '../index';
 
@@ -108,5 +108,88 @@ describe('CanvasFileRepository', () => {
     const remaining = new CanvasFileModel(serverDB, userId, to);
     expect(await remaining.listByHashes(['shared'])).toHaveLength(1);
     expect(await remaining.deleteByCanvas('cvs_b')).toEqual([`canvas/${userId}/blobs/shared`]);
+  });
+
+  describe('listStorage', () => {
+    const canvasWork = (id: string, canvasId: string, title: string, workspaceId?: string) => ({
+      id,
+      resourceId: canvasId,
+      resourceType: 'canvas' as const,
+      title,
+      toolIdentifier: 'lobe-canvas',
+      toolName: 'saveCanvas',
+      type: 'canvas' as const,
+      userId,
+      visibility: 'private' as const,
+      workspaceId,
+    });
+
+    it('totals every blob per canvas, names it by its Work, and lists the largest first', async () => {
+      const repository = new CanvasFileRepository(serverDB, userId);
+      await repository.register('cvs_small', [blob('s1', 10)]);
+      await repository.register('cvs_big', [blob('b1', 300), blob('b2', 200)]);
+      await serverDB
+        .insert(works)
+        .values([
+          canvasWork('work-big', 'cvs_big', 'Climate Alarm'),
+          canvasWork('work-small', 'cvs_small', 'SOP-TRA-010'),
+        ]);
+
+      expect(await repository.listStorage()).toEqual([
+        expect.objectContaining({
+          canvasId: 'cvs_big',
+          fileCount: 2,
+          title: 'Climate Alarm',
+          totalSize: 500,
+          workId: 'work-big',
+        }),
+        expect.objectContaining({
+          canvasId: 'cvs_small',
+          fileCount: 1,
+          title: 'SOP-TRA-010',
+          totalSize: 10,
+          workId: 'work-small',
+        }),
+      ]);
+    });
+
+    it('still lists canvas files whose Work is gone, so they can be freed', async () => {
+      const repository = new CanvasFileRepository(serverDB, userId);
+      await repository.register('cvs_orphan', [blob('o1', 42)]);
+
+      expect(await repository.listStorage()).toEqual([
+        expect.objectContaining({
+          canvasId: 'cvs_orphan',
+          title: null,
+          totalSize: 42,
+          workId: null,
+        }),
+      ]);
+    });
+
+    it('lists only the caller’s canvases in the active space', async () => {
+      const workspaceId = 'canvas-storage-ws';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await new CanvasFileRepository(serverDB, userId).register('cvs_personal', [blob('p1')]);
+      await new CanvasFileRepository(serverDB, userId, workspaceId).register('cvs_ws', [
+        blob('w1'),
+      ]);
+      await new CanvasFileRepository(serverDB, otherUserId).register('cvs_other', [blob('x1')]);
+      await serverDB.insert(works).values(canvasWork('work-personal', 'cvs_ws', 'Wrong space'));
+
+      expect(
+        (await new CanvasFileRepository(serverDB, userId).listStorage()).map((r) => r.canvasId),
+      ).toEqual(['cvs_personal']);
+      const inWorkspace = await new CanvasFileRepository(
+        serverDB,
+        userId,
+        workspaceId,
+      ).listStorage();
+      expect(inWorkspace).toEqual([
+        expect.objectContaining({ canvasId: 'cvs_ws', title: null, workId: null }),
+      ]);
+    });
   });
 });

@@ -11,13 +11,13 @@ import {
 import type { SwitcherItem } from '@/features/NavPanel/switcher/switcherItems';
 import SwitcherMenu from '@/features/NavPanel/switcher/SwitcherMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import type { ProjectDetail } from '@/store/project';
+import type { ProjectListItem } from '@/store/project';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 
 import { resolveProjectListState } from '../projectListState';
 
 interface ProjectHeaderProps {
-  project?: ProjectDetail['project'];
+  project?: ProjectListItem;
 }
 
 const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {

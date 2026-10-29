@@ -9,6 +9,7 @@ export * from './botPlatformContext';
 export * from './chatMessages';
 export * from './compressContext';
 export * from './discordContext';
+export * from './documentBlocks';
 export * from './files';
 export * from './fileSystem';
 export * from './goal';

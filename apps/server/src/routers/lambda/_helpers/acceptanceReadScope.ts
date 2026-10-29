@@ -1,3 +1,5 @@
+import { isWorkspaceReadableVisibility } from '@lobechat/const/verify';
+
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
@@ -20,7 +22,7 @@ export const canReadAcceptance = async (
   }
   if (ctx.userId && ctx.userId === acceptance.userId) return true;
   if (acceptance.visibility === 'public') return true;
-  if (!ctx.userId) return false;
+  if (!ctx.userId || !isWorkspaceReadableVisibility(acceptance.visibility)) return false;
   // Membership in the acceptance's OWN workspace — not the viewer's currently
   // active one, which may be a different workspace entirely.
   if (acceptance.workspaceId) {

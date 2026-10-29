@@ -71,6 +71,7 @@ export const ChannelMessage = ({
       <ChatItem
         showAvatar
         showTitle
+        agentId={message.author.type === 'agent' ? message.author.id : undefined}
         avatarProps={{ size: 36 }}
         belowMessage={isRequest ? <MessageRoutingStatus message={message} /> : undefined}
         gap={4}

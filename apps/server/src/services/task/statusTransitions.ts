@@ -26,6 +26,8 @@ export interface UpdateStatusResult {
   parentTaskId?: string | null;
   paused: string[];
   pausedTasks?: { id: string; identifier: string }[];
+  /** `skipIfRunning` found the task running and left it unchanged. */
+  skippedRunning?: boolean;
   task: TaskItem;
   unlocked: string[];
   unlockedTasks?: { id: string; identifier: string }[];
@@ -59,6 +61,12 @@ export async function updateStatus(
      * interrupting the run mid-tool-call.
      */
     operationId?: string;
+    /**
+     * Leave a running task alone instead of interrupting it, checked again
+     * under the row lock of the write. For system closes (an external issue
+     * closed) that must never stop work in progress.
+     */
+    skipIfRunning?: boolean;
     status: TaskStatus;
   },
   /**
@@ -78,6 +86,9 @@ export async function updateStatus(
   }
 
   const resolved = await findTaskOrThrow(deps.taskModel, id);
+  if (input.skipIfRunning && resolved.status === 'running') {
+    return { paused: [], skippedRunning: true, task: resolved, unlocked: [] };
+  }
   assertArchivedTaskStaysIdle(resolved, { status });
 
   if (resolved.status === 'running' && status !== 'running') {
@@ -122,13 +133,25 @@ export async function updateStatus(
     extra.completedAt = new Date();
   if (errorMsg) extra.error = errorMsg;
 
-  const task = await writeKeepingArchivedIdle(deps.db, (tx) => {
+  let startedMeanwhile: TaskItem | undefined;
+  const task = await writeKeepingArchivedIdle(deps.db, async (tx) => {
     const model = new TaskModel(tx, deps.userId, deps.workspaceId);
+    if (input.skipIfRunning) {
+      await model.lockForUpdate(resolved.id);
+      const current = await model.findById(resolved.id);
+      if (current?.status === 'running') {
+        startedMeanwhile = current;
+        return current;
+      }
+    }
     return actor
       ? model.updateWithLog(resolved.id, { status, ...extra }, actor)
       : model.updateStatus(resolved.id, status, extra);
   });
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+  if (startedMeanwhile) {
+    return { paused: [], skippedRunning: true, task: startedMeanwhile, unlocked: [] };
+  }
 
   // Stamp the schedule run-count window each time the user (re)starts a
   // scheduled task. The cron dispatcher itself flips a task running →

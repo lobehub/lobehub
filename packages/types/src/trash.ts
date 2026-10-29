@@ -27,6 +27,14 @@ export const TRASH_RESOURCE_TYPES = [
 export type TrashResourceType = (typeof TRASH_RESOURCE_TYPES)[number];
 
 /**
+ * Which side of a workspace bin a root sits on. `private` when the resource,
+ * or an agent, group or project it lives under, is private to its creator;
+ * `public` otherwise. Personal bins have no sides.
+ */
+export const TRASH_VISIBILITIES = ['public', 'private'] as const;
+export type TrashVisibility = (typeof TRASH_VISIBILITIES)[number];
+
+/**
  * Lightweight, denormalised snapshot captured at trash time so the recycle
  * bin list can render a row without joining the source table. Kept small on
  * purpose — the source row is still there until purge, so anything heavier
@@ -47,6 +55,12 @@ export interface TrashItemMeta {
   messageTree?: { childIds: string[]; parentId: string | null };
   /** Human readable parent title (agent name for a topic, folder for a page …) */
   parentTitle?: string | null;
+  /**
+   * Workspace roots: whether the resource was private when it was trashed,
+   * snapshotted by `TrashModel` so a later visibility change of a still-live
+   * parent does not move it to the other side of the bin.
+   */
+  private?: boolean;
   /**
    * Topic-only: the user asked for the topic's attachments to go with it.
    * Files are not trash-aware yet, so they stay live while the topic sits in
@@ -88,13 +102,14 @@ export type TrashProjectFilter = string | null | undefined;
 /** Filters shared by the recycle-bin list, its counts and "empty trash". */
 export interface TrashRootFilter {
   /**
-   * Only roots this user trashed. Set server-side for workspace non-owners, so
-   * a member never sees titles of teammates' resources (a message root's title
-   * is a content excerpt).
+   * Only roots this user trashed. Set server-side in a workspace for the
+   * private side, so nobody sees another member's private deletions.
    */
   deletedByUserId?: string;
   projectId?: TrashProjectFilter;
   resourceType?: TrashResourceType;
+  /** Workspace bins only: one side of the bin (see {@link TrashVisibility}). */
+  visibility?: TrashVisibility;
 }
 
 export interface TrashListParams extends TrashRootFilter {

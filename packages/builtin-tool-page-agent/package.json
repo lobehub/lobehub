@@ -10,7 +10,8 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/editor-runtime": "workspace:*"
+    "@lobechat/editor-runtime": "workspace:*",
+    "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

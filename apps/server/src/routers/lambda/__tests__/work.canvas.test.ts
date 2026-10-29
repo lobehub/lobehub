@@ -10,6 +10,12 @@ import { workRouter } from '../work';
 
 const serverDB = await getTestDB();
 const objects = vi.hoisted(() => new Map<string, Uint8Array>());
+const unpublishCanvasSite = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/canvasPublish', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  unpublishCanvasSite,
+}));
 
 vi.mock('@/server/services/file', () => ({
   FileService: class {
@@ -85,6 +91,23 @@ describe('workRouter.deleteWork · Canvas storage', () => {
 
     expect(await model.findCanvas('cvs_cleanup')).toBeNull();
     expect(await model.listVersions(workId)).toEqual([]);
+    expect(objects.size).toBe(0);
+  });
+
+  it('takes a published canvas offline when its Work card is removed', async () => {
+    const { model, workId } = await createCanvas();
+    await model.recordCanvasPublish('cvs_cleanup', {
+      deploymentId: 'dep_cleanup',
+      publishedVersion: 2,
+      url: 'https://cleanup.lobehub.sites',
+    });
+
+    await caller().deleteWork({ id: workId });
+
+    expect(unpublishCanvasSite).toHaveBeenCalledWith(
+      expect.objectContaining({ deploymentId: 'dep_cleanup', userId }),
+    );
+    expect(await model.findCanvas('cvs_cleanup')).toBeNull();
     expect(objects.size).toBe(0);
   });
 

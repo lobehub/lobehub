@@ -16,8 +16,9 @@ import {
   PanelRight,
   PanelTop,
   PencilLine,
+  Pin,
+  PinOff,
   Share,
-  Star,
   Stethoscope,
   Trash,
   Wand2,
@@ -164,14 +165,14 @@ export const useTopicItemDropdownMenu = ({
       },
       {
         disabled: !canEditTopic,
-        icon: <Icon icon={Star} />,
+        icon: <Icon icon={fav ? PinOff : Pin} />,
         key: 'favorite',
-        label: fav ? t('actions.unfavorite') : t('actions.favorite'),
+        label: fav ? t('actions.unpin') : t('actions.pin'),
         onClick: async () => {
           await favoriteTopic(id, !fav);
           if (scope) await refresh();
         },
-        sfSymbol: fav ? 'star.slash' : 'star',
+        sfSymbol: fav ? 'pin.slash' : 'pin',
       },
       {
         type: 'divider' as const,

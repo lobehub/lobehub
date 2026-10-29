@@ -154,7 +154,7 @@ export type TaskViewMode = 'kanban' | 'list';
 /** How topics inside one byProject sidebar group are sectioned. */
 export type ProjectTopicSubGroupMode = 'none' | 'byDevice' | 'byTime' | 'byStatus';
 
-export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent', 'private'];
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent', 'private'];
 
 /** How the agent document tree orders sibling rows. */
 export interface AgentDocumentSort {
@@ -208,7 +208,7 @@ export interface SystemStatus {
    */
   agentListSidebarSectionCollapsed?: boolean;
   /**
-   * View mode of the agent view-all page (card grid vs table list)
+   * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
    */
   agentListViewMode?: 'card' | 'list';
   /**
@@ -224,6 +224,12 @@ export interface SystemStatus {
    * number of agents (defaultList) to display
    */
   agentPageSize?: number;
+  /**
+   * Sidebar groups folded in the task assignee picker, keyed by group id.
+   * Nested booleans so the lodash `merge` in `updateSystemStatus` replaces
+   * scalars instead of index-merging arrays.
+   */
+  assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -260,6 +266,11 @@ export interface SystemStatus {
    */
   expandAgentSidebarSectionsByAgent?: Record<string, Record<string, boolean>>;
   expandInputActionbar?: boolean;
+  /**
+   * Per-project expanded state of the project sidebar's sections (Channels / Topics), keyed by
+   * projectId. Nested booleans for the same `merge` reason as the agent sections above.
+   */
+  expandProjectSidebarSectionsByProject?: Record<string, Record<string, boolean>>;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
   fileManagerViewMode?: 'list' | 'masonry';
@@ -362,6 +373,11 @@ export interface SystemStatus {
    */
   projectTopicSubGroupModeByGroup?: Record<string, ProjectTopicSubGroupMode>;
   readNotificationSlugs?: string[];
+  /**
+   * Agents this device last picked as a task assignee, newest first, keyed by
+   * workspace id (`personal` outside a workspace). See `pushRecentAssignee`.
+   */
+  recentAssigneeAgentIds?: Record<string, string[]>;
   /**
    * number of recent items to display
    */
@@ -473,6 +489,12 @@ export interface SystemStatus {
    */
   tokenDisplayFormatShort?: boolean;
   /**
+   * Workspace "only my topics" filter, keyed by the topic list's owner: the
+   * agentId of an agent sidebar, the groupId of a group, the projectId of a
+   * project sidebar. Device-local, so each agent keeps its own choice.
+   */
+  topicOnlyMineByAgent?: Record<string, boolean>;
+  /**
    * number of topics to display per page
    */
   topicPageSize?: number;
@@ -573,7 +595,7 @@ export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentListExpandedGroupKeys: [] as string[],
   agentListSidebarSectionCollapsed: false,
-  agentListViewMode: 'list' as const,
+  agentListViewMode: 'card' as const,
   agentListViewOptions: {
     groupBy: 'none' as const,
     orderBy: 'updatedAt' as const,
@@ -630,7 +652,12 @@ export const INITIAL_STATUS = {
   showFilePanel: true,
   showHomePortrait: true,
   showHotkeyHelper: false,
-  showHomeRail: true,
+  /**
+   * One column by default: most people prefer the single-column Home. Only
+   * browsers without a stored preference get this, because `updateSystemStatus`
+   * persists the whole status, so earlier sessions already stored `true`.
+   */
+  showHomeRail: false,
   showImagePanel: true,
   showImageTopicPanel: true,
   showAgentBuilderPanel: false,
@@ -657,6 +684,16 @@ export const INITIAL_STATUS = {
 
 const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
 
+/** Keeps only `ownerId → boolean` entries of a persisted value of unknown shape. */
+const restoreTopicOnlyMineByAgent = (value: unknown): Record<string, boolean> | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+    ),
+  );
+};
+
 /**
  * Restore the shell-defining preferences before React's first render. The
  * remaining system status still follows the existing async initialization path,
@@ -664,6 +701,10 @@ const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
  * the boot shell reads them synchronously to draw a shell that lines up with
  * the real layout, and `NavPanelDraggable` would otherwise size its
  * pre-hydration placeholder to the default width.
+ *
+ * The per-agent "only mine" topic filter is restored here too: it is part of
+ * the topic list identity, and the route loader seeds that list before the
+ * async initialization runs — an unrestored filter seeds the unfiltered page.
  */
 export const createInitialSystemStatus = (): SystemStatus => {
   const persistedStatus = statusStorage.getFromLocalStorageSync();
@@ -693,6 +734,7 @@ export const createInitialSystemStatus = (): SystemStatus => {
       typeof persistedStatus.showRightPanel === 'boolean'
         ? persistedStatus.showRightPanel
         : INITIAL_STATUS.showRightPanel,
+    topicOnlyMineByAgent: restoreTopicOnlyMineByAgent(persistedStatus.topicOnlyMineByAgent),
     showWorkingOverview:
       typeof persistedStatus.showWorkingOverview === 'boolean'
         ? persistedStatus.showWorkingOverview

@@ -105,3 +105,11 @@ Source: acceptance round 4 review — Discord comparisons for composer, typing l
 Channel join events identify people and Agents using their own avatars, not a generic invitation icon. Render each avatar beside its member name, including every member in a grouped event. Let member pairs wrap at narrow widths; do not detach the avatar stack from the names or silently omit later avatars. A member’s emoji avatar is identity, even when it resembles a warning symbol.
 
 Source: user clarification during acceptance round 6 (2026-10-27).
+
+## LOBE-UX-015 — Feature-gated settings follow the feature's availability
+
+An unreleased feature's settings, search results and settings summary counts use the same per-user feature flag as the feature itself. Channel decision settings are visible only when `serverConfigSelectors.enableChannels` is true; a default-on preference does not bypass the `channel` rollout gate.
+
+Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
+
+Source: user correction about the unreleased Channel feature (2026-10-28).

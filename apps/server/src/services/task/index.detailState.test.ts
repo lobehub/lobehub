@@ -9,6 +9,7 @@ import { TaskService } from './index';
  */
 const mocks = vi.hoisted(() => ({
   findByOperations: vi.fn(),
+  getAgentAvatarsByIds: vi.fn(),
   findWithHandoff: vi.fn(),
   findById: vi.fn(),
   timeoutRunning: vi.fn(),
@@ -18,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
-    return { getAgentAvatarsByIds: vi.fn().mockResolvedValue([]) };
+    return { getAgentAvatarsByIds: mocks.getAgentAvatarsByIds };
   }),
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: vi.fn() }));
@@ -90,6 +91,30 @@ describe('TaskService.getTaskDetail state', () => {
     vi.clearAllMocks();
     mocks.findWithHandoff.mockResolvedValue([]);
     mocks.findByOperations.mockResolvedValue(new Map());
+    mocks.getAgentAvatarsByIds.mockResolvedValue([]);
+  });
+
+  it('labels agent authors by name, falling back to title when the name is blank', async () => {
+    mocks.findById.mockResolvedValue({
+      ...baseTask,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdByAgentId: 'agt_named',
+    });
+    mocks.getAgentAvatarsByIds.mockResolvedValue([
+      { avatar: null, id: 'agt_named', name: 'Dario 任务队列版', title: '美国100刀' },
+    ]);
+
+    const named = await service().getTaskDetail('T-1');
+    expect(named?.activities?.find((a) => a.type === 'created')?.author?.name).toBe(
+      'Dario 任务队列版',
+    );
+
+    mocks.getAgentAvatarsByIds.mockResolvedValue([
+      { avatar: null, id: 'agt_named', name: '  ', title: '美国100刀' },
+    ]);
+
+    const untitled = await service().getTaskDetail('T-1');
+    expect(untitled?.activities?.find((a) => a.type === 'created')?.author?.name).toBe('美国100刀');
   });
 
   it('pauses a running task whose heartbeat timed out, then re-reads it', async () => {

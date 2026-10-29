@@ -1,9 +1,11 @@
 // @vitest-environment node
 import {
+  hasConversationLog,
   isEmptyOrEmojiOnly,
   judgeExplicitMention,
   parseDiscordMentions,
   resolveChannelKeys,
+  resolveConversationLogKeys,
   wakeStateKeys,
 } from '../botWake/facts';
 
@@ -173,9 +175,39 @@ describe('resolveChannelKeys', () => {
     ]);
   });
 
+  it('matches a Feishu / Lark chat by its chat id, not by its chat type', () => {
+    expect(resolveChannelKeys('feishu', 'app', 'feishu:group:oc_1').ids).toEqual([
+      'feishu:group:oc_1',
+      'oc_1',
+    ]);
+    expect(resolveChannelKeys('lark', 'app', 'lark:oc_1').ids).toEqual(['lark:oc_1', 'oc_1']);
+  });
+
   it('keeps two bots in one channel apart', () => {
     expect(resolveChannelKeys('discord', 'a', 'discord:g:c').channelKey).not.toBe(
       resolveChannelKeys('discord', 'b', 'discord:g:c').channelKey,
     );
+  });
+});
+
+describe('hasConversationLog', () => {
+  it.each([
+    ['discord', 'discord:g1:c1', true],
+    ['discord', 'discord:g1:c1:t1', true],
+    ['discord', 'discord:@me:dm1', false],
+    ['feishu', 'feishu:group:oc_1', true],
+    ['lark', 'lark:group:oc_1', true],
+    ['feishu', 'feishu:p2p:oc_1', false],
+    // A legacy id cannot tell a group from a direct message.
+    ['feishu', 'feishu:oc_1', false],
+    ['telegram', 'telegram:-100', false],
+  ])('%s %s -> %s', (platform, threadId, expected) => {
+    expect(hasConversationLog(platform, threadId)).toBe(expected);
+  });
+
+  it('files a Feishu group message under the group', () => {
+    expect(resolveConversationLogKeys('feishu', 'feishu:group:oc_1')).toEqual([
+      'feishu:group:oc_1',
+    ]);
   });
 });

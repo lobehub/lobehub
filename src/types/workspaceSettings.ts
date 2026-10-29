@@ -38,6 +38,7 @@ export enum WorkspaceSettingsTabs {
   Storage = 'storage',
   SubscriptionAccounts = 'subscription-accounts',
   Teams = 'teams',
+  Trash = 'trash',
   Usage = 'usage',
 }
 

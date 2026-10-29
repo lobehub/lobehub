@@ -5,7 +5,6 @@ import {
   Avatar,
   Button,
   Button as LobeButton,
-  Center,
   confirmModal,
   cssVar,
   DropdownMenu,
@@ -13,11 +12,10 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
-import { CircleCheck, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import { createLobehubSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
@@ -28,6 +26,7 @@ import { toConnectorActionError } from '@/utils/connectorActionError';
 
 import { renderConnectorRowDescription } from './ConnectorRowFeedback';
 import { isSettledByConnection } from './connectorRowState';
+import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
@@ -44,6 +43,7 @@ interface LobehubSkillItemProps {
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
   ({ provider, server, isSelected, onSelect, onDelete }) => {
     const { t } = useTranslation('setting');
+    const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
     const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
     const [isConnecting, setIsConnecting] = useState(false);
@@ -324,20 +324,18 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       }
       if (isConnected) {
         return (
-          <Tooltip title={t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}>
-            <Center width={20}>
-              <Icon icon={CircleCheck} size={16} style={{ color: cssVar.colorSuccess }} />
-            </Center>
-          </Tooltip>
+          <ConnectedStatus
+            label={t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
+          />
         );
       }
       return (
         <Tooltip title={!canCreate ? createReason : editReason}>
           <Button
             disabled={!canCreate || !canEdit}
-            icon={<Icon icon={SquareArrowOutUpRight} />}
+            icon={isPage ? undefined : <Icon icon={SquareArrowOutUpRight} />}
             size="small"
-            type="text"
+            type={isPage ? 'default' : 'text'}
             onClick={handleConnect}
           >
             {t('tools.lobehubSkill.connect')}
@@ -349,11 +347,12 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     if (onSelect) {
       const renderNavIcon = () => {
         const { icon, label } = provider;
-        if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={18} />;
-        return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+        if (typeof icon === 'string')
+          return <Avatar alt={label} avatar={icon} size={isPage ? 20 : 18} />;
+        return <Icon fill={cssVar.colorText} icon={icon} size={isPage ? 20 : 18} />;
       };
       return (
-        <NavItem
+        <SkillListRow
           active={isSelected}
           description={description}
           extra={renderNavExtra()}
@@ -363,6 +362,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           // Only connected connectors open the detail panel. When disconnected,
           // the row is inert and the only affordance is the inline Connect button —
           // otherwise clicking opens a blank detail panel that reads as a bug.
+          summary={t(`tools.lobehubSkill.providers.${provider.id}.description`, {
+            defaultValue: provider.description,
+          })}
           onClick={isConnected ? onSelect : undefined}
         />
       );

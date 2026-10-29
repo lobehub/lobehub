@@ -91,6 +91,9 @@ importers:
       '@lobechat/electron-mac-permission-guide':
         specifier: workspace:*
         version: link:../../packages/electron-mac-permission-guide
+      '@lobechat/electron-mac-sidebar-glass':
+        specifier: workspace:*
+        version: link:../../packages/electron-mac-sidebar-glass
       '@lobechat/electron-server-ipc':
         specifier: workspace:*
         version: link:../../packages/electron-server-ipc
@@ -434,6 +437,19 @@ importers:
         version: 12.4.0
 
   ../../packages/electron-mac-permission-guide:
+    dependencies:
+      '@lobechat/napi-loader':
+        specifier: workspace:*
+        version: link:../napi-loader
+    devDependencies:
+      node-addon-api:
+        specifier: ^8.5.0
+        version: 8.9.2
+      node-gyp:
+        specifier: ^12.4.0
+        version: 12.4.0
+
+  ../../packages/electron-mac-sidebar-glass:
     dependencies:
       '@lobechat/napi-loader':
         specifier: workspace:*
@@ -824,6 +840,9 @@ importers:
       '@lobechat/local-file-shell':
         specifier: workspace:*
         version: link:../../packages/local-file-shell
+      '@lobechat/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
       '@lobechat/tool-runtime':
         specifier: workspace:*
         version: link:../../packages/tool-runtime

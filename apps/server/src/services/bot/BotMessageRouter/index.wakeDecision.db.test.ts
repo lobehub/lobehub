@@ -197,7 +197,7 @@ describe('mock Discord bot-wake decision records (real database, real router han
     ]);
     for (const row of stored) {
       expect(row).toMatchObject({
-        pipelineVersion: 'bot-wake@2',
+        pipelineVersion: 'bot-wake@3',
         scopeKey: 'discord:app-1',
         source: 'bot:discord',
       });
@@ -233,7 +233,7 @@ describe('mock Discord bot-wake decision records (real database, real router han
       decision: {
         llmTracingIds: [tracing.id],
         outcome: 'skip',
-        pipelineVersion: 'bot-wake@2',
+        pipelineVersion: 'bot-wake@3',
       },
       scopeKey: 'discord:app-1',
       signal: {

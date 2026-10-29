@@ -123,6 +123,19 @@ export type BotWakeKind = (typeof BOT_WAKE_KINDS)[number];
  */
 export const BOT_NO_REPLY_TOKEN = 'NO_REPLY';
 
+/**
+ * The line an agent ends its reply with to step back from the conversation: people told it it is
+ * interfering. The line is not posted; whatever it wrote before it (a short acknowledgement) is.
+ * `NO_REPLY:stand_down` does the same in silence.
+ */
+export const BOT_STAND_DOWN_TOKEN = 'STAND_DOWN';
+
+/**
+ * How long a bot that stood down stays out of the conversation: only an @-mention, a reply to it,
+ * a DM or a command wakes it until then.
+ */
+export const BOT_STAND_DOWN_MINUTES = 30;
+
 /** Why a woken agent chose not to speak. */
 export const BOT_NO_REPLY_REASONS = [
   'not_addressed',
@@ -130,6 +143,7 @@ export const BOT_NO_REPLY_REASONS = [
   'nothing_to_add',
   'duplicate',
   'already_handled',
+  'stand_down',
   'unspecified',
   'empty_completion',
 ] as const;
@@ -140,6 +154,8 @@ export type BotNoReplyClaimedReason = Exclude<BotNoReplyReason, 'empty_completio
 /**
  * The decision label each silence reason is written under. Staying silent means the wake was not
  * worth an answer (`false_wake`), unless the same message had already been answered (`dup_wake`).
+ * Standing down is the one silence that acted on the message (it told the bot to back off), so
+ * that wake was `correct`.
  */
 export const BOT_NO_REPLY_LABELS: Record<BotNoReplyReason, SignalDecisionLabel> = {
   already_handled: 'dup_wake',
@@ -148,6 +164,7 @@ export const BOT_NO_REPLY_LABELS: Record<BotNoReplyReason, SignalDecisionLabel> 
   nothing_to_add: 'false_wake',
   not_addressed: 'false_wake',
   off_topic: 'false_wake',
+  stand_down: 'correct',
   unspecified: 'false_wake',
 };
 

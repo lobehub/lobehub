@@ -380,6 +380,24 @@ describe('sendQueuedMessageNow', () => {
     );
   });
 
+  it('sends on the runtime the item was queued for', async () => {
+    // A task-run drawer queues follow-ups with `forceRuntime: 'gateway'`; Send
+    // now must not fall back to the user's global runtime preference.
+    const { chat } = chatWith(true);
+
+    await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg: { ...msg, forceRuntime: 'gateway' },
+      withdraw: async () => true,
+    });
+
+    expect(chat.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ forceRuntime: 'gateway', message: 'now' }),
+    );
+  });
+
   it('stops nothing and sends nothing when the run already took it', async () => {
     const { chat } = chatWith(true);
 

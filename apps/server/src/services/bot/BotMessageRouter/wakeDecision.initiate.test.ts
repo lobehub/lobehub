@@ -201,7 +201,38 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
 
       await expect(recorder.initiate(observation({}, plain))).resolves.toEqual({
         addressed: false,
+        followup: { participants: [], score: 0.9 },
         reason: 'followup-window',
+      });
+    });
+
+    // Production: the owner talking to a teammate and to another agent woke the bot in its window
+    // every time, and it answered every time. The agent is told how sure the check was and who
+    // else is here, so it can tell a message for it from one for someone else.
+    it('tells the agent how sure the classifier was and who else took part lately', async () => {
+      const state = fakeState(spokeRecently());
+      state.logs.set('discord:g1:c1', [
+        { at: 1, authorId: 'tm', authorName: 'teammate', id: 'a', isBot: false, text: 'hmm' },
+        { at: 2, authorId: APP, id: 'bot:op', isBot: true, text: 'Here is the plan.' },
+        { at: 3, authorId: 'ag', authorName: 'Dario', id: 'b', isBot: true, text: 'Draft v2' },
+        { at: 4, authorId: OWNER, authorName: 'arvin', id: 'c', isBot: false, text: 'nice' },
+        { at: 5, authorId: 'tm', authorName: 'teammate', id: 'd', isBot: false, text: 'ok' },
+      ]);
+      const recorder = make(WITH_CLASSIFIER('enforce'), state, {
+        classify: classifierAnswer(0.56),
+      });
+
+      const initiation = await recorder.initiate(observation({}, plain));
+
+      expect(initiation).toMatchObject({ reason: 'followup-window' });
+      expect(initiation?.followup).toEqual({
+        // Newest first, once each, without the bot itself; names only.
+        participants: [
+          { isBot: false, isOwner: false, name: 'teammate' },
+          { isBot: false, isOwner: true, name: 'arvin' },
+          { isBot: true, isOwner: false, name: 'Dario' },
+        ],
+        score: 0.56,
       });
     });
 
@@ -230,6 +261,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
 
       await expect(recorder.initiate(observation({}, plain))).resolves.toEqual({
         addressed: false,
+        followup: { participants: [], score: 0.1 },
         reason: 'followup-window',
       });
       expect(classify).toHaveBeenCalledTimes(1);
@@ -291,7 +323,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
         },
       });
 
-      await expect(recorder.initiate(observation({}, plain))).resolves.toEqual({
+      await expect(recorder.initiate(observation({}, plain))).resolves.toMatchObject({
         addressed: false,
         reason: 'followup-window',
       });
@@ -342,7 +374,7 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     const recorder = make(WITH_CLASSIFIER('enforce'), state, { classify });
     const message = observation({}, { text: '那这个怎么处理?' });
 
-    expect(await recorder.initiate(message)).toEqual({
+    expect(await recorder.initiate(message)).toMatchObject({
       addressed: false,
       reason: 'followup-window',
     });
@@ -534,6 +566,28 @@ describe('bot-wake recorder: remembering what was said', () => {
     await make(ENFORCE, state).remember(observation({}, { id }));
 
     expect(state.logs.get('discord:g1:c1')?.[0].at).toBe(Date.UTC(2026, 0, 1));
+  });
+
+  it('keeps a Feishu group message under the group, stamped with its send time', async () => {
+    const state = fakeState();
+    const sent = new Date(Date.UTC(2026, 0, 1));
+    await make(ENFORCE, state, { platform: 'feishu' }).remember(
+      observation({ threadId: 'feishu:group:oc_1' }, { id: 'om_1', metadata: { dateSent: sent } }),
+    );
+
+    expect(state.logs.get('feishu:group:oc_1')?.[0]).toMatchObject({
+      at: sent.getTime(),
+      id: 'om_1',
+    });
+  });
+
+  it('does not keep a Feishu direct message', async () => {
+    const state = fakeState();
+    await make(ENFORCE, state, { platform: 'feishu' }).remember(
+      observation({ threadId: 'feishu:p2p:oc_1' }),
+    );
+
+    expect(state.rememberMessages).not.toHaveBeenCalled();
   });
 
   it('never throws when Redis is down', async () => {

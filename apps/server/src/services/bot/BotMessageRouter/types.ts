@@ -8,6 +8,7 @@ import type {
   BotReplyLocale,
   DmSettings,
   PlatformClient,
+  ReplyEmojiEntry,
   WatchKeywordEntry,
 } from '../platforms';
 import type { WakeMessageLike } from '../wake/signal';
@@ -116,17 +117,32 @@ export type BotAccessGate = (
   caller: string,
 ) => Promise<boolean>;
 
+/** The owner's reply style for one conversation and the emoji the bot may use there. */
+export interface BotReplyVoice {
+  replyEmojis?: ReplyEmojiEntry[];
+  replyStyle?: string;
+}
+
 /** Per-bot values `registerHandlers` hands to the DM / keyword catch-all. */
 export interface BotHandlerContext {
   agentId: string;
   applicationId: string;
+  /** The bot's settings, handed to the bridge for the bot-wake bookkeeping of local runs. */
+  botSettings?: Record<string, unknown>;
   /** The bot has the bot-wake scenario enabled: it listens to unaddressed channel chatter. */
   botWakeEnabled: boolean;
   bridge: AgentBridgeService;
+  /**
+   * Whether the agent may step back from this conversation (`STAND_DOWN`): a group conversation
+   * of a bot whose wake rules enforce, once the rollout reaches it.
+   */
+  canStandDown: (thread: { isDM?: boolean }) => Promise<boolean>;
   charLimit?: number;
   client: PlatformClient;
   commands: BotCommand[];
   detectReplyLocale: (message: { author?: unknown }) => BotReplyLocale;
+  /** User IDs, besides the owner, trusted with the owner's devices. */
+  deviceAllowlist: string[];
   displayToolCalls: boolean;
   dmSettings: DmSettings;
   /** Last check before a follow-up wake (watch keyword) runs: enforced policies, then the scheduler. */
@@ -176,6 +192,8 @@ export interface BotHandlerContext {
     messages: WakeMessageLike[],
     thread: { id: string },
   ) => void;
+  /** How the bot talks in a conversation: the owner's reply style for it and the emoji it may use. */
+  replyVoiceFor: (platformThreadId: string) => BotReplyVoice;
   serverDB: LobeChatDatabase;
   /**
    * Opens the reply to a message that woke the bot (an acknowledgement, and the channel or a new

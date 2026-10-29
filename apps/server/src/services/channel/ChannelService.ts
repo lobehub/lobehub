@@ -4,6 +4,7 @@ import { isChannelRuntime } from '@lobechat/types';
 import pMap from 'p-map';
 
 import { DeviceModel } from '@/database/models/device';
+import { ProjectModel } from '@/database/models/project';
 import type {
   ChannelAddAgentInput,
   ChannelSendInput,
@@ -32,6 +33,7 @@ export class ChannelService {
   readonly repository: ChannelRepository;
   private readonly agentService: AgentService;
   private readonly deviceModel: DeviceModel;
+  private readonly projectModel: ProjectModel;
 
   constructor(
     private readonly db: LobeChatDatabase,
@@ -41,6 +43,7 @@ export class ChannelService {
     this.repository = new ChannelRepository(db, userId, workspaceId);
     this.agentService = new AgentService(db, userId, workspaceId);
     this.deviceModel = new DeviceModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId);
   }
 
   private async resolveAgent(input: ChannelAgentSelection): Promise<ChannelAddAgentInput> {
@@ -67,18 +70,34 @@ export class ChannelService {
           'BAD_REQUEST',
           'Native Channel execution is not supported on Windows devices yet',
         );
-      if (!input.workingDirectory?.trim())
+      // An Agent without its own directory on this device runs in the device's home folder,
+      // the same fallback an ordinary conversation uses.
+      const workingDirectory =
+        input.workingDirectory?.trim() ||
+        (await deviceGateway.queryDeviceSystemInfo(this.userId, input.deviceId, this.workspaceId))
+          ?.homePath;
+      if (!workingDirectory)
         throw new ChannelError('BAD_REQUEST', 'Choose a working directory for this device');
       const path = await deviceGateway.statPath({
         deviceId: input.deviceId,
-        path: input.workingDirectory,
+        path: workingDirectory,
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
-      if (!path?.isDirectory || !path.canonicalPath)
+      if (!path)
         throw new ChannelError(
           'BAD_REQUEST',
-          'The device must be online and support directory verification',
+          'Could not reach the device to verify the working directory',
+        );
+      if (!path.isDirectory)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'The working directory does not exist or is not a directory',
+        );
+      if (!path.canonicalPath)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'The device connector must be upgraded to verify the working directory',
         );
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
@@ -89,12 +108,19 @@ export class ChannelService {
     return { agentId: input.agentId, config, description: input.description, name: input.name };
   }
 
-  create = async (input: { agents: ChannelAgentSelection[]; title: string }) => {
+  create = async (input: {
+    agents: ChannelAgentSelection[];
+    projectId?: string;
+    title: string;
+  }) => {
+    // The project must be readable in this scope, the same visibility as the project list.
+    if (input.projectId && !(await this.projectModel.findById(input.projectId)))
+      throw new ChannelError('NOT_FOUND', 'Project not found');
     // Resolving probes devices, so cap the work one request can start.
     const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
       concurrency: 5,
     });
-    return this.repository.create({ agents, title: input.title });
+    return this.repository.create({ agents, projectId: input.projectId, title: input.title });
   };
 
   addAgent = async (channelId: string, input: ChannelAgentSelection) => {
@@ -184,10 +210,13 @@ export class ChannelService {
   };
 
   send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
-    const config = await resolveChannelRoutingConfig(this.db, this.userId);
+    // The repository directs any mentioned message itself and never reads its routing mode.
+    const config = input.mentions?.length
+      ? null
+      : await resolveChannelRoutingConfig(this.db, this.userId);
     const message = await this.repository.send(channelId, {
       ...input,
-      routing: config ? 'jev' : 'fallback',
+      routing: config ? 'decision' : 'fallback',
     });
     // Do not swallow a queue failure: the client can retry the SAME request key safely.
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);

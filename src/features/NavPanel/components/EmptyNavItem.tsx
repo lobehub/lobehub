@@ -26,7 +26,13 @@ const EmptyNavItem = memo<EmptyStatusProps>(({ title, onClick, className, disabl
       <Center flex={'none'} height={28} width={28}>
         <Icon icon={PlusIcon} size={'small'} />
       </Center>
-      <Text align={'center'} type={'secondary'}>
+      {/* One line like a NavItem: a long title (e.g. in a narrow sidebar) truncates
+          instead of wrapping out of the fixed-height row. */}
+      <Text
+        ellipsis={{ tooltipWhenOverflow: true }}
+        style={{ flex: 1, minWidth: 0 }}
+        type={'secondary'}
+      >
         {title}
       </Text>
     </Block>

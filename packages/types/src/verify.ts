@@ -670,6 +670,12 @@ export interface VerifyRunMetadata {
     feedback: string;
     predictionIds: string[];
     /**
+     * The checks of the reviewed round the review sent back, by that round's own
+     * plan item id, with the review's reason. They are what an in-round repair is
+     * asked to fix, instead of the whole Task starting another attempt.
+     */
+    rejectedChecks?: { checkItemId: string; feedback: string }[];
+    /**
      * `unjudgeable` is separate from `rejected` on purpose: it means the review
      * could not decide from evidence, not that the delivery fell short. Folding
      * it into `rejected` both sent the builder off to fix nothing and made the

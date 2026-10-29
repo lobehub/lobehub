@@ -1,22 +1,23 @@
-import type { Chat, MessageContext } from 'chat';
+import type { Chat, Message, MessageContext } from 'chat';
 import debug from 'debug';
 
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import type { LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
-import { isWholeGroupChatThreadId } from '../isWholeGroupChatThreadId';
-import { getSameSenderMessages } from '../mergeMessages';
+import { getOriginMessageId, getSameSenderMessages, getSourceMessages } from '../mergeMessages';
 import {
   type BotReplyLocale,
   type DmSettings,
   extractDmSettings,
   extractGroupSettings,
   extractGuestSettings,
+  extractReplyEmojis,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   getBotReplyLocale,
@@ -26,8 +27,10 @@ import {
   normalizeBotReplyLocale,
   normalizeBotReplyPlacementMode,
   type PlatformClient,
+  resolveReplyStyle,
   type UserAllowlist,
 } from '../platforms';
+import { extractDeviceAllowlist } from '../platforms/deviceAccess';
 import { renderThrownAgentError } from '../renderThrownError';
 import { createWakeClassify } from '../wake/classify';
 import { createWakeDutyJudge } from '../wake/dutyJudge';
@@ -39,14 +42,9 @@ import { createAccessGate } from './accessGate';
 import { registerCatchAllHandler } from './catchAll';
 import { registerCommands } from './commands';
 import { createFollowupGate, type FollowupGateDeps } from './followupGate';
-import {
-  createParticipantTracker,
-  isSoloThreadConversation,
-  mentionRequiredAnnouncedKey,
-  PARTICIPANTS_TTL_MS,
-} from './participants';
+import { createParticipantTracker, isSoloThreadConversation } from './participants';
 import { createReplyOpening } from './replyOpening';
-import type { BotCommand, BotHandlerContext, ResolvedAgentInfo } from './types';
+import type { BotCommand, BotHandlerContext, BotReplyVoice, ResolvedAgentInfo } from './types';
 import {
   applyWatchKeywordInstructions,
   burstMatchesWatchKeyword,
@@ -89,6 +87,14 @@ export function registerHandlers(
   const { agentId, applicationId, platform, userId, workspaceId } = info;
   const bridge = new AgentBridgeService(serverDB, userId, workspaceId);
   const charLimit = (info.settings?.charLimit as number) || undefined;
+  const replyEmojis = extractReplyEmojis(info.settings);
+  const replyVoiceFor = (platformThreadId: string): BotReplyVoice => ({
+    replyEmojis: replyEmojis.length > 0 ? replyEmojis : undefined,
+    replyStyle: resolveReplyStyle(
+      info.settings,
+      resolveChannelKeys(platform, applicationId, platformThreadId).ids,
+    ),
+  });
   const displayToolCalls = info.settings?.displayToolCalls === true;
   const reactionMode = normalizeBotReactionMode(info.settings?.reactionMode);
   const dmSettings: DmSettings = extractDmSettings(info.settings);
@@ -110,6 +116,8 @@ export function registerHandlers(
    * can drive a specific directive ("scan the recent thread for a bug
    * report", "summarise the last 20 messages", …).
    */
+  const wakeSettings = parseBotWakeSettings(info.settings);
+  const botWakeEnabled = isBotWakeEnabled(wakeSettings.config);
   const watchKeywordEntries = extractWatchKeywordEntries(info.settings);
   const watchKeywords: ReadonlyArray<string> = watchKeywordEntries.map((e) => e.keyword);
   /**
@@ -158,6 +166,8 @@ export function registerHandlers(
     typeof info.settings?.userId === 'string'
       ? (info.settings.userId as string).trim() || undefined
       : undefined;
+  /** Who besides the owner may use the owner's devices; read once per bot. */
+  const deviceAllowlist = extractDeviceAllowlist(info.settings);
   const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
 
   /**
@@ -301,6 +311,7 @@ export function registerHandlers(
       author: message.author,
       id: message.id,
       isMention: message.isMention,
+      metadata: message.metadata,
       raw: message.raw,
       text: message.text,
     },
@@ -407,6 +418,12 @@ export function registerHandlers(
       reason,
       threadSubscribed,
     );
+    // An edit that later @-mentions the bot must not answer these messages a second time.
+    await wakeRecorder.rememberEngaged(
+      getSourceMessages(message as Message).flatMap((source) =>
+        source.id ? [getOriginMessageId(source)] : [],
+      ),
+    );
     const opening = await replyOpening.open({
       conversation: () => wakeRecorder.conversation(observation),
       legacyOpensThread,
@@ -424,6 +441,17 @@ export function registerHandlers(
 
     return { openingReply: opening.openingReply, release: opening.release };
   };
+
+  /**
+   * Whether the agent may step back from a conversation when people say it is interfering. Only
+   * where it changes something: a stand-down is enforced by the owner rules, in a group
+   * conversation, once the rollout reaches the bot's owner.
+   */
+  const canStandDown = async (thread: { isDM?: boolean }) =>
+    botWakeEnabled &&
+    wakeSettings.ruleMode === 'enforce' &&
+    !thread.isDM &&
+    (await wakeRecorder.isRolledOut());
 
   const gateFollowup = createFollowupGate({
     applicationId,
@@ -530,16 +558,20 @@ export function registerHandlers(
         botContext: buildBotContext({
           applicationId,
           authorUserId: merged.author?.userId,
+          deviceAllowlist,
           operatorUserId,
           platform,
           platformThreadId: thread.id,
         }),
+        botSettings: info.settings,
         charLimit,
         client,
         displayToolCalls,
         openingReply,
         reactionMode,
         replyLocale,
+        ...replyVoiceFor(thread.id),
+        standDown: await canStandDown(thread),
       });
     } catch (error) {
       const operationId = AgentBridgeService.getActiveOperationId(thread.id);
@@ -612,8 +644,6 @@ export function registerHandlers(
         client.isSoloBotConversation && (() => client.isSoloBotConversation!(thread.id)),
       ));
     const isAddressedToBot = isExplicitlyAddressed || isSoloBotConversation;
-    const platformReportsShared =
-      !isExplicitlyAddressed && !!client.isSoloBotConversation && !isSoloBotConversation;
     const isCommand = looksLikeCommand(message.text);
     // operator-configured keyword match also wakes the bot in a
     // subscribed group thread. Skipped (debounced) siblings are inspected
@@ -644,27 +674,6 @@ export function registerHandlers(
         message.author.userName,
         thread.id,
       );
-      // first skip in this thread → tell participants the bot
-      // is now mention-only so newcomers don't think it broke. Dedupe by
-      // thread id so we never announce more than once.
-      if (
-        !thread.isDM &&
-        !isWholeGroupChatThreadId(thread.id) &&
-        (humanCount >= 2 || platformReportsShared)
-      ) {
-        try {
-          const fresh = await bot
-            .getState()
-            .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
-          if (fresh) {
-            await thread.post(
-              "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
-            );
-          }
-        } catch (error) {
-          log('onSubscribedMessage: mention-mode announcement failed: %O', error);
-        }
-      }
       observeBurst('onSubscribedMessage', message, context, thread, true);
       return;
     }
@@ -832,18 +841,23 @@ export function registerHandlers(
         botContext: buildBotContext({
           applicationId,
           authorUserId: merged.author?.userId,
+          deviceAllowlist,
           operatorUserId,
           platform,
           platformThreadId: thread.id,
         }),
+        botSettings: info.settings,
         charLimit,
         client,
         displayToolCalls,
         duty: wakeReason === 'in-duty' ? { matched: initiation?.duty } : undefined,
+        followup: wakeReason === 'followup-window' ? initiation?.followup : undefined,
         named: wakeReason === 'named-in-text',
         openingReply,
         reactionMode,
         replyLocale,
+        ...replyVoiceFor(thread.id),
+        standDown: await canStandDown(thread),
         wakeKind,
       });
     } catch (error) {
@@ -879,10 +893,14 @@ export function registerHandlers(
   );
 
   registerCatchAllHandler(bot, {
+    deviceAllowlist,
     agentId,
     applicationId,
-    botWakeEnabled: isBotWakeEnabled(parseBotWakeSettings(info.settings).config),
+    replyVoiceFor,
+    botSettings: info.settings,
+    botWakeEnabled,
     bridge,
+    canStandDown,
     charLimit,
     client,
     commands,

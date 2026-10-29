@@ -45,6 +45,7 @@ export class ChunkModel {
         workspaceId: this.workspaceId ?? null,
       }));
 
+      /* v8 ignore else -- unreachable: `params` is non-empty here and INSERT … RETURNING yields one row per value */
       if (fileChunksData.length > 0) {
         await trx.insert(fileChunks).values(fileChunksData);
       }

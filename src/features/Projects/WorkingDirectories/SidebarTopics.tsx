@@ -1,4 +1,15 @@
-import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Button,
+  cx,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,13 +26,12 @@ import FlatMode from '@/features/AgentSidebar/Topic/TopicListContent/FlatMode';
 import {
   TopicListFilterContext,
   TopicListRevealContext,
+  type TopicListScopeAgent,
   TopicListScopeContext,
   useTopicListFilter,
 } from '@/features/AgentSidebar/Topic/TopicListScope';
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useWorkspacePreferenceReady } from '@/hooks/useWorkspacePreferenceReady';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -29,15 +39,28 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
-import { openProjectTopicModal } from './StartDirectoryModal';
-import { canStageDraftOn, startProjectTopicDraft } from './startProjectTopicDraft';
+import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
+import { useStartProjectTopic } from './useStartProjectTopic';
 
-export function ProjectDirectoryTopics(props: { projectId: string; coordinatorAgentId: string }) {
+interface ProjectDirectoryTopicsProps {
+  /** The main agent's display meta, for its group before the project has any topic. */
+  coordinatorAgent?: TopicListScopeAgent;
+  coordinatorAgentId: string;
+  /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
+  itemKey: string;
+  projectId: string;
+}
+
+export function ProjectDirectoryTopics(props: ProjectDirectoryTopicsProps) {
   const scope = useMemo(
-    () => ({ coordinatorAgentId: props.coordinatorAgentId, projectId: props.projectId }),
-    [props.projectId, props.coordinatorAgentId],
+    () => ({
+      coordinatorAgent: props.coordinatorAgent,
+      coordinatorAgentId: props.coordinatorAgentId,
+      projectId: props.projectId,
+    }),
+    [props.projectId, props.coordinatorAgentId, props.coordinatorAgent],
   );
   const reveal = useProjectTopicReveal(props.projectId);
   const [filter, setFilter] = useState<TopicListFilter>({});
@@ -53,13 +76,7 @@ export function ProjectDirectoryTopics(props: { projectId: string; coordinatorAg
   );
 }
 
-function ProjectTopicList({
-  projectId,
-  coordinatorAgentId,
-}: {
-  projectId: string;
-  coordinatorAgentId: string;
-}) {
+function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDirectoryTopicsProps) {
   const { t } = useTranslation('project');
   const { t: tTopic } = useTranslation('topic');
   const { topicGroupMode } = useAgentTopicGroupMode();
@@ -78,19 +95,26 @@ function ProjectTopicList({
       filterTopics(scopedTopics, filter, { directories }).length === 0,
     [filter, scopedTopics, directories],
   );
-  // The rows are filtered client-side by the workspace "only mine" choice, and
-  // nothing else on a project route syncs that preference. Hold the list until
-  // it is known so the unfiltered rows never paint.
-  const isPreferenceLoading = !useWorkspacePreferenceReady();
-  const navigate = useWorkspaceAwareNavigate();
+  const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
   return (
-    <Flexbox gap={1} paddingBlock={12}>
-      <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
-        <Text fontSize={12} type="secondary" weight={500}>
-          {t('topics.title')}
-        </Text>
-        <Flexbox horizontal align="center" gap={2}>
+    <AccordionItem value={itemKey}>
+      <AccordionHeader>
+        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <Text ellipsis fontSize={12} type="secondary" weight={500}>
+            {t('topics.title')}
+          </Text>
+        </AccordionTrigger>
+        <Flexbox
+          horizontal
+          align="center"
+          gap={2}
+          className={cx(
+            'accordion-action',
+            accordionStyles.action,
+            accordionStyles.actionBorderless,
+          )}
+        >
           <ToggleGroups />
           <Filter />
           <ActionIcon
@@ -99,61 +123,53 @@ function ProjectTopicList({
             icon={PlusIcon}
             size="small"
             title={t('sidebar.newConversation')}
-            onClick={() => {
-              // Same habit as an agent's "+": a blank conversation on the first
-              // directory the coordinator can run in, switchable in the composer before the first
-              // send. The modal only remains for a project with none yet.
-              const directory = directories.find((d) => canStageDraftOn(d, fixedDeviceId));
-              if (directory) {
-                startProjectTopicDraft({
-                  agentId: coordinatorAgentId,
-                  directoryId: directory.id,
-                  navigate,
-                  projectId,
-                });
-                return;
-              }
-              openProjectTopicModal({
-                title: t('sidebar.newConversation'),
-                coordinatorAgentId,
-                directories,
-                projectId,
-              });
-            }}
+            onClick={() =>
+              // Same habit as an agent's "+": straight into the coordinator's
+              // conversation, on the first directory it can run in when there is one.
+              void startTopic({
+                agentId: coordinatorAgentId,
+                directoryId: directories.find((d) => canStageDraftOn(d, fixedDeviceId))?.id,
+              })
+            }
           />
         </Flexbox>
-      </Flexbox>
-      {request.error || directoriesRequest.error ? (
-        <AsyncError
-          error={request.error || directoriesRequest.error}
-          onRetry={() => Promise.all([request.revalidate(), directoriesRequest.revalidate()])}
-        />
-      ) : null}
-      {!request.hasData || isPreferenceLoading ? (
-        <SkeletonList />
-      ) : !topics.length && !request.error ? (
-        <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
-          {t('directories.noConversations')}
-        </Text>
-      ) : filteredEmpty ? (
-        <Flexbox align="flex-start" gap={4} paddingInline={8}>
-          <Text type="secondary">{tTopic('filter.emptyFiltered')}</Text>
-          <Button size="small" type="text" onClick={() => filterState?.setFilter({})}>
-            {tTopic('filter.clear')}
-          </Button>
+      </AccordionHeader>
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        <Flexbox gap={1} paddingBlock={1}>
+          {request.error || directoriesRequest.error ? (
+            <AsyncError
+              error={request.error || directoriesRequest.error}
+              onRetry={() => Promise.all([request.revalidate(), directoriesRequest.revalidate()])}
+            />
+          ) : null}
+          {!request.hasData ? (
+            <SkeletonList />
+          ) : !topics.length && !request.error && topicGroupMode !== 'byAgent' ? (
+            // By agent, the main agent's empty group offers the first topic instead.
+            <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
+              {t('directories.noConversations')}
+            </Text>
+          ) : filteredEmpty ? (
+            <Flexbox align="flex-start" gap={4} paddingInline={8}>
+              <Text type="secondary">{tTopic('filter.emptyFiltered')}</Text>
+              <Button size="small" type="text" onClick={() => filterState?.setFilter({})}>
+                {tTopic('filter.clear')}
+              </Button>
+            </Flexbox>
+          ) : null}
+          {topicGroupMode === 'flat' ? (
+            <FlatMode />
+          ) : topicGroupMode === 'byStatus' ? (
+            <ByStatusMode />
+          ) : topicGroupMode === 'byAgent' ? (
+            <ByAgentMode />
+          ) : topicGroupMode === 'byDevice' ? (
+            <ByDeviceMode />
+          ) : (
+            <ByTimeMode />
+          )}
         </Flexbox>
-      ) : null}
-      {isPreferenceLoading ? null : topicGroupMode === 'flat' ? (
-        <FlatMode />
-      ) : topicGroupMode === 'byStatus' ? (
-        <ByStatusMode />
-      ) : topicGroupMode === 'byAgent' ? (
-        <ByAgentMode />
-      ) : topicGroupMode === 'byDevice' ? (
-        <ByDeviceMode />
-      ) : (
-        <ByTimeMode />
-      )}
-    </Flexbox>
+      </AccordionPanel>
+    </AccordionItem>
   );
 }

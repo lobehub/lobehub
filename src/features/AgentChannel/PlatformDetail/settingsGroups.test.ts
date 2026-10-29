@@ -4,9 +4,38 @@ import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/b
 import { botWakeFields } from '@/server/services/bot/platforms/botWakeFields';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
 
-import { getSchemaFields, groupSettingsFields, groupWakeFields } from './settingsGroups';
+import {
+  getSchemaFields,
+  groupAccessFields,
+  groupReplyFields,
+  groupSettingsFields,
+  groupWakeFields,
+} from './settingsGroups';
 
 const field = (key: string): FieldSchema => ({ key, label: key, type: 'string' });
+
+describe('groupAccessFields', () => {
+  it('splits access into owner identity, conversation and device blocks, in page order', () => {
+    const sections = groupAccessFields(
+      ['deviceAllowFrom', 'groupPolicy', 'userId', 'devicePolicy', 'dmPolicy', 'serverId'].map(
+        field,
+      ),
+    );
+
+    expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
+      ['identity', ['userId', 'serverId']],
+      ['conversation', ['dmPolicy', 'groupPolicy']],
+      ['device', ['devicePolicy', 'deviceAllowFrom']],
+    ]);
+  });
+
+  it('drops a block the platform has no fields for', () => {
+    expect(groupAccessFields(['userId', 'devicePolicy'].map(field)).map((s) => s.key)).toEqual([
+      'identity',
+      'device',
+    ]);
+  });
+});
 
 describe('groupSettingsFields', () => {
   it('sorts fields into connect, access, reply and advanced, ordered by how a person decides them', () => {
@@ -75,6 +104,19 @@ describe('groupSettingsFields', () => {
       ['access', ['dmPolicy']],
       ['wake', ['watchKeywords', 'botWakeEnabled', 'botWakeScope']],
       ['reply', ['displayToolCalls']],
+      ['advanced', ['charLimit']],
+    ]);
+  });
+
+  it('puts the reply style and emoji with the replies, not in advanced', () => {
+    const groups = groupSettingsFields(
+      ['charLimit', 'replyStyle', 'displayToolCalls', 'channelReplyStyles', 'replyEmojis'].map(
+        field,
+      ),
+    );
+
+    expect(groups.map((g) => [g.key, g.fields.map((f) => f.key)])).toEqual([
+      ['reply', ['displayToolCalls', 'replyStyle', 'channelReplyStyles', 'replyEmojis']],
       ['advanced', ['charLimit']],
     ]);
   });
@@ -204,5 +246,24 @@ describe('groupWakeFields', () => {
         .filter((key) => key !== K.enabled)
         .sort(),
     );
+  });
+});
+
+describe('groupReplyFields', () => {
+  it('splits the replies into how they look, then how the bot talks', () => {
+    const sections = groupReplyFields(
+      ['replyEmojis', 'reactionMode', 'replyStyle', 'displayToolCalls', 'channelReplyStyles'].map(
+        field,
+      ),
+    );
+
+    expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
+      ['display', ['displayToolCalls', 'reactionMode']],
+      ['style', ['replyStyle', 'channelReplyStyles', 'replyEmojis']],
+    ]);
+  });
+
+  it('drops a block the platform has no fields for', () => {
+    expect(groupReplyFields(['replyStyle'].map(field)).map((s) => s.key)).toEqual(['style']);
   });
 });

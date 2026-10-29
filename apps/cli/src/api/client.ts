@@ -1,3 +1,4 @@
+import type { Operation } from '@trpc/client';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import superjson from 'superjson';
 
@@ -11,6 +12,11 @@ import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { cliPackageName } from '../pkg';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
+import {
+  isOperationToken,
+  operationTokenFallbackLink,
+  operationTokenHeaders,
+} from './operationTokenFallback';
 import { resolveWorkspaceId, withWorkspaceHeader } from './workspace';
 
 export type TrpcClient = ReturnType<typeof createTRPCClient<LambdaRouter>>;
@@ -20,8 +26,14 @@ const PERSONAL_KEY = '__personal__';
 const _clients = new Map<string, TrpcClient>();
 const _toolsClients = new Map<string, ToolsTrpcClient>();
 
+type AuthHeaders = (opts?: {
+  op?: Operation;
+}) => Record<string, string> | Promise<Record<string, string>>;
+
 async function getAuthAndServer(): Promise<{
-  headers: () => Record<string, string> | Promise<Record<string, string>>;
+  headers: AuthHeaders;
+  /** Set when the credential is a run's operation token; see `operationTokenFallback`. */
+  operationToken?: () => string;
   serverUrl: string;
 }> {
   // Precedence lives in `pickAuthSource`, shared with `resolveToken` and
@@ -32,12 +44,14 @@ async function getAuthAndServer(): Promise<{
   if (source.kind === 'env-jwt') {
     const serverUrl = resolveServerUrl();
 
-    return {
-      // Read per request: `hetero exec` renews its operation token in place, and
-      // its clients live for the whole run.
-      headers: () => ({ 'Oidc-Auth': process.env.LOBEHUB_JWT || source.token! }),
-      serverUrl,
-    };
+    // Read per request: `hetero exec` renews its operation token in place, and
+    // its clients live for the whole run.
+    const envToken = () => process.env.LOBEHUB_JWT || source.token!;
+    if (isOperationToken(source.token)) {
+      return { headers: operationTokenHeaders(envToken), operationToken: envToken, serverUrl };
+    }
+
+    return { headers: () => ({ 'Oidc-Auth': envToken() }), serverUrl };
   }
 
   if (source.kind === 'env-api-key') {
@@ -82,11 +96,12 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   const cached = _clients.get(cacheKey);
   if (cached) return cached;
 
-  const { headers, serverUrl } = await getAuthAndServer();
+  const { headers, operationToken, serverUrl } = await getAuthAndServer();
   const client = createTRPCClient<LambdaRouter>({
     links: [
+      ...(operationToken ? [operationTokenFallbackLink<LambdaRouter>(operationToken)] : []),
       httpLink({
-        headers: async () => withWorkspaceHeader(await headers(), wsId),
+        headers: async (opts) => withWorkspaceHeader(await headers(opts), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/lambda`,
       }),
@@ -156,11 +171,12 @@ export async function getToolsTrpcClient(workspaceId?: string): Promise<ToolsTrp
   const cached = _toolsClients.get(cacheKey);
   if (cached) return cached;
 
-  const { headers, serverUrl } = await getAuthAndServer();
+  const { headers, operationToken, serverUrl } = await getAuthAndServer();
   const client = createTRPCClient<ToolsRouter>({
     links: [
+      ...(operationToken ? [operationTokenFallbackLink<ToolsRouter>(operationToken)] : []),
       httpLink({
-        headers: async () => withWorkspaceHeader(await headers(), wsId),
+        headers: async (opts) => withWorkspaceHeader(await headers(opts), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/tools`,
       }),

@@ -12,6 +12,7 @@ export const serverConfigSelectors = {
   enableChannels: (s: ServerConfigStore) => s.featureFlags.enableChannels === true,
   enableDashboard: (s: ServerConfigStore) => s.featureFlags.enableDashboard === true,
   enableGatewayMode: (s: ServerConfigStore) => s.serverConfig.enableGatewayMode || false,
+  enableTopicPreview: (s: ServerConfigStore) => s.featureFlags.enableTopicPreview === true,
   enableLobehubSkill: (s: ServerConfigStore) => s.serverConfig.enableLobehubSkill || false,
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   enableMarketTrustedClient: (s: ServerConfigStore) =>

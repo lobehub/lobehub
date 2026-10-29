@@ -89,6 +89,18 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     expect(await domain.recordSilentWake(keys)).toBe(1);
   });
 
+  it('keeps a stand-down on the thread the bot left, not on its whole channel', async () => {
+    const keys = ['discord:app:g:c6', 'discord:app:g:c6:t1'];
+    await domain.recordBotSpoke(keys, 1_000, 300_000);
+    await domain.recordStandDown(keys[1], 1_801_000);
+
+    expect(await domain.readChannel(keys)).toMatchObject({
+      followupUntil: 301_000,
+      standDownUntil: 1_801_000,
+    });
+    expect((await domain.readChannel([keys[0]]))?.standDownUntil).toBeUndefined();
+  });
+
   it('remembers when the owner last spoke without touching the bot fields', async () => {
     const keys = ['discord:app:g:c3'];
     await domain.recordBotSpoke(keys, 1_000, 60_000);
@@ -153,6 +165,21 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     raw.disconnect();
 
     expect(result).toBeUndefined();
+  });
+
+  it('lets one edit wake the bot on a message that never engaged it, and only once', async () => {
+    expect(await domain.claimEditWake('app', 'fresh')).toBe(true);
+    // A second edit of the same message, or a redelivery, does not wake it again.
+    expect(await domain.claimEditWake('app', 'fresh')).toBe(false);
+    // Another bot in the channel may still be woken by its own @-mention.
+    expect(await domain.claimEditWake('other-app', 'fresh')).toBe(true);
+  });
+
+  it('keeps an edit from waking the bot on a message that already engaged it', async () => {
+    await domain.markEditWakeEngaged('app', ['answered', 'answered', 'merged']);
+
+    expect(await domain.claimEditWake('app', 'answered')).toBe(false);
+    expect(await domain.claimEditWake('app', 'merged')).toBe(false);
   });
 
   describe('conversation log', () => {

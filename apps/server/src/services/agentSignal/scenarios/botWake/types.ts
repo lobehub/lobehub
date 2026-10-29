@@ -209,6 +209,11 @@ export interface WakeChannelState {
    * silence.
    */
   silentWakes: number;
+  /**
+   * The bot stepped back from this conversation until then: people told it it was interfering.
+   * Only an explicit address (@-mention, reply, DM, command) wakes it before.
+   */
+  standDownUntil?: number;
 }
 
 /** Where passive waking may happen. */

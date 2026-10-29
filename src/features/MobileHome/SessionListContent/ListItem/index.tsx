@@ -1,7 +1,8 @@
-import { Avatar, createStaticStyles, cx } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { useHover } from 'ahooks';
 import { memo, useMemo, useRef } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import GroupAvatar from '@/features/GroupAvatar';
 import { useServerConfigStore } from '@/store/serverConfig';
 
@@ -29,11 +30,13 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 
 const ListItem = memo<
   Omit<ListItemProps, 'avatar' | 'key'> & {
+    /** Seeds the generated avatar of an agent without one of its own. */
+    agentId?: string;
     avatar: string | { avatar: string; background?: string }[];
     avatarBackground?: string;
     type?: 'agent' | 'group' | 'inbox';
   }
->(({ avatar, avatarBackground, active, showAction, actions, title, type, ...props }) => {
+>(({ agentId, avatar, avatarBackground, active, showAction, actions, title, type, ...props }) => {
   const ref = useRef(null);
   const isHovering = useHover(ref);
   const mobile = useServerConfigStore((s) => s.isMobile);
@@ -44,13 +47,20 @@ const ListItem = memo<
       return <GroupAvatar avatars={avatars} size={40} />;
     }
 
-    // For regular sessions, use the regular Avatar component
     const agentAvatar = typeof avatar === 'string' ? avatar : avatar[0]?.avatar;
 
     return (
-      <Avatar animation={isHovering} avatar={agentAvatar} background={avatarBackground} size={40} />
+      <AgentAvatar
+        agentId={agentId}
+        animation={isHovering}
+        avatar={agentAvatar}
+        background={avatarBackground}
+        name={typeof title === 'string' ? title : undefined}
+        shape={'circle'}
+        size={40}
+      />
     );
-  }, [isHovering, avatar, avatarBackground, type]);
+  }, [isHovering, agentId, avatar, avatarBackground, title, type]);
 
   return (
     <Item

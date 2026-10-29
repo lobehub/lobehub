@@ -114,9 +114,14 @@ export const styles = stylex.create({
     gap: 4,
     maxWidth: '100%',
     marginInline: 2,
-    verticalAlign: 'middle',
+    verticalAlign: 'baseline',
   },
-  eventMemberName: { minWidth: 0, overflowWrap: 'anywhere' },
+  eventMemberName: {
+    // Let the name supply the inline flex baseline instead of the avatar.
+    alignSelf: 'baseline',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
+  },
   /** A mentioned member inside message text. */
   mention: {
     paddingBlock: 1,
@@ -130,7 +135,7 @@ export const styles = stylex.create({
     flexShrink: 0,
     paddingBlockEnd: 12,
   },
-  /** Typing activity on the left, who will reply on the right; keeps its height when empty. */
+  /** Typing activity above the input; keeps its height when empty. */
   composerStatus: {
     display: 'flex',
     alignItems: 'center',
@@ -154,11 +159,6 @@ export const styles = stylex.create({
     minWidth: 0,
     maxHeight: 240,
     paddingBlock: 5,
-  },
-  recipients: {
-    overflow: 'hidden',
-    flexShrink: 1,
-    minWidth: 0,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {

@@ -11,6 +11,17 @@ describe('mergeBotWakeChannelFields', () => {
     ).toMatchObject({ followupAuthorId: 'new', followupUntil: 2_000, silentWakes: 1 });
   });
 
+  it('keeps the latest stand-down of any key: stepping back from the thread holds', () => {
+    expect(
+      mergeBotWakeChannelFields([
+        { silentWakes: 0 },
+        { silentWakes: 0, standDownUntil: 5_000 },
+        { silentWakes: 0, standDownUntil: 3_000 },
+      ]).standDownUntil,
+    ).toBe(5_000);
+    expect(mergeBotWakeChannelFields([{ silentWakes: 0 }]).standDownUntil).toBeUndefined();
+  });
+
   it('has no follow-up author without a window', () => {
     expect(
       mergeBotWakeChannelFields([{ followupAuthorId: 'u1', silentWakes: 0 }]).followupAuthorId,

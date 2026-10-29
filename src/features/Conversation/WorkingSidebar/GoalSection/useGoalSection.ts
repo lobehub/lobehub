@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
-
 import {
   deriveOperationGoals,
   type OperationGoal,
-} from '@/features/Conversation/Messages/GoalTaskCard/deriveOperationGoals';
+} from '@lobechat/builtin-tools/operationArtifacts';
+import { useMemo } from 'react';
+
 import {
   getGoalTaskProgress,
   type GoalTaskPhase,

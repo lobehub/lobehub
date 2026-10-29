@@ -72,15 +72,15 @@ describe('duty policy', () => {
     expect(judge).toHaveBeenCalledTimes(2);
   });
 
-  it('defaults to 0.8 and takes the threshold from the settings', async () => {
+  it('defaults to 0.65 and takes the threshold from the settings', async () => {
     const at = (score: number) =>
       createDutyPolicy(
         parseBotWakeSettings({ [K.duties]: DUTIES, [K.enabled]: true }).rules,
         judgeScoring(score),
       ).evaluate({ signal: signal(), state: {} });
 
-    expect((await at(0.8)).verdict).toBe('allow');
-    expect((await at(0.79)).verdict).toBe('deny');
+    expect((await at(0.65)).verdict).toBe('allow');
+    expect((await at(0.64)).verdict).toBe('deny');
   });
 
   it('never asks the model without duties', async () => {
@@ -110,7 +110,7 @@ describe('duty policy', () => {
     const judge = judgeScoring(1);
     const after = (line: Partial<WakeConversationLine>, at = NOW - 30_000) =>
       createDutyPolicy(rules(), judge).evaluate({
-        signal: signal(),
+        signal: signal({ applicationId: 'bot-app' }),
         state: {
           conversation: {
             botNames: ['Nasa'],
@@ -127,6 +127,13 @@ describe('duty policy', () => {
     expect((await after({}, NOW - 5 * 60_000)).verdict).toBe('allow');
     expect((await after({ authorId: 'bot-app', isBot: true })).verdict).toBe('allow');
     expect((await after({ authorId: 'bob' })).verdict).toBe('allow');
+
+    // Another agent in the thread: the owner is answering it, not asking this bot.
+    expect(await after({ authorId: 'other-agent', isBot: true })).toMatchObject({
+      reason: 'answering-other',
+      verdict: 'abstain',
+    });
+    expect(judge).toHaveBeenCalledTimes(3);
   });
 
   it('does not ask about a message too short to act on', async () => {
@@ -182,7 +189,7 @@ describe('duty policy', () => {
       costly: true,
       id: DUTY_POLICY_ID,
       mode: 'enforce',
-      version: 1,
+      version: 2,
     });
   });
 });

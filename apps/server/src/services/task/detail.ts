@@ -1,14 +1,15 @@
-import type {
-  TaskAssignmentKind,
-  TaskAutomationSnapshot,
-  TaskDetailActivity,
-  TaskDetailActivityAuthor,
-  TaskDetailData,
-  TaskDetailSubtask,
-  TaskDetailWorkspaceNode,
-  TaskStatus,
-  TaskTopicHandoff,
-  WorkspaceData,
+import {
+  agentDisplayName,
+  type TaskAssignmentKind,
+  type TaskAutomationSnapshot,
+  type TaskDetailActivity,
+  type TaskDetailActivityAuthor,
+  type TaskDetailData,
+  type TaskDetailSubtask,
+  type TaskDetailWorkspaceNode,
+  type TaskStatus,
+  type TaskTopicHandoff,
+  type WorkspaceData,
 } from '@lobechat/types';
 import pMap from 'p-map';
 
@@ -555,11 +556,12 @@ export class TaskDetailService {
       UserModel.findByIds(this.db, [...userIds]),
     ]);
 
-    // Both display columns are nullable, so fall back to the other one the
-    // query already returns rather than letting a live participant render as
-    // nameless — the UI reserves its nameless labels for absent identities.
+    // An agent is labelled by its name, with `title` (its role) as the
+    // fallback — see `agentDisplayName`. Both columns are nullable, so a live
+    // participant never renders as nameless; the UI reserves its nameless
+    // labels for absent identities.
     for (const a of agentRows) {
-      map.set(a.id, { avatar: a.avatar, id: a.id, name: a.title || a.name, type: 'agent' });
+      map.set(a.id, { avatar: a.avatar, id: a.id, name: agentDisplayName(a), type: 'agent' });
     }
     for (const u of userRows) {
       map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName || u.username, type: 'user' });

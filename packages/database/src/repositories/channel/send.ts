@@ -62,7 +62,7 @@ export const validateSendInput = (input: ChannelSendInput) => {
  *
  * - @mentioned Agents get jobs in this transaction (`directed`, source `explicit`).
  * - @mentioning only people wakes no Agent.
- * - Without mentions, `jev` leaves the message `pending` for the routing task, and
+ * - Without mentions, `decision` leaves the message `pending` for the routing task, and
  *   `fallback` hands it to every candidate Agent at once.
  */
 export const sendMessage = async (
@@ -159,7 +159,7 @@ export const sendMessage = async (
         ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
         : direct
           ? ({ reason: 'Direct conversation', source: 'explicit', status: 'directed' } as const)
-          : input.routing === 'jev'
+          : input.routing === 'decision'
             ? ({ reason: null, source: null, status: 'pending' } as const)
             : ({
                 reason: 'No decision model configured',

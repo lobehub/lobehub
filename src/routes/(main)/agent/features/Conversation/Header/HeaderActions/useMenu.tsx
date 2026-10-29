@@ -18,7 +18,8 @@ import {
   Hash,
   Maximize2,
   PencilLine,
-  Star,
+  Pin,
+  PinOff,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -236,9 +237,9 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
     if (topicId) {
       items.push(
         {
-          icon: <Icon icon={Star} />,
+          icon: <Icon icon={isFavorite ? PinOff : Pin} />,
           key: 'favorite',
-          label: t(isFavorite ? 'actions.unfavorite' : 'actions.favorite', { ns: 'topic' }),
+          label: t(isFavorite ? 'actions.unpin' : 'actions.pin', { ns: 'topic' }),
           onClick: () => {
             favoriteTopic(topicId, !isFavorite);
           },

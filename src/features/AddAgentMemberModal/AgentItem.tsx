@@ -1,12 +1,12 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Checkbox, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Checkbox, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { useHover } from 'ahooks';
 import { X } from 'lucide-react';
 import { memo, useRef } from 'react';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 
 import { useAgentSelectionStore } from './store';
 
@@ -77,8 +77,6 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
   const removeAgent = useAgentSelectionStore((s) => s.removeAgent);
 
   const title = agentDisplayName(agent, defaultTitle);
-  const avatar = agent.avatar || DEFAULT_AVATAR;
-  const avatarBackground = agent.backgroundColor ?? undefined;
 
   const handleClick = () => {
     toggleAgent(agent.id);
@@ -107,10 +105,12 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
             }}
           />
         )}
-        <Avatar
+        <AgentAvatar
+          agentId={agent.id}
           animation={isHovering}
-          avatar={avatar}
-          background={avatarBackground}
+          avatar={agent.avatar}
+          background={agent.backgroundColor ?? undefined}
+          name={title}
           shape="circle"
           size={28}
         />

@@ -290,6 +290,7 @@ export const countAgents = async (
       ]),
     );
 
+  /* v8 ignore next -- unreachable: count() without GROUP BY always returns exactly one non-null row */
   return result[0]?.count ?? 0;
 };
 

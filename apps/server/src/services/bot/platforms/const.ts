@@ -639,7 +639,7 @@ const findFirstMatchingKeyword = (
  * never sees the names — those exist purely so the operator can recognise
  * each entry on the settings page.
  */
-function parseIdList(raw: unknown): string[] {
+export function parseIdList(raw: unknown): string[] {
   if (typeof raw === 'string') {
     return raw
       .split(/[\s,]+/)
@@ -1002,11 +1002,13 @@ export const DEFAULT_BOT_REPLY_PLACEMENT_MODE: BotReplyPlacementMode = 'agent';
 
 export const replyPlacementField: FieldSchema = {
   key: 'replyPlacement',
+  choices: true,
   default: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
   description: 'channel.replyPlacementHint',
   enum: [...BOT_REPLY_PLACEMENT_MODES],
   enumDescriptions: ['channel.replyPlacementAgentHint', 'channel.replyPlacementThreadHint'],
   enumLabels: ['channel.replyPlacementAgent', 'channel.replyPlacementThread'],
+  enumRecommended: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
   label: 'channel.replyPlacement',
   type: 'string',
 };

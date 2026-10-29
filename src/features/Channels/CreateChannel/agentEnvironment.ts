@@ -64,9 +64,15 @@ export const createChannelAgentSelection = (
   return { agentId, deviceId, workingDirectory: getDeviceDirectory(deviceId, environment) };
 };
 
+export interface ChannelAgentIssueOptions {
+  /** Inherited defaults may omit the directory; the server then uses the device's home folder. */
+  directoryOptional?: boolean;
+}
+
 export const getChannelAgentIssue = (
   selection: ChannelAgentSelection,
   environment: ChannelAgentEnvironment,
+  { directoryOptional }: ChannelAgentIssueOptions = {},
 ): ChannelAgentIssue | undefined => {
   const runtime = getRuntime(environment);
   if (!isChannelRuntime(runtime)) return 'unsupportedRuntime';
@@ -78,7 +84,7 @@ export const getChannelAgentIssue = (
     return 'deviceUnavailable';
   if (device.onlineUnknown) return 'devicesLoading';
   if (!device.online) return 'deviceOffline';
-  if (!selection.workingDirectory?.trim()) return 'directoryRequired';
+  if (!directoryOptional && !selection.workingDirectory?.trim()) return 'directoryRequired';
 };
 
 export const changeChannelAgentDevice = (
@@ -96,6 +102,7 @@ export const reconcileChannelAgentDraft = (
   draft: ChannelAgentDraft,
   environment: ChannelAgentEnvironment,
   sourceIssue?: ChannelAgentIssue,
+  options?: ChannelAgentIssueOptions,
 ): ChannelAgentDraft => {
   let next = draft;
   let issue = sourceIssue;
@@ -108,7 +115,7 @@ export const reconcileChannelAgentDraft = (
         next = { ...draft, ...selection, initialized: true };
       }
     }
-    issue ??= getChannelAgentIssue(next, environment);
+    issue ??= getChannelAgentIssue(next, environment, options);
   }
   return next === draft && draft.issue === issue ? draft : { ...next, issue };
 };

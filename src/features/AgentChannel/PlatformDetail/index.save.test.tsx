@@ -131,7 +131,7 @@ describe('PlatformDetail saving', () => {
     expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWake).toEqual(override);
   });
 
-  it('shows a Save in each wake block and none on the replies', () => {
+  it('shows a Save in each wake block, and on the replies only for how the bot talks', () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
       wrapper: MemoryRouter,
     });
@@ -140,7 +140,40 @@ describe('PlatformDetail saving', () => {
     expect(screen.getAllByRole('button', { name: en['channel.module.save'] })).toHaveLength(4);
 
     openTab(en['channel.tab.reply']);
-    expect(screen.queryByRole('button', { name: en['channel.module.save'] })).toBeNull();
+    const style = screen
+      .getByText(en['channel.reply.section.style'])
+      .closest('div[class*="header"]')!.parentElement!;
+    expect(screen.getAllByRole('button', { name: en['channel.module.save'] })).toEqual([
+      within(style).getByRole('button', { name: en['channel.module.save'] }),
+    ]);
+  });
+
+  it('keeps the reply style off the advanced tab and saves it only with its own Save', async () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.advanced']);
+    expect(screen.queryByText(en['channel.replyStyle'])).not.toBeVisible();
+
+    openTab(en['channel.tab.reply']);
+    const area = screen.getByPlaceholderText(en['channel.replyStylePlaceholder']);
+    expect(area).toBeVisible();
+    fireEvent.change(area, { target: { value: 'Short and casual.' } });
+    fireEvent.blur(area);
+
+    await waitFor(() => expect(screen.getByText(en['channel.module.unsaved'])).toBeVisible());
+    // Typed text is not an instant reply setting: nothing is written until Save.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(mocks.updateBotProvider).not.toHaveBeenCalled();
+
+    const style = screen
+      .getByText(en['channel.reply.section.style'])
+      .closest('div[class*="header"]')!.parentElement!;
+    fireEvent.click(within(style).getByRole('button', { name: en['channel.module.save'] }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
+    expect(mocks.updateBotProvider.mock.calls[0][2].settings.replyStyle).toBe('Short and casual.');
   });
 
   it('leaves the bottom bar to Remove and Test connection for a saved bot', () => {
@@ -185,7 +218,7 @@ describe('PlatformDetail saving', () => {
     const [, , patch] = mocks.updateBotProvider.mock.calls[0];
     expect(patch.settings.botWakeMaxSilentWakes).toBe(5);
     // The sensitivity is edited but not saved: the write carries the stored value.
-    expect(patch.settings.botWakeDutiesThreshold).toBe(0.8);
+    expect(patch.settings.botWakeDutiesThreshold).toBe(0.65);
     expect(patch).not.toHaveProperty('credentials');
     expect(mocks.connectBot).not.toHaveBeenCalled();
 

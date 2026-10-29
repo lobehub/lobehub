@@ -43,6 +43,8 @@
   "switchAgent.title": "Hızlı Ajan Değiştir",
   "switchTab.desc": "Masaüstü uygulamasındaki sekme çubuğunda konumuna (1–9) göre belirli bir sekmeye geç",
   "switchTab.title": "Numaraya Göre Sekmeye Geç",
+  "toggleFavorite.desc": "Açık sayfayı kenar çubuğundaki Favoriler bölümüne ekleyin veya kaldırın",
+  "toggleFavorite.title": "Favorilere Ekle / Favorilerden Kaldır",
   "toggleLeftPanel.desc": "Sol paneli göster veya gizle",
   "toggleLeftPanel.title": "Sol Paneli Aç/Kapat",
   "toggleRightPanel.desc": "Sağ paneli göster veya gizle",

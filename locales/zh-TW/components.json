@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "該模型支援影片識別",
   "ModelSelect.featureTag.vision": "該模型支援視覺辨識",
   "ModelSelect.removed": "該模型不在清單中，若取消選取將會自動移除",
+  "ModelSelect.routing": "路由",
+  "ModelSelect.routingTooltip": "一個路由群組：多個提供者服務此模型，每個請求都會發送到最先回應的提供者。",
   "ModelSelect.staleModel.current": "目前選擇",
   "ModelSelect.staleModel.notEnabled.action": "啟用此模型",
   "ModelSelect.staleModel.notEnabled.actionFailed": "啟用模型失敗。請再試一次。",
