@@ -17,17 +17,20 @@ export interface FileShareSettings {
 }
 
 /**
- * What a share link visitor reads: the file and stable addresses to its bytes.
- * The addresses must outlive the page — the page reads the share once (each
- * read counts a view), so a signed URL that expires would break a later
- * download or a resumed video.
+ * What a share link visitor reads: the file and addresses to its bytes.
+ *
+ * The addresses are scoped to the SHARE and re-check it on every request, so
+ * making the share private cuts off a page already open. They must also outlive
+ * the page — it reads the share once (each read counts a view), so a signed URL
+ * that expires would break a later download or a resumed video. The file's own
+ * id is deliberately absent: the `/f/:fileId` proxy is public by id and would
+ * outlive the share.
  */
 export interface SharedFileData {
   file: {
     /** Address that downloads the bytes under the file's own name. */
     downloadUrl: string;
     fileType: string;
-    id: string;
     name: string;
     /** Address the viewer renders from. */
     previewUrl: string;

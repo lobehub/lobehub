@@ -86,8 +86,8 @@ const SharedFileView = memo(() => {
     () => lambdaClient.fileShare.getSharedFile.query({ shareId: shareId! }),
     // Every read counts a view, so the copy on screen is never read again: not
     // on mount over the SSR document, nor on refocus or reconnect. Its file
-    // addresses are stable (`SharedFileData`), so they do not expire under a
-    // page left open.
+    // addresses re-check the share per request (`SharedFileData`), so they do
+    // not expire under a page left open and stop working once it is private.
     { revalidateIfStale: false, revalidateOnFocus: false, revalidateOnReconnect: false },
   );
 
@@ -112,6 +112,7 @@ const SharedFileView = memo(() => {
               fallback={<div {...stylex.props(styles.stagePlaceholder)} />}
               file={data.file}
               kind={getSharedFileKind(data.file)}
+              shareId={data.shareId}
             />
           </div>
         </div>

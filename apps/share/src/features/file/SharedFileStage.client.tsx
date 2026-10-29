@@ -79,7 +79,7 @@ const DownloadCard = ({ file }: { file: SharedFile }) => {
 };
 
 /** Documents and text go through the reader the app itself uses. */
-const Reader = ({ file }: { file: SharedFile }) => {
+const Reader = ({ file, shareId }: { file: SharedFile; shareId: string }) => {
   // FileViewer renders a library item; a share carries only what a visitor may
   // read, so the rest of the item is inert.
   const item = useMemo<FileListItem>(() => {
@@ -91,14 +91,15 @@ const Reader = ({ file }: { file: SharedFile }) => {
       embeddingError: null,
       fileType: file.fileType,
       finishEmbedding: false,
-      id: file.id,
+      // The share stands in for the file: a visitor never learns the file id.
+      id: shareId,
       name: file.name,
       size: file.size,
       sourceType: 'file',
       updatedAt: createdAt,
       url: file.previewUrl,
     };
-  }, [file]);
+  }, [file, shareId]);
 
   return (
     <Flexbox {...stylex.props(styles.reader)}>
@@ -110,9 +111,10 @@ const Reader = ({ file }: { file: SharedFile }) => {
 interface SharedFileStageProps {
   file: SharedFile;
   kind: SharedFileKind;
+  shareId: string;
 }
 
-const SharedFileStage = memo<SharedFileStageProps>(({ file, kind }) => {
+const SharedFileStage = memo<SharedFileStageProps>(({ file, kind, shareId }) => {
   switch (kind) {
     case 'video': {
       return (
@@ -139,7 +141,7 @@ const SharedFileStage = memo<SharedFileStageProps>(({ file, kind }) => {
       return <DownloadCard file={file} />;
     }
     default: {
-      return <Reader file={file} />;
+      return <Reader file={file} shareId={shareId} />;
     }
   }
 });
