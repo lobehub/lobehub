@@ -26,10 +26,11 @@ const SharedFileView = memo(() => {
   const { data, error, isLoading } = useSWR(
     shareId ? shareKeys.file(shareId) : null,
     () => lambdaClient.fileShare.getSharedFile.query({ shareId: shareId! }),
-    // Every read counts a view and mints new presigned addresses, so the SSR
-    // document's copy is not read again on mount, and a refocus must not swap
-    // the source of a video mid-playback.
-    { revalidateIfStale: false, revalidateOnFocus: false },
+    // Every read counts a view and mints new presigned addresses, so the copy
+    // on screen is never read again: not on mount over the SSR document, and
+    // not on refocus or reconnect, which would also swap the source of a video
+    // mid-playback.
+    { revalidateIfStale: false, revalidateOnFocus: false, revalidateOnReconnect: false },
   );
 
   const loading = isLoading && !data;

@@ -126,6 +126,17 @@ describe('parseFileLinkHref Docs file links', () => {
     expect(parseFileLinkHref(href, ORIGIN)).toBeNull();
   });
 
+  // Regression: inside a workspace an unprefixed Docs link names a personal
+  // file; previewing it by id in the workspace scope showed it as unavailable.
+  it('leaves an unprefixed Docs link to navigation inside a workspace', () => {
+    const options = { activeWorkspaceSlug: 'acme' };
+
+    expect(parseFileLinkHref('/resource/file/file_ynz', ORIGIN, options)).toBeNull();
+    expect(parseFileLinkHref('/resource?file=file_ynz', ORIGIN, options)).toBeNull();
+    // The file proxy is addressed by id alone, in every scope.
+    expect(parseFileLinkHref('/f/file_ynz', ORIGIN, options)?.fileId).toBe('file_ynz');
+  });
+
   it('does not match a Docs path on a foreign host', () => {
     expect(parseFileLinkHref('https://example.com/resource/file/file_ynz', ORIGIN)).toBeNull();
   });

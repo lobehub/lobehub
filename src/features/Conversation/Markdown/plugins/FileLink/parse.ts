@@ -71,16 +71,26 @@ const matchDocsFile = (pathname: string, searchParams: URLSearchParams): string 
   return null;
 };
 
-/** Strip the active workspace's slug; a link into any other workspace is not ours to open. */
+const isDocsPath = (pathname: string) =>
+  pathname === '/resource' || pathname.startsWith('/resource/');
+
+/**
+ * The Docs path a link addresses in the ACTIVE scope, or null. An unprefixed
+ * path is the personal space (workspace routes always carry `/{slug}`), so
+ * inside a workspace it is another scope's file and is left to navigation, as
+ * is a link into any other workspace.
+ */
 const stripWorkspacePrefix = (
   pathname: string,
   activeWorkspaceSlug?: string | null,
 ): string | null => {
-  if (pathname === '/resource' || pathname.startsWith('/resource/')) return pathname;
-  if (!activeWorkspaceSlug) return null;
+  if (!activeWorkspaceSlug) return isDocsPath(pathname) ? pathname : null;
 
   const prefix = `/${activeWorkspaceSlug}`;
-  return pathname.startsWith(`${prefix}/resource`) ? pathname.slice(prefix.length) : null;
+  if (!pathname.startsWith(`${prefix}/`)) return null;
+
+  const scoped = pathname.slice(prefix.length);
+  return isDocsPath(scoped) ? scoped : null;
 };
 
 export const parseFileLinkHref = (
