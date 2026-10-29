@@ -477,7 +477,10 @@ export const documentRouter = router({
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
       const chain = [];
-      let currentFolder = await ctx.documentModel.findBySlug(input.slug);
+      // Folder URLs carry the id; older links still carry the slug.
+      let currentFolder =
+        (await ctx.documentModel.findBySlug(input.slug)) ??
+        (await ctx.documentModel.findById(input.slug));
 
       // Build chain from current folder to root
       while (currentFolder) {
