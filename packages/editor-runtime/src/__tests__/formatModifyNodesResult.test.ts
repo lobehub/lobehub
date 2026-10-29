@@ -110,6 +110,29 @@ describe('formatModifyNodesResult', () => {
     expect(content).toContain(PENDING_REVIEW_NOTE);
   });
 
+  it('keeps a partial operation that left a diff in the pending count', () => {
+    const content = formatModifyNodesResult(
+      {
+        results: [
+          {
+            action: 'modify',
+            error: 'node "zzzz" not found in the document',
+            partiallyApplied: true,
+            pendingReview: true,
+            success: false,
+          },
+        ],
+        successCount: 0,
+        totalCount: 1,
+      },
+      { pendingReview: true },
+    );
+
+    expect(content).toContain('1 of 1 operations are review diffs');
+    expect(content).toContain('failed after part of it was written');
+    expect(content).toContain(PENDING_REVIEW_NOTE);
+  });
+
   it('keeps the previous wording when the host applies edits directly', () => {
     const content = formatModifyNodesResult({
       results: [{ action: 'insert', success: true }],

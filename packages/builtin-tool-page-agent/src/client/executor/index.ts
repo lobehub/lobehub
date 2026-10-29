@@ -328,9 +328,9 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
       // `formatModifyNodesResult` reads the per-operation flag, so the message
       // only claims "not live" for the operations that really are diffs.
       const content = formatModifyNodesResult(result, { pendingReview: true });
-      const pendingReview = result.results.some(
-        (operation) => operation.success && operation.pendingReview,
-      );
+      // A split operation can leave a review diff behind while reporting failure,
+      // so count any operation that landed as a diff, not only the successful ones.
+      const pendingReview = result.results.some((operation) => operation.pendingReview);
 
       const state: ModifyNodesState = {
         pendingReview,

@@ -39,14 +39,25 @@ export const formatModifyNodesResult = (
     .join(', ');
 
   // Only operations the editor actually kept as a diff are pending; list and
-  // table edits are written directly and are live immediately.
-  const pendingResults = results.filter((result) => result.success && result.pendingReview);
-  const pendingCount = pendingResults.length;
+  // table edits are written directly and are live immediately. A `modify` split
+  // across several steps can leave a diff behind while the operation as a whole
+  // reports failure, so partial results count here too.
+  const pendingCount = results.filter((result) => result.pendingReview).length;
+  const hasPendingPartial = results.some((result) => result.pendingReview && !result.success);
   const reviewNote =
     options.pendingReview && pendingCount > 0
       ? pendingCount === successCount
         ? PENDING_REVIEW_NOTE
-        : `${pendingCount} of ${successCount} applied operations are review diffs and are NOT live yet; the rest were written to the page directly. ${PENDING_REVIEW_NOTE}`
+        : [
+            `${pendingCount} of ${totalCount} operations are review diffs and are NOT live yet.`,
+            hasPendingPartial
+              ? 'One of them failed after part of it was written, so that fragment is pending too.'
+              : '',
+            pendingCount < totalCount ? 'The remaining operations are live in the page.' : '',
+            PENDING_REVIEW_NOTE,
+          ]
+            .filter(Boolean)
+            .join(' ')
       : '';
 
   if (successCount === totalCount) {
