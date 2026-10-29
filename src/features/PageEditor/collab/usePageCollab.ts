@@ -75,9 +75,10 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);
       },
       onPendingChange: (pending) => setCollab({ pending }),
-      onReset: () => {
+      onReset: (reason) => {
         const editor = storeApi.getState().editor;
-        if (provider.pendingCount > 0 && editor) {
+        // After a lost bootstrap race the pending edits are the duplicate copy itself.
+        if (reason === 'epoch' && provider.pendingCount > 0 && editor) {
           offlineSnapshots.set(documentId!, editor.getDocument('json'));
         }
         onReset?.();

@@ -13,6 +13,8 @@ export type PageCollabAccess = 'edit' | 'view';
 
 export type PageCollabStatus = 'connecting' | 'error' | 'offline' | 'synced';
 
+export type PageCollabResetReason = 'bootstrap_conflict' | 'epoch';
+
 /** The room could not be joined: it answered with an error, or never synced in time. */
 export interface PageCollabFailure {
   code: string;
@@ -29,7 +31,7 @@ export interface PageCollabProviderEvents {
   onBootstrap?: () => void;
   onFailure?: (failure: PageCollabFailure) => void;
   onPendingChange?: (pending: number) => void;
-  onReset?: () => void;
+  onReset?: (reason: PageCollabResetReason) => void;
   onStatus?: (status: PageCollabStatus) => void;
 }
 
@@ -113,6 +115,8 @@ export class PageCollabProvider extends Emitter {
   private readonly pending = new Set<number>();
   private waitingForBootstrap = false;
   private bootstrapPending = false;
+  private bootstrapping = false;
+  private conflicted = false;
   private synced = false;
   private failed = false;
   private subscribedAt = 0;
@@ -213,6 +217,7 @@ export class PageCollabProvider extends Emitter {
     this.pending.add(seq);
     this.events.onPendingChange?.(this.pending.size);
     this.channel?.send({
+      ...(this.bootstrapping ? { bootstrap: true as const } : {}),
       documentId: this.documentId,
       seq,
       type: 'doc_update',
@@ -238,6 +243,7 @@ export class PageCollabProvider extends Emitter {
     queueMicrotask(() => {
       if (!this.bootstrapPending) return;
       this.bootstrapPending = false;
+      this.bootstrapping = true;
       this.events.onBootstrap?.();
     });
   }
@@ -253,9 +259,10 @@ export class PageCollabProvider extends Emitter {
     switch (message.type) {
       case 'doc_synced': {
         if (message.reset && this.epoch && this.epoch !== message.epoch) {
-          this.events.onReset?.();
+          this.events.onReset?.('epoch');
           return;
         }
+        this.bootstrapping = false;
         this.epoch = message.epoch;
         this.events.onAccess?.(message.access);
         Y.applyUpdate(this.doc, fromBase64(message.update), this);
@@ -283,6 +290,7 @@ export class PageCollabProvider extends Emitter {
       }
 
       case 'doc_ack': {
+        this.bootstrapping = false;
         if (this.pending.delete(message.seq)) this.events.onPendingChange?.(this.pending.size);
         return;
       }
@@ -293,6 +301,14 @@ export class PageCollabProvider extends Emitter {
       }
 
       case 'doc_error': {
+        // Our doc now holds a second copy of the page; the room refuses it until we rejoin with a fresh one.
+        if (message.code === 'bootstrap_conflict') {
+          if (!this.conflicted) {
+            this.conflicted = true;
+            this.events.onReset?.('bootstrap_conflict');
+          }
+          return;
+        }
         // A view-only member is still in the room; only their writes are refused.
         if (message.code === 'read_only' || message.code === 'forbidden') {
           this.events.onAccess?.('view');

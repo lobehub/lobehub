@@ -47,7 +47,7 @@ export interface MuxUserInputMessage {
 export type MuxDocClientMessage =
   | { documentId: string; epoch?: string; stateVector?: string; type: 'doc_subscribe' }
   | { documentId: string; type: 'doc_unsubscribe' }
-  | { documentId: string; seq: number; type: 'doc_update'; update: string }
+  | { bootstrap?: true; documentId: string; seq: number; type: 'doc_update'; update: string }
   | {
       clientID: number;
       documentId: string;

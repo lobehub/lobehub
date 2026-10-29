@@ -116,6 +116,7 @@ describe('PageCollabProvider', () => {
 
     const update = sent.find((m) => m.type === 'doc_update');
     expect(update).toMatchObject({ documentId: 'doc_1', seq: 1 });
+    expect(update.bootstrap).toBeUndefined();
     expect(provider.pendingCount).toBe(1);
 
     deliver({ documentId: 'doc_1', seq: 1, type: 'doc_ack' });
@@ -194,5 +195,52 @@ describe('PageCollabProvider', () => {
     await Promise.resolve();
 
     expect(onBootstrap).not.toHaveBeenCalled();
+  });
+
+  it('flags the updates it sends while bootstrapping until the room acks one', async () => {
+    const { deliver, mux, ready, sent } = createMux();
+    const doc = new Y.Doc();
+    const onBootstrap = vi.fn(() => doc.getText('t').insert(0, 'from db'));
+    const provider = new PageCollabProvider('doc_1', doc, mux as any, { onBootstrap });
+
+    provider.connect();
+    ready();
+    deliver(
+      synced({
+        bootstrap: true,
+        bootstrapped: false,
+        update: b64(Y.encodeStateAsUpdate(new Y.Doc())),
+      }),
+    );
+    await Promise.resolve();
+    doc.getText('t').insert(0, '+');
+
+    const updates = () => sent.filter((m) => m.type === 'doc_update');
+    expect(updates().map((m) => m.bootstrap)).toEqual([true, true]);
+
+    deliver({ documentId: 'doc_1', seq: 1, type: 'doc_ack' });
+    doc.getText('t').insert(0, '+');
+    expect(updates()[2].bootstrap).toBeUndefined();
+  });
+
+  it('resets once when it lost the bootstrap race', () => {
+    const { deliver, mux, ready } = createMux();
+    const onReset = vi.fn();
+    const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any, { onReset });
+
+    provider.connect();
+    ready();
+    deliver(synced());
+    const conflict = {
+      code: 'bootstrap_conflict',
+      documentId: 'doc_1',
+      message: '',
+      type: 'doc_error',
+    };
+    deliver(conflict);
+    deliver({ ...conflict });
+
+    expect(onReset).toHaveBeenCalledOnce();
+    expect(onReset).toHaveBeenCalledWith('bootstrap_conflict');
   });
 });
