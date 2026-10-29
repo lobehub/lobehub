@@ -49,6 +49,9 @@ describe('Channel routing ingress', () => {
       'channel',
       expect.objectContaining({ mentions: ['coder'] }),
     );
+    // A mentioned message is directed, so its routing settings are never needed.
+    expect(mocks.config).not.toHaveBeenCalled();
+    expect(mocks.wake).toHaveBeenCalledWith('channel');
   });
   it('schedules a retried attempt only after the permission-checked repository write', async () => {
     mocks.retry.mockResolvedValue({ routingAttempt: 2 });

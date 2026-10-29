@@ -210,7 +210,10 @@ export class ChannelService {
   };
 
   send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
-    const config = await resolveChannelRoutingConfig(this.db, this.userId);
+    // The repository directs any mentioned message itself and never reads its routing mode.
+    const config = input.mentions?.length
+      ? null
+      : await resolveChannelRoutingConfig(this.db, this.userId);
     const message = await this.repository.send(channelId, {
       ...input,
       routing: config ? 'jev' : 'fallback',
