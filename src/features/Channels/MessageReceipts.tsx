@@ -1,6 +1,5 @@
 import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { Popover, usePopoverContext } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Popover, Text, usePopoverContext } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, Square } from 'lucide-react';
 import { useState } from 'react';
