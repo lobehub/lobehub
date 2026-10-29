@@ -56,7 +56,7 @@ describe('Channel routing input and lease', () => {
       workspaceId: fixture.workspaceId,
       message: 'Implement a parser',
     });
-    expect(input?.candidates.map((item) => item.memberId)).toContain(coder.id);
+    expect(input.candidates.map((item) => item.memberId)).toContain(coder.id);
     expect(await routing.claim(channel.id, message.id)).toBeNull();
     const decision = { memberIds: [coder.id], status: 'assigned' as const, reason: 'Fits' };
     expect(await execution.resolveRouting(channel.id, message.id, 1, decision)).toBe(true);
@@ -239,7 +239,7 @@ describe('Channel routing input and lease', () => {
     const input = await routing.claim(channel.id, request.id);
     assert(input?.status === 'claimed');
     expect(input.candidates.map((candidate) => candidate.memberId)).toEqual([coder.id]);
-    expect(input?.history.map((item) => item.content)).toEqual(['Implement a parser']);
+    expect(input.history.map((item) => item.content)).toEqual(['Implement a parser']);
   });
 
   it('bounds history and uses the agent description when a member has no routing description', async () => {
@@ -262,8 +262,8 @@ describe('Channel routing input and lease', () => {
     const input = await routing.claim(channel.id, message.id);
     assert(input?.status === 'claimed');
     expect(input.history).toHaveLength(20);
-    expect(input?.history.every((item) => item.content.length <= 1500)).toBe(true);
-    expect(input?.candidates.find((item) => item.memberId === coder.id)?.description).toBe(
+    expect(input.history.every((item) => item.content.length <= 1500)).toBe(true);
+    expect(input.candidates.find((item) => item.memberId === coder.id)?.description).toBe(
       'Owns parsers',
     );
   });

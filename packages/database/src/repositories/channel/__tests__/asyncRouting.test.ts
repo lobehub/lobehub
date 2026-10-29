@@ -218,8 +218,8 @@ describe('asynchronous Channel routing', () => {
       expect(input.candidates.map((candidate) => candidate.memberId).sort()).toEqual(
         [agent.id, other.id].sort(),
       );
-      expect(input?.fallback).toBe(mode === 'fallback');
-      await execution.resolveRouting(channel.id, reply.id, input!.attempt, {
+      expect(input.fallback).toBe(mode === 'fallback');
+      await execution.resolveRouting(channel.id, reply.id, input.attempt, {
         memberIds: [agent.id],
         reason: 'Follow-up',
         status: 'assigned',
@@ -316,8 +316,8 @@ describe('asynchronous Channel routing', () => {
     const input = await routing.claim(channel.id, reply.id);
     assert(input?.status === 'claimed');
     expect(input.candidates.map(({ memberId }) => memberId).sort()).toEqual(recipients.sort());
-    await execution.resolveRouting(channel.id, reply.id, input!.attempt, {
-      memberIds: input!.candidates.map(({ memberId }) => memberId),
+    await execution.resolveRouting(channel.id, reply.id, input.attempt, {
+      memberIds: input.candidates.map(({ memberId }) => memberId),
       reason: 'Fallback',
       status: 'assigned',
     });
