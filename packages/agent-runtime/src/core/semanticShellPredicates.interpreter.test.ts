@@ -281,6 +281,29 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
         expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
       },
     );
+
+    // `c` inside an option CLUSTER: the letters around it stay flags
+    // (`bash [GNU long option] [option] ...`), so `bash -xce '<payload>'` runs
+    // the payload that follows the whole option word. Verified against bash:
+    // `bash -xce 'echo A' B` prints A, while `bash -cecho hi` fails with
+    // `hi: invalid option name` — the rest of a cluster is never source.
+    it.each([
+      ['rmRecursiveHomeTarget', "bash -xce 'echo $(rm -rf ~)' rm; echo ~"],
+      ['rmRecursiveHomeTarget', "bash -xce 'echo $(rm -rf ~)' rm"],
+      ['rmRecursiveRootTarget', "bash -eCxc 'echo $(rm -rf /)' rm"],
+      ['rmRecursiveHomeTarget', "bash -xec 'echo $(rm -rf ~)'"],
+      ['rmRecursiveRootTarget', "sh -ec 'echo $(rm -rf /)'"],
+      ['rmRecursiveHomeTarget', "xargs bash -xce 'echo $(rm -rf ~)'"],
+    ] as const)('reads a payload behind a flag cluster (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each(["bash -xce 'echo hi' rm", "bash -xce 'rm -rf /tmp/cache'"])(
+      'keeps a harmless payload behind a flag cluster inert: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      },
+    );
   });
   describe('twenty-second-round review: locale-translation quoting in argv', () => {
     // `$"…"` is a QUOTED word at parse time: bash removes the `$`, translates

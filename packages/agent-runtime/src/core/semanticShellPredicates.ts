@@ -325,7 +325,10 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
     if (!isShellInterpreterWord(words[index])) continue;
     if (words[index].replace(/^.*\//, '') === 'eval') {
       // `eval` concatenates its arguments; `eval 'rm -rf' ~` runs `rm -rf ~`.
-      const joined = words.slice(index + 1).join(' ').trim();
+      const joined = words
+        .slice(index + 1)
+        .join(' ')
+        .trim();
       if (joined) payloads.push(joined);
       continue;
     }
@@ -354,6 +357,21 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
       if (option.startsWith('-c')) {
         // Glued form `-c<source>`.
         payloads.push(option.slice(2));
+        break;
+      }
+      // `c` can also sit in the MIDDLE of a valid cluster. Bash documents
+      // invocation as `bash [GNU long option] [option] ...` and lists
+      // `-c command`, so the letters before `c` are ordinary flags: in
+      // `bash -xce '<payload>'` the payload is the word AFTER the whole option
+      // word. Reading only the cluster's edges missed it, and the positional
+      // `rm` behind the payload blocked the generic fallback, so
+      // `bash -xce 'echo $(rm -rf ~)' rm` deleted the home directory with all
+      // three predicates returning false. Never read the rest of the cluster as
+      // source: `bash -cecho hi` makes `echo` more flags and `hi` the `-o`
+      // operand, not a `echo hi` payload.
+      if (option.slice(1).includes('c')) {
+        const payload = words[cursor + 1];
+        if (payload) payloads.push(payload);
         break;
       }
       // Value-taking short options: `-o option` (`bash --help`: `-o option`)
