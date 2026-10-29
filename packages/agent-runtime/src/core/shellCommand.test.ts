@@ -315,6 +315,28 @@ describe('analyzeShellCommand', () => {
       expect(rmSegments[0].trailingSlashTargets).toContain('/');
     });
 
+    it('counts a dash-shaped parameter-expansion operand in the flag position', () => {
+      // `rm ${RM_FLAGS:--rf} ~` expands to `rm -rf ~` whenever RM_FLAGS is
+      // unset. The raw word starts with `$`, so a dash-word-only filter dropped
+      // the recursive flag and every predicate returned false.
+      for (const command of [
+        'rm ${RM_FLAGS:--rf} ~',
+        'rm ${RM_FLAGS--rf} ~',
+        'rm ${RM_FLAGS:=-rf} ~',
+      ]) {
+        const seg = analyzeShellCommand(command)[0];
+        expect(seg.resolvedCommand).toBe('rm');
+        expect(seg.flags).toEqual(['-rf']);
+        expect(seg.hasFlag('r')).toBe(true);
+        expect(seg.hasFlag('f')).toBe(true);
+        expect(seg.homeTargets).toContain('~');
+      }
+
+      // An expansion with no dash operand (or a harmless one) is not a flag.
+      expect(analyzeShellCommand('rm ${FLAGS} ~')[0].flags).toEqual([]);
+      expect(analyzeShellCommand('rm ${F:-x} ~')[0].hasFlag('r')).toBe(false);
+    });
+
     it('flags stop at file targets (flags-prefixed word after non-flag is treated as target)', () => {
       // GNU getopt permutes arguments, so flags after paths are still valid flags for rm.
       // We conservatively parse ALL leading dash words as flags; this is the safe direction

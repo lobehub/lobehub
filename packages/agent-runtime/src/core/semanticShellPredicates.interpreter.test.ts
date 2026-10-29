@@ -531,6 +531,30 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
       },
     );
 
+    // Flag-position parameter expansion: the operand is invisible to a
+    // dash-word filter, so `rm ${RM_FLAGS:--rf} ~` ran a recursive home delete
+    // while every predicate returned false.
+    it.each([
+      ['rmRecursiveHomeTarget', 'rm ${RM_FLAGS:--rf} ~'],
+      ['rmRecursiveHomeTarget', 'rm ${RM_FLAGS--rf} ~'],
+      ['rmRecursiveHomeTarget', 'rm ${RM_FLAGS:=-rf} ~'],
+      ['rmRecursiveRootTarget', 'rm ${F:--rf} /'],
+    ] as const)(
+      'still blocks a recursive flag hidden in a parameter expansion (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
+
+    // Without a dash-shaped operand nothing recursive is visible, so the
+    // ordinary rm call stays allowed.
+    it.each(['rm ${FLAGS} ~', 'rm ${F:-x} ~'])(
+      'leaves a non-flag expansion alone: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      },
+    );
+
     // A switch whose arity is unknown stays ambiguous, which routes the
     // segment through the fallback instead of trusting a guessed executable.
     it.each(['exec -Z rm -rf ~', 'setsid -Z rm -rf ~', 'nohup -Z rm -rf ~'])(

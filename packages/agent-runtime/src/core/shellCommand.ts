@@ -130,7 +130,19 @@ const isBareSlash = (word: string): boolean => word === '/';
  * Parse flags: every isolated dash-word is a flag entry. Combined short flags
  * like -rf expand at query time.
  */
-const collectFlags = (words: string[]): string[] => words.filter(isDashWord);
+const collectFlags = (words: string[]): string[] =>
+  words.flatMap((word) => {
+    if (isDashWord(word)) return [word];
+    // FLAG-position parameter expansion: `rm ${RM_FLAGS:--rf} ~` expands to
+    // `rm -rf ~` whenever RM_FLAGS is unset, but the raw word starts with `$`,
+    // so a plain dash-word filter dropped the recursive flag and every
+    // predicate returned false while the home directory was deleted.
+    // Parameter-expansion operands were already inspected in the command and
+    // target positions (`${CMD} -rf /`, `rm -rf ${TARGET}`); the flag position
+    // is the same question, so a dash-shaped operand counts as a flag word.
+    const operand = parameterExpansionOperand(word);
+    return operand !== undefined && isDashWord(operand) ? [operand] : [];
+  });
 
 /**
  * Brace-expand a word the way Bash does before the word reaches argv:
