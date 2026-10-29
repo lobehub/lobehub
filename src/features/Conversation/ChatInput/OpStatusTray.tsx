@@ -3,7 +3,8 @@
 import { formatElapsedClockTime } from '@lobechat/utils';
 import { createStaticStyles, cx, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
-import { BrainCircuitIcon, CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
+import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +16,7 @@ import { calculateOperationUsageMetrics } from '@/utils/operationUsageMetrics';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
 import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
+import AnimatedCount from './OpStatusTray/AnimatedCount';
 import { parseStatusPhrases, pickRotatingStatusPhrase } from './OpStatusTray/logic';
 
 // Cycle the generating phrase like a carousel so a long-running task doesn't
@@ -237,7 +239,7 @@ interface MetricItem {
   key: 'cost' | 'llmCalls' | 'tokens';
   label: string;
   title: string;
-  value: string;
+  value: ReactNode;
 }
 
 const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
@@ -347,10 +349,10 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
 
   // Zero-valued metrics render nothing. LLM calls are the user-facing "step"
   // metric: tool-only iterations never increment it.
-  const metrics = [
+  const metricCandidates: (MetricItem | undefined)[] = [
     operationState.llmCalls > 0
       ? {
-          icon: BrainCircuitIcon,
+          icon: FootprintsIcon,
           key: 'llmCalls',
           label: llmCallsLabel,
           title: `${operationState.llmCalls} ${llmCallsLabel}`,
@@ -363,7 +365,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           key: 'tokens',
           label: tokenLabel,
           title: `${formatTokens(totalTokens)} ${tokenLabel}`,
-          value: formatTokens(totalTokens),
+          value: <AnimatedCount format={formatTokens} value={totalTokens} />,
         }
       : undefined,
     totalCost > 0
@@ -375,7 +377,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           value: formatCost(totalCost),
         }
       : undefined,
-  ].filter((item): item is MetricItem => !!item);
+  ];
+  const metrics = metricCandidates.filter((item): item is MetricItem => !!item);
   const tokenMetric = metrics.find((metric) => metric.key === 'tokens');
 
   const renderMetric = ({ icon, title, value }: MetricItem) => (
