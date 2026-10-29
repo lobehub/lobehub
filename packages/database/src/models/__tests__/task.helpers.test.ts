@@ -2,6 +2,7 @@
 import type { TaskItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { checkpointTaskMatcher, checkpointTaskPairsMatch } from '../task/checkpoint';
 import { getVerifyConfig } from '../task/config';
 import { isTaskIdentifierUniqueViolation, withStaleReposCleared } from '../task/utils';
@@ -43,14 +44,7 @@ describe('task withStaleReposCleared', () => {
 });
 
 describe('task isTaskIdentifierUniqueViolation', () => {
-  it('reads a thrown non-Error value by its string form', () => {
-    expect(isTaskIdentifierUniqueViolation('duplicate key value')).toBe(true);
-    expect(isTaskIdentifierUniqueViolation('connection reset')).toBe(false);
-    expect(isTaskIdentifierUniqueViolation(null)).toBe(false);
-  });
-
-  it('reads a code from a plain object', () => {
-    expect(isTaskIdentifierUniqueViolation({ code: '23505' })).toBe(true);
-    expect(isTaskIdentifierUniqueViolation({ code: '23503' })).toBe(false);
+  it('is the shared unique-violation check', () => {
+    expect(isTaskIdentifierUniqueViolation).toBe(isUniqueViolation);
   });
 });

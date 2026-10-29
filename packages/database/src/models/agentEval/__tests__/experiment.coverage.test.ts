@@ -25,34 +25,43 @@ afterEach(async () => {
 describe('AgentEvalExperimentModel coverage', () => {
   describe('create race', () => {
     /**
-     * The concurrent create commits first and ours fails on the primary key. The stand-in throws
-     * the driver's error shape (`code` on the error itself) — see the PR "Findings" for why the
-     * drizzle-wrapped shape never reaches this branch today.
+     * The concurrent create commits after our idempotency pre-check and before our insert, so our
+     * insert hits a real primary-key violation. drizzle wraps the driver error, putting the code on
+     * `cause` rather than on the error itself.
      */
+    const commitBeforeInsert = (winner: typeof agentEvalExperiments.$inferInsert) => {
+      const transaction = serverDB.transaction.bind(serverDB);
+      return vi
+        .spyOn(serverDB, 'transaction')
+        .mockImplementationOnce(async (run: Parameters<typeof transaction>[0]) => {
+          await serverDB.insert(agentEvalExperiments).values(winner);
+          return transaction(run);
+        });
+    };
+
     it('returns the winner of a create race that surfaces as a unique violation', async () => {
       const id = 'experiment-cov-race-winner';
-      vi.spyOn(serverDB, 'transaction').mockImplementationOnce(async () => {
-        await serverDB.insert(agentEvalExperiments).values({ id, name: 'winner', userId });
-        throw Object.assign(new Error('duplicate key value'), { code: '23505' });
-      });
+      commitBeforeInsert({ id, name: 'winner', userId });
 
       const created = await model.create({ benchmarkIds: [], id, name: 'loser' });
 
       expect(created.id).toBe(id);
       expect(created.name).toBe('winner');
+      const rows = await serverDB
+        .select()
+        .from(agentEvalExperiments)
+        .where(inArray(agentEvalExperiments.id, [id]));
+      expect(rows).toHaveLength(1);
     });
 
     it('rethrows a unique violation whose winner is not visible to the caller', async () => {
       const id = 'experiment-cov-race-hidden';
-      const violation = Object.assign(new Error('duplicate key value'), { code: '23505' });
-      vi.spyOn(serverDB, 'transaction').mockImplementationOnce(async () => {
-        await serverDB
-          .insert(agentEvalExperiments)
-          .values({ id, name: 'hidden', userId: otherOwnerId });
-        throw violation;
-      });
+      commitBeforeInsert({ id, name: 'hidden', userId: otherOwnerId });
 
-      await expect(model.create({ benchmarkIds: [], id, name: 'mine' })).rejects.toBe(violation);
+      const error = await model.create({ benchmarkIds: [], id, name: 'mine' }).catch((e) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as { cause?: { code?: string } }).cause?.code).toBe('23505');
     });
   });
 

@@ -20,8 +20,6 @@ export const HASH_PATTERN = /^[a-f0-9]{64}$/;
 
 export const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 
-export const PG_UNIQUE_VIOLATION = '23505';
-
 export const AGENT_INTERVENTION_CUSTOM_EXECUTION_MIN_LEASE_MS = 1000;
 
 export const AGENT_INTERVENTION_CUSTOM_EXECUTION_MAX_LEASE_MS = 15 * 60_000;

@@ -15,6 +15,7 @@ import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import {
   documentOwnership,
@@ -59,27 +60,6 @@ const versionSnapshotSelection = {
   status: workVersions.status,
   title: workVersions.title,
   url: workVersions.url,
-};
-
-const isUniqueViolation = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  const code =
-    typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
-  const cause = error instanceof Error ? error.cause : undefined;
-  const causeCode =
-    typeof cause === 'object' && cause && 'code' in cause
-      ? String((cause as { code?: unknown }).code)
-      : '';
-
-  return (
-    code === '23505' ||
-    causeCode === '23505' ||
-    message.includes('23505') ||
-    message.includes('duplicate') ||
-    message.includes('unique')
-  );
 };
 
 const findVersionByToolCall = async (
