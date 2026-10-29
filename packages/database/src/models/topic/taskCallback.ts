@@ -188,9 +188,8 @@ export const repairAgentInterventionContinuation = async (
         metadata: {
           ...existing.metadata,
           runningOperation,
-          /* v8 ignore start -- unreachable: the `{}` arm; a live reservation this caller does not own already returned 'conflict' above */
-          ...(ownsReservation || !hasLiveReservation ? { taskCallbackReservation: null } : {}),
-          /* v8 ignore stop */
+          // A live reservation this caller does not own already returned 'conflict'.
+          taskCallbackReservation: null,
         },
         updatedAt: new Date(),
       })

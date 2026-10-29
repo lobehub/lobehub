@@ -551,14 +551,13 @@ export class GoalGraphModel {
         ),
       );
 
+    // A task outside the ancestor chain (or no task at all) never ranks.
+    const depthOfTask = (taskId: string | null) =>
+      (taskId ? depthOf.get(taskId) : undefined) ?? Infinity;
     const depthOfRow = (row: (typeof rows)[number]) =>
       Math.min(
-        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
-        row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
-        /* v8 ignore stop */
-        row.subjectType === 'task' && row.carrierTaskId
-          ? (depthOf.get(row.carrierTaskId) ?? Infinity)
-          : Infinity,
+        depthOfTask(row.nodeTaskId),
+        row.subjectType === 'task' ? depthOfTask(row.carrierTaskId) : Infinity,
       );
     const [nearest] = rows.sort(
       (a, b) =>
