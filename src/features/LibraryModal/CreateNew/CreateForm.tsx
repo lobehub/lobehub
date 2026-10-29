@@ -1,112 +1,121 @@
-import { Button, Flexbox, Input, TextArea } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { Button, Flexbox, Icon, Input, ModalFooter, Segmented, Text, TextArea } from '@lobehub/ui';
+import { LockIcon, UsersIcon } from 'lucide-react';
+import { memo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { defaultCoverPreset, presetCoverValue } from '@/features/LibraryCover';
 import CoverPicker from '@/features/LibraryCover/CoverPicker';
-import { useResourceManagerStore } from '@/features/ResourceManager/store';
-import { buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
-import { useKnowledgeBaseStore } from '@/store/library';
+import type { ResourceListVisibilityFilter } from '@/features/ResourceManager/store/initialState';
 
-interface CreateFormProps {
-  id?: string;
-  initialValues?: { cover?: string; description?: string; name?: string };
-  onClose?: () => void;
-  onSuccess?: (id: string) => void;
-}
+import { type LibraryFormOptions, useLibraryForm } from './useLibraryForm';
 
-const CreateForm = memo<CreateFormProps>(({ id, initialValues, onClose, onSuccess }) => {
-  const { t } = useTranslation('knowledgeBase');
-  const [loading, setLoading] = useState(false);
-  const [name, setName] = useState(initialValues?.name || '');
-  const [description, setDescription] = useState(initialValues?.description || '');
-  // A new library has no id yet; a per-form seed keeps the previewed default
-  // cover identical to the one it is created with.
-  const [draftSeed] = useState(() => id ?? `draft-${Math.random().toString(36).slice(2)}`);
-  const [cover, setCover] = useState<string | null>(initialValues?.cover ?? null);
-  const updateKnowledgeBaseCover = useKnowledgeBaseStore((s) => s.updateKnowledgeBaseCover);
-  const createNewKnowledgeBase = useKnowledgeBaseStore((s) => s.createNewKnowledgeBase);
-  const updateKnowledgeBase = useKnowledgeBaseStore((s) => s.updateKnowledgeBase);
-  // Derive KB visibility from the current sidebar mode: "private space" →
-  // private KB, "workspace space" → public KB. Personal-mode users have the
-  // toggle hidden and `listVisibility` stays at its default 'workspace', so
-  // personal-mode create still resolves to 'public' — matching the pre-column
-  // default and giving `buildWorkspaceWhere` nothing to filter on.
-  const listVisibility = useResourceManagerStore((s) => s.listVisibility);
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+export const LIBRARY_NAME_MAX_LENGTH = 255;
 
-  const isEditMode = !!id;
-
-  const handleSubmit = async () => {
-    if (!name.trim()) return;
-
-    setLoading(true);
-    const values = {
-      description: description.trim(),
-      name: name.trim(),
-    };
-
-    try {
-      if (isEditMode) {
-        // Edit only touches the metadata the form shows. `listVisibility`
-        // describes the sidebar mode the user happens to be browsing in, not
-        // this library's visibility — sending it would silently take a shared
-        // library private just because its description was edited from the
-        // Private tab. Publish / make-private have their own guarded entries.
-        await updateKnowledgeBase(id, values);
-        if (cover !== (initialValues?.cover ?? null)) await updateKnowledgeBaseCover(id, cover);
-        setLoading(false);
-        onClose?.();
-      } else {
-        const newId = await createNewKnowledgeBase({
-          ...values,
-          cover: cover ?? presetCoverValue(defaultCoverPreset(draftSeed).id),
-          visibility: listVisibility === 'private' ? ('private' as const) : ('public' as const),
-        });
-        setLoading(false);
-
-        if (onSuccess) {
-          onSuccess(newId);
-          onClose?.();
-        } else {
-          // Workspace routes are mounted under `/:workspaceSlug`, so the hard
-          // navigation must carry the active slug or it lands in the personal
-          // scope where the new library does not resolve.
-          window.location.href = buildLibraryPath(newId, activeWorkspaceSlug);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-      setLoading(false);
-    }
-  };
+const CreateForm = memo<LibraryFormOptions>((props) => {
+  const { t } = useTranslation(['knowledgeBase', 'common']);
+  const fieldId = useId();
+  const {
+    cover,
+    description,
+    draftSeed,
+    isEditMode,
+    loading,
+    name,
+    nameError,
+    setCover,
+    setDescription,
+    setName,
+    setVisibility,
+    showVisibility,
+    submit,
+    submitDisabled,
+    visibility,
+  } = useLibraryForm(props);
 
   return (
-    <Flexbox gap={16}>
-      <Input
-        autoFocus
-        placeholder={t('createNew.name.placeholder')}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <Flexbox gap={8}>
-        <label style={{ fontSize: 14 }}>{t('createNew.description.label')}</label>
-        <TextArea
-          placeholder={t('createNew.description.placeholder')}
-          style={{ minHeight: 120 }}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+    <>
+      <Flexbox gap={16} padding={16}>
+        <Flexbox gap={6}>
+          <Text fontSize={13} id={`${fieldId}-name`} weight={500}>
+            {t('createNew.name.label')}
+          </Text>
+          <Input
+            autoFocus
+            aria-invalid={nameError}
+            aria-labelledby={`${fieldId}-name`}
+            data-invalid={nameError ? '' : undefined}
+            maxLength={LIBRARY_NAME_MAX_LENGTH}
+            placeholder={t('createNew.name.placeholder')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onPressEnter={submit}
+          />
+          {nameError && (
+            <Text fontSize={12} type={'danger'}>
+              {t('createNew.name.required')}
+            </Text>
+          )}
+        </Flexbox>
+        {showVisibility && (
+          <Flexbox gap={6}>
+            <Text fontSize={13} id={`${fieldId}-visibility`} weight={500}>
+              {t('createNew.visibility.label')}
+            </Text>
+            <Segmented
+              block
+              aria-labelledby={`${fieldId}-visibility`}
+              value={visibility}
+              options={[
+                {
+                  icon: <Icon icon={LockIcon} />,
+                  label: t('createNew.visibility.private'),
+                  value: 'private',
+                },
+                {
+                  icon: <Icon icon={UsersIcon} />,
+                  label: t('createNew.visibility.workspace'),
+                  value: 'workspace',
+                },
+              ]}
+              onChange={(value) => setVisibility(value as ResourceListVisibilityFilter)}
+            />
+            <Text fontSize={12} type={'secondary'}>
+              {t(
+                visibility === 'private'
+                  ? 'createNew.visibility.privateHelp'
+                  : 'createNew.visibility.workspaceHelp',
+              )}
+            </Text>
+          </Flexbox>
+        )}
+        <Flexbox gap={6}>
+          <Text fontSize={13} id={`${fieldId}-description`} weight={500}>
+            {t('createNew.description.label')}
+          </Text>
+          <TextArea
+            aria-labelledby={`${fieldId}-description`}
+            autoSize={{ maxRows: 6, minRows: 3 }}
+            placeholder={t('createNew.description.placeholder')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <Text fontSize={12} type={'secondary'}>
+            {t('createNew.description.help')}
+          </Text>
+        </Flexbox>
+        <Flexbox gap={6}>
+          <Text fontSize={13} weight={500}>
+            {t('createNew.cover.label')}
+          </Text>
+          <CoverPicker seed={draftSeed} value={cover} onChange={setCover} />
+        </Flexbox>
       </Flexbox>
-      <Flexbox gap={8}>
-        <label style={{ fontSize: 14 }}>{t('createNew.cover.label')}</label>
-        <CoverPicker seed={draftSeed} value={cover} onChange={setCover} />
-      </Flexbox>
-      <Button block loading={loading} type={'primary'} onClick={handleSubmit}>
-        {isEditMode ? t('createNew.edit.confirm') : t('createNew.confirm')}
-      </Button>
-    </Flexbox>
+      <ModalFooter>
+        <Button onClick={props.onClose}>{t('cancel', { ns: 'common' })}</Button>
+        <Button disabled={submitDisabled} loading={loading} type={'primary'} onClick={submit}>
+          {isEditMode ? t('createNew.edit.confirm') : t('createNew.confirm')}
+        </Button>
+      </ModalFooter>
+    </>
   );
 });
 
