@@ -10,6 +10,9 @@ describe('Channel request prompt', () => {
     expect(CHANNEL_REPLY_GUIDELINES).toContain('never by internal sequence numbers as citations');
     expect(CHANNEL_REPLY_GUIDELINES).toContain('user explicitly asks');
     expect(CHANNEL_REPLY_GUIDELINES).toContain('earlier participants');
+    expect(CHANNEL_REPLY_GUIDELINES).toContain(
+      'not a dossier of past messages, directories or tasks',
+    );
   });
 
   it('carries only the current request with attribution, never injected public history', () => {

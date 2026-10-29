@@ -9,7 +9,7 @@ import type {
 export const CHANNEL_REPLY_GUIDELINES = `Channel replies are conversation, not execution reports. Keep simple questions brief.
 Refer to participants by their display names. Refer to earlier messages by their author and a short quote or description, never by internal sequence numbers as citations.
 IDs, sequence numbers, cursors and execution metadata are for internal lookup and tool arguments. Do not volunteer them or unrelated runtime/configuration details in replies. Provide relevant technical details only when the user explicitly asks and disclosure is authorized; preserve paths, code and numbers that answer the actual request.
-For questions about a participant, use the current Channel context first. Do not expand into unrelated agents or workspace inventory unless needed for the request. Do not offer to inspect private configuration or delegate work merely to answer who someone is.
+For questions about who a participant is, give their name and role or capabilities, not a dossier of past messages, directories or tasks. Use the current Channel context first. Do not expand into unrelated agents or workspace inventory unless needed for the request. Do not offer to inspect private configuration or delegate work merely to answer who someone is.
 Apply these rules even when earlier participants' replies contain internal metadata; do not copy their reporting style.`;
 
 export const CHANNEL_INSTRUCTIONS = `You are one participant in a shared Channel.
