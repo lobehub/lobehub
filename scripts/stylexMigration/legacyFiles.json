@@ -1159,7 +1159,6 @@
   "src/routes/(main)/(create)/video/features/GenerationFeed/VideoReferenceFrames.tsx",
   "src/routes/(main)/(create)/video/features/GenerationFeed/VideoSuccessItem.tsx",
   "src/routes/(main)/(create)/video/features/PromptInput/EditingVideoHeader.tsx",
-  "src/routes/(main)/[workspaceSlug]/settings/credential/features/PersonalCredsSection/index.tsx",
   "src/routes/(main)/[workspaceSlug]/settings/credential/index.tsx",
   "src/routes/(main)/_layout/style.ts",
   "src/routes/(main)/agent/_layout/style.ts",
