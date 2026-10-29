@@ -14,6 +14,10 @@ const seg = (value: string) => encodeURIComponent(value);
 const libraryItemPath = (id: string, knowledgeBaseId: Id) =>
   `/resource/library/${seg(knowledgeBaseId!)}?file=${seg(id)}`;
 
+/** Standalone pages and files open in Docs; `/page/:id` and `/resource/file/` only redirect there. */
+const docsPagePath = (id: string) => `/resource/page/${seg(id)}`;
+const docsFilePath = (id: string) => `/resource/file/${seg(id)}`;
+
 export const resourcePath = {
   acceptance: (id: Id) => (id ? `/acceptance/${seg(id)}` : undefined),
   agent: (id: Id) => (id ? `/agent/${seg(id)}` : undefined),
@@ -28,13 +32,13 @@ export const resourcePath = {
     if (!doc.id) return undefined;
     return doc.knowledgeBaseId
       ? libraryItemPath(doc.id, doc.knowledgeBaseId)
-      : `/page/${seg(doc.id)}`;
+      : docsPagePath(doc.id);
   },
   file: (file: { id?: Id; knowledgeBaseId?: Id }) => {
     if (!file.id) return undefined;
     return file.knowledgeBaseId
       ? libraryItemPath(file.id, file.knowledgeBaseId)
-      : `/resource?file=${seg(file.id)}`;
+      : docsFilePath(file.id);
   },
   goal: (id: Id) => (id ? `/goal/${seg(id)}` : undefined),
   group: (id: Id) => (id ? `/group/${seg(id)}` : undefined),
@@ -82,7 +86,7 @@ export const searchResultPath = (item: Record<string, any>): string | undefined 
       return resourcePath.file(item);
     }
     case 'page': {
-      return item.id ? `/page/${seg(item.id)}` : undefined;
+      return item.id ? docsPagePath(item.id) : undefined;
     }
     case 'knowledgeBase': {
       return resourcePath.knowledgeBase(item.id);

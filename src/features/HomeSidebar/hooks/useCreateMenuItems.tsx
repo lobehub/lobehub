@@ -19,6 +19,7 @@ import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { openConnectAgentModal } from '@/features/ConnectAgent';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import type { CreateAgentParams } from '@/services/agent';
@@ -412,7 +413,7 @@ export const useCreateMenuItems = () => {
     const untitledTitle = tFile('pageList.untitled');
     try {
       const newPageId = await pageActions.createNewPage(untitledTitle);
-      navigate(`/page/${newPageId}`);
+      navigate(docsPagePath(newPageId));
     } catch (error) {
       console.error('Failed to create page:', error);
       toast.error(tFile('pageList.createFailed'));

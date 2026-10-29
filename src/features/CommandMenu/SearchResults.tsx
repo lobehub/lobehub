@@ -25,6 +25,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
@@ -124,7 +125,7 @@ const SearchResults = memo<SearchResultsProps>(
           // Navigate to resource library with file parameter
           const fileUrl = result.knowledgeBaseId
             ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
-            : `/resource?file=${result.id}`;
+            : docsFilePath(result.id);
           console.info('[SearchResults] File navigation:', {
             fileDetails: result,
             url: fileUrl,
@@ -145,7 +146,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'page': {
-          navigate(`/page/${result.id.split('_')[1]}`);
+          navigate(docsPagePath(result.id));
           break;
         }
         case 'mcp': {

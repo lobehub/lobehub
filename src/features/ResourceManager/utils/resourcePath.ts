@@ -1,3 +1,4 @@
+import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 /**
@@ -17,7 +18,7 @@ export const buildLibraryPath = (
 ): string => buildWorkspaceAwarePath(`/resource/library/${libraryId}`, activeWorkspaceSlug);
 
 /**
- * Path that opens a page: `/resource?file=<id>`, or the library-scoped
+ * Path that opens a page: `/resource/page/<id>`, or the library-scoped
  * `/resource/library/<libraryId>?file=<id>` when the page lives in a library.
  */
 export const buildPagePath = (
@@ -26,6 +27,12 @@ export const buildPagePath = (
   libraryId?: string | null,
 ): string =>
   buildWorkspaceAwarePath(
-    libraryId ? `/resource/library/${libraryId}?file=${fileId}` : `/resource?file=${fileId}`,
+    libraryId ? `/resource/library/${libraryId}?file=${fileId}` : docsPagePath(fileId),
     activeWorkspaceSlug,
   );
+
+/** Path that opens an uploaded file in Docs: `/resource/file/<id>`. */
+export const buildFilePath = (
+  fileId: string,
+  activeWorkspaceSlug: string | null | undefined,
+): string => buildWorkspaceAwarePath(docsFilePath(fileId), activeWorkspaceSlug);
