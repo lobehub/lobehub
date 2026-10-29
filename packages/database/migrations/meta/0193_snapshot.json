@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "7e192da5-333b-471d-b2a2-664627a799b7",
+  "id": "0504dd92-6a40-4f7b-97be-7a6f934887c0",
   "policies": {},
   "prevId": "9aa70021-b222-4c91-9e85-e665a3b0762f",
   "roles": {},
@@ -39494,6 +39494,24 @@
           "primaryKey": false,
           "notNull": false
         },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "user_memory_id": {
           "name": "user_memory_id",
           "type": "varchar(255)",
@@ -39561,6 +39579,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'private'"
         },
         "accessed_at": {
           "name": "accessed_at",
@@ -39651,6 +39676,63 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_memories_dossiers_workspace_visibility_idx": {
+          "name": "user_memories_dossiers_workspace_visibility_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "visibility",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_memories_dossiers_agent_id_index": {
+          "name": "user_memories_dossiers_agent_id_index",
+          "columns": [
+            {
+              "expression": "agent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_memories_dossiers_project_id_index": {
+          "name": "user_memories_dossiers_project_id_index",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -39668,6 +39750,33 @@
           "tableFrom": "user_memories_dossiers",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_dossiers_workspace_id_workspaces_id_fk": {
+          "name": "user_memories_dossiers_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_memories_dossiers",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_dossiers_agent_id_agents_id_fk": {
+          "name": "user_memories_dossiers_agent_id_agents_id_fk",
+          "tableFrom": "user_memories_dossiers",
+          "tableTo": "agents",
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_dossiers_project_id_projects_id_fk": {
+          "name": "user_memories_dossiers_project_id_projects_id_fk",
+          "tableFrom": "user_memories_dossiers",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -39713,6 +39822,12 @@
         },
         "user_id": {
           "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -39827,6 +39942,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_memories_edges_workspace_id_relation_index": {
+          "name": "user_memories_edges_workspace_id_relation_index",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "relation",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -39856,6 +39992,15 @@
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "user_memories_edges_workspace_id_workspaces_id_fk": {
+          "name": "user_memories_edges_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_memories_edges",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -39882,6 +40027,24 @@
         },
         "user_id": {
           "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -39941,6 +40104,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'private'"
         },
         "accessed_at": {
           "name": "accessed_at",
@@ -40041,6 +40211,63 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_memories_entities_workspace_visibility_idx": {
+          "name": "user_memories_entities_workspace_visibility_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "visibility",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_memories_entities_agent_id_index": {
+          "name": "user_memories_entities_agent_id_index",
+          "columns": [
+            {
+              "expression": "agent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_memories_entities_project_id_index": {
+          "name": "user_memories_entities_project_id_index",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -40058,6 +40285,33 @@
           "tableFrom": "user_memories_entities",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_entities_workspace_id_workspaces_id_fk": {
+          "name": "user_memories_entities_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_memories_entities",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_entities_agent_id_agents_id_fk": {
+          "name": "user_memories_entities_agent_id_agents_id_fk",
+          "tableFrom": "user_memories_entities",
+          "tableTo": "agents",
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_entities_project_id_projects_id_fk": {
+          "name": "user_memories_entities_project_id_projects_id_fk",
+          "tableFrom": "user_memories_entities",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -40097,6 +40351,12 @@
         },
         "user_id": {
           "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -40196,6 +40456,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_memories_entity_names_workspace_id_normalized_index": {
+          "name": "user_memories_entity_names_workspace_id_normalized_index",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "normalized",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -40213,6 +40494,15 @@
           "tableFrom": "user_memories_entity_names",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_entity_names_workspace_id_workspaces_id_fk": {
+          "name": "user_memories_entity_names_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_memories_entity_names",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -40682,6 +40972,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "metadata": {
           "name": "metadata",
           "type": "jsonb",
@@ -40797,6 +41093,33 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "user_memories_operations_workspace_id_state_created_at_index": {
+          "name": "user_memories_operations_workspace_id_state_created_at_index",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -40805,6 +41128,15 @@
           "tableFrom": "user_memories_operations",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_memories_operations_workspace_id_workspaces_id_fk": {
+          "name": "user_memories_operations_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_memories_operations",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"

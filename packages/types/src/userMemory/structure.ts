@@ -4,6 +4,12 @@
  * Columns store these as plain text, so adding a value needs no migration.
  */
 
+/**
+ * Workspace visibility of a memory row, as for agents / projects: `private` is owner-only,
+ * `public` is shared with the workspace (agent / project memory). Personal memory stays private.
+ */
+export type UserMemoryVisibility = 'private' | 'public';
+
 /** Whether a memory may be used in conversations yet. */
 export type UserMemoryState = 'hypothesis' | 'active' | 'superseded' | 'rejected';
 
