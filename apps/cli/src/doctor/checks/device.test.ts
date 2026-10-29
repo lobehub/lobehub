@@ -2,6 +2,8 @@ import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClientModule from '../../api/client';
+import type { ConnectServiceStatus } from '../../service/status';
+import type * as ServiceStatusModule from '../../service/status';
 import type * as SettingsModule from '../../settings';
 import type * as ProbesModule from '../probes';
 import { makeContext, runCheck } from '../testUtils';
@@ -12,6 +14,7 @@ const state = vi.hoisted(() => ({
   daemonStatus: null as any,
   devices: [] as any[],
   localDeviceId: undefined as string | undefined,
+  services: [] as ConnectServiceStatus[],
 }));
 
 const removePid = vi.hoisted(() => vi.fn());
@@ -24,10 +27,9 @@ vi.mock('../../daemon/manager', () => ({
   removeStatus,
 }));
 
-vi.mock('../../service/connect', () => ({
-  readConnectServiceStatus: () => {
-    throw new Error('not systemd');
-  },
+vi.mock('../../service/status', async (importOriginal) => ({
+  ...(await importOriginal<typeof ServiceStatusModule>()),
+  readConnectServices: async () => ({ services: state.services, unavailableScopes: [] }),
 }));
 
 vi.mock('../../utils/device', () => ({ resolveLocalDeviceId: () => state.localDeviceId }));
@@ -153,6 +155,7 @@ describe('device.daemon', () => {
   beforeEach(() => {
     state.daemonPid = null;
     state.daemonStatus = null;
+    state.services = [];
   });
 
   it('survives a platform without the connect service', async () => {
@@ -160,6 +163,34 @@ describe('device.daemon', () => {
 
     expect(outcome.status).toBe('warn');
     expect(outcome.detail).toContain('No connect daemon');
+  });
+
+  it('recognizes a connected system service without suggesting another daemon', async () => {
+    state.services = [
+      {
+        active: true,
+        enabled: true,
+        fragmentPath: '/etc/systemd/system/lobehub-connect.service',
+        mainPid: 42,
+        scope: 'system',
+        serviceName: 'lobehub-connect.service',
+        subState: 'running',
+        user: 'ubuntu',
+      },
+    ];
+    state.daemonStatus = {
+      cliVersion: '0.0.71',
+      connectionStatus: 'connected',
+      deviceId: 'dev_1',
+      gatewayUrl: 'wss://gw',
+      pid: 42,
+      startedAt: '',
+    };
+    const outcome = await runCheck(deviceChecks, 'device.daemon');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.detail).toContain('system');
+    expect(outcome.detail).toContain('dev_1');
+    expect(outcome.fix).toBeUndefined();
   });
 
   it('flags a status file with no daemon behind it', async () => {

@@ -155,6 +155,22 @@ describe('daemon manager', () => {
       expect(readStatus()).toBeNull();
     });
 
+    it('preserves a service status when cleaning up an unrelated stale daemon pid', () => {
+      writePid(999999);
+      const serviceStatus = {
+        cliVersion: '0.0.71',
+        connectionStatus: 'connected',
+        gatewayUrl: 'https://test.com',
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+      };
+      writeStatus(serviceStatus);
+
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
+      expect(readStatus()).toEqual(serviceStatus);
+    });
+
     it('should treat a live but reused (non-daemon) PID as stale and clean up', () => {
       // process.pid is alive, but the inspected command line is not our daemon —
       // simulates the OS reusing a dead daemon's PID for an unrelated process.

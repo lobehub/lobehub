@@ -39,7 +39,6 @@ import {
   getLogPath,
   getRunningDaemonPid,
   isProcessAlive,
-  readStatus,
   removePid,
   removeStatus,
   reportDaemonStartupReady,
@@ -64,16 +63,17 @@ import {
 } from '../device/register';
 import { collectSystemInfo, probeNativeRuntimes } from '../device/systemInfo';
 import { TerminalSessionManager } from '../device/terminal';
+import { cliVersion } from '../pkg';
 import {
   CONNECT_RETRYABLE_EXIT_CODE,
   getWorkspaceFailureExitCode,
   installConnectService,
-  readConnectServiceStatus,
   restartConnectService,
   startConnectService,
   stopConnectService,
   uninstallConnectService,
 } from '../service/connect';
+import { getServiceRestartCommand, readConnectServices } from '../service/status';
 import {
   addWorkspaceEnrollment,
   loadOrCreateConnectionId,
@@ -87,6 +87,7 @@ import { executeComputerUseCall, resolveComputerUseDevice } from '../tools/compu
 import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
+import { printConnectStatus } from './connectStatus';
 
 /** Longest a clean stop waits to push pending device health samples. */
 const SHUTDOWN_METRICS_FLUSH_MS = 3000;
@@ -160,26 +161,8 @@ export function registerConnectCommand(program: Command) {
 
   connectCmd
     .command('status')
-    .description('Show background daemon status')
-    .action(() => {
-      const pid = getRunningDaemonPid();
-      if (pid === null) {
-        log.info('No daemon is running.');
-        return;
-      }
-
-      const status = readStatus();
-      log.info('─── Daemon Status ───');
-      log.info(`  PID              : ${pid}`);
-      if (status) {
-        log.info(`  Started at       : ${status.startedAt}`);
-        log.info(`  Connection       : ${status.connectionStatus}`);
-        log.info(`  Gateway          : ${formatStatusGateway(status)}`);
-        const uptime = formatUptime(new Date(status.startedAt));
-        log.info(`  Uptime           : ${uptime}`);
-      }
-      log.info('─────────────────────');
-    });
+    .description('Show connect daemon and user/system service status')
+    .action(() => printConnectStatus());
 
   connectCmd
     .command('logs')
@@ -228,7 +211,7 @@ export function registerConnectCommand(program: Command) {
 
   const serviceCmd = connectCmd
     .command('service')
-    .description('Manage the Linux user systemd connect service');
+    .description('Inspect Linux connect services and manage the user-level systemd service');
 
   serviceCmd
     .command('install')
@@ -255,7 +238,10 @@ export function registerConnectCommand(program: Command) {
     .action(() => {
       const removed = uninstallConnectService();
       if (removed) log.info(`Uninstalled ${CONNECT_SERVICE_NAME}.`);
-      else log.warn('No connect service is installed.');
+      else
+        log.warn(
+          "No user-level connect service is installed. Run 'lh connect service status' to check for a system-level service.",
+        );
     });
 
   serviceCmd
@@ -264,7 +250,10 @@ export function registerConnectCommand(program: Command) {
     .action(() => {
       const started = startConnectService();
       if (started) log.info(`Started ${CONNECT_SERVICE_NAME}.`);
-      else log.warn('No connect service is installed.');
+      else
+        log.warn(
+          "No user-level connect service is installed. Run 'lh connect service status' to check for a system-level service.",
+        );
     });
 
   serviceCmd
@@ -273,7 +262,10 @@ export function registerConnectCommand(program: Command) {
     .action(() => {
       const stopped = stopConnectService();
       if (stopped) log.info(`Stopped ${CONNECT_SERVICE_NAME}.`);
-      else log.warn('No connect service is installed.');
+      else
+        log.warn(
+          "No user-level connect service is installed. Run 'lh connect service status' to check for a system-level service.",
+        );
     });
 
   serviceCmd
@@ -282,37 +274,16 @@ export function registerConnectCommand(program: Command) {
     .action(() => {
       const restarted = restartConnectService();
       if (restarted) log.info(`Restarted ${CONNECT_SERVICE_NAME}.`);
-      else log.warn('No connect service is installed.');
+      else
+        log.warn(
+          "No user-level connect service is installed. Run 'lh connect service status' to check for a system-level service.",
+        );
     });
 
   serviceCmd
     .command('status')
-    .description('Show the installed connect service status')
-    .action(() => {
-      const serviceStatus = readConnectServiceStatus();
-      if (!serviceStatus) {
-        log.info('No connect service is installed.');
-        return;
-      }
-
-      const status = readStatus();
-      log.info('─── Connect Service Status ───');
-      log.info(`  Service          : ${serviceStatus.serviceName}`);
-      log.info(`  Installed        : yes`);
-      log.info(`  Enabled          : ${serviceStatus.enabled ? 'yes' : 'no'}`);
-      log.info(`  Active           : ${serviceStatus.active ? 'yes' : 'no'}`);
-      log.info(`  Sub-state        : ${serviceStatus.subState || 'unknown'}`);
-      if (serviceStatus.mainPid !== null) {
-        log.info(`  PID              : ${serviceStatus.mainPid}`);
-      }
-      if (status) {
-        log.info(`  Connection       : ${status.connectionStatus}`);
-        log.info(`  Gateway          : ${formatStatusGateway(status)}`);
-        const uptime = formatUptime(new Date(status.startedAt));
-        log.info(`  Uptime           : ${uptime}`);
-      }
-      log.info('──────────────────────────────');
-    });
+    .description('Show user-level and system-level connect service status')
+    .action(() => printConnectStatus({ servicesOnly: true }));
 
   // Top-level alias for `connect stop`. Users who run `lh connect` naturally
   // reach for `lh disconnect` to undo it; the nested `connect stop` is not
@@ -335,6 +306,15 @@ function handleStop() {
 }
 
 async function handleDaemonStart(options: ConnectOptions) {
+  const { services } = await readConnectServices();
+  const runningService = services.find((service) => service.active || service.mainPid);
+  if (runningService) {
+    log.error(
+      `A ${runningService.scope}-level connect service is already running. After active tasks finish, restart it with: ${getServiceRestartCommand(runningService)}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   const existingPid = getRunningDaemonPid();
   if (existingPid !== null) {
     log.error(`Daemon is already running (PID ${existingPid}).`);
@@ -492,6 +472,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const updateStatus = (status: string) => {
     connectionStatus = status;
     writeStatus({
+      cliVersion,
       connectionStatus,
       deviceId: client.currentDeviceId,
       gatewaySource: gateway.endpoint.source,
@@ -1172,23 +1153,4 @@ function createDaemonLogger() {
     info: (msg: string) => appendLog(`[INFO] ${msg}`),
     warn: (msg: string) => appendLog(`[WARN] ${msg}`),
   };
-}
-
-function formatStatusGateway(status: { gatewaySource?: string; gatewayUrl: string }): string {
-  return status.gatewaySource
-    ? `${status.gatewayUrl} (${status.gatewaySource})`
-    : status.gatewayUrl;
-}
-
-function formatUptime(startedAt: Date): string {
-  const diff = Date.now() - startedAt.getTime();
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
 }

@@ -14,11 +14,35 @@ import { resolveToken } from '../auth/resolveToken';
 import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
 import type * as SystemInfoModule from '../device/systemInfo';
+import { cliVersion } from '../pkg';
+import type * as ServiceStatusModule from '../service/status';
 import { loadDeviceGatewayUrl, saveDeviceGatewayUrl } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { registerConnectCommand } from './connect';
+
+const systemService = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../service/status', async (importOriginal) => ({
+  ...(await importOriginal<typeof ServiceStatusModule>()),
+  readConnectServices: async () => ({
+    services: systemService.enabled
+      ? [
+          {
+            active: true,
+            enabled: true,
+            fragmentPath: '/etc/systemd/system/lobehub-connect.service',
+            mainPid: 4567,
+            scope: 'system',
+            serviceName: 'lobehub-connect.service',
+            subState: 'running',
+            user: 'ubuntu',
+          },
+        ]
+      : [],
+    unavailableScopes: [],
+  }),
+}));
 
 // Native runtime probing spawns Codex; connect.nativeRuntimes.test.ts covers it.
 vi.mock('../device/systemInfo', async (importOriginal) => ({
@@ -235,7 +259,11 @@ describe('connect command', () => {
     await program.parseAsync(['node', 'test', 'connect', '--daemon-child']);
 
     expect(writeStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionStatus: 'connecting', deviceId: 'mock-device-id' }),
+      expect.objectContaining({
+        cliVersion,
+        connectionStatus: 'connecting',
+        deviceId: 'mock-device-id',
+      }),
     );
 
     clientEventHandlers.connected?.();
@@ -966,11 +994,31 @@ describe('connect command', () => {
   });
 
   describe('connect status', () => {
+    it.each([['status'], ['service', 'status']])(
+      'finds a system-level connector through %j',
+      async (...command) => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+        systemService.enabled = true;
+        try {
+          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+          const output = vi.mocked(log.info).mock.calls.flat().join('\n');
+          expect(output).toContain('system');
+          expect(output).toContain('4567');
+          expect(output).toContain('ubuntu');
+          expect(output).toContain('sudo systemctl --no-block restart lobehub-connect.service');
+          expect(output).not.toContain('No connect service is installed');
+          expect(output).not.toContain('No daemon is running');
+        } finally {
+          systemService.enabled = false;
+        }
+      },
+    );
+
     it('should show no daemon running', async () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'connect', 'status']);
 
-      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('No daemon'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('No managed connect'));
     });
 
     it('should show daemon status', async () => {
@@ -992,6 +1040,24 @@ describe('connect command', () => {
   });
 
   describe('connect restart', () => {
+    it.each([['--daemon'], ['restart']])(
+      'does not create a competing daemon through %j',
+      async (...command) => {
+        systemService.enabled = true;
+        const exitCode = process.exitCode;
+        try {
+          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+          expect(spawnDaemon).not.toHaveBeenCalled();
+          expect(log.error).toHaveBeenCalledWith(
+            expect.stringContaining('sudo systemctl --no-block restart lobehub-connect.service'),
+          );
+          expect(process.exitCode).toBe(1);
+        } finally {
+          systemService.enabled = false;
+          process.exitCode = exitCode;
+        }
+      },
+    );
     it('should stop and start daemon', async () => {
       mockRunningPid = 12345;
 
