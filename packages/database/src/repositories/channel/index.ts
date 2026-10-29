@@ -473,7 +473,7 @@ export class ChannelRepository {
       { minRole: 'admin' },
     );
 
-  /** Sends an unassigned message back to Jev. Its author or an admin may retry. */
+  /** Sends an unassigned message back to the decision model. Its author or an admin may retry. */
   retryRouting = async (channelId: string, messageId: string): Promise<ChannelMessageItem> =>
     this.write(channelId, async (tx, { member }) => {
       if (!hasRole(member.role, 'admin')) {

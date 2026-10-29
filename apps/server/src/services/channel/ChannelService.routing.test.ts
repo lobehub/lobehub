@@ -32,10 +32,10 @@ beforeEach(() => {
 describe('Channel routing ingress', () => {
   const service = () => new ChannelService({} as never, 'sender', 'workspace');
   const input = { content: 'Help with code', requestKey: 'key' };
-  it('enqueues unmentioned messages for Jev when configured', async () => {
+  it('enqueues unmentioned messages for the decision model when configured', async () => {
     mocks.config.mockResolvedValue({ model: 'jev-1.14.0', provider: 'typesafe' });
     await service().send('channel', input);
-    expect(mocks.send).toHaveBeenCalledWith('channel', { ...input, routing: 'jev' });
+    expect(mocks.send).toHaveBeenCalledWith('channel', { ...input, routing: 'decision' });
     expect(mocks.wake).toHaveBeenCalledWith('channel');
   });
   it('preserves the existing fallback when not configured', async () => {
