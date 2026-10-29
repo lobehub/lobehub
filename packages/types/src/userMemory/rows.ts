@@ -17,6 +17,7 @@ import type {
   UserMemoryOperationState,
   UserMemoryOperationType,
   UserMemoryState,
+  UserMemoryVisibility,
 } from './structure';
 
 /** Row of `user_memories` — the parent row every layer hangs off. */
@@ -135,6 +136,7 @@ export interface UserMemoryContextInsert {
 export interface UserMemoryDossier {
   accessedAt: Date;
   activityCount: number;
+  agentId: string | null;
   contextId: string | null;
   createdAt: Date;
   decisions: UserMemoryDossierDecision[] | null;
@@ -143,6 +145,7 @@ export interface UserMemoryDossier {
   lastEvidenceAt: Date | null;
   metadata: Record<string, unknown> | null;
   now: string | null;
+  projectId: string | null;
   status: UserMemoryDossierStatus;
   summary: string | null;
   summaryVector: number[] | null;
@@ -150,12 +153,15 @@ export interface UserMemoryDossier {
   updatedAt: Date;
   userId: string | null;
   userMemoryId: string | null;
+  visibility: UserMemoryVisibility;
+  workspaceId: string | null;
 }
 
 /** Insert shape of `UserMemoryDossier`: required columns have no database default. */
 export interface UserMemoryDossierInsert {
   accessedAt?: Date;
   activityCount?: number;
+  agentId?: string | null;
   contextId?: string | null;
   createdAt?: Date;
   decisions?: UserMemoryDossierDecision[] | null;
@@ -164,6 +170,7 @@ export interface UserMemoryDossierInsert {
   lastEvidenceAt?: Date | null;
   metadata?: Record<string, unknown> | null;
   now?: string | null;
+  projectId?: string | null;
   status?: UserMemoryDossierStatus;
   summary?: string | null;
   summaryVector?: number[] | null;
@@ -171,6 +178,8 @@ export interface UserMemoryDossierInsert {
   updatedAt?: Date;
   userId?: string | null;
   userMemoryId?: string | null;
+  visibility?: UserMemoryVisibility;
+  workspaceId?: string | null;
 }
 
 /** Row of `user_memories_context_projects` — a context linked to a project. */
@@ -397,6 +406,7 @@ export interface UserMemoryExperienceInsert {
 /** Row of `user_memories_entities` — a person, organization, product, repository or place. */
 export interface UserMemoryEntity {
   accessedAt: Date;
+  agentId: string | null;
   createdAt: Date;
   description: string | null;
   descriptionVector: number[] | null;
@@ -405,17 +415,21 @@ export interface UserMemoryEntity {
   metadata: Record<string, unknown> | null;
   name: string;
   parentEntityId: string | null;
+  projectId: string | null;
   relationship: string | null;
   role: string | null;
   type: UserMemoryEntityType;
   updatedAt: Date;
   userId: string | null;
   userMemoryId: string | null;
+  visibility: UserMemoryVisibility;
+  workspaceId: string | null;
 }
 
 /** Insert shape of `UserMemoryEntity`: required columns have no database default. */
 export interface UserMemoryEntityInsert {
   accessedAt?: Date;
+  agentId?: string | null;
   createdAt?: Date;
   description?: string | null;
   descriptionVector?: number[] | null;
@@ -424,12 +438,15 @@ export interface UserMemoryEntityInsert {
   metadata?: Record<string, unknown> | null;
   name: string;
   parentEntityId?: string | null;
+  projectId?: string | null;
   relationship?: string | null;
   role?: string | null;
   type?: UserMemoryEntityType;
   updatedAt?: Date;
   userId?: string | null;
   userMemoryId?: string | null;
+  visibility?: UserMemoryVisibility;
+  workspaceId?: string | null;
 }
 
 /** Row of `user_memories_entity_names` — a name an entity goes by. */
@@ -445,6 +462,7 @@ export interface UserMemoryEntityName {
   sourceMemoryId: string | null;
   updatedAt: Date;
   userId: string | null;
+  workspaceId: string | null;
 }
 
 /** Insert shape of `UserMemoryEntityName`: required columns have no database default. */
@@ -460,6 +478,7 @@ export interface UserMemoryEntityNameInsert {
   sourceMemoryId?: string | null;
   updatedAt?: Date;
   userId?: string | null;
+  workspaceId?: string | null;
 }
 
 /** Row of `user_memories_edges` — a graph relation between two memories. */
@@ -474,6 +493,7 @@ export interface UserMemoryEdge {
   targetMemoryId: string;
   updatedAt: Date;
   userId: string | null;
+  workspaceId: string | null;
 }
 
 /** Insert shape of `UserMemoryEdge`: required columns have no database default. */
@@ -488,6 +508,7 @@ export interface UserMemoryEdgeInsert {
   targetMemoryId: string;
   updatedAt?: Date;
   userId?: string | null;
+  workspaceId?: string | null;
 }
 
 /** Row of `user_memories_operations` — one structural change, with what is needed to undo it. */
@@ -508,6 +529,7 @@ export interface UserMemoryOperation {
   targets: Record<string, string | string[]>;
   updatedAt: Date;
   userId: string | null;
+  workspaceId: string | null;
 }
 
 /** Insert shape of `UserMemoryOperation`: required columns have no database default. */
@@ -528,6 +550,7 @@ export interface UserMemoryOperationInsert {
   targets: Record<string, string | string[]>;
   updatedAt?: Date;
   userId?: string | null;
+  workspaceId?: string | null;
 }
 
 /** Row of `user_memory_persona_documents` — the current persona of a user. */
