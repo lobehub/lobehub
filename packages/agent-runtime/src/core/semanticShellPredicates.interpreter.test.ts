@@ -304,6 +304,47 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
         expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
       },
     );
+
+    // Value-taking option letters inside the cluster move the payload: Bash
+    // consumes `pipefail` as the `-o` operand and runs the LATER `-c` payload
+    // (`bash -xoc pipefail -c 'echo B'` prints B), so stopping at the first
+    // `c` and reading `pipefail` as the command left the real payload unseen.
+    it.each([
+      ['rmRecursiveHomeTarget', "bash -xoc pipefail -c 'echo $(rm -rf ~)' rm; echo ~"],
+      ['rmRecursiveHomeTarget', "bash -xoc pipefail -c 'echo $(rm -rf ~)'"],
+      ['rmRecursiveRootTarget', "bash -eoc pipefail -c 'echo $(rm -rf /)' rm"],
+      ['rmRecursiveHomeTarget', "bash -o posix -c 'echo $(rm -rf ~)' rm; echo ~"],
+    ] as const)(
+      'reads the payload after a clustered option operand (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
+
+    it.each(["bash -xoc pipefail -c 'echo hi'", "bash -o posix -c 'echo hi'"])(
+      'keeps a harmless payload behind a clustered operand inert: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      },
+    );
+
+    // `+`-prefixed words turn a flag OFF (`help set`); they are still option
+    // words, so the walk must keep going: `bash +e -c '<payload>'` runs it.
+    it.each([
+      ['rmRecursiveHomeTarget', "bash +e -c 'echo $(rm -rf ~)' rm; echo ~"],
+      ['rmRecursiveHomeTarget', "bash +e -c 'echo $(rm -rf ~)'"],
+      ['rmRecursiveRootTarget', "sh +e -c 'echo $(rm -rf /)'"],
+      ['rmRecursiveHomeTarget', "bash +e +x -c 'echo $(rm -rf ~)' rm"],
+    ] as const)('reads a payload after plus-prefixed options (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each(["bash +e -c 'echo hi'", 'bash +e script.sh'])(
+      'keeps a harmless command behind plus-prefixed options inert: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+      },
+    );
   });
   describe('twenty-second-round review: locale-translation quoting in argv', () => {
     // `$"…"` is a QUOTED word at parse time: bash removes the `$`, translates

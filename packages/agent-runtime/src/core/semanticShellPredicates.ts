@@ -336,10 +336,35 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
     // command payload after any number of preceding options (`bash [GNU long
     // option] [option] ...`), so requiring `-c` right after the executable
     // missed the payload and let the deletion run in the child shell.
+    //
+    // The walk models Bash's own parse instead of the shape of one word:
+    //  - `c` sets a PENDING command and may sit anywhere in a cluster (`-c`,
+    //    `-ec`, `-xce`), so the payload is the first NON-OPTION word after it;
+    //  - `+`-prefixed words stay option words (`bash +e -c '…'`; `help set`:
+    //    "Using + rather than - causes these flags to be turned off"), so they
+    //    must not end the walk;
+    //  - `-o option` / `-O shopt_option` take their operand from the NEXT word
+    //    and a cluster can carry both (`bash -xoc pipefail -c '<payload>'`), so
+    //    each such letter before `c` shifts where the payload starts.
     let cursor = index + 1;
+    let commandPending = false;
     while (cursor < words.length) {
       const option = words[cursor];
-      if (option === '--' || !option.startsWith('-')) break;
+      if (option === '--') {
+        // End of options: a pending `-c` takes the next word as its payload.
+        if (commandPending && words[cursor + 1]) payloads.push(words[cursor + 1]);
+        break;
+      }
+      if (option.startsWith('+')) {
+        cursor++;
+        continue;
+      }
+      if (!option.startsWith('-')) {
+        // First non-option word: the pending `-c` payload (`bash -c '<src>'`,
+        // `bash -xce '<src>'`) or the script file of a plain `bash script.sh`.
+        if (commandPending) payloads.push(option);
+        break;
+      }
       if (option.startsWith('--')) {
         // Value-taking long options (`bash --rcfile FILE -c …`) keep their
         // operand in the NEXT word. Skipping only the flag made the operand
@@ -348,44 +373,22 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
         cursor += INTERPRETER_LONG_OPTIONS_WITH_VALUE.has(option) ? 2 : 1;
         continue;
       }
-      if (option.endsWith('c')) {
-        // `-c`/`-ec`: the payload is the next word.
-        const payload = words[cursor + 1];
-        if (payload) payloads.push(payload);
-        break;
+      const letters = option.slice(1);
+      const commandAt = letters.indexOf('c');
+      if (commandAt === 0 && letters.length > 1) {
+        // Glued form `-c<source>`: keep the remainder as a candidate so a
+        // command written without a space is still inspected. Over-detection is
+        // the safe direction: `bash -cecho hi` makes `echo` more flags and `hi`
+        // the `-o` operand (`bash: hi: invalid option name`), never source.
+        payloads.push(letters.slice(1));
       }
-      if (option.startsWith('-c')) {
-        // Glued form `-c<source>`.
-        payloads.push(option.slice(2));
-        break;
-      }
-      // `c` can also sit in the MIDDLE of a valid cluster. Bash documents
-      // invocation as `bash [GNU long option] [option] ...` and lists
-      // `-c command`, so the letters before `c` are ordinary flags: in
-      // `bash -xce '<payload>'` the payload is the word AFTER the whole option
-      // word. Reading only the cluster's edges missed it, and the positional
-      // `rm` behind the payload blocked the generic fallback, so
-      // `bash -xce 'echo $(rm -rf ~)' rm` deleted the home directory with all
-      // three predicates returning false. Never read the rest of the cluster as
-      // source: `bash -cecho hi` makes `echo` more flags and `hi` the `-o`
-      // operand, not a `echo hi` payload.
-      if (option.slice(1).includes('c')) {
-        const payload = words[cursor + 1];
-        if (payload) payloads.push(payload);
-        break;
-      }
-      // Value-taking short options: `-o option` (`bash --help`: `-o option`)
-      // and `-O shopt_option`, plus their combined spellings (`-eo pipefail`).
-      // The operand is an option NAME, not the next flag, so the walk must
-      // consume it — otherwise it stops at `posix` in
-      // `bash -o posix -c 'echo $(rm -rf ~)' rm; echo ~`, `-c` is never
-      // reached, and all three predicates return false although Bash runs the
-      // substitution in the child shell.
-      if (/o$/i.test(option)) {
-        cursor += 2;
-        continue;
-      }
-      cursor++;
+      if (commandAt !== -1) commandPending = true;
+      // Operand letters before `c` consume the next word, which moves the
+      // payload: `bash -xoc pipefail -c '<payload>'` runs `<payload>`, not
+      // `pipefail`, and all three predicates returned false for it.
+      const operandLetters = commandAt === -1 ? letters : letters.slice(0, commandAt);
+      const operands = [...operandLetters].filter((letter) => /o/i.test(letter)).length;
+      cursor += 1 + operands;
     }
   }
   return payloads;
