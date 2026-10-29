@@ -131,6 +131,29 @@ export const findCanvasIdByWorkId = async (
   return row?.canvasId ?? null;
 };
 
+export const findCanvasIdsByDeploymentIds = async (
+  ctx: WorkContext,
+  deploymentIds: string[],
+): Promise<Record<string, string>> => {
+  if (deploymentIds.length === 0) return {};
+
+  const deploymentId = sql<string>`${works.metadata}->'canvasPublish'->>'deploymentId'`;
+  const rows = await ctx.db
+    .select({ canvasId: works.resourceId, deploymentId })
+    .from(works)
+    .where(
+      and(
+        workOwnership(ctx),
+        eq(works.resourceType, 'canvas'),
+        inArray(deploymentId, deploymentIds),
+      ),
+    );
+
+  return Object.fromEntries(
+    rows.flatMap((row) => (row.canvasId ? [[row.deploymentId, row.canvasId] as const] : [])),
+  );
+};
+
 export const findCanvasWorkVersion = async (
   ctx: WorkContext,
   workId: string,

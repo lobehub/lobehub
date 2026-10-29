@@ -254,6 +254,25 @@ describe('WorkModel · canvas', () => {
     expect((await model.findCanvas('cvs_cost'))?.work.url).toBe('https://cost.lobehub.sites');
   });
 
+  it('maps published deployment ids back to the canvases the caller can see', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerCanvas(params());
+    await model.registerCanvas(params({ canvasId: 'cvs_draft', toolCallId: 'call-canvas-2' }));
+    await model.recordCanvasPublish('cvs_cost', {
+      deploymentId: 'dep_1',
+      publishedVersion: 1,
+      url: 'https://cost.lobehub.sites',
+    });
+
+    expect(await model.findCanvasIdsByDeploymentIds(['dep_1', 'dep_unknown'])).toEqual({
+      dep_1: 'cvs_cost',
+    });
+    expect(await model.findCanvasIdsByDeploymentIds([])).toEqual({});
+    expect(await new WorkModel(serverDB, userId2).findCanvasIdsByDeploymentIds(['dep_1'])).toEqual(
+      {},
+    );
+  });
+
   it('keeps the public link of a published canvas when a newer version is registered', async () => {
     const model = new WorkModel(serverDB, userId);
     await model.registerCanvas(params());
