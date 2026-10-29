@@ -1243,6 +1243,8 @@ export default {
     'Claude Code rejected the cloud credential. Generate a new token with `claude setup-token`, update it in the agent profile, then retry your message.',
   'cliAuthGuide.desc':
     '{{name}} could not continue because its sign-in session expired or the credentials are invalid.',
+  'cliAuthGuide.deviceAfterLogin':
+    'Run it on the device that runs {{name}}, then retry your message.',
   'cliAuthGuide.errorDetails': 'Error details',
   'cliAuthGuide.runCommand': 'Run this in Terminal',
   'cliAuthGuide.title': 'Sign in to {{name}}',
@@ -1306,6 +1308,17 @@ export default {
   'codexInstallGuide.menuNotification.title': 'Codex CLI not found',
   'codexInstallGuide.reason': 'LobeHub could not start Codex: {{message}}',
   'codexInstallGuide.title': 'Install Codex CLI',
+  'copilotInstallGuide.actions.openDocs': 'Open Install Guide',
+  'copilotInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'copilotInstallGuide.afterInstall':
+    'After installing, run `copilot` and enter `/login` (or run `copilot login`) to sign in with GitHub, then retry your message or click Re-detect in System Tools.',
+  'copilotInstallGuide.desc':
+    'GitHub Copilot needs the Copilot CLI to run locally. Install it and make sure the `copilot` command is available in your PATH.',
+  'copilotInstallGuide.installWithBrew': 'Install script (macOS / Linux)',
+  'copilotInstallGuide.installWithNpm': 'npm (macOS / Linux / Windows)',
+  'copilotInstallGuide.menuNotification.title': 'GitHub Copilot CLI not found',
+  'copilotInstallGuide.reason': 'LobeHub could not start GitHub Copilot: {{message}}',
+  'copilotInstallGuide.title': 'Install GitHub Copilot CLI',
   'cursorInstallGuide.actions.openDocs': 'Open Install Guide',
   'cursorInstallGuide.actions.openSystemTools': 'Open System Tools',
   'cursorInstallGuide.afterInstall':
@@ -1422,6 +1435,7 @@ export default {
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodeBuddyAgent': 'Add CodeBuddy',
   'newCodexAgent': 'Add Codex',
+  'newCopilotAgent': 'Add GitHub Copilot',
   'newCursorAgent': 'Add Cursor',
   'newDroidAgent': 'Add Factory Droid',
   'newDevinAgent': 'Add Devin',
@@ -1519,6 +1533,7 @@ export default {
     'DeepSeek Harness agent (dsh CLI) with tools and subagents',
   'connectAgent.providerDesc.codebuddy': 'Tencent coding agent CLI',
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
+  'connectAgent.providerDesc.copilot': 'GitHub coding agent CLI',
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
   'connectAgent.providerDesc.droid': 'Factory coding agent CLI',
   'connectAgent.providerDesc.devin': 'Cognition coding agent CLI',

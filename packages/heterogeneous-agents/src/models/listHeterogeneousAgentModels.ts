@@ -23,12 +23,46 @@ const MODEL_CATALOG_MAX_BUFFER = 4 * 1024 * 1024;
 const MODEL_CATALOG_TIMEOUT_MS = 15_000;
 const CODEBUDDY_MODEL_OPTION = '--model <model>';
 const CODEBUDDY_SUPPORTED_MODELS_LABEL = 'Currently supported:';
+const COPILOT_MODEL_SETTING = '`model`:';
+const COPILOT_MODEL_ROW_PATTERN = /^\s+- "([A-Z0-9][\w.:@+-]*)"$/i;
+/**
+ * Models the Copilot CLI 1.0.105 probe found enabled for a Copilot Free
+ * account, offered when `copilot help config` stops documenting its catalog.
+ */
+const COPILOT_FALLBACK_MODELS: HeterogeneousAgentModel[] = [
+  'gpt-6-luna',
+  'gpt-5.6-luna',
+  'claude-haiku-4.5',
+  'gpt-4.1',
+  'mai-code-1.1-flash',
+].map((id) => ({ id, modelId: id, providerId: 'copilot' }));
 const CURSOR_MODEL_ANNOTATIONS = [' (current)', ' (default)'] as const;
 const CURSOR_MODEL_ID_PATTERN = /^[A-Z0-9][\w./:@+-]*$/i;
 const GROK_MODEL_ID_PATTERN = /^[A-Z0-9][\w./:@+-]*$/i;
 const OPENCODE_MODEL_ID_PATTERN = /^[A-Z0-9][\w.-]*\/[A-Z0-9@][\w./:@+-]*$/i;
 const PI_MODEL_ROW_PATTERN = /^(\S+)\s{2,}(\S+)\s{2,}\S+\s{2,}\S+\s{2,}(?:yes|no)\s{2,}(?:yes|no)$/;
 const QODER_CUSTOM_MODEL_ROW_PATTERN = /^(.+?) \(([^()\s]+)\)$/;
+
+/**
+ * `copilot help config` documents the `model` setting with the CLI's built-in
+ * catalog, one quoted id per line. ACP itself exposes no model list, and
+ * probing one through `session/new` would leave an empty session in the
+ * user's Copilot history.
+ */
+export const parseCopilotModelCatalog = (output: string): HeterogeneousAgentModel[] | undefined => {
+  const lines = output.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim().startsWith(COPILOT_MODEL_SETTING));
+  if (start < 0) return;
+
+  const ids: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    const id = line.match(COPILOT_MODEL_ROW_PATTERN)?.[1];
+    if (!id) break;
+    ids.push(id);
+  }
+  if (ids.length === 0) return;
+  return [...new Set(ids)].map((id) => ({ id, modelId: id, providerId: 'copilot' }));
+};
 
 const parseCodeBuddyModelCatalogResult = (
   output: string,
@@ -346,13 +380,15 @@ export const listHeterogeneousAgentModels = async (
     const args =
       params.type === 'codebuddy'
         ? ['--help']
-        : params.type === 'devin'
-          ? ['models', 'list', '--format', 'json']
-          : params.type === 'grok-build' || params.type === 'opencode'
-            ? ['models']
-            : params.type === 'kimi-code'
-              ? ['provider', 'list', '--json']
-              : ['--list-models'];
+        : params.type === 'copilot'
+          ? ['help', 'config']
+          : params.type === 'devin'
+            ? ['models', 'list', '--format', 'json']
+            : params.type === 'grok-build' || params.type === 'opencode'
+              ? ['models']
+              : params.type === 'kimi-code'
+                ? ['provider', 'list', '--json']
+                : ['--list-models'];
     const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
       cwd: params.cwd,
@@ -362,6 +398,11 @@ export const listHeterogeneousAgentModels = async (
       timeout: MODEL_CATALOG_TIMEOUT_MS,
       windowsHide: true,
     });
+
+    if (params.type === 'copilot') {
+      const models = parseCopilotModelCatalog(String(stdout)) ?? COPILOT_FALLBACK_MODELS;
+      return { models, status: 'success', updatedAt };
+    }
 
     if (params.type === 'codebuddy') {
       const models =

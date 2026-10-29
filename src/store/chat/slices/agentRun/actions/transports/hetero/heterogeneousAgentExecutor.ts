@@ -93,6 +93,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
+import { abortOpenToolMessages } from './abortOpenToolMessages';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
@@ -377,6 +378,8 @@ const subscribeBroadcasts = (
   };
 };
 
+/** ACP runtimes that switch to the selected model after the handshake, not via a CLI flag. */
+const ACP_MODEL_ADAPTERS = new Set(['copilot', 'deepseek-harness', 'devin', 'droid', 'trae']);
 const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 const HETERO_TERMINAL_EVENT_GRACE_TIMEOUT_MS = 3_000;
 
@@ -1028,6 +1031,8 @@ export const executeHeterogeneousAgent = async (
       pendingToolFlush.set(toolMsgId, toolUpdate);
     });
   };
+  const abortStoppedTools = () =>
+    abortOpenToolMessages(get, operationId, toolMsgIdByCallId.values(), terminalToolMessageIds);
   const claimToolStateSnapshot = (
     toolCallId: string,
     toolMsgId: string,
@@ -1101,10 +1106,9 @@ export const executeHeterogeneousAgent = async (
         },
         { operationId },
       );
-      // Bridge resolved without the user — drop the hand state so the
-      // sidebar reflects that we're back to whatever the stream does
-      // next (`active`/`failed` lands shortly after via runtime_end).
-      writeTopicStatus('running');
+      // Bridge resolved without the user: drop the hand state, unless the run already
+      // ended — onComplete wrote its final status and a late `running` would strand it.
+      if (!completed) writeTopicStatus('running');
     } catch (err) {
       console.error('[HeterogeneousAgent] persist intervention rejection failed:', err);
     }
@@ -2010,10 +2014,7 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'devin' ||
-          adapterType === 'droid' ||
-          adapterType === 'trae' ||
-          adapterType === 'deepseek-harness') &&
+        ACP_MODEL_ADAPTERS.has(adapterType) &&
         !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
@@ -2091,8 +2092,7 @@ export const executeHeterogeneousAgent = async (
      * batch). Per-event branches still mirror the pre-Phase-0 inner loop.
      */
     const handleStreamEvent = (event: AgentStreamEvent) => {
-      // Once the user cancels, drop any trailing events the CLI emits before
-      // exit so they don't leak into DB writes.
+      // After a user cancel, drop trailing CLI events; abortStoppedTools settles open tools.
       if (isAborted()) return;
 
       // Record for debugging
@@ -2452,12 +2452,11 @@ export const executeHeterogeneousAgent = async (
             }
             pendingSubagentFlush.clear();
           }
+          if (isAborted()) await abortStoppedTools();
 
           if (!isErrorTerminal) {
-            // Topic status was already reset ahead of the queue (top of
-            // onComplete); forward the deferred terminal with the current
-            // frontend SoT so the handler can complete the operation without a
-            // DB refresh that may race write-behind batchMutate.
+            // Status was reset atop onComplete; forward the terminal with the current
+            // frontend SoT so completion needn't race write-behind batchMutate.
             attachTerminalFrontendSnapshot(terminalEvent);
             eventHandler(terminalEvent);
             if (!queueDrained) get().completeOperation(operationId);
@@ -2553,10 +2552,9 @@ export const executeHeterogeneousAgent = async (
           });
           await waitForPersistQueue(persistQueue, 'error');
 
-          // If the error came from a user-initiated cancel (SIGINT → non-zero
-          // exit), don't surface it as a runtime error toast — the operation is
-          // already marked cancelled and the partial content is persisted above.
+          // A user cancel (SIGINT → non-zero exit) is no runtime error: settle its tools only.
           if (isAborted()) {
+            await abortStoppedTools();
             writeTopicStatus('active');
             return;
           }

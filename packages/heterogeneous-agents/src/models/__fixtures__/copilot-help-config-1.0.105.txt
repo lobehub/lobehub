@@ -1,0 +1,262 @@
+Configuration Settings:
+
+  Change these settings with `copilot config`, using dot notation for nested keys:
+    $ copilot config footer.showQuota off
+    $ copilot config allowedUrls github.com         # adds an item to a list setting
+    $ copilot config allowedUrls
+    $ copilot config --rm allowedUrls github.com    # removes one item from a list setting
+    $ copilot config --list
+  Use --repo or --local to change .github/copilot/settings.json or settings.local.json.
+
+  `allowedUrls`: list of URLs or domains that are allowed to be accessed without prompting.
+    Supports exact URLs (e.g., "https://github.com"), domain patterns (e.g., "github.com"),
+    and wildcard subdomains (e.g., "*.github.com").
+
+  `autoUpdate`: whether to automatically download updated CLI versions; defaults to `true`.
+    On standalone-binary installations, downloads run in the background and a downloaded
+    version applies at your next launch of the CLI, unless that launch opts out with
+    `--no-auto-update`, `--prefer-version`, or `COPILOT_AUTO_UPDATE=false`; `/restart`
+    applies it in the CLI you already have open. Setting this to `false` only stops
+    further downloads - it does not stop an already downloaded version from applying.
+    Installations run from npm/JavaScript only report that a newer version is available -
+    installing it stays a manual `npm install`.
+
+  `banner`: frequency of showing animated banner; defaults to "once".
+    - "always" displays it every time
+    - "never" disables it
+    - "once" displays it the first time
+
+  `bannerStyle`: which artwork the startup banner uses; defaults to "mona".
+    - "mona" is the two-Mona pixel-art hi-five
+    - "classic" is the COPILOT wordmark with the goggled mascot
+    - Ignored when `banner` resolves to "never"
+
+  `bashEnv`: whether to enable BASH_ENV support for bash shells; defaults to `false`.
+    - Can also be set with --bash-env or --no-bash-env
+    - Using either flag persists the preference to config
+
+  `beep`: whether to beep when user attention is required; defaults to `false`.
+
+  `beepOnSchedule`: whether to beep when a scheduled `/every` (or `/after`) run finishes; defaults to `true`.
+    - Only applies when `beep` is enabled; set to `false` to silence completion beeps for scheduled runs.
+
+  `notifications`: whether to show OS notifications when user attention is required and when the agent finishes; defaults to `false`.
+    - Set to `true` to enable desktop toasts. Toasts are suppressed while the terminal window already has focus.
+    - Clicking a toast attempts to focus the terminal window that raised it where supported; multi-tab terminals (e.g. Windows Terminal) can't switch to the specific tab.
+
+  `terminalNotifications`: whether to prefer terminal-owned OSC 777 notifications; defaults to `false`.
+    - Requires `notifications` to be enabled.
+    - Used for recognized, active Ghostty and WezTerm sessions. Herdr uses its own notification path; tmux, GNU screen, Zellij, unsupported terminals, and rejected writes try the OS notification backend when available.
+
+  `powershellFlags`: list of flags passed to PowerShell (pwsh) on startup; defaults to `["-NoProfile", "-NoLogo"]`.
+    - Overrides the default flags when set; only applies on Windows
+    - Examples: `["-NoProfile"]` to keep the logo, `[]` to load your profile and show the logo,
+      `["-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass"]` for locked-down environments
+    - Use caution: flags that change execution semantics (`-Command`, `-File`, `-NoExit`,
+      `-NonInteractive`, `-EncodedCommand`, `-InputFormat`, `-OutputFormat`) will break
+      the runtime. See the settings documentation for details.
+
+  `compactPaste`: whether to collapse large pasted content into compact tokens; defaults to `true`.
+    - When `true` (default), pastes with more than 10 lines are displayed as `[Paste #N - X lines]`
+    - When `false`, all pasted content is displayed directly in the input
+
+  `copyOnSelect`: whether selecting text in alt screen mode automatically copies it to the system clipboard; defaults to `true` on macOS, `false` elsewhere.
+    - When `true`, text is copied to the system clipboard as soon as the mouse button is released after a selection
+    - When `false` (default), use Ctrl+C or right-click to copy selected text to the system clipboard
+    - On Linux, the X11 primary selection is always updated on selection regardless of this setting
+
+  `commandHistoryMaxSize`: maximum number of recent prompts kept for Ctrl+R command-history search and up/down history navigation; defaults to `50`.
+    - History is newest-first and deduplicated; entries beyond this many are dropped
+    - Must be an integer between `1` and `1000`; out-of-range or invalid values fall back to `50`
+    - Lowering it trims the in-memory history immediately and persists on the next submitted prompt
+
+  `customAgents.defaultLocalOnly`: whether to default to only use local custom agents (no remote org/enterprise); defaults to `false`.
+
+  `deniedUrls`: list of URLs or domains that are denied access. Denial rules take precedence
+    over allow rules.
+
+  `proxyKerberosServicePrincipal`: service principal name (SPN) for Kerberos/Negotiate proxy
+    authentication; overrides the derived `HTTP/<proxy-host>`. Mirrors VS Code's
+    `http.proxyKerberosServicePrincipal`.
+    - The `COPILOT_PROXY_KERBEROS_SPN` environment variable, when set, takes precedence
+    - Changing this requires a restart to take effect
+
+  `proxyUrl`: proxy URL for HTTP(S) requests (e.g. `http://proxy.corp.example:3128`).
+    - Can be overridden by the `HTTP_PROXY` / `HTTPS_PROXY` environment variables (any casing,
+      including lowercase `http_proxy` / `https_proxy`); if either is set in the environment,
+      it takes precedence and this setting is ignored
+    - `NO_PROXY` from the environment is still honored
+    - Changing this requires a restart to take effect
+
+  `experimental`: whether to enable experimental features; defaults to `false`.
+    - Can be enabled with --experimental flag, /settings experimental on, or /experimental (deprecated)
+
+  `memory`: whether to enable agentic memory (cross-session fact recall); defaults to `true`.
+    - Toggle with `/memory on|off` (writes this setting)
+    - When `false`, the agent will not store or recall memories
+
+  `includeCoAuthoredBy`: whether to instruct the agent to add a Co-authored-by trailer to git commits; defaults to `true`.
+
+  `keepAlive`: keep-alive mode applied at CLI startup; prevents the system from sleeping while the session is active. Defaults to `"off"`.
+    - `"off"` (default): system sleeps normally.
+    - `"on"`: keep-alive is enabled for the duration of the session.
+    - `"busy"`: keep-alive is enabled only while the agent is working on a turn.
+    - Can also be set interactively with `/keep-alive [on|off|busy|<duration>]`.
+
+  `companyAnnouncements`: list of messages to display in the banner on startup.
+    - One message is randomly selected each time the CLI starts
+    - Useful for team announcements or reminders
+
+  `continueOnAutoMode`: whether to automatically switch to auto mode when rate-limited; defaults to `false`.
+    - When `true`, eligible rate limit errors (per-model, weekly, or integration limits) trigger an automatic switch to auto mode and retry
+    - Does not apply to global rate limits, generic 429s, or BYOK providers
+
+  `stayInAutopilot`: whether to stay in autopilot mode after an autopilot task completes; defaults to `true`.
+    - When `true` (default), the CLI remains in autopilot mode after the agent calls `task_complete` instead of exiting to interactive mode
+    - Set to `false` to revert to interactive mode after each completed task
+
+  `defaultMode`: agent mode new interactive sessions start in; defaults to "interactive".
+    - One of "interactive", "plan", or "autopilot"
+    - `--mode`, `--autopilot`, and `--plan` still win when passed
+    - Resumed sessions keep their own persisted mode, and it does not apply to `-p`/`--prompt`, `--server`, or `--acp` runs
+
+  `defaultPermissionMode`: permission mode new interactive sessions start in; defaults to "manual" unless an eligible organization targets Assisted.
+    - `"manual"` (default): write and command requests are prompted; read-only requests are auto-approved
+    - `"assisted"`: a probabilistic LLM review reduces confirmation dialogs by auto-approving requests it judges safe and asking otherwise; it is not a security boundary and may approve dangerous or unintended actions, so use managed restrictions, sandboxing, least-privilege credentials, and egress controls for enforceable protection
+    - `"allow-all"`: auto-approves everything, equivalent to launching with `--allow-all`; ignored when policy disables bypass-permissions mode
+    - Any value is ignored on resumed sessions, outside interactive runs, and when `--allow-all`/`--yolo` already elevated the session
+    - Pairs with `defaultMode: "autopilot"` to skip the autopilot permission confirmation entirely
+
+  `logLevel`: log level for CLI; defaults to "default". Set to "all" for debug logging.
+
+  `model`: AI model to use for Copilot CLI; can be changed with /model command or --model flag option.
+    - "claude-sonnet-5.5"
+    - "claude-sonnet-5"
+    - "claude-fable-5.1"
+    - "claude-fable-5"
+    - "claude-opus-5.5"
+    - "claude-opus-5"
+    - "claude-opus-4.8"
+    - "claude-opus-4.8-fast"
+    - "claude-sonnet-4.6"
+    - "claude-haiku-5.5"
+    - "claude-haiku-4.5"
+    - "gpt-6.1-sol"
+    - "gpt-6-sol"
+    - "gpt-6-luna"
+    - "gpt-6-astra"
+    - "gpt-5.6-sol"
+    - "gpt-5.6-terra"
+    - "gpt-5.6-luna"
+    - "gpt-5.5"
+    - "gpt-5.4"
+    - "gpt-5.4-mini"
+    - "gpt-5.3-codex"
+    - "gpt-5-mini"
+    - "mai-code-1.1-flash"
+    - "gemini-4-argon"
+    - "gemini-3.8-flash"
+    - "gemini-3.7-flash"
+    - "grok-4.7"
+    - "grok-4.6"
+    - "grok-4.5"
+    - "kimi-k3"
+
+  `contextTier`: context window tier for tiered-pricing models (e.g., "default" or "long_context").
+    - Can also be set with --context flag (overrides persisted setting)
+    - Can be changed with /model command (context tier picker appears for eligible models)
+
+  `autoTier`: routing profile used when the selected model is Auto (displayed as Copilot Fusion when dynamic tier discovery is enabled locally). Normally "efficiency", "balance", or "intelligence"; server-advertised profiles are also accepted when dynamic Auto tiers are enabled. CLI/SDK treatment accepts `fusion`; stored model IDs remain `auto`. A stored "fast" profile is still read, for compatibility with other Copilot clients and with settings older CLI versions wrote, but the CLI cannot run on it and uses "balance" instead.
+    - Can also be set with --auto-tier (overrides the persisted setting)
+    - Configured interactively with /config model when Auto preferences are available
+
+  `subagents.agents.<agent-name>`: per-subagent model, effortLevel, and contextTier selection.
+    - Each field can be set to "inherit" to use the parent session's effective value
+    - Configure interactively with the /subagents command
+
+  Session limits are opt-in. They apply across the current conversation; /clear and /new reset used AI credits but keep the configured limit until you unset it.
+    - Run /limits with no arguments to open the interactive limits dialog
+    - Use /limits set max-ai-credits <credits> to set the AI credit limit
+    - Use --max-ai-credits to set an initial AI credit limit when starting the session
+    - The minimum AI credit limit is 30; lower values are too small for a useful CLI turn
+    - AI credit usage is known only after a model call returns, so one call can exceed the limit before the CLI blocks
+      the next model call
+
+  `mouse`: whether to enable mouse support in alt screen mode; defaults to `true`.
+    - Can also be set with --mouse or --no-mouse
+    - Using either flag persists the preference to config
+    - When disabled, scroll wheel and click events are not captured by the CLI
+
+  `renderMarkdown`: whether to render markdown in the terminal; defaults to `true`.
+
+  `inlineImages`: whether to render images inline using the Kitty graphics protocol; defaults to `true`.
+    - Only takes effect on terminals that support Kitty graphics (e.g. Ghostty, kitty, WezTerm), and inside tmux with passthrough enabled
+    - In a herdr pane, images are off by default: herdr draws them itself rather than passing them through, which additionally requires `experimental.kitty_graphics = true` in herdr's own config and cannot be detected from inside a pane. Set `COPILOT_INLINE_IMAGES_HERDR=1` to opt in once that setting is on
+    - When disabled, image attachments show a text placeholder instead
+
+  `inlineImageLiveWindow`: maximum number of inline images kept resident in the terminal at once (the most-recent N by timeline order); defaults to `50`.
+    - Images beyond N render as a text caption and have their data freed from the terminal, bounding its image memory in long, image-heavy sessions
+    - Set to `0` to disable the cap (keep every inline image resident)
+    - The `COPILOT_INLINE_IMAGE_LIMIT` environment variable overrides this setting
+
+  `scrollbar`: whether to show the scrollbar in scrollable views; defaults to `true`.
+    - When `false`, the scrollbar is hidden and its gutter is reclaimed so content uses the full terminal width.
+
+  `respectGitignore`: whether to exclude gitignored files from the `@` file mention picker; defaults to `true`.
+    - When `false`, the `@` picker includes files that are normally excluded by `.gitignore`
+    - Useful when sub-repositories or vendor directories are gitignored but still need to be referenced
+
+  `screenReader`: whether to enable screen reader optimizations; defaults to `false`.
+
+  `showTipsOnStartup`: whether to show a random command tip when the CLI starts; defaults to `true`.
+
+  `stream`: whether to enable streaming mode; defaults to `true`.
+
+  `streamerMode`: whether to enable streamer mode; defaults to `false`.
+    - Hides preview model names and quota details (useful for streaming or screen sharing)
+    - Toggle with the staff-only /streamer-mode command (persists across sessions)
+    - Note: this setting is not exposed via /settings because /streamer-mode is staff-gated
+
+  `statusLine`: configuration for a custom status line displayed below the input.
+    - `type`: optional; when set, must be "command"
+    - `command`: path to an executable script or a shell command that generates status line content.
+      Supports `~` (home directory) and environment variables (`$HOME`, `${HOME}`, `${VAR:-default}`).
+      Plain commands are run with the platform shell (`/bin/sh` on Unix-like systems, `cmd.exe` on Windows).
+      The command receives the current session status as JSON on stdin and should print the status line to stdout.
+    - `padding`: optional number of spaces to pad each line on the left
+    - `refreshInterval`: optional integer number of seconds between command re-runs (minimum `1`, maximum `2147483`); omit to refresh only on events
+
+  `tabs`: configuration for the home screen navigation tab bar (Session, Agents, Issues, Pull requests, Gists).
+    - `enabled`: whether to show the tab bar; defaults to `true`. Set to `false` to hide it entirely.
+    - `sort`: array of tab identifiers controlling display order. Accepted identifiers (case-insensitive): `copilot` (Session), `agents`, `issues`, `pull-requests`, `gists`. Tabs not listed keep their default order after the listed ones; unknown identifiers are ignored.
+    - `hide`: array of tab identifiers to hide (same identifiers as `sort`). Unknown identifiers are ignored; the `copilot` (Session) tab cannot be hidden.
+
+  `terminalProgress`: whether to emit terminal progress indicators (OSC 9;4) while the agent is working; defaults to `true`.
+    - Shows an indeterminate progress indicator in the terminal title bar or tab on supported emulators (Windows Terminal, iTerm2, Ghostty, ConEmu)
+    - Set to `false` to suppress these escape sequences on terminals that render them as visible artifacts
+
+  `theme`: color palette / theme for output; defaults to "github".
+    - One of: "default", "github", "dim", "high-contrast", "colorblind"
+    - Set via /settings theme <value>, or /theme <value> (deprecated)
+    - `colorMode` is a legacy alias for `theme` and still works for now
+
+  `trustedFolders`: list of folders where permission to read or execute files has been granted.
+
+  `updateTerminalTitle`: whether to update the terminal tab/window title with current intent; defaults to `true`.
+    - Shows what the agent is currently working on in the terminal title bar
+    - Only works on supported terminal emulators (xterm, iTerm, Windows Terminal, etc.)
+    - Can also be disabled via the `COPILOT_DISABLE_TERMINAL_TITLE` environment variable
+
+  `disableAllHooks`: whether to disable all hooks (repo-level and user-level); defaults to `false`.
+
+  `hooks`: inline hook definitions, keyed by event name (same schema as .github/hooks/*.json).
+    - In the user settings.json these act as user-level hooks; in repo settings.json they act as repo-level hooks
+
+  `ide.autoConnect`: whether to automatically connect to an IDE workspace on startup; defaults to `true`.
+    - When `false`, the CLI will not auto-connect to IDEs or watch for new IDE lock files
+    - You can still manually connect using the /ide command
+
+  `ide.openDiffOnEdit`: whether to open file edit diffs in the connected IDE for approval; defaults to `true`.
+    - When `false`, file edit approvals are shown only in the terminal
+    - The IDE connection is unaffected; diagnostics and selection features still work
+

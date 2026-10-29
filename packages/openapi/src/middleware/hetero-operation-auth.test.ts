@@ -104,23 +104,23 @@ describe('heterogeneous operation auth middleware', () => {
     });
   });
 
-  it('authorizes a Kimi Code x-api-key token on the Anthropic ingress', async () => {
-    mockResolveActiveHeteroOperationPrincipal.mockResolvedValueOnce({
-      agentType: 'kimi-code',
-      userId: 'user-1',
-    });
+  it.each(['kimi-code', 'copilot'])(
+    'authorizes a %s x-api-key token on the Anthropic ingress',
+    async (agentType) => {
+      mockResolveActiveHeteroOperationPrincipal.mockResolvedValueOnce({
+        agentType,
+        userId: 'user-1',
+      });
 
-    const response = await createApp().request('/invoke', {
-      headers: { 'x-api-key': 'kimi-operation-token' },
-    });
+      const response = await createApp().request('/invoke', {
+        headers: { 'x-api-key': `${agentType}-operation-token` },
+      });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      agentType: 'kimi-code',
-      userId: 'user-1',
-    });
-    expect(mockValidateHeteroOperationJWT).toHaveBeenCalledWith('kimi-operation-token');
-  });
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ agentType, userId: 'user-1' });
+      expect(mockValidateHeteroOperationJWT).toHaveBeenCalledWith(`${agentType}-operation-token`);
+    },
+  );
 
   it('rejects requests that provide both operation credential headers', async () => {
     const response = await createApp().request('/invoke', {
@@ -139,6 +139,8 @@ describe('heterogeneous operation auth middleware', () => {
 
   it.each([
     ['kimi-code', 'anthropic-messages', 'Bearer operation-token'],
+    ['copilot', 'anthropic-messages', 'Bearer operation-token'],
+    ['copilot', 'openai-responses', undefined],
     ['pi', 'anthropic-messages', 'Bearer operation-token'],
     ['pi', 'openai-responses', undefined],
   ] as const)(

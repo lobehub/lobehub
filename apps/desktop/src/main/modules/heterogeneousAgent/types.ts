@@ -76,6 +76,8 @@ export interface ProviderBindingPlan {
   model?: string;
   /** Environment variable that receives the per-prompt server operation token. */
   operationTokenEnvKey?: string;
+  /** Variables only the plan may set; matching values inherited from the app are dropped. */
+  ownsEnvKey?: (key: string) => boolean;
   profileFiles?: ProviderBindingFilePlan[];
   runFiles?: ProviderBindingFilePlan[];
 }

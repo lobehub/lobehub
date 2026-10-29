@@ -18,6 +18,7 @@ describe('heterogeneous agent config', () => {
       'claude-code',
       'codebuddy',
       'codex',
+      'copilot',
       'cursor',
       'droid',
       'devin',
@@ -55,6 +56,16 @@ describe('heterogeneous agent config', () => {
       install: { commands: ['curl https://cursor.com/install -fsS | bash'] },
       title: 'Cursor',
       type: 'cursor',
+    });
+    expect(getHeterogeneousAgentConfig('copilot')).toMatchObject({
+      auth: { signInCommand: 'copilot login' },
+      defaultCommand: 'copilot',
+      iconId: 'GithubCopilot',
+      install: { commands: expect.arrayContaining(['npm install -g @github/copilot']) },
+      kind: 'local-cli',
+      resume: { supported: true },
+      title: 'GitHub Copilot',
+      type: 'copilot',
     });
     expect(getHeterogeneousAgentConfig('droid')).toMatchObject({
       auth: { signInCommand: 'droid' },
@@ -167,6 +178,29 @@ describe('heterogeneous agent config', () => {
     });
   });
 
+  it('recognizes the ways Copilot reports a missing or unusable GitHub login', () => {
+    // `session/new` with no credentials, then a PAT without the Copilot scope.
+    expect(isHeterogeneousAgentAuthRequired('copilot', 'Authentication required')).toBe(true);
+    expect(
+      isHeterogeneousAgentAuthRequired(
+        'copilot',
+        '401 Personal Access Token does not have "Copilot Requests" permission',
+      ),
+    ).toBe(true);
+    expect(isHeterogeneousAgentAuthRequired('copilot', 'Model request timed out')).toBe(false);
+    expect(buildHeterogeneousAgentAuthRequiredError({ agentType: 'copilot' })).toMatchObject({
+      command: 'copilot',
+      docsUrl: 'https://docs.github.com/copilot/concepts/agents/about-copilot-cli',
+      message:
+        'GitHub Copilot could not authenticate. Run `copilot login`, or set COPILOT_GITHUB_TOKEN to a token with the "Copilot Requests" permission, then retry.',
+    });
+    expect(buildHeterogeneousAgentCliNotFoundError({ agentType: 'copilot' })).toMatchObject({
+      command: 'copilot',
+      message:
+        'GitHub Copilot CLI was not found. Install it and make sure `copilot` can be executed.',
+    });
+  });
+
   it('builds TRAE CLI installation guidance without duplicating the CLI suffix', () => {
     expect(buildHeterogeneousAgentCliNotFoundError({ agentType: 'trae' })).toMatchObject({
       agentType: 'trae',
@@ -182,6 +216,7 @@ describe('heterogeneous agent config', () => {
       'claude-code': 'Claude Code',
       'codebuddy': 'CodeBuddy',
       'codex': 'Codex',
+      'copilot': 'GitHub Copilot',
       'cursor': 'Cursor',
       'droid': 'Factory Droid',
       'devin': 'Devin',
@@ -208,6 +243,7 @@ describe('heterogeneous agent config', () => {
   it('classifies local CLIs separately from remote platforms', () => {
     expect(isRemoteHeterogeneousType('amp')).toBe(false);
     expect(isRemoteHeterogeneousType('codebuddy')).toBe(false);
+    expect(isRemoteHeterogeneousType('copilot')).toBe(false);
     expect(isRemoteHeterogeneousType('droid')).toBe(false);
     expect(isRemoteHeterogeneousType('devin')).toBe(false);
     expect(isRemoteHeterogeneousType('opencode')).toBe(false);

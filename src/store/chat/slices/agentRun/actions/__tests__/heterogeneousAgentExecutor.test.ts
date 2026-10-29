@@ -2398,28 +2398,25 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(systemContext).toContain('const answer = 42;');
     });
 
-    it('should pass the selected TRAE model through ACP instead of native args', async () => {
-      const store = createMockStore();
-      const get = vi.fn(() => store);
+    it.each([
+      ['trae', 'traecli', ['--feature=test']],
+      ['copilot', 'copilot', ['--add-dir', '/repo']],
+    ] as const)(
+      'should pass the selected %s model through ACP instead of native args',
+      async (type, command, args) => {
+        const store = createMockStore();
+        const get = vi.fn(() => store);
 
-      await executeHeterogeneousAgent(get, {
-        ...defaultParams,
-        heterogeneousProvider: {
-          args: ['--feature=test'],
-          command: 'traecli',
-          model: 'gpt-5.4',
-          type: 'trae' as const,
-        },
-      });
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: { args: [...args], command, model: 'gpt-5.4', type },
+        });
 
-      expect(mockStartSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentType: 'trae',
-          args: ['--feature=test'],
-          initialModel: 'gpt-5.4',
-        }),
-      );
-    });
+        expect(mockStartSession).toHaveBeenCalledWith(
+          expect.objectContaining({ agentType: type, args: [...args], initialModel: 'gpt-5.4' }),
+        );
+      },
+    );
 
     it('should leave TRAE model selection to the managed profile in API mode', async () => {
       const store = createMockStore();

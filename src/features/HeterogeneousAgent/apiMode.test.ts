@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { supportsHeterogeneousApiMode } from './apiMode';
 
 describe('supportsHeterogeneousApiMode', () => {
-  it.each(['opencode', 'droid'])(
+  it.each(['opencode', 'droid', 'copilot'])(
     'offers %s server-default models without enabling user-provider credentials',
     (agentType) => {
       expect(isHeterogeneousProviderBindingSupported(agentType)).toBe(false);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { HeterogeneousProviderConfig } from './agencyConfig';
-import { buildHeteroSpawnArgs } from './agencyConfig';
+import { buildHeteroExecArgs, buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
   CODEX_SERVER_DEFAULT_CUSTOM_MODELS,
@@ -17,6 +17,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
+    expect(isHeteroSelectorAvailable('copilot')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
     expect(isHeteroSelectorAvailable('droid')).toBe(true);
     expect(isHeteroSelectorAvailable('devin')).toBe(true);
@@ -41,6 +42,7 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('amp')?.model).toBeUndefined();
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
+    expect(getHeteroSelectorCapability('copilot')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');
@@ -191,6 +193,35 @@ describe('applyHeteroSelection', () => {
       'coding',
       '--model',
       'claude-sonnet-4-6-thinking',
+    ]);
+  });
+
+  it('keeps a Copilot model selection in ACP and forwards it only to the exec wrapper', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--add-dir', '/repo', '--model', 'old-model'],
+      type: 'copilot',
+    };
+    const patch = applyHeteroSelection(provider, { model: 'gpt-6-luna' });
+
+    // Copilot switches models through `session/set_model`, so the selector
+    // owns no argv spelling and leaves hand-authored args untouched.
+    expect(patch).toEqual({ args: provider.args, model: 'gpt-6-luna' });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual(provider.args);
+    expect(buildHeteroExecArgs({ ...provider, ...patch })).toEqual([
+      '--agent-arg=--add-dir',
+      '--agent-arg=/repo',
+      '--agent-arg=--model',
+      '--agent-arg=old-model',
+      '--model',
+      'gpt-6-luna',
+    ]);
+    expect(
+      buildHeteroExecArgs({ ...provider, model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION }),
+    ).toEqual([
+      '--agent-arg=--add-dir',
+      '--agent-arg=/repo',
+      '--agent-arg=--model',
+      '--agent-arg=old-model',
     ]);
   });
 

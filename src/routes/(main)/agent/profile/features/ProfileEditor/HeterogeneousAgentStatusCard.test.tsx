@@ -15,51 +15,29 @@ vi.mock('@lobechat/const', () => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobechat/heterogeneous-agents/client', () => ({
-  getHeterogeneousAgentClientConfig: (type: string) =>
-    type === 'deepseek-harness'
-      ? {
-          icon: () => <span>DeepSeek Icon</span>,
-          title: 'DeepSeek Harness',
-        }
-      : type === 'claude-code'
-        ? {
-            defaultCommand: 'claude',
-            icon: () => <span>Claude Code Icon</span>,
-            title: 'Claude Code',
-          }
-        : type === 'droid'
-          ? {
-              defaultCommand: 'droid',
-              icon: () => <span>Factory Droid Icon</span>,
-              title: 'Factory Droid',
-            }
-          : type === 'kimi-code'
-            ? {
-                defaultCommand: 'kimi',
-                icon: () => <span>Kimi Code Icon</span>,
-                title: 'Kimi Code',
-              }
-            : type === 'opencode'
-              ? {
-                  defaultCommand: 'opencode',
-                  icon: () => <span>OpenCode Icon</span>,
-                  title: 'OpenCode',
-                }
-              : type === 'pi'
-                ? {
-                    defaultCommand: 'pi',
-                    icon: () => <span>Pi Icon</span>,
-                    title: 'Pi',
-                  }
-                : {
-                    defaultCommand: 'codex',
-                    icon: () => <span>Codex Icon</span>,
-                    title: 'Codex',
-                  },
-  isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
-  isLocalRuntimeHeterogeneousType: (type: string) => type === 'deepseek-harness',
-}));
+vi.mock('@lobechat/heterogeneous-agents/client', () => {
+  const clientConfig = (title: string, defaultCommand?: string) => ({
+    defaultCommand,
+    icon: () => <span>{`${title} Icon`}</span>,
+    title,
+  });
+  const configs: Record<string, ReturnType<typeof clientConfig>> = {
+    'claude-code': clientConfig('Claude Code', 'claude'),
+    'copilot': clientConfig('GitHub Copilot', 'copilot'),
+    'deepseek-harness': clientConfig('DeepSeek Harness'),
+    'droid': clientConfig('Factory Droid', 'droid'),
+    'kimi-code': clientConfig('Kimi Code', 'kimi'),
+    'opencode': clientConfig('OpenCode', 'opencode'),
+    'pi': clientConfig('Pi', 'pi'),
+  };
+
+  return {
+    getHeterogeneousAgentClientConfig: (type: string) =>
+      configs[type] ?? clientConfig('Codex', 'codex'),
+    isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
+    isLocalRuntimeHeterogeneousType: (type: string) => type === 'deepseek-harness',
+  };
+});
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -309,13 +287,13 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.queryByDisplayValue('codex')).not.toBeInTheDocument();
   });
 
-  it('detects Factory Droid and shows its install guide when unavailable', async () => {
+  it.each([
+    ['droid', 'Factory Droid'],
+    ['copilot', 'GitHub Copilot'],
+  ] as const)('detects %s and shows its install guide when unavailable', async (type, title) => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
 
-    const provider = {
-      command: 'droid',
-      type: 'droid',
-    } satisfies HeterogeneousProviderConfig;
+    const provider = { command: type, type } satisfies HeterogeneousProviderConfig;
 
     render(
       <MemoryRouter>
@@ -325,14 +303,14 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     await waitFor(() => {
       expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
-        agentType: 'droid',
-        command: 'droid',
+        agentType: type,
+        command: type,
       });
     });
 
-    expect(screen.getByText('Factory Droid CLI')).toBeInTheDocument();
-    expect(screen.getByText('Factory Droid CLI is unavailable')).toBeInTheDocument();
-    expect(screen.getByText('droid Install Guide')).toBeInTheDocument();
+    expect(screen.getByText(`${title} CLI`)).toBeInTheDocument();
+    expect(screen.getByText(`${title} CLI is unavailable`)).toBeInTheDocument();
+    expect(screen.getByText(`${type} Install Guide`)).toBeInTheDocument();
   });
 
   it('detects OpenCode and shows its install guide when unavailable', async () => {

@@ -1,0 +1,396 @@
+{
+  "copilotVersion": "1.0.105",
+  "scenarios": {
+    "acp-github-tool-turn": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "optionId": "allow_once",
+              "outcome": "selected"
+            }
+          }
+        }
+      ],
+      "mode": "github-login (Copilot Free, auto model resolved to gpt-6-luna)",
+      "notes": "Real Copilot backend. view (kind=read, no permission, result only in rawOutput) then bash (kind=execute) gated by session/request_permission answered allow_once. No agent_thought_chunk from this model.",
+      "prompt": [
+        {
+          "text": "Read the file notes.txt in the current directory, then run the shell command `echo copilot-acp-probe && uname -s`. Reply with the first line of notes.txt and the command output.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 37617,
+          "outputTokens": 90,
+          "totalTokens": 37707,
+          "thoughtTokens": 0,
+          "cachedReadTokens": 25008,
+          "cachedWriteTokens": 12600
+        }
+      },
+      "sourceRun": "30-gh-real-tool-turn"
+    },
+    "acp-byok-openai-tool-turn": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "optionId": "allow_once",
+              "outcome": "selected"
+            }
+          }
+        }
+      ],
+      "mode": "byok openai, no GitHub login",
+      "notes": "Mock OpenAI-compatible provider. reasoning_text deltas surface as agent_thought_chunk. Same view -> bash(permission allow_once) -> answer flow.",
+      "prompt": [
+        {
+          "text": "Read the file notes.txt in the current directory, then run the shell command `echo copilot-acp-probe && uname -s`. Reply with the first line of notes.txt and the command output.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 300,
+          "outputTokens": 36,
+          "totalTokens": 336,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "10-byok-openai-nologin"
+    },
+    "acp-byok-anthropic-tool-turn": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "optionId": "allow_once",
+              "outcome": "selected"
+            }
+          }
+        }
+      ],
+      "mode": "byok anthropic, COPILOT_OFFLINE=true, no GitHub login",
+      "notes": "Mock Anthropic-compatible provider at <base>/api/v1/anthropic (CLI appends /v1/messages). thinking blocks surface as agent_thought_chunk.",
+      "prompt": [
+        {
+          "text": "Read the file notes.txt in the current directory, then run the shell command `echo copilot-acp-probe && uname -s`. Reply with the first line of notes.txt and the command output.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 300,
+          "outputTokens": 36,
+          "totalTokens": 336,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "12-byok-anthropic-offline"
+    },
+    "acp-permission-reject": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "optionId": "reject_once",
+              "outcome": "selected"
+            }
+          }
+        }
+      ],
+      "mode": "byok openai offline",
+      "notes": "request_permission answered reject_once -> tool_call_update status=failed rawOutput.code=rejected; turn ends (end_turn) without another model request.",
+      "prompt": [
+        {
+          "text": "Read the file notes.txt in the current directory, then run the shell command `echo copilot-acp-probe && uname -s`. Reply with the first line of notes.txt and the command output.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 200,
+          "outputTokens": 24,
+          "totalTokens": 224,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "23-byok-permission-reject"
+    },
+    "acp-cancel-midstream": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [],
+      "mode": "byok openai offline",
+      "notes": "session/cancel sent while text was streaming; prompt resolves stopReason=cancelled ~5 ms later; no trailing updates; upstream HTTP stream aborted.",
+      "prompt": [
+        {
+          "text": "Write a long answer.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "cancelled"
+      },
+      "sourceRun": "20-byok-cancel-midstream"
+    },
+    "acp-cancel-during-tool": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "optionId": "allow_once",
+              "outcome": "selected"
+            }
+          }
+        }
+      ],
+      "mode": "byok openai offline",
+      "notes": "session/cancel sent while an allowed bash tool (sleep 30) was running; prompt resolves cancelled; NO terminal tool_call_update is sent for the running tool.",
+      "prompt": [
+        {
+          "text": "Run the long command.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "cancelled",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 12,
+          "totalTokens": 112,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "21-byok-cancel-during-tool"
+    },
+    "acp-cancel-at-permission": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "outcome": "cancelled"
+            }
+          }
+        }
+      ],
+      "mode": "byok openai offline",
+      "notes": "Client answered the pending request_permission with outcome=cancelled and sent session/cancel; prompt resolves cancelled; tool never gets a terminal update.",
+      "prompt": [
+        {
+          "text": "Run the long command.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "cancelled",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 12,
+          "totalTokens": 112,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "22-byok-cancel-at-permission"
+    },
+    "acp-github-cancel": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [],
+      "mode": "github-login, session/set_model claude-haiku-4.5 before prompt",
+      "notes": "Real backend cancel on first agent_message_chunk: 55 more chunks that were already in flight arrive before the cancelled result.",
+      "prompt": [
+        {
+          "text": "Count from 1 to 300, one number per line, no other text.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "cancelled"
+      },
+      "sourceRun": "32-gh-real-setmodel-cancel"
+    },
+    "acp-subagent": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [],
+      "mode": "byok openai offline",
+      "notes": "task tool (kind=other) runs an explore subagent. Subagent tool_call/tool_call_update carry _meta[\"github.com/copilot\"].agentId; subagent text/thought chunks and usage_update carry NO marker and interleave with the parent stream.",
+      "prompt": [
+        {
+          "text": "Use a subagent to read notes.txt.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 400,
+          "outputTokens": 48,
+          "totalTokens": 448,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "41-byok-subagent"
+    },
+    "acp-plan": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [],
+      "mode": "byok openai offline",
+      "notes": "sql tool inserting into the built-in todos table triggers a plan update (entries were empty in this run).",
+      "prompt": [
+        {
+          "text": "Plan the work with todos.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn",
+        "usage": {
+          "inputTokens": 300,
+          "outputTokens": 36,
+          "totalTokens": 336,
+          "cachedReadTokens": 0,
+          "cachedWriteTokens": 0
+        }
+      },
+      "sourceRun": "40-byok-plan-todos"
+    },
+    "acp-provider-error": {
+      "clientMethod": "session/prompt",
+      "clientRepliesToAgentRequests": [],
+      "mode": "byok openai offline, provider returns HTTP 401",
+      "notes": "Provider failures are reported as agent_message_chunk text (\"Info: ... Retrying...\", then \"Error: Authentication failed ...\") and the prompt still resolves end_turn - no JSON-RPC error.",
+      "prompt": [
+        {
+          "text": "Say hi.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "stopReason": "end_turn"
+      },
+      "sourceRun": "53-byok-provider-401"
+    },
+    "acp-load-replay": {
+      "clientMethod": "session/load",
+      "clientRepliesToAgentRequests": [
+        {
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": {
+            "outcome": {
+              "optionId": "allow_once",
+              "outcome": "selected"
+            }
+          }
+        }
+      ],
+      "mode": "byok openai offline, new process, same COPILOT_HOME",
+      "notes": "session/load replays history (user_message_chunk, coalesced agent_message_chunk, tool_call + tool_call_update with original ids, no thought chunks) BEFORE the load response.",
+      "prompt": [
+        {
+          "text": "What did I ask you before? Answer briefly.",
+          "type": "text"
+        }
+      ],
+      "result": {
+        "configOptions": [
+          {
+            "type": "select",
+            "id": "mode",
+            "name": "Mode",
+            "category": "mode",
+            "description": "Controls how Copilot responds: a conversational agent, planning multi-step work, or autonomous autopilot.",
+            "currentValue": "https://agentclientprotocol.com/protocol/session-modes#agent",
+            "options": [
+              {
+                "value": "https://agentclientprotocol.com/protocol/session-modes#agent",
+                "name": "Agent",
+                "description": "Default agent mode for conversational interactions"
+              },
+              {
+                "value": "https://agentclientprotocol.com/protocol/session-modes#plan",
+                "name": "Plan",
+                "description": "Plan mode for creating and executing multi-step plans"
+              },
+              {
+                "value": "https://agentclientprotocol.com/protocol/session-modes#autopilot",
+                "name": "Autopilot",
+                "description": "Autonomous mode that enables allow-all and runs until task completion without user interaction (experimental)"
+              }
+            ]
+          },
+          {
+            "type": "select",
+            "id": "allow_all",
+            "name": "Allow All",
+            "category": "permissions",
+            "description": "Controls whether Copilot prompts for approval before using tools, accessing paths, or fetching URLs.",
+            "currentValue": "off",
+            "options": [
+              {
+                "value": "on",
+                "name": "On",
+                "description": "Automatically approve all tool, path, and URL requests"
+              },
+              {
+                "value": "off",
+                "name": "Off",
+                "description": "Require approval for tool, path, and URL requests"
+              }
+            ]
+          }
+        ],
+        "modes": {
+          "availableModes": [
+            {
+              "id": "https://agentclientprotocol.com/protocol/session-modes#agent",
+              "name": "Agent",
+              "description": "Default agent mode for conversational interactions"
+            },
+            {
+              "id": "https://agentclientprotocol.com/protocol/session-modes#plan",
+              "name": "Plan",
+              "description": "Plan mode for creating and executing multi-step plans"
+            },
+            {
+              "id": "https://agentclientprotocol.com/protocol/session-modes#autopilot",
+              "name": "Autopilot",
+              "description": "Autonomous mode that enables allow-all and runs until task completion without user interaction (experimental)"
+            }
+          ],
+          "currentModeId": "https://agentclientprotocol.com/protocol/session-modes#agent"
+        }
+      },
+      "sourceRun": "27b-byok-load-replay"
+    }
+  }
+}

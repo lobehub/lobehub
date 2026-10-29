@@ -50,6 +50,9 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const COPILOT_ACP_HELP = `Usage: copilot [options] [command]
+      --acp
+          Start as Agent Client Protocol server`;
 const DROID_ACP_HELP = `Usage: droid exec [options]
   --output-format <format>  Output format (ACP modes)`;
 const TRAE_ACP_HELP = `Start the ACP server
@@ -328,6 +331,28 @@ describe('cliAgentBinaries', () => {
         path: '/Users/test/.local/bin/qodercli',
         version: '1.1.15',
       });
+    });
+
+    it('detects GitHub Copilot by its version banner and ACP capability', async () => {
+      callExecFile('/Users/test/.local/bin/copilot\n');
+      callExecFile("GitHub Copilot CLI 1.0.105.\nRun 'copilot update' to check for updates.");
+      callExecFile(COPILOT_ACP_HELP);
+
+      const { copilotBinary, heterogeneousCliAgentBinaries } = await import('../cliAgentBinaries');
+      expect(heterogeneousCliAgentBinaries.copilot).toBe(copilotBinary);
+      await expect(copilotBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/copilot',
+        version: '1.0.105',
+      });
+    });
+
+    it('rejects an unrelated copilot executable without the GitHub banner', async () => {
+      callExecFile('/usr/local/bin/copilot\n');
+      callExecFile('copilot version: v1.34.0');
+
+      const { copilotBinary } = await import('../cliAgentBinaries');
+      await expect(copilotBinary.detect()).resolves.toMatchObject({ available: false });
     });
 
     it('detects Factory Droid by its ACP capability', async () => {

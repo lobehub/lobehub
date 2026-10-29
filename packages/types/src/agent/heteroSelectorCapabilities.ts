@@ -400,6 +400,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       supported: codexModelSupportsFastSpeed,
     },
   },
+  'copilot': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'cursor': {
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],

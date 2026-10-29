@@ -54,6 +54,12 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     ).toMatchObject({ interactionKind: 'permission', provider: 'droid' });
   });
 
+  it('accepts GitHub Copilot as an explicit permission provider', () => {
+    expect(
+      sanitizeAgentInterventionRequestForReview(request({ provider: 'copilot' })),
+    ).toMatchObject({ interactionKind: 'permission', provider: 'copilot' });
+  });
+
   it('fails closed when a permission option lacks an id or ids are duplicated', () => {
     const missingId = request({
       arguments: JSON.stringify({

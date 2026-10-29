@@ -13,6 +13,7 @@ describe('server-default heterogeneous agent matrix', () => {
       'droid',
       'claude-code',
       'codex',
+      'copilot',
       'grok-build',
       'kimi-code',
       'pi',
@@ -31,6 +32,10 @@ describe('server-default heterogeneous agent matrix', () => {
       'codex': {
         ingress: 'openai-responses',
         tokenHeader: 'bearer',
+      },
+      'copilot': {
+        ingress: 'anthropic-messages',
+        tokenHeader: 'x-api-key',
       },
       'grok-build': {
         ingress: 'openai-responses',
@@ -63,6 +68,10 @@ describe('server-default heterogeneous agent matrix', () => {
     expect(isServerDefaultHeterogeneousAgentType('pi')).toBe(true);
     expect(isServerDefaultHeterogeneousAgentType('trae')).toBe(true);
     expect(isServerDefaultHeterogeneousAgentType('opencode')).toBe(true);
+    expect(getServerDefaultHeterogeneousAgentConfig('copilot')).toEqual({
+      ingress: 'anthropic-messages',
+      tokenHeader: 'x-api-key',
+    });
     expect(isServerDefaultHeterogeneousAgentType('amp')).toBe(false);
     expect(isServerDefaultHeterogeneousAgentType('toString')).toBe(false);
     expect(getServerDefaultHeterogeneousAgentConfig(undefined)).toBeUndefined();

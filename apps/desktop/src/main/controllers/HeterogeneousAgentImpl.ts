@@ -64,14 +64,18 @@ import {
   preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
+  AgentPromptInput,
   AgentStreamEvent,
   CodexAppServerClient,
+  DevinAcpSessionOptions,
   UsageData,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
   AgentStreamPipeline,
   buildAgentInput,
+  buildCopilotAcpArgs,
+  buildCopilotAcpPrompt,
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
   buildDevinAcpArgs,
@@ -83,6 +87,7 @@ import {
   buildTraeAcpArgs,
   buildTraeAcpPrompt,
   ClaudeAgentSdkSession,
+  CopilotAcpSession,
   createFileStoreImageUploader,
   CursorAcpSession,
   detectDshCommand,
@@ -94,6 +99,7 @@ import {
   getCodexAppServerUnsupportedArgs,
   getHeterogeneousAgentPresetEnv,
   GrokAcpSession,
+  isCopilotAcpSessionNotFoundError,
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
@@ -151,6 +157,8 @@ import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
   gcHostedProviderBindingProfiles,
+  needsServerDefaultModelDescriptor,
+  omitOwnedEnv,
   prepareHostedProviderBinding,
   prepareHostedServerDefaultBinding,
   resolveHostedBindingSession,
@@ -242,6 +250,15 @@ const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
 ] as const;
 
 /** Directory under appStoragePath for caching downloaded files */
+// Oldest CLI that honors a LobeHub provider binding. GitHub Copilot ignores its
+// BYOK env in ACP sessions before 1.0.56 and asks for a GitHub sign-in instead.
+const PROVIDER_BINDING_MIN_CLI_VERSIONS: Partial<
+  Record<string, { name: string; version: string }>
+> = {
+  'copilot': { name: 'GitHub Copilot CLI', version: '1.0.56' },
+  'kimi-code': { name: 'Kimi Code', version: '0.6.0' },
+  'trae': { name: 'TRAE CLI', version: '0.201.2' },
+};
 const FILE_CACHE_DIR = HETERO_AGENT_FILES_DIR;
 const CLI_TRACE_DIR = '.heerogeneous-tracing';
 const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
@@ -419,6 +436,58 @@ interface InteractiveAcpSession {
   run: () => Promise<void>;
 }
 
+type ModelAcpSessionOptions = Omit<DevinAcpSessionOptions, 'permissionMode' | 'prompt'>;
+
+const defineModelAcpAgent = <TPrompt>(agent: {
+  buildArgs: (args: string[]) => string[];
+  buildPrompt: (input: AgentPromptInput, options: { cacheDir: string }) => Promise<TPrompt>;
+  create: (
+    options: ModelAcpSessionOptions & { prompt: TPrompt },
+  ) => NonNullable<AgentSession['modelAcpSession']>;
+  isResumeError: (error: unknown) => error is AcpRpcResponseError;
+  title: string;
+}) => ({
+  ...agent,
+  prepare: async (input: AgentPromptInput, cacheDir: string) => {
+    const prompt = await agent.buildPrompt(input, { cacheDir });
+    return {
+      create: (options: ModelAcpSessionOptions) => agent.create({ ...options, prompt }),
+      prompt,
+    };
+  },
+});
+
+/**
+ * ACP agents that switch to the requested model after the handshake and route
+ * permission requests to the intervention bridge; a missing saved session
+ * falls back to a new conversation.
+ */
+const MODEL_ACP_AGENTS = {
+  copilot: defineModelAcpAgent({
+    buildArgs: buildCopilotAcpArgs,
+    buildPrompt: buildCopilotAcpPrompt,
+    create: (options) => new CopilotAcpSession(options),
+    isResumeError: isCopilotAcpSessionNotFoundError,
+    title: 'GitHub Copilot',
+  }),
+  devin: defineModelAcpAgent({
+    buildArgs: buildDevinAcpArgs,
+    buildPrompt: buildDevinAcpPrompt,
+    create: (options) => new DevinAcpSession(options),
+    isResumeError: isDevinAcpSessionNotFoundError,
+    title: 'Devin',
+  }),
+  droid: defineModelAcpAgent({
+    buildArgs: buildDroidAcpArgs,
+    buildPrompt: buildDroidAcpPrompt,
+    create: (options) => new DroidAcpSession(options),
+    isResumeError: isDroidAcpSessionNotFoundError,
+    title: 'Factory Droid',
+  }),
+};
+
+type ModelAcpAgentType = keyof typeof MODEL_ACP_AGENTS;
+
 /**
  * External Agent Controller — manages external agent CLI processes via Electron IPC.
  *
@@ -586,12 +655,16 @@ export default class HeterogeneousAgentCtr {
       await this.sendPromptWithCursorAcp(params, session);
       return true;
     },
+    'copilot': async (params, session) => {
+      await this.sendPromptWithModelAcp(params, session, 'copilot');
+      return true;
+    },
     'devin': async (params, session) => {
-      await this.sendPromptWithDevinAcp(params, session);
+      await this.sendPromptWithModelAcp(params, session, 'devin');
       return true;
     },
     'droid': async (params, session) => {
-      await this.sendPromptWithDroidAcp(params, session);
+      await this.sendPromptWithModelAcp(params, session, 'droid');
       return true;
     },
     'deepseek-harness': async (params, session) => {
@@ -770,28 +843,22 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
-  private getDroidResumeError(
+  private getModelAcpResumeError(
     error: unknown,
     session: AgentSession,
   ): HeterogeneousAgentSessionError | undefined {
-    if (
-      session.agentType !== 'droid' ||
-      !session.resumeSessionId ||
-      !isDroidAcpSessionNotFoundError(error)
-    ) {
-      return;
-    }
+    const agent = MODEL_ACP_AGENTS[session.agentType as ModelAcpAgentType];
+    if (!agent || !session.resumeSessionId || !agent.isResumeError(error)) return;
 
     return {
-      agentType: 'droid',
+      agentType: session.agentType,
       code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
       command: session.command,
       details: {
         code: error.rpcError.code,
         data: error.rpcError.data,
       },
-      message:
-        'The saved Factory Droid session could not be found, so a new conversation will start.',
+      message: `The saved ${agent.title} session could not be found, so a new conversation will start.`,
       resumeSessionId: session.resumeSessionId,
       stderr: error.message,
       workingDirectory: session.cwd,
@@ -856,33 +923,6 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
-  private getDevinResumeError(
-    error: unknown,
-    session: AgentSession,
-  ): HeterogeneousAgentSessionError | undefined {
-    if (
-      session.agentType !== 'devin' ||
-      !session.resumeSessionId ||
-      !isDevinAcpSessionNotFoundError(error)
-    ) {
-      return;
-    }
-
-    return {
-      agentType: 'devin',
-      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
-      command: session.command,
-      details: {
-        code: error.rpcError.code,
-        data: error.rpcError.data,
-      },
-      message: 'The saved Devin session could not be found, so a new conversation will start.',
-      resumeSessionId: session.resumeSessionId,
-      stderr: error.message,
-      workingDirectory: session.cwd,
-    };
-  }
-
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -908,10 +948,9 @@ export default class HeterogeneousAgentCtr {
 
     const resumeError =
       this.getCodexResumeError(error, session) ??
-      this.getDroidResumeError(error, session) ??
+      this.getModelAcpResumeError(error, session) ??
       this.getGrokResumeError(error, session) ??
-      this.getCursorResumeError(error, session) ??
-      this.getDevinResumeError(error, session);
+      this.getCursorResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
@@ -986,31 +1025,15 @@ export default class HeterogeneousAgentCtr {
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
-      if (
-        session.agentType === 'kimi-code' &&
-        session.hostedProviderBinding &&
-        status?.version &&
-        semver.lt(status.version, '0.6.0')
-      ) {
+      const minimum = session.hostedProviderBinding
+        ? PROVIDER_BINDING_MIN_CLI_VERSIONS[session.agentType]
+        : undefined;
+      if (minimum && status?.version && semver.lt(status.version, minimum.version)) {
         return {
           agentType: session.agentType,
           code: 'cli_version_unsupported',
           command,
-          message: `Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
-          workingDirectory,
-        };
-      }
-      if (
-        session.agentType === 'trae' &&
-        session.hostedProviderBinding &&
-        status?.version &&
-        semver.lt(status.version, '0.201.2')
-      ) {
-        return {
-          agentType: session.agentType,
-          code: 'cli_version_unsupported',
-          command,
-          message: `TRAE CLI 0.201.2 or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
+          message: `${minimum.name} ${minimum.version} or newer is required to use a LobeHub provider. Installed version: ${status.version}.`,
           workingDirectory,
         };
       }
@@ -1072,7 +1095,7 @@ export default class HeterogeneousAgentCtr {
     // main-process undici dispatcher doesn't reach child processes — they need
     // env vars.
     const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
-    const inheritedEnv = buildInheritedSpawnEnv();
+    const inheritedEnv = omitOwnedEnv(buildInheritedSpawnEnv(), session.hostedProviderBinding);
     // When preflight resolved the CLI via the login-shell PATH, spawn with
     // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
@@ -1325,10 +1348,10 @@ export default class HeterogeneousAgentCtr {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    // Cursor keeps its legacy Claude Code renderer identifier. Droid has a
-    // first-class identifier, while provider remains explicit for both.
+    // Copilot and Cursor permission cards use the Claude Code renderer; Devin
+    // and Droid keep their own identifiers. The provider is always explicit.
     const bridge = new AskUserBridge(operationId, {
-      identifier: provider === 'cursor' ? 'claude-code' : provider,
+      identifier: provider === 'copilot' || provider === 'cursor' ? 'claude-code' : provider,
       provider,
     });
     const pumpDone = (async () => {
@@ -1581,18 +1604,14 @@ export default class HeterogeneousAgentCtr {
     } else if (driver && params.providerBinding?.kind === 'server-default') {
       const model = params.providerBinding.apiConfig.model;
       // Model-card lookup is best-effort; operation begin validates the selection.
-      const modelDescriptor =
-        agentType === 'codex' ||
-        agentType === 'pi' ||
-        agentType === 'opencode' ||
-        agentType === 'droid'
-          ? await describeServerDefaultModel(this.remoteServerAuth, { agentType, model }).catch(
-              (error) => {
-                logger.warn('Server-default model description unavailable:', error);
-                return undefined;
-              },
-            )
-          : undefined;
+      const modelDescriptor = needsServerDefaultModelDescriptor(agentType)
+        ? await describeServerDefaultModel(this.remoteServerAuth, { agentType, model }).catch(
+            (error) => {
+              logger.warn('Server-default model description unavailable:', error);
+              return undefined;
+            },
+          )
+        : undefined;
       hostedProviderBinding = await prepareHostedServerDefaultBinding({
         agentType,
         appStoragePath: this.app.appStoragePath,
@@ -2384,10 +2403,13 @@ export default class HeterogeneousAgentCtr {
     });
   }
 
-  private async sendPromptWithDroidAcp(
+  private async sendPromptWithModelAcp(
     params: SendPromptParams,
     session: AgentSession,
+    agentType: ModelAcpAgentType,
   ): Promise<void> {
+    const agent = MODEL_ACP_AGENTS[agentType];
+    const transport = `${agentType}-acp` as const;
     const cwd = this.resolveSessionWorkingDirectory(session);
     const spawnEnv = this.buildSessionSpawnEnv(session);
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
@@ -2397,10 +2419,10 @@ export default class HeterogeneousAgentCtr {
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
-    const prompt = await buildDroidAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const { create, prompt } = await agent.prepare(promptInput, this.fileCacheDir);
     const tracePayload = `${JSON.stringify(prompt)}\n`;
     const traceSession = await this.createCliTraceSession({
-      cliArgs: buildDroidAcpArgs(session.args),
+      cliArgs: agent.buildArgs(session.args),
       cwd,
       imageList: params.imageList ?? [],
       session,
@@ -2417,9 +2439,9 @@ export default class HeterogeneousAgentCtr {
     const intervention = this.setupAcpInterventionForOp(
       params.operationId,
       session.sessionId,
-      'droid',
+      agentType,
     );
-    const droidAcpSession = new DroidAcpSession({
+    const acpSession = create({
       args: session.args,
       askUserBridge: intervention.bridge,
       clientVersion: electronApp.getVersion(),
@@ -2434,7 +2456,7 @@ export default class HeterogeneousAgentCtr {
       },
       onModel: (model) => {
         session.model = model;
-        session.modelSource = 'droid-acp';
+        session.modelSource = transport;
       },
       onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
       onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
@@ -2446,129 +2468,20 @@ export default class HeterogeneousAgentCtr {
         return this.appendCliTraceFile(traceSession, 'stderr.log', data);
       },
       operationId: params.operationId,
-      prompt,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
     });
-    session.droidAcpSession = droidAcpSession;
-
-    try {
-      await droidAcpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'droid-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport: 'droid-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = isDroidAcpSessionNotFoundError(error)
-        ? error
-        : stderr
-          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-              cause: error,
-            })
-          : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await intervention.cleanup();
-      if (session.droidAcpSession === droidAcpSession) session.droidAcpSession = undefined;
-    }
-  }
-
-  private async sendPromptWithDevinAcp(
-    params: SendPromptParams,
-    session: AgentSession,
-  ): Promise<void> {
-    const cwd = this.resolveSessionWorkingDirectory(session);
-    const spawnEnv = this.buildSessionSpawnEnv(session);
-    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
-    const promptInput = buildHeterogeneousPrompt({
-      imageList: params.imageList,
-      isNewSession: this.needsSessionIntroduction(session),
-      prompt: params.prompt,
-      systemContext: params.systemContext,
-    });
-    const prompt = await buildDevinAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
-    const tracePayload = `${JSON.stringify(prompt)}\n`;
-    const traceSession = await this.createCliTraceSession({
-      cliArgs: buildDevinAcpArgs(session.args),
-      cwd,
-      imageList: params.imageList ?? [],
-      session,
-      stdinPayload: tracePayload,
-    });
-    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
-
-    if (session.cancelledByUs) {
-      await this.completeCancelledSessionBeforeLaunch(session);
-      return;
-    }
-
-    const stderrChunks: string[] = [];
-    const intervention = this.setupAcpInterventionForOp(
-      params.operationId,
-      session.sessionId,
-      'devin',
-    );
-    const devinAcpSession = new DevinAcpSession({
-      args: session.args,
-      askUserBridge: intervention.bridge,
-      clientVersion: electronApp.getVersion(),
-      commandPath,
-      cwd,
-      env: spawnEnv,
-      initialModel: session.model,
-      onEvents: async (events) => {
-        for (const event of events) {
-          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
-        }
-      },
-      onModel: (model) => {
-        session.model = model;
-        session.modelSource = 'devin-acp';
-      },
-      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
-      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
-      onSessionId: (agentSessionId) => {
-        session.agentSessionId = agentSessionId;
-      },
-      onStderr: (data) => {
-        stderrChunks.push(data);
-        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
-      },
-      operationId: params.operationId,
-      prompt,
-      resumeSessionId: session.agentSessionId,
-      sessionId: session.sessionId,
-    });
-    session.devinAcpSession = devinAcpSession;
+    session.modelAcpSession = acpSession;
 
     await this.runInteractiveAcpSession({
-      acpSession: devinAcpSession,
-      activeSessionKey: 'devinAcpSession',
+      acpSession,
+      activeSessionKey: 'modelAcpSession',
       cleanup: intervention.cleanup,
-      isResumeError: isDevinAcpSessionNotFoundError,
+      isResumeError: agent.isResumeError,
       session,
       stderrChunks,
       traceSession,
-      transport: 'devin-acp',
+      transport,
     });
   }
 
@@ -2583,13 +2496,13 @@ export default class HeterogeneousAgentCtr {
     transport,
   }: {
     acpSession: InteractiveAcpSession;
-    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
+    activeSessionKey: 'cursorAcpSession' | 'modelAcpSession' | 'traeAcpSession';
     cleanup?: () => Promise<void>;
     isResumeError?: (error: unknown) => boolean;
     session: AgentSession;
     stderrChunks: string[];
     traceSession: CliTraceSession | undefined;
-    transport: 'cursor-acp' | 'devin-acp' | 'trae-acp';
+    transport: `${ModelAcpAgentType | 'cursor' | 'trae'}-acp`;
   }): Promise<void> {
     try {
       await acpSession.run();
@@ -2629,8 +2542,8 @@ export default class HeterogeneousAgentCtr {
       await cleanup?.();
       if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
         session.cursorAcpSession = undefined;
-      } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
-        session.devinAcpSession = undefined;
+      } else if (activeSessionKey === 'modelAcpSession' && session.modelAcpSession === acpSession) {
+        session.modelAcpSession = undefined;
       } else if (activeSessionKey === 'traeAcpSession' && session.traeAcpSession === acpSession) {
         session.traeAcpSession = undefined;
       }
@@ -3750,8 +3663,8 @@ export default class HeterogeneousAgentCtr {
       await session.dshSession.dispose();
       return;
     }
-    if (session.devinAcpSession) {
-      session.devinAcpSession.interrupt();
+    if (session.modelAcpSession) {
+      session.modelAcpSession.interrupt();
       return;
     }
     if (session.grokAcpSession) {
@@ -3760,10 +3673,6 @@ export default class HeterogeneousAgentCtr {
     }
     if (session.cursorAcpSession) {
       session.cursorAcpSession.interrupt();
-      return;
-    }
-    if (session.droidAcpSession) {
-      session.droidAcpSession.interrupt();
       return;
     }
     if (session.appServerSession) {
@@ -3829,9 +3738,9 @@ export default class HeterogeneousAgentCtr {
       await session.dshSession.dispose();
       session.dshSession = undefined;
     }
-    if (session.devinAcpSession) {
+    if (session.modelAcpSession) {
       session.cancelledByUs = true;
-      session.devinAcpSession.close();
+      session.modelAcpSession.close();
     }
 
     if (session.grokAcpSession) {
@@ -3842,11 +3751,6 @@ export default class HeterogeneousAgentCtr {
     if (session.cursorAcpSession) {
       session.cancelledByUs = true;
       session.cursorAcpSession.close();
-    }
-
-    if (session.droidAcpSession) {
-      session.cancelledByUs = true;
-      session.droidAcpSession.close();
     }
 
     if (session.appServerSession) {
@@ -3956,9 +3860,9 @@ export default class HeterogeneousAgentCtr {
           session.cancelledByUs = true;
           piClosing.push(session.piRpcSession.close());
         }
-        if (session.devinAcpSession) {
+        if (session.modelAcpSession) {
           session.cancelledByUs = true;
-          session.devinAcpSession.close();
+          session.modelAcpSession.close();
         }
         if (session.grokAcpSession) {
           session.cancelledByUs = true;
@@ -3967,10 +3871,6 @@ export default class HeterogeneousAgentCtr {
         if (session.cursorAcpSession) {
           session.cancelledByUs = true;
           session.cursorAcpSession.close();
-        }
-        if (session.droidAcpSession) {
-          session.cancelledByUs = true;
-          session.droidAcpSession.close();
         }
         if (session.appServerSession) {
           session.cancelledByUs = true;
