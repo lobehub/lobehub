@@ -32,6 +32,29 @@ describe('PptxLoader', () => {
     expect(pages).toMatchSnapshot();
   });
 
+  it('should match every consecutive slide entry in the zip filter (regression for #19981)', () => {
+    const slidesRegex = /ppt\/slides\/slide\d+\.xml/;
+    const entries = [
+      'ppt/slides/slide1.xml',
+      'ppt/slides/slide2.xml',
+      'ppt/slides/slide3.xml',
+      'ppt/slides/slide4.xml',
+      'ppt/slides/slide5.xml',
+      '[Content_Types].xml',
+      'ppt/slides/slide6.xml',
+    ];
+    const matched = entries.filter((e) => slidesRegex.test(e));
+    expect(matched).toEqual([
+      'ppt/slides/slide1.xml',
+      'ppt/slides/slide2.xml',
+      'ppt/slides/slide3.xml',
+      'ppt/slides/slide4.xml',
+      'ppt/slides/slide5.xml',
+      'ppt/slides/slide6.xml',
+    ]);
+    expect(slidesRegex.flags).not.toContain('g');
+  });
+
   it('should aggregate content correctly (joining slides)', async () => {
     const pages = await loader.loadPages(testFile);
     const content = await loader.aggregateContent(pages);
