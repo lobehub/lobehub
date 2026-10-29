@@ -97,6 +97,8 @@
   "invite.title": "邀请成员",
   "latestMessages": "最新消息",
   "main": "频道对话",
+  "members.hide": "收起成员列表",
+  "members.show": "展开成员列表",
   "membersCount": "成员 · {{count}}",
   "membersTitle": "成员",
   "mentionHint": "@ Agent 可指定谁来回复；不 @ 时，频道里的所有 Agent 都会回复。",

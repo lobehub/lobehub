@@ -97,6 +97,8 @@
   "invite.title": "Invite members",
   "latestMessages": "Latest messages",
   "main": "Channel conversation",
+  "members.hide": "Hide member list",
+  "members.show": "Show member list",
   "membersCount": "Members · {{count}}",
   "membersTitle": "Members",
   "mentionHint": "Mention Agents to choose who replies. Without a mention, every Agent here replies.",

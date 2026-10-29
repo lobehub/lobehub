@@ -66,12 +66,6 @@ const Timeline = ({
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
   const channelArchived = detail?.channel.status === 'archived';
-  // Unmentioned messages go to every Agent on the main conversation, to followers in a Thread.
-  const followerIds = threadId ? (thread?.followerMemberIds ?? []) : undefined;
-  const defaultRecipientIds = activeMembers
-    .filter((member) => member.actorType === 'agent')
-    .filter((member) => !followerIds || followerIds.includes(member.id))
-    .map((member) => member.id);
   // Join lines belong to the main conversation; a thread starts from its root message.
   const timeline = detail
     ? channelTimeline(
@@ -167,9 +161,7 @@ const Timeline = ({
             ) : (
               <Composer
                 activity={<ReplyActivity detail={detail} threadId={threadId} />}
-                defaultRecipientIds={defaultRecipientIds}
                 draftKey={channelDraftKey(channelId, threadId)}
-                inThread={!!threadId}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 placeholder={t(threadId ? 'threadComposer' : 'composer')}

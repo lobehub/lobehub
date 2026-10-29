@@ -77,6 +77,8 @@ export default {
   'deleteThreadSuccess': 'Thread moved to trash',
   'deletedMember': 'Former member',
   'membersTitle': 'Members',
+  'members.show': 'Show member list',
+  'members.hide': 'Hide member list',
   'membersCount': 'Members · {{count}}',
   'openAgent': 'Open Agent',
   'openAgentNamed': 'Open {{name}}',

@@ -11,7 +11,7 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { styles } from './styles';
-import { type ChannelThreadDraft, draftThreadFollowerIds } from './threadDraft';
+import type { ChannelThreadDraft } from './threadDraft';
 import { channelDraftKey } from './useComposerDraft';
 
 /** No thread query, subscription or database write until the user sends. */
@@ -50,8 +50,6 @@ export function DraftThreadConversation({
           <ArchivedNotice channel={detail.channel} threadId={null} />
         ) : (
           <Composer
-            inThread
-            defaultRecipientIds={draftThreadFollowerIds(draft.root, detail.members)}
             draftKey={channelDraftKey(detail.channel.id, `draft:${draft.root.id}`)}
             members={detail.members.filter((member) => member.status === 'active')}
             placeholder={t('threadComposer')}
