@@ -1,8 +1,7 @@
 /**
  * Shell word quoting helpers shared by the command splitter.
  *
- * Kept separate from `shellCommand.ts` (already over the repository's
- * 1200-line source limit): quote removal is a self-contained stage — it takes
+ * Kept separate from `shellCommand/`: quote removal is a self-contained stage — it takes
  * raw text and returns the word the shell would present as argv — and it is
  * where the ANSI-C semantics (`$'…'`, NUL truncation) live.
  */

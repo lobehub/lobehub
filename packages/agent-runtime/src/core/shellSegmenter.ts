@@ -3,10 +3,10 @@
  * string into segments, then tokenize each segment into the words the shell
  * would present as argv.
  *
- * Kept separate from `shellCommand.ts` so the segment/predicate layer stays
+ * Kept separate from `shellCommand/` so the segment/predicate layer stays
  * readable: this module owns quoting, escapes, heredocs and command
  * substitutions; command RESOLUTION (wrappers, flags, target families) lives
- * in `shellCommand.ts`.
+ * in `shellCommand/`.
  */
 
 import { decodeAnsiCQuoted } from './shellQuoting';
