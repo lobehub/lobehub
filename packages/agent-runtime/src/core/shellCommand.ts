@@ -280,6 +280,12 @@ const WRAPPER_VALUE_FREE_FLAGS: Record<string, ReadonlySet<string>> = {
   // executable, so every predicate returned false while bash deleted the home
   // directory.
   xargs: new Set(['0', 'r', 't', 'p', 'x', 'o', 'e', 'i', 'l']),
+  // `time` is a bash KEYWORD (`time [-p] pipeline`, `help time`: "-p print the
+  // timing summary in the portable Posix format") and GNU time's `-p` is the
+  // same switch. Without the table `-p` defaulted to "value-taking", ate the
+  // wrapped command and left `~` as a confidently unrelated executable, so
+  // `time -p rm -rf /tmp/cache ~` passed every predicate.
+  time: new Set(['p']),
 };
 
 /**
@@ -367,6 +373,8 @@ const WRAPPER_VALUE_FREE_LONG_FLAGS: Record<string, ReadonlySet<string>> = {
     '--replace',
     '--eof',
   ]),
+  // GNU time long switches (the `-p` above is the bash keyword form).
+  time: new Set(['--portability', '--verbose', '--quiet']),
 };
 
 /**

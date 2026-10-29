@@ -380,9 +380,32 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
       ['rmRecursiveRootTarget', "bash -o posix -c 'echo $(rm -rf /)'"],
       ['rmRecursiveHomeTarget', "bash --rcfile /tmp/rc -c 'echo $(rm -rf ~)'"],
       ['rmRecursiveHomeTarget', "bash --init-file /tmp/rc -c 'echo $(rm -rf ~)'"],
+      // `+o` turns an option off but still takes its operand from the next
+      // word, so the walk must not stop at `posix` and miss the `-c` payload.
+      ['rmRecursiveHomeTarget', "bash +o posix -c 'echo $(rm -rf ~)' rm"],
+      ['rmRecursiveRootTarget', "bash +o posix -c 'echo $(rm -rf /)'"],
+      ['rmRecursiveHomeTarget', "bash +e +o posix -c 'echo $(rm -rf ~)'"],
     ] as const)('consumes the option operand before -c (%s): %s', (predicate, command) => {
       expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
     });
+
+    it.each([
+      // `time -p` is a value-free switch on the bash keyword
+      // (`help time`: "time [-p] pipeline"), so it must not swallow `rm`.
+      ['rmRecursiveHomeTarget', 'time -p rm -rf /tmp/cache ~'],
+      ['rmRecursiveRootTarget', 'time -p rm -rf /'],
+      ['rmRecursiveHomeTarget', 'time --portability rm -rf ~'],
+    ] as const)('keeps the executable after a time switch (%s): %s', (predicate, command) => {
+      expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+    });
+
+    it.each(['time -p echo hi', 'time -p rm -rf /tmp/cache', 'time --portability ls /tmp'])(
+      'keeps a harmless pipeline behind a time switch inert: %s',
+      (command) => {
+        expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', command)).toBe(false);
+        expect(matchSemanticShellPredicate('rmRecursiveRootTarget', command)).toBe(false);
+      },
+    );
 
     it.each([
       "bash -o posix -c 'echo hi'",
@@ -429,6 +452,20 @@ describe('matchSemanticShellPredicate · interpreter payloads', () => {
         ),
       ).toBe(true);
     });
+
+    // ANSI-C escapes decode to the same byte AFTER the input was sanitized, so
+    // `$'\1'` / `$'\x01'` must not inherit the marker's meaning either.
+    it.each([
+      ['rmRecursiveHomeTarget', "echo $'\\1'$(rm -rf ~); echo ~"],
+      ['rmRecursiveRootTarget', "echo $'\\x01'`rm -rf /`"],
+      ['rmRecursiveHomeTarget', "echo $'\\001'$(rm -rf ~)"],
+      ['rmRecursiveRootTarget', "echo $'\\u0001'$(rm -rf /)"],
+    ] as const)(
+      'still inspects a substitution after a decoded marker (%s): %s',
+      (predicate, command) => {
+        expect(matchSemanticShellPredicate(predicate, command)).toBe(true);
+      },
+    );
 
     it('keeps quoted sigils inert', () => {
       expect(matchSemanticShellPredicate('rmRecursiveHomeTarget', "echo '$(rm -rf ~)'")).toBe(

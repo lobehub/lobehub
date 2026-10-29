@@ -356,7 +356,14 @@ const interpreterPayloadWords = (segment: ShellSegment): string[] => {
         break;
       }
       if (option.startsWith('+')) {
-        cursor++;
+        // `+`-prefixed options still take their operand from the NEXT word:
+        // `help set` documents `-o option-name` and says "Using + rather than -
+        // causes these flags to be turned off", so `bash +o posix -c '<src>'`
+        // skips `+o` but leaves `posix`, and the walk stopped before `-c` — the
+        // positional `rm` in `bash +o posix -c 'echo $(rm -rf ~)' rm` then
+        // suppressed the fallback and all three predicates returned false.
+        const plusLetters = option.slice(1);
+        cursor += 1 + [...plusLetters].filter((letter) => /o/i.test(letter)).length;
         continue;
       }
       if (!option.startsWith('-')) {

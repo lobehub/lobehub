@@ -676,7 +676,12 @@ export const tokenizeWords = (raw: string): string[] => {
       // the decoded sigils never expand. Mark them literal like the
       // single-quote case; appending the decoded text as-is made the predicate
       // read the payload as a running substitution and block a harmless `echo`.
+      // The decoded bytes must not be able to FORGE provenance either: `$'\1'`
+      // synthesizes U+0001 AFTER the predicate layer sanitized the input, so
+      // `echo $'\1'$(rm -rf ~)` made a live substitution look literal. Drop
+      // decoded marker bytes — they carry no meaning of their own.
       word += value
+        .replaceAll(LITERAL_EXPANSION_MARKER, '')
         .replaceAll('$', LITERAL_EXPANSION_MARKER + '$')
         .replaceAll('`', LITERAL_EXPANSION_MARKER + '`');
       hasWord = true;
