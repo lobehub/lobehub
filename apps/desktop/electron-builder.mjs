@@ -152,7 +152,18 @@ const getProtocolScheme = () => {
   // claiming `lobehub://` on one machine race for the handler, and the loser's
   // deep links and OAuth handoffs open the other app. Must match the value the
   // main process is built with (see vite.main.config.ts).
-  if (process.env.DESKTOP_PROTOCOL_SCHEME) return process.env.DESKTOP_PROTOCOL_SCHEME;
+  const scheme = process.env.DESKTOP_PROTOCOL_SCHEME;
+  if (scheme) {
+    // URL parsing lowercases schemes, so the main process can only ever match a
+    // lowercase one — fail the build rather than ship an app that drops its own
+    // deep links.
+    if (!/^[a-z][\d+.a-z-]*$/.test(scheme)) {
+      throw new Error(
+        `DESKTOP_PROTOCOL_SCHEME "${scheme}" must be a lowercase URL scheme (a-z, then a-z, 0-9, "+", "-", ".")`,
+      );
+    }
+    return scheme;
+  }
   if (isCanary) return 'lobehub-canary';
   if (isNightly) return 'lobehub-nightly';
   return 'lobehub';

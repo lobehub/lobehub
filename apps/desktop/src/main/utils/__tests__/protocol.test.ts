@@ -227,6 +227,16 @@ describe('Protocol', () => {
       });
     });
 
+    it('matches a mixed-case override against the lowercased scheme URL parsing yields', () => {
+      desktopEnv.DESKTOP_PROTOCOL_SCHEME = 'Acme';
+
+      expect(getProtocolScheme()).toBe('acme');
+      expect(parseProtocolUrl('Acme://plugin/install?id=figma')).toMatchObject({
+        action: 'install',
+        urlType: 'plugin',
+      });
+    });
+
     it('still rejects schemes that are neither upstream nor configured', () => {
       expect(parseProtocolUrl('acme://plugin/install?id=figma')).toBeNull();
     });

@@ -6,11 +6,19 @@ import type { McpSchema, ProtocolUrlParsed } from '../types/protocol';
 
 export type AppChannel = 'stable' | 'beta' | 'nightly';
 
+/**
+ * The distribution's scheme, lowercased: `new URL()` lowercases the scheme it
+ * parses, so a mixed-case value would never match an incoming link. The build
+ * rejects non-lowercase values (electron-builder.mjs); this keeps the runtime
+ * consistent even if one slips through.
+ */
+const getSchemeOverride = () => getDesktopEnv().DESKTOP_PROTOCOL_SCHEME?.toLowerCase();
+
 export const getProtocolScheme = (): string => {
   // A distribution owns its scheme outright. The heuristics below only know
   // upstream's names, so a renamed build would fall through to `lobehub` and
   // fight an official install on the same machine for its deep links.
-  const override = getDesktopEnv().DESKTOP_PROTOCOL_SCHEME;
+  const override = getSchemeOverride();
   if (override) return override;
 
   // In Electron environment, version can be determined in multiple ways
@@ -107,7 +115,7 @@ export const parseProtocolUrl = (url: string): ProtocolUrlParsed | null => {
 
     // Support multiple protocol schemes
     const validProtocols = ['lobehub:', 'lobehub-dev:', 'lobehub-nightly:', 'lobehub-beta:'];
-    const override = getDesktopEnv().DESKTOP_PROTOCOL_SCHEME;
+    const override = getSchemeOverride();
     if (override) validProtocols.push(`${override}:`);
     if (!validProtocols.includes(parsedUrl.protocol)) {
       return null;
