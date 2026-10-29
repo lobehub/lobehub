@@ -3,6 +3,7 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
 import { DEFAULT_LANG } from '@/const/locale';
+import { brandPostProcessOptions, withBrandPostProcessor } from '@/locales/brandPostProcessor';
 import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
@@ -40,12 +41,13 @@ const translationOptions = {
   interpolation: { escapeValue: false },
   keySeparator: false,
   showSupportNotice: false,
+  ...brandPostProcessOptions,
 } as const;
 
 // Loader-side copy: a bare instance, so react-i18next's global instance stays the one rendering.
 export const createShareT = (lang: string | undefined, resources: ShareResources) => {
   const locale = normalizeLocale(lang);
-  const instance = i18next.createInstance();
+  const instance = withBrandPostProcessor(i18next.createInstance());
 
   void instance.init({
     ...translationOptions,
@@ -64,8 +66,7 @@ export const createShareI18n = (lang?: string, bundledResources?: ShareResources
   const locale = normalizeLocale(lang);
   const resources = bundledResources ? { [locale]: bundledResources } : undefined;
 
-  const instance = i18next
-    .createInstance()
+  const instance = withBrandPostProcessor(i18next.createInstance())
     .use(initReactI18next)
     .use(resourcesToBackend(loadShareNamespace));
 

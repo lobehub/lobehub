@@ -1,7 +1,7 @@
 // Imported via @lobechat/const (already a dependency) rather than
 // @lobechat/business-const, which this package does not depend on.
 import { BRANDING_NAME, DEFAULT_INBOX_TITLE, LOBE_CHAT_CLOUD } from '@lobechat/const';
-import type { PostProcessorModule } from 'i18next';
+import type { i18n as I18n, InitOptions, PostProcessorModule } from 'i18next';
 
 /**
  * Upstream brand literals baked into the locale files, each paired with the
@@ -23,16 +23,23 @@ import type { PostProcessorModule } from 'i18next';
  * `LobeChat` is the pre-rename product name. It still appears in locales that
  * have not been retranslated since the rename (ja-JP, ko-KR, zh-TW, …), so a
  * deployment that rewrote only `LobeHub` would keep leaking it.
+ *
+ * The third column is the upstream default of the constant. A literal is only
+ * rewritten once the deployment moved that constant off its default, which
+ * keeps default branding a strict no-op — including `LobeChat`, which upstream
+ * leaves as translated.
  */
-const BRAND_LITERALS: [from: string, to: string][] = [
-  ['LobeHub Cloud', LOBE_CHAT_CLOUD],
-  ['LobeHub', BRANDING_NAME],
-  ['LobeChat', BRANDING_NAME],
-  ['Lobe AI', DEFAULT_INBOX_TITLE],
+const BRAND_LITERALS: [from: string, to: string, upstream: string][] = [
+  ['LobeHub Cloud', LOBE_CHAT_CLOUD, 'LobeHub Cloud'],
+  ['LobeHub', BRANDING_NAME, 'LobeHub'],
+  ['LobeChat', BRANDING_NAME, 'LobeHub'],
+  ['Lobe AI', DEFAULT_INBOX_TITLE, 'Lobe AI'],
 ];
 
-/** Only the literals this deployment actually renamed; identity pairs are noise. */
-const replacements = BRAND_LITERALS.filter(([from, to]) => from !== to);
+/** Only the literals this deployment actually renamed. */
+const replacements = BRAND_LITERALS.filter(([, to, upstream]) => to !== upstream).map(
+  ([from, to]) => [from, to] as const,
+);
 
 const lookup = new Map(replacements);
 
@@ -83,3 +90,15 @@ export const brandPostProcessor: PostProcessorModule = {
   process: (value) => (typeof value === 'string' ? applyBrandStrings(value) : value),
   type: 'postProcessor',
 };
+
+/** Init options that turn the processor on; empty under default branding. */
+export const brandPostProcessOptions: Pick<InitOptions, 'postProcess'> = isBrandPostProcessorEnabled
+  ? { postProcess: [BRAND_POST_PROCESSOR] }
+  : {};
+
+/**
+ * Register the processor on an i18next instance (no-op under default branding).
+ * Pair with `brandPostProcessOptions` in `init()`, otherwise i18next never runs it.
+ */
+export const withBrandPostProcessor = <T extends I18n>(instance: T): T =>
+  isBrandPostProcessorEnabled ? (instance.use(brandPostProcessor) as T) : instance;

@@ -24,6 +24,10 @@ const loadAvatars = async (brandingLogoUrl: string) => {
     ...(await importOriginal<typeof BusinessConst>()),
     BRANDING_LOGO_URL: brandingLogoUrl,
   }));
+  // Import the mocked module from the test file first. Under vitest 5 a
+  // `doMock` only lands once the test file itself imports something, so modules
+  // reached transitively below would otherwise see the previous case's mock.
+  await import('@lobechat/business-const');
 
   const [agentBuilder, groupAgentBuilder, pageAgent, inbox] = await Promise.all([
     import('./agent-builder'),

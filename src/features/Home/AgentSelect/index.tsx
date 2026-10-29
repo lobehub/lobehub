@@ -16,7 +16,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
-import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
@@ -86,7 +86,7 @@ const AgentSelect = memo(() => {
   const displayMeta = showInboxFallback ? inboxMeta : (sidebarItem ?? agentMapMeta);
   const displayTitle = agentDisplayName(
     displayMeta,
-    showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }),
+    showInboxFallback ? DEFAULT_INBOX_TITLE : t('defaultSession', { ns: 'common' }),
   );
   const displayAvatar =
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
