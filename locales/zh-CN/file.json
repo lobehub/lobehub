@@ -335,7 +335,7 @@
   "pageEditor.deleteError": "删除遇到了问题。你可以重试",
   "pageEditor.deleteSuccess": "文稿删除成功",
   "pageEditor.duplicateError": "页面复制失败",
-  "pageEditor.duplicateSuccess": "页面复制成功",
+  "pageEditor.duplicateSuccess": "已创建副本",
   "pageEditor.editMode.checking": "正在检查可编辑状态…",
   "pageEditor.editMode.draftRestoreCancel": "丢弃",
   "pageEditor.editMode.draftRestoreContent": "检测到上次编辑遗留的本地草稿，是否恢复？",

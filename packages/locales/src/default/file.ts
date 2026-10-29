@@ -382,7 +382,7 @@ export default {
   'pageEditor.deleteError': 'Failed to delete the page',
   'pageEditor.deleteSuccess': 'Page deleted successfully',
   'pageEditor.duplicateError': 'Failed to duplicate the page',
-  'pageEditor.duplicateSuccess': 'Page duplicated successfully',
+  'pageEditor.duplicateSuccess': 'Copy created',
   'pageEditor.editedAt': 'Last edited on {{time}}',
   'pageEditor.editedAtBy': 'Last edited on {{time}} by {{name}}',
   'pageEditor.editedBy': 'Last edited by {{name}}',
