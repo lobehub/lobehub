@@ -27,6 +27,37 @@ const SEED_COLORS: Record<AgentAvatarColor, string> = {
 export const seedCoverColor = (item: SidebarAgentItem): string =>
   SEED_COLORS[getAgentAvatarTraits(item.id).color];
 
+export const AGENT_COVER_PATTERNS = [
+  'dots',
+  'grid',
+  'stripes',
+  'crosshatch',
+  'rings',
+  'stagger',
+  'lines',
+  'scales',
+] as const;
+
+export type AgentCoverPattern = (typeof AGENT_COVER_PATTERNS)[number];
+
+/** FNV-1a: a small, stable string hash. */
+const hashString = (text: string): number => {
+  let hash = 0x81_1c_9d_c5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01_00_01_93);
+  }
+
+  return hash >>> 0;
+};
+
+/**
+ * Cover texture derived from the agent id. Hashed separately from the color
+ * (salted), so two agents that share a color still read apart.
+ */
+export const coverPattern = (item: SidebarAgentItem): AgentCoverPattern =>
+  AGENT_COVER_PATTERNS[hashString(`cover-pattern:${item.id}`) % AGENT_COVER_PATTERNS.length];
+
 /** The uploaded image worth sampling, if the avatar is one. */
 export const coverImageSrc = (item: SidebarAgentItem): string | undefined => {
   const { avatar } = item;
