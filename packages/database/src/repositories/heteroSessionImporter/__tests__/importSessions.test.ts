@@ -125,6 +125,34 @@ describe('HeteroSessionImporterRepo.importSessions', () => {
     expect(pluginRow.apiName).toBe('Bash');
   });
 
+  it('strips null bytes from imported content and plugin payloads', async () => {
+    const payload = basePayload();
+    // PostgreSQL cannot store U+0000 in text/jsonb columns
+    payload.messages[0].content = 'hel\u0000lo';
+    payload.messages[2].plugin = {
+      ...(payload.messages[2].plugin as any),
+      arguments: '{"c\u0000md":"ls"}',
+    };
+
+    const repo = new HeteroSessionImporterRepo(serverDB, userId);
+    const [result] = await repo.importSessions({ agentId, sessions: [payload] });
+
+    expect(result.insertedMessages).toBe(3);
+
+    const rows = await serverDB
+      .select()
+      .from(messages)
+      .where(eq(messages.topicId, result.topicId))
+      .orderBy(messages.createdAt);
+    expect(rows[0].content).toBe('hello');
+
+    const [pluginRow] = await serverDB
+      .select()
+      .from(messagePlugins)
+      .where(eq(messagePlugins.id, rows[2].id));
+    expect(pluginRow.arguments).toBe('{"cmd":"ls"}');
+  });
+
   it('pins the agent heterogeneous runtime type onto the created topic', async () => {
     const heteroAgentId = 'session-importer-hetero-agent';
     await serverDB.insert(agents).values({
