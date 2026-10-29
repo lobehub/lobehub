@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { LocalFile } from '@/features/LocalFile';
 
 import { useStartTopicConversation } from '../../../../hooks/useStartTopicConversation';
+import { useOpenEditedFile } from '../../../../Messages/EditedFilesCard/useOpenEditedFile';
 import { useConversationStore } from '../../../../store';
 import { type MarkdownElementProps } from '../../type';
 
@@ -24,6 +25,9 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
     (s) => !!s.context.topicShareId || !!s.context.agentShareId,
   );
   const conversation = useStartTopicConversation();
+  // Same reachability rules as the edited-files card: on web the file opens in
+  // the portal only when the agent's bound device can serve the read.
+  const resolveOpenFile = useOpenEditedFile();
 
   if (!name || !path) {
     // If required properties are missing, render an error or null
@@ -33,12 +37,16 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
 
   // isDirectory may be true (from plugin) or undefined; ensure it is a boolean
   const isDir = isDirectory === true;
+  const openInPortal = isDir
+    ? undefined
+    : resolveOpenFile({ kind: 'modified', path, sandboxBacked: false });
 
   return (
     <LocalFile
       conversation={conversation}
       isDirectory={isDir}
       name={name}
+      openInPortal={openInPortal}
       path={path}
       readonly={isSharePage}
     />
