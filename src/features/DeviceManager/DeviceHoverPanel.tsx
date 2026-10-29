@@ -12,6 +12,7 @@ import {
   type LucideIcon,
   MemoryStickIcon,
   MonitorIcon,
+  PlayIcon,
   PowerIcon,
   ServerIcon,
   UserIcon,
@@ -21,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -165,6 +167,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
             </UsageMeterGroup>
           )}
         </div>
+      )}
+      {online && (
+        <InfoRow icon={PlayIcon} label={t('devices.card.runningTopics')}>
+          <DeviceRunningSummaryValue deviceId={device.deviceId} />
+        </InfoRow>
       )}
 
       <Section color={cssVar.colorInfo} title={t('devices.detail.specs')} />
