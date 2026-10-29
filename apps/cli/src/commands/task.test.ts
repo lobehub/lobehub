@@ -72,16 +72,16 @@ describe('task create', () => {
     mockResolveWorkspaceId.mockReturnValue('ws-1');
     mockGetWorkspace.mockResolvedValue({ id: 'ws-1', slug: 'lobehub' });
     mockCreateTask.mockResolvedValue({
-      data: { id: 'task_2', identifier: 'LOBE-321', name: 'Workspace task' },
+      data: { id: 'task_2', identifier: 'T-321', name: 'Workspace task' },
       message: 'Task created',
       success: true,
     });
 
     await run('--instruction', 'Do the workspace thing');
 
-    expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('LOBE-321'));
+    expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining('T-321'));
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('https://app.example.com/lobehub/task/LOBE-321/workspace-task'),
+      expect.stringContaining('https://app.example.com/lobehub/task/T-321/workspace-task'),
     );
   });
 });

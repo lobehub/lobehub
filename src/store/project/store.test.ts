@@ -29,6 +29,7 @@ import {
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
   refreshProjectTopics: vi.fn(),
+  syncFavoriteSnapshot: vi.fn(),
 }));
 
 vi.mock('@/store/projectWorkingDirectory', () => ({
@@ -40,6 +41,10 @@ vi.mock('@/store/projectWorkingDirectory', () => ({
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => mocks.activeWorkspaceId,
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
+
+vi.mock('@/store/home', () => ({
+  useHomeStore: { getState: () => ({ syncFavoriteSnapshot: mocks.syncFavoriteSnapshot }) },
 }));
 
 vi.mock('@/services/project', () => ({
@@ -458,6 +463,29 @@ describe('project store replicas', () => {
         'workspace-1',
       );
       expect(useProjectStore.getState().projectListMap.all[0].id).toBe('p3');
+    });
+    it('refreshes a favorited project when its name or logo changes', async () => {
+      seed();
+      await waitSeeded();
+      const renamed = { ...project('p1', 'Renamed'), avatar: '🚀' };
+      vi.mocked(projectService.update).mockResolvedValue(ok(renamed) as any);
+
+      await act(async () => {
+        await useProjectStore.getState().updateProject('p1', { avatar: '🚀', name: 'Renamed' });
+      });
+      await waitFor(() =>
+        expect(mocks.syncFavoriteSnapshot).toHaveBeenCalledWith('project', 'p1', {
+          icon: '🚀',
+          title: 'Renamed',
+        }),
+      );
+
+      mocks.syncFavoriteSnapshot.mockClear();
+      vi.mocked(projectService.update).mockResolvedValue(ok(project('p1', 'Renamed')) as any);
+      await act(async () => {
+        await useProjectStore.getState().updateProject('p1', { description: 'Plan' } as any);
+      });
+      expect(mocks.syncFavoriteSnapshot).not.toHaveBeenCalled();
     });
   });
 });

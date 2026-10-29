@@ -37,10 +37,10 @@ export default {
     'You are about to delete unstarred topics. They will be moved to the trash and can be restored within 30 days.',
   'actions.confirmRemoveUnstarredOwn':
     'You are about to delete unstarred topics you created. Topics created by other Workspace members will remain. Deleted topics move to the trash and can be restored within 30 days.',
-  'actions.confirmRemoveUnstarredWorkspace':
-    'You are about to delete all unstarred topics in the current Workspace list, including topics created by other members. Starred topics will remain. Deleted topics move to the trash and can be restored within 30 days.',
-  'actions.confirmRemoveUnstarredWorkspaceAcknowledge':
-    "I understand that this moves other members' unstarred topics to the trash.",
+  'actions.confirmRemoveUnpinnedWorkspace':
+    'You are about to delete all unpinned topics in the current Workspace list, including topics created by other members. Pinned topics will remain. Deleted topics move to the trash and can be restored within 30 days.',
+  'actions.confirmRemoveUnpinnedWorkspaceAcknowledge':
+    "I understand that this moves other members' unpinned topics to the trash.",
   'actions.copyLink': 'Copy Link',
   'actions.copyLinkSuccess': 'Link copied',
   'actions.copySessionId': 'Copy Topic ID',
@@ -53,8 +53,8 @@ export default {
   'actions.duplicate': 'Duplicate',
   'actions.moveToAgent': 'Move to another agent',
   'actions.forwardToAgent': 'Forward to another agent',
-  'actions.favorite': 'Favorite',
-  'actions.unfavorite': 'Unfavorite',
+  'actions.pin': 'Pin',
+  'actions.unpin': 'Unpin',
   'actions.markCompleted': 'Archive',
   'actions.unmarkCompleted': 'Unarchive',
   'actions.export': 'Export Topics',
@@ -67,7 +67,7 @@ export default {
   'actions.removeTopic': 'Delete Topic',
   'actions.removeUnstarred': 'Delete Unstarred Topics',
   'actions.removeUnstarredOwn': 'Delete My Unstarred Topics',
-  'actions.removeUnstarredWorkspace': 'Delete All Unstarred Topics',
+  'actions.removeUnpinnedWorkspace': 'Delete All Unpinned Topics',
   'defaultTitle': 'Default Topic',
   'doctor.checkFailed': 'The check could not be completed.',
   'doctor.healthy': 'Every message in this topic is showing. Nothing to fix.',
@@ -94,7 +94,7 @@ export default {
   'duplicateLoading': 'Copying Topic...',
   'duplicateSuccess': 'Topic Copied Successfully',
   'failedStatusTip': 'This run hit an error — open it to take a look.',
-  'favorite': 'Favorite',
+  'pinned': 'Pinned',
   'forkFailed': 'Failed to fork the topic',
   'forkLoading': 'Creating a new topic...',
   'forkSuccess': 'Forked to a new topic',
@@ -229,12 +229,13 @@ export default {
   'management.bulk.deleteConfirm':
     'You are about to delete {{count}} topics. They will be moved to the trash and can be restored within 30 days.',
   'management.bulk.deleteTitle': 'Delete topics?',
-  'management.bulk.favorite': 'Favorite',
+  'management.bulk.pin': 'Pin',
   'management.bulk.move': 'Move to agent',
   'management.bulk.moveEmpty': 'No other agents',
   'management.bulk.moveSearchPlaceholder': 'Search agents…',
   'management.bulk.selectedCount_one': '{{count}} selected',
   'management.bulk.selectedCount_other': '{{count}} selected',
+  'management.bulk.unarchive': 'Unarchive',
   'management.card.noPreview': 'No preview available',
   'management.columns.project': 'Project',
   'management.columns.status': 'Status',

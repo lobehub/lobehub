@@ -309,7 +309,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
     [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
-    [OPENCODE_IDENTIFIER]: heterogeneousCliRenders,
+    [OPENCODE_IDENTIFIER]: {
+      ...heterogeneousCliRenders,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [PI_IDENTIFIER]: heterogeneousCliRenders,
     [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
@@ -386,7 +389,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
-    [OPENCODE_IDENTIFIER]: heterogeneousCliInspectors,
+    [OPENCODE_IDENTIFIER]: {
+      ...heterogeneousCliInspectors,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
     [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
     'codex': CodexInspectors,
@@ -445,6 +451,10 @@ export const registerBuiltinToolSurfaces = (): void => {
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
     },
     [QODER_IDENTIFIER]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    [OPENCODE_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [CredsIdentifier]: CredsInterventions as Record<string, BuiltinIntervention>,
     [CloudSandboxManifest.identifier]: CloudSandboxInterventions as Record<
       string,

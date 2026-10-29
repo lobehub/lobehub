@@ -412,7 +412,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config imageUrls through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -431,7 +431,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform single config imageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -451,7 +451,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform both imageUrl and imageUrls when both are present', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -476,7 +476,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config endImageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -497,7 +497,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config with both imageUrl and endImageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -524,7 +524,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should handle config without imageUrls', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -783,7 +783,7 @@ describe('GenerationBatchModel', () => {
 
   describe('External service integration', () => {
     it('should call FileService with correct parameters', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -818,7 +818,7 @@ describe('GenerationBatchModel', () => {
     it('should handle FileService errors gracefully', async () => {
       mockGetFullFileUrl.mockRejectedValue(new Error('FileService error'));
 
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,

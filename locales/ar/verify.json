@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "غير مؤكد",
   "acceptance.roundStatus.verifying": "قيد التحقق",
   "acceptance.share.copyFailed": "تعذر نسخ الرابط. انسخه من شريط العنوان.",
-  "acceptance.share.makePrivate": "تقييد الوصول",
-  "acceptance.share.makePublic": "السماح بالوصول عبر الرابط",
   "acceptance.share.privateHint": "سيتمكن فقط المنشئ وأعضاء مساحة العمل من قراءة هذا القبول وجولاته. لا يمكن استرجاع النسخ التي تم تنزيلها بالفعل.",
   "acceptance.share.publicHint": "سيتمكن أي شخص لديه الرابط من قراءة هذا القبول، جميع جولاته، الأدلة والتعليقات. يمكن للزوار المسجلين أيضًا التعليق والتوضيح. راجع المحتوى قبل جعله عامًا.",
   "acceptance.share.saved": "تم تحديث أذونات المشاركة",

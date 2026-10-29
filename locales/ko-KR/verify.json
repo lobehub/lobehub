@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "불확실",
   "acceptance.roundStatus.verifying": "진행 중",
   "acceptance.share.copyFailed": "링크를 복사할 수 없습니다. 주소 표시줄에서 복사하세요.",
-  "acceptance.share.makePrivate": "접근 제한",
-  "acceptance.share.makePublic": "링크로 접근 허용",
   "acceptance.share.privateHint": "창작자와 작업 공간 멤버만 이 승인 및 라운드를 읽을 수 있습니다. 이미 다운로드된 복사본은 회수할 수 없습니다.",
   "acceptance.share.publicHint": "링크를 가진 누구나 이 승인, 모든 라운드, 증거 및 댓글을 읽을 수 있습니다. 로그인한 방문자는 댓글을 달고 주석을 추가할 수도 있습니다. 공개하기 전에 내용을 검토하세요.",
   "acceptance.share.saved": "공유 권한이 업데이트되었습니다",

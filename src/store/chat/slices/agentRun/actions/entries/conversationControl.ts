@@ -6,9 +6,9 @@ import {
   type ConversationContext,
   type MessageMetadata,
   resolveAgentAgencyConfig,
-  type ToolIntervention,
   type UIChatMessage,
 } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
@@ -112,13 +112,6 @@ const toHeterogeneousSourceAction = (
       : undefined;
   }
 };
-
-/**
- * How long a published-but-unacknowledged hetero intervention stays in the
- * `resolving` phase before it is settled. Mirrors `SUBMIT_ACK_TIMEOUT_MS` in
- * `@lobechat/shared-tool-ui/ask-user`.
- */
-const HETERO_INTERVENTION_ACK_TIMEOUT_MS = 30 * 1000;
 
 export const conversationControl = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ConversationControlActionImpl(set, get, _api);
@@ -481,56 +474,13 @@ export class ConversationControlActionImpl {
     return true;
   };
 
-  /**
-   * A remote submit parks the card on `pending + resolving` until the blocked
-   * producer echoes its ACK. That ACK can never arrive when the producer is
-   * already gone — its own ask-user deadline elapsed, its process died, or its
-   * long-poll stopped listening the moment the bridge settled — and nothing
-   * else moves the card off that phase, so every surface reading it stays
-   * permanently non-actionable.
-   *
-   * Settle it after a bounded wait rather than handing the buttons back. The
-   * server accepted the user's decision for delivery, so from their side the
-   * question IS resolved; re-offering it would ask them to decide a second time
-   * and risk a duplicate landing on a producer that already has one. The
-   * terminal state is the one the user chose — an answer settles `approved`, a
-   * skip or cancel settles `rejected` — matching what the local desktop path
-   * stamps immediately. A later real producer result simply overwrites this.
-   */
-  #scheduleHeteroInterventionSettle = (
-    toolMessageId: string,
-    actionType: 'submit' | 'skip' | 'cancel',
-    context: OptimisticUpdateContext,
-  ): void => {
-    const settled: Partial<ToolIntervention> =
-      actionType === 'submit'
-        ? { resolving: false, status: 'approved' }
-        : {
-            rejectedReason: actionType === 'skip' ? 'User skipped' : 'User cancelled',
-            resolving: false,
-            skipped: actionType === 'skip',
-            status: 'rejected',
-          };
-
-    setTimeout(() => {
-      const intervention = dbMessageSelectors.getDbMessageById(toolMessageId)(
-        this.#get(),
-      )?.pluginIntervention;
-      // Anything terminal already won the race — never reopen a settled card.
-      if (intervention?.resolving !== true || intervention.status !== 'pending') return;
-
-      // Write the terminal state onto the projections the surfaces read BEFORE
-      // persisting: `optimisticUpdateMessagePlugin` only reaches the tool row's
-      // top-level `pluginIntervention` (what the card list is built from) once
-      // the server echoes, so a failed or slow write would leave the card on
-      // screen — the exact state this settle exists to end.
-      this.#interventions.dispatch(toolMessageId, settled, context);
-      void this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        { intervention: settled },
-        context,
-      );
-    }, HETERO_INTERVENTION_ACK_TIMEOUT_MS);
+  #discardSettledHeteroQuestion = (id: string): boolean => {
+    const intervention = dbMessageSelectors.getDbMessageById(id)(this.#get())?.pluginIntervention;
+    if (!intervention || intervention.status === 'pending') return false;
+    if (intervention.status === 'aborted') {
+      toast.info(t('tool.intervention.toolEnded', { ns: 'chat' }));
+    }
+    return true;
   };
 
   #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus, force?: boolean) => {
@@ -1759,8 +1709,7 @@ export class ConversationControlActionImpl {
    *   keeps going on its own; no synthetic user message, no new op.
    *
    * The framework's intervention surface still drives the UI: we just
-   * stamp the local terminal state immediately. Remote submits remain
-   * `pending + resolving` until the blocked producer echoes its ACK, so the
+   * keep submissions `pending + resolving` until the producer echoes its ACK, so the
    * form stays visible and disabled across remounts without claiming success.
    *
    * `actionType`:
@@ -1776,12 +1725,12 @@ export class ConversationControlActionImpl {
     context?: ConversationContext,
   ): Promise<void> => {
     const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
-    if (!toolMessage) return;
+    if (!toolMessage) throw new Error('Question message is unavailable');
+    if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
     const toolCallId = toolMessage.tool_call_id;
     if (!toolCallId) {
-      console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
-      return;
+      throw new Error('Question has no tool call identity');
     }
 
     const effectiveContext: ConversationContext = context ?? {
@@ -1790,7 +1739,6 @@ export class ConversationControlActionImpl {
       threadId: this.#get().activeThreadId,
     };
     const originalIntervention = toolMessage.pluginIntervention;
-    const originalContent = toolMessage.content;
     const interventionState = (
       toolMessage.pluginState as
         { heterogeneousIntervention?: { interactionKind?: unknown } } | undefined
@@ -1807,24 +1755,34 @@ export class ConversationControlActionImpl {
     // durable first-winner claim. The message/runtime ids are locators only;
     // the source endpoint remains responsible for ACL and token authority.
     if (originalIntervention?.batchId && originalIntervention.operationId && sourceAction) {
-      const sourceResolution = await this.tryResolveAgentInterventionBySource({
-        action: sourceAction,
-        context: effectiveContext,
-        toolMessageIds: [toolMessageId],
-      });
+      let sourceResolution: ResolveAgentInterventionBySourceResult;
+      try {
+        sourceResolution = await this.tryResolveAgentInterventionBySource({
+          action: sourceAction,
+          context: effectiveContext,
+          toolMessageIds: [toolMessageId],
+        });
+      } catch (error) {
+        if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
+        if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
+          this.#discardSettledHeteroQuestion(toolMessageId);
+          return;
+        }
+        throw error;
+      }
+      if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (sourceResolution.handled) {
         const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
         this.#interventions.dispatch(
           toolMessageId,
-          { resolving: true, status: 'pending' },
+          { resolving: true, skipped: actionType === 'skip', status: 'pending' },
           sourceOptimisticContext,
         );
         if (actionType === 'submit') {
           await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
         }
-        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, sourceOptimisticContext);
         return;
       }
     }
@@ -1841,8 +1799,11 @@ export class ConversationControlActionImpl {
       messageOperationMap?.[toolMessageId];
 
     if (!candidateOperationId) {
-      console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
-      return;
+      if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
+        this.#discardSettledHeteroQuestion(toolMessageId);
+        return;
+      }
+      throw new Error('Question runtime is unavailable');
     }
 
     // Resolve the runtime execution op before choosing IPC vs remote transport.
@@ -1851,76 +1812,30 @@ export class ConversationControlActionImpl {
     const { operation, operationId } =
       this.#resolveHeteroInterventionExecutionOperation(candidateOperationId);
 
-    // If the operation has already been garbage-collected (e.g. the bridge
-    // timed out earlier and `runtime_end` rolled the op into `completed`
-    // 30s+ ago), don't pass the stale opId into the optimistic chain — the
-    // `internal_getConversationContext` fallback uses global state, which
-    // matches the active conversation the user just clicked in. The IPC
-    // submit below stays unchanged: `bridge.resolve()` no-ops on unknown
-    // toolCallIds, so it's safe to fire even when the bridge is gone.
+    // A cold/GC'd run still uses the card's captured context, never the active tab.
     const operationAlive = !!operation;
     if (!operationAlive) {
       console.warn(
-        '[submitHeteroIntervention] operation already gone, using global-state fallback for optimistic write:',
+        '[submitHeteroIntervention] operation already gone, using card context:',
         operationId,
       );
     }
-    const optimisticContext: OptimisticUpdateContext = operationAlive ? { operationId } : {};
+    const optimisticContext: OptimisticUpdateContext = operationAlive
+      ? { operationId }
+      : { context: effectiveContext };
     const isLocalDesktopHetero = operation?.type === 'execHeterogeneousAgent';
 
-    if (!isLocalDesktopHetero) {
-      // Publishing the user intent is not completion. Keep the interaction
-      // pending but mark its in-flight phase so a remount/retry cannot present
-      // an optimistic terminal state before the producer has consumed it.
-      this.#interventions.dispatch(
-        toolMessageId,
-        { resolving: true, status: 'pending' },
-        optimisticContext,
-      );
-      if (actionType === 'submit') {
-        await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
-      }
-    } else if (actionType === 'submit') {
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        { intervention: { status: 'approved' } },
-        optimisticContext,
-      );
-      // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
-      // to `pluginState.askUserAnswers` so the Render component can show
-      // Q&A pairs instead of parsing the bridge's prose `User answers:`
-      // dump out of `content`. Best-effort — never block the IPC submit.
+    // Both transports wait for the producer's result event. Local IPC delivery
+    // does not prove that an already-ended bridge consumed the answer.
+    this.#interventions.dispatch(
+      toolMessageId,
+      { resolving: true, skipped: actionType === 'skip', status: 'pending' },
+      optimisticContext,
+    );
+    if (actionType === 'submit') {
       await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
-      // Bridge formats its own "User answers:" string for CC, so the eventual
-      // tool_result re-rewrites this content. The optimistic write is just
-      // for the brief gap between Submit and CC echoing the result back.
-      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        summary,
-        undefined,
-        optimisticContext,
-      );
-    } else {
-      const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        {
-          intervention: {
-            rejectedReason: reason,
-            skipped: actionType === 'skip',
-            status: 'rejected',
-          },
-        },
-        optimisticContext,
-      );
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        `${reason} this interaction.`,
-        undefined,
-        optimisticContext,
-      );
     }
+    if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
     // Forward the answer to the producer over the transport THIS op actually
     // ran on — read from the op itself, not re-derived from the current agent
@@ -1974,35 +1889,20 @@ export class ConversationControlActionImpl {
                 toolCallId,
               },
         );
-        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
       }
     } catch (err) {
+      if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);
-      // Drop the in-flight hint first: the rollback below only reaches
-      // `pluginIntervention` once the server echoes, and a failed publish must
-      // never leave the card disabled waiting on an ACK that was never asked for.
-      if (!isLocalDesktopHetero) {
-        this.#interventions.dispatch(
-          toolMessageId,
-          { resolving: false, status: 'pending' },
-          optimisticContext,
-        );
-      }
-      await this.#get().optimisticUpdateMessagePlugin(
+      // Only the client-owned in-flight hint needs undoing. Writing pending
+      // back to the server could overwrite a producer result racing this error.
+      this.#interventions.dispatch(
         toolMessageId,
-        // `resolving` is never part of what a rollback restores: it describes
-        // an in-flight publish, and this one just failed. Carrying a hint left
-        // by an earlier attempt would re-disable the card the user must retry.
-        { intervention: { ...(originalIntervention ?? { status: 'pending' }), resolving: false } },
+        { resolving: false, skipped: originalIntervention?.skipped ?? false, status: 'pending' },
         optimisticContext,
       );
-      if (isLocalDesktopHetero) {
-        await this.#get().optimisticUpdateMessageContent(
-          toolMessageId,
-          originalContent,
-          undefined,
-          optimisticContext,
-        );
+      if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
+        this.#discardSettledHeteroQuestion(toolMessageId);
+        return;
       }
       throw err;
     }

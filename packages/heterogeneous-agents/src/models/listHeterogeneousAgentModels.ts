@@ -11,10 +11,12 @@ import type {
 import { isRecord } from '@lobechat/utils/object';
 
 import { getHeterogeneousTypeLabel } from '../labels';
+import { AcpRpcResponseError } from '../spawn/acpStdioClient';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
+import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
 import { listCodexModels } from './codex';
 
 const execFilePromise = promisify(execFile);
@@ -252,6 +254,34 @@ export const parseQoderModelCatalog = (stdout: string): HeterogeneousAgentModel[
   return models;
 };
 
+/** Pi extensions can register providers; retain their loading policy without running a session. */
+const buildPiCatalogArgs = (source: string[] = []): string[] => {
+  const args = ['--list-models'];
+  const switches = [
+    '--no-extensions',
+    '-ne',
+    '--approve',
+    '-a',
+    '--no-approve',
+    '-na',
+    '--offline',
+  ];
+  for (let index = 0; index < source.length; index += 1) {
+    const arg = source[index];
+    if (arg === '--') break;
+    if (arg === '--extension' || arg === '-e') {
+      const value = source[++index];
+      if (!value || value.startsWith('-')) {
+        throw Object.assign(new Error(`Missing value for Pi ${arg}`), {
+          code: 'unsupported_configuration',
+        });
+      }
+      args.push(arg, value);
+    } else if (switches.includes(arg)) args.push(arg);
+  }
+  return args;
+};
+
 const getErrorRecord = (error: unknown) =>
   error as {
     code?: string;
@@ -262,6 +292,9 @@ const getErrorRecord = (error: unknown) =>
   };
 
 const classifyCatalogError = (error: unknown): HeterogeneousAgentModelCatalogErrorCode => {
+  if (error instanceof AcpRpcResponseError && error.rpcError.code === -32_601) {
+    return 'unsupported_client';
+  }
   // The app-server client wraps spawn errors with their original cause.
   if (error instanceof Error && error.cause) return classifyCatalogError(error.cause);
   const { code, killed, signal } = getErrorRecord(error);
@@ -321,11 +354,15 @@ export const listHeterogeneousAgentModels = async (
       return { models, status: 'success', updatedAt };
     }
 
+    // Catalog discovery must work even when a saved project path no longer exists.
+    // Keep valid project directories so project-specific provider configuration still applies.
+    const cwd = resolveHeteroSpawnCwd(params.cwd ?? process.cwd());
+
     if (params.type === 'droid') {
       const models = await listDroidAcpModels({
         args: params.args,
         commandPath: resolved.command,
-        cwd: params.cwd ?? process.cwd(),
+        cwd: cwd ?? process.cwd(),
         env: env as NodeJS.ProcessEnv,
         timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
       });
@@ -336,7 +373,7 @@ export const listHeterogeneousAgentModels = async (
       const models = await listTraeAcpModels({
         args: params.args,
         commandPath: resolved.command,
-        cwd: params.cwd ?? process.cwd(),
+        cwd: cwd ?? process.cwd(),
         env: env as NodeJS.ProcessEnv,
         timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
       });
@@ -352,10 +389,12 @@ export const listHeterogeneousAgentModels = async (
             ? ['models']
             : params.type === 'kimi-code'
               ? ['provider', 'list', '--json']
-              : ['--list-models'];
+              : params.type === 'pi'
+                ? buildPiCatalogArgs(params.args)
+                : ['--list-models'];
     const spawnPlan = await resolveCliSpawnPlan(resolved.command, args);
     const { stderr, stdout } = await execFilePromise(spawnPlan.command, spawnPlan.args, {
-      cwd: params.cwd,
+      cwd,
       encoding: 'utf8',
       env: env as NodeJS.ProcessEnv,
       maxBuffer: MODEL_CATALOG_MAX_BUFFER,

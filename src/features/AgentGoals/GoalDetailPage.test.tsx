@@ -114,6 +114,11 @@ vi.mock('./GoalSupervisorToggle', () => ({
 vi.mock('@/features/Portal/router', () => ({
   PortalContent: () => <div data-testid="goal-portal-content" />,
 }));
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: () => null,
+}));
 vi.mock('@/features/NavHeader', () => ({
   default: ({ left, right }: { left: ReactNode; right: ReactNode }) => (
     <div>

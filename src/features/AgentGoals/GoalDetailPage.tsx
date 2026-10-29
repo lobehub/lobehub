@@ -11,6 +11,7 @@ import ConversationSkeleton from '@/components/Skeleton/Conversation/List';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useAgentRoutePath } from '@/features/AgentBreadcrumb/useAgentRoutePath';
+import { FavoriteButton, useCurrentFavoritePath } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
@@ -83,6 +84,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const canStart = useResourceManageable(snapshot?.goal.userId);
 
   const buildAgentPath = useAgentRoutePath(agentId ?? '');
+  const favoritePath = useCurrentFavoritePath();
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
@@ -257,6 +259,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 ) : (
                   <GoalWorkspaceBreadcrumb title={goal.title} />
                 )}
+                <FavoriteButton
+                  path={favoritePath}
+                  targetId={goal.id}
+                  title={goal.title}
+                  type={'goal'}
+                />
                 {/* Not nested under the breadcrumb: an agent-less goal still has to
                   be deletable, and this menu is the only place that can do it. */}
                 <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />

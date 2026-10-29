@@ -655,6 +655,40 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(globalStore.toggleRightPanel).not.toHaveBeenCalled();
   });
 
+  it('only exposes the close button on the selected tab', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'skills';
+
+    render(<AgentWorkingSidebar />);
+    const skillsTab = screen.getByRole('button', { name: 'workingPanel.resources.filter.skills' });
+    const documentsTab = screen.getByRole('button', {
+      name: 'workingPanel.resources.filter.documents',
+    });
+    fireEvent.mouseOver(documentsTab);
+
+    expect(skillsTab.parentElement!.querySelector('[data-tab-close]')).toBeInTheDocument();
+    expect(documentsTab.parentElement!.querySelector('[data-tab-close]')).toBeNull();
+    expect(document.querySelectorAll('[data-tab-close]')).toHaveLength(1);
+  });
+
+  it('closes an unselected tab on middle click', () => {
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'skills';
+
+    render(<AgentWorkingSidebar />);
+    fireEvent(
+      screen.getByRole('button', { name: 'workingPanel.resources.filter.documents' }),
+      new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'workingPanel.resources.filter.documents' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'workingPanel.resources.filter.skills' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps the panel open and selects a surviving pinned tab when the active tab closes', () => {
     agentStore.activeAgentId = 'agent';
     localStorageState.openTabsByContext = { 'draft:agent:none': ['works', 'params'] };
@@ -792,6 +826,45 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(tabs.map((tab) => tab.dataset.tabKey)).toEqual(['files', 'skills', 'documents']);
     expect(tabs[0]).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('opens Claude Code memory by default once a project folder is selected', () => {
+    agentStore.activeAgentId = 'agent';
+    agentStore.heterogeneousType = 'claude-code';
+    agentStore.isHeterogeneous = true;
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.workingDirectory = '/repo';
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'claudeMemory';
+
+    render(<AgentWorkingSidebar />);
+
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-tab-key]'));
+    expect(tabs.map((tab) => tab.dataset.tabKey)).toEqual(['files', 'skills', 'claudeMemory']);
+    expect(screen.getByTestId('memory-pane')).toHaveTextContent('/repo');
+  });
+
+  it.each([
+    ['another heterogeneous agent', 'codex', '/repo', false],
+    ['a Claude Code agent without a project folder', 'claude-code', undefined, false],
+    ['a Claude Code agent on the home fallback only', 'claude-code', '/home/me', true],
+  ])(
+    'offers no memory tab for %s',
+    (_case, heterogeneousType, workingDirectory, isHomeFallback) => {
+      agentStore.activeAgentId = 'agent';
+      agentStore.heterogeneousType = heterogeneousType;
+      agentStore.isHeterogeneous = true;
+      effectiveConfig.agencyConfig = { executionTarget: 'local' };
+      reviewState.workingDirectory = workingDirectory;
+      reviewState.isHomeFallback = isHomeFallback;
+      localStorageState.openTabsByContext = {};
+
+      render(<AgentWorkingSidebar />);
+
+      const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-tab-key]'));
+      expect(tabs.map((tab) => tab.dataset.tabKey)).not.toContain('claudeMemory');
+      expect(screen.queryByTestId('memory-pane')).toBeNull();
+    },
+  );
 
   it('creates an independent browser tab every time Browser is chosen', async () => {
     localStorageState.openTabsByContext = { 'draft:default:none': ['params'] };
@@ -1029,7 +1102,12 @@ describe('AgentWorkingSidebar — tab strip', () => {
       expect(document.querySelector('button[data-tab-key="review"]')).toBeInTheDocument();
     });
 
-    fireEvent.click(document.querySelector('button[data-tab-key="review"]')!.nextElementSibling!);
+    // the review tab is not the selected one, so it exposes no close button —
+    // close it through the middle-click shortcut instead
+    fireEvent(
+      document.querySelector('button[data-tab-key="review"]')!,
+      new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+    );
     expect(document.querySelector('button[data-tab-key="review"]')).not.toBeInTheDocument();
 
     globalStore.status.workingSidebarTabRequest = { nonce: 2, tab: 'review' };

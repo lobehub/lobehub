@@ -161,20 +161,20 @@ describe('Conversation header action menu', () => {
     expect(copiedText).toBe('topic-1');
     expect(document.querySelector('textarea')).toBeNull();
   });
-  it('includes the desktop popup-window action for the active topic', () => {
+  it('reuses the sidebar open-in-new-window action for the active topic', () => {
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 
     const { result } = renderHook(() => useMenu());
 
     const popupItem = result.current
       .menuItems()
-      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeDefined();
     if (!isActionItem(popupItem)) {
       throw new Error('Expected popup menu item to be a clickable action item');
     }
-    expect(popupItem?.label).toBe('topic:inPopup.title');
+    expect(popupItem?.label).toBe('topic:actions.openInNewWindow');
 
     act(() => {
       popupItem?.onClick?.();
@@ -190,7 +190,7 @@ describe('Conversation header action menu', () => {
 
     const popupItem = result.current
       .menuItems()
-      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeUndefined();
   });

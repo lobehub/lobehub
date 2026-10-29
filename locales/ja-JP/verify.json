@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "不確定",
   "acceptance.roundStatus.verifying": "進行中",
   "acceptance.share.copyFailed": "リンクをコピーできませんでした。アドレスバーからコピーしてください。",
-  "acceptance.share.makePrivate": "アクセスを制限する",
-  "acceptance.share.makePublic": "リンクでのアクセスを許可する",
   "acceptance.share.privateHint": "作成者とワークスペースメンバーのみがこの承認とそのラウンドを閲覧できます。既にダウンロードされたコピーは取り消せません。",
   "acceptance.share.publicHint": "リンクを持つ誰もがこの承認、そのすべてのラウンド、証拠、コメントを閲覧できます。サインインした訪問者はコメントや注釈を追加することもできます。公開する前に内容を確認してください。",
   "acceptance.share.saved": "共有権限が更新されました",

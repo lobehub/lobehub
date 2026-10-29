@@ -42,6 +42,19 @@ export const matchesStatus = (topic: ChatTopic, status: StatusFilter): boolean =
   }
 };
 
+/**
+ * True when every selected topic is already archived (`completed` in the UI),
+ * so the bulk bar should offer "Unarchive" instead of "Archive".
+ */
+export const areAllTopicsArchived = (topics: ChatTopic[], ids: string[]): boolean => {
+  if (ids.length === 0) return false;
+  const statusById = new Map(topics.map((t) => [t.id, t.status]));
+  return ids.every((id) => {
+    const status = statusById.get(id);
+    return status === 'completed' || status === 'archived';
+  });
+};
+
 export const matchesGroup = (topic: ChatTopic, groupIds: string[]): boolean => {
   if (groupIds.length === 0) return true;
   // ChatTopic doesn't surface groupId on the client type; fall back to the

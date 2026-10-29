@@ -14,8 +14,13 @@ vi.mock('@/database/models/workspaceMember', () => ({
 }));
 
 const db = {} as never;
-const row = (userId: string, workspaceId: string | null) =>
-  ({ userId, workspaceId }) as { userId: string; workspaceId: string | null };
+type Visibility = 'owner' | 'private' | 'public';
+const row = (userId: string, workspaceId: string | null, visibility: Visibility = 'private') =>
+  ({ userId, visibility, workspaceId }) as {
+    userId: string;
+    visibility: Visibility;
+    workspaceId: string | null;
+  };
 
 beforeEach(() => {
   getMember.mockReset();
@@ -84,6 +89,17 @@ describe('canManageAcceptance', () => {
     expect(getMember).not.toHaveBeenCalled();
   });
 
+  it("keeps an only-me delivery its creator's, whatever the teammate's role", async () => {
+    getMember.mockResolvedValue({ role: 'owner' });
+
+    await expect(
+      canManageAcceptance({ serverDB: db, userId: 'me' }, row('teammate', 'ws_a', 'owner')),
+    ).resolves.toBe(false);
+    await expect(
+      canManageAcceptance({ serverDB: db, userId: 'me' }, row('me', 'ws_a', 'owner')),
+    ).resolves.toBe(true);
+  });
+
   it('refuses an anonymous caller', async () => {
     await expect(canManageAcceptance({ serverDB: db }, row('teammate', 'ws_a'))).resolves.toBe(
       false,
@@ -122,6 +138,8 @@ describe('filterManageableAcceptances', () => {
       row('teammate', 'ws_member'),
       row('teammate', 'ws_viewer'),
       row('teammate', null),
+      row('teammate', 'ws_owned', 'owner'),
+      row('me', 'ws_owned', 'owner'),
     ];
     await expect(
       filterManageableAcceptances({ serverDB: db, userId: 'me' }, rows),
@@ -131,6 +149,7 @@ describe('filterManageableAcceptances', () => {
       row('teammate', 'ws_owned'),
       row('teammate', 'ws_admin'),
       row('teammate', 'ws_member'),
+      row('me', 'ws_owned', 'owner'),
     ]);
   });
 

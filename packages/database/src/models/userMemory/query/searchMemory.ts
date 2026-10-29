@@ -49,16 +49,36 @@ export const searchMemory = async (
       if (layer === LayersEnum.Experience) return false;
       switch (layer) {
         case LayersEnum.Activity: {
-          return (limits.activities ?? 0) > 0;
+          return (
+            (limits.activities ??
+              // v8 ignore start -- unreachable: limits.activities always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
+              0) > 0
+            // v8 ignore stop
+          );
         }
         case LayersEnum.Context: {
-          return (limits.contexts ?? 0) > 0;
+          return (
+            (limits.contexts ??
+              // v8 ignore start -- unreachable: limits.contexts always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
+              0) > 0
+            // v8 ignore stop
+          );
         }
         case LayersEnum.Identity: {
-          return (limits.identities ?? 0) > 0;
+          return (
+            (limits.identities ??
+              // v8 ignore start -- unreachable: limits.identities always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
+              0) > 0
+            // v8 ignore stop
+          );
         }
         case LayersEnum.Preference: {
-          return (limits.preferences ?? 0) > 0;
+          return (
+            (limits.preferences ??
+              // v8 ignore start -- unreachable: limits.preferences always falls back to DEFAULT_HYBRID_SEARCH_LIMIT
+              0) > 0
+            // v8 ignore stop
+          );
         }
       }
     }),
@@ -84,13 +104,15 @@ export const searchMemory = async (
         })
       : Promise.resolve([]),
     requestedLayers.has(LayersEnum.Experience)
-      ? ctx.searchHybridExperiences({
+      ? // v8 ignore start -- unreachable: requestedLayers filters out LayersEnum.Experience; the pair is ignored because a skipped first arm shifts the second arm's count
+        ctx.searchHybridExperiences({
           embeddings: queryEmbeddings,
           lexicalSearch,
           params,
           queries: appliedQueries,
         })
       : Promise.resolve([]),
+    // v8 ignore stop
     requestedLayers.has(LayersEnum.Identity)
       ? ctx.searchHybridIdentities({
           embeddings: queryEmbeddings,
@@ -115,7 +137,11 @@ export const searchMemory = async (
     key: SearchLayerKey,
     items: RankedSearchCandidate<T>[],
   ) => {
-    const limit = limits[key] ?? DEFAULT_HYBRID_SEARCH_LIMIT;
+    const limit =
+      limits[key] ??
+      // v8 ignore start -- unreachable: every limits entry is already defaulted
+      DEFAULT_HYBRID_SEARCH_LIMIT;
+    // v8 ignore stop
     const sorted = items.sort((left, right) => right.score.final - left.score.final);
     const selected = sorted.slice(0, limit).map((entry) => entry.item);
     ranking[key] = Object.fromEntries(

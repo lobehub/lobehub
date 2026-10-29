@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "Incertain",
   "acceptance.roundStatus.verifying": "En cours",
   "acceptance.share.copyFailed": "Impossible de copier le lien. Copiez-le depuis la barre d'adresse.",
-  "acceptance.share.makePrivate": "Restreindre l'accès",
-  "acceptance.share.makePublic": "Autoriser l'accès avec le lien",
   "acceptance.share.privateHint": "Seul le créateur et les membres de l'espace de travail pourront lire cette acceptation et ses phases. Les copies déjà téléchargées ne peuvent pas être rappelées.",
   "acceptance.share.publicHint": "Toute personne disposant du lien pourra lire cette acceptation, toutes ses phases, preuves et commentaires. Les visiteurs connectés peuvent également commenter et annoter. Vérifiez le contenu avant de le rendre public.",
   "acceptance.share.saved": "Permissions de partage mises à jour",

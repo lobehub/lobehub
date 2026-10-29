@@ -1,5 +1,6 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
@@ -569,6 +570,7 @@ export const discoverTools = async (
       ],
       lobehubSkills: activeLobehubSkillManifests,
       manifestContext,
+      pageScope: manifestContext?.scope === 'page' && pluginIds.includes(PageAgentIdentifier),
     });
     Object.assign(toolManifestMap, discovery.manifestMap);
     Object.assign(toolSourceMap, discovery.sourceMap);

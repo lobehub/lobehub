@@ -11,7 +11,7 @@ import {
   TextArea,
   useModalContext,
 } from '@lobehub/ui';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
@@ -20,7 +20,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import SelectCircle from '../SelectCircle';
-import type { ForwardTarget } from '../useForwardMessages';
+import { useForwardTargets } from '../useForwardTargets';
 import { useForwardTopic } from '../useForwardTopic';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -77,10 +77,12 @@ export const TopicForwardContent = ({
 }: TopicForwardContentProps) => {
   const { t } = useTranslation('chat');
   const { close } = useModalContext();
-  const [keyword, setKeyword] = useState('');
   const [note, setNote] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const { candidates, keyword, selectedIds, setKeyword, targets, toggle } = useForwardTargets(
+    agents,
+    sourceAgentId,
+  );
   const forwardTopic = useForwardTopic({
     agentId: sourceAgentId,
     cancelSourceContinuation,
@@ -89,18 +91,7 @@ export const TopicForwardContent = ({
 
   useFetchAgentList();
 
-  const candidates = useMemo(() => {
-    const query = keyword.trim().toLowerCase();
-    return agents
-      .filter((agent) => agent.type === 'agent' && agent.id !== sourceAgentId)
-      .filter((agent) => !query || (agent.title || '').toLowerCase().includes(query));
-  }, [agents, keyword, sourceAgentId]);
-
   const handleForward = () => {
-    const targets: ForwardTarget[] = selectedIds
-      .map((id) => agents.find((agent) => agent.id === id))
-      .filter((agent): agent is NonNullable<typeof agent> => !!agent)
-      .map((agent) => ({ id: agent.id, title: agent.title }));
     if (targets.length === 0) return;
 
     forwardTopic(targets, note);
@@ -131,21 +122,17 @@ export const TopicForwardContent = ({
                   className={cx(styles.row, selected && styles.selected)}
                   gap={8}
                   key={agent.id}
-                  onClick={() =>
-                    setSelectedIds((ids) =>
-                      selected ? ids.filter((id) => id !== agent.id) : [...ids, agent.id],
-                    )
-                  }
+                  onClick={() => toggle(agent.id)}
                 >
                   <AgentAvatar
                     agentId={agent.id}
                     avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
                     background={agent.backgroundColor || undefined}
-                    name={agent.title || undefined}
+                    name={agent.label || t('untitledAgent')}
                     size={22}
                   />
                   <Text ellipsis style={{ flex: 1 }}>
-                    {agent.title || t('untitledAgent')}
+                    {agent.label || t('untitledAgent')}
                   </Text>
                   <SelectCircle checked={selected} />
                 </Flexbox>

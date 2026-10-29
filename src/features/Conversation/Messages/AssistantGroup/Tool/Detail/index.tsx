@@ -80,7 +80,7 @@ const Render = memo<RenderProps>(
     }
 
     if (intervention?.status === 'aborted') {
-      return <AbortResponse />;
+      return <AbortResponse sessionEnded={intervention.rejectedReason === 'session_ended'} />;
     }
 
     // Handle arguments streaming state
