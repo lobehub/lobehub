@@ -1,7 +1,9 @@
+import fs from 'node:fs';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
-import { getTrpcClient } from '../api/client';
+import { getTrpcClient, type TrpcClient } from '../api/client';
 import {
   PERSONAL_SCOPE_ENV_VALUE,
   resolveWorkspaceScope,
@@ -89,6 +91,87 @@ const isForbidden = (error: unknown): boolean =>
   typeof error === 'object' &&
   error !== null &&
   (error as { data?: { code?: string } }).data?.code === 'FORBIDDEN';
+
+type MemberRow = Awaited<ReturnType<TrpcClient['workspaceMember']['list']['query']>>[number];
+
+const PROFILE_FIELDS = ['title', 'responsibilities'] as const;
+type ProfileField = (typeof PROFILE_FIELDS)[number];
+
+/** One row of a profile write: `null` clears a field, a missing key keeps it. */
+interface MemberProfilePatch {
+  member: string;
+  responsibilities?: string | null;
+  title?: string | null;
+}
+
+interface MemberProfileResult {
+  error?: string;
+  name: string | null;
+  responsibilities: string | null;
+  status: 'failed' | 'unchanged' | 'updated' | 'would-update';
+  title: string | null;
+  userId: string;
+}
+
+/** Mirror the server: trimmed, and blank means "clear". */
+const normalizeProfileValue = (value: string | null | undefined) => {
+  if (value === undefined || value === null) return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+/**
+ * Read `[{ member, title?, responsibilities? }, …]`. Every entry is checked
+ * before anything is sent, so a typo on row 15 cannot leave rows 1–14 written.
+ */
+const readProfilePatchFile = (file: string): MemberProfilePatch[] => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    log.error(`Could not read ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+
+  if (!Array.isArray(parsed)) {
+    log.error(`${file} must hold a JSON array of { member, title?, responsibilities? } objects.`);
+    process.exit(1);
+  }
+
+  return parsed.map((entry: unknown, index): MemberProfilePatch => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const fail = (reason: string): never => {
+      log.error(`${file} entry #${index + 1}: ${reason}`);
+      process.exit(1);
+    };
+
+    if (typeof row.member !== 'string' || !row.member.trim())
+      fail('"member" must be a user id, username or email.');
+    for (const field of PROFILE_FIELDS)
+      if (row[field] !== undefined && row[field] !== null && typeof row[field] !== 'string')
+        fail(`"${field}" must be a string or null.`);
+    if (PROFILE_FIELDS.every((field) => row[field] === undefined))
+      fail('provide "title" and/or "responsibilities".');
+
+    return {
+      member: row.member as string,
+      responsibilities: row.responsibilities as string | null | undefined,
+      title: row.title as string | null | undefined,
+    };
+  });
+};
+
+/** Match a member by user id, then by username or email (case-insensitive). */
+const findMembers = (members: MemberRow[], ref: string): MemberRow[] => {
+  const raw = ref.trim();
+  const byId = members.filter((m) => m.userId === raw);
+  if (byId.length > 0) return byId;
+
+  const needle = raw.toLowerCase();
+  return members.filter(
+    (m) => m.user?.username?.toLowerCase() === needle || m.user?.email?.toLowerCase() === needle,
+  );
+};
 
 const planLabel = (workspace: WorkspaceRow): string => {
   if (!workspace.plan) return '-';
@@ -397,11 +480,181 @@ export function registerWorkspaceCommand(program: Command) {
           truncate(m.user?.fullName || m.user?.username || '-', 24),
           m.user?.email ?? '-',
           m.role,
+          truncate(m.title || '-', 24),
           timeAgo(m.joinedAt),
         ]),
-        ['USER ID', 'NAME', 'EMAIL', 'ROLE', 'JOINED'],
+        ['USER ID', 'NAME', 'EMAIL', 'ROLE', 'TITLE', 'JOINED'],
       );
     });
+
+  const member = workspace.command('member').description('Manage individual workspace members');
+
+  member
+    .command('update [members...]')
+    .description(
+      "Set members' title and responsibilities (your own, or anyone's as admin or higher)",
+    )
+    .option('-w, --workspace <id|slug>', 'Workspace to write (defaults to the active scope)')
+    .option('-t, --title <title>', 'Job title; pass "" to clear')
+    .option('-r, --responsibilities <text>', 'Responsibilities; pass "" to clear')
+    .option(
+      '-f, --file <path>',
+      'JSON array of { member, title?, responsibilities? } to apply in one run',
+    )
+    .option('--dry-run', 'Show what would change without writing')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        refs: string[],
+        options: {
+          dryRun?: boolean;
+          file?: string;
+          json?: boolean | string;
+          responsibilities?: string;
+          title?: string;
+          workspace?: string;
+        },
+      ) => {
+        let patches: MemberProfilePatch[];
+        if (options.file) {
+          if (
+            refs.length > 0 ||
+            options.title !== undefined ||
+            options.responsibilities !== undefined
+          ) {
+            log.error('--file carries its own members and fields; drop the other arguments.');
+            process.exit(1);
+          }
+          patches = readProfilePatchFile(options.file);
+        } else {
+          if (refs.length === 0) {
+            log.error('Name at least one member (user id, username or email), or pass --file.');
+            process.exit(1);
+          }
+          if (options.title === undefined && options.responsibilities === undefined) {
+            log.error('Nothing to update. Pass --title and/or --responsibilities.');
+            process.exit(1);
+          }
+          patches = refs.map((ref) => ({
+            member: ref,
+            responsibilities: options.responsibilities,
+            title: options.title,
+          }));
+        }
+
+        const scopeId = await requireScope(options.workspace);
+        const client = await getTrpcClient(scopeId);
+        const members = await client.workspaceMember.list.query({}).catch((error: unknown) => {
+          if (isForbidden(error)) {
+            log.error(`Permission denied: you cannot read the members of workspace ${scopeId}.`);
+            process.exit(1);
+          }
+          throw error;
+        });
+        // A workspace always lists at least the caller; an empty list means the
+        // server did not accept this scope, which would otherwise read as
+        // "no member matches" for every row.
+        if (members.length === 0) {
+          log.error(
+            `Workspace ${scopeId} is not accessible — it does not exist or you are not a member. Nothing was written.`,
+          );
+          process.exit(1);
+        }
+
+        // Resolve every reference up front: an unknown or ambiguous one aborts
+        // the whole run before the first write.
+        const targets: { member: MemberRow; patch: MemberProfilePatch }[] = [];
+        const problems: string[] = [];
+        for (const patch of patches) {
+          const matches = findMembers(members, patch.member);
+          if (matches.length === 0) problems.push(`no member matches "${patch.member}"`);
+          else if (matches.length > 1)
+            problems.push(`"${patch.member}" matches ${matches.length} members — use the user id`);
+          else if (targets.some((t) => t.member.userId === matches[0].userId))
+            problems.push(`"${patch.member}" names ${matches[0].userId} a second time`);
+          else targets.push({ member: matches[0], patch });
+        }
+        if (problems.length > 0) {
+          for (const problem of problems) log.error(problem);
+          log.error(`Nothing was written to workspace ${scopeId}.`);
+          process.exit(1);
+        }
+
+        const results: MemberProfileResult[] = [];
+        let forbidden = false;
+        for (const { member: target, patch } of targets) {
+          const name = target.user?.fullName || target.user?.username || null;
+          const current = { responsibilities: target.responsibilities, title: target.title };
+
+          // Only send fields that differ, so a re-run is a no-op rather than
+          // another round of writes and audit-log entries.
+          const changes: Partial<Record<ProfileField, string | null>> = {};
+          for (const field of PROFILE_FIELDS) {
+            const next = normalizeProfileValue(patch[field]);
+            if (next !== undefined && next !== (current[field] ?? null)) changes[field] = next;
+          }
+
+          const result: MemberProfileResult = {
+            name,
+            ...current,
+            status: 'unchanged',
+            userId: target.userId,
+          };
+          results.push(result);
+
+          if (Object.keys(changes).length === 0) continue;
+          if (options.dryRun || forbidden) {
+            Object.assign(result, changes, { status: forbidden ? 'failed' : 'would-update' });
+            if (forbidden) result.error = 'skipped after a permission error';
+            continue;
+          }
+
+          try {
+            const updated = await client.workspaceMember.updateProfile.mutate({
+              userId: target.userId,
+              ...changes,
+            });
+            Object.assign(result, {
+              responsibilities: updated.responsibilities,
+              status: 'updated',
+              title: updated.title,
+            });
+          } catch (error) {
+            result.status = 'failed';
+            result.error = error instanceof Error ? error.message : String(error);
+            // The same check guards every other member, so stop sending.
+            if (isForbidden(error)) forbidden = true;
+          }
+        }
+
+        if (options.json !== undefined) outputJson(results, options.json);
+        else {
+          printTable(
+            results.map((r) => [
+              r.userId,
+              truncate(r.name ?? '-', 20),
+              r.status === 'failed' ? pc.red(r.status) : r.status,
+              truncate(r.title ?? '-', 24),
+              truncate(r.error ?? r.responsibilities ?? '-', 40),
+            ]),
+            ['USER ID', 'NAME', 'STATUS', 'TITLE', 'RESPONSIBILITIES'],
+          );
+          const count = (status: MemberProfileResult['status']) =>
+            results.filter((r) => r.status === status).length;
+          console.log(
+            options.dryRun
+              ? `\n${count('would-update')} would change, ${count('unchanged')} already up to date.`
+              : `\n${count('updated')} updated, ${count('unchanged')} unchanged, ${count('failed')} failed.`,
+          );
+        }
+
+        if (forbidden)
+          log.error(
+            `Permission denied in workspace ${scopeId}: editing another member's profile needs admin or higher.`,
+          );
+        if (results.some((r) => r.status === 'failed')) process.exit(1);
+      },
+    );
 
   workspace
     .command('invite <email>')
