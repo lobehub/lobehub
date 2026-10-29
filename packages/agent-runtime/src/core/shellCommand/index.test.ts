@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { analyzeShellCommand } from './shellCommand';
-import { stripGroupingParens } from './shellQuoting';
+import { stripGroupingParens } from '../shellQuoting';
+import { analyzeShellCommand } from './index';
 
 describe('analyzeShellCommand', () => {
   describe('splitting', () => {

@@ -1,14 +1,14 @@
 import type { SemanticShellPredicate } from '@lobechat/types';
 
-import type { ShellSegment } from './shellCommand';
+import type { ShellSegment } from '../shellCommand';
 import {
   analyzeShellCommand,
   collectFlagLettersAndNames,
   isUnresolvableCommandWord,
   parameterExpansionOperand,
-} from './shellCommand';
-import { stripGroupingParens } from './shellQuoting';
-import { LITERAL_EXPANSION_MARKER } from './shellSegmenter';
+} from '../shellCommand';
+import { stripGroupingParens } from '../shellQuoting';
+import { LITERAL_EXPANSION_MARKER } from '../shellSegmenter';
 
 /**
  * Semantic shell predicates for security rules.

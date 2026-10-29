@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchSemanticShellPredicate } from './semanticShellPredicates';
+import { matchSemanticShellPredicate } from './index';
 
 describe('matchSemanticShellPredicate', () => {
   describe('rmRecursiveRootTarget', () => {

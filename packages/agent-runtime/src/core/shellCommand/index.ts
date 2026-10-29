@@ -16,8 +16,8 @@
  * - Wrappers (sudo / env / nohup) are unwrapped to expose the real command.
  */
 
-import { skipShellSyntax, stripGroupingParens, stripLeadingGroupingParens } from './shellQuoting';
-import { splitIntoRawSegments, tokenizeWords } from './shellSegmenter';
+import { skipShellSyntax, stripGroupingParens, stripLeadingGroupingParens } from '../shellQuoting';
+import { splitIntoRawSegments, tokenizeWords } from '../shellSegmenter';
 
 export interface ShellSegment {
   /**

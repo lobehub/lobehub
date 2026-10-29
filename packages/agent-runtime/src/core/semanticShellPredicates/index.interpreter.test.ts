@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchSemanticShellPredicate } from './semanticShellPredicates';
+import { matchSemanticShellPredicate } from './index';
 
 /**
  * Payloads that cross a shell boundary: substitution bodies, caller-level
