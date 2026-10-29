@@ -163,6 +163,15 @@ describe('FavoriteModel', () => {
     expect((await workspaceModel.query()).map((item) => item.id)).toEqual([foreign.id]);
   });
 
+  it('leaves other sidebars untouched when reordering an empty one', async () => {
+    const foreign = await workspaceModel.add(topic('tpc_ws'));
+
+    await personalModel.reorder([foreign.id]);
+
+    expect(await personalModel.query()).toEqual([]);
+    expect((await workspaceModel.query()).map((item) => item.id)).toEqual([foreign.id]);
+  });
+
   it('updates the snapshot of a favorite in scope', async () => {
     const item = await personalModel.add(topic('tpc_1', 'Old'));
 
