@@ -9,7 +9,7 @@
  * in `shellCommand/`.
  */
 
-import { decodeAnsiCQuoted } from './shellQuoting';
+import { decodeAnsiCQuoted } from '../shellQuoting';
 
 /**
  * Characters that terminate an unquoted shell WORD. A heredoc delimiter is a
