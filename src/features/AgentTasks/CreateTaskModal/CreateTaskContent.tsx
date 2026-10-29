@@ -43,6 +43,7 @@ import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import { hasUnsavedTaskDraft } from './hasUnsavedTaskDraft';
 import ScheduleChip from './ScheduleChip';
 import {
   createDefaultScheduleDraft,
@@ -247,9 +248,11 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const rootRef = useRef<HTMLDivElement>(null);
     useEscapeDiscardGuard(rootRef, {
       hasUnsavedInput: () =>
-        Boolean(title.trim()) ||
-        Boolean(instructionRef.current.trim()) ||
-        getAttachmentFileIdsFromEditor(editor).length > 0,
+        hasUnsavedTaskDraft({
+          editorJson: editor?.getDocument?.('json'),
+          instruction: instructionRef.current,
+          title,
+        }),
       onEscape: () =>
         confirmModal({
           cancelText: t('createTask.discardConfirm.cancel'),
