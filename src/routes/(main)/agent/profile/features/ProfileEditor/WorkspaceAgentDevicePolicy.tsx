@@ -2,7 +2,7 @@
 
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget, DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import type { SelectOptions } from '@lobehub/ui';
+import type { SelectOption, SelectOptions } from '@lobehub/ui';
 import { createStaticStyles, cssVar, Flexbox, Select } from '@lobehub/ui';
 import { MonitorSmartphone } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -170,11 +170,23 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     const { data: devices, error, isConfirmed, isLoading, mutate } = useDeviceList();
-    const { publicWorkspace: publicWorkspaceDevices } = useMemo(
-      () => groupExecutionTargetDevices(devices),
-      [devices],
+    const { privateWorkspace: privateWorkspaceDevices, publicWorkspace: publicWorkspaceDevices } =
+      useMemo(() => groupExecutionTargetDevices(devices), [devices]);
+    const selectableDevices = useMemo(
+      () => [...privateWorkspaceDevices, ...publicWorkspaceDevices],
+      [privateWorkspaceDevices, publicWorkspaceDevices],
     );
     const agencyConfig = config?.agencyConfig;
+    // This card writes the shared config, so a private device (resolvable only
+    // by the member who enrolled it) may be bound only when that member is the
+    // sole runner: a private Agent. A fixed target must stay public — the
+    // server rejects anything else (`assertFixedExecutionTarget`).
+    const privateDeviceBlockedReason =
+      config?.visibility !== 'private'
+        ? t('settingAgent.devicePolicy.privateDevicePublicAgent')
+        : agencyConfig?.executionTargetSelectionPolicy === 'fixed'
+          ? t('settingAgent.devicePolicy.privateDeviceFixed')
+          : undefined;
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);
@@ -287,8 +299,36 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
                 },
               ];
 
+      // Only the caller's own private devices reach this list, so the group is
+      // simply absent for anyone without one.
+      const privateOptions: SelectOption<string>[] = [
+        ...privateWorkspaceDevices.map((device) => ({
+          disabled: !isConfirmed || !!privateDeviceBlockedReason,
+          label: renderDeviceLabel(device),
+          title: device.friendlyName || device.hostname || device.deviceId,
+          value: executionTargetValue('device', device.deviceId),
+        })),
+        ...(privateDeviceBlockedReason
+          ? [
+              {
+                disabled: true,
+                label: privateDeviceBlockedReason,
+                value: 'status:privateUnavailable',
+              },
+            ]
+          : []),
+      ];
+
       return [
         ...sharedTargets,
+        ...(!error && !isLoading && privateWorkspaceDevices.length > 0
+          ? [
+              {
+                label: t('chat:heteroAgent.executionTarget.personalGroup'),
+                options: privateOptions,
+              },
+            ]
+          : []),
         ...(!error
           ? [
               {
@@ -303,6 +343,8 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       isConfirmed,
       isLoading,
       isHeterogeneous,
+      privateDeviceBlockedReason,
+      privateWorkspaceDevices,
       publicWorkspaceDevices,
       renderDeviceLabel,
       renderTargetLabel,
@@ -314,7 +356,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const selectedTarget = resolveExecutionTargetSelection({
       boundDeviceId: agencyConfig?.boundDeviceId,
       configuredTarget: agencyConfig?.executionTarget,
-      devices: publicWorkspaceDevices,
+      devices: selectableDevices,
       isHeterogeneous,
     });
     const selectedValue = selectedTarget
@@ -353,7 +395,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
               const selection = parseExecutionTargetValue(option.value);
               if (!selection) return option.label;
               if (selection.target === 'device') {
-                const device = publicWorkspaceDevices.find(
+                const device = selectableDevices.find(
                   (item) => item.deviceId === selection.deviceId,
                 );
                 return device ? renderDeviceLabel(device, true) : option.label;

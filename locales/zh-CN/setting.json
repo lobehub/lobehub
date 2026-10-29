@@ -1302,6 +1302,8 @@
   "settingAgent.description.placeholder": "请输入助理描述",
   "settingAgent.description.title": "助理描述",
   "settingAgent.devicePolicy.noPublicDevice": "暂无公开设备",
+  "settingAgent.devicePolicy.privateDeviceFixed": "固定的执行环境只能使用公开的工作区设备",
+  "settingAgent.devicePolicy.privateDevicePublicAgent": "私人设备仅可用于私有助手，其他成员无法连接",
   "settingAgent.devicePolicy.selectTarget": "选择环境",
   "settingAgent.devicePolicy.title": "执行环境",
   "settingAgent.export.dialogTitle": "导出助理档案",

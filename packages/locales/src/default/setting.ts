@@ -1191,6 +1191,10 @@ export default {
   'settingAgent.agentTools.tabUser': 'User Tools',
   'settingAgent.agentTools.tabWorkspace': 'Workspace Tools',
   'settingAgent.devicePolicy.noPublicDevice': 'No public devices',
+  'settingAgent.devicePolicy.privateDeviceFixed':
+    'A fixed environment can only use public workspace devices',
+  'settingAgent.devicePolicy.privateDevicePublicAgent':
+    'Private devices are for private agents only — other members cannot reach them',
   'settingAgent.devicePolicy.selectTarget': 'Select environment',
   'settingAgent.devicePolicy.title': 'Execution environment',
   'settingAgent.modelPolicy.fixedTip':
