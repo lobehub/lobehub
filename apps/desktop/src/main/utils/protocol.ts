@@ -1,10 +1,18 @@
 import { app } from 'electron';
 
+import { getDesktopEnv } from '@/env';
+
 import type { McpSchema, ProtocolUrlParsed } from '../types/protocol';
 
 export type AppChannel = 'stable' | 'beta' | 'nightly';
 
 export const getProtocolScheme = (): string => {
+  // A distribution owns its scheme outright. The heuristics below only know
+  // upstream's names, so a renamed build would fall through to `lobehub` and
+  // fight an official install on the same machine for its deep links.
+  const override = getDesktopEnv().DESKTOP_PROTOCOL_SCHEME;
+  if (override) return override;
+
   // In Electron environment, version can be determined in multiple ways
   const bundleId = app.name;
   const appPath = app.getPath('exe');
@@ -99,6 +107,8 @@ export const parseProtocolUrl = (url: string): ProtocolUrlParsed | null => {
 
     // Support multiple protocol schemes
     const validProtocols = ['lobehub:', 'lobehub-dev:', 'lobehub-nightly:', 'lobehub-beta:'];
+    const override = getDesktopEnv().DESKTOP_PROTOCOL_SCHEME;
+    if (override) validProtocols.push(`${override}:`);
     if (!validProtocols.includes(parsedUrl.protocol)) {
       return null;
     }
