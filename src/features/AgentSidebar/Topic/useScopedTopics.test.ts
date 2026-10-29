@@ -77,9 +77,9 @@ vi.mock('@/store/user', () => ({
 }));
 vi.mock('@/store/user/selectors', () => ({
   userProfileSelectors: { userId: (s: typeof userFixture) => s.userId },
-  workspaceUserSettingsSelectors: {
-    topicOnlyMine: () => (s: typeof userFixture) => s.topicOnlyMine,
-  },
+}));
+vi.mock('@/hooks/useTopicOnlyMine', () => ({
+  useTopicOnlyMine: () => userFixture.topicOnlyMine,
 }));
 vi.mock('i18next', () => ({ t: (key: string) => key }));
 
@@ -104,7 +104,7 @@ describe('Project topics use the canonical Agent sidebar rules', () => {
     userFixture.topicOnlyMine = false;
     updateSystemStatus.mockClear();
   });
-  it('lists only the caller topics with the workspace only-mine filter, keeping the open one', () => {
+  it('lists only the caller topics with the project only-mine filter, keeping the open one', () => {
     userFixture.topicOnlyMine = true;
     const { result, rerender } = renderHook(
       () => useScopedSidebarTopics(20, 'updatedAt', 'flat', false),

@@ -5,30 +5,33 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
-import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
-import { useUserStore } from '@/store/user';
+import {
+  useSetTopicOnlyMine,
+  useTopicOnlyMine,
+  useTopicOnlyMineOwnerId,
+} from '@/hooks/useTopicOnlyMine';
 
 /**
  * "Only my topics" toggle for the topic filter menus. A workspace lists every
  * member's topics under a shared agent, so the toggle exists only there and is
- * stored per member per workspace. Returns `null` in personal mode.
+ * stored on this device per agent (group / project). Returns `null` in
+ * personal mode.
  */
 export const useOnlyMineFilterItem = (): DropdownItem | null => {
   const { t } = useTranslation('topic');
   const hasActiveWorkspace = useHasActiveWorkspace();
+  const ownerId = useTopicOnlyMineOwnerId();
   const onlyMine = useTopicOnlyMine();
-  const updateWorkspaceUserPreference = useUserStore((s) => s.updateWorkspaceUserPreference);
+  const setOnlyMine = useSetTopicOnlyMine();
 
   return useMemo(() => {
-    if (!hasActiveWorkspace) return null;
+    if (!hasActiveWorkspace || !ownerId) return null;
 
     return {
       icon: onlyMine ? <Icon icon={LucideCheck} /> : <div />,
       key: 'onlyMine',
       label: t('filter.onlyMine'),
-      onClick: () => {
-        void updateWorkspaceUserPreference({ topicOnlyMine: !onlyMine });
-      },
+      onClick: () => setOnlyMine(ownerId, !onlyMine),
     };
-  }, [hasActiveWorkspace, onlyMine, updateWorkspaceUserPreference, t]);
+  }, [hasActiveWorkspace, ownerId, onlyMine, setOnlyMine, t]);
 };

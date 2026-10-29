@@ -3,7 +3,7 @@ import { useChatStore } from '@/store/chat';
 
 /**
  * Server-side topic search for the active agent's sidebar surfaces (topic
- * drawers, mobile search). Applies the same workspace "only mine" filter as
+ * drawers, mobile search). Applies the same per-agent "only mine" filter as
  * the list, so a search never brings back topics the list is hiding. An empty
  * keyword disables the request.
  */

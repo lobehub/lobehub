@@ -32,7 +32,7 @@ import {
 } from '@/features/AgentSidebar/Topic/TopicListScope';
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useWorkspacePreferenceReady } from '@/hooks/useWorkspacePreferenceReady';
+import { useTopicOnlyMineReady } from '@/hooks/useTopicOnlyMine';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -96,10 +96,10 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
       filterTopics(scopedTopics, filter, { directories }).length === 0,
     [filter, scopedTopics, directories],
   );
-  // The rows are filtered client-side by the workspace "only mine" choice, and
-  // nothing else on a project route syncs that preference. Hold the list until
-  // it is known so the unfiltered rows never paint.
-  const isPreferenceLoading = !useWorkspacePreferenceReady();
+  // The rows are filtered client-side by the project's "only mine" choice,
+  // which lives in the persisted system status. Hold the list until it has
+  // hydrated so the unfiltered rows never paint.
+  const isPreferenceLoading = !useTopicOnlyMineReady();
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
   return (

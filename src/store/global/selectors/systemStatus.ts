@@ -120,6 +120,12 @@ const projectSidebarSections =
   (s: GlobalState): Record<string, boolean> | undefined =>
     projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
 
+/** Whether the topic list owned by `ownerId` (agent / group / project) shows only my topics. */
+const topicOnlyMine =
+  (ownerId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    !!ownerId && !!s.status.topicOnlyMineByAgent?.[ownerId];
+
 /** Upper bound of `topic.getTopics`'s `pageSize` input on the server. */
 export const MAX_TOPIC_PAGE_SIZE = 100;
 
@@ -595,6 +601,7 @@ export const systemStatusSelectors = {
   tokenDisplayFormatShort,
   collapsedTopicGroupKeys,
   projectTopicSubGroupMode,
+  topicOnlyMine,
   topicPageSize,
   videoPanelWidth,
   videoTopicViewMode,

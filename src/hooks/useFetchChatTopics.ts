@@ -4,8 +4,7 @@ import {
   type SidebarTopicListQuery,
 } from '@/hooks/chatTopicListQuery';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
-import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
-import { useWorkspacePreferenceReady } from '@/hooks/useWorkspacePreferenceReady';
+import { useTopicOnlyMine, useTopicOnlyMineReady } from '@/hooks/useTopicOnlyMine';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -25,14 +24,15 @@ import { preferenceSelectors } from '@/store/user/selectors';
  * pre-paint hydrate reads imperatively: same inputs means the same SWR key and
  * the same persisted row, so SWR dedupes and the hydrate actually applies.
  */
-const useChatTopicListQuery = (): { query: SidebarTopicListQuery; ready: boolean } => {
+const useChatTopicListQuery = (
+  ownerId?: string,
+): { query: SidebarTopicListQuery; ready: boolean } => {
   const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
-  const onlyMine = useTopicOnlyMine();
-  // The workspace "only mine" filter is part of the list identity. On a cold
-  // load the workspace resolves after the route loader, so hold the fetch until
-  // this member's preference is known (local copy or network, success or
-  // failure) — otherwise the unfiltered list paints first.
-  const ready = useWorkspacePreferenceReady();
+  const onlyMine = useTopicOnlyMine(ownerId);
+  // The per-agent "only mine" filter is part of the list identity and lives in
+  // the persisted system status, which hydrates after the route loader. Hold
+  // the fetch until it has — otherwise the unfiltered list paints first.
+  const ready = useTopicOnlyMineReady();
   const activeGroupId = useChatStore((s) => s.activeGroupId);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
@@ -70,7 +70,7 @@ export const useFetchChatTopics = () => {
  * moment such a panel mounted next to it.
  */
 export const useFetchAgentChatTopics = (agentId?: string) => {
-  const { query, ready } = useChatTopicListQuery();
+  const { query, ready } = useChatTopicListQuery(agentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const pageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
 

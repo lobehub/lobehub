@@ -489,6 +489,12 @@ export interface SystemStatus {
    */
   tokenDisplayFormatShort?: boolean;
   /**
+   * Workspace "only my topics" filter, keyed by the topic list's owner: the
+   * agentId of an agent sidebar, the groupId of a group, the projectId of a
+   * project sidebar. Device-local, so each agent keeps its own choice.
+   */
+  topicOnlyMineByAgent?: Record<string, boolean>;
+  /**
    * number of topics to display per page
    */
   topicPageSize?: number;

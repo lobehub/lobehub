@@ -126,8 +126,9 @@ vi.mock('@/store/user/selectors', () => ({
     topicSortBy: (state: { topicSortBy: string }) => state.topicSortBy,
   },
   userProfileSelectors: { userId: () => 'test-user-id' },
-  workspaceUserSettingsSelectors: { topicOnlyMine: () => () => false },
 }));
+
+vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => false }));
 
 vi.mock('../AllTopicsDrawer', () => ({
   default: ({ open }: { open: boolean }) => (
