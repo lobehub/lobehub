@@ -172,6 +172,10 @@ And updates:
 - `packages/database/migrations/meta/_journal.json`
 - `docs/development/database-schema.dbml`
 
+It then prunes `meta/*_snapshot.json` down to the newest 10 (`scripts/pruneMigrationSnapshots`). drizzle-kit only diffs against the latest snapshot and `migrate` reads only the journal and SQL, so commit the deletions with the migration.
+
+If you run `bunx drizzle-kit generate` directly (e.g. `--custom`), it skips the pruning step.
+
 ## Custom Migrations (e.g. CREATE EXTENSION)
 
 For migrations that don't involve Drizzle schema changes (e.g. enabling PostgreSQL extensions), use the `--custom` flag:
