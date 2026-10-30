@@ -46,7 +46,9 @@ export const resolveNavPanelKey = (
     }
 
     case 'resource': {
-      return childSegment === 'library' ? 'resourceLibrary' : 'resource';
+      // `/resource/library` is the library gallery under the Docs sidebar; only
+      // a concrete library (`/resource/library/:id`) owns the library sidebar.
+      return childSegment === 'library' && grandchildSegment ? 'resourceLibrary' : 'resource';
     }
 
     case 'video': {

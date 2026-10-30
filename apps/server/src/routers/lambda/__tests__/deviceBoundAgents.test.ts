@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DeviceBindingCandidate } from '@/database/models/agent';
 
-import { selectEffectivelyBoundAgents } from '../deviceBoundAgents';
+import { selectAgentDeviceBindings, selectEffectivelyBoundAgents } from '../deviceBoundAgents';
 
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/workspaceUserSettings', () => ({ WorkspaceUserSettingsModel: vi.fn() }));
@@ -89,5 +89,53 @@ describe('selectEffectivelyBoundAgents', () => {
       title: 'agent',
       visibility: 'public',
     });
+  });
+});
+
+describe('selectAgentDeviceBindings', () => {
+  const bind = (
+    candidates: DeviceBindingCandidate[],
+    overrides: Record<string, AgentDeviceOverride> = {},
+    canManage: string[] = [],
+  ) => selectAgentDeviceBindings(candidates, { canManage: new Set(canManage), overrides });
+
+  it('maps each agent to the device its stored config routes to', () => {
+    expect(
+      bind([
+        candidate('device-agent', onA),
+        candidate('local-agent', { boundDeviceId: 'device-b', executionTarget: 'local' }),
+      ]),
+    ).toEqual({ 'device-agent': 'device-a', 'local-agent': 'device-b' });
+  });
+
+  it('leaves out an agent whose stale binding the execution target does not use', () => {
+    // A binding lingers after switching to the sandbox / none; `auto` treats it as stale.
+    expect(
+      bind([
+        candidate('sandbox', { boundDeviceId: 'device-a', executionTarget: 'sandbox' }),
+        candidate('none', { boundDeviceId: 'device-a', executionTarget: 'none' }),
+        candidate('auto', { boundDeviceId: 'device-a', executionTarget: 'auto' }),
+        candidate('unbound', null),
+      ]),
+    ).toEqual({});
+  });
+
+  it("applies the caller's own override over the shared binding", () => {
+    const agents = [candidate('moved', onA), candidate('to-sandbox', onA)];
+
+    expect(
+      bind(agents, {
+        'moved': { boundDeviceId: 'device-b', executionTarget: 'device' },
+        'to-sandbox': { executionTarget: 'sandbox' },
+      }),
+    ).toEqual({ moved: 'device-b' });
+  });
+
+  it('ignores a member override on a fixed agent but honours the manager override', () => {
+    const fixed = candidate('fixed', { ...onA, executionTargetSelectionPolicy: 'fixed' });
+    const overrides = { fixed: { boundDeviceId: 'device-b', executionTarget: 'device' as const } };
+
+    expect(bind([fixed], overrides)).toEqual({ fixed: 'device-a' });
+    expect(bind([fixed], overrides, ['fixed'])).toEqual({ fixed: 'device-b' });
   });
 });

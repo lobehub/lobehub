@@ -1,4 +1,3 @@
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
   DEFAULT_REVIEW_PREDICT_MODEL,
   DEFAULT_REVIEW_PREDICT_PROVIDER,
@@ -7,13 +6,17 @@ import {
   DEFAULT_VERIFY_PLAN_PROVIDER,
   DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
+import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
 import {
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
+import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 
 export interface VerifyModelConfig {
   model: string;
@@ -76,8 +79,8 @@ const isUsableVerifyModelConfig = (
 
 /**
  * The fallback model used by Verify's LobeHub LLM calls when neither a pinned
- * verifier agent nor the builtin verify agent provides a runnable config —
- * and the floor under the whole resolution chain.
+ * verifier agent nor the user's or deployment's `verify` service model
+ * provides a runnable config — the floor under the whole resolution chain.
  *
  * MUST be vision-capable in model-bank: agent-type checks attach screenshot
  * evidence, and a text-only verifier cannot read the frames it is judging (it
@@ -94,16 +97,41 @@ export const VERIFY_FALLBACK_MODEL_CONFIG: VerifyModelConfig = {
 };
 
 /**
+ * The `verify` service model: the user's pick in Settings → Service Model,
+ * then the deployment's `SYSTEM_AGENT` (`verify=` or `default=`). Undefined
+ * when neither set one, so callers fall through to their own floor.
+ */
+export const resolveVerifyServiceModel = async (
+  db: LobeChatDatabase,
+  userId: string,
+): Promise<VerifyModelConfig | undefined> => {
+  const settings = await new UserModel(db, userId).getUserSettings();
+  const systemAgent = settings?.systemAgent as Partial<UserSystemAgentConfig> | undefined;
+  const candidates: (Partial<SystemAgentItem> | undefined)[] = [
+    systemAgent?.verify,
+    parseSystemAgent(appEnv.SYSTEM_AGENT).verify,
+  ];
+  for (const candidate of candidates) {
+    if (isUsableVerifyModelConfig(candidate))
+      return { model: candidate.model, provider: candidate.provider };
+  }
+};
+
+/**
  * Pick the model used by Verify's LobeHub LLM calls. Heterogeneous parent runs
  * expose CLI/runtime identifiers (e.g. `claude-code`) that are not valid model
  * runtime providers, so Verify must resolve its own runnable provider/model.
  *
- * Resolution order: pinned verifier agent → builtin verify agent →
- * VERIFY_FALLBACK_MODEL_CONFIG. The parent run model is deliberately NOT a
- * source: verification is the quality gate, so it judges on one consistent
- * model instead of inheriting whichever chat model the task happened to run
- * on (drifts the bar between runs, and heterogeneous parents can't be
- * inherited at all).
+ * Resolution order: pinned verifier agent → `verify` service model (user, then
+ * deployment) → VERIFY_FALLBACK_MODEL_CONFIG. The parent run model is
+ * deliberately NOT a source: verification is the quality gate, so it judges on
+ * one consistent model instead of inheriting whichever chat model the task
+ * happened to run on (drifts the bar between runs, and heterogeneous parents
+ * can't be inherited at all).
+ *
+ * The builtin verify agent's own row is NOT a source either: it is persisted
+ * with the generic chat default, which may be text-only, and no UI edits it —
+ * reading it first meant the vision-capable floor was never reached.
  */
 export const resolveVerifyModelConfig = async (
   db: LobeChatDatabase,
@@ -111,16 +139,11 @@ export const resolveVerifyModelConfig = async (
   params: ResolveVerifyModelConfigParams,
   workspaceId?: string,
 ): Promise<VerifyModelConfig> => {
-  const agentModel = new AgentModel(db, userId, workspaceId);
-
   if (params.verifierAgentId) {
+    const agentModel = new AgentModel(db, userId, workspaceId);
     const verifierConfig = await agentModel.getAgentModelConfig(params.verifierAgentId);
     if (isUsableVerifyModelConfig(verifierConfig)) return verifierConfig;
   }
 
-  await agentModel.getBuiltinAgent(BUILTIN_AGENT_SLUGS.verifyAgent);
-  const builtinConfig = await agentModel.getAgentModelConfig(BUILTIN_AGENT_SLUGS.verifyAgent);
-  if (isUsableVerifyModelConfig(builtinConfig)) return builtinConfig;
-
-  return VERIFY_FALLBACK_MODEL_CONFIG;
+  return (await resolveVerifyServiceModel(db, userId)) ?? VERIFY_FALLBACK_MODEL_CONFIG;
 };

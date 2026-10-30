@@ -12,6 +12,7 @@ import {
   Lock,
   MessageSquarePlus,
   RotateCcw,
+  UsersRound,
   Wrench,
 } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
@@ -234,6 +235,9 @@ interface DecisionBarProps {
   /** The viewer may weigh in but not decide: the closing actions stay on the
       bar, disabled, with this reason shown beside them. */
   readOnlyReason?: string;
+  /** The viewer was granted reject access: reject is live, accept stays
+      disabled, and this reason says who accepts. */
+  rejectOnlyReason?: string;
   /** A live round that is a dispatched repair — coloured as an in-progress task
       (warning), not a neutral verify, to match the system's task-process cue. */
   repairing?: boolean;
@@ -271,6 +275,7 @@ const DecisionBar = memo<DecisionBarProps>(
     onRerun,
     pending,
     readOnlyReason,
+    rejectOnlyReason,
     repairing,
     rerunAvailable,
     rerunPending,
@@ -354,16 +359,20 @@ const DecisionBar = memo<DecisionBarProps>(
                 {subText}
               </Text>
             )}
-            {readOnlyReason && (
+            {(readOnlyReason || rejectOnlyReason) && (
               <Flexbox
                 horizontal
                 align={'center'}
                 data-testid={'acceptance-decision-reason'}
                 gap={4}
               >
-                <Icon icon={Lock} size={12} style={{ flex: 'none' }} />
+                <Icon
+                  icon={readOnlyReason ? Lock : UsersRound}
+                  size={12}
+                  style={{ flex: 'none' }}
+                />
                 <Text fontSize={12} type={'secondary'}>
-                  {readOnlyReason}
+                  {readOnlyReason ?? rejectOnlyReason}
                 </Text>
               </Flexbox>
             )}
@@ -395,6 +404,18 @@ const DecisionBar = memo<DecisionBarProps>(
               <ActionButton disabled title={readOnlyReason} type={'fill'}>
                 {t('acceptance.actions.accept')}
               </ActionButton>
+            </Flexbox>
+          )
+        ) : rejectOnlyReason ? (
+          // Granted reject access only: sending back is theirs, accepting is not.
+          state === 'settled' && (
+            <Flexbox horizontal className={styles.actions} gap={8}>
+              <Button disabled={pending} type={'fill'} onClick={onRejectComment}>
+                {t('acceptance.bar.rejectComment')}
+              </Button>
+              <Button disabled title={rejectOnlyReason} type={'fill'}>
+                {t('acceptance.actions.accept')}
+              </Button>
             </Flexbox>
           )
         ) : (

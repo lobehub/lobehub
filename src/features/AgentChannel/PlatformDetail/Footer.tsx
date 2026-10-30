@@ -1,7 +1,9 @@
 'use client';
 
-import { Alert, Button, createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Tag } from '@lobehub/ui';
 import { type FormInstance, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -11,46 +13,59 @@ import type { SerializedPlatformDefinition } from '@/server/services/bot/platfor
 
 import type { ChannelFormValues, CurrentConfig, TestResult } from './index';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionBar: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-block-start: 16px;
-  `,
-  bottom: css`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+/**
+ * The tint stays, the outline goes. The soft Alert draws its outline as an inset box-shadow, not a
+ * border, so that is what has to be cleared.
+ */
+const NOTICE_STYLE = { boxShadow: 'none' } as const;
 
-    width: 100%;
-    max-width: 1024px;
-  `,
-  resultDetail: css`
-    font-family: monospace;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    word-break: break-all;
-  `,
-  webhookBox: css`
-    overflow: hidden;
-    flex: 1;
-
-    height: ${cssVar.controlHeight};
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: monospace;
-    font-size: 13px;
-    line-height: ${cssVar.controlHeight};
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  actionBar: {
+    alignItems: 'center',
+    display: 'flex',
+    justifyContent: 'space-between',
+    paddingBlockStart: 16,
+  },
+  bottom: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+    maxWidth: 1024,
+    width: '100%',
+  },
+  notices: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    marginBlockStart: { ':empty': 0, 'default': 8 },
+    maxWidth: 1024,
+    width: '100%',
+  },
+  resultDetail: {
+    color: cssVar.colorTextTertiary,
+    fontFamily: 'monospace',
+    fontSize: 12,
+    wordBreak: 'break-all',
+  },
+  webhookBox: {
+    backgroundColor: cssVar.colorFillQuaternary,
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: cssVar.colorTextSecondary,
+    flexGrow: 1,
+    flexShrink: 1,
+    fontFamily: 'monospace',
+    fontSize: 13,
+    height: cssVar.controlHeight,
+    lineHeight: cssVar.controlHeight,
+    overflow: 'hidden',
+    paddingInline: 12,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 /**
  * Error body of a result banner: one readable sentence, with the raw platform
@@ -67,60 +82,33 @@ const ResultDetail = memo<{ detail?: string; hint: string }>(({ detail, hint }) 
       <Button size={'small'} type={'text'} onClick={() => setOpen((value) => !value)}>
         {open ? t('channel.resultDetail.hide') : t('channel.resultDetail.show')}
       </Button>
-      {open && <span className={styles.resultDetail}>{detail}</span>}
+      {open && <span {...stylex.props(styles.resultDetail)}>{detail}</span>}
     </Flexbox>
   );
 });
 
 ResultDetail.displayName = 'ResultDetail';
 
-interface FooterProps {
-  connecting: boolean;
+interface FooterNoticesProps {
   connectResult?: TestResult;
   currentConfig?: CurrentConfig;
-  disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
-  isDirty: boolean;
-  onCopied: () => void;
-  onDelete: () => void;
-  onDiscard: () => void;
-  onSave: () => void;
-  onTestConnection: () => void;
   platformDef: SerializedPlatformDefinition;
   saveResult?: TestResult;
-  saving: boolean;
-  testing: boolean;
   testResult?: TestResult;
-  writeDisabled?: boolean;
 }
 
-const Footer = memo<FooterProps>(
-  ({
-    platformDef,
-    currentConfig,
-    form,
-    hasConfig,
-    isDirty,
-    connectResult,
-    connecting,
-    disabled,
-    saveResult,
-    saving,
-    testing,
-    testResult,
-    writeDisabled,
-    onSave,
-    onDelete,
-    onDiscard,
-    onTestConnection,
-    onCopied,
-  }) => {
+/**
+ * What just happened to the bot (saved, connected, failed) and what it still
+ * needs. Rendered above the form: the form is long enough now that a notice
+ * under it would be scrolled past, and a failed connection is the one thing
+ * the person has to see.
+ */
+export const FooterNotices = memo<FooterNoticesProps>(
+  ({ platformDef, currentConfig, form, hasConfig, connectResult, saveResult, testResult }) => {
     const { t } = useTranslation('agent');
-    const origin = useAppOrigin();
     const platformId = platformDef.id;
-    const applicationId = useWatch(form, 'applicationId');
-
     const settingsConnectionMode = useWatch(form, 'settings.connectionMode');
 
     const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
@@ -152,13 +140,171 @@ const Footer = memo<FooterProps>(
       hasUserIdField &&
       !(typeof effectiveUserId === 'string' && effectiveUserId.trim());
 
+    return (
+      <div {...stylex.props(styles.notices)}>
+        {saveResult && (
+          <Alert
+            closable
+            showIcon
+            style={NOTICE_STYLE}
+            title={saveResult.type === 'success' ? t('channel.saved') : t('channel.saveFailed')}
+            type={saveResult.type}
+            description={
+              saveResult.type === 'error' ? (
+                <ResultDetail
+                  detail={saveResult.errorDetail}
+                  hint={saveResult.hint || t('channel.saveFailedHint')}
+                />
+              ) : undefined
+            }
+          />
+        )}
+
+        {connectResult && (
+          <Alert
+            closable
+            showIcon
+            style={NOTICE_STYLE}
+            type={connectResult.type}
+            description={
+              connectResult.type === 'error' ? (
+                <ResultDetail
+                  detail={connectResult.errorDetail}
+                  hint={connectResult.hint || t('channel.connectFailedHint')}
+                />
+              ) : undefined
+            }
+            title={
+              connectResult.title ||
+              (connectResult.type === 'success'
+                ? t('channel.connectSuccess')
+                : t('channel.connectFailed'))
+            }
+          />
+        )}
+
+        {testResult && (
+          <Alert
+            closable
+            showIcon
+            style={NOTICE_STYLE}
+            type={testResult.type}
+            description={
+              testResult.type === 'error' ? (
+                <ResultDetail
+                  detail={testResult.errorDetail}
+                  hint={testResult.hint || t('channel.testFailedHint')}
+                />
+              ) : undefined
+            }
+            title={
+              testResult.type === 'success' ? t('channel.testSuccess') : t('channel.testFailed')
+            }
+          />
+        )}
+
+        {userIdMissing && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.userIdMissingDesc')}
+            message={t('channel.userIdMissingTitle')}
+            style={NOTICE_STYLE}
+            type="info"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && platformId === 'qq' && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.qq.webhookMigrationDesc')}
+            message={t('channel.qq.webhookMigrationTitle')}
+            style={NOTICE_STYLE}
+            type="info"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && platformId === 'slack' && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.slack.webhookMigrationDesc')}
+            message={t('channel.slack.webhookMigrationTitle')}
+            style={NOTICE_STYLE}
+            type="info"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && (platformId === 'feishu' || platformId === 'lark') && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.feishu.webhookMigrationDesc')}
+            message={t('channel.feishu.webhookMigrationTitle')}
+            style={NOTICE_STYLE}
+            type="info"
+          />
+        )}
+      </div>
+    );
+  },
+);
+
+FooterNotices.displayName = 'ChannelFooterNotices';
+
+interface FooterActionsProps {
+  connecting: boolean;
+  disabled?: boolean;
+  form: FormInstance<ChannelFormValues>;
+  hasConfig: boolean;
+  /** The setup steps already offer the save, so the bar does not repeat it. */
+  hideSave?: boolean;
+  isDirty: boolean;
+  onCopied: () => void;
+  onDelete: () => void;
+  onDiscard: () => void;
+  onSave: () => void;
+  onTestConnection: () => void;
+  platformDef: SerializedPlatformDefinition;
+  saving: boolean;
+  testing: boolean;
+  writeDisabled?: boolean;
+}
+
+/** The buttons that act on the form, and the endpoint URL a webhook bot hands to the platform. */
+export const FooterActions = memo<FooterActionsProps>(
+  ({
+    platformDef,
+    form,
+    hasConfig,
+    hideSave,
+    isDirty,
+    connecting,
+    disabled,
+    saving,
+    testing,
+    writeDisabled,
+    onSave,
+    onDelete,
+    onDiscard,
+    onTestConnection,
+    onCopied,
+  }) => {
+    const { t } = useTranslation('agent');
+    const origin = useAppOrigin();
+    const platformId = platformDef.id;
+    const applicationId = useWatch(form, 'applicationId');
+    const settingsConnectionMode = useWatch(form, 'settings.connectionMode');
+    const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
+
     const webhookUrl = applicationId
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
       : `${origin}/api/agent/webhooks/${platformId}`;
 
     return (
-      <div className={styles.bottom}>
-        <div className={styles.actionBar}>
+      <div {...stylex.props(styles.bottom)}>
+        <div {...stylex.props(styles.actionBar)}>
           {hasConfig ? (
             <Button
               danger
@@ -187,114 +333,20 @@ const Footer = memo<FooterProps>(
                 {t('channel.discard')}
               </Button>
             )}
-            <Button
-              disabled={writeDisabled}
-              loading={saving || connecting}
-              type="primary"
-              onClick={onSave}
-            >
-              {connecting ? t('channel.connecting') : t('channel.save')}
-            </Button>
+            {!hideSave && (
+              <Button
+                disabled={writeDisabled}
+                loading={saving || connecting}
+                type="primary"
+                onClick={onSave}
+              >
+                {connecting
+                  ? t('channel.connecting')
+                  : t(hasConfig ? 'channel.save' : 'channel.saveAndConnect')}
+              </Button>
+            )}
           </Flexbox>
         </div>
-
-        {saveResult && (
-          <Alert
-            closable
-            showIcon
-            title={saveResult.type === 'success' ? t('channel.saved') : t('channel.saveFailed')}
-            type={saveResult.type}
-            description={
-              saveResult.type === 'error' ? (
-                <ResultDetail
-                  detail={saveResult.errorDetail}
-                  hint={saveResult.hint || t('channel.saveFailedHint')}
-                />
-              ) : undefined
-            }
-          />
-        )}
-
-        {connectResult && (
-          <Alert
-            closable
-            showIcon
-            type={connectResult.type}
-            description={
-              connectResult.type === 'error' ? (
-                <ResultDetail
-                  detail={connectResult.errorDetail}
-                  hint={connectResult.hint || t('channel.connectFailedHint')}
-                />
-              ) : undefined
-            }
-            title={
-              connectResult.title ||
-              (connectResult.type === 'success'
-                ? t('channel.connectSuccess')
-                : t('channel.connectFailed'))
-            }
-          />
-        )}
-
-        {testResult && (
-          <Alert
-            closable
-            showIcon
-            type={testResult.type}
-            description={
-              testResult.type === 'error' ? (
-                <ResultDetail
-                  detail={testResult.errorDetail}
-                  hint={testResult.hint || t('channel.testFailedHint')}
-                />
-              ) : undefined
-            }
-            title={
-              testResult.type === 'success' ? t('channel.testSuccess') : t('channel.testFailed')
-            }
-          />
-        )}
-
-        {userIdMissing && (
-          <Alert
-            closable
-            showIcon
-            description={t('channel.userIdMissingDesc')}
-            message={t('channel.userIdMissingTitle')}
-            type="info"
-          />
-        )}
-
-        {hasConfig && showWebhookUrl && platformId === 'qq' && (
-          <Alert
-            closable
-            showIcon
-            description={t('channel.qq.webhookMigrationDesc')}
-            message={t('channel.qq.webhookMigrationTitle')}
-            type="info"
-          />
-        )}
-
-        {hasConfig && showWebhookUrl && platformId === 'slack' && (
-          <Alert
-            closable
-            showIcon
-            description={t('channel.slack.webhookMigrationDesc')}
-            message={t('channel.slack.webhookMigrationTitle')}
-            type="info"
-          />
-        )}
-
-        {hasConfig && showWebhookUrl && (platformId === 'feishu' || platformId === 'lark') && (
-          <Alert
-            closable
-            showIcon
-            description={t('channel.feishu.webhookMigrationDesc')}
-            message={t('channel.feishu.webhookMigrationTitle')}
-            type="info"
-          />
-        )}
 
         {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>
@@ -303,7 +355,7 @@ const Footer = memo<FooterProps>(
               <Tag>{'Event Subscription URL'}</Tag>
             </Flexbox>
             <Flexbox horizontal gap={8}>
-              <div className={styles.webhookBox}>{webhookUrl}</div>
+              <div {...stylex.props(styles.webhookBox)}>{webhookUrl}</div>
               <Button
                 onClick={() => {
                   navigator.clipboard.writeText(webhookUrl);
@@ -315,6 +367,7 @@ const Footer = memo<FooterProps>(
             </Flexbox>
             <Alert
               showIcon
+              style={NOTICE_STYLE}
               type="info"
               message={
                 <Trans<'channel.endpointUrlHint', 'agent'>
@@ -332,4 +385,4 @@ const Footer = memo<FooterProps>(
   },
 );
 
-export default Footer;
+FooterActions.displayName = 'ChannelFooterActions';

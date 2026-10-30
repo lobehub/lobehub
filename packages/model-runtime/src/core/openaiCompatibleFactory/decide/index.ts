@@ -1,11 +1,16 @@
 import type { ModelUsage } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
+import { isRecord } from '../../../utils/object';
 import createDebug from 'debug';
 import { DECISION_MODEL_SUFFIX } from 'model-bank';
 import type OpenAI from 'openai';
 
-import type { DecisionOptions, DecisionPayload, DecisionResponse } from '../../../types';
+import type {
+  DecisionOptions,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
+} from '../../../types';
 import { AgentRuntimeError } from '../../../utils/createError';
 import { getModelPricing } from '../../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../../utils/modelIdMapping';
@@ -28,6 +33,8 @@ const adapters = {
  * `decide`, so callers can tell decision support apart from plain chat compatibility.
  */
 export interface DecideConfig {
+  /** Whether the provider accepts the optional request user identifier. Defaults to true. */
+  includeUser?: boolean;
   /** Endpoint path relative to the client base URL, e.g. `/systemone` or `/decisions`. */
   path: string;
   /**
@@ -53,12 +60,12 @@ interface RequestDecisionParams extends DecideConfig {
   requestModel: string;
 }
 
-const requestDecision = async (
+const requestDecision = async <Q extends DecisionQuestions>(
   client: OpenAI,
-  payload: DecisionPayload,
+  payload: DecisionPayload<Q>,
   options: DecisionOptions | undefined,
-  { path, protocol, provider, requestModel }: RequestDecisionParams,
-): Promise<DecisionResponse> => {
+  { includeUser = true, path, protocol, provider, requestModel }: RequestDecisionParams,
+): Promise<DecisionResponse<Q>> => {
   const adapter = adapters[protocol];
   const questionEntries = Object.entries(payload.questions);
   if (questionEntries.length === 0) {
@@ -72,7 +79,12 @@ const requestDecision = async (
   log('decide protocol=%s model=%s questions=%d', protocol, requestModel, questionEntries.length);
 
   const raw = await client.post(path, {
-    body: adapter.buildBody({ payload, questionEntries, requestModel, user: options?.user }),
+    body: adapter.buildBody({
+      payload,
+      questionEntries,
+      requestModel,
+      user: includeUser ? options?.user : undefined,
+    }),
     headers: options?.headers,
     // Callers own retry policy: a decision is often one arm of a timed experiment, and hidden
     // SDK retries would multiply latency and spend without the caller seeing the attempts.
@@ -92,7 +104,9 @@ const requestDecision = async (
     });
   }
 
-  const response: DecisionResponse = parsed.response;
+  // The adapters validate every requested name and answer type at runtime. Object.entries erases
+  // the payload's mapped-key relationship, so restore it only after that validation boundary.
+  const response = parsed.response as DecisionResponse<Q>;
   const usage = parsed.usage;
   if (usage) {
     const outputTokens = usage.outputTokens ?? 0;
@@ -125,12 +139,12 @@ interface CreateDecisionParams extends DecideConfig {
   provider: string;
 }
 
-export const createDecision = async (
+export const createDecision = async <Q extends DecisionQuestions>(
   client: OpenAI,
-  payload: DecisionPayload,
+  payload: DecisionPayload<Q>,
   options: DecisionOptions | undefined,
   { handleError, modelIdMappingOptions, ...params }: CreateDecisionParams,
-): Promise<DecisionResponse> => {
+): Promise<DecisionResponse<Q>> => {
   try {
     return await requestDecision(client, payload, options, {
       ...params,

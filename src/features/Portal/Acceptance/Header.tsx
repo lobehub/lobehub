@@ -16,7 +16,6 @@ const AcceptanceHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
 
   return (
     <Header
-      paddingInline={24}
       title={<Title />}
       rightExtra={
         <ActionIcon

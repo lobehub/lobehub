@@ -391,12 +391,14 @@ export const AcceptanceCheckRow = memo<{
                 <Flexbox
                   horizontal
                   align={'center'}
+                  // A running accept/ignore spinner stays visible after the pointer leaves.
+                  data-busy={accepting || ignoring ? '' : undefined}
                   gap={2}
-                  {...sx([styles.rowActions], undefined, {
-                    // The accept spinner must stay visible after the pointer leaves.
-                    ...(accepting ? { opacity: 1 } : undefined),
-                    flex: 'none',
-                  })}
+                  {...sx(
+                    [styles.rowActions, !(accepting || ignoring) && styles.rowActionsIdle],
+                    undefined,
+                    { flex: 'none' },
+                  )}
                 >
                   <ActionIcon
                     disabled={reviewPending && !accepting}

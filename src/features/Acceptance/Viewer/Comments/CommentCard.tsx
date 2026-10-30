@@ -19,6 +19,7 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -86,6 +87,7 @@ const CommentCard = memo<CommentCardProps>(
   }) => {
     const { t } = useTranslation('verify');
     const time = useActivityTime(comment.createdAt);
+    const appOrigin = useAppOrigin();
     const [deleting, setDeleting] = useState(false);
     const name = nameOverride ?? commentAuthorName(comment.author);
     const viewerId = useUserStore(userProfileSelectors.userId);
@@ -93,7 +95,7 @@ const CommentCard = memo<CommentCardProps>(
 
     const copyAnchor = async () => {
       try {
-        await navigator.clipboard.writeText(commentAnchorUrl(comment.id));
+        await navigator.clipboard.writeText(commentAnchorUrl(comment.id, appOrigin));
         toast.success(t('acceptance.comments.linkCopied'));
       } catch (cause) {
         console.error('[acceptance:comments]', cause);

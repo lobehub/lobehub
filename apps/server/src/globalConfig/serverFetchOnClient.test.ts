@@ -20,8 +20,15 @@ describe('getServerFetchOnClientOverride', () => {
     expect(getServerFetchOnClientOverride('unsloth')).toBe(true);
   });
 
+  it('sends magpie from the browser unless the deployment reaches another one', () => {
+    expect(getServerFetchOnClientOverride('magpie')).toBe(true);
+
+    vi.stubEnv('MAGPIE_PROXY_URL', 'http://magpie.internal:3425');
+    expect(getServerFetchOnClientOverride('magpie')).toBe(false);
+  });
+
   // The settings switch shows this default; it must match what the relay does.
-  it.each(['ollama', 'lmstudio', 'unsloth'])(
+  it.each(['magpie', 'ollama', 'lmstudio', 'unsloth'])(
     'shows the same default for %s as the relay applies',
     (provider) => {
       const fetchOnClient = getServerFetchOnClientOverride(provider);

@@ -3,6 +3,7 @@ export * from './binary';
 export * from './bootstrap';
 export * from './browserControl';
 export * from './browserSidebar';
+export * from './connectorOAuth';
 export * from './contextMenu';
 export * from './dataSync';
 export * from './devtools';

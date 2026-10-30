@@ -1,0 +1,51 @@
+name: Preview CLI
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/preview-cli.yml
+      - apps/cli/**
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-preview:
+    name: Publish CLI preview
+    # Forks cannot publish: the pkg.pr.new app identity belongs to this repo.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install CLI workspace dependencies
+        run: pnpm install
+        working-directory: apps/cli
+
+      # prepublishOnly is the same chain a manual npm publish runs:
+      # workbench build:report -> tsdown bundle -> copyReportTemplate -> man:generate.
+      # npm/pnpm pack does not trigger it, so the build happens here explicitly.
+      - name: Build publishable CLI bundle
+        run: npm run prepublishOnly
+        working-directory: apps/cli
+
+      - name: Smoke check
+        run: node apps/cli/dist/index.js --version
+
+      - name: Publish preview to pkg.pr.new
+        run: pnpm dlx pkg-pr-new@0.0.91 publish --pnpm --bin --no-compact --commentWithSha --no-template './apps/cli'

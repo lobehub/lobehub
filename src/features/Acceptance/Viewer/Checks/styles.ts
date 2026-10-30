@@ -11,6 +11,7 @@ const celebratePop = stylex.keyframes({
 
 const compact = '@media (width <= 767px)';
 const hoverable = '@media (hover: hover) and (pointer: fine)';
+const rowReveal = stylex.keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
 
 export const styles = stylex.create({
   /**
@@ -99,37 +100,34 @@ export const styles = stylex.create({
     color: { 'default': null, ':hover': cssVar.colorText },
   },
   rowActions: {
-    opacity: {
-      default: 0,
-      [stylex.when.ancestor(':hover', rowHeaderMarker)]: 1,
-      [stylex.when.ancestor(':focus-within', rowHeaderMarker)]: 1,
+    height: '22px',
+    animationName: rowReveal,
+    animationDuration: '0.2s',
+    animationFillMode: 'both',
+  },
+  rowActionsIdle: {
+    display: {
+      default: null,
+      [stylex.when.ancestor(':not(:hover, :focus-within)', rowHeaderMarker)]: 'none',
     },
-    transition: 'opacity 0.2s',
   },
   rowChevron: {
     gridArea: { default: null, [compact]: '1 / 4' },
   },
   rowMeta: {
-    transition: 'opacity 0.2s',
+    animationName: rowReveal,
+    animationDuration: '0.2s',
+    animationFillMode: 'both',
     gridArea: { default: null, [compact]: '1 / 3' },
     flexWrap: { default: null, [compact]: 'wrap' },
     justifyContent: { default: null, [compact]: 'flex-end' },
     minWidth: { default: null, [compact]: 0 },
-    display: { default: null, [compact]: { 'default': null, ':empty': 'none' } },
-    pointerEvents: {
+    display: {
       default: null,
+      [compact]: { 'default': null, ':empty': 'none' },
       [hoverable]: {
-        default: 'none',
-        [stylex.when.ancestor(':hover', rowHeaderMarker)]: 'auto',
-        [stylex.when.ancestor(':focus-within', rowHeaderMarker)]: 'auto',
-      },
-    },
-    opacity: {
-      default: null,
-      [hoverable]: {
-        default: 0,
-        [stylex.when.ancestor(':hover', rowHeaderMarker)]: 1,
-        [stylex.when.ancestor(':focus-within', rowHeaderMarker)]: 1,
+        default: null,
+        [stylex.when.ancestor(':not(:hover, :focus-within)', rowHeaderMarker)]: 'none',
       },
     },
   },

@@ -5,7 +5,9 @@ import { toast } from '@lobehub/ui';
 import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
+import { withResponseDetail } from '@/components/Error/unreadableResponseMessage';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
+import { findUnreadableServerResponseError } from '@/libs/trpc/client/unreadableServerResponse';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
@@ -76,6 +78,13 @@ const getUploadErrorDescription = (error: unknown): string => {
 
   if (getTrpcErrorCode(error) === 'FORBIDDEN') {
     return t('upload.permissionDenied', { ns: 'error' });
+  }
+
+  // A gateway error page answered instead of the upload API. Its parse error
+  // means nothing to the user; the status and request id let support trace it.
+  const unreadable = findUnreadableServerResponseError(error);
+  if (unreadable) {
+    return withResponseDetail(t('upload.serviceUnavailable', { ns: 'error' }), unreadable);
   }
 
   return typeof error === 'string'

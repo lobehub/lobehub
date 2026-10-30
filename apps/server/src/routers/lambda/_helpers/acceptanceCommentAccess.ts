@@ -1,3 +1,4 @@
+import { isWorkspaceReadableVisibility } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 
@@ -6,6 +7,10 @@ import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { isUuid } from '@/database/utils/uuid';
+import {
+  findProjectReviewScope,
+  resolveProjectReviewRole,
+} from '@/server/services/acceptanceReview/projectAccess';
 
 export interface AcceptanceCommentAccess {
   acceptance: AcceptanceItem;
@@ -28,7 +33,8 @@ export interface AcceptanceCommentAccess {
  *
  * Reading follows the bundle: the creator, anyone when the acceptance is
  * `public`, or a member of the acceptance's OWN workspace (not the caller's
- * active one).
+ * active one). An `owner` acceptance is the creator's alone: membership and
+ * project roles open nothing.
  *
  * Remarking is as wide as READING A PUBLIC LINK, minus anonymity — whoever was
  * handed the link can answer the evidence in front of them, and a shared
@@ -54,17 +60,31 @@ export async function resolveAcceptanceCommentAccess(
     ? await db.select().from(acceptances).where(eq(acceptances.id, acceptanceId)).limit(1)
     : [];
   if (!acceptance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+  if (acceptance.subjectType === 'site') return resolveSiteReviewAccess(db, userId, acceptance);
 
   const isOwner = Boolean(userId) && userId === acceptance.userId;
+  if (!isOwner && !isWorkspaceReadableVisibility(acceptance.visibility))
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
   const member =
     !isOwner && userId && acceptance.workspaceId
       ? await new WorkspaceMemberModel(db, userId).getMember(acceptance.workspaceId, userId)
       : undefined;
 
-  const canRead = isOwner || acceptance.visibility === 'public' || Boolean(member);
+  const project =
+    !isOwner && userId && acceptance.projectId
+      ? await findProjectReviewScope(db, acceptance.projectId)
+      : null;
+  const projectRole = project ? await resolveProjectReviewRole(db, userId, project) : null;
+
+  const canRead =
+    isOwner || acceptance.visibility === 'public' || Boolean(member) || Boolean(projectRole);
   if (!canRead) throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
 
-  const canApprove = isOwner || (Boolean(member) && member!.role !== 'viewer');
+  const canApprove =
+    isOwner ||
+    (project
+      ? projectRole === 'admin' || projectRole === 'member'
+      : Boolean(member) && member!.role !== 'viewer');
 
   return {
     acceptance,
@@ -79,5 +99,28 @@ export async function resolveAcceptanceCommentAccess(
      * one off the page and post under that agent's name and face.
      */
     memberOfWorkspaceId: isOwner || member ? (acceptance.workspaceId ?? undefined) : undefined,
+  };
+}
+
+// A site review belongs to the project, not to whoever created it or to its visibility flag:
+// only the project's current roles open it, so removing someone takes effect on their next request.
+async function resolveSiteReviewAccess(
+  db: LobeChatDatabase,
+  userId: string | null | undefined,
+  acceptance: AcceptanceItem,
+): Promise<AcceptanceCommentAccess> {
+  const project = acceptance.projectId
+    ? await findProjectReviewScope(db, acceptance.projectId)
+    : null;
+  const role = project ? await resolveProjectReviewRole(db, userId, project) : null;
+  if (!role) throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+
+  const canApprove = role === 'admin';
+  return {
+    acceptance,
+    canApprove,
+    canComment: role !== 'viewer',
+    isOwner: project?.userId === userId,
+    memberOfWorkspaceId: project?.workspaceId ?? undefined,
   };
 }

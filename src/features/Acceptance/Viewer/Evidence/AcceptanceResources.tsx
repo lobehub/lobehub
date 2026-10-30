@@ -4,7 +4,7 @@ import { Empty, Flexbox, Icon, Image, Text, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import { FileText, Film, Paperclip } from 'lucide-react';
+import { FileText, Film, Paperclip, SquareTerminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsHydrated } from '@/hooks/useIsHydrated';
@@ -131,9 +131,15 @@ const AcceptanceResources = () => {
                 ) : (
                   <div {...stylex.props(styles.nonVisual)}>
                     <Icon
-                      icon={evidence.type === 'video' ? Film : FileText}
                       size={16}
                       style={{ color: cssVar.colorTextTertiary }}
+                      icon={
+                        evidence.type === 'video'
+                          ? Film
+                          : evidence.type === 'terminal'
+                            ? SquareTerminal
+                            : FileText
+                      }
                     />
                     <Text ellipsis fontSize={13}>
                       {name}

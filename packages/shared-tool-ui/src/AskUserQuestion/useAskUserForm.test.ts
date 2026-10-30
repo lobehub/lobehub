@@ -566,3 +566,30 @@ describe('useAskUserForm requireAllAnswered', () => {
     });
   });
 });
+
+describe('question submission recovery', () => {
+  it('keeps the answer and exposes failure so an explicit retry can succeed', async () => {
+    const { hook, onInteractionAction } = setup(singleQuestionArgs);
+    onInteractionAction.mockRejectedValueOnce(new Error('offline'));
+    act(() => hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Narrow'));
+    await act(async () => hook.result.current.handleSubmit());
+    expect(hook.result.current.submissionFailed).toBe(true);
+    expect(hook.result.current.submitting).toBe(false);
+    expect(hook.result.current.picks['How broad?']).toBe('Narrow');
+    await act(async () => hook.result.current.handleSubmit());
+    expect(hook.result.current.submissionFailed).toBe(false);
+    expect(onInteractionAction).toHaveBeenCalledTimes(2);
+    hook.unmount();
+  });
+
+  it('does not send both submit and skip before React renders the busy state', async () => {
+    const { hook, onInteractionAction } = setup(singleQuestionArgs);
+    act(() => hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Narrow'));
+    await act(async () => {
+      hook.result.current.handleSubmit();
+      hook.result.current.handleSkip();
+    });
+    expect(onInteractionAction).toHaveBeenCalledTimes(1);
+    hook.unmount();
+  });
+});

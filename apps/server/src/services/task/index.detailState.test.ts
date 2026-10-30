@@ -9,8 +9,9 @@ import { TaskService } from './index';
  */
 const mocks = vi.hoisted(() => ({
   findByOperations: vi.fn(),
+  getAgentAvatarsByIds: vi.fn(),
   findWithHandoff: vi.fn(),
-  resolve: vi.fn(),
+  findById: vi.fn(),
   timeoutRunning: vi.fn(),
   update: vi.fn(),
   updateStatus: vi.fn(),
@@ -18,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
-    return { getAgentAvatarsByIds: vi.fn().mockResolvedValue([]) };
+    return { getAgentAvatarsByIds: mocks.getAgentAvatarsByIds };
   }),
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: vi.fn() }));
@@ -56,7 +57,7 @@ vi.mock('@/database/models/task', () => ({
       getDependencies: vi.fn().mockResolvedValue([]),
       getTreePinnedDocuments: vi.fn().mockResolvedValue({ nodeMap: {}, tree: [] }),
       getVerifyConfig: vi.fn().mockReturnValue(undefined),
-      resolve: mocks.resolve,
+      findById: mocks.findById,
       update: mocks.update,
       updateStatus: mocks.updateStatus,
     };
@@ -90,6 +91,30 @@ describe('TaskService.getTaskDetail state', () => {
     vi.clearAllMocks();
     mocks.findWithHandoff.mockResolvedValue([]);
     mocks.findByOperations.mockResolvedValue(new Map());
+    mocks.getAgentAvatarsByIds.mockResolvedValue([]);
+  });
+
+  it('labels agent authors by name, falling back to title when the name is blank', async () => {
+    mocks.findById.mockResolvedValue({
+      ...baseTask,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdByAgentId: 'agt_named',
+    });
+    mocks.getAgentAvatarsByIds.mockResolvedValue([
+      { avatar: null, id: 'agt_named', name: 'Dario 任务队列版', title: '美国100刀' },
+    ]);
+
+    const named = await service().getTaskDetail('T-1');
+    expect(named?.activities?.find((a) => a.type === 'created')?.author?.name).toBe(
+      'Dario 任务队列版',
+    );
+
+    mocks.getAgentAvatarsByIds.mockResolvedValue([
+      { avatar: null, id: 'agt_named', name: '  ', title: '美国100刀' },
+    ]);
+
+    const untitled = await service().getTaskDetail('T-1');
+    expect(untitled?.activities?.find((a) => a.type === 'created')?.author?.name).toBe('美国100刀');
   });
 
   it('pauses a running task whose heartbeat timed out, then re-reads it', async () => {
@@ -99,7 +124,7 @@ describe('TaskService.getTaskDetail state', () => {
       lastHeartbeatAt: new Date(Date.now() - 120_000),
       status: 'running',
     };
-    mocks.resolve
+    mocks.findById
       .mockResolvedValueOnce(stale)
       .mockResolvedValueOnce({ ...stale, error: 'Heartbeat timeout', status: 'paused' });
 
@@ -109,14 +134,14 @@ describe('TaskService.getTaskDetail state', () => {
       error: 'Heartbeat timeout',
     });
     expect(mocks.timeoutRunning).toHaveBeenCalledWith('task-1');
-    expect(mocks.resolve).toHaveBeenCalledTimes(2);
+    expect(mocks.findById).toHaveBeenCalledTimes(2);
     // The re-read task is no longer running, so its timeout error is cleared.
     expect(mocks.update).toHaveBeenCalledWith('task-1', { error: null });
     expect(detail).toMatchObject({ error: null, status: 'paused' });
   });
 
   it('keeps a running task whose heartbeat is still fresh', async () => {
-    mocks.resolve.mockResolvedValue({
+    mocks.findById.mockResolvedValue({
       ...baseTask,
       heartbeatTimeout: 600,
       lastHeartbeatAt: new Date(),
@@ -130,7 +155,7 @@ describe('TaskService.getTaskDetail state', () => {
   });
 
   it("decorates each run row with its verify round's verdict", async () => {
-    mocks.resolve.mockResolvedValue(baseTask);
+    mocks.findById.mockResolvedValue(baseTask);
     mocks.findWithHandoff.mockResolvedValue([
       {
         createdAt: new Date('2024-01-02T00:00:00Z'),

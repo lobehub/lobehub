@@ -29,15 +29,29 @@ const AcceptanceOriginTopic = () => {
   const { acceptanceId, embedded } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);
   const originConversation = useOriginConversation();
+  // A collaborator never sees the owner's topic id; the bundle names the
+  // conversation for them, and the rail reads it through the acceptance.
+  const collaborationTitle = data?.canCollaborate
+    ? (data.collaboration?.topicTitle ?? data.subject.title ?? undefined)
+    : undefined;
   const openTopic = useCallback(() => {
-    if (!originConversation || !data?.origin?.topic) return;
-    originConversation.openTopicDrawer(data.origin.topic.id, {
-      agentId: data.origin.agent?.id,
-      title: data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id,
-    });
-  }, [data, originConversation]);
+    if (!originConversation || !data) return;
+    if (data.origin?.topic) {
+      originConversation.openTopicDrawer(data.origin.topic.id, {
+        agentId: data.origin.agent?.id,
+        title: data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id,
+      });
+      return;
+    }
+    if (data.collaboration) originConversation.openTopicDrawer('', { title: collaborationTitle });
+  }, [collaborationTitle, data, originConversation]);
 
-  if (embedded || !data?.origin?.topic || !originConversation) return null;
+  const title = data?.origin?.topic
+    ? (data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id)
+    : data?.collaboration
+      ? collaborationTitle
+      : undefined;
+  if (embedded || !title || !originConversation) return null;
 
   return (
     <button
@@ -48,7 +62,7 @@ const AcceptanceOriginTopic = () => {
     >
       <Flexbox horizontal align={'center'} gap={4}>
         <Icon icon={MessagesSquare} size={13} />
-        {data.origin.topic.title ?? data.subject.title ?? data.origin.topic.id}
+        {title}
       </Flexbox>
     </button>
   );

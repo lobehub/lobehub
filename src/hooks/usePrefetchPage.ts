@@ -8,7 +8,7 @@ import { useDocumentStore } from '@/store/document';
  * paints from the projection instead of a skeleton.
  *
  * The Pages sidebar list is no longer an SWR cache entry — it is a
- * `@lobechat/replica` resource that hydrates from IndexedDB on mount — so only
+ * `local-replica` resource that hydrates from IndexedDB on mount — so only
  * the document detail is warmed here.
  */
 export const usePrefetchPage = () => {

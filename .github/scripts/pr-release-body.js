@@ -2,8 +2,8 @@
  * Generate PR pre-release body content
  * This script generates the description text for PR pre-releases
  */
-module.exports = ({ version, prNumber, branch }) => {
-  const prLink = `https://github.com/lobehub/lobe-chat/pull/${prNumber}`;
+const generatePrReleaseBody = ({ version, prNumber }) => {
+  const prLink = `https://github.com/lobehub/lobehub/pull/${prNumber}`;
 
   return `
 ## PR Build Information
@@ -60,3 +60,5 @@ Please report any issues found in this build directly in the PR discussion.
 如发现任何问题，请直接在 PR 讨论中报告。
 `;
 };
+
+module.exports = generatePrReleaseBody;

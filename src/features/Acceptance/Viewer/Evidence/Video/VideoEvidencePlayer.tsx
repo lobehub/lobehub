@@ -178,8 +178,17 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
 
     return (
       <Flexbox gap={8} ref={root} width={'100%'}>
+        {/* The host takes the player's width, so the comment action floats right
+            beside a narrow recording instead of at the far edge of the column. */}
         <div
-          {...sx([floatingActionHostMarker], undefined, { position: 'relative', width: '100%' })}
+          data-acceptance-video-host
+          {...sx([floatingActionHostMarker], undefined, {
+            maxWidth: frameMaxHeight
+              ? `max(${MIN_PLAYER_WIDTH}px, calc(${frameMaxHeight} * ${aspect}))`
+              : `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,
+            position: 'relative',
+            width: '100%',
+          })}
         >
           <Video.Root
             className={`${moduleStyles.player} ${moduleStyles.compactControls}`}
@@ -195,10 +204,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
                 '--acceptance-video-frame-width': frameMaxHeight
                   ? `calc(${frameMaxHeight} * ${aspect})`
                   : `${frameWidth}px`,
-                'width': frameMaxHeight ? '100%' : undefined,
-                'maxWidth': frameMaxHeight
-                  ? `max(${MIN_PLAYER_WIDTH}px, calc(${frameMaxHeight} * ${aspect}))`
-                  : `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,
+                'width': '100%',
               } as CSSProperties
             }
             onRateChange={storeRate}

@@ -23,6 +23,7 @@ import { messages, topics, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { notTrashed } from '../utils/softDelete';
+import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 
 export interface TopicSummaryCandidateCursor {
   id: string;
@@ -47,7 +48,14 @@ export interface TopicSummaryCandidate {
 // Mirrors `DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM.enabled`: users who have
 // never touched the setting are opted out, so the missing-value default is false.
 const isTopicAutoSummaryEnabled = sql<boolean>`COALESCE((${userSettings.systemAgent}->'topicAutoSummary'->>'enabled')::boolean, false) = true`;
-const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const SYSTEM_TOPIC_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+];
 
 export const topicSummaryEligibleMessage = and(
   isNotNull(messages.content),

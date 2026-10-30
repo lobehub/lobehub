@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -213,6 +223,17 @@ describe('executeDeviceRpc', () => {
     };
     expect(result.exists).toBe(true);
     expect(result.isDirectory).toBe(true);
+  });
+
+  it('resolves directory aliases on the device before an execution can lock the path', async () => {
+    const link = path.join(root, 'channel-directory-alias');
+    const directory = path.join(root, 'channel-directory');
+    await mkdir(directory);
+    await symlink(directory, link, 'dir');
+    const direct = await executeDeviceRpc('statPath', { path: directory }, makeDeps());
+    const alias = await executeDeviceRpc('statPath', { path: link }, makeDeps());
+    expect(alias).toEqual(direct);
+    expect(alias).toMatchObject({ canonicalPath: await realpath(directory), isDirectory: true });
   });
 
   it('browses one directory level with pagination and excludes files and hidden folders', async () => {

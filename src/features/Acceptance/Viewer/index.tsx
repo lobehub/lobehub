@@ -11,6 +11,7 @@ import { sx } from '@/styles/sx';
 import { extractUuid } from '../utils';
 import { AcceptanceOverview } from './AcceptanceOverview';
 import { AcceptanceBundleGate, AcceptanceScope } from './AcceptanceScope';
+import CollaboratorConversationRail from './Conversation/CollaboratorConversationRail';
 import { FlowPanelHostContext } from './Flow/FlowPanelHost';
 import AcceptanceFocusWorkspace from './Focus/AcceptanceFocusWorkspace';
 import AcceptanceLedgerRail from './History/AcceptanceLedgerRail';
@@ -81,6 +82,7 @@ const AcceptancePage = ({
                 {!focused && <AcceptanceOverview onDraftToComposer={onDraftToComposer} />}
               </Flexbox>
               <AcceptanceLedgerRail />
+              {!embedded && <CollaboratorConversationRail />}
             </Flexbox>
             <div ref={setFlowPanelHostContext} {...stylex.props(styles.flowPanel)} />
           </Flexbox>

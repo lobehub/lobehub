@@ -9,12 +9,15 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+
 import { checkDisplayTitle } from '../../utils';
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { collectEvidenceById } from '../Checks/CheckHistory';
 import type { AcceptanceCheck } from '../Checks/types';
 import { timelineEntryMarker } from '../markers.stylex';
-import { acceptanceCheckPath } from '../routes';
+import { acceptanceCheckPath, useAcceptanceRouteBase } from '../routes';
 import { commentAnchorId } from './anchor';
 import CommentCard, { commentAuthorName, CommentAvatar } from './CommentCard';
 import CommentThread from './CommentThread';
@@ -127,11 +130,19 @@ TimelineMessage.displayName = 'AcceptanceTimelineMessage';
 export const CheckReference = memo<{ check?: AcceptanceCheck }>(({ check }) => {
   const { t } = useTranslation('verify');
   const { acceptanceId, embedded } = useAcceptanceScope();
+  const routeBase = useAcceptanceRouteBase();
+  const workspaceSlug = useActiveWorkspaceSlug();
   if (!check) return null;
   const label = `C${check.seq} · ${checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}`;
   if (embedded) return <span {...stylex.props(entryStyles.checkLink)}>{label}</span>;
   return (
-    <Link {...stylex.props(entryStyles.checkLink)} to={acceptanceCheckPath(acceptanceId, check.id)}>
+    <Link
+      {...stylex.props(entryStyles.checkLink)}
+      to={buildWorkspaceAwarePath(
+        acceptanceCheckPath(acceptanceId, check.id, routeBase),
+        workspaceSlug,
+      )}
+    >
       {label}
     </Link>
   );

@@ -242,6 +242,7 @@ describe('agentManagementRuntime', () => {
 
       expect(run).toHaveBeenCalledWith({
         agentId: 'agent-target',
+        background: false,
         description: 'Call agent agent-target',
         instruction: 'Do delegated work',
         timeout: 1_800_000,

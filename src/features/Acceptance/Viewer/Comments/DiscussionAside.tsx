@@ -14,15 +14,17 @@ const MAX_FACES = 8;
 
 const styles = stylex.create({
   aside: {
-    position: { 'default': 'sticky', '@media (width <= 767px)': 'static' },
+    position: {
+      'default': 'sticky',
+      '@container (width < 720px)': 'static',
+      '@media (width <= 767px)': 'static',
+    },
     insetBlockStart: '20px',
     display: 'flex',
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: '220px',
+    flex: 'none',
     flexDirection: 'column',
     gap: '16px',
-    maxWidth: { 'default': '264px', '@media (width <= 767px)': 'none' },
+    width: { 'default': '296px', '@container (width < 720px)': 'auto' },
     fontSize: '13px',
     order: { 'default': null, '@media (width <= 767px)': -1 },
   },

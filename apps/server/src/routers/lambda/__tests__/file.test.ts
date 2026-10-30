@@ -1107,12 +1107,12 @@ describe('fileRouter', () => {
       await expect(caller.getFileItemById({ id: 'invalid-id' })).rejects.toThrow(TRPCError);
     });
 
-    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
-      mockFileModelFindById.mockResolvedValue(mockFile);
-
+    it('should return proxy URL format ${APP_URL}/f/:id and the parent folder', async () => {
+      mockFileModelFindById.mockResolvedValue({ ...mockFile, parentId: 'docs_folder' });
       const result = await caller.getFileItemById({ id: 'test-id' });
 
       expect(result?.url).toBe('https://lobehub.com/f/test-id');
+      expect(result?.parentId).toBe('docs_folder');
     });
   });
 

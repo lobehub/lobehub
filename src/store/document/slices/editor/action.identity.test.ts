@@ -164,10 +164,14 @@ describe('document identity and metadata-only saves', () => {
   });
 
   it('syncs editor changes once the editor holding the document is in the store', async () => {
-    const { editor } = makeEditor('B typed');
+    const { editor, spy } = makeEditor('');
     seed('B', '', editor);
     await useDocumentStore.getState().onEditorInit(editor, 'B');
 
+    // The user types after the body loaded.
+    spy.getDocument.mockImplementation((format: string) =>
+      format === 'json' ? body('B typed') : 'B typed',
+    );
     useDocumentStore.getState().handleContentChange();
 
     expect(useDocumentStore.getState().documents.B.content).toBe('B typed');

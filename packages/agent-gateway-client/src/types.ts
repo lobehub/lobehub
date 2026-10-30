@@ -211,6 +211,11 @@ export interface ToolEndData {
 export interface StepCompleteData {
   /** Present only when the run opts into includeFinalState. */
   finalState?: unknown;
+  /**
+   * User-facing LLM-call total after this step. Independent of `event.stepIndex`
+   * (the internal execution index used for scheduling and idempotency).
+   */
+  llmCalls?: number;
   phase: string;
   reason?: string;
   reasonDetail?: string;
@@ -256,7 +261,8 @@ export interface OperationHeartbeatData extends StepCompleteData {
 export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
 
 /** Producer that owns the blocked interaction. */
-export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'devin' | 'droid' | 'qoder';
+export type AgentInterventionProvider =
+  'claude-code' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

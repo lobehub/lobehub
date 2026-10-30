@@ -5,6 +5,7 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 
 export function registerFileCommand(program: Command) {
   const file = program.command('file').description('Manage files');
@@ -28,7 +29,12 @@ export function registerFileCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.file({ ...item, knowledgeBaseId: item.knowledgeBaseId ?? options.kbId }),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -66,7 +72,10 @@ export function registerFileCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(result, fields);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.file(result as any)),
+          fields,
+        );
         return;
       }
 
@@ -158,7 +167,10 @@ export function registerFileCommand(program: Command) {
 
           if (options.json !== undefined) {
             const fields = typeof options.json === 'string' ? options.json : undefined;
-            outputJson(result, fields);
+            outputJson(
+              withUrl(result, await resolveUrlBuilder(client), resourcePath.file(result as any)),
+              fields,
+            );
             return;
           }
 
@@ -200,7 +212,10 @@ export function registerFileCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result, fields);
+          outputJson(
+            withUrl(result, await resolveUrlBuilder(client), resourcePath.file(result as any)),
+            fields,
+          );
           return;
         }
 
@@ -245,7 +260,7 @@ export function registerFileCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(withUrls(items, await resolveUrlBuilder(client), resourcePath.file), fields);
         return;
       }
 
@@ -279,7 +294,7 @@ export function registerFileCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(withUrls(items, await resolveUrlBuilder(client), resourcePath.file), fields);
         return;
       }
 

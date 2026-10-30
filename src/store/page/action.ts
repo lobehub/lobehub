@@ -12,11 +12,32 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { initialState, type PageState } from './initialState';
 import { currentPageSize, PagePrivateAction } from './privateAction';
-import { documentItemToLobeDocument, PAGE_LIST_KEY, TEMP_PAGE_ID_PREFIX } from './projection';
+import {
+  documentItemToLobeDocument,
+  PAGE_LIST_KEY,
+  type PageSectionListParams,
+  type PageSectionParams,
+  type PageSectionScope,
+  TEMP_PAGE_ID_PREFIX,
+} from './projection';
 import { listSelectors } from './slices/list/selectors';
 import { usePageStore } from './store';
 
 const n = setNamespace('page');
+
+/**
+ * The Docs home tabs live in the home store, on their own replica — a page
+ * mutation refreshes the sidebar sections through the shared entity, but not
+ * those tabs. The dashboard stays mounted underneath the editor overlay, so
+ * without this a rename or delete leaves the old row on it until an unrelated
+ * refetch.
+ */
+const syncDocsHome = (): void => {
+  // Loaded on demand: the page store is on the first screen, and a static
+  // import would pull the home store — and through it the chat store and the
+  // whole model bank — into the entry chunk.
+  void import('@/store/home').then(({ useHomeStore }) => useHomeStore.getState().refreshDocsHome());
+};
 
 export interface PageUpdateParams {
   emoji?: string;
@@ -49,6 +70,18 @@ export class PageActionImpl {
     return this.#private.list.useSync({ pageSize });
   };
 
+  /** The Docs sidebar's My docs / Shared sections; rows via `pageSelectors.pageSection`. */
+  useFetchPageSection = (params: PageSectionParams): ReplicaSyncResult =>
+    this.#private.section.useSync(params);
+
+  /** A section's full list, paged; rows via `pageSelectors.pageSectionList`. */
+  useFetchPageSectionList = (params: PageSectionListParams | null): ReplicaSyncResult =>
+    this.#private.sectionList.useSync(params);
+
+  loadMorePageSectionList = async (params: PageSectionListParams): Promise<void> => {
+    await this.#private.sectionList.loadMore(params.scope, params);
+  };
+
   useFetchPageDetail = (pageId?: string | null): ReplicaSyncResult =>
     this.#private.detail.useSync(pageId || null);
 
@@ -60,6 +93,7 @@ export class PageActionImpl {
 
   refreshDocuments = async (): Promise<void> => {
     await this.#private.revalidateList();
+    syncDocsHome();
   };
 
   publishPageToWorkspace = async (pageId: string): Promise<{ documentIds: string[] }> => {
@@ -95,6 +129,18 @@ export class PageActionImpl {
 
   closeAllPagesDrawer = (): void => {
     this.#set({ allPagesDrawerOpen: false }, false, n('closeAllPagesDrawer'));
+  };
+
+  openSectionFullList = (scope: PageSectionScope): void => {
+    this.#set(
+      { sectionFullListOpen: true, sectionFullListScope: scope },
+      false,
+      n('openSectionFullList'),
+    );
+  };
+
+  closeSectionFullList = (): void => {
+    this.#set({ sectionFullListOpen: false }, false, n('closeSectionFullList'));
   };
 
   openAllPagesDrawer = (): void => {
@@ -233,6 +279,7 @@ export class PageActionImpl {
     });
 
     this.#private.insertListRow(documentItemToLobeDocument(newPage));
+    syncDocsHome();
 
     return newPage;
   };
@@ -251,6 +298,7 @@ export class PageActionImpl {
       await this.#private.entity.optimistic(pageId, 'remove', () =>
         documentService.deleteDocument(pageId),
       );
+      syncDocsHome();
     } catch (error) {
       console.error('Failed to delete page:', error);
       if (selectedPageId === pageId) {
@@ -272,6 +320,7 @@ export class PageActionImpl {
   renamePage = async (pageId: string, title: string, emoji?: string): Promise<void> => {
     try {
       await this.updatePageOptimistically(pageId, { emoji, title });
+      syncDocsHome();
     } catch (error) {
       console.error('Failed to rename page:', error);
     } finally {

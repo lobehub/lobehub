@@ -15,7 +15,8 @@ import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
-import { useCommentAnchor } from './anchor';
+import AccessRequestEntry from './AccessRequestEntry';
+import { commentAnchorId, useCommentAnchor } from './anchor';
 import { commentAuthorName } from './CommentCard';
 import CommentComposer from './CommentComposer';
 import DiscussionAside from './DiscussionAside';
@@ -76,20 +77,19 @@ const local = stylex.create({
     color: cssVar.colorTextTertiary,
   },
   feed: {
-    flexGrow: 999,
-    flexShrink: 1,
-    flexBasis: '480px',
+    flex: '1',
     minWidth: 0,
   },
   // Every round after the first (the old `& + &`).
   roundSpaced: {
     marginBlockStart: '28px',
   },
+  container: { containerType: 'inline-size' },
   layout: {
     display: 'flex',
-    flexWrap: 'wrap',
+    flexDirection: { 'default': null, '@container (width < 720px)': 'column' },
     gap: '32px',
-    alignItems: 'flex-start',
+    alignItems: { 'default': 'flex-start', '@container (width < 720px)': 'stretch' },
   },
   signInPrompt: {
     paddingBlock: '16px',
@@ -107,6 +107,7 @@ const entryCommentIds = (entry: DiscussionEntry): string[] => {
   if (entry.kind === 'region')
     return [entry.thread.root.id, ...entry.thread.replies.map((reply) => reply.id)];
   if (entry.kind === 'round' && entry.proposal) return [entry.proposal.id];
+  if (entry.kind === 'accessRequest') return [entry.request.id];
   return [];
 };
 
@@ -127,8 +128,10 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const { data } = useAcceptanceBundle(acceptanceId);
   const {
+    answerAccessRequest,
     canApprove,
     canComment,
+    canManageAccess,
     create,
     error,
     isLoading,
@@ -252,6 +255,21 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
           {entry.comment && <div {...stylex.props(entryStyles.quote)}>{entry.comment}</div>}
         </TimelineEvent>
       );
+    if (entry.kind === 'accessRequest')
+      return (
+        <div
+          {...stylex.props(entry.request.id === anchoredId && styles.entryAnchored)}
+          id={commentAnchorId(entry.request.id)}
+          key={entry.request.id}
+        >
+          <AccessRequestEntry
+            at={entry.at}
+            canManage={canManageAccess}
+            request={entry.request}
+            onAnswer={answerAccessRequest}
+          />
+        </div>
+      );
     if (entry.kind === 'approval') {
       const who =
         entry.approval.contextRoundIndex === null
@@ -320,41 +338,43 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const ungrouped = sections.length <= 1 && (sections[0]?.roundIndex ?? null) === null;
 
   return (
-    <div {...stylex.props(local.layout)}>
-      <Flexbox {...stylex.props(local.feed)}>
-        {timeline.length === 0 && (
-          <span {...stylex.props(local.empty)}>{t('acceptance.comments.empty')}</span>
-        )}
-        {ungrouped ? (
-          <>
-            {sections[0]?.entries.map((entry) => renderEntry(entry))}
-            {reply}
-          </>
-        ) : (
-          sections.map((section, index) => {
-            const key = sectionKey(section);
-            const open = toggled[key] ?? (index === 0 || section === anchoredSection);
-            return (
-              <div key={key} {...stylex.props(index > 0 && local.roundSpaced)}>
-                <RoundSection
-                  open={open}
-                  section={section}
-                  onToggle={() => setToggled((state) => ({ ...state, [key]: !open }))}
-                >
-                  {section.entries.map((entry) => renderEntry(entry))}
-                </RoundSection>
-                {index === 0 && reply}
-              </div>
-            );
-          })
-        )}
-      </Flexbox>
-      <DiscussionAside
-        items={items}
-        latestRound={data?.rounds.at(-1)?.run.roundIndex ?? undefined}
-        status={data?.acceptance.status}
-        onOpenChecks={onOpenChecks}
-      />
+    <div {...stylex.props(local.container)}>
+      <div {...stylex.props(local.layout)}>
+        <Flexbox {...stylex.props(local.feed)}>
+          {timeline.length === 0 && (
+            <span {...stylex.props(local.empty)}>{t('acceptance.comments.empty')}</span>
+          )}
+          {ungrouped ? (
+            <>
+              {sections[0]?.entries.map((entry) => renderEntry(entry))}
+              {reply}
+            </>
+          ) : (
+            sections.map((section, index) => {
+              const key = sectionKey(section);
+              const open = toggled[key] ?? (index === 0 || section === anchoredSection);
+              return (
+                <div {...stylex.props(index > 0 && local.roundSpaced)} key={key}>
+                  <RoundSection
+                    open={open}
+                    section={section}
+                    onToggle={() => setToggled((state) => ({ ...state, [key]: !open }))}
+                  >
+                    {section.entries.map((entry) => renderEntry(entry))}
+                  </RoundSection>
+                  {index === 0 && reply}
+                </div>
+              );
+            })
+          )}
+        </Flexbox>
+        <DiscussionAside
+          items={items}
+          latestRound={data?.rounds.at(-1)?.run.roundIndex ?? undefined}
+          status={data?.acceptance.status}
+          onOpenChecks={onOpenChecks}
+        />
+      </div>
     </div>
   );
 });
