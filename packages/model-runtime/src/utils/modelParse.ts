@@ -143,6 +143,11 @@ export const MODEL_LIST_CONFIGS = {
     reasoningKeywords: ['thinking', 'seed', 'ui-tars'],
     visionKeywords: ['vision', '-m', 'seed', 'ui-tars'],
   },
+  watt: {
+    functionCallKeywords: ['deepseek', 'glm', 'hunyuan', 'kimi', 'minimax', 'qwen'],
+    reasoningKeywords: ['deepseek', 'glm', 'kimi', 'minimax', 'qwen'],
+    visionKeywords: ['vl', 'vision'],
+  },
   wenxin: {
     functionCallKeywords: ['ernie-5', 'ernie-x1', 'pro', 'ernie-4.5-21b-a3b-thinking'],
     reasoningKeywords: ['thinking', 'ernie-x', 'ernie-4.5-vl-28b-a3b'],

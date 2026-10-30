@@ -910,4 +910,20 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：未设置，使用内置示例模型列表，示例默认不启用；不保证这些模型已在本地安装，也不会改变已有的模型选择。
 - 示例：`-all,+your-local-model-id=Local Model`
 
+## Watt Cloud
+
+### `WATT_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 Watt Cloud 服务中申请的 API 密钥
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `WATT_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
+- 默认值：`-`
+- 示例：`-all,+GLM-5.1,+Kimi-K3`
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list
