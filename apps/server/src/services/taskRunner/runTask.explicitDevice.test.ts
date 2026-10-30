@@ -178,4 +178,67 @@ describe('TaskRunnerService.runTask explicit device', () => {
     });
     expect(execParams().deviceId).toBe('device-b');
   });
+
+  describe('when a continued kickoff on the requested device fails', () => {
+    const previous = {
+      boundDeviceId: 'device-a',
+      workingDirectory: '/a/project',
+      workingDirectoryConfig: { path: '/a/project' },
+    };
+
+    beforeEach(() => {
+      setupTask(pinnedToA);
+      mocks.findTopicById.mockResolvedValue({ id: 'tpc-old', metadata: previous });
+    });
+
+    it('restores the topic when dispatch is not accepted', async () => {
+      mocks.execAgent.mockResolvedValue({ error: 'device offline', success: false });
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow(
+        'device offline',
+      );
+
+      expect(mocks.updateTopicMetadata).toHaveBeenLastCalledWith('tpc-old', {
+        ...previous,
+        repos: undefined,
+      });
+    });
+
+    it('restores the topic when dispatch throws', async () => {
+      mocks.execAgent.mockRejectedValue(new Error('boom'));
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow(
+        'boom',
+      );
+
+      expect(mocks.updateTopicMetadata).toHaveBeenLastCalledWith('tpc-old', {
+        ...previous,
+        repos: undefined,
+      });
+    });
+
+    it('keeps the retarget once the run is accepted', async () => {
+      await run({ continueTopicId: 'tpc-old', deviceId: 'device-b' });
+
+      expect(mocks.updateTopicMetadata).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not move a continued topic to a device the fixed target replaces', async () => {
+    setupTask(pinnedToA);
+    mocks.getAgentAgencyConfig.mockResolvedValue({
+      boundDeviceId: 'device-c',
+      executionTarget: 'device',
+      executionTargetSelectionPolicy: 'fixed',
+    } satisfies LobeAgentAgencyConfig);
+    mocks.findTopicById.mockResolvedValue({
+      id: 'tpc-old',
+      metadata: { boundDeviceId: 'device-a' },
+    });
+
+    await run({ continueTopicId: 'tpc-old', deviceId: 'device-b' });
+
+    expect(mocks.updateTopicMetadata).not.toHaveBeenCalled();
+    expect(execParams().deviceId).toBe('device-a');
+  });
 });

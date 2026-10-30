@@ -73,9 +73,10 @@ export const resolveTaskRunExecution = (
    */
   runDeviceId: string | undefined,
   /**
-   * A device the caller named for this run only. It outranks the task's pin as
-   * the run's `deviceId`; the pin's directory then stays behind unless the two
-   * name the same machine (pass the same request to `resolveRunDeviceId`).
+   * A device the caller named for this run only. When the run honors it
+   * (`runDeviceId` names it) it outranks the task's pin as the run's
+   * `deviceId`; the pin's directory then stays behind unless the two name the
+   * same machine (pass the same request to `resolveRunDeviceId`).
    */
   requestedDeviceId?: string,
 ): TaskRunExecution | undefined => {
@@ -111,7 +112,13 @@ export const resolveTaskRunExecution = (
       : {}),
   };
 
-  const deviceId = requestedDeviceId ?? boundDeviceId;
+  // A request the run will not honor (a fixed agent target replaced it) must not
+  // stand in for the pin either: it would be persisted on a continued topic as
+  // the run's machine while the run goes elsewhere. Fall back to exactly what
+  // the run sent before the caller could name a device.
+  const honoredDeviceId =
+    requestedDeviceId && requestedDeviceId === runDeviceId ? requestedDeviceId : undefined;
+  const deviceId = honoredDeviceId ?? boundDeviceId;
 
   const runExecution: TaskRunExecution = {
     ...(deviceId ? { deviceId } : {}),

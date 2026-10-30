@@ -2,7 +2,7 @@ import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills'
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import type { ChatTopicMetadata, ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
 import { getHeterogeneousTaskModelProvider, readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -92,13 +92,17 @@ export class TaskRunnerService {
    * the previous machine's directory — failing the kickoff (and letting the
    * caller's error path restore the task's resting state) is better than
    * running somewhere the user did not pin.
+   *
+   * Returns the topic's previous execution axes when a device named for this
+   * run only took part in the write: that retarget is not the task's standing
+   * selection, so the caller restores it if the run never starts.
    */
   private async syncTopicExecution(
     topicId: string,
     taskConfig: Record<string, unknown>,
     runDeviceId: string | undefined,
     requestedDeviceId: string | undefined,
-  ): Promise<void> {
+  ): Promise<ChatTopicMetadata | undefined> {
     const topic = await this.topicModel.findById(topicId);
     const patch = resolveTopicExecutionPatch(
       topic?.metadata,
@@ -110,6 +114,15 @@ export class TaskRunnerService {
 
     await this.topicModel.updateMetadata(topicId, patch);
     log('runTask: synced topic %s execution metadata', topicId);
+
+    if (!requestedDeviceId) return;
+    // `undefined` clears an axis on restore, same as in the patch itself.
+    return {
+      boundDeviceId: topic?.metadata?.boundDeviceId,
+      repos: topic?.metadata?.repos,
+      workingDirectory: topic?.metadata?.workingDirectory,
+      workingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
+    };
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
@@ -142,6 +155,10 @@ export class TaskRunnerService {
     // otherwise an early failure (e.g. CONFLICT thrown because a concurrent
     // run is in flight) would clobber the in-flight run's status to 'paused'.
     let weSetRunning = false;
+    // A continued topic retargeted for this run only, and what to put back if
+    // the run is not accepted — see `syncTopicExecution`.
+    let topicExecutionToRestore: ChatTopicMetadata | undefined;
+    let runAccepted = false;
 
     try {
       if (!task.assigneeAgentId) {
@@ -320,7 +337,12 @@ export class TaskRunnerService {
       // be ignored, and the previous machine's kept. Stamp the task's selection
       // onto the topic first; see `resolveTopicExecutionPatch`.
       if (continueTopicId) {
-        await this.syncTopicExecution(continueTopicId, taskConfig, runDeviceId, deviceId);
+        topicExecutionToRestore = await this.syncTopicExecution(
+          continueTopicId,
+          taskConfig,
+          runDeviceId,
+          deviceId,
+        );
       }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
@@ -447,6 +469,7 @@ export class TaskRunnerService {
         }
       }
 
+      runAccepted = true;
       await this.taskModel.updateHeartbeat(task.id);
 
       return {
@@ -455,6 +478,17 @@ export class TaskRunnerService {
         taskIdentifier: task.identifier,
       };
     } catch (error) {
+      // The run never started on the requested device, so its retarget must
+      // not outlive it: a later plain continuation would otherwise be routed
+      // there while the task still pins its own machine.
+      if (continueTopicId && topicExecutionToRestore && !runAccepted) {
+        try {
+          await this.topicModel.updateMetadata(continueTopicId, topicExecutionToRestore);
+        } catch (restoreError) {
+          log('runTask: failed to restore topic %s execution: %O', continueTopicId, restoreError);
+        }
+      }
+
       if (weSetRunning) {
         try {
           const failedTask = await this.taskModel.findById(taskId);

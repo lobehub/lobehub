@@ -370,6 +370,24 @@ describe('explicit run device', () => {
     });
   });
 
+  it('ignores a requested device the fixed agent target replaces', () => {
+    const runDeviceId = resolveRunDeviceId(pinnedToA, fixedAgentDevice, 'ws-1', 'device-b');
+
+    // Same as before a caller could name a device: the pin rides as `deviceId`
+    // (turnSetup drops it for device-c), and A's directory stays behind.
+    expect(resolveTaskRunExecution(pinnedToA, runDeviceId, 'device-b')).toEqual({
+      deviceId: 'device-a',
+    });
+    expect(
+      resolveTopicExecutionPatch(
+        { boundDeviceId: 'device-a' },
+        { execution: pinnedToA },
+        runDeviceId,
+        'device-b',
+      ),
+    ).toBeUndefined();
+  });
+
   it('moves a continued topic to the requested device without the pinned directory', () => {
     expect(
       resolveTopicExecutionPatch(
