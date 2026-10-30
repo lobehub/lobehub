@@ -56,6 +56,7 @@
     "./mistral": "./src/aiModels/mistral.ts",
     "./modelscope": "./src/aiModels/modelscope.ts",
     "./moonshot": "./src/aiModels/moonshot.ts",
+    "./nace": "./src/aiModels/nace.ts",
     "./nebius": "./src/aiModels/nebius.ts",
     "./newapi": "./src/aiModels/newapi.ts",
     "./novita": "./src/aiModels/novita.ts",

@@ -450,6 +450,8 @@
   "doubao-seedream-5-0-260128.description": "Doubao-Seedream-5.0-lite是字节跳动最新的图像生成模型。首次集成在线检索功能，能够结合实时网络信息，提升生成图像的时效性。模型智能性也得到升级，能够精确解析复杂指令和视觉内容。此外，它在专业场景中的全球知识覆盖、参考一致性和生成质量方面均有提升，更好地满足企业级视觉创作需求。",
   "dreamina-seedance-2-0-260128.description": "字节跳动推出的 Seedance 2.0 是最强大的视频生成模型，支持多模态参考视频生成、视频编辑、视频扩展、文本生成视频以及图像生成视频，并同步生成音频。",
   "dreamina-seedance-2-0-fast-260128.description": "字节跳动推出的 Seedance 2.0 Fast 提供与 Seedance 2.0 相同的功能，但生成速度更快，价格更具竞争力。",
+  "drex-max.description": "Drex Max 是 Nace 最准确的 Drex 决策模型：它以校准概率回答类型化的是/否、选择和评分问题，而不是生成文本。",
+  "drex-v2.0.description": "Drex 2.0 是 drex-latest 别名背后的 Drex 决策模型，一个 3B 激活参数的混合专家模型，以校准概率回答类型化的是/否、选择和评分问题，而不是生成文本。",
   "emohaa.description": "Emohaa 是一款心理健康模型，具备专业咨询能力，帮助用户理解情绪问题。",
   "ernie-4.5-8k-preview.description": "ERNIE 4.5 8K Preview 是一款用于评估 ERNIE 4.5 的 8K 上下文预览模型。",
   "ernie-4.5-turbo-128k.description": "ERNIE 4.5 Turbo 128K 是一款高性能通用模型，支持搜索增强与工具调用，适用于问答、编程与代理场景。",

@@ -9,6 +9,7 @@ import { LobeGoogleAI } from '../../providers/google';
 import { LobeMetaAI } from '../../providers/meta';
 import { LobeMinimaxAI } from '../../providers/minimax';
 import { LobeMoonshotAI } from '../../providers/moonshot';
+import { LobeNaceAI } from '../../providers/nace';
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeQwenAI } from '../../providers/qwen';
 import { LobeTypeSafeAI } from '../../providers/typesafe';
@@ -31,6 +32,7 @@ export const baseRuntimeMap = {
   meta: LobeMetaAI,
   minimax: LobeMinimaxAI,
   moonshot: LobeMoonshotAI,
+  nace: LobeNaceAI,
   openai: LobeOpenAI,
   qwen: LobeQwenAI,
   typesafe: LobeTypeSafeAI,
