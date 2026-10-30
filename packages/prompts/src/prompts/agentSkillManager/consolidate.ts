@@ -1,4 +1,4 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME } from '@lobechat/const';
 
 /**
  * Input used by the focused skill consolidation prompt.
