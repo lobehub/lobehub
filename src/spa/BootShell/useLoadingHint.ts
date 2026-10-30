@@ -5,7 +5,7 @@ import { acquireHintClock, HINT_DELAY, releaseHintClock } from './hintClock';
 /**
  * `enter` once the wait outlasts `HINT_DELAY`; `static` when taking over a wait
  * whose caption is already on screen, so the handoff doesn't replay the
- * slide-in.
+ * fade-in.
  */
 export type LoadingHintState = 'enter' | 'static';
 

@@ -26,18 +26,16 @@ const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
-// The X half of the transform is the centering, not the motion — it has to be
-// restated in both frames or the keyframe overwrites it and the caption jumps
-// to the anchor's left edge.
-const slideUp = keyframes`
+// Opacity only: on an otherwise still boot screen a rising caption reads as
+// the layout jumping, and leaving `transform` alone keeps the centering in one
+// place.
+const fadeIn = keyframes`
   from {
     opacity: 0;
-    transform: translate(-50%, 10px);
   }
 
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
   }
 `;
 
@@ -65,10 +63,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     white-space: nowrap;
 
-    /* A caption taken over at handoff skips the slide-in, so the centering
-       lives here too, not only in the keyframes. */
     &[data-enter] {
-      animation: ${slideUp} 0.42s ${cssVar.motionEaseOut} both;
+      animation: ${fadeIn} 0.3s ${cssVar.motionEaseOut} both;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
     }
   `,
   brand: css`

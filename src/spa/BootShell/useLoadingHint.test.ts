@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('useLoadingHint', () => {
-  it('stays quiet through a normal wait and slides in once the delay elapses', () => {
+  it('stays quiet through a normal wait and fades in once the delay elapses', () => {
     const { result } = renderHook(() => useLoadingHint());
 
     elapse(HINT_DELAY - 1);

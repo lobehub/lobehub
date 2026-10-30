@@ -12,7 +12,7 @@ let lastSeenAt = -Infinity;
  * One wait clock shared by every shell instance. `BootShell` and the main
  * layout's Suspense fallback are separate mounts of the same screen; a
  * per-mount timer restarts on that handoff and the caption vanishes, then
- * slides in again a full delay later. An instance that mounts while another is
+ * fades in again a full delay later. An instance that mounts while another is
  * up, or right after one left, continues the wait instead of starting over.
  *
  * Returns when the wait started.
